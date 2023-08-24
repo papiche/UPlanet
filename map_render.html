@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Leaflet Map</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+</head>
+<body>
+  <div id="map" style="width: 800px; height: 600px;"></div>
+
+<br>
+
+<script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+  <script>
+    // const desiredImageWidthInKm = 11; // Now Is calculated from northEastLon - southWestLon
+    const tileSizeInPixels = 256;
+
+    function calculateZoomLevel(desiredImageWidthInKm, latitude) {
+      const earthEquatorialCircumference = 40075016.686; // Earth's equatorial circumference in meters
+
+      // Calculate the distance covered by one degree of longitude at the given latitude
+      const metersPerLongitudeDegree = earthEquatorialCircumference * Math.cos((Math.PI / 180) * latitude) / 360;
+
+      const metersPerPixel = metersPerLongitudeDegree * 360 / (tileSizeInPixels * Math.pow(2, 20));
+
+      // Calculate the number of pixels needed to achieve the desired width
+      const numberOfPixelsHorizontally = (desiredImageWidthInKm * 1000) / metersPerPixel;
+
+      // Calculate the appropriate zoom level
+      const zoomLevel = Math.log2(tileSizeInPixels * Math.pow(2, 20) / numberOfPixelsHorizontally);
+
+      return zoomLevel;
+    }
+
+    // Function to extract URL parameters
+    function getUrlParameter(name) {
+      name = name.replace(/[\[]/, '\\[').replace(/[\]]/, '\\]');
+      const regex = new RegExp('[\\?&]' + name + '=([^&#]*)');
+      const results = regex.exec(location.search);
+      return results === null ? '' : decodeURIComponent(results[1].replace(/\+/g, ' '));
+    }
+
+    const defaultSouthWestLat = 51.000;
+    const defaultSouthWestLon = -1.000;
+    const defaultNorthEastLat = 52.000;
+    const defaultNorthEastLon = 1.000;
+
+    const southWestLat = parseFloat(getUrlParameter('southWestLat')) || defaultSouthWestLat;
+    const southWestLon = parseFloat(getUrlParameter('southWestLon')) || defaultSouthWestLon;
+    const northEastLat = parseFloat(getUrlParameter('northEastLat')) || defaultNorthEastLat;
+    const northEastLon = parseFloat(getUrlParameter('northEastLon')) || defaultNorthEastLon;
+
+      // Calculate the longitudinal distance in degrees
+      const lonDistanceInDegrees = Math.abs(northEastLon - southWestLon);
+
+      // Calculate the desired image width in kilometers
+      const earthEquatorialCircumference = 40075016.686; // Earth's equatorial circumference in meters
+      const metersPerLongitudeDegree = earthEquatorialCircumference * Math.cos((Math.PI / 180) * southWestLat) / 360;
+      const desiredImageWidthInMeters = lonDistanceInDegrees * metersPerLongitudeDegree;
+      const desiredImageWidthInKm = desiredImageWidthInMeters / 1000;
+        console.log('desiredImageWidthInKm:', desiredImageWidthInKm);
+
+    const centerLat = (southWestLat + northEastLat) / 2;
+    const centerLon = (southWestLon + northEastLon) / 2;
+
+    // Provide the latitude for adjustment
+    const latitude = centerLat;
+    const zoomLevel = calculateZoomLevel(desiredImageWidthInKm, latitude);
+    console.log('Recommended zoom level:', zoomLevel);
+
+    const map = L.map('map').setView([centerLat, centerLon], zoomLevel);
+
+    // Use the Mapbox Satellite tile layer
+    //~ L.tileLayer('https://api.mapbox.com/styles/v1/mapbox/satellite-v9/tiles/{z}/{x}/{y}?access_token=YOUR_MAPBOX_ACCESS_TOKEN', {
+      //~ attribution: '© Mapbox',
+      //~ tileSize: 512,
+      //~ zoomOffset: -1,
+      //~ accessToken: 'YOUR_MAPBOX_ACCESS_TOKEN'
+    //~ }).addTo(map);
+
+    //~ // Use the OpenAerialMap (OAM) tile layer for satellite view
+    //~ L.tileLayer('https://tiles.openaerialmap.org/5d6d1e370f437a00106e06ef/0/{z}/{x}/{y}.jpg', {
+      //~ attribution: '© OpenAerialMap',
+      //~ maxZoom: 18
+    //~ }).addTo(map);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap contributors'
+    }).addTo(map);
+
+  </script>
+</body>
+</html>

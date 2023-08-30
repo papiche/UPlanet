@@ -1,16 +1,93 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Leaflet Map</title>
+      <meta charset="UTF-8">
+  <title>U Planet. Please. Zoom In. Take a part of U World</title>
   <link rel="stylesheet" href="leaflet.css" />
+    <style>
+  .clickable-area {
+      fill-opacity: 0.2; /* Adjust the opacity as needed */
+      fill: #0074d9; /* Adjust the color as needed */
+      stroke: #001f3f;
+    }
+    #coordinates-display {
+      position: absolute;
+      bottom: 10px; /* Adjust the bottom position as needed */
+      left: 10px; /* Adjust the left position as needed */
+      background-color: white;
+      padding: 5px;
+      border: 1px solid black;
+      z-index: 1000;
+    }
+</style>
 </head>
 <body>
-  <div id="map" style="width: 800px; height: 600px;"></div>
-
+  <div id="map-container" style="position: relative;">
+    <div id="coordinates-display"></div> <!-- Coordinates display element -->
+    <div id="map" style="width: 100%; height: 100vh;"></div>
+  </div>
 <br>
 
+    <center><div id="countdown"></div></center>
 <script src="leaflet.js"></script>
-  <script>
+<script>
+async function homeAstroportStation(myURL, option = '', duration = 3000) {
+  try {
+
+     let one = await fetch(myURL); // Gets a promise
+     var doc =  await one.text();
+     var regex = /url='([^']+)/i; // Get response PORT
+     var redirectURL = doc.match(regex)[1]
+
+    console.log(option + " ... Teleportation ... in " + duration + " ms ... " + redirectURL)
+
+    // start countdown
+    var timeLeft = Math.floor(duration / 1000);
+    var elem = document.getElementById("countdown");
+    var timerId = setInterval(countdown, 1000);
+
+    function countdown() {
+        if (timeLeft == -1) {
+
+            clearTimeout(timerId);
+            switch(option) {
+                    case "tab":
+                          window.open( redirectURL, "AstroTab");
+                          break;
+                    case "page":
+                          window.location.replace(redirectURL);
+                          break;
+                    case "parent":
+                          window.parent.location.href = redirectURL;
+                          break;
+                    case "aframe":
+                          document.getElementById("aframe").src = redirectURL;
+                          break;
+                    case "ainfo":
+                          ainfo(redirectURL);
+                          break;
+                    default:
+                          window.location.href = redirectURL;
+
+              }
+
+              if (document.getElementById("countdown").innerHTML !== '') {
+                document.getElementById("countdown").innerHTML = "<a href='"+redirectURL+"' target='aframe'>OK</a>";
+              }
+
+        } else {
+
+            elem.innerHTML = timeLeft + " s";
+            timeLeft--;
+
+        }
+    }
+
+  } catch (err) {
+    console.log('Fetch error:' + err + myURL ); // Error handling
+  }
+}
+
     // const desiredImageWidthInKm = 11; // Now Is calculated from northEastLon - southWestLon
     const tileSizeInPixels = 256;
 
@@ -57,12 +134,12 @@
     const lonDistanceInDegrees = Math.abs(northEastLon - southWestLon);
     console.log('lonDistanceInDegrees:', lonDistanceInDegrees);
 
-      // Calculate the desired image width in kilometers
-      const earthEquatorialCircumference = 40075016.686; // Earth's equatorial circumference in meters
-      const metersPerLongitudeDegree = Math.abs(earthEquatorialCircumference * Math.cos((Math.PI / 180) * southWestLat) / 360);
-      const desiredImageWidthInMeters = lonDistanceInDegrees * metersPerLongitudeDegree;
-      const desiredImageWidthInKm = desiredImageWidthInMeters / 1000;
-      console.log('desiredImageWidthInKm:', desiredImageWidthInKm);
+    // Calculate the desired image width in kilometers
+    const earthEquatorialCircumference = 40075016.686; // Earth's equatorial circumference in meters
+    const metersPerLongitudeDegree = Math.abs(earthEquatorialCircumference * Math.cos((Math.PI / 180) * southWestLat) / 360);
+    const desiredImageWidthInMeters = lonDistanceInDegrees * metersPerLongitudeDegree;
+    const desiredImageWidthInKm = desiredImageWidthInMeters / 1000;
+    console.log('desiredImageWidthInKm:', desiredImageWidthInKm);
 
     const centerLat = (southWestLat + northEastLat) / 2;
     const centerLon = (southWestLon + northEastLon) / 2;
@@ -91,6 +168,115 @@
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: 'U Planet'
     }).addTo(map);
+
+const gridSize = 10; // Number of rows and columns in the grid
+const NSize = deg / 10; // Size of each grid cell
+
+
+// Create a HTML element for displaying coordinates
+const coordinatesDisplay = document.getElementById('coordinates-display');
+
+// Check if deg is less than or equal to 0.01
+if (deg <= 0.01) {
+  const container = document.createElement('div');
+  container.style.position = 'fixed';
+  container.style.top = '0';
+  container.style.left = '0';
+  container.style.width = '100vw';
+  container.style.height = '100vh';
+  container.style.backgroundColor = 'rgba(255, 255, 255, 0.8)';
+  container.style.border = 'none';
+  container.style.zIndex = '1000';
+  container.style.display = 'flex';
+  container.style.flexDirection = 'column';
+  container.style.alignItems = 'center';
+  container.style.justifyContent = 'center';
+
+  const emailInput = document.createElement('input');
+  emailInput.type = 'email';
+  emailInput.placeholder = 'Email address';
+  emailInput.style.width = '20%';
+  emailInput.style.marginBottom = '10px';
+
+  container.appendChild(emailInput);
+
+  const button = document.createElement('button');
+  button.textContent = 'Apply for Visa';
+  button.style.width = '100%';
+  button.style.height = '100px'; // Customize the button height
+  button.style.backgroundColor = '#0074d9';
+  button.style.border = 'none';
+  button.style.fontFamily = 'Arial, sans-serif'; // Customize the font family
+  button.style.fontSize = '24px'; // Customize the font size
+  button.style.color = '#fff'; // Customize the font color
+
+  button.addEventListener('click', () => {
+    const email = emailInput.value;
+    const url = `https://libra.copylaradio.com/?montant=0&type=xastro&dice=4&email=${encodeURIComponent(email)}`;
+    window.location.href = url;
+  });
+
+  container.appendChild(button);
+
+  const link = document.createElement('a');
+  link.href = 'https://ipfs.copylaradio.com/ipfs/QmXom7iUq7G9Z1eiuckAQ1B7tkYfYGKnWhh3kUaKBd3ct4';
+  link.target = 'pp';
+  link.textContent = '>> PRINT PASSPORT <<';
+  link.style.fontSize = '24px'; // Customize the font size
+  link.style.textDecoration = 'none'; // Remove underline from the link
+  link.style.marginBottom = '30px'; // Add some space between the link and the button
+
+  container.appendChild(link);
+
+  document.body.appendChild(container);
+
+} else {
+
+  // Add a mousemove event listener to the map
+  map.on('mousemove', (event) => {
+    const latLng = event.latlng;
+    const lat = latLng.lat.toFixed(6);
+    const lng = latLng.lng.toFixed(6);
+    coordinatesDisplay.textContent = `Latitude: ${lat}, Longitude: ${lng}`;
+  });
+
+  // Create a clickable rectangle for each grid cell
+  for (let latIndex = 0; latIndex < gridSize; latIndex++) {
+    for (let lonIndex = 0; lonIndex < gridSize; lonIndex++) {
+      const lat = southWestLat + latIndex * NSize ;
+      const lon = southWestLon + lonIndex * NSize ;
+
+      // Create a clickable rectangle
+      const rectangle = L.rectangle(
+        [[lat , lon ], [lat + NSize , lon + NSize]],
+        { color: 'transparent', weight: 1, className: 'clickable-area' } // Add CSS class
+      );
+
+      // Add a click event to the rectangle
+      rectangle.on('click', () => {
+        // Calculate new northEastLat and northEastLon based on the clicked grid cell
+        const newNorthEastLat = lat.toFixed(2);
+        const newNorthEastLon = lon.toFixed(2);
+
+        // Update URL parameters with the new values
+        const url = `map_render.html?southWestLat=${newNorthEastLat}&southWestLon=${newNorthEastLon}&deg=${NSize}`;
+        window.location.href = url;
+      });
+
+      // Add the rectangle to the map
+      rectangle.addTo(map);
+    }
+  }
+}
+
+// Add a click event listener to the map container
+document.getElementById('map-container').addEventListener('click', (event) => {
+  const isInsideRectangle = event.target.classList.contains('clickable-area');
+  if (!isInsideRectangle) {
+    history.back(); // Trigger browser's back functionality
+  }
+});
+
 
   </script>
 </body>

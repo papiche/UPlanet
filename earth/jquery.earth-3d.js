@@ -173,7 +173,7 @@ var earth3d;
         var $elem = $('<div class="location"></div>');
         $elem.appendTo(widget.options.locationsElement);
         $elem.click(function() {
-            alert('Clicked on ' + location.name + ' : ' + location.link );
+            // alert('Clicked on ' + location.name + ' : ' + location.link );
             window.open( location.link, "AstroTab");
         });
         location.$element = $elem;

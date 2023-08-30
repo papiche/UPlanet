@@ -26,7 +26,7 @@ examples['locations'] = function() {
 var locations = {};
 
 for (let latIndex = 0; latIndex < 36; latIndex++) {
-    for (let lonIndex = 0; lonIndex < 36; lonIndex++) {
+    var lonIndex = 0
         const alpha = (90 - lonIndex * 10) * (Math.PI / 180);
         const delta = (latIndex * 10) * (Math.PI / 180);
 
@@ -35,7 +35,7 @@ for (let latIndex = 0; latIndex < 36; latIndex++) {
 
         const objKey = `obj_${latIndex}_${lonIndex}`;
         const objName = `_${latIndex}_${lonIndex}_`;
-        const objLink = `map_render.html?southWestLat=${southWestLat}&southWestLon=${southWestLon}`;
+        const objLink = `welcome.html`;
 
         locations[objKey] = {
             alpha: alpha,
@@ -43,7 +43,6 @@ for (let latIndex = 0; latIndex < 36; latIndex++) {
             name: objName,
             link: objLink
         };
-    }
 }
   //~ var locations = {
     //~ obj1: {

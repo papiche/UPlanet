@@ -26,7 +26,7 @@ const puppeteer = require('puppeteer');
 
 //~ http://ipfs.asycn.io/ipfs/QmZzE8ypb2q9CF93B8gbjif3Qpqhsrh8y5DtgPPwGYTpdP/map_render.html?southWestLat=${tileLat}&southWestLon=${tileLon}&deg=1
 
-      const url = `file:///tmp/osm/index.html?lat=${tileLat}&lon=${tileLon}&zoom=${zoomLevel}`;
+      const url = `file:///home/fred/workspace/OSM2IPFS/earth/Umap.html?southWestLat=${tileLat}&southWestLon=${tileLon}&deg=0.01`;
 
       await page.goto(url);
       await page.waitForTimeout(2000);

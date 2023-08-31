@@ -1,33 +1,28 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Leaflet Map</title>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+  <title>UPlanet Map</title>
+  <link rel="stylesheet" href="leaflet.css" />
 </head>
 <body>
-  <div id="map" style="width: 800px; height: 600px;"></div>
+    <div id="map" style="width: 100%; height: 100vh;"></div>
 
 <br>
 
-<script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+<script src="leaflet.js"></script>
   <script>
     // const desiredImageWidthInKm = 11; // Now Is calculated from northEastLon - southWestLon
     const tileSizeInPixels = 256;
 
     function calculateZoomLevel(desiredImageWidthInKm, latitude) {
       const earthEquatorialCircumference = 40075016.686; // Earth's equatorial circumference in meters
-
       // Calculate the distance covered by one degree of longitude at the given latitude
       const metersPerLongitudeDegree = earthEquatorialCircumference * Math.cos((Math.PI / 180) * latitude) / 360;
-
       const metersPerPixel = metersPerLongitudeDegree * 360 / (tileSizeInPixels * Math.pow(2, 20));
-
       // Calculate the number of pixels needed to achieve the desired width
       const numberOfPixelsHorizontally = (desiredImageWidthInKm * 1000) / metersPerPixel;
-
       // Calculate the appropriate zoom level
       const zoomLevel = Math.log2(tileSizeInPixels * Math.pow(2, 20) / numberOfPixelsHorizontally);
-
       return zoomLevel;
     }
 
@@ -39,25 +34,35 @@
       return results === null ? '' : decodeURIComponent(results[1].replace(/\+/g, ' '));
     }
 
-    const defaultSouthWestLat = 51.000;
+    const defaultSouthWestLat = 44.000;
     const defaultSouthWestLon = -1.000;
-    const defaultNorthEastLat = 52.000;
-    const defaultNorthEastLon = 1.000;
+    const defaultOffsetDegrees = 10.000; // 10° offset
 
     const southWestLat = parseFloat(getUrlParameter('southWestLat')) || defaultSouthWestLat;
+    console.log('Lat:', southWestLat);
     const southWestLon = parseFloat(getUrlParameter('southWestLon')) || defaultSouthWestLon;
-    const northEastLat = parseFloat(getUrlParameter('northEastLat')) || defaultNorthEastLat;
-    const northEastLon = parseFloat(getUrlParameter('northEastLon')) || defaultNorthEastLon;
+    console.log('Lon:', southWestLon);
 
-      // Calculate the longitudinal distance in degrees
-      const lonDistanceInDegrees = Math.abs(northEastLon - southWestLon);
+    const deg = parseFloat(getUrlParameter('deg')) || defaultOffsetDegrees;
+    console.log('Offset:', deg);
 
-      // Calculate the desired image width in kilometers
-      const earthEquatorialCircumference = 40075016.686; // Earth's equatorial circumference in meters
-      const metersPerLongitudeDegree = earthEquatorialCircumference * Math.cos((Math.PI / 180) * southWestLat) / 360;
-      const desiredImageWidthInMeters = lonDistanceInDegrees * metersPerLongitudeDegree;
-      const desiredImageWidthInKm = desiredImageWidthInMeters / 1000;
-        console.log('desiredImageWidthInKm:', desiredImageWidthInKm);
+    // Calculate northEastLat and northEastLon with deg° offset only if parameters are empty
+    const northEastLatParam = getUrlParameter('northEastLat');
+    const northEastLonParam = getUrlParameter('northEastLon');
+
+    const northEastLat = northEastLatParam ? parseFloat(northEastLatParam) : southWestLat + deg;
+    const northEastLon = northEastLonParam ? parseFloat(northEastLonParam) : southWestLon + deg;
+
+     // Calculate the longitudinal distance in degrees
+    const lonDistanceInDegrees = Math.abs(northEastLon - southWestLon);
+    console.log('lonDistanceInDegrees:', lonDistanceInDegrees);
+
+    // Calculate the desired image width in kilometers
+    const earthEquatorialCircumference = 40075016.686; // Earth's equatorial circumference in meters
+    const metersPerLongitudeDegree = Math.abs(earthEquatorialCircumference * Math.cos((Math.PI / 180) * southWestLat) / 360);
+    const desiredImageWidthInMeters = lonDistanceInDegrees * metersPerLongitudeDegree;
+    const desiredImageWidthInKm = desiredImageWidthInMeters / 1000;
+    console.log('desiredImageWidthInKm:', desiredImageWidthInKm);
 
     const centerLat = (southWestLat + northEastLat) / 2;
     const centerLon = (southWestLon + northEastLon) / 2;
@@ -84,7 +89,7 @@
     //~ }).addTo(map);
 
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '© OpenStreetMap contributors'
+      attribution: 'U Planet'
     }).addTo(map);
 
   </script>

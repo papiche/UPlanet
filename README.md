@@ -4,8 +4,18 @@
 2. World divided in 36 x 18 LONxLAT 10° grid .
 3. Clic on a grid cell to zoom to 1°, 0.1°, 0.01° sub grids
 4. From selected 0.01° land appears "Apply for Visa" button
-5. Enter your email to create G1Visa and G1Card (Astroport.ONE ambassy compatible)
+5. Enter Astroport Station then type your email to create G1Visa and G1Card for this "Umap"
 
 
+Start registering your commons and personnal registrered in Blockchains
 
-https://ipfs.asycn.io/ipfs/QmUQKH5eMAsUwRYwZD7ZywytjBExCRhEFY2wVeZ8PGGtLE/
+## Crypto Commons for United Planet -
+
+Umap image are created with LAT and LON on DEG=0.01 SCALE
+You receive an access to this crypto landing recorded into IPFS
+
+Get Friends.
+Explore Trust.
+
+https://ipfs.asycn.io/ipfs/QmcNU2krdHogvxUkERf52roFbX8iVb1i11HSwRFjFf3QVm/
+Enjoy the visit.

@@ -17,9 +17,10 @@ You receive an access to this crypto landing recorded into IPFS.
 Get Friends.
 Explore Trust.
 
-* For LOCALHOST : http://ipfs.localhost:8080/ipfs/Qme4r4fHf6VfaqoXobTnzjWVwBRhRPzMazJyrZ9ubbdJMP/ (PROD)
+Choose your Astroport style
 
-* For WAN : https://ipfs.copylaradio.com/ipfs/QmZjtNz7iNgPiULbyT2Zyi6QHGXt8WqKo1DzKkM5EKPLfL/ (DEMO ONLY)
+* LOCALHOST : http://ipfs.localhost:8080/ipfs/QmYJ2Ri1ygL7ZFTamP3gcc5VZwxhE685bWJnXSVkvNFJfF/ (DEV)
+* WAN : https://ipfs.copylaradio.com/ipfs/QmZjtNz7iNgPiULbyT2Zyi6QHGXt8WqKo1DzKkM5EKPLfL/ (DEMO SNAPSHOT)
 
 
 Enjoy Life

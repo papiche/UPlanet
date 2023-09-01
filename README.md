@@ -17,5 +17,5 @@ You receive an access to this crypto landing recorded into IPFS
 Get Friends.
 Explore Trust.
 
-https://ipfs.copylaradio.com/ipfs/QmcNU2krdHogvxUkERf52roFbX8iVb1i11HSwRFjFf3QVm/
+https://ipfs.copylaradio.com/ipfs/QmbVVpUUBEkp35oMKUmdYyw4SWEQsFeJnxW5EPa5tAyfQn/
 Enjoy the visit.

@@ -17,5 +17,8 @@ You receive an access to this crypto landing recorded into IPFS
 Get Friends.
 Explore Trust.
 
-https://ipfs.copylaradio.com/ipfs/QmbVVpUUBEkp35oMKUmdYyw4SWEQsFeJnxW5EPa5tAyfQn/
+For LOCALHOST : http://ipfs.localhost:8080/ipfs/Qme4r4fHf6VfaqoXobTnzjWVwBRhRPzMazJyrZ9ubbdJMP/ (PROD)
+For WAN : https://ipfs.copylaradio.com/ipfs/QmZjtNz7iNgPiULbyT2Zyi6QHGXt8WqKo1DzKkM5EKPLfL/ (DEMO ONLY)
+
+
 Enjoy the visit.

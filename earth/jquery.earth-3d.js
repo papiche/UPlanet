@@ -174,7 +174,8 @@ var earth3d;
         $elem.appendTo(widget.options.locationsElement);
         $elem.click(function() {
             // alert('Clicked on ' + location.name + ' : ' + location.link );
-            window.open( location.link, "AstroTab");
+            // window.open( location.link, "AstroTab");
+            window.parent.location.href = location.link;
         });
         location.$element = $elem;
       },

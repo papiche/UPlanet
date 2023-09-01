@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>G1 to IPNS Public Key Conversion</title>
+</head>
+<body>
+    <h1>G1 to IPNS Public Key Conversion</h1>
+    <input type="text" id="g1PublicKey" size=40 placeholder="Enter G1 Public Key">
+    <button onclick="convertPublicKey()">Convert</button>
+    <p>IPNS Public Key:</p>
+    <p id="ipnsPublicKey"></p>
+
+    <!-- Include the tweetnacl library for Ed25519 operations -->
+    <script src="./nacl.min.js"></script>
+
+    <script>
+        // Custom Base58 encoding and decoding functions
+        function base58Encode(bytes) {
+            const ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+            const base = BigInt(ALPHABET.length);
+            let encoded = '';
+
+            let value = BigInt('0');
+            for (let i = 0; i < bytes.length; i++) {
+                value = value * BigInt(256) + BigInt(bytes[i]);
+            }
+
+            while (value > BigInt(0)) {
+                const remainder = value % base;
+                value = value / base;
+                encoded = ALPHABET[Number(remainder)] + encoded;
+            }
+
+            return encoded;
+        }
+
+        function base58Decode(encoded) {
+            const ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+            const base = BigInt(ALPHABET.length);
+
+            let value = BigInt('0');
+            for (let i = 0; i < encoded.length; i++) {
+                const char = encoded[i];
+                const charValue = BigInt(ALPHABET.indexOf(char));
+                value = value * base + charValue;
+            }
+
+            const valueBytes = [];
+            while (value > BigInt(0)) {
+                const byteValue = Number(value % BigInt(256));
+                value = value / BigInt(256);
+                valueBytes.unshift(byteValue);
+            }
+
+            return new Uint8Array(valueBytes);
+        }
+
+        function convertPublicKey() {
+            const g1PublicKey = document.getElementById("g1PublicKey").value;
+
+            // Decode the Base58 encoded G1 public key using custom function
+            const decodedShared = base58Decode(g1PublicKey);
+
+            // Create a new Uint8Array to hold the IPNS public key bytes
+            const ipnsPublicKeyBytes = new Uint8Array(decodedShared.length + 6);
+
+            // Prefix bytes for IPNS public key
+            const prefixBytes = new Uint8Array([0, 36, 8, 1, 18, 32]);
+
+            // Copy the prefix bytes and G1 public key bytes into the new array
+            ipnsPublicKeyBytes.set(prefixBytes, 0);
+            ipnsPublicKeyBytes.set(decodedShared, prefixBytes.length);
+
+            // Encode the IPNS public key using custom Base58 encoding
+            const ipnsPublicKey = '1' + base58Encode(ipnsPublicKeyBytes); // Prepend '1'
+
+            document.getElementById("ipnsPublicKey").innerText = ipnsPublicKey;
+        }
+    </script>
+</body>
+</html>
+

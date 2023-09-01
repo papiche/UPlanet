@@ -12,13 +12,14 @@ Start registering your commons and personnal registrered in Blockchains
 ## Crypto Commons for United Planet -
 
 Umap image are created with LAT and LON on DEG=0.01 SCALE
-You receive an access to this crypto landing recorded into IPFS
+You receive an access to this crypto landing recorded into IPFS.
 
 Get Friends.
 Explore Trust.
 
-For LOCALHOST : http://ipfs.localhost:8080/ipfs/Qme4r4fHf6VfaqoXobTnzjWVwBRhRPzMazJyrZ9ubbdJMP/ (PROD)
-For WAN : https://ipfs.copylaradio.com/ipfs/QmZjtNz7iNgPiULbyT2Zyi6QHGXt8WqKo1DzKkM5EKPLfL/ (DEMO ONLY)
+* For LOCALHOST : http://ipfs.localhost:8080/ipfs/Qme4r4fHf6VfaqoXobTnzjWVwBRhRPzMazJyrZ9ubbdJMP/ (PROD)
+
+* For WAN : https://ipfs.copylaradio.com/ipfs/QmZjtNz7iNgPiULbyT2Zyi6QHGXt8WqKo1DzKkM5EKPLfL/ (DEMO ONLY)
 
 
 Enjoy the visit.

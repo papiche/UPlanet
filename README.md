@@ -22,4 +22,4 @@ Explore Trust.
 * For WAN : https://ipfs.copylaradio.com/ipfs/QmZjtNz7iNgPiULbyT2Zyi6QHGXt8WqKo1DzKkM5EKPLfL/ (DEMO ONLY)
 
 
-Enjoy the visit.
+Enjoy Life

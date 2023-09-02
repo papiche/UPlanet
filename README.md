@@ -18,9 +18,8 @@ Get Friends.
 Explore Trust.
 
 Choose your Astroport style
-
-* LOCALHOST : http://ipfs.localhost:8080/ipfs/QmYJ2Ri1ygL7ZFTamP3gcc5VZwxhE685bWJnXSVkvNFJfF/ (DEV)
-* WAN : https://ipfs.copylaradio.com/ipfs/QmSaFpSM6ps2pBqYxxLjKJfuigpEo98GNCPdK4PkMXnDaY/ (DEMO SNAPSHOT)
+# SNAPSHOT DEMO
+https://ipfs.copylaradio.com/ipfs/QmcVwQ6nYgqhhAw5Eb4P3vwYfejqXYnnXu6XNu8BiwcTiX/
 
 
 Enjoy Life

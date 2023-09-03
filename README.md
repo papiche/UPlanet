@@ -17,9 +17,10 @@ You receive an access to this crypto landing recorded into IPFS.
 Get Friends.
 Explore Trust.
 
-Choose your Astroport style
 # SNAPSHOT DEMO
-https://ipfs.copylaradio.com/ipfs/QmcVwQ6nYgqhhAw5Eb4P3vwYfejqXYnnXu6XNu8BiwcTiX/
+https://ipfs.copylaradio.com/ipfs/QmQdB6ChBs7N1StVo3ikytMRBW4zCHL4pxEFP9Tq8kfjAV/
 
+Install Astroport.ONE at your location
+https://github.com/papiche/Astroport.ONE
 
 Enjoy Life

@@ -18,7 +18,7 @@ Get Friends.
 Explore Trust.
 
 # SNAPSHOT DEMO
-https://ipfs.copylaradio.com/ipfs/Qmduhh6ERX74dx1LhJzB4Bw3ZzM91kAqmPE47BVfMWwYfm/
+https://ipfs.copylaradio.com/ipfs/QmaHt2bCJdmGiSbyASEgezAtQ8VTdGk4Y7uuxW2vQRsFQ6/
 
 Install Astroport.ONE at your location
 https://github.com/papiche/Astroport.ONE

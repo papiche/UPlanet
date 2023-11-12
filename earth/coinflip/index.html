@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="content-type" content="text/html; charset=UTF-8">
+  <link rel="icon" type="image/x-icon" href="./favicon.ico">
+  <title>Coin Flip App</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+    }
+    #coin {
+      width: 100px;
+      height: 100px;
+      cursor: pointer;
+      transition: transform 0.6s ease-out; /* Transition for flipping effect */
+    }
+  </style>
+  <script src="/ipfs/Qmae5v9zydax9u6C9ceDijURu5PYdd5avmv4NkenCw7RFv/astro.js"></script>
+</head>
+<body>
+  <h1>Coin Flip Game</h1>
+
+<div id="ainfo">
+  <img id="coin" src="/ipfs/QmYCKyYnYDGq6U7WuMmUoF7v5okvzoEThgYyKj9AzJPeP2" alt="Coin">
+</div>
+
+  <div id="message"><p>Click on the coin to flip!</p></div>
+
+<div id="countdown"></div>
+
+  <script>
+    // Extract the hostname (e.g., "https://ipfs.domain.tld" or "http://ipfs.localhost:8080")
+    var currentURL = new URL(window.location.href);
+    var hostname = currentURL.hostname;
+    var port = currentURL.port;
+    var protocol = currentURL.protocol.split(":")[0];
+
+    // Check and replace the port if it's 8080
+    if (port === "8080") {
+        port = "1234";
+    }
+
+    var zHost = hostname.replace("ipfs", "astroport");
+
+    // Create the "station" variable with the specified format
+    var station = protocol + "://" + zHost + (port ? (":" + port) : "");
+
+    console.log(station)
+
+
+    // Function to extract URL parameters
+    function getUrlParameter(name) {
+      name = name.replace(/[\[]/, '\\[').replace(/[\]]/, '\\]');
+      const regex = new RegExp('[\\?&]' + name + '=([^&#]*)');
+      const results = regex.exec(location.search);
+      return results === null ? '' : results[1];
+    }
+
+    const AstroID = getUrlParameter('qrcode') || "";
+    const AstroPASS = getUrlParameter('pass') || "";
+    const G1PUB = getUrlParameter('g1pub') || "";
+    const MAX = getUrlParameter('max') || "";
+
+    let isFlipping = false;
+    let consecutiveHeads = 1;
+
+    document.getElementById('coin').addEventListener('click', (event) => {
+      if (!isFlipping) {
+
+        isFlipping = true;
+        document.getElementById('coin').style.transform = 'rotateY(360deg)';
+        setTimeout(() => {
+          const result = Math.random() < 0.5 ? 'Heads' : 'Tails';
+            if (result === 'Heads') {
+              consecutiveHeads++;
+              document.getElementById('coin').src = '/ipfs/QmZ6jrZGTWo4eimrGxu7BfKjYfRLqknb18WhmekNxppFg9';
+              document.getElementById('message').innerHTML = `<p>Pile! ${consecutiveHeads - 1} fois.</p>`;
+
+            } else {
+             // as descibed in https://en.wikipedia.org/wiki/St._Petersburg_paradox
+             // TODO : make use of MAX parameter
+             var vousgagnez = Math.pow(2, (consecutiveHeads - 1));
+             vousgagnez /= 10; // ZEN CONVERSION
+
+                // STOP CLIC
+                event.stopPropagation();
+                event.preventDefault();
+
+             var myU = station + '/?qrcode=' + AstroID +'&pass=' + AstroPASS + '&pay=' + vousgagnez + '&g1pub=' + G1PUB + '&max=' + MAX;
+             console.log('myU:' + myU);
+
+              document.getElementById('message').innerHTML = `<p><b>Face!<br>VOUS GAGNEZ</b><h2>${Math.pow(2, (consecutiveHeads - 1))} ZEN</h2></p>`;
+
+              consecutiveHeads = 1; // Reset the count for consecutive heads
+              document.getElementById('coin').src = '/ipfs/QmeZhZ6yR6YHhiZ9qfBUCA1RKUP83dZL6MtU4PCBrdzjWn'; // Coin Pile Icon
+
+             window.history.replaceState({}, document.title, "/"); // Forget Page URL in Browser History
+
+             // Astroport CALL
+            homeAstroportStation(myU, 'parent', 12000)
+
+            }
+          isFlipping = false;
+          document.getElementById('coin').style.transform = 'rotateY(0deg)';
+        }, 600); // Delay must match the transition time in CSS
+      }
+    });
+  </script>
+
+</body>
+</html>
+

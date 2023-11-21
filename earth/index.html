@@ -27,6 +27,39 @@
         dragElement: $('#locations') // where do we catch the mouse drag
     });
     };
+
+    function getCoordinates() {
+            const addressInput = document.getElementById('address');
+            const address = addressInput.value;
+
+            // Replace spaces with '+' for the URL
+            const formattedAddress = address.replace(/ /g, '+');
+
+            // Make a request to the Nominatim API
+            fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${formattedAddress}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.length > 0) {
+                        const latitude = data[0].lat;
+                        const longitude = data[0].lon;
+                        const lat = parseFloat(data[0].lat).toFixed(2);
+                        const lon = parseFloat(data[0].lon).toFixed(2);
+                        window.location.replace(`map_render.html?southWestLat=${lat}&southWestLon=${lon}&deg=0.01`);
+                    } else {
+                        document.getElementById('result').innerText = 'Coordinates not found. Clic on surrounding dots to zoom in.';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    document.getElementById('result').innerText = 'An error occurred while fetching coordinates.';
+                });
+        }
+        // Add event listener for the "Enter" key
+        document.getElementById('address').addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') {
+                getCoordinates();
+            }
+        });
     </script>
 
    <style>
@@ -106,7 +139,7 @@
 
   <body>
     <h1>♥ U Planet ♥</h1>
-        <a href="login/">ASTROID</a>
+        <a href="login/">ACCESS</a>
 
     <div id="container">
         <br><br>
@@ -116,8 +149,6 @@
           <div id="flights"></div>
           <div id="locations"></div>
      </div>
- <h2></h2>
-  <h3>... register landing zone ...</h3>
 
         <div class="choose_example">
           Planet : <select id="example">
@@ -132,6 +163,14 @@
             <option value="locations" selected >Earth</option>
           </select>
         </div>
+         <h2></h2>
+    <form id="addressForm">
+        <label for="address">Address: </label>
+        <input type="text" id="address" size=30 required>
+        <button type="button" onclick="getCoordinates()">Go There</button>
+    </form>
+                <p id="result"><a href="mailto:support@qo-op.com">Contact us</a> to add your own UPlanet</p>
+
         <!--
         <div class="code">
           <a href="#" onclick="$('#example_code').show(); $(this).hide().siblings('a').show(); return false;">Show code</a>

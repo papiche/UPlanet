@@ -27,13 +27,18 @@
         width: 100%;
         height: 100%;
     }
-
     .button {
         background-color: #3498db;
         color: #fff;
         padding: 10px 20px;
         border: none;
         cursor: pointer;
+    }
+    .grid-number {
+      position: absolute;
+      font-size: 12px;
+      font-weight: bold;
+      color: #fff;
     }
 </style>
 
@@ -47,6 +52,14 @@
 <script src="leaflet.js"></script>
 
 <script>
+
+    // Function to extract URL parameters
+    function getUrlParameter(name) {
+      name = name.replace(/[\[]/, '\\[').replace(/[\]]/, '\\]');
+      const regex = new RegExp('[\\?&]' + name + '=([^&#]*)');
+      const results = regex.exec(location.search);
+      return results === null ? '' : decodeURIComponent(results[1].replace(/\+/g, ' '));
+    }
 
     // const desiredImageWidthInKm = 11; // Now Is calculated from northEastLon - southWestLon
     const tileSizeInPixels = 256;
@@ -63,17 +76,51 @@
       return zoomLevel;
     }
 
-    // Function to extract URL parameters
-    function getUrlParameter(name) {
-      name = name.replace(/[\[]/, '\\[').replace(/[\]]/, '\\]');
-      const regex = new RegExp('[\\?&]' + name + '=([^&#]*)');
-      const results = regex.exec(location.search);
-      return results === null ? '' : decodeURIComponent(results[1].replace(/\+/g, ' '));
+///////////////////////////////////////////////////////////////////////////////////
+    // Extract the hostname (e.g., "https://ipfs.domain.tld" or "http://ipfs.localhost:8080")
+    var currentURL = new URL(window.location.href);
+    var hostname = currentURL.hostname;
+    var port = currentURL.port;
+    var protocol = currentURL.protocol.split(":")[0];
+    // Check and replace the port if it's 8080
+    if (port === "8080") {
+        port = "1234";
     }
+    var zHost = hostname.replace("ipfs", "astroport");
+    // Create the "station" variable with the specified format
+    var station = protocol + "://" + zHost + (port ? (":" + port) : "");
+    console.log(station)
+//////////////////////////////////////////////////////////////// fetchAstroport
+    async function fetchAstroport(myURL) {
+      try {
+        let one = await fetch(myURL); // Gets a promise
+        var doc = await one.text();
+        var regex = /url='([^']+)/i; // Get response PORT
+        var redirectURL = doc.match(regex)[1];
+
+        console.log(redirectURL);
+
+        setTimeout(async function () {
+          try {
+            let two = await fetch(redirectURL);
+            const data = await two.json();
+            console.log(data);
+            return data;
+          } catch (error) {
+            console.log('Fetch error (inside setTimeout):', error);
+          }
+        }, 5000);
+      } catch (err) {
+        console.log('Fetch error:', err);
+      }
+    }
+///////////////////////////////////////////////////////////////////////////////////
+
 
     const defaultIPNS = '';
     const sectorIPNS = getUrlParameter('ipns') || defaultIPNS;
     console.log('sectorIPNS: /ipns/', sectorIPNS);
+
     if (sectorIPNS !== '') {
         const buttonContainer = document.createElement('div');
         buttonContainer.id = 'button-container'
@@ -110,7 +157,6 @@
     console.log('Lat:', southWestLat);
     const southWestLon = parseFloat(getUrlParameter('southWestLon')) || defaultSouthWestLon;
     console.log('Lon:', southWestLon);
-
     const deg = parseFloat(getUrlParameter('deg')) || defaultOffsetDegrees;
     console.log('Offset:', deg);
 
@@ -142,29 +188,12 @@
 
     const map = L.map('map').setView([centerLat, centerLon], zoomLevel);
 
-    // Use the Mapbox Satellite tile layer
-    //~ L.tileLayer('https://api.mapbox.com/styles/v1/mapbox/satellite-v9/tiles/{z}/{x}/{y}?access_token=YOUR_MAPBOX_ACCESS_TOKEN', {
-      //~ attribution: '© Mapbox',
-      //~ tileSize: 512,
-      //~ zoomOffset: -1,
-      //~ accessToken: 'YOUR_MAPBOX_ACCESS_TOKEN'
-    //~ }).addTo(map);
-
-    //~ // Use the OpenAerialMap (OAM) tile layer for satellite view
-    //~ L.tileLayer('https://tiles.openaerialmap.org/5d6d1e370f437a00106e06ef/0/{z}/{x}/{y}.jpg', {
-      //~ attribution: '© OpenAerialMap',
-      //~ maxZoom: 18
-    //~ }).addTo(map);
-
-//    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}', {
-//L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: 'U Planet'
     }).addTo(map);
 
 const gridSize = 10; // Number of rows and columns in the grid
 const NSize = deg / 10; // Size of each grid cell
-
 
 // Create a HTML element for displaying coordinates
 const coordinatesDisplay = document.getElementById('coordinates-display');
@@ -195,24 +224,6 @@ if (deg <= 0.01) {
   button.style.fontFamily = 'Arial, sans-serif'; // Customize the font family
   button.style.fontSize = '24px'; // Customize the font size
   button.style.color = '#fff'; // Customize the font color
-
-    // Extract the hostname (e.g., "https://ipfs.domain.tld" or "http://ipfs.localhost:8080")
-    var currentURL = new URL(window.location.href);
-    var hostname = currentURL.hostname;
-    var port = currentURL.port;
-    var protocol = currentURL.protocol.split(":")[0];
-
-    // Check and replace the port if it's 8080
-    if (port === "8080") {
-        port = "1234";
-    }
-
-    var zHost = hostname.replace("ipfs", "astroport");
-
-    // Create the "station" variable with the specified format
-    var station = protocol + "://" + zHost + (port ? (":" + port) : "");
-
-    console.log(station)
 
   button.addEventListener('click', () => {
     const url = `${station}/?uplanet=@&zlat=${southWestLat}&zlon=${southWestLon}`;
@@ -271,6 +282,37 @@ if (deg <= 0.01) {
     });
 
 /////////////////
+  async function loadGridNumbers(myURL) {
+
+    try {
+      const data = await fetchAstroport(myURL);
+      return data.gridNumbers || [];
+    } catch (error) {
+      console.error('Error loading grid numbers:', error);
+      return [];
+    }
+  }
+
+  // Function to overlay grid numbers on the map
+  function overlayGridNumbers(gridNumbers) {
+    gridNumbers.forEach(({ lat, lon, number }) => {
+      const latLng = L.latLng(lat, lon);
+      const numberElement = document.createElement('div');
+      numberElement.className = 'grid-number';
+      numberElement.textContent = number;
+      numberElement.style.top = `${map.latLngToContainerPoint(latLng).y}px`;
+      numberElement.style.left = `${map.latLngToContainerPoint(latLng).x}px`;
+      document.getElementById('map').appendChild(numberElement);
+    });
+  }
+
+    const zquery = 'zone='+NSize+'&ulat='+southWestLat+'&ulon='+southWestLon; // Replace with your actual query parameters
+    const zoneURL = station+'/?' + zquery;
+
+    console.log('ZONE URL:', zoneURL);
+
+  // Load grid numbers and overlay them on the map
+  loadGridNumbers(zoneURL).then(gridNumbers => overlayGridNumbers(gridNumbers));
 
   </script>
 </body>

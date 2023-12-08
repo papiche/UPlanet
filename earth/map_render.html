@@ -263,16 +263,15 @@ document.getElementById('map-container').addEventListener('click', (event) => {
 });
 
 /////////////////
-  async function loadGridNumbers(myURL) {
-
-    try {
+async function loadGridNumbers(myURL) {
+try {
       const data = await fetchAstroport(myURL);
       return data.gridNumbers || [];
-    } catch (error) {
+} catch (error) {
       console.error('Error loading grid numbers:', error);
       return [];
     }
-  }
+}
 
   // Function to overlay grid numbers on the map
 function overlayGridNumbers(rectangle, number) {
@@ -292,27 +291,10 @@ function overlayGridNumbers(rectangle, number) {
     document.getElementById('map-container').appendChild(numberElement);
 }
 
-
     const zquery = 'zone='+NSize+'&ulat='+southWestLat+'&ulon='+southWestLon; // Replace with your actual query parameters
     const zoneURL = station+'/?' + zquery;
 
     console.log('ZONE URL:', zoneURL);
-
-// Load grid numbers and overlay them on the map
-loadGridNumbers(zoneURL).then(gridNumbers => {
-  gridNumbers.forEach(({ lat, lon, number }) => {
-    const latLng = L.latLng(lat, lon);
-
-    // Find the corresponding rectangle
-    const matchingRectangle = rectangles.find(rectangle =>
-      rectangle.getBounds().contains(latLng)
-    );
-
-    if (matchingRectangle) {
-      overlayGridNumbers(matchingRectangle, number);
-    }
-  });
-});
 
 // Create a clickable rectangle for each grid cell
 const rectangles = [];
@@ -343,6 +325,58 @@ for (let latIndex = 0; latIndex < gridSize; latIndex++) {
     rectangles.push(rectangle);
   }
 }
+
+// Load grid numbers and overlay them on the map
+loadGridNumbers(zoneURL).then(gridNumbers => {
+  gridNumbers.forEach(({ lat, lon, number, ipns }) => {
+    // Calculate the center of the rectangle based on lat + NSize and lon + NSize
+    const latCenter = lat + (lat < 0 ? -NSize / 2 : NSize / 2);
+    const lonCenter = lon + (lon < 0 ? -NSize / 2 : NSize / 2);
+
+    const latLng = L.latLng(latCenter, lonCenter);
+
+    // Find the corresponding rectangle
+    const matchingRectangle = rectangles.find(rectangle =>
+      rectangle.getBounds().contains(latLng)
+    );
+
+    if (matchingRectangle) {
+      overlayGridNumbers(matchingRectangle, number);
+    }
+
+    if (ipns !== '') {
+        const buttonContainer = document.createElement('div');
+        buttonContainer.id = 'button-container'
+        buttonContainer.style.position = 'absolute';
+        buttonContainer.style.bottom = '10px';
+        buttonContainer.style.left = '10px';
+        buttonContainer.style.width = '200px';
+        buttonContainer.style.height = '150px';
+        buttonContainer.style.zIndex = '1001';
+        buttonContainer.style.display = 'flex';
+        buttonContainer.style.flexDirection = 'column';
+        buttonContainer.style.alignItems = 'center';
+        buttonContainer.style.justifyContent = 'center';
+
+        const button = document.createElement('button');
+        button.innerText = 'EXPLORE';
+        button.className = 'button';
+
+        // Add an event listener to the button
+        button.addEventListener('click', function() {
+            window.open( ipns , "AstroTab");
+        });
+
+        // Append the button to the button container
+        buttonContainer.appendChild(button);
+        document.body.appendChild(buttonContainer);
+    }
+
+  });
+});
+
+
+
   </script>
 </body>
 </html>

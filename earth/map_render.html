@@ -94,33 +94,44 @@
     var station = protocol + "://" + zHost + (port ? (":" + port) : "");
     console.log(station)
 //////////////////////////////////////////////////////////////// fetchAstroport
-    async function fetchAstroport(myURL) {
+    async function fetchAstroport(myURL, retryCount = 3) {
       try {
-        let one = await fetch(myURL); // Gets a promise
+        let one = await fetch(myURL);
         var doc = await one.text();
-        var regex = /url='([^']+)/i; // Get response PORT
+        var regex = /url='([^']+)/i;
         var redirectURL = doc.match(regex)[1];
 
         console.log(redirectURL);
 
-        return new Promise((resolve, reject) => {
-          setTimeout(async function () {
+        return new Promise(async (resolve, reject) => {
+          let retry = 0;
+
+          const fetchData = async () => {
             try {
               let two = await fetch(redirectURL);
               const data = await two.json();
               console.log(data);
               resolve(data);
             } catch (error) {
-              console.log('Fetch error (inside setTimeout):', error);
-              reject(error);
+              if (retry < retryCount) {
+                console.log(`Retry ${retry + 1} after 3000ms...`);
+                retry++;
+                setTimeout(fetchData, 3000);
+              } else {
+                console.log('Max retries reached. Fetch error:', error);
+                reject(error);
+              }
             }
-          }, 3000);
+          };
+
+          setTimeout(fetchData, 3000);
         });
       } catch (err) {
         console.log('Fetch error:', err);
         return Promise.reject(err);
       }
     }
+
 ///////////////////////////////////////////////////////////////////////////////////
 
 

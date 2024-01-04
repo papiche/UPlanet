@@ -1,6 +1,8 @@
 import * as d3 from "https://cdn.jsdelivr.net/npm/d3@7/+esm";
 export const DU = 10.68;
-export const MAX_NB_TX = 30;
+export const MAX_NB_TX = 200;
+let txLimit = MAX_NB_TX;
+let minTime = null;
 
 export const CESIUM_G1_NODES = [
 	"https://g1.data.brussels.ovh",
@@ -185,29 +187,45 @@ export const G12DU = (amount) => {
 };
 
 
-export const query__expenses = (walletPk, size = 100) => {
+export const query__expenses = (walletPk, minTime, size = MAX_NB_TX) => {
 
 	return {
 		_source: ["amount", "recipient"]
+		,sort: [
+			{
+				"medianTime": "desc"
+			}
+		]
 		,size: size
 		,query: {
 			bool: {
 				filter: [
-					{term: {"issuer": walletPk}}
+					{
+						range: {
+							"medianTime": {
+								gte: minTime
+							}
+						}
+					}
+					,{
+						term: {
+							"issuer": walletPk
+						}
+					}
 				]
 			}
 		}
 	};
 };
 
-export const fetchExpenses = async (pubkey, limit = 100) => {
+export const fetchExpenses = async (pubkey, minTime, limit = MAX_NB_TX) => {
 
 	shuffle(CESIUM_G1_NODES); // Mélanger la liste des noeuds
 
 	for (let node of CESIUM_G1_NODES) {
 		try {
 			const url = `${node}/g1/movement/_search`;
-			let queryBody = query__expenses(pubkey, limit);
+			let queryBody = query__expenses(pubkey, minTime, limit);
 
 			console.log('expenses queryBody : \n', JSON.stringify(queryBody));
 
@@ -279,10 +297,11 @@ export const query__cesium_profile = (pubkey) => {
 };
 
 
-export const query__cesium_profiles = (pubkeys) => {
+export const query__cesium_profiles = (pubkeys, limit = 200) => {
 
 	return {
-		_source: ["title"]
+		size: limit
+		,_source: ["title"]
 		,query: {
 			bool: {
 				filter: [
@@ -334,7 +353,7 @@ export const fetchCesiumProfile = async (pubkey) => {
 	throw new Error("Failed to fetch data from all nodes");
 };
 
-export const fetchCesiumProfiles = async (pubkeys) => {
+export const fetchCesiumProfiles = async (pubkeys, limit) => {
 
 	shuffle(CESIUM_G1_NODES); // Mélanger la liste des noeuds
 
@@ -342,7 +361,7 @@ export const fetchCesiumProfiles = async (pubkeys) => {
 
 		try {
 			const url = `${node}/user/profile/_search`;
-			let queryBody = query__cesium_profiles(pubkeys);
+			let queryBody = query__cesium_profiles(pubkeys, limit);
 
 			console.log('cesium_profiles queryBody : \n', JSON.stringify(queryBody));
 
@@ -443,17 +462,21 @@ export const displayExpenses = (expensesByRecipient, expensesTotalAmount, recipi
 
 let formElt = document.querySelector('form#explore');
 
-const treemapIt = async (pubkey, maxNbTx = MAX_NB_TX) => {
+const treemapIt = async (pubkey, minTime, maxNbTx = MAX_NB_TX) => {
 
 	let dotsPos = pubkey.indexOf(':');
 	if (dotsPos != -1) {
 		pubkey = pubkey.substr(0, dotsPos);
 	}
 
-	let { expensesTotalAmount, expensesByRecipient } = await fetchExpenses(pubkey, maxNbTx);
+	let { expensesTotalAmount, expensesByRecipient } = await fetchExpenses(pubkey, minTime, maxNbTx);
+
+	let nbRecipients = Object.keys(expensesByRecipient).length;
+
+	console.log("nb recipients :\n", nbRecipients);
 
 	let recipientsList = Object.keys(expensesByRecipient);
-	let recipientsCesiumProfiles = await fetchCesiumProfiles(recipientsList);
+	let recipientsCesiumProfiles = await fetchCesiumProfiles(recipientsList, maxNbTx);
 
 	let currentProfile = await fetchCesiumProfile(pubkey);
 	console.log('currentProfile :\n', currentProfile);
@@ -471,18 +494,64 @@ const treemapIt = async (pubkey, maxNbTx = MAX_NB_TX) => {
 			console.log('linkEvent.currentTarget :\n', linkEvent.currentTarget);
 			let pubkey = linkEvent.currentTarget.getAttribute('href').substr(1);
 
-			treemapIt(pubkey);
+			// treemapIt(pubkey, minDate);
 		});
 	}
 };
+
+const getPkInHash = () => {
+
+	let hash = window.location.hash;
+	hash = hash.substring(1);
+	return hash;
+};
+
+window.addEventListener("popstate", (popEvent) => {
+
+	let pk = getPkInHash();
+	console.log('\n\n\npubkey :\n', pk);
+
+	if (pk != '') {
+		treemapIt(pk, minTime, txLimit);
+	}
+});
 
 formElt.addEventListener('submit', (formEvent) => {
 
 	formEvent.preventDefault();
 
+	txLimit = formEvent.target.querySelector('input[name="txLimit"]').value;
+
+	let minDateStr = formEvent.target.querySelector('input[name="minDate"]').value;
+	let minDate = new Date(minDateStr);
+	minTime = Math.floor(minDate.valueOf()/1000);
+	console.log('minTime :\n', minTime);
+
 	let pubkey = formEvent.target.querySelector('input[name="pubkey"]').value;
 
-	let txLimit = formEvent.target.querySelector('input[name="txLimit"]').value;
-
-	treemapIt(pubkey, txLimit);
+	window.location = '#';
+	window.location = '#' + pubkey;
 });
+
+window.addEventListener('DOMContentLoaded', (loadEvent) => {
+
+	let formElt = document.getElementById('explore');
+
+	let minDateElt = formElt.querySelector('input[name="minDate"]');
+
+	let now = Date();
+	console.log('now : \n', now);
+
+	let aMonthAgo = new Date(now);
+	aMonthAgo.setMonth(aMonthAgo.getMonth() - 1);
+
+	console.log('aMonthAgo : ', aMonthAgo);
+	console.log('aMonthAgo.getMonth() :\n', aMonthAgo.getMonth());
+
+	let dateStr = aMonthAgo.getFullYear() + '-' + (aMonthAgo.getMonth()+1).toString().padStart(2,0) + '-' + aMonthAgo.getDate().toString().padStart(2,0);
+
+	console.log('dateStr : ', dateStr);
+
+	minDateElt.value = dateStr;
+});
+

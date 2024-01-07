@@ -263,9 +263,9 @@ export const fetchExpenses = async (pubkey, minTime, limit = MAX_NB_TX) => {
                 transactions.push({
                     date: new Date(tx.medianTime).toLocaleDateString(),
                     walletId: pubkey,
-                    income: tx.amount > 0 ? tx.amount / 100 : 0,
-                    outcome: tx.amount < 0 ? -tx.amount / 100 : 0,
-                    comment: "Transaction Comment", // Add your logic to get the comment
+                    income: 0,
+                    outcome: tx.amount,
+                    comment: "Expense Comment", // Add your logic to get the comment
                   });
 
             }
@@ -285,6 +285,102 @@ export const fetchExpenses = async (pubkey, minTime, limit = MAX_NB_TX) => {
     throw new Error("Failed to fetch data from all nodes");
 };
 
+export const query__incomes = (walletPk, minTime, size = MAX_NB_TX) => {
+
+    return {
+        _source: ["amount", "issuer"]
+        ,sort: [
+            {
+                "medianTime": "desc"
+            }
+        ]
+        ,size: size
+        ,query: {
+            bool: {
+                filter: [
+                    {
+                        range: {
+                            "medianTime": {
+                                gte: minTime
+                            }
+                        }
+                    }
+                    ,{
+                        term: {
+                            "recipient": walletPk
+                        }
+                    }
+                ]
+            }
+        }
+    };
+};
+
+export const fetchIncomes = async (pubkey, minTime, limit = MAX_NB_TX) => {
+
+    shuffle(CESIUM_G1_NODES); // Mélanger la liste des noeuds
+
+    for (let node of CESIUM_G1_NODES) {
+        try {
+            const url = `${node}/g1/movement/_search`;
+            let queryBody = query__incomes(pubkey, minTime, limit);
+
+            console.log('incomes queryBody : \n', JSON.stringify(queryBody));
+
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(queryBody)
+            });
+
+            const data = await response.json();
+
+            console.log('node for the incomes of :\n', pubkey, '\n', node);
+            console.log('incomes data :\n', data);
+
+            let incomesByIssuer = {};
+            let totalAmount = 0;
+            let transactions = [];
+
+            for (const hit of data.hits.hits) {
+
+                const tx = hit._source;
+
+                if (!(tx.issuer in incomesByIssuer)) {
+
+                    incomesByIssuer[tx.issuer] = 0;
+                }
+
+                incomesByIssuer[tx.issuer] += tx.amount/100;
+
+                totalAmount += tx.amount;
+
+                transactions.push({
+                    date: new Date(tx.medianTime).toLocaleDateString(),
+                    walletId: pubkey,
+                    income: tx.amount,
+                    outcome: 0,
+                    comment: "Income Comment", // Add your logic to get the comment
+                  });
+
+            }
+
+            totalAmount = totalAmount/100;
+
+            return {
+                incomesTotalAmount: totalAmount
+                ,incomesByIssuer: incomesByIssuer
+            };
+        } catch (error) {
+            console.error(`Failed to fetch data from ${node}: ${error}`);
+            // Si une erreur se produit, passez simplement au noeud suivant
+        }
+    }
+
+    throw new Error("Failed to fetch data from all nodes");
+};
 
 export const query__cesium_profile = (pubkey) => {
 
@@ -444,40 +540,6 @@ const exportToPDF = (transactions) => {
 
 export const displayExpenses = (expensesByRecipient, expensesTotalAmount, recipientsCesiumProfiles, chartColors, currentPubkey, currentProfile) => {
 
-  let exportButtonContainer = document.querySelector("#export-button");
-  let exportButton = document.createElement("button");
-  exportButton.textContent = "Export to PDF";
-  exportButton.addEventListener("click", async () => {
-    try {
-      const { expensesByRecipient, expensesTotalAmount } = await fetchExpenses(
-        currentPubkey,
-        minTime,
-        txLimit
-      );
-
-      let transactions = [];
-
-      for (const recipient in expensesByRecipient) {
-        transactions.push({
-          date: new Date().toLocaleDateString(),
-          walletId: currentPubkey,
-          income: expensesByRecipient[recipient],
-          outcome: 0,
-          comment: "Transaction Comment", // Add your logic to get the comment
-        });
-      }
-
-      // Export transactions to PDF
-      exportToPDF(transactions);
-    } catch (error) {
-      console.error(`Error exporting to PDF: ${error}`);
-    }
-  });
-
-    // Append the export button to the container
-    exportButtonContainer.innerHTML = '';
-    exportButtonContainer.appendChild(exportButton);
-
     let screenElt = document.querySelector('#expenses');
     screenElt.innerHTML = '';
 
@@ -539,6 +601,69 @@ export const displayExpenses = (expensesByRecipient, expensesTotalAmount, recipi
     screenElt.scrollIntoView({behavior: 'smooth'}, true);
 };
 
+export const displayIncomes = (incomesByIssuer, incomesTotalAmount, issuersCesiumProfiles, chartColors, currentPubkey, currentProfile) => {
+
+    let screenElt = document.querySelector('#incomes');
+    screenElt.innerHTML = '';
+
+    let currentProfileTitleElt = document.createElement('h2');
+    screenElt.append(currentProfileTitleElt);
+    let title = null;
+    if (currentProfile == undefined) {
+        title = 'Revenus du portefeuille <code>' + currentPubkey.substr(0, 8) + '</code>';
+    } else {
+        title = 'Revenus de <q>' + currentProfile.title + '</q>';
+    }
+    currentProfileTitleElt.innerHTML = title;
+
+    let svgContainer = document.createElement('article');
+    screenElt.append(svgContainer);
+    svgContainer.classList.add("svg-container");
+
+    let chartData = [];
+
+    // Formatting data
+    for (const issuer in incomesByIssuer) {
+
+        let issuerObj = {};
+
+        issuerObj.pk = issuer;
+        issuerObj.amount = incomesByIssuer[issuer];
+        let numberOptions = { roundingMode: 'ceil', minimumFractionDigits: 0, maximumFractionDigits: 0 };
+        issuerObj.displayedAmount = G12DU(issuerObj.amount).toLocaleString('fr-FR', numberOptions) + ' DU';
+
+        if (issuersCesiumProfiles[issuer] != undefined
+            &&  issuersCesiumProfiles[issuer].title != undefined
+        ) {
+            issuerObj.title = issuersCesiumProfiles[issuer].title;
+        } else {
+            issuerObj.title = issuer.substr(0, 8);
+        }
+
+        chartData.push(issuerObj);
+    }
+
+    let chart = Treemap(chartData, {
+        path: d => d.title,
+        value: d => d.amount,
+        group: d => d.title,
+        label: (d, n) => d.title,
+        title: (d, n) => d.displayedAmount,
+        link: (d, n) => '#' + d.pk + '',
+        linkTarget: '_self',
+        tile: d3.treemapSquarify,
+        width: 1280,
+        height: 720,
+        padding: 0,
+        colors: chartColors,
+        fillOpacity: 1
+    });
+
+    svgContainer.append(chart);
+
+    screenElt.scrollIntoView({behavior: 'smooth'}, true);
+};
+
 
 let formElt = document.querySelector('form#explore');
 
@@ -550,18 +675,25 @@ const treemapIt = async (pubkey, minTime, maxNbTx = MAX_NB_TX) => {
     }
 
     let { expensesTotalAmount, expensesByRecipient } = await fetchExpenses(pubkey, minTime, maxNbTx);
+    let { incomesTotalAmount, incomesByIssuer } = await fetchIncomes(pubkey, minTime, maxNbTx);
 
     let nbRecipients = Object.keys(expensesByRecipient).length;
+    let nbIssuers = Object.keys(incomesByIssuer).length;
 
-    console.log("nb recipients :\n", nbRecipients);
+    console.log("nb recipients :\n", nbRecipients);
+    console.log("nb Issuers :\n", nbIssuers);
 
     let recipientsList = Object.keys(expensesByRecipient);
     let recipientsCesiumProfiles = await fetchCesiumProfiles(recipientsList, maxNbTx);
 
+    let issuersList = Object.keys(incomesByIssuer);
+    let issuersCesiumProfiles = await fetchCesiumProfiles(issuersList, maxNbTx);
+
     let currentProfile = await fetchCesiumProfile(pubkey);
-    console.log('currentProfile :\n', currentProfile);
+    console.log('currentProfile :\n', currentProfile);
 
     displayExpenses(expensesByRecipient, expensesTotalAmount, recipientsCesiumProfiles, chartColors, pubkey, currentProfile);
+    displayIncomes(incomesByIssuer, incomesTotalAmount, issuersCesiumProfiles, chartColors, pubkey, currentProfile);
 
     let svg = document.querySelector('#expenses svg');
     let links = svg.querySelectorAll("a");
@@ -571,7 +703,7 @@ const treemapIt = async (pubkey, minTime, maxNbTx = MAX_NB_TX) => {
         link.addEventListener('click', (linkEvent) => {
 
             // linkEvent.currentTarget.preventDefault();
-            console.log('linkEvent.currentTarget :\n', linkEvent.currentTarget);
+            console.log('linkEvent.currentTarget :\n', linkEvent.currentTarget);
             let pubkey = linkEvent.currentTarget.getAttribute('href').substr(1);
 
             // treemapIt(pubkey, minDate);
@@ -589,7 +721,7 @@ const getPkInHash = () => {
 window.addEventListener("popstate", (popEvent) => {
 
     let pk = getPkInHash();
-    console.log('\n\n\npubkey :\n', pk);
+    console.log('\n\n\npubkey :\n', pk);
 
     if (pk != '') {
         treemapIt(pk, minTime, txLimit);
@@ -605,7 +737,7 @@ formElt.addEventListener('submit', (formEvent) => {
     let minDateStr = formEvent.target.querySelector('input[name="minDate"]').value;
     let minDate = new Date(minDateStr);
     minTime = Math.floor(minDate.valueOf()/1000);
-    console.log('minTime :\n', minTime);
+    console.log('minTime :\n', minTime);
 
     let pubkey = formEvent.target.querySelector('input[name="pubkey"]').value;
 
@@ -625,13 +757,12 @@ window.addEventListener('DOMContentLoaded', (loadEvent) => {
     let aMonthAgo = new Date(now);
     aMonthAgo.setMonth(aMonthAgo.getMonth() - 1);
 
-    console.log('aMonthAgo : ', aMonthAgo);
-    console.log('aMonthAgo.getMonth() :\n', aMonthAgo.getMonth());
+    console.log('aMonthAgo : ', aMonthAgo);
+    console.log('aMonthAgo.getMonth() :\n', aMonthAgo.getMonth());
 
     let dateStr = aMonthAgo.getFullYear() + '-' + (aMonthAgo.getMonth()+1).toString().padStart(2,0) + '-' + aMonthAgo.getDate().toString().padStart(2,0);
 
-    console.log('dateStr : ', dateStr);
+    console.log('dateStr : ', dateStr);
 
     minDateElt.value = dateStr;
 });
-

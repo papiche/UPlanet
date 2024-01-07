@@ -547,9 +547,9 @@ export const displayExpenses = (expensesByRecipient, expensesTotalAmount, recipi
     screenElt.append(currentProfileTitleElt);
     let title = null;
     if (currentProfile == undefined) {
-        title = 'Dépenses du portefeuille <code>' + currentPubkey.substr(0, 8) + '</code>';
+        title = 'Dépenses du portefeuille <code>' + currentPubkey.substr(0, 8) + '</code> = '+ expensesTotalAmount + ' Ğ1';
     } else {
-        title = 'Dépenses de <q>' + currentProfile.title + '</q>';
+        title = 'Dépenses de <q>' + currentProfile.title + '</q> <code>' + currentPubkey.substr(0, 8) + '</code> = '+ expensesTotalAmount + ' Ğ1' ;
     }
     currentProfileTitleElt.innerHTML = title;
 
@@ -610,9 +610,9 @@ export const displayIncomes = (incomesByIssuer, incomesTotalAmount, issuersCesiu
     screenElt.append(currentProfileTitleElt);
     let title = null;
     if (currentProfile == undefined) {
-        title = 'Revenus du portefeuille <code>' + currentPubkey.substr(0, 8) + '</code>';
+        title = 'Revenus du portefeuille <code>' + currentPubkey.substr(0, 8) + '</code> = '+ incomesTotalAmount + ' Ğ1';
     } else {
-        title = 'Revenus de <q>' + currentProfile.title + '</q>';
+        title = 'Revenus de <q>' + currentProfile.title + '</q> <code>' + currentPubkey.substr(0, 8) + '</code> = ' + incomesTotalAmount + ' Ğ1';
     }
     currentProfileTitleElt.innerHTML = title;
 
@@ -673,6 +673,10 @@ const treemapIt = async (pubkey, minTime, maxNbTx = MAX_NB_TX) => {
     if (dotsPos != -1) {
         pubkey = pubkey.substr(0, dotsPos);
     }
+
+    // Change pubkey in form
+    const pubkeyElement = document.querySelector('input[name="pubkey"]');
+    pubkeyElement.value = pubkey
 
     let { expensesTotalAmount, expensesByRecipient } = await fetchExpenses(pubkey, minTime, maxNbTx);
     let { incomesTotalAmount, incomesByIssuer } = await fetchIncomes(pubkey, minTime, maxNbTx);

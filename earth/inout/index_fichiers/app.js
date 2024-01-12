@@ -191,7 +191,7 @@ export const G12DU = (amount) => {
 export const query__expenses = (walletPk, minTime, size = MAX_NB_TX) => {
 
     return {
-        _source: ["amount", "recipient", "comment", "medianTime"]
+        _source: ["amount", "recipient"]
         ,sort: [
             {
                 "medianTime": "desc"
@@ -245,6 +245,7 @@ export const fetchExpenses = async (pubkey, minTime, limit = MAX_NB_TX) => {
 
             let expensesByRecipient = {};
             let totalAmount = 0;
+            let transactions = [];
 
             for (const hit of data.hits.hits) {
 
@@ -257,13 +258,15 @@ export const fetchExpenses = async (pubkey, minTime, limit = MAX_NB_TX) => {
 
                 expensesByRecipient[tx.recipient] += tx.amount/100;
 
-                // incomesByIssuer initialize table
-                expensesByRecipient[tx.medianTime] = tx.medianTime;
-                expensesByRecipient[tx.amout] = tx.amount;
-                expensesByRecipient[tx.recipient] = tx.recipient;
-                expensesByRecipient[tx.comment] = tx.comment;
-
                 totalAmount += tx.amount;
+
+                transactions.push({
+                    date: new Date(tx.medianTime).toLocaleDateString(),
+                    walletId: pubkey,
+                    income: 0,
+                    outcome: tx.amount,
+                    comment: "Expense Comment", // Add your logic to get the comment
+                  });
 
             }
 
@@ -285,7 +288,7 @@ export const fetchExpenses = async (pubkey, minTime, limit = MAX_NB_TX) => {
 export const query__incomes = (walletPk, minTime, size = MAX_NB_TX) => {
 
     return {
-        _source: ["amount", "issuer", "comment", "medianTime"]
+        _source: ["amount", "issuer"]
         ,sort: [
             {
                 "medianTime": "desc"
@@ -339,6 +342,7 @@ export const fetchIncomes = async (pubkey, minTime, limit = MAX_NB_TX) => {
 
             let incomesByIssuer = {};
             let totalAmount = 0;
+            let transactions = [];
 
             for (const hit of data.hits.hits) {
 
@@ -351,13 +355,15 @@ export const fetchIncomes = async (pubkey, minTime, limit = MAX_NB_TX) => {
 
                 incomesByIssuer[tx.issuer] += tx.amount/100;
 
-                // incomesByIssuer initialize table
-                incomesByIssuer[tx.medianTime] = tx.medianTime;
-                incomesByIssuer[tx.amout] = tx.amount;
-                incomesByIssuer[tx.issuer] = tx.issuer;
-                incomesByIssuer[tx.comment] = tx.comment;
-
                 totalAmount += tx.amount;
+
+                transactions.push({
+                    date: new Date(tx.medianTime).toLocaleDateString(),
+                    walletId: pubkey,
+                    income: tx.amount,
+                    outcome: 0,
+                    comment: "Income Comment", // Add your logic to get the comment
+                  });
 
             }
 
@@ -495,6 +501,42 @@ export const fetchCesiumProfiles = async (pubkeys, limit) => {
 
     throw new Error("Failed to fetch data from all nodes");
 };
+
+// Function to export transactions to PDF
+const exportToPDF = (transactions) => {
+  const pdf = new jsPDF();
+  pdf.text("Transaction Report", 20, 10);
+
+  // Define table columns
+  const columns = ["Date", "Wallet ID", "Income", "Outcome", "Comment"];
+
+  // Initialize y-position for table
+  let y = 20;
+
+  // Add table headers
+  columns.forEach((column, index) => {
+    pdf.text(column, 20 + index * 40, y);
+  });
+
+  // Increment y for the next row
+  y += 10;
+
+  // Add transactions to the table
+  transactions.forEach((transaction) => {
+    pdf.text(transaction.date, 20, y);
+    pdf.text(transaction.walletId, 60, y);
+    pdf.text(transaction.income.toString(), 100, y);
+    pdf.text(transaction.outcome.toString(), 140, y);
+    pdf.text(transaction.comment, 180, y);
+
+    // Increment y for the next row
+    y += 10;
+  });
+
+  // Save the PDF
+  pdf.save("transaction_report.pdf");
+};
+
 
 export const displayExpenses = (expensesByRecipient, expensesTotalAmount, recipientsCesiumProfiles, chartColors, currentPubkey, currentProfile) => {
 
@@ -673,60 +715,6 @@ const treemapIt = async (pubkey, minTime, maxNbTx = MAX_NB_TX) => {
     }
 };
 
-// Function to export transactions to PDF
-const exportToPDF = (transactions) => {
-    const pdf = new jsPDF({
-        orientation: 'landscape', // Set orientation to landscape
-        unit: 'mm',
-        format: 'a4',
-    });
-
-    pdf.text("Transaction Report", 10, 10);
-
-    // Define table columns
-    const columns = ["Date", "Recipient", "Outcome", "Issuer", "Incoming", "Total"];
-
-    // Initialize y-position for the table
-    let y = 20;
-
-    // Add table headers
-    columns.forEach((column, index) => {
-        pdf.text(column, 10 + index * 40, y);
-    });
-
-    // Increment y for the next row
-    y += 10;
-
-    // Add transactions to the table
-    transactions.forEach((transaction) => {
-        pdf.text(transaction.medianTime, 10, y);
-        pdf.text(transaction.recipient || "", 50, y);
-        pdf.text(transaction.amount, 90, y);
-        pdf.text(transaction.issuer || "", 130, y);
-        pdf.text(transaction.amount, 170, y);
-
-        // Increment y for the next row
-        y += 10;
-
-        // Add a new page if the table exceeds one page
-        if (y > 280) {
-            pdf.addPage();
-            y = 20;
-
-            // Add table headers for the new page
-            columns.forEach((column, index) => {
-                pdf.text(column, 10 + index * 40, y);
-            });
-
-            // Increment y for the next row on the new page
-            y += 10;
-        }
-    });
-
-    // Save the PDF
-    pdf.save("transaction_report.pdf");
-};
-
 const getPkInHash = () => {
 
     let hash = window.location.hash;
@@ -781,50 +769,4 @@ window.addEventListener('DOMContentLoaded', (loadEvent) => {
     console.log('dateStr : ', dateStr);
 
     minDateElt.value = dateStr;
-
-        // Add an event listener to the export button
-    const exportButton = document.getElementById('exportButton');
-    exportButton.addEventListener('click', async () => {
-        try {
-
-            const pubkey = document.querySelector('input[name="pubkey"]').value;
-
-            const { expensesTotalAmount, expensesByRecipient } = await fetchExpenses(pubkey, minTime, txLimit);
-            const { incomesTotalAmount, incomesByIssuer } = await fetchIncomes(pubkey, minTime, txLimit);
-
-            // Combine expenses and incomes into a single list ordered by date
-            const combinedTransactions = [];
-
-            for (const recipient in expensesByRecipient) {
-                combinedTransactions.push({
-                    medianTime: expensesByRecipient[medianTime],
-                    type: 'Expense',
-                    amount: expensesByRecipient[amount],
-                    recipient: expensesByRecipient[recipient],
-                });
-            }
-
-            for (const issuer in incomesByIssuer) {
-                combinedTransactions.push({
-                    medianTime: incomesByIssuer[medianTime],
-                    type: 'Income',
-                    amount: incomesByIssuer[amount],
-                    issuer: incomesByIssuer[issuer],
-                });
-            }
-
-            // Sort the transactions by date
-            combinedTransactions.sort((a, b) => new Date(a.medianTime) - new Date(b.medianTime));
-
-            // Create a PDF with the combined transactions
-            exportToPDF(combinedTransactions);
-        } catch (error) {
-            console.error(`Error exporting transactions to PDF: ${error}`);
-        }
-    });
-
-
-
-
-
 });

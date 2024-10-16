@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Treasure Hunt App</title>
+</head>
+<body>
+    <h1>Treasure Hunt</h1>
+    <p id="status">Waiting for coordinates...</p>
+
+    <script>
+        // Function to calculate the distance between two points using Haversine formula
+        function calculateDistance(lat1, lon1, lat2, lon2) {
+            const R = 6371; // Radius of the Earth in kilometers
+            const dLat = (lat2 - lat1) * (Math.PI / 180);
+            const dLon = (lon2 - lon1) * (Math.PI / 180);
+            const a =
+                Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) *
+                Math.sin(dLon / 2) * Math.sin(dLon / 2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            const distance = R * c;
+            return distance;
+        }
+
+        // Function to check if the user is at the treasure spot
+        function checkTreasure(latitude, longitude) {
+            // Replace these values with the actual coordinates of the treasures
+            const treasureCoordinates = [
+                { lat: 37.7749, lon: -122.4194 }, // Example coordinates (San Francisco, CA)
+                // Add more coordinates as needed
+            ];
+
+            for (const treasure of treasureCoordinates) {
+                const distance = calculateDistance(latitude, longitude, treasure.lat, treasure.lon);
+                if (distance < 0.1) {
+                    // User is at the treasure spot
+                    document.getElementById('status').innerText = 'You found the treasure!';
+                    // Ask for email and send a request to a GET URL
+                    const userEmail = prompt('Congratulations! Enter your email to claim the treasure:');
+                    sendRequest(userEmail);
+                    return;
+                }
+            }
+
+            // User is not at any treasure spot
+            document.getElementById('status').innerText = 'Waiting for coordinates...';
+        }
+
+        // Function to send a request to a GET URL with the user's email
+        function sendRequest(email) {
+            // Replace 'YOUR_GET_URL' with the actual GET URL
+            const apiUrl = 'YOUR_GET_URL';
+
+            // Construct the final URL with the user's email
+            const finalUrl = `${apiUrl}?email=${encodeURIComponent(email)}`;
+
+            // Use fetch to send the GET request
+            fetch(finalUrl)
+                .then(response => {
+                    if (response.ok) {
+                        console.log('Request sent successfully.');
+                    } else {
+                        console.error('Error sending request:', response.status);
+                    }
+                })
+                .catch(error => console.error('Error sending request:', error));
+        }
+
+        // Dummy function to simulate getting the user's current location
+        function getUserLocation() {
+            // Replace with actual geolocation API calls for a mobile app
+            // In a real-world scenario, you would request the user's location using the Geolocation API
+            // For this example, we'll use hardcoded values for testing
+            const userLatitude = 37.7749; // Example latitude (San Francisco, CA)
+            const userLongitude = -122.4194; // Example longitude (San Francisco, CA)
+            checkTreasure(userLatitude, userLongitude);
+        }
+
+        // Simulate checking for user location every few seconds (for demonstration purposes)
+        setInterval(getUserLocation, 5000);
+    </script>
+</body>
+</html>

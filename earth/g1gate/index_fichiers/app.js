@@ -45,8 +45,8 @@ export const Treemap = (
     link, // given a leaf node d, its link (if any)
     linkTarget = "_blank", // the target attribute for links (if any)
     tile = d3.treemapBinary, // treemap strategy
-    width = 640, // outer width, in pixels
-    height = 400, // outer height, in pixels
+    width = 480, // outer width, in pixels
+    height = 360, // outer height, in pixels
     margin = 0, // shorthand for margins
     marginTop = margin, // top margin, in pixels
     marginRight = margin, // right margin, in pixels
@@ -241,8 +241,8 @@ export const fetchExpenses = async (pubkey, minTime, limit = MAX_NB_TX) => {
             const data = await response.json();
 
             console.log('node for the expenses of :\n', pubkey, '\n', node);
-            console.log('expenses data :\n', data);
 
+            // expensesByRecipient initialize table
             let expensesByRecipient = {};
             let totalAmount = 0;
 
@@ -250,18 +250,15 @@ export const fetchExpenses = async (pubkey, minTime, limit = MAX_NB_TX) => {
 
                 const tx = hit._source;
 
+                // tx expense example : Object { amount: 18000, medianTime: 1670155095, recipient: "9e7rdkfNQetyyKudJz9aRSQQV6HeebeZFsj3Ha5MsMZ1", comment: "Bolso cartera marron" }
+                console.log('tx expense :\n', tx);
+
                 if (!(tx.recipient in expensesByRecipient)) {
 
                     expensesByRecipient[tx.recipient] = 0;
                 }
 
                 expensesByRecipient[tx.recipient] += tx.amount/100;
-
-                // incomesByIssuer initialize table
-                expensesByRecipient[tx.medianTime] = tx.medianTime;
-                expensesByRecipient[tx.amout] = tx.amount;
-                expensesByRecipient[tx.recipient] = tx.recipient;
-                expensesByRecipient[tx.comment] = tx.comment;
 
                 totalAmount += tx.amount;
 
@@ -335,8 +332,8 @@ export const fetchIncomes = async (pubkey, minTime, limit = MAX_NB_TX) => {
             const data = await response.json();
 
             console.log('node for the incomes of :\n', pubkey, '\n', node);
-            console.log('incomes data :\n', data);
 
+            // incomesByIssuer initialize table
             let incomesByIssuer = {};
             let totalAmount = 0;
 
@@ -344,18 +341,15 @@ export const fetchIncomes = async (pubkey, minTime, limit = MAX_NB_TX) => {
 
                 const tx = hit._source;
 
+                // tx income example : Object { amount: 40000, medianTime: 1693753222, comment: "Huevos gotas", issuer: "HpztnzdDP1FEiS4bnXVzQ3BQBAfRiMUMhHK7xzTGsVqe" }
+                console.log('tx income :\n', tx);
+
                 if (!(tx.issuer in incomesByIssuer)) {
 
                     incomesByIssuer[tx.issuer] = 0;
                 }
 
                 incomesByIssuer[tx.issuer] += tx.amount/100;
-
-                // incomesByIssuer initialize table
-                incomesByIssuer[tx.medianTime] = tx.medianTime;
-                incomesByIssuer[tx.amout] = tx.amount;
-                incomesByIssuer[tx.issuer] = tx.issuer;
-                incomesByIssuer[tx.comment] = tx.comment;
 
                 totalAmount += tx.amount;
 
@@ -557,6 +551,19 @@ export const displayExpenses = (expensesByRecipient, expensesTotalAmount, recipi
     svgContainer.append(chart);
 
     screenElt.scrollIntoView({behavior: 'smooth'}, true);
+
+    // Display transaction list
+    const expensesList = document.getElementById("expensesList");
+    expensesList.innerHTML = "";
+    for (const recipient in expensesByRecipient) {
+        const listItem = document.createElement("li");
+        listItem.textContent = `To: ${recipientsCesiumProfiles[recipient]?.title || recipient}, Amount: ${expensesByRecipient[recipient]} Ğ1`;
+        expensesList.appendChild(listItem);
+    }
+
+    // Display total expenses
+    const totalExpensesAmount = document.getElementById("totalExpensesAmount");
+    totalExpensesAmount.textContent = expensesTotalAmount.toFixed(2);
 };
 
 export const displayIncomes = (incomesByIssuer, incomesTotalAmount, issuersCesiumProfiles, chartColors, currentPubkey, currentProfile) => {
@@ -620,6 +627,19 @@ export const displayIncomes = (incomesByIssuer, incomesTotalAmount, issuersCesiu
     svgContainer.append(chart);
 
     screenElt.scrollIntoView({behavior: 'smooth'}, true);
+
+    // Display transaction list
+    const incomesList = document.getElementById("incomesList");
+    incomesList.innerHTML = "";
+    for (const issuer in incomesByIssuer) {
+        const listItem = document.createElement("li");
+        listItem.textContent = `From: ${issuersCesiumProfiles[issuer]?.title || issuer}, Amount: ${incomesByIssuer[issuer]} Ğ1`;
+        incomesList.appendChild(listItem);
+    }
+
+    // Display total incomes
+    const totalIncomesAmount = document.getElementById("totalIncomesAmount");
+    totalIncomesAmount.textContent = incomesTotalAmount.toFixed(2);
 };
 
 
@@ -642,8 +662,8 @@ const treemapIt = async (pubkey, minTime, maxNbTx = MAX_NB_TX) => {
     let nbRecipients = Object.keys(expensesByRecipient).length;
     let nbIssuers = Object.keys(incomesByIssuer).length;
 
-    console.log("nb recipients :\n", nbRecipients);
-    console.log("nb Issuers :\n", nbIssuers);
+    console.log("nb Expences recipients :\n", nbRecipients);
+    console.log("nb Income Issuers :\n", nbIssuers);
 
     let recipientsList = Object.keys(expensesByRecipient);
     let recipientsCesiumProfiles = await fetchCesiumProfiles(recipientsList, maxNbTx);
@@ -781,50 +801,5 @@ window.addEventListener('DOMContentLoaded', (loadEvent) => {
     console.log('dateStr : ', dateStr);
 
     minDateElt.value = dateStr;
-
-        // Add an event listener to the export button
-    const exportButton = document.getElementById('exportButton');
-    exportButton.addEventListener('click', async () => {
-        try {
-
-            const pubkey = document.querySelector('input[name="pubkey"]').value;
-
-            const { expensesTotalAmount, expensesByRecipient } = await fetchExpenses(pubkey, minTime, txLimit);
-            const { incomesTotalAmount, incomesByIssuer } = await fetchIncomes(pubkey, minTime, txLimit);
-
-            // Combine expenses and incomes into a single list ordered by date
-            const combinedTransactions = [];
-
-            for (const recipient in expensesByRecipient) {
-                combinedTransactions.push({
-                    medianTime: expensesByRecipient[medianTime],
-                    type: 'Expense',
-                    amount: expensesByRecipient[amount],
-                    recipient: expensesByRecipient[recipient],
-                });
-            }
-
-            for (const issuer in incomesByIssuer) {
-                combinedTransactions.push({
-                    medianTime: incomesByIssuer[medianTime],
-                    type: 'Income',
-                    amount: incomesByIssuer[amount],
-                    issuer: incomesByIssuer[issuer],
-                });
-            }
-
-            // Sort the transactions by date
-            combinedTransactions.sort((a, b) => new Date(a.medianTime) - new Date(b.medianTime));
-
-            // Create a PDF with the combined transactions
-            exportToPDF(combinedTransactions);
-        } catch (error) {
-            console.error(`Error exporting transactions to PDF: ${error}`);
-        }
-    });
-
-
-
-
 
 });

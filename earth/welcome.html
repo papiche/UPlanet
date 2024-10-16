@@ -26,16 +26,51 @@
         border: none;
         cursor: pointer;
     }
+    .rolling-text-container {
+      position: fixed;
+      top: 20px;
+      left: 0px;
+      width: 100%;
+      background-color: #fff;
+      color: #000;
+      padding: 20px;
+      text-align: center;
+      font-size: 20px;
+      overflow: hidden;
+      z-index: 99; /* Ensure the rolling text is above the map */
+    }
 </style>
 
   <script src="leaflet.js"></script>
+<!--
+  <script src="axios.min.js"></script>
+-->
 
 </head>
 <body>
   <div id="map"></div>
+    <div id="rollingText" class="rolling-text-container"></div>
 
   <script>
+///////////////////////////////////////////////////////////////////////////////////
+    // Extract the hostname (e.g., "https://ipfs.domain.tld" or "http://ipfs.localhost:8080")
+    var currentURL = new URL(window.location.href);
+    var hostname = currentURL.hostname;
+    var port = currentURL.port;
+    var protocol = currentURL.protocol.split(":")[0];
+    // Check and replace the port if it's 8080
+    if (port === "8080") {
+        port = "1234";
+    }
+    var zHost = hostname.replace("ipfs", "astroport");
+    // Create the "station" variable with the specified format
+    var station = protocol + "://" + zHost + (port ? (":" + port) : "");
+    console.log(station)
+    const zoneURL = station+'/?dragons=one';
 
+    console.log('DRAGON URL:', zoneURL);
+
+///////////////////////////////////////////////////////////////////////////////////
     // Function to extract URL parameters
     function getUrlParameter(name) {
       name = name.replace(/[\[]/, '\\[').replace(/[\]]/, '\\]');
@@ -43,74 +78,162 @@
       const results = regex.exec(location.search);
       return results === null ? '' : decodeURIComponent(results[1].replace(/\+/g, ' '));
     }
-    const defaultIPNS = '';
-    const sectorIPNS = getUrlParameter('ipns') || defaultIPNS;
-    console.log('sectorIPNS: /ipns/', sectorIPNS);
-    if (sectorIPNS !== '') {
-        const buttonContainer = document.createElement('div');
-        buttonContainer.id = 'button-container'
-        buttonContainer.style.position = 'absolute';
-        buttonContainer.style.bottom = '0px';
-        buttonContainer.style.left = '0px';
-        buttonContainer.style.width = '200px';
-        buttonContainer.style.height = '150px';
-        buttonContainer.style.zIndex = '1001';
-        buttonContainer.style.display = 'flex';
-        buttonContainer.style.flexDirection = 'column';
-        buttonContainer.style.alignItems = 'center';
-        buttonContainer.style.justifyContent = 'center';
-
-        const button = document.createElement('button');
-        button.innerText = 'EXPLORE';
-        button.className = 'button';
-
-        // Add an event listener to the button
-        button.addEventListener('click', function() {
-            window.open( '/ipns/'+ sectorIPNS, "AstroTab");
-        });
-
-        // Append the button to the button container
-        buttonContainer.appendChild(button);
-        document.body.appendChild(buttonContainer);
-    }
 
   // Set up initial variables
-const tileSize = 10; // 10° interval
-const gridSize = 36;
-const initialZoom = 1; // Choose an initial zoom level
+    const tileSize = 10; // 10° interval
+    const gridSize = 36;
+    const initialZoom = 1; // Choose an initial zoom level
 
-// Create the map
-const map = L.map('map').setView([0, 0], initialZoom);
+    // Create the map
+    const map = L.map('map').setView([0, 0], initialZoom);
 
-// Add OpenStreetMap tile layer
-//L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+    // Add OpenStreetMap tile layer
+    //L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+      attribution: 'UPlanet Astroport'
+    }).addTo(map);
 
-  attribution: 'Astroport | U Planet'
-}).addTo(map);
+    const rectangles = [];
+    const rectangleCounts = new Map();
 
-// Create a clickable area for each grid cell
-for (let latIndex = 0; latIndex < gridSize; latIndex++) {
-  for (let lonIndex = 0; lonIndex < gridSize; lonIndex++) {
-    const lat = -180 + latIndex * tileSize;
-    const lon = -180 + lonIndex * tileSize;
+    // Create a clickable area for each grid cell
+    for (let latIndex = 0; latIndex < gridSize; latIndex++) {
+      for (let lonIndex = 0; lonIndex < gridSize; lonIndex++) {
+        const lat = -180 + latIndex * tileSize;
+        const lon = -180 + lonIndex * tileSize;
 
-    // Create a clickable rectangle
-    const rectangle = L.rectangle(
-      [[lat, lon], [lat + tileSize, lon + tileSize]],
-      { color: 'transparent', weight: 1, className: 'clickable-area' } // Add CSS class
-    );
+        // Create a clickable rectangle
+        const rectangle = L.rectangle(
+          [[lat, lon], [lat + tileSize, lon + tileSize]],
+          { color: 'transparent', weight: 1, className: 'clickable-area' } // Add CSS class
+        );
 
-    // Add a click event to the rectangle
-    rectangle.on('click', () => {
-      const url = `map_render.html?southWestLat=${lat}&southWestLon=${lon}`;
-      window.location.href = url;
+        // Add a click event to the rectangle
+        rectangle.on('click', () => {
+          const url = `map_render.html?southWestLat=${lat}&southWestLon=${lon}`;
+          window.location.href = url;
+        });
+
+        // Add the rectangle to the map and array
+        rectangle.addTo(map);
+        rectangles.push(rectangle);
+      }
+    }
+
+///////////////////////////////////////////////////////////////////////////////////
+    async function loadDRAGONS(myURL) {
+      try {
+        console.log('Fetching DRAGONS data from:', myURL);
+        const data = await fetchAstroport(myURL);
+        console.log('DRAGONS data loaded successfully:', data);
+        return data.filter(({ lat, lon }) => lat !== undefined && lon !== undefined) || [];
+      } catch (error) {
+        console.error('Error loading DRAGONS:', error);
+        return [];
+      }
+    }
+///////////////////////////////////////////////////////////////////////////////////
+    function overlayGridNumbers(rectangle, count) {
+      const latLng = rectangle.getBounds().getCenter();
+      const containerPoint = map.latLngToContainerPoint(latLng);
+
+      const numberElement = document.createElement('div');
+      numberElement.className = 'grid-number';
+      numberElement.textContent = count;
+      numberElement.style.position = 'absolute';
+      numberElement.style.fontSize = '16px';
+      numberElement.style.zIndex = '1000';
+      numberElement.style.fontWeight = 'bold';
+      numberElement.style.color = 'white';
+      numberElement.style.top = `${containerPoint.y}px`;
+      numberElement.style.left = `${containerPoint.x}px`;
+
+      document.getElementById('map').appendChild(numberElement);
+    }
+//////////////////////////////////////////////////////////////// fetchAstroport
+    async function fetchAstroport(myURL, retryCount = 3) {
+      try {
+        let one = await fetch(myURL);
+        var doc = await one.text();
+        var regex = /url='([^']+)/i;
+        var redirectURL = doc.match(regex)[1];
+
+        return new Promise(async (resolve, reject) => {
+          let retry = 0;
+
+          const fetchData = async () => {
+            try {
+              let two = await fetch(redirectURL);
+              const data = await two.json();
+              resolve(data);
+            } catch (error) {
+              if (retry < retryCount) {
+                console.log(`Retry ${retry + 1} after 4000ms...`);
+                retry++;
+                setTimeout(fetchData, 4000);
+              } else {
+                console.log('Max retries reached. Fetch error:', error);
+                reject(error);
+              }
+            }
+          };
+
+          setTimeout(fetchData, 3000);
+        });
+      } catch (err) {
+        console.log('Fetch error:', err);
+        return Promise.reject(err);
+      }
+    }
+///////////////////////////////////////////////////////////////////////////////////
+    async function displayRollingText(dragons) {
+      const rollingTextContainer = document.getElementById('rollingText');
+      let currentIndex = 0;
+
+      function updateText() {
+        rollingTextContainer.innerHTML = `[${currentIndex}] :: ${dragons[currentIndex].tags} :: _${dragons[currentIndex].lat}_${dragons[currentIndex].lon} <a href="/ipns/${dragons[currentIndex].ipfsnodeid}" title="${dragons[currentIndex].tags}" target="12345">(U) [^_^] (U)</a>`;
+        currentIndex = (currentIndex + 1) % dragons.length;
+      }
+
+      setInterval(updateText, 5000);
+      updateText();
+    }
+
+///////////////////////////////////////////////////////////////////////////////////
+    loadDRAGONS(zoneURL).then(dragons => {
+      const dragonRectanglesMap = new Map();
+
+      displayRollingText(dragons);
+
+      dragons.forEach(({ lat, lon, umap, tags }) => {
+        const latLng = L.latLng(lat, lon);
+
+        const matchingRectangle = rectangles.find(rectangle =>
+          rectangle.getBounds().contains(latLng)
+        );
+
+        if (matchingRectangle) {
+          console.log(`Dragon at (${lat}, ${lon}) matched with rectangle`);
+
+          // Keep track of the number of DRAGONS for each matching rectangle
+          if (dragonRectanglesMap.has(matchingRectangle)) {
+            dragonRectanglesMap.set(matchingRectangle, dragonRectanglesMap.get(matchingRectangle) + 1);
+          } else {
+            dragonRectanglesMap.set(matchingRectangle, 1);
+          }
+        } else {
+          console.log(`No matching rectangle found for dragon at (${lat}, ${lon})`);
+        }
+      });
+
+      // Overlay grid numbers with the count of DRAGONS for each matching rectangle
+      dragonRectanglesMap.forEach((count, rectangle) => {
+        overlayGridNumbers(rectangle, count);
+        console.log(`Overlaying grid number ${count} on matching rectangle`);
+      });
+
     });
 
-    // Add the rectangle to the map
-    rectangle.addTo(map);
-  }
-}
-  </script>
+</script>
 </body>
 </html>

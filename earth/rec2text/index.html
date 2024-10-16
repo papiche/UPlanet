@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Audio Recorder</title>
+</head>
+<body>
+  <h1>Audio Recorder</h1>
+  <p>Press the button to start recording. Click again to stop recording and send the audio.</p>
+
+  <button id="recordButton">Start Recording</button>
+  <span id="countdown"></span>
+  <div id="result"></div>
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      let recording = false;
+      let audioChunks = [];
+      let mediaRecorder;
+      let timeoutId;
+      let countdownValue = 5; // Initial countdown value in seconds
+
+      const recordButton = document.getElementById('recordButton');
+      const countdownElement = document.getElementById('countdown');
+
+      recordButton.addEventListener('click', () => {
+        if (!recording) {
+          startRecording();
+          countdown();
+          recordButton.textContent = 'Stop Recording';
+        } else {
+          stopRecording();
+          recordButton.textContent = 'Sending Audio...';
+          sendAudio();
+        }
+        recording = !recording;
+      });
+
+      function startRecording() {
+        navigator.mediaDevices.getUserMedia({ audio: true })
+          .then((stream) => {
+            audioChunks = [];
+            mediaRecorder = new MediaRecorder(stream);
+
+            mediaRecorder.ondataavailable = (event) => {
+              if (event.data.size > 0) {
+                audioChunks.push(event.data);
+              }
+            };
+
+            mediaRecorder.onstop = () => {
+              const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+              const audioUrl = URL.createObjectURL(audioBlob);
+              const audio = new Audio(audioUrl);
+              audio.play();
+            };
+
+            mediaRecorder.start();
+          })
+          .catch((error) => {
+            console.error('Error accessing microphone:', error);
+          });
+      }
+
+      function stopRecording() {
+        if (mediaRecorder.state === 'recording') {
+          mediaRecorder.stop();
+        }
+      }
+
+      async function sendAudio() {
+        const formData = new FormData();
+        formData.append('file', new Blob(audioChunks, { type: 'audio/wav' }));
+
+        try {
+          const response = await fetch('http://alienware.local:9000/speechToText', {
+            method: 'POST',
+            body: formData
+          });
+          const result = await response.text();
+          console.log('Speech to text result:', result);
+          // Display the result on the page
+          resultElement.textContent = 'Speech to text result: ' + result;
+
+          recordButton.textContent = 'Start Recording';
+          countdownElement.textContent = '';
+        } catch (error) {
+          console.error('Error sending audio:', error);
+          recordButton.textContent = 'Error Sending Audio';
+        }
+      }
+
+      function countdown() {
+        countdownElement.textContent = `Recording: ${countdownValue} seconds remaining`;
+        timeoutId = setInterval(() => {
+          countdownValue--;
+          countdownElement.textContent = `Recording: ${countdownValue} seconds remaining`;
+
+          if (countdownValue <= 0) {
+            clearInterval(timeoutId);
+            stopRecording();
+            recordButton.textContent = 'Sending Audio...';
+            sendAudio();
+          }
+        }, 1000);
+      }
+    });
+  </script>
+</body>
+</html>

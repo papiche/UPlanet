@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Key Conversion Tool</title>
+    <style>
+        .container {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-around;
+        }
+        .key-section {
+            width: 45%;
+            margin-bottom: 20px;
+            padding: 15px;
+            border: 1px solid #ccc;
+            box-sizing: border-box;
+        }
+        .key-section h2 {
+            margin-top: 0;
+        }
+        .key-section label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        .key-section input[type="text"], .key-section input[type="password"] {
+            width: 100%;
+            padding: 8px;
+            margin-bottom: 10px;
+            border: 1px solid #ddd;
+            box-sizing: border-box;
+        }
+        .key-section button {
+            padding: 8px 15px;
+            cursor: pointer;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+        }
+        .key-section p {
+            margin-top: 5px;
+            margin-bottom: 10px;
+            word-wrap: break-word;
+        }
+        .key-section .ipns-key {
+            font-family: monospace;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+    </style>
+</head>
+<body>
+    <h1>Key Conversion Tool</h1>
+    <div class="container">
+        <!-- Section for generating keys from username and password -->
+        <div class="key-section">
+            <h2>Generate Keys from Username and Password</h2>
+            <label for="username">Username:</label>
+            <input type="text" id="username" placeholder="Enter username">
+            <label for="password">Password:</label>
+            <input type="password" id="password" placeholder="Enter password">
+            <button onclick="generateKeysFromCredentials()">Generate Keys</button>
+            <p>Generated Keys:</p>
+            <pre id="generatedKeys" class="ipns-key"></pre>
+        </div>
+
+        <!-- Section for Bitcoin key generation -->
+        <div class="key-section">
+            <h2>Bitcoin Key Generation</h2>
+            <label for="bitcoinSeed">Seed (Hex):</label>
+            <input type="text" id="bitcoinSeed" placeholder="Enter seed (hex)">
+            <button onclick="generateBitcoinKeys()">Generate Bitcoin Keys</button>
+            <p>Bitcoin Private Key (WIF):</p>
+            <p id="bitcoinPrivateKey" class="ipns-key"></p>
+            <p>Bitcoin Public Address:</p>
+            <p id="bitcoinPublicAddress" class="ipns-key"></p>
+        </div>
+
+        <!-- Section for Monero key generation -->
+        <div class="key-section">
+            <h2>Monero Key Generation</h2>
+            <label for="moneroSeed">Seed (Hex):</label>
+            <input type="text" id="moneroSeed" placeholder="Enter seed (hex)">
+            <button onclick="generateMoneroKeys()">Generate Monero Keys</button>
+            <p>Monero Private Spend Key:</p>
+            <p id="moneroPrivateSpendKey" class="ipns-key"></p>
+            <p>Monero Private View Key:</p>
+            <p id="moneroPrivateViewKey" class="ipns-key"></p>
+            <p>Monero Public Address:</p>
+            <p id="moneroPublicAddress" class="ipns-key"></p>
+        </div>
+
+        <!-- Section for Nostr key generation -->
+        <div class="key-section">
+            <h2>Nostr Key Generation</h2>
+            <label for="nostrSeed">Seed (Hex):</label>
+            <input type="text" id="nostrSeed" placeholder="Enter seed (hex)">
+            <button onclick="generateNostrKeys()">Generate Nostr Keys</button>
+            <p>Nostr Private Key (nsec):</p>
+            <p id="nostrPrivateKey" class="ipns-key"></p>
+            <p>Nostr Public Key (npub):</p>
+            <p id="nostrPublicKey" class="ipns-key"></p>
+        </div>
+
+        <!-- Section for IPNS key conversion -->
+        <div class="key-section">
+            <h2>IPNS Key Conversion</h2>
+            <label for="ipnsInput">Input Key (Hex or Base58):</label>
+            <input type="text" id="ipnsInput" placeholder="Enter key">
+            <button onclick="convertToIPNS()">Convert to IPNS</button>
+            <p>IPNS Key:</p>
+            <p id="ipnsOutput" class="ipns-key"></p>
+        </div>
+    </div>
+
+    <script>
+        // Function to generate keys from username and password
+        function generateKeysFromCredentials() {
+            const username = document.getElementById("username").value;
+            const password = document.getElementById("password").value;
+
+            if (!username || !password) {
+                document.getElementById("generatedKeys").innerText = "Error: Please enter both username and password.";
+                return;
+            }
+
+            try {
+                // Generate a seed from username and password
+                const seed = generateSeed(username, password);
+
+                // Generate keys from the seed
+                const keys = {
+                    bitcoin: generateBitcoinKeysFromSeed(seed),
+                    monero: generateMoneroKeysFromSeed(seed),
+                    nostr: generateNostrKeysFromSeed(seed),
+                };
+
+                // Display the generated keys
+                document.getElementById("generatedKeys").innerText = JSON.stringify(keys, null, 2);
+            } catch (error) {
+                document.getElementById("generatedKeys").innerText = "Error: " + error.message;
+            }
+        }
+
+        // Function to generate a seed from username and password
+        function generateSeed(username, password) {
+            const encoder = new TextEncoder();
+            const data = encoder.encode(username + ":" + password);
+            return crypto.subtle.digest("SHA-256", data).then(hash => {
+                return new Uint8Array(hash);
+            });
+        }
+
+        // Function to generate Bitcoin keys from a seed
+        function generateBitcoinKeysFromSeed(seed) {
+            const privateKey = seed.slice(0, 32);
+            const wifPrivateKey = encodeWIF(privateKey);
+            const publicAddress = privkeyToAddress(privateKey);
+            return {
+                privateKey: wifPrivateKey,
+                publicAddress: publicAddress,
+            };
+        }
+
+        // Function to generate Monero keys from a seed
+        function generateMoneroKeysFromSeed(seed) {
+            const privateSpendKey = seed.slice(0, 32);
+            const privateViewKey = seed.slice(32, 64);
+            const publicAddress = generateMoneroAddress(privateSpendKey, privateViewKey);
+            return {
+                privateSpendKey: bytesToHex(privateSpendKey),
+                privateViewKey: bytesToHex(privateViewKey),
+                publicAddress: publicAddress,
+            };
+        }
+
+        // Function to generate Nostr keys from a seed
+        function generateNostrKeysFromSeed(seed) {
+            const privateKey = seed.slice(0, 32);
+            const npub = generateNpub(privateKey);
+            const nsec = generateNsec(privateKey);
+            return {
+                npub: npub,
+                nsec: nsec,
+            };
+        }
+
+        // Helper functions
+        function encodeWIF(privateKey) {
+            // Implement WIF encoding logic here
+            return "WIF-encoded-private-key";
+        }
+
+        function privkeyToAddress(privateKey) {
+            // Implement Bitcoin address generation logic here
+            return "Bitcoin-address";
+        }
+
+        function generateMoneroAddress(privateSpendKey, privateViewKey) {
+            // Implement Monero address generation logic here
+            return "Monero-address";
+        }
+
+        function generateNpub(privateKey) {
+            // Implement npub generation logic here
+            return "npub-encoded-public-key";
+        }
+
+        function generateNsec(privateKey) {
+            // Implement nsec generation logic here
+            return "nsec-encoded-private-key";
+        }
+
+        function bytesToHex(bytes) {
+            return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
+        }
+
+        // Function to convert a key to IPNS format
+        function convertToIPNS() {
+            const input = document.getElementById("ipnsInput").value;
+            if (!input) {
+                document.getElementById("ipnsOutput").innerText = "Error: Please enter a key.";
+                return;
+            }
+
+            try {
+                // Convert the input key to IPNS format
+                const ipnsKey = "1" + base58Encode(new TextEncoder().encode(input));
+                document.getElementById("ipnsOutput").innerText = ipnsKey;
+            } catch (error) {
+                document.getElementById("ipnsOutput").innerText = "Error: Invalid key format.";
+            }
+        }
+
+        // Base58 encoding function
+        function base58Encode(bytes) {
+            const alphabet = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+            let result = "";
+            let num = BigInt("0x" + bytes.reduce((acc, byte) => acc + byte.toString(16).padStart(2, "0"), ""));
+            while (num > 0) {
+                result = alphabet[num % BigInt(alphabet.length)] + result;
+                num = num / BigInt(alphabet.length);
+            }
+            return result;
+        }
+    </script>
+</body>
+</html>

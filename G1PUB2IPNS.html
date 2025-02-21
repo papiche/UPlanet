@@ -1,25 +1,120 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>G1 to IPNS Public Key Conversion</title>
+    <title>Key Conversion Tool</title>
+    <style>
+        .container {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-around;
+        }
+        .key-section {
+            width: 45%;
+            margin-bottom: 20px;
+            padding: 15px;
+            border: 1px solid #ccc;
+            box-sizing: border-box;
+        }
+        .key-section h2 {
+            margin-top: 0;
+        }
+         .key-section label {
+            display: block;
+             margin-bottom: 5px;
+            font-weight: bold;
+        }
+
+         .key-section input[type="text"] {
+             width: 100%;
+            padding: 8px;
+            margin-bottom: 10px;
+            border: 1px solid #ddd;
+             box-sizing: border-box;
+        }
+         .key-section button {
+             padding: 8px 15px;
+             cursor: pointer;
+             background-color: #4CAF50;
+             color: white;
+             border: none;
+             border-radius: 4px;
+        }
+         .key-section p {
+            margin-top: 5px;
+            margin-bottom: 10px;
+             word-wrap: break-word;
+
+        }
+        .key-section .ipns-key {
+            font-family: monospace;
+            white-space: pre-wrap;
+             word-wrap: break-word;
+        }
+    </style>
 </head>
 <body>
-    <h1>G1 to IPNS Public Key Conversion</h1>
-    <input type="text" id="g1PublicKey" size=40 placeholder="Enter G1 Public Key">
-    <button onclick="convertPublicKey()">Convert</button>
-    <p>IPNS Public Key:</p>
-    <p id="ipnsPublicKey"></p>
+    <h1>Key Conversion Tool</h1>
+    <div class="container">
 
+         <div class="key-section">
+            <h2>G1 to IPNS</h2>
+            <label for="g1PublicKey">G1 Public Key (Base58):</label>
+            <input type="text" id="g1PublicKey" placeholder="Enter G1 Public Key (Base58)">
+             <button onclick="convertG1PublicKey()">Convert to IPNS</button>
+            <p>IPNS Public Key:</p>
+            <p id="ipnsG1PublicKey" class="ipns-key"></p>
+        </div>
+
+        <div class="key-section">
+             <h2>Nostr to IPNS</h2>
+             <label for="nostrPublicKey">Nostr Public Key (Hex or npub):</label>
+            <input type="text" id="nostrPublicKey" placeholder="Enter Nostr Public Key (Hex or npub)">
+            <button onclick="convertNostrPublicKey()">Convert to IPNS</button>
+            <p>IPNS Public Key:</p>
+            <p id="ipnsNostrPublicKey" class="ipns-key"></p>
+        </div>
+         <div class="key-section">
+             <h2>Bitcoin to IPNS</h2>
+            <label for="bitcoinPublicKey">Bitcoin Public Key (Base58):</label>
+             <input type="text" id="bitcoinPublicKey" placeholder="Enter Bitcoin Public Key (Base58)">
+            <button onclick="convertBitcoinPublicKey()">Convert to IPNS</button>
+            <p>IPNS Public Key:</p>
+            <p id="ipnsBitcoinPublicKey" class="ipns-key"></p>
+        </div>
+
+        <div class="key-section">
+            <h2>Monero to IPNS</h2>
+            <label for="moneroPublicKey">Monero Public Address (Base58):</label>
+             <input type="text" id="moneroPublicKey" placeholder="Enter Monero Public Address">
+            <button onclick="convertMoneroPublicKey()">Convert to IPNS</button>
+            <p>IPNS Public Key:</p>
+            <p id="ipnsMoneroPublicKey" class="ipns-key"></p>
+        </div>
+         <div class="key-section">
+            <h2>IPNS to Bitcoin</h2>
+            <label for="ipnsBitcoin">IPNS Public Key:</label>
+             <input type="text" id="ipnsBitcoin" placeholder="Enter IPNS Public Key">
+            <button onclick="convertIPNSToBitcoin()">Convert to Bitcoin</button>
+            <p>Bitcoin Public Key:</p>
+            <p id="bitcoinFromIpns" class="ipns-key"></p>
+        </div>
+        <div class="key-section">
+             <h2>IPNS to Monero</h2>
+            <label for="ipnsMonero">IPNS Public Key:</label>
+             <input type="text" id="ipnsMonero" placeholder="Enter IPNS Public Key">
+            <button onclick="convertIPNSToMonero()">Convert to Monero</button>
+            <p>Monero Public Address:</p>
+            <p id="moneroFromIpns" class="ipns-key"></p>
+        </div>
+    </div>
     <!-- Include the tweetnacl library for Ed25519 operations -->
     <script src="./nacl.min.js"></script>
-
     <script>
         // Custom Base58 encoding and decoding functions
         function base58Encode(bytes) {
             const ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
             const base = BigInt(ALPHABET.length);
             let encoded = '';
-
             let value = BigInt('0');
             for (let i = 0; i < bytes.length; i++) {
                 value = value * BigInt(256) + BigInt(bytes[i]);
@@ -33,7 +128,6 @@
 
             return encoded;
         }
-
         function base58Decode(encoded) {
             const ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
             const base = BigInt(ALPHABET.length);
@@ -55,28 +149,251 @@
             return new Uint8Array(valueBytes);
         }
 
-        function convertPublicKey() {
-            const g1PublicKey = document.getElementById("g1PublicKey").value;
-
-            // Decode the Base58 encoded G1 public key using custom function
-            const decodedShared = base58Decode(g1PublicKey);
-
-            // Create a new Uint8Array to hold the IPNS public key bytes
-            const ipnsPublicKeyBytes = new Uint8Array(decodedShared.length + 6);
-
-            // Prefix bytes for IPNS public key
-            const prefixBytes = new Uint8Array([0, 36, 8, 1, 18, 32]);
-
-            // Copy the prefix bytes and G1 public key bytes into the new array
-            ipnsPublicKeyBytes.set(prefixBytes, 0);
-            ipnsPublicKeyBytes.set(decodedShared, prefixBytes.length);
-
-            // Encode the IPNS public key using custom Base58 encoding
-            const ipnsPublicKey = '1' + base58Encode(ipnsPublicKeyBytes); // Prepend '1'
-
-            document.getElementById("ipnsPublicKey").innerText = ipnsPublicKey;
+       function hexToBytes(hex) {
+            let bytes = [];
+            for (let c = 0; c < hex.length; c += 2)
+                bytes.push(parseInt(hex.substr(c, 2), 16));
+            return new Uint8Array(bytes);
         }
+
+function bech32Decode(bech32String) {
+    const ALPHABET = "qpzry9x8gf2tvdw0s3jn54khce6mua7l";
+    const GENERATOR = [0x3b6a57b2, 0x26508e6d, 0x1ea119fa, 0x3d4233dd, 0x2a1462b3];
+
+    function polymod(values) {
+        let chk = 1;
+        for (let v of values) {
+            let top = chk >> 25;
+            chk = ((chk & 0x1ffffff) << 5) ^ v;
+            for (let i = 0; i < 5; i++) {
+                if ((top >> i) & 1) {
+                    chk ^= GENERATOR[i];
+                }
+            }
+        }
+        return chk;
+    }
+
+    function hrpExpand(hrp) {
+        let result = [];
+        for (let i = 0; i < hrp.length; i++) {
+            result.push(hrp.charCodeAt(i) >> 5);
+        }
+        result.push(0);
+        for (let i = 0; i < hrp.length; i++) {
+            result.push(hrp.charCodeAt(i) & 31);
+        }
+        return result;
+    }
+
+    function convertBits(data, fromBits, toBits, pad) {
+        let acc = 0;
+        let bits = 0;
+        let result = [];
+        let maxv = (1 << toBits) - 1;
+
+        for (let i = 0; i < data.length; i++) {
+            acc = (acc << fromBits) | data[i];
+            bits += fromBits;
+            while (bits >= toBits) {
+                bits -= toBits;
+                result.push((acc >> bits) & maxv);
+            }
+        }
+
+        if (pad) {
+            if (bits > 0) {
+                result.push((acc << (toBits - bits)) & maxv);
+            }
+        } else if (bits >= fromBits || ((acc << (toBits - bits)) & maxv)) {
+            return null;
+        }
+
+        return result;
+    }
+
+    try {
+        let lower = bech32String.toLowerCase();
+        let parts = lower.split('1');
+        if (parts.length !== 2) {
+            return null; // Invalid format
+        }
+
+        let hrp = parts[0];
+        let data = parts[1];
+        let values = [];
+
+        for (let i = 0; i < data.length; i++) {
+            let charIndex = ALPHABET.indexOf(data[i]);
+            if (charIndex === -1) {
+                return null; // Invalid char in data
+            }
+            values.push(charIndex);
+        }
+
+        let checksum = values.slice(-6);
+        values = values.slice(0, -6);
+
+        let fullValues = hrpExpand(hrp).concat(values);
+        if (polymod(fullValues.concat(checksum)) !== 1) {
+            return null; // Invalid checksum
+        }
+
+        // Convert 5-bit data to 8-bit
+        let convertedData = convertBits(values, 5, 8, false);
+        if (!convertedData) {
+            return null; // Conversion failed
+        }
+
+        return new Uint8Array(convertedData);
+    } catch (error) {
+        return null; // Indicate invalid Bech32 string
+    }
+}
+        function convertG1PublicKey() {
+            const g1PublicKey = document.getElementById("g1PublicKey").value;
+              if (!g1PublicKey) {
+                document.getElementById("ipnsG1PublicKey").innerText = "Error: Please enter a G1 public key.";
+                return;
+              }
+
+            try {
+                const decodedShared = base58Decode(g1PublicKey);
+                const ipnsPublicKeyBytes = new Uint8Array(decodedShared.length + 6);
+                const prefixBytes = new Uint8Array([0, 36, 8, 1, 18, 32]);
+
+                ipnsPublicKeyBytes.set(prefixBytes, 0);
+                ipnsPublicKeyBytes.set(decodedShared, prefixBytes.length);
+
+                const ipnsPublicKey = '1' + base58Encode(ipnsPublicKeyBytes);
+                document.getElementById("ipnsG1PublicKey").innerText = ipnsPublicKey;
+            } catch (error) {
+                document.getElementById("ipnsG1PublicKey").innerText = "Error: Invalid G1 Public Key";
+            }
+        }
+
+
+
+        function convertNostrPublicKey() {
+           const nostrPublicKeyInput = document.getElementById("nostrPublicKey").value;
+              if (!nostrPublicKeyInput) {
+                  document.getElementById("ipnsNostrPublicKey").innerText = "Error: Please enter a Nostr public key.";
+                   return;
+                }
+
+            try {
+                let nostrPublicKeyBytes;
+                if (nostrPublicKeyInput.startsWith("npub")) {
+                    const decodedNpub = bech32Decode(nostrPublicKeyInput);
+                      if (!decodedNpub || decodedNpub.length !== 32) {
+                         document.getElementById("ipnsNostrPublicKey").innerText = "Error: Invalid npub format";
+                        return;
+                     }
+                    nostrPublicKeyBytes = decodedNpub;
+
+                } else {
+                      nostrPublicKeyBytes = hexToBytes(nostrPublicKeyInput);
+                      if (nostrPublicKeyBytes.length !== 32) {
+                           document.getElementById("ipnsNostrPublicKey").innerText = "Error: Nostr public key must be 32 bytes (64 hex characters)";
+                           return;
+                      }
+                }
+
+                const ipnsPublicKeyBytes = new Uint8Array(nostrPublicKeyBytes.length + 6);
+                 const prefixBytes = new Uint8Array([0, 36, 8, 1, 18, 32]);
+                 ipnsPublicKeyBytes.set(prefixBytes, 0);
+                ipnsPublicKeyBytes.set(nostrPublicKeyBytes, prefixBytes.length);
+                const ipnsPublicKey = '1' + base58Encode(ipnsPublicKeyBytes);
+
+                document.getElementById("ipnsNostrPublicKey").innerText = ipnsPublicKey;
+
+            } catch (error) {
+                 document.getElementById("ipnsNostrPublicKey").innerText = "Error: Invalid Nostr Public Key";
+
+            }
+        }
+
+        function convertBitcoinPublicKey() {
+            const bitcoinPublicKey = document.getElementById("bitcoinPublicKey").value;
+             if (!bitcoinPublicKey) {
+                document.getElementById("ipnsBitcoinPublicKey").innerText = "Error: Please enter a Bitcoin public key.";
+                return;
+            }
+            try {
+                const decodedShared = base58Decode(bitcoinPublicKey);
+                const ipnsPublicKeyBytes = new Uint8Array(decodedShared.length + 6);
+                const prefixBytes = new Uint8Array([0, 36, 8, 1, 18, 32]);
+                 ipnsPublicKeyBytes.set(prefixBytes, 0);
+                ipnsPublicKeyBytes.set(decodedShared, prefixBytes.length);
+                const ipnsPublicKey = '1' + base58Encode(ipnsPublicKeyBytes);
+                document.getElementById("ipnsBitcoinPublicKey").innerText = ipnsPublicKey;
+            } catch (error) {
+                document.getElementById("ipnsBitcoinPublicKey").innerText = "Error: Invalid Bitcoin Public Key";
+            }
+        }
+
+
+        function convertMoneroPublicKey() {
+            const moneroPublicKey = document.getElementById("moneroPublicKey").value;
+            if (!moneroPublicKey) {
+                document.getElementById("ipnsMoneroPublicKey").innerText = "Error: Please enter a Monero public address.";
+                return;
+            }
+            try {
+                const decodedShared = base58Decode(moneroPublicKey);
+                const ipnsPublicKeyBytes = new Uint8Array(decodedShared.length + 6);
+                const prefixBytes = new Uint8Array([0, 36, 8, 1, 18, 32]);
+                ipnsPublicKeyBytes.set(prefixBytes, 0);
+                ipnsPublicKeyBytes.set(decodedShared, prefixBytes.length);
+
+                const ipnsPublicKey = '1' + base58Encode(ipnsPublicKeyBytes);
+                document.getElementById("ipnsMoneroPublicKey").innerText = ipnsPublicKey;
+            } catch (error) {
+                 document.getElementById("ipnsMoneroPublicKey").innerText = "Error: Invalid Monero Public Address";
+            }
+        }
+
+        function convertIPNSToBitcoin() {
+             const ipnsBitcoin = document.getElementById("ipnsBitcoin").value;
+
+               if (!ipnsBitcoin) {
+                document.getElementById("bitcoinFromIpns").innerText = "Error: Please enter an IPNS public key.";
+                return;
+              }
+            try {
+                const decodedIPNS = base58Decode(ipnsBitcoin.substring(1));
+                 if (decodedIPNS.length <= 6) {
+                       document.getElementById("bitcoinFromIpns").innerText = "Error: Invalid IPNS Public Key";
+                         return;
+                   }
+                const bitcoinBytes = decodedIPNS.slice(6);
+                const bitcoinPublicKey = base58Encode(bitcoinBytes);
+                document.getElementById("bitcoinFromIpns").innerText = bitcoinPublicKey;
+
+            } catch (error) {
+                   document.getElementById("bitcoinFromIpns").innerText = "Error: Invalid IPNS Public Key";
+            }
+        }
+        function convertIPNSToMonero() {
+           const ipnsMonero = document.getElementById("ipnsMonero").value;
+             if (!ipnsMonero) {
+                document.getElementById("moneroFromIpns").innerText = "Error: Please enter an IPNS public key.";
+                return;
+             }
+             try {
+                const decodedIPNS = base58Decode(ipnsMonero.substring(1));
+                 if (decodedIPNS.length <= 6) {
+                       document.getElementById("moneroFromIpns").innerText = "Error: Invalid IPNS Public Key";
+                        return;
+                   }
+                const moneroBytes = decodedIPNS.slice(6);
+                const moneroPublicKey = base58Encode(moneroBytes);
+                 document.getElementById("moneroFromIpns").innerText = moneroPublicKey;
+             } catch (error) {
+                document.getElementById("moneroFromIpns").innerText = "Error: Invalid IPNS Public Key";
+             }
+        }
+
     </script>
 </body>
 </html>
-

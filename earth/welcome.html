@@ -305,28 +305,59 @@
 ///////////////////////////////////////////////////////////////////////////////////
     loadUPlanetData(uPlanetAPI_URL).then(uPlanetData => {
       if (uPlanetData) {
-        // Ajouter les PLAYERS sur la carte
+        const locationEntities = {};
+
+        // Group PLAYERS and UMAPS by location
         if (uPlanetData.PLAYERs) {
           uPlanetData.PLAYERs.forEach(player => {
             if (player.LAT && player.LON && player.HEX) {
-              L.marker([parseFloat(player.LAT), parseFloat(player.LON)], {icon: playerIcon})
-                .bindPopup(`<a href="nostr.html?hex=${player.HEX}" target="_blank">Voir le profil Nostr</a>`, { className: 'custom-popup' })
-                .addTo(map);
-              console.log(`PLAYER ajouté: LAT: ${player.LAT}, LON: ${player.LON}, HEX: ${player.HEX}`);
+              const locationKey = `${player.LAT},${player.LON}`;
+              if (!locationEntities[locationKey]) {
+                locationEntities[locationKey] = [];
+              }
+              locationEntities[locationKey].push({ type: 'PLAYER', hex: player.HEX });
             }
           });
         }
 
-        // Ajouter les UMAPS sur la carte
         if (uPlanetData.UMAPs) {
           uPlanetData.UMAPs.forEach(umap => {
-            if (umap.LAT && umap.LON && umap.UMAPHEX) { // Utilisation de UMAPHEX ici
-              L.marker([parseFloat(umap.LAT), parseFloat(umap.LON)], {icon: umapIcon})
-                .bindPopup(`<a href="nostr.html?hex=${umap.UMAPHEX}" target="_blank">Voir le profil Nostr</a>`, { className: 'custom-popup' }) // Utilisation de UMAPHEX ici
-                .addTo(map);
-              console.log(`UMAP ajouté: LAT: ${umap.LAT}, LON: ${umap.LON}, HEX: ${umap.UMAPHEX}`); // Utilisation de UMAPHEX ici
+            if (umap.LAT && umap.LON && umap.UMAPHEX) {
+              const locationKey = `${umap.LAT},${umap.LON}`;
+              if (!locationEntities[locationKey]) {
+                locationEntities[locationKey] = [];
+              }
+              locationEntities[locationKey].push({ type: 'UMAP', hex: umap.UMAPHEX });
             }
           });
+        }
+
+        // Add markers for each location
+        for (const locationKey in locationEntities) {
+          const [lat, lon] = locationKey.split(',').map(parseFloat);
+          const entities = locationEntities[locationKey];
+          let popupContent = '';
+          let icon = null;
+
+          entities.forEach(entity => {
+              popupContent += `<a href="nostr.html?hex=${entity.hex}" target="_blank">View Nostr Profile (${entity.type})</a><br>`;
+              if (entity.type === 'PLAYER') {
+                  icon = playerIcon; // Use player icon if there's a player at this location
+              } else if (!icon && entity.type === 'UMAP') {
+                  icon = umapIcon; // Use umap icon if no player icon has been set yet
+              }
+          });
+
+          // If no icon was determined based on entity types, use a default or handle as needed.
+          if (!icon) {
+              icon = playerIcon; // Default to playerIcon if no specific icon determined. Adjust as needed.
+          }
+
+
+          L.marker([lat, lon], {icon: icon})
+              .bindPopup(popupContent, { className: 'custom-popup' })
+              .addTo(map);
+          console.log(`Marker ajouté à LAT: ${lat}, LON: ${lon} avec entités:`, entities);
         }
       }
     });

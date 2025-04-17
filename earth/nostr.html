@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Nostr Profile et Messages</title>
+    <style>
+        body { font-family: sans-serif; }
+        .profile { border: 1px solid #ccc; padding: 10px; margin-bottom: 20px; }
+        .messages { border: 1px solid #ccc; padding: 10px; }
+        .message { border-bottom: 1px dotted #ccc; padding: 5px 0; }
+        .message:last-child { border-bottom: none; }
+        .loading { opacity: 0.5; } /* Style pour indiquer le chargement */
+    </style>
+    <script src="nostr.js"></script>
+</head>
+<body>
+
+    <h1>Profil Nostr et Messages de la semaine</h1>
+
+    <div id="profile-container" class="profile loading">
+        <h2>Profil</h2>
+        <div id="profile-content">Chargement du profil...</div>
+    </div>
+
+    <div id="messages-container" class="messages loading">
+        <h2>Messages récents (dernière semaine)</h2>
+        <div id="messages-content">Chargement des messages...</div>
+    </div>
+
+    <script>
+        async function getRelayURL() {
+            const currentUrl = new URL(window.location.href);
+            let relayName = currentUrl.hostname.replace('ipfs.', 'relay.');
+            if (currentUrl.port === '8080' || currentUrl.port !== '') {
+                return `ws://127.0.0.1:7777`;
+            }
+            return `wss://${relayName}`;
+            // You might want to add a fallback relay URL here if needed
+            // return `wss://relay.damus.io`; // Example fallback
+        }
+
+        function getUrlParameter(name) {
+            name = name.replace(/[\[]/, '\\[').replace(/[\]]/, '\\]');
+            const regex = new RegExp('[\\?&]' + name + '=([^&#]*)');
+            const results = regex.exec(location.search);
+            return results === null ? '' : decodeURIComponent(results[1].replace(/\+/g, ' '));
+        }
+
+        const hexKey = getUrlParameter('hex');
+        let relayUrl; // Will be set asynchronously
+
+        if (!hexKey) {
+            document.getElementById('profile-content').innerText = "Clé HEX non fournie dans l'URL.";
+            document.getElementById('messages-content').innerText = "Clé HEX non fournie dans l'URL.";
+            document.getElementById('profile-container').classList.remove('loading');
+            document.getElementById('messages-container').classList.remove('loading');
+        } else {
+            document.getElementById('profile-content').innerText = `Récupération du profil pour la clé publique: ${hexKey}`;
+            document.getElementById('messages-content').innerText = `Récupération des messages récents...`;
+
+            async function fetchNostrProfile(hex, relayUrl) {
+                try {
+                    const relay = nostrTools.relayInit(relayUrl);
+                    await relay.connect();
+
+                    const publicKey = hex; // Assuming hexKey is already the hex public key
+
+                    const sub = relay.sub([{
+                        kinds: [0],
+                        authors: [publicKey]
+                    }]);
+
+                    return new Promise((resolve, reject) => {
+                        let profileData = null;
+                        let timeout = setTimeout(() => {
+                            sub.unsub();
+                            relay.close();
+                            reject("Timeout: No profile event received");
+                        }, 5000); // Timeout after 5 seconds
+
+                        sub.on('event', event => {
+                            clearTimeout(timeout);
+                            profileData = JSON.parse(event.content);
+                            sub.unsub();
+                            relay.close();
+                            resolve(profileData);
+                        });
+
+                        sub.on('eose', () => {
+                            if (!profileData) {
+                                clearTimeout(timeout);
+                                sub.unsub();
+                                relay.close();
+                                resolve({}); // Resolve with empty object if no profile found (EOSE reached without event)
+                            }
+                        });
+
+                        relay.on('error', () => {
+                            clearTimeout(timeout);
+                            sub.unsub();
+                            relay.close();
+                            reject(`Relay error on ${relayUrl}`);
+                        });
+                    });
+                } catch (error) {
+                    console.error("Erreur lors de la récupération du profil Nostr:", error);
+                    throw error;
+                }
+            }
+
+
+            async function fetchNostrMessages(hex, relayUrl) {
+                try {
+                    const relay = nostrTools.relayInit(relayUrl);
+                    await relay.connect();
+
+                    const publicKey = hex;
+                    const now = Math.floor(Date.now() / 1000);
+                    const oneWeekAgo = now - (7 * 24 * 3600); // Seconds in a week
+
+                    const sub = relay.sub([{
+                        kinds: [1], // Kind 1 is for short notes (messages)
+                        authors: [publicKey],
+                        since: oneWeekAgo
+                    }]);
+
+                    const messages = [];
+
+                    return new Promise((resolve, reject) => {
+                        let timeout = setTimeout(() => {
+                            sub.unsub();
+                            relay.close();
+                            reject("Timeout: No message events received");
+                        }, 10000); // Timeout after 10 seconds for messages
+
+                        sub.on('event', event => {
+                            messages.push(event);
+                        });
+
+                        sub.on('eose', () => {
+                            clearTimeout(timeout);
+                            sub.unsub();
+                            relay.close();
+                            resolve(messages);
+                        });
+
+                        relay.on('error', () => {
+                            clearTimeout(timeout);
+                            sub.unsub();
+                            relay.close();
+                            reject(`Relay error on ${relayUrl}`);
+                        });
+
+                    });
+                } catch (error) {
+                    console.error("Erreur lors de la récupération des messages Nostr:", error);
+                    throw error;
+                }
+            }
+
+
+            async function displayNostrData() {
+                relayUrl = await getRelayURL(); // Get relay URL asynchronously
+                try {
+                    const profileData = await fetchNostrProfile(hexKey, relayUrl);
+                    document.getElementById('profile-container').classList.remove('loading');
+                    let profileHTML = `<h3>${profileData.name || 'N/A'}</h3>`;
+                    profileHTML += `<p>${profileData.about || 'Pas de description'}</p>`;
+                    if (profileData.picture) {
+                        profileHTML += `<img src="${profileData.picture}" alt="Profile Picture" style="max-width: 100px; max-height: 100px;">`;
+                    }
+                    document.getElementById('profile-content').innerHTML = profileHTML;
+
+                } catch (profileError) {
+                    console.error("Erreur de profil:", profileError);
+                    document.getElementById('profile-container').classList.remove('loading');
+                    document.getElementById('profile-content').innerText = `Erreur lors du chargement du profil depuis ${relayUrl} : ${profileError}`;
+                }
+
+
+                try {
+                    const messagesData = await fetchNostrMessages(hexKey, relayUrl);
+                    document.getElementById('messages-container').classList.remove('loading');
+                    let messagesHTML = '';
+                    if (messagesData && messagesData.length > 0) {
+                        // Sort messages by created_at in descending order (newest first)
+                        messagesData.sort((a, b) => b.created_at - a.created_at);
+                        messagesData.forEach(message => {
+                            const date = new Date(message.created_at * 1000); // Convert seconds to milliseconds
+                            messagesHTML += `<div class="message"><p><strong>${date.toLocaleDateString()} ${date.toLocaleTimeString()}</strong></p><p>${message.content}</p></div>`;
+                        });
+                    } else {
+                        messagesHTML = "<p>Aucun message récent trouvé pour cette clé publique sur ce relay.</p>";
+                    }
+                    document.getElementById('messages-content').innerHTML = messagesHTML;
+
+                } catch (messagesError) {
+                    console.error("Erreur de messages:", messagesError);
+                    document.getElementById('messages-container').classList.remove('loading');
+                    document.getElementById('messages-content').innerText = `Erreur lors du chargement des messages depuis ${relayUrl} : ${messagesError}`;
+                }
+            }
+
+            displayNostrData();
+        }
+
+
+    </script>
+</body>
+</html>

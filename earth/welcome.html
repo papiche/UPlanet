@@ -47,14 +47,26 @@
 
     /* Styles pour les popups (encarts) */
     .custom-popup .leaflet-popup-content-wrapper {
-      background-color: #f0f0f0;
+      background-color: #ffffff; /* White background */
       color: #333;
-      border-radius: 5px;
-      padding: 10px;
+      border-radius: 10px; /* Rounded corners */
+      padding: 12px;
+      box-shadow: 0 3px 14px rgba(0,0,0,0.4); /* Nice shadow */
     }
 
     .custom-popup .leaflet-popup-content {
       margin: 0;
+      line-height: 1.6; /* Better line spacing */
+    }
+
+    .custom-popup .leaflet-popup-content a {
+      color: #007bff; /* Link color */
+      text-decoration: none;
+      font-weight: bold;
+    }
+
+    .custom-popup .leaflet-popup-content a:hover {
+      text-decoration: underline; /* Underline on hover */
     }
 
     .custom-popup .leaflet-popup-tip-container {
@@ -63,8 +75,9 @@
     }
 
     .custom-popup .leaflet-popup-tip {
-      background: #f0f0f0;
+      background: #ffffff; /* White tip to match popup */
       border: none;
+      box-shadow: 0 3px 14px rgba(0,0,0,0.4); /* Shadow for the tip as well */
     }
 
   </style>
@@ -310,12 +323,12 @@
         // Group PLAYERS and UMAPS by location
         if (uPlanetData.PLAYERs) {
           uPlanetData.PLAYERs.forEach(player => {
-            if (player.LAT && player.LON && player.HEX) {
+            if (player.LAT && player.LON && player.HEX && player.ASTROMAIL) { // Ensure ASTROMAIL is checked
               const locationKey = `${player.LAT},${player.LON}`;
               if (!locationEntities[locationKey]) {
-                locationEntities[locationKey] = [];
+                locationEntities[locationKey] = { PLAYERS: [], UMAPS: [] }; // Initialize both arrays
               }
-              locationEntities[locationKey].push({ type: 'PLAYER', hex: player.HEX });
+              locationEntities[locationKey].PLAYERS.push({ hex: player.HEX, astromail: player.ASTROMAIL }); // Store ASTROMAIL
             }
           });
         }
@@ -325,9 +338,9 @@
             if (umap.LAT && umap.LON && umap.UMAPHEX) {
               const locationKey = `${umap.LAT},${umap.LON}`;
               if (!locationEntities[locationKey]) {
-                locationEntities[locationKey] = [];
+                locationEntities[locationKey] = { PLAYERS: [], UMAPS: [] }; // Initialize both arrays
               }
-              locationEntities[locationKey].push({ type: 'UMAP', hex: umap.UMAPHEX });
+              locationEntities[locationKey].UMAPS.push({ hex: umap.UMAPHEX, umapipfs: umap.UMAPIPNS, lat: umap.LAT, lon: umap.LON }); // Store LAT and LON
             }
           });
         }
@@ -339,25 +352,42 @@
           let popupContent = '';
           let icon = null;
 
-          entities.forEach(entity => {
-              popupContent += `<a href="nostr.html?hex=${entity.hex}" target="_blank">View Nostr Profile (${entity.type})</a><br>`;
-              if (entity.type === 'PLAYER') {
-                  icon = playerIcon; // Use player icon if there's a player at this location
-              } else if (!icon && entity.type === 'UMAP') {
-                  icon = umapIcon; // Use umap icon if no player icon has been set yet
-              }
-          });
+          if (entities.UMAPS.length > 0) {
+              icon = umapIcon; // Prioritize UMAP icon if UMAPS are present
+              const umap = entities.UMAPS[0]; // Assuming only one UMAP per location, adjust if needed
+              popupContent += `<p><b>UMAP</b></p>`;
+              popupContent += `<p><b>Lat:</b> ${umap.lat}, <b>Lon:</b> ${umap.lon}</p>`; // Display Lat and Lon
+              popupContent += `<ul>`;
+              popupContent += `<li><a href="nostr.html?hex=${umap.hex}" target="_blank">Nostr (UMAP)</a> - <a href="${umap.umapipfs}" target="_blank">UMAP IPFS</a></li>`;
+              popupContent += `</ul>`;
 
-          // If no icon was determined based on entity types, use a default or handle as needed.
-          if (!icon) {
-              icon = playerIcon; // Default to playerIcon if no specific icon determined. Adjust as needed.
+              if (entities.PLAYERS.length > 0) {
+                  popupContent += `<p><b>Players nearby:</b></p><ul>`;
+                  // Randomly select up to 10 players
+                  const shuffledPlayers = [...entities.PLAYERS].sort(() => 0.5 - Math.random());
+                  const selectedPlayers = shuffledPlayers.slice(0, Math.min(10, entities.PLAYERS.length));
+                  selectedPlayers.forEach(player => {
+                      popupContent += `<li><a href="nostr.html?hex=${player.hex}" target="_blank">${player.astromail}</a></li>`;
+                  });
+                  popupContent += `</ul>`;
+              }
+
+
+          } else if (entities.PLAYERS.length > 0) {
+              icon = playerIcon; // Use player icon if only PLAYERS are present
+              popupContent += `<p><b>NOSTR:</b></p><ul>`;
+              entities.PLAYERS.forEach(player => {
+                  popupContent += `<li><a href="nostr.html?hex=${player.hex}" target="_blank">${player.astromail}</a></li>`; // Use player.astromail
+              });
+              popupContent += `</ul>`;
           }
 
-
-          L.marker([lat, lon], {icon: icon})
-              .bindPopup(popupContent, { className: 'custom-popup' })
-              .addTo(map);
-          console.log(`Marker ajouté à LAT: ${lat}, LON: ${lon} avec entités:`, entities);
+          if (icon) { // Only add marker if there's an icon (either UMAP or PLAYER present)
+              L.marker([lat, lon], {icon: icon})
+                  .bindPopup(popupContent, { className: 'custom-popup' })
+                  .addTo(map);
+              console.log(`Marker ajouté à LAT: ${lat}, LON: ${lon} avec entités:`, entities);
+          }
         }
       }
     });

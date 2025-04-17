@@ -39,7 +39,35 @@
       overflow: hidden;
       z-index: 99; /* Ensure the rolling text is above the map */
     }
-</style>
+
+    /* Style pour les marqueurs */
+    .leaflet-marker-icon {
+        border: none; /* Supprime la bordure par défaut des marqueurs */
+    }
+
+    /* Styles pour les popups (encarts) */
+    .custom-popup .leaflet-popup-content-wrapper {
+      background-color: #f0f0f0;
+      color: #333;
+      border-radius: 5px;
+      padding: 10px;
+    }
+
+    .custom-popup .leaflet-popup-content {
+      margin: 0;
+    }
+
+    .custom-popup .leaflet-popup-tip-container {
+      width: 20px;
+      height: 10px;
+    }
+
+    .custom-popup .leaflet-popup-tip {
+      background: #f0f0f0;
+      border: none;
+    }
+
+  </style>
 
   <script src="leaflet.js"></script>
 <!--
@@ -70,6 +98,15 @@
 
     console.log('DRAGON URL:', zoneURL);
 
+    var uHost = hostname.replace("ipfs", "u");
+    if (port === "8080") {
+        port = "54321";
+    }
+    var uPlanetStation = protocol + "://" + uHost + (port ? (":" + port) : "");
+    const uPlanetAPI_URL = uPlanetStation+'/api.json';
+
+    console.log('UPLANET API URL:', uPlanetAPI_URL);
+
 ///////////////////////////////////////////////////////////////////////////////////
     // Function to extract URL parameters
     function getUrlParameter(name) {
@@ -95,6 +132,22 @@
 
     const rectangles = [];
     const rectangleCounts = new Map();
+
+    // Icones pour PLAYER et UMAP
+    const playerIcon = L.icon({
+        iconUrl: 'player-icon.png', // Remplace par le chemin vers ton icône PLAYER
+        iconSize: [32, 32], // Taille de l'icône
+        iconAnchor: [16, 32], // Point de l'icône qui correspondra à la position du marker
+        popupAnchor: [0, -32] // Point d'où la popup s'ouvrira par rapport à l'icône
+    });
+
+    const umapIcon = L.icon({
+        iconUrl: 'umap-icon.png', // Remplace par le chemin vers ton icône UMAP
+        iconSize: [32, 32],
+        iconAnchor: [16, 32],
+        popupAnchor: [0, -32]
+    });
+
 
     // Create a clickable area for each grid cell
     for (let latIndex = 0; latIndex < gridSize; latIndex++) {
@@ -132,6 +185,21 @@
         return [];
       }
     }
+
+///////////////////////////////////////////////////////////////////////////////////
+    async function loadUPlanetData(myURL) {
+      try {
+        console.log('Fetching UPlanet data from:', myURL);
+        const response = await fetch(myURL);
+        const data = await response.json();
+        console.log('UPlanet data loaded successfully:', data);
+        return data;
+      } catch (error) {
+        console.error('Error loading UPlanet data:', error);
+        return null;
+      }
+    }
+
 ///////////////////////////////////////////////////////////////////////////////////
     function overlayGridNumbers(rectangle, count) {
       const latLng = rectangle.getBounds().getCenter();
@@ -233,6 +301,36 @@
       });
 
     });
+
+///////////////////////////////////////////////////////////////////////////////////
+    loadUPlanetData(uPlanetAPI_URL).then(uPlanetData => {
+      if (uPlanetData) {
+        // Ajouter les PLAYERS sur la carte
+        if (uPlanetData.PLAYERs) {
+          uPlanetData.PLAYERs.forEach(player => {
+            if (player.LAT && player.LON && player.HEX) {
+              L.marker([parseFloat(player.LAT), parseFloat(player.LON)], {icon: playerIcon})
+                .bindPopup(`<a href="nostr.html?hex=${player.HEX}" target="_blank">Voir le profil Nostr</a>`, { className: 'custom-popup' })
+                .addTo(map);
+              console.log(`PLAYER ajouté: LAT: ${player.LAT}, LON: ${player.LON}, HEX: ${player.HEX}`);
+            }
+          });
+        }
+
+        // Ajouter les UMAPS sur la carte
+        if (uPlanetData.UMAPs) {
+          uPlanetData.UMAPs.forEach(umap => {
+            if (umap.LAT && umap.LON && umap.UMAPHEX) { // Utilisation de UMAPHEX ici
+              L.marker([parseFloat(umap.LAT), parseFloat(umap.LON)], {icon: umapIcon})
+                .bindPopup(`<a href="nostr.html?hex=${umap.UMAPHEX}" target="_blank">Voir le profil Nostr</a>`, { className: 'custom-popup' }) // Utilisation de UMAPHEX ici
+                .addTo(map);
+              console.log(`UMAP ajouté: LAT: ${umap.LAT}, LON: ${umap.LON}, HEX: ${umap.UMAPHEX}`); // Utilisation de UMAPHEX ici
+            }
+          });
+        }
+      }
+    });
+
 
 </script>
 </body>

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>UPlanet Nostr Profile +7 Messages</title>
+    <title>Nostr Profile et Messages</title>
     <style>
         body {
             font-family: 'Arial', sans-serif;
@@ -90,7 +90,7 @@
 
         #follow-button {
             padding: 10px 15px;
-            background-color: #007bff; /* Example button color */
+            background-color: #007bff; /* Example button color (original blue-ish) */
             color: white;
             border: none;
             border-radius: 5px;
@@ -138,7 +138,7 @@
         </div>
 
         <div id="messages-container" class="messages loading">
-            <h2>Messages (+7)</h2>
+            <h2>Messages</h2>
             <div id="messages-content" class="messages-scrollable">loading messages...</div>
         </div>
 
@@ -146,6 +146,8 @@
 
     <script>
         let selectedMessageId = null; // Variable to store the selected message ID
+        const followButton = document.getElementById('follow-button');
+        const originalButtonColor = followButton.style.backgroundColor; // Store original color
 
         async function getRelayURL() {
             const currentUrl = new URL(window.location.href);
@@ -275,6 +277,53 @@
                 }
             }
 
+            // Make fetchExistingFollowList globally available
+            window.fetchExistingFollowList = async function(publicKey, relayUrl) {
+                try {
+                    const relay = nostrTools.relayInit(relayUrl);
+                    await relay.connect();
+
+                    const sub = relay.sub([{
+                        kinds: [3],
+                        authors: [publicKey]
+                    }]);
+
+                    return new Promise((resolve, reject) => {
+                        let followListEvent = null;
+                        let timeout = setTimeout(() => {
+                            sub.unsub();
+                            relay.close();
+                            reject("Timeout: No follow list event received");
+                        }, 5000);
+
+                        sub.on('event', event => {
+                            clearTimeout(timeout);
+                            followListEvent = event;
+                            sub.unsub();
+                            relay.close();
+                            resolve(followListEvent);
+                        });
+
+                        sub.on('eose', () => {
+                            clearTimeout(timeout);
+                            sub.unsub();
+                            relay.close();
+                            resolve(null); // No existing follow list found
+                        });
+
+                        relay.on('error', (error) => {
+                            clearTimeout(timeout);
+                            sub.unsub();
+                            relay.close();
+                            reject(`Relay error on fetchExistingFollowList: ${error}`);
+                        });
+                    });
+                } catch (error) {
+                    console.error("Error fetching existing follow list:", error);
+                    throw error;
+                }
+            }
+
 
             async function displayNostrData() {
                 relayUrl = await getRelayURL();
@@ -348,27 +397,61 @@
             }
 
             try {
+                followButton.disabled = true; // Disable button during processing
                 const publicKey = await window.nostr.getPublicKey();
+                relayUrl = await getRelayURL();
+
+                const existingFollowListEvent = await window.fetchExistingFollowList(publicKey, relayUrl); // Call it using window.fetchExistingFollowList
+                let currentFollows = [];
+                if (existingFollowListEvent && existingFollowListEvent.tags) {
+                    currentFollows = existingFollowListEvent.tags
+                        .filter(tag => tag[0] === 'p')
+                        .map(tag => tag[1]);
+                }
+
+                if (!currentFollows.includes(hexKey)) {
+                    currentFollows.push(hexKey);
+                }
+
+                const followTags = currentFollows.map(followedPubKey => ["p", followedPubKey, "", ""]);
+
                 const event = {
                     kind: 3, // Kind 3 for contact list (follows)
                     pubkey: publicKey,
                     created_at: Math.floor(Date.now() / 1000),
-                    tags: [["p", hexKey]], // 'p' tag to specify the public key to follow
+                    tags: followTags,
                     content: "" // Content is optional for kind 3 events, can be empty
                 };
 
                 const signedEvent = await window.nostr.signEvent(event);
-                relayUrl = await getRelayURL();
+
                 const relay = nostrTools.relayInit(relayUrl);
                 await relay.connect();
                 await relay.publish(signedEvent); // Use await to ensure publication finishes before closing
                 relay.close();
 
-                alert(`Vous suivez maintenant ${hexKey.substring(0, 8)}...`); // Basic feedback, showing truncated hex key
+                followButton.style.backgroundColor = 'blue'; // Change to blue for success
+                followButton.textContent = 'Following'; // Optionally change text
+
+                // Reset button color and text after 2 seconds
+                setTimeout(() => {
+                    followButton.style.backgroundColor = originalButtonColor;
+                    followButton.textContent = 'Follow';
+                    followButton.disabled = false; // Re-enable button
+                }, 2000);
+
 
             } catch (error) {
                 console.error("Erreur lors de l'action de suivre:", error);
                 followErrorMessageDiv.textContent = `Erreur lors de l'action de suivre: ${error.message || error}`;
+                followButton.style.backgroundColor = 'red'; // Change to red for failure
+
+                // Reset button color and text after 3 seconds (longer for error)
+                setTimeout(() => {
+                    followButton.style.backgroundColor = originalButtonColor;
+                    followButton.textContent = 'Follow';
+                    followButton.disabled = false; // Re-enable button
+                }, 3000);
             }
         });
 

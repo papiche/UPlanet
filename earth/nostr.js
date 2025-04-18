@@ -1,5 +1,3 @@
-// nostr.js
-
 const nostrTools = {
     relayInit: (relayUrl) => {
         let ws;
@@ -96,7 +94,42 @@ const nostrTools = {
                 if (type === 'error') {
                     eventHandlers['error'].push(handler);
                 }
+            },
+            // --- ADD THIS publish FUNCTION ---
+            publish: (event) => {
+                return new Promise((resolve, reject) => {
+                    if (!ws || ws.readyState !== WebSocket.OPEN) {
+                        reject("WebSocket is not connected or is closing.");
+                        return;
+                    }
+                    const pubMessage = ["EVENT", event];
+                    ws.send(JSON.stringify(pubMessage));
+
+                    const timeout = setTimeout(() => {
+                        reject("Timeout waiting for OK or NOTICE.");
+                    }, 10000); // Adjust timeout as needed
+
+                    const handleMessage = (msgEvent) => {
+                        try {
+                            const message = JSON.parse(msgEvent.data);
+                            if (message[0] === 'OK' && message[1] === event.id) {
+                                clearTimeout(timeout);
+                                ws.removeEventListener('message', handleMessage);
+                                resolve();
+                            } else if (message[0] === 'NOTICE') {
+                                clearTimeout(timeout);
+                                ws.removeEventListener('message', handleMessage);
+                                reject(`Relay Notice: ${message[1]}`);
+                            }
+                        } catch (e) {
+                            console.error("Error parsing message:", msgEvent.data, e);
+                        }
+                    };
+
+                    ws.addEventListener('message', handleMessage);
+                });
             }
+            // --- END ADDED publish FUNCTION ---
         };
         return relay;
     }

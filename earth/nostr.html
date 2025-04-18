@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Nostr Profile et Messages</title>
+    <title>UPlanet Nostr Profile +7 Messages</title>
     <style>
         body {
             font-family: 'Arial', sans-serif;
@@ -58,42 +58,39 @@
             background-color: #f9f9f9;
         }
 
-        .message {
+        .message-item {
+            display: flex;
+            align-items: flex-start; /* Align items at the start vertically */
             border-bottom: 1px dotted #ccc;
             padding: 8px 0;
             word-wrap: break-word; /* Prevent long words from breaking layout */
         }
 
-        .message:last-child {
+        .message-item:last-child {
             border-bottom: none;
         }
 
-        .message strong {
+        .message-item strong {
             display: block;
             margin-bottom: 5px;
             color: #777;
             font-size: 0.9em;
         }
 
-        #message-form {
+        .message-radio {
+            margin-right: 10px; /* Space between radio and message content */
+            margin-top: 5px; /* Align radio with the top of the message content */
+        }
+
+
+        #follow-button-container {
             margin-top: 20px;
-            display: flex;
-            flex-direction: column;
+            text-align: center; /* Center the button */
         }
 
-        #message-input {
-            padding: 10px;
-            margin-bottom: 10px;
-            border: 1px solid #ccc;
-            border-radius: 5px;
-            font-size: 1em;
-            resize: vertical; /* Allow vertical resizing */
-            min-height: 80px;
-        }
-
-        #send-button {
+        #follow-button {
             padding: 10px 15px;
-            background-color: #5cb85c;
+            background-color: #007bff; /* Example button color */
             color: white;
             border: none;
             border-radius: 5px;
@@ -102,13 +99,15 @@
             transition: background-color 0.3s;
         }
 
-        #send-button:hover {
-            background-color: #4cae4c;
+        #follow-button:hover {
+            background-color: #0056b3; /* Darker shade for hover */
         }
 
-        #error-message {
+
+        #follow-error-message {
             color: red;
             margin-top: 10px;
+            text-align: center; /* Center error message */
         }
 
         /* Responsive adjustments */
@@ -122,9 +121,6 @@
             .messages-scrollable {
                 max-height: 200px; /* Adjust max height for smaller screens */
             }
-            #message-input {
-                min-height: 60px;
-            }
         }
     </style>
     <script src="nostr.js"></script>
@@ -132,27 +128,25 @@
 <body>
 
     <div class="container">
-        <h1>Nostr Profile et Messages</h1>
-
         <div id="profile-container" class="profile loading">
-            <h2>Profil</h2>
-            <div id="profile-content">Chargement du profil...</div>
+            <div id="profile-content">loading profile...</div>
+        </div>
+
+        <div id="follow-button-container">
+            <button id="follow-button">Follow</button>
+            <div id="follow-error-message"></div>
         </div>
 
         <div id="messages-container" class="messages loading">
-            <h2>Messages récents (dernière semaine)</h2>
-            <div id="messages-content" class="messages-scrollable">Chargement des messages...</div>
+            <h2>Messages (+7)</h2>
+            <div id="messages-content" class="messages-scrollable">loading messages...</div>
         </div>
 
-        <form id="message-form">
-            <h2>Envoyer un message</h2>
-            <textarea id="message-input" placeholder="Votre message ici..."></textarea>
-            <button type="submit" id="send-button">Envoyer</button>
-            <div id="error-message"></div>
-        </form>
     </div>
 
     <script>
+        let selectedMessageId = null; // Variable to store the selected message ID
+
         async function getRelayURL() {
             const currentUrl = new URL(window.location.href);
             let relayName = currentUrl.hostname.replace('ipfs.', 'relay.');
@@ -226,7 +220,7 @@
                         });
                     });
                 } catch (error) {
-                    console.error("Erreur lors de la récupération du profil Nostr:", error);
+                    console.error("Error Nostr Profile:", error);
                     throw error;
                 }
             }
@@ -276,7 +270,7 @@
 
                     });
                 } catch (error) {
-                    console.error("Erreur lors de la récupération des messages Nostr:", error);
+                    console.error("Error Nostr Message:", error);
                     throw error;
                 }
             }
@@ -309,7 +303,13 @@
                         messagesData.sort((a, b) => b.created_at - a.created_at);
                         messagesData.forEach(message => {
                             const date = new Date(message.created_at * 1000);
-                            messagesHTML += `<div class="message"><strong>${date.toLocaleDateString()} ${date.toLocaleTimeString()}</strong><p>${message.content}</p></div>`;
+                            messagesHTML += `<div class="message-item">
+                                                <input type="radio" name="selectedMessage" class="message-radio" value="${message.id}" id="message-${message.id}" onclick="selectMessage('${message.id}')">
+                                                <label for="message-${message.id}">
+                                                    <strong>${date.toLocaleDateString()} ${date.toLocaleTimeString()}</strong>
+                                                    <p>${message.content}</p>
+                                                </label>
+                                            </div>`;
                         });
                     } else {
                         messagesHTML = "<p>Aucun message récent trouvé pour cette clé publique sur ce relay.</p>";
@@ -326,45 +326,49 @@
             displayNostrData();
         }
 
-        document.getElementById('message-form').addEventListener('submit', async function(event) {
-            event.preventDefault();
-            const messageContent = document.getElementById('message-input').value.trim();
-            const errorMessageDiv = document.getElementById('error-message');
+        function selectMessage(messageId) {
+            selectedMessageId = messageId;
+            console.log("Selected message ID:", selectedMessageId);
+        }
 
-            if (!messageContent) {
-                errorMessageDiv.textContent = "Le message ne peut pas être vide.";
-                return;
-            }
-            errorMessageDiv.textContent = ""; // Clear any previous error
+
+        document.getElementById('follow-button').addEventListener('click', async function(event) {
+            event.preventDefault();
+            const followErrorMessageDiv = document.getElementById('follow-error-message');
+            followErrorMessageDiv.textContent = ""; // Clear any previous error
 
             if (!window.nostr) {
-                errorMessageDiv.textContent = "Plugin Nostr non détecté. Veuillez installer Nostr Connect ou une extension similaire.";
+                followErrorMessageDiv.textContent = "Plugin Nostr non détecté. Veuillez installer Nostr Connect ou une extension similaire.";
+                return;
+            }
+
+            if (!hexKey) {
+                followErrorMessageDiv.textContent = "Clé HEX de la personne à suivre non disponible.";
                 return;
             }
 
             try {
                 const publicKey = await window.nostr.getPublicKey();
                 const event = {
-                    kind: 1,
+                    kind: 3, // Kind 3 for contact list (follows)
                     pubkey: publicKey,
                     created_at: Math.floor(Date.now() / 1000),
-                    tags: [],
-                    content: messageContent
+                    tags: [["p", hexKey]], // 'p' tag to specify the public key to follow
+                    content: "" // Content is optional for kind 3 events, can be empty
                 };
 
                 const signedEvent = await window.nostr.signEvent(event);
                 relayUrl = await getRelayURL();
                 const relay = nostrTools.relayInit(relayUrl);
                 await relay.connect();
-                relay.publish(signedEvent);
+                await relay.publish(signedEvent); // Use await to ensure publication finishes before closing
                 relay.close();
 
-                document.getElementById('message-input').value = ''; // Clear input after sending
-                alert("Message envoyé !"); // Basic feedback
+                alert(`Vous suivez maintenant ${hexKey.substring(0, 8)}...`); // Basic feedback, showing truncated hex key
 
             } catch (error) {
-                console.error("Erreur lors de l'envoi du message:", error);
-                errorMessageDiv.textContent = `Erreur lors de l'envoi du message: ${error.message || error}`;
+                console.error("Erreur lors de l'action de suivre:", error);
+                followErrorMessageDiv.textContent = `Erreur lors de l'action de suivre: ${error.message || error}`;
             }
         });
 

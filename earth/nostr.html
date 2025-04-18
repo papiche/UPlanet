@@ -2,29 +2,154 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Nostr Profile et Messages</title>
     <style>
-        body { font-family: sans-serif; }
-        .profile { border: 1px solid #ccc; padding: 10px; margin-bottom: 20px; }
-        .messages { border: 1px solid #ccc; padding: 10px; }
-        .message { border-bottom: 1px dotted #ccc; padding: 5px 0; }
-        .message:last-child { border-bottom: none; }
-        .loading { opacity: 0.5; } /* Style pour indiquer le chargement */
+        body {
+            font-family: 'Arial', sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f4f4f4;
+            color: #333;
+            line-height: 1.6;
+        }
+
+        h1, h2, h3 {
+            color: #2c3e50;
+            text-align: center;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 20px auto;
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .profile {
+            border-bottom: 1px solid #eee;
+            padding-bottom: 15px;
+            margin-bottom: 20px;
+            text-align: center; /* Center profile content */
+        }
+
+        .profile.loading, .messages.loading {
+            opacity: 0.7;
+        }
+
+        .profile-picture {
+            max-width: 100px;
+            border-radius: 50%;
+            margin-bottom: 10px;
+        }
+
+        .messages {
+            padding-top: 10px;
+        }
+
+        .messages-scrollable {
+            max-height: 300px; /* Adjust as needed */
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            padding: 10px;
+            background-color: #f9f9f9;
+        }
+
+        .message {
+            border-bottom: 1px dotted #ccc;
+            padding: 8px 0;
+            word-wrap: break-word; /* Prevent long words from breaking layout */
+        }
+
+        .message:last-child {
+            border-bottom: none;
+        }
+
+        .message strong {
+            display: block;
+            margin-bottom: 5px;
+            color: #777;
+            font-size: 0.9em;
+        }
+
+        #message-form {
+            margin-top: 20px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        #message-input {
+            padding: 10px;
+            margin-bottom: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            font-size: 1em;
+            resize: vertical; /* Allow vertical resizing */
+            min-height: 80px;
+        }
+
+        #send-button {
+            padding: 10px 15px;
+            background-color: #5cb85c;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1em;
+            transition: background-color 0.3s;
+        }
+
+        #send-button:hover {
+            background-color: #4cae4c;
+        }
+
+        #error-message {
+            color: red;
+            margin-top: 10px;
+        }
+
+        /* Responsive adjustments */
+        @media (max-width: 768px) {
+            body {
+                padding: 10px;
+            }
+            .container {
+                padding: 15px;
+            }
+            .messages-scrollable {
+                max-height: 200px; /* Adjust max height for smaller screens */
+            }
+            #message-input {
+                min-height: 60px;
+            }
+        }
     </style>
     <script src="nostr.js"></script>
 </head>
 <body>
 
-    <h1>Profil Nostr et Messages de la semaine</h1>
+    <div class="container">
+        <h1>Nostr Profile et Messages</h1>
 
-    <div id="profile-container" class="profile loading">
-        <h2>Profil</h2>
-        <div id="profile-content">Chargement du profil...</div>
-    </div>
+        <div id="profile-container" class="profile loading">
+            <h2>Profil</h2>
+            <div id="profile-content">Chargement du profil...</div>
+        </div>
 
-    <div id="messages-container" class="messages loading">
-        <h2>Messages récents (dernière semaine)</h2>
-        <div id="messages-content">Chargement des messages...</div>
+        <div id="messages-container" class="messages loading">
+            <h2>Messages récents (dernière semaine)</h2>
+            <div id="messages-content" class="messages-scrollable">Chargement des messages...</div>
+        </div>
+
+        <form id="message-form">
+            <h2>Envoyer un message</h2>
+            <textarea id="message-input" placeholder="Votre message ici..."></textarea>
+            <button type="submit" id="send-button">Envoyer</button>
+            <div id="error-message"></div>
+        </form>
     </div>
 
     <script>
@@ -35,8 +160,6 @@
                 return `ws://127.0.0.1:7777`;
             }
             return `wss://${relayName}`;
-            // You might want to add a fallback relay URL here if needed
-            // return `wss://relay.damus.io`; // Example fallback
         }
 
         function getUrlParameter(name) {
@@ -47,7 +170,7 @@
         }
 
         const hexKey = getUrlParameter('hex');
-        let relayUrl; // Will be set asynchronously
+        let relayUrl;
 
         if (!hexKey) {
             document.getElementById('profile-content').innerText = "Clé HEX non fournie dans l'URL.";
@@ -63,7 +186,7 @@
                     const relay = nostrTools.relayInit(relayUrl);
                     await relay.connect();
 
-                    const publicKey = hex; // Assuming hexKey is already the hex public key
+                    const publicKey = hex;
 
                     const sub = relay.sub([{
                         kinds: [0],
@@ -76,7 +199,7 @@
                             sub.unsub();
                             relay.close();
                             reject("Timeout: No profile event received");
-                        }, 5000); // Timeout after 5 seconds
+                        }, 5000);
 
                         sub.on('event', event => {
                             clearTimeout(timeout);
@@ -91,7 +214,7 @@
                                 clearTimeout(timeout);
                                 sub.unsub();
                                 relay.close();
-                                resolve({}); // Resolve with empty object if no profile found (EOSE reached without event)
+                                resolve({});
                             }
                         });
 
@@ -116,10 +239,10 @@
 
                     const publicKey = hex;
                     const now = Math.floor(Date.now() / 1000);
-                    const oneWeekAgo = now - (7 * 24 * 3600); // Seconds in a week
+                    const oneWeekAgo = now - (7 * 24 * 3600);
 
                     const sub = relay.sub([{
-                        kinds: [1], // Kind 1 is for short notes (messages)
+                        kinds: [1],
                         authors: [publicKey],
                         since: oneWeekAgo
                     }]);
@@ -131,7 +254,7 @@
                             sub.unsub();
                             relay.close();
                             reject("Timeout: No message events received");
-                        }, 10000); // Timeout after 10 seconds for messages
+                        }, 10000);
 
                         sub.on('event', event => {
                             messages.push(event);
@@ -160,14 +283,14 @@
 
 
             async function displayNostrData() {
-                relayUrl = await getRelayURL(); // Get relay URL asynchronously
+                relayUrl = await getRelayURL();
                 try {
                     const profileData = await fetchNostrProfile(hexKey, relayUrl);
                     document.getElementById('profile-container').classList.remove('loading');
                     let profileHTML = `<h3>${profileData.name || 'N/A'}</h3>`;
                     profileHTML += `<p>${profileData.about || 'Pas de description'}</p>`;
                     if (profileData.picture) {
-                        profileHTML += `<img src="${profileData.picture}" alt="Profile Picture" style="max-width: 100px; max-height: 100px;">`;
+                        profileHTML += `<img src="${profileData.picture}" alt="Profile Picture" class="profile-picture">`;
                     }
                     document.getElementById('profile-content').innerHTML = profileHTML;
 
@@ -183,11 +306,10 @@
                     document.getElementById('messages-container').classList.remove('loading');
                     let messagesHTML = '';
                     if (messagesData && messagesData.length > 0) {
-                        // Sort messages by created_at in descending order (newest first)
                         messagesData.sort((a, b) => b.created_at - a.created_at);
                         messagesData.forEach(message => {
-                            const date = new Date(message.created_at * 1000); // Convert seconds to milliseconds
-                            messagesHTML += `<div class="message"><p><strong>${date.toLocaleDateString()} ${date.toLocaleTimeString()}</strong></p><p>${message.content}</p></div>`;
+                            const date = new Date(message.created_at * 1000);
+                            messagesHTML += `<div class="message"><strong>${date.toLocaleDateString()} ${date.toLocaleTimeString()}</strong><p>${message.content}</p></div>`;
                         });
                     } else {
                         messagesHTML = "<p>Aucun message récent trouvé pour cette clé publique sur ce relay.</p>";
@@ -204,6 +326,47 @@
             displayNostrData();
         }
 
+        document.getElementById('message-form').addEventListener('submit', async function(event) {
+            event.preventDefault();
+            const messageContent = document.getElementById('message-input').value.trim();
+            const errorMessageDiv = document.getElementById('error-message');
+
+            if (!messageContent) {
+                errorMessageDiv.textContent = "Le message ne peut pas être vide.";
+                return;
+            }
+            errorMessageDiv.textContent = ""; // Clear any previous error
+
+            if (!window.nostr) {
+                errorMessageDiv.textContent = "Plugin Nostr non détecté. Veuillez installer Nostr Connect ou une extension similaire.";
+                return;
+            }
+
+            try {
+                const publicKey = await window.nostr.getPublicKey();
+                const event = {
+                    kind: 1,
+                    pubkey: publicKey,
+                    created_at: Math.floor(Date.now() / 1000),
+                    tags: [],
+                    content: messageContent
+                };
+
+                const signedEvent = await window.nostr.signEvent(event);
+                relayUrl = await getRelayURL();
+                const relay = nostrTools.relayInit(relayUrl);
+                await relay.connect();
+                relay.publish(signedEvent);
+                relay.close();
+
+                document.getElementById('message-input').value = ''; // Clear input after sending
+                alert("Message envoyé !"); // Basic feedback
+
+            } catch (error) {
+                console.error("Erreur lors de l'envoi du message:", error);
+                errorMessageDiv.textContent = `Erreur lors de l'envoi du message: ${error.message || error}`;
+            }
+        });
 
     </script>
 </body>

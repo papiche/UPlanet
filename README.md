@@ -4,36 +4,35 @@ This repo /earth folder is the App published over /ipns/copylaradio.com
 
 https://qo-op.com redirects to it
 
-## **Connect to Astropot APIz**
+## **Connect to Astroport's API**
 
 This is the URL conversion method and principle that gives access to AstroportONE Distributed Information System Services
 
 ```
-    // Extract the hostname (e.g., "https://ipfs.domain.tld" or "http://ipfs.localhost:8080")
     var currentURL = new URL(window.location.href);
     var hostname = currentURL.hostname;
-    var port = currentURL.port;
     var protocol = currentURL.protocol.split(":")[0];
-    // Check and replace the port if it's 8080
-    if (port === "8080") {
-        port = "1234";
+
+    // Premier bloc (zoneURL)
+    var zPort = currentURL.port;
+    if (zPort === "8080") {
+        zPort = "1234";
     }
     var zHost = hostname.replace("ipfs", "astroport");
-    // Create the "station" variable with the specified format
-    var station = protocol + "://" + zHost + (port ? (":" + port) : "");
-    console.log(station)
-    const zoneURL = station+'/?dragons=one';
-
+    var station = protocol + "://" + zHost + (zPort ? ":" + zPort : "");
+    const zoneURL = station + '/?dragons=one';
     console.log('DRAGON URL:', zoneURL);
 
-    var uHost = hostname.replace("ipfs", "u");
-    if (port === "8080") {
-        port = "54321";
+    // Second bloc (uPlanetAPI_URL)
+    var uPort = currentURL.port;
+    if (uPort === "8080") {
+        uPort = "54321";
     }
-    var uPlanetStation = protocol + "://" + uHost + (port ? (":" + port) : "");
-    const uPlanetAPI_URL = uPlanetStation+'/';
-
+    var uHost = hostname.replace("ipfs", "u");
+    var uPlanetStation = protocol + "://" + uHost + (uPort ? ":" + uPort : "");
+    const uPlanetAPI_URL = uPlanetStation + '/';
     console.log('UPLANET API URL:', uPlanetAPI_URL);
+
 ```
 
 ## Des Bits au Sens : Comment UPlanet Rétablit la Qualité de l'Information à l'Ère du Numérique

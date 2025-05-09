@@ -3,157 +3,376 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Nostr Profile et Messages</title>
+    <title>Nostr Profile Viewer</title>
     <style>
-        body {
-            font-family: 'Arial', sans-serif;
+        @import url('https://fonts.googleapis.com/css2?family=Inconsolata:wght@400;700&family=Share+Tech+Mono&display=swap');
+
+        :root {
+            --terminal-bg: #0a0a12;
+            --terminal-green: #0f0;
+            --terminal-cyan: #0ff;
+            --terminal-purple: #b19cd9;
+            --terminal-red: #f44;
+            --terminal-glow: rgba(0, 255, 0, 0.7);
+            --terminal-border: #333;
+            --text-color: #e0e0e0;
+            --text-shadow: 0 0 8px var(--terminal-glow);
+        }
+
+        * {
             margin: 0;
-            padding: 20px;
-            background-color: #f4f4f4;
-            color: #333;
-            line-height: 1.6;
+            padding: 0;
+            box-sizing: border-box;
         }
 
-        h1, h2, h3 {
-            color: #2c3e50;
-            text-align: center;
+        body {
+            background: #000;
+            overflow-y: auto; /* Allow scrolling if content exceeds viewport */
+            overflow-x: hidden;
+            font-family: 'Inconsolata', monospace;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start; /* Align to top */
+            align-items: center;
+            min-height: 100vh;
+            padding-top: 2rem; /* Add some padding at the top */
+            perspective: 1000px;
         }
 
-        .container {
+        .matrix-background {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            opacity: 0.15;
+        }
+
+        .terminal-container {
+            position: relative;
+            width: 85%;
             max-width: 800px;
-            margin: 20px auto;
-            background-color: #fff;
-            padding: 20px;
+            /* height: auto; Let content define height */
+            min-height: 70vh; /* Minimum height */
+            background: var(--terminal-bg);
             border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 0 30px rgba(0, 255, 0, 0.5),
+                        inset 0 0 10px rgba(0, 255, 0, 0.2);
+            overflow: hidden;
+            border: 1px solid var(--terminal-green);
+            transform-style: preserve-3d;
+            animation: float 8s ease-in-out infinite;
+            margin-bottom: 2rem; /* Space at the bottom */
+        }
+
+        @keyframes float {
+            0%, 100% {
+                transform: translateY(0) rotateX(10deg) rotateY(5deg);
+            }
+            50% {
+                transform: translateY(-15px) rotateX(5deg) rotateY(10deg);
+            }
+        }
+
+        .terminal-header {
+            background: linear-gradient(to right, #0a0a0a, #111);
+            padding: 8px 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            color: var(--terminal-green);
+            font-family: 'Share Tech Mono', monospace;
+            border-bottom: 1px solid var(--terminal-green);
+            box-shadow: 0 2px 15px rgba(0, 255, 0, 0.3);
+        }
+
+        .terminal-buttons-group { /* Renamed to avoid conflict */
+            display: flex;
+            gap: 8px;
+        }
+
+        .terminal-button-ctrl { /* Renamed to avoid conflict */
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .terminal-button-ctrl.red { background: #ff5f56; }
+        .terminal-button-ctrl.yellow { background: #ffbd2e; }
+        .terminal-button-ctrl.green { background: #27c93f; }
+
+        .terminal-body {
+            padding: 15px;
+            height: calc(100% - 40px); /* Adjust if header height changes */
+            overflow-y: auto;
+            color: var(--text-color);
+            text-shadow: var(--text-shadow);
+            line-height: 1.6;
+            font-size: 0.9rem;
+        }
+
+        .terminal-body::-webkit-scrollbar { width: 8px; }
+        .terminal-body::-webkit-scrollbar-track { background: var(--terminal-bg); }
+        .terminal-body::-webkit-scrollbar-thumb {
+            background-color: var(--terminal-green);
+            border-radius: 4px;
+            border: 1px solid var(--terminal-bg);
+        }
+
+        .glitch { position: relative; }
+        .glitch::before, .glitch::after {
+            content: attr(data-text);
+            position: absolute; top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: var(--terminal-bg);
+        }
+        .glitch::before {
+            left: 2px; text-shadow: -2px 0 var(--terminal-red);
+            clip: rect(24px, 550px, 90px, 0);
+            animation: glitch-anim-1 2s infinite linear alternate-reverse;
+        }
+        .glitch::after {
+            left: -2px; text-shadow: -2px 0 var(--terminal-cyan);
+            clip: rect(85px, 550px, 140px, 0);
+            animation: glitch-anim-2 2s infinite linear alternate-reverse;
+        }
+        @keyframes glitch-anim-1 { /* ... (glitch keyframes from UPlanet Terminal) ... */
+            0% { clip: rect(54px, 800px, 54px, 0); } 20% { clip: rect(27px, 800px, 86px, 0); }
+            40% { clip: rect(14px, 800px, 75px, 0); } 60% { clip: rect(39px, 800px, 104px, 0); }
+            80% { clip: rect(18px, 800px, 53px, 0); } 100% { clip: rect(73px, 800px, 112px, 0); }
+        }
+        @keyframes glitch-anim-2 { /* ... (glitch keyframes from UPlanet Terminal) ... */
+            0% { clip: rect(35px, 800px, 89px, 0); } 20% { clip: rect(56px, 800px, 103px, 0); }
+            40% { clip: rect(22px, 800px, 64px, 0); } 60% { clip: rect(88px, 800px, 120px, 0); }
+            80% { clip: rect(13px, 800px, 32px, 0); } 100% { clip: rect(42px, 800px, 99px, 0); }
+        }
+        canvas { display: block; }
+
+        /* Styles for Nostr Profile Content */
+        .uplanet-logo-link {
+            display: block;
+            text-align: center;
+            margin-bottom: 20px; /* Was in <center> before */
+        }
+        .uplanet-logo-link img {
+             max-width: 150px; /* Adjust as needed */
+             border: 2px solid var(--terminal-cyan);
+             padding: 5px;
+             background-color: var(--terminal-bg);
         }
 
         .profile {
-            border-bottom: 1px solid #eee;
+            border-bottom: 1px dashed var(--terminal-border);
             padding-bottom: 15px;
             margin-bottom: 20px;
-            text-align: center; /* Center profile content */
+            text-align: center;
         }
-
-        .profile.loading, .messages.loading {
-            opacity: 0.7;
+        .profile h3 {
+            color: var(--terminal-purple);
+            font-family: 'Share Tech Mono', monospace;
+            margin-top: 0;
+            margin-bottom: 10px;
+            font-size: 1.4em;
         }
-
+        .profile p {
+            color: var(--text-color);
+            margin-bottom: 10px;
+        }
         .profile-picture {
             max-width: 100px;
             border-radius: 50%;
-            margin-bottom: 10px;
-        }
-
-        .messages {
-            padding-top: 10px;
-        }
-
-        .messages-scrollable {
-            max-height: 300px; /* Adjust as needed */
-            overflow-y: auto;
-            border: 1px solid #ddd;
-            border-radius: 5px;
-            padding: 10px;
-            background-color: #f9f9f9;
-        }
-
-        .message-item {
-            display: flex;
-            align-items: flex-start; /* Align items at the start vertically */
-            border-bottom: 1px dotted #ccc;
-            padding: 8px 0;
-            word-wrap: break-word; /* Prevent long words from breaking layout */
-        }
-
-        .message-item:last-child {
-            border-bottom: none;
-        }
-
-        .message-item strong {
+            border: 2px solid var(--terminal-cyan);
+            margin: 0 auto 10px auto; /* Center picture */
             display: block;
-            margin-bottom: 5px;
-            color: #777;
-            font-size: 0.9em;
         }
-
-        .message-radio {
-            margin-right: 10px; /* Space between radio and message content */
-            margin-top: 5px; /* Align radio with the top of the message content */
+        .profile.loading, .messages.loading {
+            color: var(--terminal-cyan); /* Loading text color */
+        }
+        .profile.loading div, .messages.loading div{
+            color: var(--terminal-cyan);
         }
 
 
         #follow-button-container {
             margin-top: 20px;
-            text-align: center; /* Center the button */
+            text-align: center;
+            margin-bottom: 20px;
         }
-
         #follow-button {
-            padding: 10px 15px;
-            background-color: #007bff; /* Example button color (original blue-ish) */
-            color: white;
-            border: none;
-            border-radius: 5px;
+            background-color: var(--terminal-green);
+            color: var(--terminal-bg);
+            border: 1px solid var(--terminal-green);
+            padding: 10px 20px;
+            font-family: 'Share Tech Mono', monospace;
             cursor: pointer;
-            font-size: 1em;
-            transition: background-color 0.3s;
+            border-radius: 4px;
+            transition: all 0.2s ease;
+            box-shadow: 0 0 5px var(--terminal-glow);
+            font-size: 1.1em;
         }
-
         #follow-button:hover {
-            background-color: #0056b3; /* Darker shade for hover */
+            background-color: var(--terminal-cyan);
+            color: var(--terminal-bg);
+            box-shadow: 0 0 10px var(--terminal-cyan);
         }
-
-
+        #follow-button:disabled {
+            background-color: #555;
+            color: #888;
+            cursor: not-allowed;
+            box-shadow: none;
+        }
         #follow-error-message {
-            color: red;
+            color: var(--terminal-red);
             margin-top: 10px;
-            text-align: center; /* Center error message */
+            text-align: center;
+            font-family: 'Share Tech Mono', monospace;
         }
 
-        /* Responsive adjustments */
-        @media (max-width: 768px) {
-            body {
-                padding: 10px;
-            }
-            .container {
-                padding: 15px;
-            }
-            .messages-scrollable {
-                max-height: 200px; /* Adjust max height for smaller screens */
-            }
+        .messages h2 {
+            color: var(--terminal-purple);
+            font-family: 'Share Tech Mono', monospace;
+            text-align: center;
+            margin-bottom: 15px;
+            font-size: 1.5em;
+            border-bottom: 1px solid var(--terminal-green);
+            padding-bottom: 5px;
         }
+        .messages-scrollable {
+            max-height: 350px;
+            overflow-y: auto;
+            border: 1px solid var(--terminal-border);
+            border-radius: 5px;
+            padding: 10px;
+            background-color: rgba(0,0,0, 0.1); /* Slightly darker than terminal-bg */
+        }
+        .message-item {
+            display: flex;
+            align-items: flex-start;
+            border-bottom: 1px dotted var(--terminal-border);
+            padding: 10px 0;
+            word-wrap: break-word;
+        }
+        .message-item:last-child { border-bottom: none; }
+
+        .message-item strong { /* Date/Time */
+            display: block;
+            margin-bottom: 5px;
+            color: var(--terminal-cyan);
+            font-size: 0.9em;
+        }
+        .message-item p { /* Message content */
+            color: var(--text-color);
+            margin: 0;
+            line-height: 1.4;
+        }
+        .message-radio {
+            margin-right: 10px;
+            margin-top: 5px;
+            accent-color: var(--terminal-green); /* Style radio button if browser supports */
+            cursor: pointer;
+        }
+        /* Custom radio button appearance (optional, more complex) */
+        .message-radio + label {
+            cursor: pointer;
+            width: calc(100% - 30px); /* Adjust based on radio size + margin */
+        }
+
+        /* Loading text */
+        #profile-content, #messages-content {
+            color: var(--terminal-cyan);
+        }
+        #profile-content p, #messages-content p { /* Ensure p inside loading also gets color */
+             color: var(--terminal-cyan);
+        }
+
+
     </style>
     <script src="nostr.js"></script>
 </head>
 <body>
-<center><a href="/ipns/copylaradio.com"><img src="/ipfs/QmfBK5h8R4LjS2qMtHKze3nnFrtdm85pCbUw3oPSirik5M/logo.uplanet.png"></a></center>
-    <div class="container">
-        <div id="profile-container" class="profile loading">
-            <div id="profile-content">loading profile...</div>
-        </div>
+    <canvas id="matrix" class="matrix-background"></canvas>
+    <a href="/ipns/copylaradio.com" class="uplanet-logo-link"><img src="/ipfs/QmfBK5h8R4LjS2qMtHKze3nnFrtdm85pCbUw3oPSirik5M/logo.uplanet.png" alt="UPlanet Logo"></a>
 
-        <div id="follow-button-container">
-            <button id="follow-button">Follow</button>
-            <div id="follow-error-message"></div>
+    <div class="terminal-container">
+        <div class="terminal-header">
+            <div class="terminal-buttons-group">
+                <div class="terminal-button-ctrl red"></div>
+                <div class="terminal-button-ctrl yellow"></div>
+                <div class="terminal-button-ctrl green"></div>
+            </div>
+            <div class="glitch" data-text="Nostr Profile Viewer:~">Nostr Profile Viewer:~</div>
+            <div class="terminal-buttons-group">
+                <div style="width: 20px;"></div> <!-- Spacer -->
+            </div>
         </div>
+        <div class="terminal-body">
+            <!-- Original content goes here -->
+            <div id="profile-container" class="profile loading">
+                <div id="profile-content">loading profile...</div>
+            </div>
 
-        <div id="messages-container" class="messages loading">
-            <h2>Messages</h2>
-            <div id="messages-content" class="messages-scrollable">loading messages...</div>
+            <div id="follow-button-container">
+                <button id="follow-button">Follow</button>
+                <div id="follow-error-message"></div>
+            </div>
+
+            <div id="messages-container" class="messages loading">
+                <h2>Messages</h2>
+                <div id="messages-content" class="messages-scrollable">loading messages...</div>
+            </div>
+            <!-- End of original content -->
         </div>
-
     </div>
 
     <script>
-        let selectedMessageId = null; // Variable to store the selected message ID
+        // Matrix effect
+        const canvas = document.getElementById('matrix');
+        const ctx = canvas.getContext('2d');
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        const alphabet = 'アァカサタナハマヤャラワガザダバパイィキシチニヒミリヰギジヂビピウゥクスツヌフムユュルグズブヅプエェケセテネヘメレヱゲゼデベペオォコソトノホモヨョロヲゴゾドボポヴッンABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!"#$%&\'()*+,-./:;<=>?@[\\]^_`{|}~01';
+        const fontSize = 16;
+        let columns = canvas.width / fontSize; // Make columns dynamic
+        let rainDrops = Array(Math.floor(columns)).fill(1);
+
+        function drawMatrix() {
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.05)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = 'var(--terminal-green)'; // Use CSS variable
+            ctx.font = fontSize + 'px monospace';
+            for (let i = 0; i < rainDrops.length; i++) {
+                const text = alphabet.charAt(Math.floor(Math.random() * alphabet.length));
+                ctx.fillText(text, i * fontSize, rainDrops[i] * fontSize);
+                if (rainDrops[i] * fontSize > canvas.height && Math.random() > 0.975) {
+                    rainDrops[i] = 0;
+                }
+                rainDrops[i]++;
+            }
+            requestAnimationFrame(drawMatrix);
+        }
+        drawMatrix(); // Start matrix
+
+        window.addEventListener('resize', function() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            columns = canvas.width / fontSize;
+            rainDrops = Array(Math.floor(columns)).fill(1).map(() => Math.floor(Math.random() * canvas.height / fontSize)); // Reinitialize drops on resize
+        });
+
+
+        // --- Original Nostr Profile JavaScript ---
+        let selectedMessageId = null;
         const followButton = document.getElementById('follow-button');
-        const originalButtonColor = followButton.style.backgroundColor; // Store original color
+        const originalButtonBgColor = getComputedStyle(followButton).backgroundColor; // Get initial dynamic color
 
         async function getRelayURL() {
+            // ipfs. astroport. u. relay.
             const currentUrl = new URL(window.location.href);
             let relayName = currentUrl.hostname.replace('ipfs.', 'relay.');
-            if (currentUrl.port === '8080' || currentUrl.port !== '') {
-                return `ws://127.0.0.1:7777`;
+            if (currentUrl.port === '8080' || currentUrl.port !== '') { // Using '8080' or any port
+                return `ws://127.0.0.1:7777`; // Default local relay
             }
             return `wss://${relayName}`;
         }
@@ -166,136 +385,121 @@
         }
 
         const hexKey = getUrlParameter('hex');
-        let relayUrl;
+        let relayUrl; // Will be set in displayNostrData
+
+        const profileContentDiv = document.getElementById('profile-content');
+        const messagesContentDiv = document.getElementById('messages-content');
+        const profileContainerDiv = document.getElementById('profile-container');
+        const messagesContainerDiv = document.getElementById('messages-container');
+
 
         if (!hexKey) {
-            document.getElementById('profile-content').innerText = "Clé HEX non fournie dans l'URL.";
-            document.getElementById('messages-content').innerText = "Clé HEX non fournie dans l'URL.";
-            document.getElementById('profile-container').classList.remove('loading');
-            document.getElementById('messages-container').classList.remove('loading');
+            profileContentDiv.innerText = "HEX key not provided in URL.";
+            messagesContentDiv.innerText = "HEX key not provided in URL.";
+            profileContainerDiv.classList.remove('loading');
+            messagesContainerDiv.classList.remove('loading');
         } else {
-            document.getElementById('profile-content').innerText = `Récupération du profil pour la clé publique: ${hexKey}`;
-            document.getElementById('messages-content').innerText = `Récupération des messages récents...`;
+            profileContentDiv.innerText = `Fetching profile for pubkey: ${hexKey.substring(0,10)}...`;
+            messagesContentDiv.innerText = `Fetching recent messages...`;
 
-            async function fetchNostrProfile(hex, relayUrl) {
+            async function fetchNostrProfile(hex, nostrRelayUrl) { // Renamed relayUrl param
                 try {
-                    const relay = nostrTools.relayInit(relayUrl);
+                    const relay = nostrTools.relayInit(nostrRelayUrl);
                     await relay.connect();
-
-                    const publicKey = hex;
-
-                    const sub = relay.sub([{
-                        kinds: [0],
-                        authors: [publicKey]
-                    }]);
-
+                    const sub = relay.sub([{ kinds: [0], authors: [hex], limit: 1 }]); // Added limit
                     return new Promise((resolve, reject) => {
                         let profileData = null;
                         let timeout = setTimeout(() => {
                             sub.unsub();
                             relay.close();
-                            reject("Timeout: No profile event received");
+                            console.warn(`Timeout fetching profile for ${hex}`);
+                            resolve({}); // Resolve with empty on timeout
                         }, 5000);
 
                         sub.on('event', event => {
                             clearTimeout(timeout);
-                            profileData = JSON.parse(event.content);
+                            try {
+                                profileData = JSON.parse(event.content);
+                            } catch (e) {
+                                console.error("Error parsing profile JSON:", e, event.content);
+                                profileData = {}; // Fallback
+                            }
                             sub.unsub();
                             relay.close();
                             resolve(profileData);
                         });
-
                         sub.on('eose', () => {
-                            if (!profileData) {
+                            if (!profileData) { // If EOSE before event
                                 clearTimeout(timeout);
                                 sub.unsub();
                                 relay.close();
                                 resolve({});
                             }
                         });
-
-                        relay.on('error', () => {
+                        relay.on('error', (err) => { // Changed to err param
                             clearTimeout(timeout);
                             sub.unsub();
-                            relay.close();
-                            reject(`Relay error on ${relayUrl}`);
+                            try { relay.close(); } catch(e) {} // Best effort close
+                            console.error(`Relay error fetching profile on ${nostrRelayUrl}:`, err);
+                            reject(`Relay error fetching profile`); // More specific error
                         });
                     });
                 } catch (error) {
-                    console.error("Error Nostr Profile:", error);
-                    throw error;
+                    console.error("Nostr Profile Fetch Error:", error);
+                    throw error; // Re-throw to be caught by displayNostrData
                 }
             }
 
-
-            async function fetchNostrMessages(hex, relayUrl) {
+            async function fetchNostrMessages(hex, nostrRelayUrl) {
                 try {
-                    const relay = nostrTools.relayInit(relayUrl);
+                    const relay = nostrTools.relayInit(nostrRelayUrl);
                     await relay.connect();
-
-                    const publicKey = hex;
                     const now = Math.floor(Date.now() / 1000);
                     const oneWeekAgo = now - (7 * 24 * 3600);
-
-                    const sub = relay.sub([{
-                        kinds: [1],
-                        authors: [publicKey],
-                        since: oneWeekAgo
-                    }]);
-
+                    const sub = relay.sub([{ kinds: [1], authors: [hex], since: oneWeekAgo, limit: 50 }]); // Added limit
                     const messages = [];
-
                     return new Promise((resolve, reject) => {
                         let timeout = setTimeout(() => {
                             sub.unsub();
                             relay.close();
-                            reject("Timeout: No message events received");
+                            console.warn(`Timeout fetching messages for ${hex}`);
+                            resolve(messages.sort((a,b) => b.created_at - a.created_at)); // Sort what we have
                         }, 10000);
 
-                        sub.on('event', event => {
-                            messages.push(event);
-                        });
-
+                        sub.on('event', event => { messages.push(event); });
                         sub.on('eose', () => {
                             clearTimeout(timeout);
                             sub.unsub();
                             relay.close();
-                            resolve(messages);
+                            resolve(messages.sort((a,b) => b.created_at - a.created_at));
                         });
-
-                        relay.on('error', () => {
+                        relay.on('error', (err) => {
                             clearTimeout(timeout);
                             sub.unsub();
-                            relay.close();
-                            reject(`Relay error on ${relayUrl}`);
+                            try { relay.close(); } catch(e) {}
+                            console.error(`Relay error fetching messages on ${nostrRelayUrl}:`, err);
+                            reject(`Relay error fetching messages`);
                         });
-
                     });
                 } catch (error) {
-                    console.error("Error Nostr Message:", error);
+                    console.error("Nostr Messages Fetch Error:", error);
                     throw error;
                 }
             }
 
-            // Make fetchExistingFollowList globally available
-            window.fetchExistingFollowList = async function(publicKey, relayUrl) {
+            window.fetchExistingFollowList = async function(publicKey, nostrRelayUrl) {
                 try {
-                    const relay = nostrTools.relayInit(relayUrl);
+                    const relay = nostrTools.relayInit(nostrRelayUrl);
                     await relay.connect();
-
-                    const sub = relay.sub([{
-                        kinds: [3],
-                        authors: [publicKey]
-                    }]);
-
+                    const sub = relay.sub([{ kinds: [3], authors: [publicKey], limit: 1 }]); // Get latest
                     return new Promise((resolve, reject) => {
                         let followListEvent = null;
                         let timeout = setTimeout(() => {
                             sub.unsub();
                             relay.close();
-                            reject("Timeout: No follow list event received");
+                            console.warn(`Timeout fetching follow list for ${publicKey}`);
+                            resolve(null); // Resolve with null on timeout
                         }, 5000);
-
                         sub.on('event', event => {
                             clearTimeout(timeout);
                             followListEvent = event;
@@ -303,19 +507,20 @@
                             relay.close();
                             resolve(followListEvent);
                         });
-
                         sub.on('eose', () => {
-                            clearTimeout(timeout);
-                            sub.unsub();
-                            relay.close();
-                            resolve(null); // No existing follow list found
+                             if (!followListEvent) {
+                                clearTimeout(timeout);
+                                sub.unsub();
+                                relay.close();
+                                resolve(null);
+                            }
                         });
-
                         relay.on('error', (error) => {
                             clearTimeout(timeout);
                             sub.unsub();
-                            relay.close();
-                            reject(`Relay error on fetchExistingFollowList: ${error}`);
+                            try { relay.close(); } catch(e) {}
+                            console.error(`Relay error fetching follow list on ${nostrRelayUrl}:`, error);
+                            reject(`Relay error fetching follow list`);
                         });
                     });
                 } catch (error) {
@@ -324,137 +529,131 @@
                 }
             }
 
-
             async function displayNostrData() {
-                relayUrl = await getRelayURL();
+                relayUrl = await getRelayURL(); // Set global relayUrl
                 try {
                     const profileData = await fetchNostrProfile(hexKey, relayUrl);
-                    document.getElementById('profile-container').classList.remove('loading');
-                    let profileHTML = `<h3>${profileData.name || 'N/A'}</h3>`;
-                    profileHTML += `<p>${profileData.about || 'Pas de description'}</p>`;
+                    profileContainerDiv.classList.remove('loading');
+                    let profileHTML = `<h3>${(profileData.name || profileData.display_name || 'N/A')}</h3>`;
                     if (profileData.picture) {
                         profileHTML += `<img src="${profileData.picture}" alt="Profile Picture" class="profile-picture">`;
                     }
-                    document.getElementById('profile-content').innerHTML = profileHTML;
-
+                    profileHTML += `<p>${profileData.about || 'No description available.'}</p>`;
+                    profileContentDiv.innerHTML = profileHTML;
                 } catch (profileError) {
-                    console.error("Erreur de profil:", profileError);
-                    document.getElementById('profile-container').classList.remove('loading');
-                    document.getElementById('profile-content').innerText = `Erreur lors du chargement du profil depuis ${relayUrl} : ${profileError}`;
+                    console.error("Profile display error:", profileError);
+                    profileContainerDiv.classList.remove('loading');
+                    profileContentDiv.innerHTML = `<p style="color:var(--terminal-red)">Error loading profile from ${relayUrl}: ${profileError.message || profileError}</p>`;
                 }
-
 
                 try {
                     const messagesData = await fetchNostrMessages(hexKey, relayUrl);
-                    document.getElementById('messages-container').classList.remove('loading');
+                    messagesContainerDiv.classList.remove('loading');
                     let messagesHTML = '';
                     if (messagesData && messagesData.length > 0) {
-                        messagesData.sort((a, b) => b.created_at - a.created_at);
+                        // Already sorted by fetchNostrMessages
                         messagesData.forEach(message => {
                             const date = new Date(message.created_at * 1000);
+                            const content = message.content.replace(/</g, "<").replace(/>/g, ">"); // XSS protection
                             messagesHTML += `<div class="message-item">
                                                 <input type="radio" name="selectedMessage" class="message-radio" value="${message.id}" id="message-${message.id}" onclick="selectMessage('${message.id}')">
                                                 <label for="message-${message.id}">
                                                     <strong>${date.toLocaleDateString()} ${date.toLocaleTimeString()}</strong>
-                                                    <p>${message.content}</p>
+                                                    <p>${content}</p>
                                                 </label>
                                             </div>`;
                         });
                     } else {
-                        messagesHTML = "<p>Aucun message récent trouvé pour cette clé publique sur ce relay.</p>";
+                        messagesHTML = "<p>No recent messages found for this pubkey on this relay.</p>";
                     }
-                    document.getElementById('messages-content').innerHTML = messagesHTML;
-
+                    messagesContentDiv.innerHTML = messagesHTML;
                 } catch (messagesError) {
-                    console.error("Erreur de messages:", messagesError);
-                    document.getElementById('messages-container').classList.remove('loading');
-                    document.getElementById('messages-content').innerText = `Erreur lors du chargement des messages depuis ${relayUrl} : ${messagesError}`;
+                    console.error("Messages display error:", messagesError);
+                    messagesContainerDiv.classList.remove('loading');
+                    messagesContentDiv.innerHTML = `<p style="color:var(--terminal-red)">Error loading messages from ${relayUrl}: ${messagesError.message || messagesError}</p>`;
                 }
             }
-
             displayNostrData();
         }
 
         function selectMessage(messageId) {
             selectedMessageId = messageId;
-            console.log("Selected message ID:", selectedMessageId);
+            // console.log("Selected message ID:", selectedMessageId);
         }
 
-
-        document.getElementById('follow-button').addEventListener('click', async function(event) {
+        followButton.addEventListener('click', async function(event) {
             event.preventDefault();
             const followErrorMessageDiv = document.getElementById('follow-error-message');
-            followErrorMessageDiv.textContent = ""; // Clear any previous error
+            followErrorMessageDiv.textContent = "";
 
             if (!window.nostr) {
-                followErrorMessageDiv.textContent = "Plugin Nostr non détecté. Veuillez installer Nostr Connect ou une extension similaire.";
+                followErrorMessageDiv.textContent = "Nostr extension (NOSTR Connect, Alby, nos2x) not detected.";
                 return;
             }
-
             if (!hexKey) {
-                followErrorMessageDiv.textContent = "Clé HEX de la personne à suivre non disponible.";
+                followErrorMessageDiv.textContent = "Target pubkey (HEX) not available.";
                 return;
             }
 
             try {
-                followButton.disabled = true; // Disable button during processing
-                const publicKey = await window.nostr.getPublicKey();
-                relayUrl = await getRelayURL();
+                followButton.disabled = true;
+                followButton.textContent = "Processing...";
+                const userPublicKey = await window.nostr.getPublicKey();
+                // relayUrl should be set by displayNostrData, if not, get it again
+                if (!relayUrl) relayUrl = await getRelayURL();
 
-                const existingFollowListEvent = await window.fetchExistingFollowList(publicKey, relayUrl); // Call it using window.fetchExistingFollowList
-                let currentFollows = [];
+                const existingFollowListEvent = await window.fetchExistingFollowList(userPublicKey, relayUrl);
+                let currentFollowsTags = []; // Store full tags ["p", pubkey, relay_url, name]
                 if (existingFollowListEvent && existingFollowListEvent.tags) {
-                    currentFollows = existingFollowListEvent.tags
-                        .filter(tag => tag[0] === 'p')
-                        .map(tag => tag[1]);
+                    currentFollowsTags = existingFollowListEvent.tags.filter(tag => tag[0] === 'p');
                 }
 
-                if (!currentFollows.includes(hexKey)) {
-                    currentFollows.push(hexKey);
+                const isAlreadyFollowing = currentFollowsTags.some(tag => tag[1] === hexKey);
+
+                if (!isAlreadyFollowing) {
+                    // Add new follow. For simplicity, we don't fetch the name/relay for the new follow tag.
+                    // A more complete implementation might try to fetch profile for name.
+                    currentFollowsTags.push(["p", hexKey, "", ""]); // Recommended relay and petname are often empty
+                } else {
+                    // Optional: If already following, maybe unfollow or just indicate already following.
+                    // For this example, we'll proceed as if updating (which re-adds if not present).
+                    // Or, you could show a different message:
+                    // followErrorMessageDiv.textContent = "Already following this user.";
+                    // followButton.textContent = "Already Following";
+                    // setTimeout(() => { /* reset button */ }, 2000);
+                    // return;
                 }
 
-                const followTags = currentFollows.map(followedPubKey => ["p", followedPubKey, "", ""]);
 
-                const event = {
-                    kind: 3, // Kind 3 for contact list (follows)
-                    pubkey: publicKey,
+                const newEvent = {
+                    kind: 3,
+                    pubkey: userPublicKey,
                     created_at: Math.floor(Date.now() / 1000),
-                    tags: followTags,
-                    content: "" // Content is optional for kind 3 events, can be empty
+                    tags: currentFollowsTags, // Use the modified list of tags
+                    content: existingFollowListEvent ? existingFollowListEvent.content : "" // Preserve original content if any
                 };
 
-                const signedEvent = await window.nostr.signEvent(event);
-
+                const signedEvent = await window.nostr.signEvent(newEvent);
                 const relay = nostrTools.relayInit(relayUrl);
                 await relay.connect();
-                await relay.publish(signedEvent); // Use await to ensure publication finishes before closing
+                await relay.publish(signedEvent);
                 relay.close();
 
-                followButton.style.backgroundColor = 'blue'; // Change to blue for success
-                followButton.textContent = 'Following'; // Optionally change text
-
-                // Reset button color and text after 2 seconds
-                setTimeout(() => {
-                    followButton.style.backgroundColor = originalButtonColor;
-                    followButton.textContent = 'Follow';
-                    followButton.disabled = false; // Re-enable button
-                }, 2000);
-
-
+                followButton.style.backgroundColor = 'var(--terminal-cyan)';
+                followButton.textContent = 'Followed!';
             } catch (error) {
-                console.error("Erreur lors de l'action de suivre:", error);
-                followErrorMessageDiv.textContent = `Erreur lors de l'action de suivre: ${error.message || error}`;
-                followButton.style.backgroundColor = 'red'; // Change to red for failure
-
-                // Reset button color and text after 3 seconds (longer for error)
+                console.error("Error during follow action:", error);
+                followErrorMessageDiv.textContent = `Error: ${error.message || error}`;
+                followButton.style.backgroundColor = 'var(--terminal-red)';
+                followButton.textContent = 'Follow Failed';
+            } finally {
                 setTimeout(() => {
-                    followButton.style.backgroundColor = originalButtonColor;
+                    followButton.disabled = false;
                     followButton.textContent = 'Follow';
-                    followButton.disabled = false; // Re-enable button
+                    followButton.style.backgroundColor = originalButtonBgColor; // Reset to original dynamic color
                 }, 3000);
             }
         });
-
     </script>
 </body>
 </html>

@@ -1,0 +1,766 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UPlanet Nostr Terminal</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inconsolata:wght@400;700&family=Share+Tech+Mono&display=swap');
+
+        :root {
+            --terminal-bg: #0a0a12;
+            --terminal-green: #0f0;
+            --terminal-cyan: #0ff;
+            --terminal-purple: #b19cd9;
+            --terminal-red: #f44;
+            --terminal-glow: rgba(0, 255, 0, 0.7);
+            --terminal-border: #333;
+            --text-color: #e0e0e0;
+            --text-shadow: 0 0 8px var(--terminal-glow);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #000;
+            overflow: hidden;
+            font-family: 'Inconsolata', monospace;
+            display: flex;
+            flex-direction: column; /* Allow buttons below terminal */
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            perspective: 1000px;
+        }
+
+        .matrix-background {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            opacity: 0.15;
+        }
+
+        .terminal-container {
+            position: relative;
+            width: 85%;
+            max-width: 800px;
+            height: 65vh; /* Adjusted height */
+            background: var(--terminal-bg);
+            border-radius: 8px;
+            box-shadow: 0 0 30px rgba(0, 255, 0, 0.5),
+                        inset 0 0 10px rgba(0, 255, 0, 0.2);
+            overflow: hidden;
+            border: 1px solid var(--terminal-green);
+            transform-style: preserve-3d;
+            animation: float 8s ease-in-out infinite;
+        }
+
+        @keyframes float {
+            0%, 100% {
+                transform: translateY(0) rotateX(10deg) rotateY(5deg);
+            }
+            50% {
+                transform: translateY(-15px) rotateX(5deg) rotateY(10deg);
+            }
+        }
+
+        .terminal-header {
+            background: linear-gradient(to right, #0a0a0a, #111);
+            padding: 8px 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            color: var(--terminal-green);
+            font-family: 'Share Tech Mono', monospace;
+            border-bottom: 1px solid var(--terminal-green);
+            box-shadow: 0 2px 15px rgba(0, 255, 0, 0.3);
+        }
+
+        .terminal-buttons {
+            display: flex;
+            gap: 8px;
+        }
+
+        .terminal-button {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .terminal-button.red {
+            background: #ff5f56;
+        }
+
+        .terminal-button.yellow {
+            background: #ffbd2e;
+        }
+
+        .terminal-button.green {
+            background: #27c93f;
+        }
+
+        .terminal-body {
+            padding: 15px;
+            height: calc(100% - 40px); /* height of header */
+            overflow-y: auto;
+            color: var(--text-color);
+            text-shadow: var(--text-shadow);
+            line-height: 1.6;
+            font-size: 0.9rem;
+        }
+
+        .terminal-body::-webkit-scrollbar {
+            width: 8px;
+        }
+        .terminal-body::-webkit-scrollbar-track {
+            background: var(--terminal-bg);
+        }
+        .terminal-body::-webkit-scrollbar-thumb {
+            background-color: var(--terminal-green);
+            border-radius: 4px;
+            border: 1px solid var(--terminal-bg);
+        }
+
+
+        .glitch {
+            position: relative;
+        }
+
+        .glitch::before, .glitch::after {
+            content: attr(data-text);
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: var(--terminal-bg); /* Match terminal background */
+        }
+
+        .glitch::before {
+            left: 2px;
+            text-shadow: -2px 0 var(--terminal-red);
+            clip: rect(24px, 550px, 90px, 0);
+            animation: glitch-anim-1 2s infinite linear alternate-reverse;
+        }
+
+        .glitch::after {
+            left: -2px;
+            text-shadow: -2px 0 var(--terminal-cyan);
+            clip: rect(85px, 550px, 140px, 0);
+            animation: glitch-anim-2 2s infinite linear alternate-reverse;
+        }
+
+        @keyframes glitch-anim-1 {
+            0% { clip: rect(54px, 800px, 54px, 0); } 20% { clip: rect(27px, 800px, 86px, 0); }
+            40% { clip: rect(14px, 800px, 75px, 0); } 60% { clip: rect(39px, 800px, 104px, 0); }
+            80% { clip: rect(18px, 800px, 53px, 0); } 100% { clip: rect(73px, 800px, 112px, 0); }
+        }
+        @keyframes glitch-anim-2 {
+            0% { clip: rect(35px, 800px, 89px, 0); } 20% { clip: rect(56px, 800px, 103px, 0); }
+            40% { clip: rect(22px, 800px, 64px, 0); } 60% { clip: rect(88px, 800px, 120px, 0); }
+            80% { clip: rect(13px, 800px, 32px, 0); } 100% { clip: rect(42px, 800px, 99px, 0); }
+        }
+
+        .profile-pic {
+            max-width: 80px;
+            max-height: 80px;
+            border-radius: 50%;
+            border: 2px solid var(--terminal-cyan);
+            margin-bottom: 10px;
+            float: right; /* Or left */
+            margin-left: 10px;
+        }
+
+        .nostr-entry {
+            border: 1px dashed var(--terminal-border);
+            padding: 10px;
+            margin-bottom: 15px;
+            background-color: rgba(0, 255, 0, 0.03); /* Slight green tint */
+        }
+        .nostr-entry h3 {
+            color: var(--terminal-purple);
+            font-family: 'Share Tech Mono', monospace;
+            margin-top: 0;
+        }
+        .nostr-entry .pubkey {
+            color: var(--terminal-red);
+            font-size: 0.8em;
+            word-break: break-all;
+            margin-bottom: 5px;
+        }
+        .nostr-entry .message-content {
+            color: var(--text-color);
+            white-space: pre-wrap; /* Preserve formatting in messages */
+            margin-top: 5px;
+            border-left: 2px solid var(--terminal-green);
+            padding-left: 8px;
+        }
+        .nostr-entry .message-date {
+            color: var(--terminal-cyan);
+            font-size: 0.8em;
+            margin-top: 8px;
+        }
+         .nostr-entry .profile-about {
+            font-style: italic;
+            color: #aaa; /* Lighter color for about text */
+            margin-bottom: 10px;
+        }
+        .nav-status {
+            color: var(--terminal-cyan);
+            font-family: 'Share Tech Mono', monospace;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+
+        .navigation-controls {
+            margin-top: 20px;
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+        }
+        .nav-button {
+            background-color: var(--terminal-green);
+            color: var(--terminal-bg);
+            border: 1px solid var(--terminal-green);
+            padding: 8px 15px;
+            font-family: 'Share Tech Mono', monospace;
+            cursor: pointer;
+            border-radius: 4px;
+            transition: all 0.2s ease;
+            box-shadow: 0 0 5px var(--terminal-glow);
+        }
+        .nav-button:hover {
+            background-color: var(--terminal-cyan);
+            color: var(--terminal-bg);
+            box-shadow: 0 0 10px var(--terminal-cyan);
+        }
+        .nav-button:disabled {
+            background-color: #555;
+            color: #888;
+            cursor: not-allowed;
+            box-shadow: none;
+        }
+        canvas { display: block; } /* For matrix */
+    </style>
+</head>
+<body>
+    <canvas id="matrix" class="matrix-background"></canvas>
+
+    <div class="terminal-container">
+        <div class="terminal-header">
+            <div class="terminal-buttons">
+                <div class="terminal-button red"></div>
+                <div class="terminal-button yellow"></div>
+                <div class="terminal-button green"></div>
+            </div>
+            <div class="glitch" data-text="UPlanet Nostr Stream:~">UPlanet Nostr Stream:~</div>
+            <div class="terminal-buttons">
+                <div style="width: 20px;"></div> <!-- Spacer -->
+            </div>
+        </div>
+        <div class="terminal-body" id="terminal-body">
+            <div id="initial-typing-text" style="white-space: pre-wrap;"></div>
+            <div id="nostr-content-area">
+                <!-- Nostr data will be injected here -->
+            </div>
+        </div>
+    </div>
+
+    <div class="navigation-controls">
+        <button id="prev-key-btn" class="nav-button">Prev Key</button>
+        <button id="next-key-btn" class="nav-button">Next Key</button>
+        <span style="color:var(--terminal-border); margin: 0 10px;">|</span>
+        <button id="prev-msg-btn" class="nav-button">Older Msg</button>
+        <button id="next-msg-btn" class="nav-button">Newer Msg</button>
+    </div>
+    <div id="nav-status-text" class="nav-status" style="margin-top:10px;">Key 0/0 | Msg 0/0</div>
+
+    <script src="nostr.js"></script>
+    <script>
+        // Matrix effect (from your example)
+        const canvas = document.getElementById('matrix');
+        const ctx = canvas.getContext('2d');
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        const alphabet = 'アァカサタナハマヤャラワガザダバパイィキシチニヒミリヰギジヂビピウゥクスツヌフムユュルグズブヅプエェケセテネヘメレヱゲゼデベペオォコソトノホモヨョロヲゴゾドボポヴッンABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!"#$%&\'()*+,-./:;<=>?@[\\]^_`{|}~01';
+        const fontSize = 16;
+        const columns = canvas.width / fontSize;
+        const rainDrops = Array(Math.floor(columns)).fill(1);
+
+        function drawMatrix() {
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.05)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = '#0f0'; // Terminal green
+            ctx.font = fontSize + 'px monospace';
+            for (let i = 0; i < rainDrops.length; i++) {
+                const text = alphabet.charAt(Math.floor(Math.random() * alphabet.length));
+                ctx.fillText(text, i * fontSize, rainDrops[i] * fontSize);
+                if (rainDrops[i] * fontSize > canvas.height && Math.random() > 0.975) {
+                    rainDrops[i] = 0;
+                }
+                rainDrops[i]++;
+            }
+            requestAnimationFrame(drawMatrix);
+        }
+
+        // Initial Terminal Typing Effect
+        const initialTypingTextElement = document.getElementById('initial-typing-text');
+        const nostrContentArea = document.getElementById('nostr-content-area');
+
+        const initialMessages = [
+            { text: "Booting UPlanet Nostr Stream OS...", delay: 50, style: "color: var(--terminal-purple);" },
+            { text: "\nConnecting to decentralized data sources...", delay: 40 },
+            { text: "\n[INFO] Fetching planetary entity map...", delay: 30 },
+            { text: "\n[OK] Entity map `UPlanet data json` loaded.", delay: 60, style: "color: var(--terminal-green);" },
+            { text: "\n[INFO] Establishing Nostr relay connection...", delay: 30 },
+            { text: "\n[OK] Relay handshake successful.", delay: 60, style: "color: var(--terminal-green);" },
+            { text: "\nInitializing Nostr Data Feed...", delay: 50 },
+            { text: "\n██████████████ 100% COMPLETE", delay: 70, style: "color: var(--terminal-cyan)" },
+            { text: "\n\nSYSTEM READY. STREAMING NOSTR DATA...\n\n", delay: 100, style: "font-weight: bold; color: var(--terminal-green);" }
+        ];
+
+        let currentInitialMessageIndex = 0;
+        let currentInitialCharIndex = 0;
+
+        function typeInitialMessage() {
+            if (currentInitialMessageIndex >= initialMessages.length) {
+                initialTypingTextElement.style.display = 'none'; // Hide initial text
+                nostrContentArea.style.display = 'block';      // Show Nostr content
+                startNostrStream(); // Start the main application logic
+                return;
+            }
+
+            const currentMessage = initialMessages[currentInitialMessageIndex];
+            const textToType = currentMessage.text;
+
+            if (currentInitialCharIndex < textToType.length) {
+                const char = textToType.charAt(currentInitialCharIndex);
+                const span = document.createElement('span');
+                span.textContent = char;
+                if (currentMessage.style) span.style = currentMessage.style;
+                initialTypingTextElement.appendChild(span);
+                currentInitialCharIndex++;
+                setTimeout(typeInitialMessage, currentMessage.delay);
+            } else {
+                currentInitialMessageIndex++;
+                currentInitialCharIndex = 0;
+                setTimeout(typeInitialMessage, 100); // Delay before next message
+            }
+        }
+
+        // --- Main Application Logic ---
+        let uPlanetDataGlobal = null;
+        let allNostrKeys = [];
+        let currentKeyIndex = 0;
+        let nostrDataCache = {}; // { pubkey: { profile: {}, messages: [], currentMessageIndex: 0 } }
+        let relayUrl = ''; // To be set from data.json or default
+
+        let userInteracted = false; // Flag to track user interaction
+        let autoRefreshInterval;    // Variable to hold the interval ID
+
+        const prevKeyBtn = document.getElementById('prev-key-btn');
+        const nextKeyBtn = document.getElementById('next-key-btn');
+        const prevMsgBtn = document.getElementById('prev-msg-btn');
+        const nextMsgBtn = document.getElementById('next-msg-btn');
+        const navStatusText = document.getElementById('nav-status-text');
+
+        function stopAutoRefresh() {
+            if (autoRefreshInterval) {
+                clearInterval(autoRefreshInterval);
+                autoRefreshInterval = null;
+                // console.log("Auto-refresh stopped.");
+            }
+        }
+
+        function startAutoRefresh() {
+            stopAutoRefresh(); // Clear any existing one first
+            if (!userInteracted && allNostrKeys.length > 0) {
+                // console.log("Auto-refresh started.");
+                autoRefreshInterval = setInterval(() => {
+                    let nextIndex = currentKeyIndex + 1;
+                    if (nextIndex >= allNostrKeys.length) {
+                        nextIndex = 0; // Loop to start
+                    }
+                    navigateKey(nextIndex, true); // Pass the target index and isAuto=true
+                }, 3000);
+            }
+        }
+
+
+        async function getUPlanetRelayURL(uPlanetData) {
+            if (uPlanetData && uPlanetData.myRELAY) {
+                return uPlanetData.myRELAY;
+            }
+            const currentUrl = new URL(window.location.href);
+            let relayName = currentUrl.hostname.replace('ipfs.', 'relay.');
+            if (currentUrl.port === '8080' || currentUrl.port) {
+                return `ws://127.0.0.1:7777`;
+            }
+            return `wss://${relayName}`;
+        }
+
+        async function loadUPlanetData(apiUrl) {
+            try {
+                const response = await fetch(apiUrl); // Assuming apiUrl is the full path to UStat json
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return await response.json();
+            } catch (error) {
+                console.error("Failed to load uPlanetData:", error);
+                nostrContentArea.innerHTML = `<p style="color:var(--terminal-red)">Error loading uPlanetData from ${apiUrl}. Check console.</p>`;
+                return null;
+            }
+        }
+
+        function extractNostrKeys(data) {
+            const keys = new Set();
+            if (data.PLAYERs) {
+                data.PLAYERs.forEach(player => player.HEX && player.HEX !== "null" && keys.add(player.HEX));
+            }
+            if (data.UMAPs) {
+                data.UMAPs.forEach(umap => umap.UMAPHEX && keys.add(umap.UMAPHEX));
+            }
+             if (data.NOSTR) {
+                data.NOSTR.forEach(item => item.HEX && item.HEX !== "null" && keys.add(item.HEX));
+            }
+            return Array.from(keys);
+        }
+
+        async function fetchNostrProfile(pubkey, nostrRelayUrl) {
+            if (nostrDataCache[pubkey] && nostrDataCache[pubkey].profile) {
+                return nostrDataCache[pubkey].profile;
+            }
+            // console.log(`Fetching profile for ${pubkey} from ${nostrRelayUrl}`);
+            try {
+                const relay = nostrTools.relayInit(nostrRelayUrl);
+                await relay.connect();
+                const sub = relay.sub([{ kinds: [0], authors: [pubkey], limit: 1 }]);
+                return new Promise((resolve, reject) => {
+                    let profile = null;
+                    const timeout = setTimeout(() => {
+                        sub.unsub();
+                        relay.close();
+                        console.warn(`Timeout fetching profile for ${pubkey}`);
+                        resolve({});
+                    }, 3000);
+
+                    sub.on('event', event => {
+                        clearTimeout(timeout);
+                        try {
+                            profile = JSON.parse(event.content);
+                        } catch (e) {
+                            console.error(`Error parsing profile JSON for ${pubkey}:`, e, event.content);
+                            profile = {}; // Fallback to empty profile on parse error
+                        }
+                        sub.unsub();
+                        relay.close();
+                        resolve(profile);
+                    });
+                    sub.on('eose', () => {
+                        if (!profile) {
+                           clearTimeout(timeout);
+                           sub.unsub();
+                           relay.close();
+                           resolve({});
+                        }
+                    });
+                     relay.on('error', (err) => {
+                        clearTimeout(timeout);
+                        sub.unsub();
+                        try { relay.close(); } catch(e){}
+                        console.error(`Relay error fetching profile for ${pubkey}:`, err);
+                        reject(err); // Let displayCurrentKeyData handle the error message
+                    });
+                });
+            } catch (error) {
+                console.error(`Error fetching Nostr profile for ${pubkey}:`, error);
+                return {}; // Fallback to empty profile
+            }
+        }
+
+        async function fetchNostrMessages(pubkey, nostrRelayUrl, limit = 20) {
+            // Do not use cache for messages if user explicitly navigates, to get potentially newer messages.
+            // For auto-refresh, cache is fine. Let's keep it simple for now and always try to fetch.
+            // OR: only bypass cache on manual refresh button (not implemented yet)
+            // For now, let's keep the cache for messages as well for performance during auto-scroll.
+            if (nostrDataCache[pubkey] && nostrDataCache[pubkey].messages) {
+                nostrDataCache[pubkey].messages.sort((a, b) => b.created_at - a.created_at);
+                return nostrDataCache[pubkey].messages;
+            }
+            // console.log(`Fetching messages for ${pubkey} from ${nostrRelayUrl}`);
+            try {
+                const relay = nostrTools.relayInit(nostrRelayUrl);
+                await relay.connect();
+                const sub = relay.sub([{ kinds: [1], authors: [pubkey], limit: limit }]);
+                const messages = [];
+                return new Promise((resolve, reject) => {
+                    const timeout = setTimeout(() => {
+                        sub.unsub();
+                        relay.close();
+                        console.warn(`Timeout fetching messages for ${pubkey}`);
+                        resolve(messages.sort((a, b) => b.created_at - a.created_at));
+                    }, 5000);
+
+                    sub.on('event', event => {
+                        messages.push(event);
+                    });
+                    sub.on('eose', () => {
+                        clearTimeout(timeout);
+                        sub.unsub();
+                        relay.close();
+                        resolve(messages.sort((a, b) => b.created_at - a.created_at));
+                    });
+                    relay.on('error', (err) => {
+                        clearTimeout(timeout);
+                        sub.unsub();
+                        try { relay.close(); } catch(e){}
+                        console.error(`Relay error fetching messages for ${pubkey}:`, err);
+                        reject(err); // Let displayCurrentKeyData handle the error message
+                    });
+                });
+            } catch (error) {
+                console.error(`Error fetching Nostr messages for ${pubkey}:`, error);
+                return [];
+            }
+        }
+
+        async function navigateKey(targetIndex, isAuto = false) {
+            if (!isAuto) {
+                userInteracted = true;
+                stopAutoRefresh();
+            }
+
+            if (allNostrKeys.length === 0) {
+                currentKeyIndex = 0;
+            } else if (isAuto) {
+                currentKeyIndex = targetIndex; // Directly use the index decided by the auto-refresh logic
+            } else { // Manual navigation, targetIndex is currentKeyIndex + direction (or specific index)
+                if (targetIndex < 0) {
+                    currentKeyIndex = 0;
+                } else if (targetIndex >= allNostrKeys.length) {
+                    currentKeyIndex = allNostrKeys.length - 1;
+                } else {
+                    currentKeyIndex = targetIndex;
+                }
+            }
+
+            const currentActualKey = allNostrKeys[currentKeyIndex];
+            if (currentActualKey && !nostrDataCache[currentActualKey]) {
+                nostrDataCache[currentActualKey] = { profile: null, messages: null, currentMessageIndex: 0 };
+            }
+            await displayCurrentKeyData();
+        }
+
+        async function navigateMessage(direction) { // direction is -1 or 1
+            userInteracted = true;
+            stopAutoRefresh();
+
+            const pubkey = allNostrKeys[currentKeyIndex];
+            if (pubkey && nostrDataCache[pubkey] && nostrDataCache[pubkey].messages) {
+                let msgIdx = nostrDataCache[pubkey].currentMessageIndex;
+                const messages = nostrDataCache[pubkey].messages;
+
+                msgIdx += direction;
+
+                if (messages.length === 0) {
+                    msgIdx = 0;
+                } else {
+                    if (msgIdx < 0) msgIdx = 0;
+                    if (msgIdx >= messages.length) msgIdx = messages.length - 1;
+                }
+
+                nostrDataCache[pubkey].currentMessageIndex = msgIdx;
+                await displayCurrentKeyData();
+            }
+        }
+
+
+        async function displayCurrentKeyData() {
+            if (allNostrKeys.length === 0) {
+                nostrContentArea.innerHTML = `<p style="color:var(--terminal-yellow);">No Nostr keys found in uPlanetData.</p>`;
+                updateNavStatus();
+                updateButtonStates(null);
+                return;
+            }
+
+            const pubkey = allNostrKeys[currentKeyIndex];
+            nostrContentArea.innerHTML = `<p style="color:var(--terminal-cyan);">Loading data for ${pubkey.substring(0,10)}...</p>`;
+            updateNavStatus(pubkey); // Update status early with current key
+            updateButtonStates(pubkey); // Update button states early
+
+
+            if (!nostrDataCache[pubkey]) { // Should be initialized by navigateKey
+                nostrDataCache[pubkey] = { profile: null, messages: null, currentMessageIndex: 0 };
+            }
+
+            try {
+                // Fetch profile if not cached or if forced refresh (not implemented yet)
+                if (!nostrDataCache[pubkey].profile) {
+                    nostrDataCache[pubkey].profile = await fetchNostrProfile(pubkey, relayUrl);
+                }
+                // Fetch messages if not cached or if forced refresh
+                if (!nostrDataCache[pubkey].messages) {
+                     nostrDataCache[pubkey].messages = await fetchNostrMessages(pubkey, relayUrl);
+                }
+            } catch (err) { // Catch errors from fetchNostrProfile/Messages
+                 nostrContentArea.innerHTML = `<p style="color:var(--terminal-red);">Error fetching data for ${pubkey.substring(0,10)}... Relay might be unresponsive. Check console.</p>`;
+                 updateNavStatus(pubkey); // Update status even on error
+                 updateButtonStates(pubkey);
+                 return;
+            }
+
+
+            const profile = nostrDataCache[pubkey].profile || {};
+            const messages = nostrDataCache[pubkey].messages || [];
+            let currentMessageIdx = nostrDataCache[pubkey].currentMessageIndex || 0;
+
+            // Ensure currentMessageIdx is valid
+            if (messages.length > 0) {
+                if (currentMessageIdx < 0 || currentMessageIdx >= messages.length) {
+                    currentMessageIdx = 0;
+                    nostrDataCache[pubkey].currentMessageIndex = 0;
+                }
+            } else {
+                currentMessageIdx = 0; // No messages, so index is 0 of 0
+                 nostrDataCache[pubkey].currentMessageIndex = 0;
+            }
+
+
+            let html = `<div class="nostr-entry">`;
+            html += `<h3>PROFILE: ${profile.name || 'N/A'} ${profile.display_name ? '('+profile.display_name+')' : ''}</h3>`;
+            html += `<p class="pubkey">Pubkey: ${pubkey}</p>`;
+            if (profile.picture) {
+                html += `<img src="${profile.picture}" alt="Profile Pic" class="profile-pic">`;
+            }
+            if (profile.about) {
+                html += `<p class="profile-about"><em>${profile.about.replace(/</g, "<").replace(/>/g, ">")}</em></p>`;
+            }
+            html += `<div style="clear:both;"></div>`;
+
+            if (messages.length > 0) {
+                const message = messages[currentMessageIdx];
+                html += `<h4>MESSAGE (${currentMessageIdx + 1}/${messages.length})</h4>`;
+                html += `<p class="message-content">${message.content.replace(/</g, "<").replace(/>/g, ">")}</p>`;
+                html += `<p class="message-date">Posted: ${new Date(message.created_at * 1000).toLocaleString()}</p>`;
+                const repliedToEvents = message.tags.filter(t => t[0] === 'e' && t[1]).map(t => t[1]);
+                if (repliedToEvents.length > 0) {
+                    html += `<p style="font-size:0.8em; color: var(--terminal-yellow);">Replies to: ${repliedToEvents.map(e => e.substring(0,10)+'...').join(', ')}</p>`;
+                }
+            } else {
+                html += `<p style="color:var(--terminal-yellow);">No messages found for this key on the relay.</p>`;
+            }
+            html += `</div>`;
+            nostrContentArea.innerHTML = html;
+            updateNavStatus(pubkey);
+            updateButtonStates(pubkey);
+        }
+
+        function updateNavStatus(currentPubkey) {
+            const totalKeys = allNostrKeys.length;
+            const keyText = totalKeys > 0 ? `Key ${currentKeyIndex + 1}/${totalKeys}` : 'Key 0/0';
+
+            let msgText = 'Msg 0/0';
+            if (currentPubkey && nostrDataCache[currentPubkey] && nostrDataCache[currentPubkey].messages) {
+                const messages = nostrDataCache[currentPubkey].messages;
+                const currentMsgIdx = nostrDataCache[currentPubkey].currentMessageIndex; // Already validated
+                if (messages.length > 0) {
+                    msgText = `Msg ${currentMsgIdx + 1}/${messages.length}`;
+                }
+            }
+            navStatusText.textContent = `${keyText} | ${msgText}`;
+        }
+
+        function updateButtonStates(pubkey) {
+            prevKeyBtn.disabled = allNostrKeys.length === 0 || currentKeyIndex === 0;
+            nextKeyBtn.disabled = allNostrKeys.length === 0 || currentKeyIndex >= allNostrKeys.length - 1;
+
+            if (pubkey && nostrDataCache[pubkey] && nostrDataCache[pubkey].messages) {
+                const messages = nostrDataCache[pubkey].messages;
+                const currentMsgIdx = nostrDataCache[pubkey].currentMessageIndex; // Already validated
+                prevMsgBtn.disabled = messages.length === 0 || currentMsgIdx === 0;
+                nextMsgBtn.disabled = messages.length === 0 || currentMsgIdx >= messages.length - 1;
+            } else {
+                prevMsgBtn.disabled = true;
+                nextMsgBtn.disabled = true;
+            }
+        }
+
+        async function startNostrStream() {
+            nostrContentArea.innerHTML = `<p style="color:var(--terminal-cyan);">Connecting to UPlanet Network...</p>`;
+
+            const currentURL = new URL(window.location.href);
+            const protocol = currentURL.protocol;
+            const hostname = currentURL.hostname;
+            let port = currentURL.port;
+
+            var uHost = hostname.replace("ipfs.", "u.");
+             if (port === "8080") {
+                port = "54321";
+            } else if (port) {
+                 // keep port
+            } else {
+                port = "";
+            }
+            const uPlanetBase = protocol + "//" + uHost + (port ? (":" + port) : "");
+            // Assuming data.json is at the root of this uPlanetBase
+            const uPlanetDataURL = uPlanetBase + '/'; // Construct full URL to get json
+            console.log('UPLANET DATA URL:', uPlanetDataURL);
+
+
+            uPlanetDataGlobal = await loadUPlanetData(uPlanetDataURL);
+
+            if (uPlanetDataGlobal) {
+                relayUrl = await getUPlanetRelayURL(uPlanetDataGlobal);
+                console.log('Using Nostr Relay:', relayUrl);
+                allNostrKeys = extractNostrKeys(uPlanetDataGlobal);
+                console.log('Extracted Nostr Keys:', allNostrKeys.length > 0 ? allNostrKeys : "None");
+
+                if (allNostrKeys.length > 0) {
+                    currentKeyIndex = 0; // Start with the first key
+                    await displayCurrentKeyData();
+                    startAutoRefresh();
+                } else {
+                    nostrContentArea.innerHTML = `<p style="color:var(--terminal-yellow);">No Nostr keys found to stream.</p>`;
+                    updateNavStatus(null);
+                    updateButtonStates(null);
+                }
+            } else {
+                 nostrContentArea.innerHTML = `<p style="color:var(--terminal-red);">Failed to load UPlanet data. Cannot start Nostr stream.</p>`;
+                 updateNavStatus(null);
+                 updateButtonStates(null);
+            }
+        }
+
+        // Event Listeners for navigation
+        prevKeyBtn.addEventListener('click', () => navigateKey(currentKeyIndex - 1, false));
+        nextKeyBtn.addEventListener('click', () => navigateKey(currentKeyIndex + 1, false));
+        prevMsgBtn.addEventListener('click', () => navigateMessage(-1));
+        nextMsgBtn.addEventListener('click', () => navigateMessage(1));
+
+        // Start animations and app
+        window.addEventListener('load', function() {
+            drawMatrix();
+            typeInitialMessage();
+        });
+
+        window.addEventListener('resize', function() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            // Recalculate columns for matrix if needed
+            const newColumns = canvas.width / fontSize;
+            while(rainDrops.length > newColumns) rainDrops.pop();
+            while(rainDrops.length < newColumns) rainDrops.push(1);
+        });
+
+    </script>
+</body>
+</html>

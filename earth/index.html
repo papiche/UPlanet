@@ -47,6 +47,9 @@ var uHost = hostname.replace("ipfs", "u");
 var upassport = protocol + "://" + uHost + (port ? (":" + port) : "");
 console.log(upassport)
 
+// Define UPlanet API URL
+var uPlanetAPI_URL = upassport + "/";
+
     function go2UPassport(route) {
         const currentUrl = new URL(window.location.href);
         let newUrl = new URL(currentUrl.origin);
@@ -184,6 +187,130 @@ button {
 
 button:hover {
     background-color: #27ae60;
+}
+
+/* Economic Dashboard Styles */
+.economic-dashboard {
+  position: fixed;
+  top: 80px;
+  right: 20px;
+  background: rgba(255, 255, 255, 0.95);
+  padding: 15px;
+  border-radius: 15px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  z-index: 1000;
+  max-width: 250px;
+  font-family: 'Arial', sans-serif;
+  transition: transform 0.3s ease-in-out;
+  transform: translateX(0);
+}
+
+.economic-dashboard.hidden {
+  transform: translateX(calc(100% + 20px));
+}
+
+.dashboard-toggle {
+  position: fixed;
+  top: 80px;
+  right: 20px;
+  background: #3498db;
+  color: white;
+  border: none;
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  font-size: 20px;
+  cursor: pointer;
+  z-index: 1001;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  transition: background-color 0.3s ease;
+}
+
+.dashboard-toggle:hover {
+  background: #2980b9;
+}
+
+.dashboard-title {
+  font-size: 1em;
+  font-weight: bold;
+  color: #2c3e50;
+  margin-bottom: 10px;
+  text-align: center;
+  border-bottom: 2px solid #3498db;
+  padding-bottom: 5px;
+}
+
+.metric {
+  margin: 5px 0;
+  padding: 8px;
+  border-radius: 8px;
+  background: #f8f9fa;
+}
+
+.metric-title {
+  font-weight: bold;
+  color: #34495e;
+  margin-bottom: 2px;
+  font-size: 0.9em;
+}
+
+.metric-value {
+  font-size: 1em;
+  color: #2c3e50;
+}
+
+.metric.positive {
+  border-left: 4px solid #2ecc71;
+}
+
+.metric.negative {
+  border-left: 4px solid #e74c3c;
+}
+
+.spots-container {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 10px;
+}
+
+.spot-box {
+  flex: 1;
+  margin: 0 3px;
+  padding: 8px;
+  text-align: center;
+  background: #f8f9fa;
+  border-radius: 8px;
+}
+
+.spot-title {
+  font-size: 0.8em;
+  color: #7f8c8d;
+}
+
+.spot-value {
+  font-size: 1.1em;
+  font-weight: bold;
+  color: #2c3e50;
+}
+
+.buy-link {
+  display: block;
+  text-align: center;
+  margin-top: 10px;
+  padding: 8px;
+  background: #3498db;
+  color: white;
+  text-decoration: none;
+  border-radius: 8px;
+  transition: background 0.3s ease;
+  font-size: 0.9em;
+}
+
+.buy-link:hover {
+  background: #2980b9;
 }
   </style>
 
@@ -345,6 +472,169 @@ function getLocation() {
     }
 }
 
+// Add this after the existing script section
+async function loadUPlanetData(myURL) {
+  try {
+    console.log('Fetching UPlanet data from:', myURL);
+    const response = await fetch(myURL);
+    const data = await response.json();
+    console.log('UPlanet data loaded successfully:', data);
+    return data;
+  } catch (error) {
+    console.error('Error loading UPlanet data:', error);
+    return null;
+  }
+}
+
+function createEconomicDashboard(data) {
+  // Create toggle button
+  const toggleButton = document.createElement('button');
+  toggleButton.className = 'dashboard-toggle';
+  toggleButton.innerHTML = '💰';
+  toggleButton.title = 'Toggle Economic Dashboard';
+  document.body.appendChild(toggleButton);
+
+  const dashboard = document.createElement('div');
+  dashboard.className = 'economic-dashboard';
+  
+  // Get values from JSON data
+  const maxPlayers = 24;
+  const maxNostr = 250;
+  const currentPlayers = data.PLAYERs ? data.PLAYERs.length : 0;
+  const currentNostr = data.NOSTR ? data.NOSTR.length : 0;
+  const availablePlayers = maxPlayers - currentPlayers;
+  const availableNostr = maxNostr - currentNostr;
+
+  // Get values from JSON data
+  const zcard = parseInt(data.ZCARD) || 15;
+  const ncard = parseInt(data.NCARD) || 4;
+  const paf = parseInt(data.PAF) || 100;
+  const zen = parseInt(data.ZEN) || 0;
+  const bilan = parseInt(data.BILAN) || 0;
+
+  // Calculate revenue and profit
+  const totalRevenue = zcard + ncard;
+  const monthlyProfit = totalRevenue - paf;
+
+  // Calculate shares
+  let captainShare, playerShare, playerReturn, nostrReturn;
+
+  if (monthlyProfit > 0) {
+    // If profit is positive
+    if (totalRevenue >= (2 * paf)) {
+      // Captain gets profit when revenue is 2x PAF
+      captainShare = monthlyProfit;
+      playerShare = 0;
+    } else {
+      // No profit distribution until 2x PAF is reached
+      captainShare = 0;
+      playerShare = 0;
+    }
+  } else {
+    // If loss
+    captainShare = 0; // Captain doesn't take loss
+    playerShare = 0;  // No distribution in case of loss
+  }
+
+  // Calculate returns (only for PLAYERs)
+  playerReturn = currentPlayers > 0 ? playerShare / currentPlayers : 0;
+  nostrReturn = 0; // NOSTR accounts don't get profit distribution
+
+  // Get first 8 characters of UPLANET public key
+  const planetPub = data.UPLANETG1PUB ? data.UPLANETG1PUB.substring(0, 8) : 'N/A';
+
+  // Set toggle button color based on balance
+  toggleButton.style.backgroundColor = bilan >= 0 ? '#2ecc71' : '#e74c3c';
+
+  dashboard.innerHTML = `
+    <div class="dashboard-title">♥️BOX ECO</div>
+
+    <div class="metric">
+      <div class="metric-title">UPLANET ${planetPub}</div>
+    </div>
+
+    <div class="metric paf-metric">
+      <div class="metric-title">PAF / 28 jours</div>
+      <div class="metric-value">${paf.toFixed(2)} Ẑ</div>
+    </div>
+    
+    <div class="metric ${bilan >= 0 ? 'positive' : 'negative'}">
+      <div class="metric-title">Solde</div>
+      <div class="metric-value">${bilan.toFixed(2)} Ẑ</div>
+    </div>
+
+    <div class="metric">
+      <div class="metric-title">Revenu Mensuel</div>
+      <div class="metric-value">${totalRevenue.toFixed(2)} Ẑ</div>
+      <div class="metric-subtitle">(ZCARD: ${zcard.toFixed(2)} + NCARD: ${ncard.toFixed(2)})</div>
+    </div>
+
+    <div class="metric">
+      <div class="metric-title">Gains Capitaine ♥️</div>
+      <div class="metric-value">${captainShare.toFixed(2)} Ẑ</div>
+      <div class="metric-subtitle">(Profit when revenue ≥ ${(2 * paf).toFixed(2)}Ẑ)</div>
+    </div>
+
+    <div class="metric">
+      <div class="metric-title">Gains / PLAYER ✨</div>
+      <div class="metric-value">${playerReturn.toFixed(2)} Ẑ</div>
+      <div class="metric-subtitle">per PLAYER (${currentPlayers} active)</div>
+    </div>
+
+    <div class="spots-container">
+      <div class="spot-box">
+        <div class="spot-title">NextCloud + IA</div>
+        <div class="spot-value">${availablePlayers}/${maxPlayers}</div>
+      </div>
+      <div class="spot-box">
+        <div class="spot-title">NOSTR + IA</div>
+        <div class="spot-value">${availableNostr}/${maxNostr}</div>
+      </div>
+    </div>
+
+    <a href="https://zen.g1sms.fr" target="_blank" class="buy-link">
+      Prenez votre place
+    </a>
+  `;
+
+  // Add custom styles for PAF metric
+  const style = document.createElement('style');
+  style.textContent = `
+    .paf-metric {
+      background: #f8f9fa;
+      border-left: 4px solid #3498db;
+      padding: 12px;
+      margin: 10px 0;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .paf-metric .metric-title {
+      color: #2c3e50;
+      font-weight: bold;
+    }
+    .paf-metric .metric-value {
+      color: #3498db;
+      font-size: 1.2em;
+      font-weight: bold;
+    }
+  `;
+  document.head.appendChild(style);
+
+  document.body.appendChild(dashboard);
+
+  // Add toggle functionality
+  toggleButton.addEventListener('click', () => {
+    dashboard.classList.toggle('hidden');
+    toggleButton.innerHTML = dashboard.classList.contains('hidden') ? '💰' : '📊';
+  });
+}
+
+// Load and display economic data
+loadUPlanetData(uPlanetAPI_URL).then(data => {
+  if (data) {
+    createEconomicDashboard(data);
+  }
+});
 </script>
 
 </body></html>

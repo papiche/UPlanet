@@ -149,6 +149,89 @@
       attribution: 'U Planet'
     }).addTo(map);
 
+    // Add UPlanet API call
+    const uPlanetAPI_URL = `${uPlanetStation}/?lat=${southWestLat}&lon=${southWestLon}&deg=${deg}`;
+    console.log('UPLANET API URL:', uPlanetAPI_URL);
+
+    // Load UPlanet data
+    fetch(uPlanetAPI_URL)
+        .then(response => response.json())
+        .then(uPlanetData => {
+            if (uPlanetData) {
+                const locationEntities = {};
+
+                // Group PLAYERS and UMAPS by location
+                if (uPlanetData.PLAYERs) {
+                    uPlanetData.PLAYERs.forEach(player => {
+                        if (player.LAT && player.LON && player.HEX && player.ASTROMAIL) {
+                            const locationKey = `${player.LAT},${player.LON}`;
+                            if (!locationEntities[locationKey]) {
+                                locationEntities[locationKey] = { PLAYERS: [], UMAPS: [] };
+                            }
+                            locationEntities[locationKey].PLAYERS.push({ hex: player.HEX, astromail: player.ASTROMAIL });
+                        }
+                    });
+                }
+
+                if (uPlanetData.UMAPs) {
+                    uPlanetData.UMAPs.forEach(umap => {
+                        if (umap.LAT && umap.LON && umap.UMAPHEX) {
+                            const locationKey = `${umap.LAT},${umap.LON}`;
+                            if (!locationEntities[locationKey]) {
+                                locationEntities[locationKey] = { PLAYERS: [], UMAPS: [] };
+                            }
+                            locationEntities[locationKey].UMAPS.push({ hex: umap.UMAPHEX, umapipfs: umap.UMAPROOT, lat: umap.LAT, lon: umap.LON });
+                        }
+                    });
+                }
+
+                // Add markers for each location
+                for (const locationKey in locationEntities) {
+                    const [lat, lon] = locationKey.split(',').map(parseFloat);
+                    const entities = locationEntities[locationKey];
+                    let popupContent = '';
+                    let icon = null;
+
+                    if (entities.UMAPS.length > 0) {
+                        icon = umapIcon;
+                        const umap = entities.UMAPS[0];
+                        popupContent += `<p><b>UMAP</b></p>`;
+                        popupContent += `<p><b>Lat:</b> ${umap.lat}, <b>Lon:</b> ${umap.lon}</p>`;
+                        popupContent += `<ul>`;
+                        popupContent += `<li><a href="nostr.html?hex=${umap.hex}" target="umap">UMAP Nostr</a> - <a href="/ipfs/${umap.umapipfs}" target="ipfs">IPFS Drive</a></li>`;
+                        popupContent += `</ul>`;
+
+                        if (entities.PLAYERS.length > 0) {
+                            popupContent += `<p><b>Players nearby:</b></p><ul>`;
+                            const shuffledPlayers = [...entities.PLAYERS].sort(() => 0.5 - Math.random());
+                            const selectedPlayers = shuffledPlayers.slice(0, Math.min(10, entities.PLAYERS.length));
+                            selectedPlayers.forEach(player => {
+                                popupContent += `<li><a href="nostr.html?hex=${player.hex}" target="_blank">${player.astromail}</a></li>`;
+                            });
+                            popupContent += `</ul>`;
+                        }
+                    } else if (entities.PLAYERS.length > 0) {
+                        icon = playerIcon;
+                        popupContent += `<p><b>NOSTR:</b></p><ul>`;
+                        entities.PLAYERS.forEach(player => {
+                            popupContent += `<li><a href="nostr.html?hex=${player.hex}" target="_blank">${player.astromail}</a></li>`;
+                        });
+                        popupContent += `</ul>`;
+                    }
+
+                    if (icon) {
+                        L.marker([lat, lon], {icon: icon})
+                            .bindPopup(popupContent, { className: 'custom-popup' })
+                            .addTo(map);
+                        console.log(`Marker ajouté à LAT: ${lat}, LON: ${lon} avec entités:`, entities);
+                    }
+                }
+            }
+        })
+        .catch(error => {
+            console.error('Error loading UPlanet data:', error);
+        });
+
 const gridSize = 10; // Number of rows and columns in the grid
 const NSize = deg / 10; // Size of each grid cell
 

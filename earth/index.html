@@ -1118,6 +1118,12 @@ function createEconomicDashboard(data) {
   const zen = parseInt(data.ZEN) || 0;
   const bilan = parseInt(data.BILAN) || 0;
 
+  // Count NOSTR accounts with more than ZCARD amount
+  const nostrAboveZcard = data.NOSTR ? data.NOSTR.filter(nostr => parseInt(nostr.ZEN) > zcard).length : 0;
+  
+  // Count PLAYERs with more than ZCARD amount
+  const playersAboveZcard = data.PLAYERs ? data.PLAYERs.filter(player => parseInt(player.ZEN) > zcard).length : 0;
+
   // Calculate revenue and profit
   const totalRevenue = zcard + ncard;
   const monthlyProfit = totalRevenue - paf;
@@ -1246,9 +1252,9 @@ function createEconomicDashboard(data) {
           <td class="table-label">Paliers de bénéfices</td>
           <td>
             <ul class="compact-list">
-              <li>Node : Premier palier (56 Ẑ)</li>
-              <li>Captain : Deuxième palier (112 Ẑ)</li>
-              <li>UPlanet : Troisième palier (168 Ẑ)</li>
+              <li>Node : Premier palier (${paf} Ẑ)</li>
+              <li>Captain : Deuxième palier (${2*paf} Ẑ)</li>
+              <li>UPlanet : Troisième palier (${3*paf} Ẑ)</li>
             </ul>
           </td>
         </tr>
@@ -1307,6 +1313,14 @@ function createEconomicDashboard(data) {
   // Add event listeners for dynamic simulation
   const newNostrInput = document.getElementById('new-nostr');
   const newZenInput = document.getElementById('new-zen');
+
+  // Set initial values based on accounts above ZCARD threshold
+  if (newNostrInput) {
+    newNostrInput.value = nostrAboveZcard;
+  }
+  if (newZenInput) {
+    newZenInput.value = playersAboveZcard;
+  }
 
   function updateSimulation() {
     const newNostr = parseInt(newNostrInput.value) || 0;
@@ -1497,9 +1511,10 @@ function updateBalances() {
   fetch(uPlanetAPI_URL)
     .then(response => response.json())
     .then(data => {
-      document.getElementById('uplanet-balance').textContent = `${Number(data.BILAN || 0).toFixed(2)} Ẑ`;
-      document.getElementById('node-balance').textContent = `${Number(data.NODEZEN || 0).toFixed(2)} Ẑ`;
-      document.getElementById('captain-balance').textContent = `${Number(data.CAPTAINZEN || 0).toFixed(2)} Ẑ`;
+      const balanceElement = document.getElementById('uplanet-balance');
+      if (balanceElement) {
+        balanceElement.textContent = `${Number(data.BILAN || 0).toFixed(2)} Ẑ`;
+      }
     })
     .catch(error => console.error('Error updating balances:', error));
 }

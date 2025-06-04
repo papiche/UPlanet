@@ -1,0 +1,1326 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>UPlanet Marketplace</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="earth.css">
+    <link rel="stylesheet" href="awesome.css">
+    <script src="jquery-1.7.2.min.js"></script>
+    <script src="nostr.js"></script>
+    <!-- Zen Wallet Integration -->
+    <script>
+        class ZenWallet {
+            constructor() {
+                this.connected = false;
+                this.balance = 0;
+            }
+
+            async connect() {
+                try {
+                    // Simuler une connexion au portefeuille Zen
+                    this.connected = true;
+                    this.balance = 1000; // Solde de test
+                    return true;
+                } catch (error) {
+                    console.error('Error connecting to Zen wallet:', error);
+                    return false;
+                }
+            }
+
+            async createPayment({ amount, currency, description }) {
+                if (!this.connected) {
+                    throw new Error('Wallet not connected');
+                }
+
+                // Simuler la création d'un paiement
+                return {
+                    zen_amount: amount,
+                    zen_address: 'zen_' + Math.random().toString(36).substr(2, 9),
+                    zen_txid: 'tx_' + Math.random().toString(36).substr(2, 9),
+                    metadata: JSON.stringify({
+                        description,
+                        currency,
+                        timestamp: Date.now()
+                    })
+                };
+            }
+
+            getBalance() {
+                return this.balance;
+            }
+        }
+    </script>
+    <script src="marketplace.js"></script>
+    <style>
+        /* Base layout */
+        .marketplace-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        /* Profile section at top */
+        .profile-section {
+            background: #232733;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            align-items: center;
+        }
+
+        .profile-header {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            flex: 1;
+            min-width: 300px;
+        }
+
+        .profile-image {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            object-fit: cover;
+        }
+
+        .profile-info {
+            flex: 1;
+        }
+
+        .profile-name {
+            font-size: 1.4em;
+            font-weight: bold;
+            color: #eaf6ff;
+            margin-bottom: 5px;
+        }
+
+        .profile-nip05 {
+            color: #b8c6e0;
+            font-size: 1em;
+        }
+
+        .wallet-info {
+            background: #1e2533;
+            border-radius: 8px;
+            padding: 15px;
+            flex: 1;
+            min-width: 300px;
+        }
+
+        .wallet-status {
+            display: inline-block;
+            padding: 8px 15px;
+            border-radius: 6px;
+            font-size: 1em;
+            margin-bottom: 10px;
+        }
+
+        .wallet-status.connected {
+            background: #2ecc71;
+            color: white;
+        }
+
+        .wallet-status.disconnected {
+            background: #e74c3c;
+            color: white;
+        }
+
+        .wallet-address {
+            font-family: monospace;
+            color: #b8c6e0;
+            font-size: 0.9em;
+            word-break: break-all;
+            margin: 10px 0;
+            padding: 10px;
+            background: #232733;
+            border-radius: 4px;
+        }
+
+        .zen-balance {
+            margin-top: 10px;
+            padding: 10px;
+            background: #232733;
+            border-radius: 4px;
+        }
+
+        .zen-balance-label {
+            color: #b8c6e0;
+            font-size: 0.9em;
+        }
+
+        .zen-balance-amount {
+            color: #2ecc71;
+            font-size: 1.2em;
+            font-weight: bold;
+        }
+
+        /* Main content area */
+        .main-content {
+            background: #232733;
+            border-radius: 12px;
+            padding: 20px;
+        }
+
+        /* Navigation */
+        .nav-section {
+            background: #1e2533;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 20px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .nav-buttons {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .nav-btn {
+            padding: 8px 15px;
+            background: #3498db;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+
+        .nav-btn.active {
+            background: #2ecc71;
+        }
+
+        /* Message section */
+        #message-section {
+            background: #1e2533;
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 20px;
+        }
+
+        .message-navigation {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .message-navigation button {
+            flex: 1;
+            padding: 8px;
+            background: #3498db;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .message-navigation button:disabled {
+            background: #555;
+            cursor: not-allowed;
+        }
+
+        /* Marketplace grid */
+        .listing-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        .listing-card {
+            background: #1e2533;
+            border-radius: 8px;
+            overflow: hidden;
+            transition: transform 0.2s;
+        }
+
+        .listing-card:hover {
+            transform: translateY(-5px);
+        }
+
+        /* Responsive adjustments */
+        @media (max-width: 768px) {
+            .profile-section {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .profile-header {
+                flex-direction: column;
+                text-align: center;
+            }
+
+            .wallet-info {
+                min-width: 100%;
+            }
+
+            .nav-section {
+                flex-direction: column;
+            }
+
+            .nav-buttons {
+                width: 100%;
+                justify-content: center;
+            }
+
+            .listing-grid {
+                grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            }
+        }
+
+        @media (max-width: 480px) {
+            .marketplace-container {
+                padding: 10px;
+            }
+
+            .profile-section,
+            .main-content {
+                padding: 15px;
+            }
+
+            .listing-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Location Controls */
+        #location-controls {
+            background: #1e2533;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+
+        .coord-control {
+            text-align: center;
+            margin: 10px 0;
+        }
+
+        .coord-control > div {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 2px;
+            flex-wrap: wrap;
+        }
+
+        .tumbler {
+            appearance: none;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            padding: 6px 2px;
+            border: 1px solid #555;
+            background-color: #404040;
+            color: #e0e0e0;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 0.9em;
+            font-weight: bold;
+            border-radius: 3px;
+            margin: 0 1px;
+            text-align: center;
+            cursor: pointer;
+            min-width: 24px;
+            max-width: 32px;
+        }
+
+        .tumbler:focus {
+            outline: none;
+            border-color: #4CAF50;
+            box-shadow: 0 0 5px rgba(76, 175, 80, 0.5);
+        }
+
+        .tumbler-dot {
+            font-size: 1.2em;
+            font-weight: bold;
+            margin: 0 2px;
+            align-self: center;
+            color: #aaa;
+        }
+
+        #location-status {
+            min-height: 1.1em;
+            text-align: center;
+            color: #aaa;
+            font-size: 0.9em;
+            margin-top: 10px;
+        }
+
+        .location-label {
+            font-size: 0.8em;
+            display: block;
+            text-align: center;
+            margin-bottom: 3px;
+            color: #b8c6e0;
+        }
+
+        .stall-products-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+            gap: 20px;
+        }
+        .product-card {
+            background: #232733;
+            border-radius: 10px;
+            box-shadow: 0 2px 8px #0002;
+            padding: 15px;
+            transition: transform 0.2s;
+        }
+        .product-card:hover {
+            transform: translateY(-5px) scale(1.03);
+        }
+        .product-image {
+            width: 100%;
+            border-radius: 8px;
+            margin-bottom: 10px;
+        }
+        .product-actions button {
+            background: none;
+            border: none;
+            color: #3498db;
+            font-size: 1.2em;
+            margin-right: 8px;
+            cursor: pointer;
+        }
+        .product-actions button:hover {
+            color: #e74c3c;
+        }
+        .add-product-btn {
+            background: #2ecc71;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 8px 15px;
+            font-size: 1em;
+            cursor: pointer;
+            margin-bottom: 15px;
+        }
+        .my-stall-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="marketplace-container">
+        <!-- Profile Section at top -->
+        <div class="profile-section" id="profileDisplay">
+            <div class="profile-header">
+                <img class="profile-image" src="https://ipfs.copylaradio.com/ipfs/QmQRq211EMmQJ7QE44FrVZt8EMF7JJWnayDXHyKzes4pX1" alt="Profile">
+                <div class="profile-info">
+                    <div class="profile-name">Loading...</div>
+                    <div class="profile-nip05"></div>
+                </div>
+            </div>
+            <div class="wallet-info">
+                <button id="connectButton" class="nav-btn" disabled style="margin-bottom:10px;width:100%">Connect with Nostr</button>
+                <div class="wallet-status disconnected" id="walletStatus" style="display:none;">
+                    Wallet: Disconnected
+                </div>
+                <div class="wallet-address" id="walletAddress"></div>
+                <div class="zen-balance" id="zenBalance" style="display: none;">
+                    <div class="zen-balance-label">Zen Balance:</div>
+                    <div class="zen-balance-amount" id="zenBalanceAmount">0 ZEN</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Location Controls -->
+        <div id="location-controls">
+            <div id="location-values" style="display: flex; justify-content: space-around; background-color: #333; padding: 8px; border-radius: 5px; gap: 10px;">
+                <!-- Latitude -->
+                <div class="coord-control">
+                    <label for="lat-sign" class="location-label">Latitude</label>
+                    <div>
+                        <select id="lat-sign" class="tumbler">
+                            <option value="N">N</option>
+                            <option value="S">S</option>
+                        </select>
+                        <select id="lat-deg1" class="tumbler"></select>
+                        <select id="lat-deg0" class="tumbler"></select>
+                        <span class="tumbler-dot">.</span>
+                        <select id="lat-frac1" class="tumbler"></select>
+                        <select id="lat-frac0" class="tumbler"></select>
+                    </div>
+                </div>
+                <!-- Longitude -->
+                <div class="coord-control">
+                    <label for="lon-sign" class="location-label">Longitude</label>
+                    <div>
+                        <select id="lon-sign" class="tumbler">
+                            <option value="E">E</option>
+                            <option value="W">W</option>
+                        </select>
+                        <select id="lon-deg2" class="tumbler"></select>
+                        <select id="lon-deg1" class="tumbler"></select>
+                        <select id="lon-deg0" class="tumbler"></select>
+                        <span class="tumbler-dot">.</span>
+                        <select id="lon-frac1" class="tumbler"></select>
+                        <select id="lon-frac0" class="tumbler"></select>
+                    </div>
+                </div>
+            </div>
+            <div id="location-status">Fetching location...</div>
+        </div>
+
+        <div class="main-content">
+            <!-- Navigation Section -->
+            <div class="nav-section">
+                <div class="nav-buttons">
+                    <button class="nav-btn active" data-section="marketplace">Marketplace</button>
+                    <button class="nav-btn" data-section="my-stall">My Stall</button>
+                    <button class="nav-btn" data-section="orders">Orders</button>
+                    <button class="nav-btn" data-section="settings">Settings</button>
+                </div>
+            </div>
+
+            <!-- Message Section -->
+            <div id="message-section" style="display: none;">
+                <div class="message-navigation">
+                    <button id="older-button" disabled>Older</button>
+                    <button id="refresh-button">Refresh</button>
+                    <button id="newer-button" disabled>Newer</button>
+                </div>
+                <div id="last-message-area">Loading messages...</div>
+                <div id="replies-area">
+                    <h3>Replies</h3>
+                    <ul id="replies-list"><li>Select a message to see replies...</li></ul>
+                </div>
+            </div>
+
+            <!-- Marketplace Section -->
+            <div class="section active" id="marketplace-section">
+                <div class="marketplace-header">
+                    <h1>UPlanet Marketplace</h1>
+                    <button class="create-listing-btn" onclick="marketplace.showCreateListingModal()">
+                        Create Listing
+                    </button>
+                </div>
+
+                <div class="currency-selector">
+                    <div class="currency-option active" data-currency="G1">G1</div>
+                    <div class="currency-option" data-currency="ZEN">ZEN</div>
+                </div>
+
+                <div class="filter-section">
+                    <input type="text" class="filter-input" placeholder="Search listings..." id="searchInput">
+                    <select class="filter-input" id="categoryFilter">
+                        <option value="">All Categories</option>
+                        <option value="digital">Digital Goods</option>
+                        <option value="physical">Physical Goods</option>
+                        <option value="services">Services</option>
+                    </select>
+                    <select class="filter-input" id="sortFilter">
+                        <option value="newest">Newest First</option>
+                        <option value="price_asc">Price: Low to High</option>
+                        <option value="price_desc">Price: High to Low</option>
+                    </select>
+                </div>
+
+                <div class="listing-grid" id="listingGrid">
+                    <!-- Listings will be dynamically populated here -->
+                </div>
+            </div>
+
+            <!-- My Stall Section -->
+            <div class="section" id="my-stall-section">
+                <div class="my-stall-header">
+                    <h2>My Stall</h2>
+                    <button class="add-product-btn"><i class="fa fa-plus"></i> Add Product</button>
+                </div>
+                <div class="stall-products-grid" id="stallProducts">
+                    <!-- Stall products will be populated here as cards -->
+                </div>
+            </div>
+
+            <!-- Orders Section -->
+            <div class="section" id="orders-section">
+                <h2>Orders</h2>
+                <div class="orders-list" id="ordersList">
+                    <!-- Orders will be populated here -->
+                </div>
+            </div>
+
+            <!-- Settings Section -->
+            <div class="section" id="settings-section">
+                <h2>Stall Settings</h2>
+                <div class="settings-form">
+                    <div class="form-group">
+                        <label>Stall Name</label>
+                        <input type="text" id="stallName" placeholder="Enter your stall name">
+                    </div>
+                    <div class="form-group">
+                        <label>Stall Description</label>
+                        <textarea id="stallDescription" placeholder="Describe your stall"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>Shipping Zones</label>
+                        <div class="checkbox-group">
+                            <label><input type="checkbox" value="1" checked> Zone 1</label>
+                            <label><input type="checkbox" value="2"> Zone 2</label>
+                            <label><input type="checkbox" value="3"> Zone 3</label>
+                        </div>
+                    </div>
+                    <button class="submit-btn" onclick="marketplace.saveStallSettings()">Save Settings</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Listing Modal -->
+    <div id="createListingModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Create New Listing</h2>
+                <span class="close">&times;</span>
+            </div>
+            <div class="modal-body">
+                <form id="createListingForm">
+                    <div class="form-group">
+                        <label for="listingTitle">Title</label>
+                        <input type="text" id="listingTitle" name="title" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="listingDescription">Description</label>
+                        <textarea id="listingDescription" name="description" required></textarea>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="listingPrice">Price (G1)</label>
+                        <input type="number" id="listingPrice" name="price" step="1" required>
+                        <div class="price-display">
+                            <span class="price-amount" id="zenPriceDisplay">0</span>
+                            <span class="price-currency">ZEN</span>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="listingCategory">Category</label>
+                        <select id="listingCategory" name="category" required>
+                            <option value="digital">Digital Goods</option>
+                            <option value="physical">Physical Goods</option>
+                            <option value="services">Services</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="listingImage">Image URL</label>
+                        <input type="url" id="listingImage" name="imageUrl" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="listingQuantity">Quantity</label>
+                        <input type="number" id="listingQuantity" name="quantity" min="1" required>
+                    </div>
+                    
+                    <div class="form-actions">
+                        <button type="submit" class="submit-btn">Create Listing</button>
+                        <button type="button" class="cancel-btn">Cancel</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Order Modal -->
+    <div id="orderModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Place Order</h2>
+                <span class="close">&times;</span>
+            </div>
+            <div class="modal-body">
+                <form id="orderForm">
+                    <div class="form-group">
+                        <label for="shippingAddress">Shipping Address</label>
+                        <textarea id="shippingAddress" name="address" required></textarea>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="shippingZone">Shipping Zone</label>
+                        <select id="shippingZone" name="shippingzone" required>
+                            <option value="1">Zone 1</option>
+                            <option value="2">Zone 2</option>
+                            <option value="3">Zone 3</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="email">Email</label>
+                        <input type="email" id="email" name="email" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="quantity">Quantity</label>
+                        <input type="number" id="quantity" name="quantity" min="1" required>
+                    </div>
+                    
+                    <div class="form-actions">
+                        <button type="submit" class="submit-btn">Place Order</button>
+                        <button type="button" class="cancel-btn">Cancel</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global variables for Nostr
+        let pool = null;
+        let publicKey = '';
+        let privateKeyHex = null;
+        let fetchedMessages = [];
+        let currentMessageIndex = 0;
+        const MESSAGES_PER_PAGE = 10;
+        const DEFAULT_RELAYS = ['wss://relay.copylaradio.com', 'ws://127.0.0.1:7777'];
+        let allRelaysToPublish = [...DEFAULT_RELAYS];
+
+        // Helper functions
+        function log(message) {
+            console.log(message);
+        }
+
+        function updateStatus(message, isError = false, isSuccess = false) {
+            const el = $('#status');
+            el.text(message);
+            let bg = '#333', fg = '#ccc';
+            if (isError) {
+                bg = '#5c3a3a';
+                fg = '#ff6b6b';
+            } else if (isSuccess) {
+                bg = '#3a5c3a';
+                fg = '#90ee90';
+            }
+            el.css({ 'background-color': bg, 'color': fg });
+        }
+
+        // Nostr Pool Management
+        function getNostrPool() {
+            if (!pool) {
+                if (typeof NostrTools?.SimplePool !== 'function') {
+                    const m = "Error: NostrTools.SimplePool undefined!";
+                    log(m);
+                    updateStatus(m, true);
+                    throw new Error(m);
+                }
+                try {
+                    log("Initializing SimplePool...");
+                    pool = new NostrTools.SimplePool({ getTimeout: 6000, listTimeout: 6000 });
+                    if (typeof pool?.list !== 'function' || typeof pool?.get !== 'function') {
+                        log("Error: Pool missing methods.");
+                        pool = null;
+                        throw new Error("Pool invalid.");
+                    }
+                    log("Pool initialized successfully.");
+                } catch (e) {
+                    log(`Pool initialization error: ${e.message}`);
+                    updateStatus("Failed to initialize relay pool.", true);
+                    throw e;
+                }
+            }
+            return pool;
+        }
+
+        // Message Handling
+        async function fetchAndDisplayMessages(pubkey) {
+            log(`Fetching messages for ${pubkey.slice(0, 10)}...`);
+            $('#message-section').show();
+            const messageArea = $('#last-message-area').html('<i>Loading messages...</i>');
+            const repliesList = $('#replies-list').empty().html('<li><i>Select a message...</i></li>');
+            $('#older-button').prop('disabled', true);
+            $('#newer-button').prop('disabled', true);
+            fetchedMessages = [];
+            currentMessageIndex = 0;
+
+            let nostrPool;
+            try {
+                nostrPool = getNostrPool();
+            } catch (e) {
+                log("Failed to get Nostr pool.");
+                messageArea.html('<i>Error initializing relay pool.</i>');
+                return;
+            }
+
+            try {
+                const events = await nostrPool.list(allRelaysToPublish, [{
+                    kinds: [1],
+                    authors: [pubkey],
+                    limit: MESSAGES_PER_PAGE
+                }]);
+
+                if (events.length > 0) {
+                    log(`Fetched ${events.length} messages.`);
+                    fetchedMessages = events.sort((a, b) => b.created_at - a.created_at);
+                    displayMessageAtIndex(0);
+                } else {
+                    log('No messages found.');
+                    messageArea.html('<i>No messages found.</i>');
+                    $('#replies-list').empty().html('<li><i>N/A</i></li>');
+                }
+            } catch (error) {
+                log(`Error fetching messages: ${error}`);
+                messageArea.html('<i>Error loading messages.</i>');
+                $('#replies-list').empty().html('<li><i>Error loading replies.</i></li>');
+            }
+        }
+
+        function displayMessageAtIndex(index) {
+            const messageArea = $('#last-message-area');
+            const repliesList = $('#replies-list');
+
+            if (index < 0 || index >= fetchedMessages.length) {
+                messageArea.html(`<i>Invalid message index: ${index}</i>`);
+                repliesList.empty().html('<li><i>N/A</i></li>');
+                $('#newer-button').prop('disabled', fetchedMessages.length === 0 || currentMessageIndex <= 0);
+                $('#older-button').prop('disabled', fetchedMessages.length === 0 || currentMessageIndex >= fetchedMessages.length - 1);
+                return;
+            }
+
+            currentMessageIndex = index;
+            const currentMessage = fetchedMessages[currentMessageIndex];
+            renderMessage(messageArea, currentMessage);
+            fetchAndDisplayReplies(currentMessage.id);
+
+            $('#newer-button').prop('disabled', currentMessageIndex <= 0);
+            $('#older-button').prop('disabled', currentMessageIndex >= fetchedMessages.length - 1);
+        }
+
+        function renderMessage(container, event) {
+            container.empty();
+            const item = $('<div>').addClass('message-item').appendTo(container);
+            const contentDiv = $('<div>').addClass('message-content').appendTo(item);
+            
+            const lines = event.content.split('\n');
+            lines.forEach((line, i) => {
+                const trimmed = line.trim();
+                if (/\.(jpg|jpeg|png|gif|webp)$/i.test(trimmed)) {
+                    $('<img>').attr('src', trimmed).appendTo(contentDiv);
+                } else if (/^https?:\/\//.test(trimmed)) {
+                    $('<a>').attr({href: trimmed, target: '_blank'}).text(trimmed).appendTo(contentDiv);
+                } else {
+                    contentDiv.append(document.createTextNode(line));
+                }
+                if (i < lines.length - 1) contentDiv.append('<br>');
+            });
+
+            $('<div>').css({
+                fontSize: '0.8em',
+                color: '#888',
+                marginTop: '5px'
+            }).text(`Note ${currentMessageIndex + 1}/${fetchedMessages.length} | ID: ${event.id.slice(0,10)}... At: ${new Date(event.created_at*1000).toLocaleString()}`).appendTo(item);
+        }
+
+        async function fetchAndDisplayReplies(eventId) {
+            log(`Fetching replies for event ${eventId.slice(0, 10)}...`);
+            const list = $('#replies-list').empty().html('<li><i>Loading replies...</i></li>');
+            
+            if (!eventId) {
+                list.html('<li><i>No parent ID.</i></li>');
+                return;
+            }
+
+            let nostrPool;
+            try {
+                nostrPool = getNostrPool();
+            } catch (e) {
+                log("Pool fail in fetchReplies.");
+                list.html('<li><i>Relay pool error.</i></li>');
+                return;
+            }
+
+            try {
+                const replies = await nostrPool.list(allRelaysToPublish, [{
+                    kinds: [1],
+                    '#e': [eventId],
+                    limit: 20
+                }]);
+
+                if (replies.length > 0) {
+                    log(`Found ${replies.length} replies.`);
+                    list.empty();
+                    replies.sort((a, b) => a.created_at - b.created_at)
+                          .forEach(r => renderReply(list, r));
+                } else {
+                    log('No replies found.');
+                    list.html('<li><i>No replies yet.</i></li>');
+                }
+            } catch (e) {
+                log(`Error fetching replies: ${e}`);
+                list.html('<li><i>Error loading replies.</i></li>');
+            }
+        }
+
+        function renderReply(list, event) {
+            const item = $('<li>').addClass('reply-item').appendTo(list);
+            const authorP = $('<p>').addClass('reply-author').appendTo(item);
+            authorP.append('Reply by: ');
+            $('<code>').text(event.pubkey.slice(0, 10) + '...').appendTo(authorP);
+            authorP.append(` at ${new Date(event.created_at * 1000).toLocaleTimeString()}`);
+            
+            const contentDiv = $('<div>').addClass('reply-content').appendTo(item);
+            const lines = event.content.split('\n');
+            lines.forEach((line, i) => {
+                const trimmed = line.trim();
+                if (/\.(jpg|jpeg|png|gif|webp)$/i.test(trimmed)) {
+                    $('<img>').attr('src', trimmed).appendTo(contentDiv);
+                } else if (/^https?:\/\//.test(trimmed)) {
+                    $('<a>').attr({href: trimmed, target: '_blank'}).text(trimmed).appendTo(contentDiv);
+                } else {
+                    contentDiv.append(document.createTextNode(line));
+                }
+                if (i < lines.length - 1) contentDiv.append('<br>');
+            });
+        }
+
+        // Profile Management
+        async function checkUMAPRegistration(g1pub) {
+            try {
+(                // Get current GPS coordinates
+                const coords = await getCurrentCoordinates();
+                if (!coords || !coords.lat || !coords.lon) {
+                    throw new Error('GPS coordinates not available');
+                }
+
+                // Log coordinates for debugging
+                console.log('Sending GPS coordinates:', coords);
+
+                // Make the API call with coordinates
+                const response = await fetch(`/check_umap?g1pub=${encodeURIComponent(g1pub)}&lat=${coords.lat}&lon=${coords.lon}`);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                
+                if (data.registered) {
+                    // Update UI with UMAP information
+                    const umapInfo = document.createElement('div');
+                    umapInfo.className = 'umap-info';
+                    umapInfo.innerHTML = `
+                        <h3>UMAP Registration</h3>
+                        <p>UMAP ID: ${data.umap_id}</p>
+                        <p>Stalls: ${data.stalls.length}</p>
+                        <p>Location: ${coords.lat.toFixed(4)}, ${coords.lon.toFixed(4)}</p>
+                    `;
+                    
+                    // Add stalls information if any
+                    if (data.stalls.length > 0) {
+                        const stallsList = document.createElement('ul');
+                        data.stalls.forEach(stall => {
+                            const stallItem = document.createElement('li');
+                            stallItem.innerHTML = `
+                                <strong>${stall.stall_id}</strong><br>
+                                URL: ${stall.url}<br>
+                                Location: ${stall.lat}, ${stall.lon}<br>
+                                Products: ${stall.products.length}
+                            `;
+                            stallsList.appendChild(stallItem);
+                        });
+                        umapInfo.appendChild(stallsList);
+                    }
+                    
+                    // Add to profile section
+                    const profileSection = document.getElementById('profileDisplay');
+                    // Remove existing UMAP info if any
+                    const existingInfo = profileSection.querySelector('.umap-info');
+                    if (existingInfo) {
+                        existingInfo.remove();
+                    }
+                    profileSection.appendChild(umapInfo);
+                }
+                
+                return data;
+            } catch (error) {
+                console.error('Error checking UMAP registration:', error);
+                // Show error in UI
+                const profileSection = document.getElementById('profileDisplay');
+                const errorInfo = document.createElement('div');
+                errorInfo.className = 'umap-error';
+                errorInfo.innerHTML = `
+                    <h3>UMAP Registration Error</h3>
+                    <p>${error.message}</p>
+                    <p>Please ensure GPS is enabled and try again.</p>
+                `;
+                // Remove existing error if any
+                const existingError = profileSection.querySelector('.umap-error');
+                if (existingError) {
+                    existingError.remove();
+                }
+                profileSection.appendChild(errorInfo);
+                throw error;
+            }
+        }
+
+        // Function to get current GPS coordinates with retry
+        async function getCurrentCoordinates(retries = 3) {
+            return new Promise((resolve, reject) => {
+                if (!("geolocation" in navigator)) {
+                    reject(new Error("Geolocation not supported"));
+                    return;
+                }
+
+                const successCallback = (position) => {
+                    resolve({
+                        lat: position.coords.latitude,
+                        lon: position.coords.longitude
+                    });
+                };
+
+                const errorCallback = (error) => {
+                    console.error('GPS Error:', error);
+                    if (retries > 0) {
+                        console.log(`Retrying GPS... (${retries} attempts left)`);
+                        setTimeout(() => {
+                            navigator.geolocation.getCurrentPosition(successCallback, errorCallback, {
+                                enableHighAccuracy: true,
+                                timeout: 5000,
+                                maximumAge: 0
+                            });
+                        }, 1000);
+                        retries--;
+                    } else {
+                        reject(new Error(`Failed to get GPS coordinates: ${error.message}`));
+                    }
+                };
+
+                navigator.geolocation.getCurrentPosition(successCallback, errorCallback, {
+                    enableHighAccuracy: true,
+                    timeout: 5000,
+                    maximumAge: 0
+                });
+            });
+        }
+
+        async function fetchProfileAndRelays(pubkey) {
+            log(`Fetching profile/relays for ${pubkey.slice(0,10)}...`);
+            let nostrPool;
+            try {
+                nostrPool = getNostrPool();
+            } catch (e) {
+                log("Pool fail in fetchProfileRelays.");
+                return {};
+            }
+
+            let profileEv = null;
+            let relayEv = null;
+            let userRelays = [];
+            let userProfile = {};
+
+            try {
+                const evs = await nostrPool.list(DEFAULT_RELAYS, [
+                    { kinds: [0], authors: [pubkey], limit: 1 },
+                    { kinds: [10002], authors: [pubkey], limit: 1 }
+                ]);
+
+                evs.forEach(e => {
+                    if (e.kind === 0 && (!profileEv || e.created_at > profileEv.created_at)) {
+                        profileEv = e;
+                    }
+                    if (e.kind === 10002 && (!relayEv || e.created_at > relayEv.created_at)) {
+                        relayEv = e;
+                    }
+                });
+
+                if (profileEv) {
+                    log(`Profile event: ${profileEv.id}`);
+                    try {
+                        userProfile = JSON.parse(profileEv.content);
+                    } catch (e) {
+                        log(`Profile parse error: ${e.message}`);
+                        userProfile = {};
+                    }
+                }
+
+                if (relayEv) {
+                    log(`Relay list event: ${relayEv.id}`);
+                    userRelays = relayEv.tags
+                        .filter(t => t[0] === 'r' && typeof t[1] === 'string' && t[1].startsWith('wss://'))
+                        .map(t => t[1]);
+                    log(`Extracted ${userRelays.length} relays.`);
+                }
+
+                const dyn = getRelayURL();
+                const comb = new Set([...DEFAULT_RELAYS, dyn, ...userRelays]);
+                allRelaysToPublish = [...comb];
+                updateRelayListUI();
+                renderProfile(pubkey, userProfile);
+                
+                // Check UMAP registration if G1 address is available
+                if (userProfile.g1_address) {
+                    await checkUMAPRegistration(userProfile.g1_address);
+                }
+                
+                return userProfile;
+            } catch (e) {
+                log(`Error fetching profile/relays: ${e}`);
+                updateStatus('Error fetching profile/relay.', true);
+                return {};
+            }
+        }
+
+        function renderProfile(pubkey, profileData) {
+            const div = $('#profileDisplay');
+            const defPic = 'https://ipfs.copylaradio.com/ipfs/QmQRq211EMmQJ7QE44FrVZt8EMF7JJWnayDXHyKzes4pX1';
+            const pic = profileData?.picture || defPic;
+            const name = profileData?.display_name || profileData?.name || pubkey.slice(0, 16);
+            const nip05 = profileData?.nip05 || '';
+            const g1Address = profileData?.g1_address || '';
+            const zenAddress = profileData?.zen_address || '';
+
+            // Update profile image and name
+            div.find('.profile-image').attr('src', pic).on('error', function() {
+                $(this).attr('src', defPic);
+            });
+            div.find('.profile-name').text(name);
+            div.find('.profile-nip05').text(nip05);
+
+            // Update wallet info
+            if (g1Address) {
+                $('#walletAddress').html(`G1: ${g1Address}<br>ZEN: ${zenAddress || 'Not set'}`);
+            } else {
+                $('#walletAddress').text('No wallet address found');
+            }
+        }
+
+        // Nostr Connection
+        function checkNostrExtension() {
+            log('Checking extension...');
+            if (typeof window.nostr !== 'undefined') {
+                log('Extension available.');
+                $('#connectButton').prop('disabled', false).text('Connect');
+                updateStatus('Extension ready.');
+                return true;
+            } else {
+                log('Extension not available.');
+                $('#connectButton').prop('disabled', true).text('Extension Needed');
+                updateStatus('Extension not found or NSEC needed.', true);
+                return false;
+            }
+        }
+
+        async function connectToNostr() {
+            if (!window.nostr) return;
+            
+            log('Connecting via extension...');
+            updateStatus('Connecting extension...');
+            $('#connectButton').prop('disabled', true);
+
+            try {
+                publicKey = await window.nostr.getPublicKey();
+                log(`Extension connected. Pubkey: ${publicKey.slice(0, 10)}...`);
+                $('#connectButton').hide();
+                $('#postButton').prop('disabled', false);
+                updateStatus(`Connected! ${publicKey.slice(0, 10)}...`, false, true);
+                
+                await fetchProfileAndRelays(publicKey);
+                await fetchAndDisplayMessages(publicKey);
+            } catch (e) {
+                log(`Extension connection failed: ${e.message || e}`);
+                updateStatus(`Connection failed.`, true);
+                $('#connectButton').prop('disabled', false).show();
+                publicKey = '';
+            }
+        }
+
+        // Helper Functions
+        function getRelayURL() {
+            const u = new URL(window.location.href);
+            let r = u.hostname.replace(/^u\./, 'relay.');
+            if (u.port === '54321' || ['localhost', '127.0.0.1'].includes(u.hostname)) {
+                return `ws://127.0.0.1:7777`;
+            }
+            return `wss://${r}`;
+        }
+
+        function updateRelayListUI() {
+            const l = $('#relay-list').empty();
+            if (allRelaysToPublish.length > 0) {
+                allRelaysToPublish.forEach(r => $('<li>').text(r).appendTo(l));
+            } else {
+                $('<li>').text("No relays configured!").appendTo(l);
+            }
+            log(`UI updated: ${allRelaysToPublish.length} relays.`);
+        }
+
+        // Location handling
+        function populateTumblers() {
+            for (let i = 0; i <= 9; i++) {
+                $('<option>').val(i).text(i).appendTo('#lat-deg1');
+                $('<option>').val(i).text(i).appendTo('#lat-deg0');
+                $('<option>').val(i).text(i).appendTo('#lon-deg2');
+                $('<option>').val(i).text(i).appendTo('#lon-deg1');
+                $('<option>').val(i).text(i).appendTo('#lon-deg0');
+                $('<option>').val(i).text(i).appendTo('#lat-frac1');
+                $('<option>').val(i).text(i).appendTo('#lat-frac0');
+                $('<option>').val(i).text(i).appendTo('#lon-frac1');
+                $('<option>').val(i).text(i).appendTo('#lon-frac0');
+            }
+        }
+
+        function updateLocationDisplay(lat, lon) {
+            if (lat === null || lon === null) {
+                $('#location-status').text('Location not available');
+                return;
+            }
+
+            const latAbs = Math.abs(lat);
+            const lonAbs = Math.abs(lon);
+
+            $('#lat-sign').val(lat >= 0 ? 'N' : 'S');
+            $('#lon-sign').val(lon >= 0 ? 'E' : 'W');
+
+            const latDeg = Math.floor(latAbs);
+            const latFrac = Math.round((latAbs - latDeg) * 100);
+            $('#lat-deg1').val(Math.floor(latDeg / 10));
+            $('#lat-deg0').val(latDeg % 10);
+            $('#lat-frac1').val(Math.floor(latFrac / 10));
+            $('#lat-frac0').val(latFrac % 10);
+
+            const lonDeg = Math.floor(lonAbs);
+            const lonFrac = Math.round((lonAbs - lonDeg) * 100);
+            $('#lon-deg2').val(Math.floor(lonDeg / 100));
+            $('#lon-deg1').val(Math.floor((lonDeg % 100) / 10));
+            $('#lon-deg0').val(lonDeg % 10);
+            $('#lon-frac1').val(Math.floor(lonFrac / 10));
+            $('#lon-frac0').val(lonFrac % 10);
+
+            $('#location-status').text(`Location: ${lat.toFixed(4)}, ${lon.toFixed(4)}`);
+        }
+
+        function initLocation() {
+            populateTumblers();
+            $('#location-controls').show();
+
+            if ("geolocation" in navigator) {
+                navigator.geolocation.getCurrentPosition(
+                    function(position) {
+                        updateLocationDisplay(position.coords.latitude, position.coords.longitude);
+                    },
+                    function(error) {
+                        $('#location-status').text('Error getting location: ' + error.message);
+                    }
+                );
+            } else {
+                $('#location-status').text('Geolocation not supported');
+            }
+        }
+
+        // Initialize Nostr
+        $(document).ready(function() {
+            // Check for Nostr extension
+            setTimeout(() => {
+                checkNostrExtension();
+            }, 500);
+
+            // Connect button handler
+            $('#connectButton').on('click', connectToNostr);
+
+            // Message navigation
+            $('#refresh-button').on('click', () => {
+                if (publicKey) {
+                    fetchAndDisplayMessages(publicKey);
+                }
+            });
+
+            $('#older-button').on('click', () => {
+                if (currentMessageIndex < fetchedMessages.length - 1) {
+                    displayMessageAtIndex(currentMessageIndex + 1);
+                }
+            });
+
+            $('#newer-button').on('click', () => {
+                if (currentMessageIndex > 0) {
+                    displayMessageAtIndex(currentMessageIndex - 1);
+                }
+            });
+
+            // Initialize marketplace functionality
+            if (typeof marketplace !== 'undefined') {
+                marketplace.init();
+            }
+
+            // Initialize location on document ready
+            initLocation();
+        });
+
+        // Function to register a stall
+        async function registerStall(stallId, stallUrl) {
+            try {
+                const coords = await getCurrentCoordinates();
+                const response = await fetch(`/register/${stallId}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        stall_url: stallUrl,
+                        lat: coords.lat,
+                        lon: coords.lon
+                    })
+                });
+                return await response.json();
+            } catch (error) {
+                console.error('Error registering stall:', error);
+                throw error;
+            }
+        }
+
+        // Function to get products
+        async function getProducts(stallId, indexerId) {
+            try {
+                const coords = await getCurrentCoordinates();
+                const response = await fetch(`/products/${stallId}?indexer_id=${indexerId}&lat=${coords.lat}&lon=${coords.lon}`);
+                return await response.json();
+            } catch (error) {
+                console.error('Error getting products:', error);
+                throw error;
+            }
+        }
+
+        // Function to place an order
+        async function placeOrder(stallId, orderData) {
+            try {
+                const coords = await getCurrentCoordinates();
+                const response = await fetch(`/order/${stallId}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        ...orderData,
+                        lat: coords.lat,
+                        lon: coords.lon
+                    })
+                });
+                return await response.json();
+            } catch (error) {
+                console.error('Error placing order:', error);
+                throw error;
+            }
+        }
+
+        // Function to check order status
+        async function checkOrderStatus(checkingId) {
+            try {
+                const coords = await getCurrentCoordinates();
+                const response = await fetch(`/status/${checkingId}?lat=${coords.lat}&lon=${coords.lon}`);
+                return await response.json();
+            } catch (error) {
+                console.error('Error checking order status:', error);
+                throw error;
+            }
+        }
+    </script>
+</body>
+</html> 

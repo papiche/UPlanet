@@ -31,6 +31,10 @@ echo "## TIMESTAMP CHAIN SHIFTING"
 cp ${MY_PATH}/.chain \
         ${MY_PATH}/.chain.$(cat ${MY_PATH}/.moats)
 
+# Nettoyage des anciens fichiers .chain (ne garde que les 2 plus récents)
+echo "## CLEANING OLD CHAIN FILES"
+ls -t ${MY_PATH}/.chain* | tail -n +3 | xargs rm -f 2>/dev/null || true
+
 IPFSME=$(ipfs add -rwHq --ignore=.git --ignore-rules-path=.gitignore ${MY_PATH}/* | tail -n 1)
 
 [[ ${IPFSME} == ${OLD} ]] && echo "No change." && exit 0

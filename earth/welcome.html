@@ -111,6 +111,7 @@
 <body>
   <div id="map">
     <button id="back-button" onclick="history.back()">← Back</button>
+    <button id="view-switch" style="position:absolute;top:10px;right:10px;z-index:1003;background:#fff;border-radius:50%;border:none;width:48px;height:48px;box-shadow:0 2px 8px rgba(0,0,0,0.2);font-size:24px;cursor:pointer;display:flex;align-items:center;justify-content:center;" title="Switch to Satellite view">🛰️</button>
   </div>
   <div id="rollingText" class="rolling-text-container"></div>
 
@@ -159,10 +160,23 @@
     const map = L.map('map').setView([0, 0], initialZoom);
 
     // Add OpenStreetMap tile layer
-    //L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+    let tileLayer;
+    function setTileLayer(mode) {
+      if (tileLayer) {
+        map.removeLayer(tileLayer);
+      }
+      if (mode === 'SAT') {
+        tileLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+          attribution: 'UPlanet Astroport'
+        });
+      } else {
+        tileLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: 'UPlanet Astroport'
-    }).addTo(map);
+        });
+      }
+      tileLayer.addTo(map);
+    }
+    setTileLayer(getMapMode());
 
     const rectangles = [];
     const rectangleCounts = new Map();
@@ -182,6 +196,33 @@
         popupAnchor: [0, -32]
     });
 
+    // --- MAP/SAT Switcher ---
+    function getMapMode() {
+      return localStorage.getItem('uplanet_map_mode') || 'MAP';
+    }
+    function setMapMode(mode) {
+      localStorage.setItem('uplanet_map_mode', mode);
+    }
+    function updateSwitchButton() {
+      const btn = document.getElementById('view-switch');
+      if (!btn) return;
+      const mode = getMapMode();
+      if (mode === 'MAP') {
+        btn.textContent = '🛰️';
+        btn.title = 'Switch to Satellite view';
+      } else {
+        btn.textContent = '🗺️';
+        btn.title = 'Switch to Map view';
+      }
+    }
+    document.getElementById('view-switch').addEventListener('click', function() {
+      const mode = getMapMode();
+      const newMode = mode === 'MAP' ? 'SAT' : 'MAP';
+      setMapMode(newMode);
+      updateSwitchButton();
+      setTileLayer(newMode);
+    });
+    updateSwitchButton();
 
     // Create a clickable area for each grid cell
     for (let latIndex = 0; latIndex < gridSize; latIndex++) {
@@ -197,7 +238,9 @@
 
         // Add a click event to the rectangle
         rectangle.on('click', () => {
-          const url = `map_render.html?southWestLat=${lat}&southWestLon=${lon}`;
+          const mode = getMapMode();
+          const urlBase = mode === 'SAT' ? 'sat_render.html' : 'map_render.html';
+          const url = `${urlBase}?southWestLat=${lat}&southWestLon=${lon}`;
           window.location.href = url;
         });
 
@@ -379,7 +422,7 @@
               popupContent += `<p><b>UMAP</b></p>`;
               popupContent += `<p><b>Lat:</b> ${umap.lat}, <b>Lon:</b> ${umap.lon}</p>`; // Display Lat and Lon
               popupContent += `<ul>`;
-              popupContent += `<li><a href="nostr.html?hex=${umap.hex}" target="umap">UMAP Nostr</a> - <a href="/ipfs/${umap.umapipfs}" target="ipfs">IPFS Drive</a></li>`;
+              popupContent += `<li><a href="nostr.html?hex=${umap.hex}" target="umap">UMAP Nostr</a> - <a href="/ipfs/${umap.umapipfs}" target="_new">IPFS Drive</a></li>`;
               popupContent += `</ul>`;
 
               if (entities.PLAYERS.length > 0) {
@@ -410,9 +453,101 @@
               console.log(`Marker ajouté à LAT: ${lat}, LON: ${lon} avec entités:`, entities);
           }
         }
+
+        // --- UPlanet Summary (like ZONE summary) ---
+        // Count regions, sectors, umaps, players, nostr
+        let regionCount = 0, sectorCount = 0, umapCount = 0, playerCount = 0, nostrCount = 0;
+        if (uPlanetData.UMAPs) umapCount = uPlanetData.UMAPs.length;
+        if (uPlanetData.PLAYERs) playerCount = uPlanetData.PLAYERs.length;
+        if (uPlanetData.NOSTR) nostrCount = uPlanetData.NOSTR.length;
+        const regionSet = new Set(), sectorSet = new Set();
+        if (uPlanetData.UMAPs) {
+          uPlanetData.UMAPs.forEach(umap => {
+            if (umap.REGIONHEX && umap.REGIONHEX !== '') regionSet.add(umap.REGIONHEX);
+            if (umap.SECTORHEX && umap.SECTORHEX !== '') sectorSet.add(umap.SECTORHEX);
+          });
+        }
+        regionCount = regionSet.size;
+        sectorCount = sectorSet.size;
+        if (regionCount > 0 || sectorCount > 0 || umapCount > 0 || playerCount > 0 || nostrCount > 0) {
+          const summaryBox = document.createElement('div');
+          summaryBox.style.position = 'absolute';
+          summaryBox.style.top = '70px';
+          summaryBox.style.right = '20px';
+          summaryBox.style.background = 'rgba(255,255,255,0.95)';
+          summaryBox.style.borderRadius = '10px';
+          summaryBox.style.boxShadow = '0 2px 8px rgba(0,0,0,0.15)';
+          summaryBox.style.padding = '0';
+          summaryBox.style.zIndex = '2000';
+          summaryBox.style.overflow = 'hidden';
+          summaryBox.style.minWidth = '220px';
+          summaryBox.style.maxWidth = '350px';
+          summaryBox.id = 'uplanet-summary-accordion';
+          let html = `<div id='uplanet-summary-header' style='cursor:pointer;padding:16px 22px 10px 22px;user-select:none;display:flex;align-items:center;justify-content:space-between;'><span style='font-size:1.1em;font-weight:bold;'>UPlanet Summary</span><span id='uplanet-summary-arrow' style='font-size:1.2em;transition:transform 0.2s;'>▼</span></div>`;
+          html += `<div id='uplanet-summary-content' style='padding:0 22px 16px 22px;display:block;'>`;
+          html += `<ul style='margin:0;padding-left:18px;'>`;
+          html += `<li><span title='Regions'>🗺️</span> <b>${regionCount}</b></li>`;
+          html += `<li><span title='Sectors'>🗂️</span> <b>${sectorCount}</b></li>`;
+          html += `<li><span title='UMAPs'>🧩</span> <b>${umapCount}</b></li>`;
+          html += `<li><span title='Sociétaires (ZENCARD)'>🧑‍💼</span> <b>${playerCount}</b></li>`;
+          html += `<li><span title='Utilisateurs (MULTIPASS)'>👤</span> <b>${nostrCount}</b></li>`;
+          html += `</ul>`;
+          html += `</div>`;
+          summaryBox.innerHTML = html;
+          document.body.appendChild(summaryBox);
+          // Accordion JS
+          const header = summaryBox.querySelector('#uplanet-summary-header');
+          const content = summaryBox.querySelector('#uplanet-summary-content');
+          const arrow = summaryBox.querySelector('#uplanet-summary-arrow');
+          let expanded = true;
+          header.onclick = function() {
+            expanded = !expanded;
+            content.style.display = expanded ? 'block' : 'none';
+            arrow.textContent = expanded ? '▼' : '▲';
+          };
+        }
       }
     });
 
+    // --- Custom popup CSS for summary box ---
+    const style = document.createElement('style');
+    style.textContent = `
+      .custom-popup .leaflet-popup-content-wrapper {
+        background: #f8fafd;
+        color: #222;
+        border-radius: 12px;
+        padding: 16px 18px 12px 18px;
+        box-shadow: 0 3px 14px rgba(0,0,0,0.18);
+        min-width: 220px;
+        max-width: 350px;
+      }
+      .custom-popup .leaflet-popup-content h3 {
+        margin: 0 0 6px 0;
+        font-size: 1.2em;
+        color: #1a4a7a;
+      }
+      .custom-popup .leaflet-popup-content h4 {
+        margin: 8px 0 2px 0;
+        font-size: 1em;
+        color: #2b6c3e;
+      }
+      .custom-popup .leaflet-popup-content ul {
+        margin: 0 0 6px 0;
+        padding-left: 18px;
+      }
+      .custom-popup .leaflet-popup-content li {
+        margin-bottom: 2px;
+      }
+      .custom-popup .leaflet-popup-content a {
+        color: #007bff;
+        text-decoration: none;
+        font-weight: 500;
+      }
+      .custom-popup .leaflet-popup-content a:hover {
+        text-decoration: underline;
+      }
+    `;
+    document.head.appendChild(style);
 
 </script>
 </body>

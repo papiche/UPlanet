@@ -3,7 +3,7 @@
 <head>
       <meta charset="UTF-8">
           <link rel="icon" type="image/x-icon" href="./favicon.ico">
-  <title>UPlanet Sat View ! Please Zoom In.</title>
+  <title id="dynamic-title">UPlanet</title>
   <link rel="stylesheet" href="leaflet.css" />
     <style>
   .clickable-area {
@@ -62,6 +62,7 @@
 
 <div id="map-container" style="position: relative;">
     <button id="back-button" onclick="history.back()">← Back</button>
+    <button id="view-switch" style="position:absolute;top:10px;right:10px;z-index:1003;background:#fff;border-radius:50%;border:none;width:48px;height:48px;box-shadow:0 2px 8px rgba(0,0,0,0.2);font-size:24px;cursor:pointer;display:flex;align-items:center;justify-content:center;" title="Switch to Map view">🗺️</button>
     <div id="coordinates-display"></div> <!-- Coordinates display element -->
     <div id="map" style="width: 100%; height: 100vh;"></div>
 </div>
@@ -264,40 +265,98 @@
                     const entities = locationEntities[locationKey];
                     let popupContent = '';
                     let icon = null;
+                    const level = getLevelByDeg(deg);
 
+                    // UMAP popup (most detailed)
                     if (entities.UMAPS.length > 0) {
                         icon = umapIcon;
                         const umap = entities.UMAPS[0];
-                        popupContent += `<p><b>UMAP</b></p>`;
-                        popupContent += `<p><b>Lat:</b> ${umap.lat}, <b>Lon:</b> ${umap.lon}</p>`;
-                        popupContent += `<ul>`;
-                        popupContent += `<li><a href="nostr.html?hex=${umap.hex}" target="umap">UMAP Nostr</a> - <a href="/ipfs/${umap.umapipfs}" target="ipfs">IPFS Drive</a></li>`;
+                        popupContent += `<div class='umap-popup' style='min-width:260px;max-width:350px;'>`;
+                        popupContent += `<h3 style='margin-bottom:4px;'>UMAP</h3>`;
+                        popupContent += `<div><b>Lat:</b> ${umap.lat} <b>Lon:</b> ${umap.lon}</div>`;
+                        popupContent += `<ul style='margin:8px 0 8px 0;padding-left:18px;'>`;
+                        if (umap.hex && umap.hex !== 'null' && umap.hex !== '') popupContent += `<li><a href="nostr.html?hex=${umap.hex}" target="_blank" title="Open Nostr profile">🧑‍🚀 UMAP Nostr</a></li>`;
+                        if (umap.umapipfs && umap.umapipfs !== '') popupContent += `<li><a href="/ipfs/${umap.umapipfs}" target="_blank" title="Open IPFS Drive">📁 IPFS Drive</a></li>`;
+                        if (umap.UMAPIPNS && umap.UMAPIPNS !== '') popupContent += `<li><a href="${umap.UMAPIPNS}" target="_blank" title="Open UMAP IPNS">🌐 UMAP IPNS</a></li>`;
+                        if (umap.SECTORROOT && umap.SECTORROOT !== '') popupContent += `<li><a href="/ipfs/${umap.SECTORROOT}" target="_blank" title="Open SECTOR ROOT">🗂️ Sector Root</a></li>`;
+                        if (umap.SECTORIPNS && umap.SECTORIPNS !== '') popupContent += `<li><a href="${umap.SECTORIPNS}" target="_blank" title="Open SECTOR IPNS">🌐 Sector IPNS</a></li>`;
+                        if (umap.SECTORHEX && umap.SECTORHEX !== '') popupContent += `<li><span title="Sector HEX">#️⃣ Sector HEX: ${umap.SECTORHEX}</span></li>`;
+                        if (umap.REGIONROOT && umap.REGIONROOT !== '') popupContent += `<li><a href="/ipfs/${umap.REGIONROOT}" target="_blank" title="Open REGION ROOT">🗺️ Region Root</a></li>`;
+                        if (umap.REGIONIPNS && umap.REGIONIPNS !== '') popupContent += `<li><a href="${umap.REGIONIPNS}" target="_blank" title="Open REGION IPNS">🌐 Region IPNS</a></li>`;
+                        if (umap.REGIONHEX && umap.REGIONHEX !== '') popupContent += `<li><span title="Region HEX">#️⃣ Region HEX: ${umap.REGIONHEX}</span></li>`;
                         popupContent += `</ul>`;
-
                         if (entities.PLAYERS.length > 0) {
-                            popupContent += `<p><b>Players nearby:</b></p><ul>`;
+                            popupContent += `<section><h4 style='margin:6px 0 2px 0;'>Sociétaires (PLAYERS)</h4><ul style='padding-left:18px;'>`;
                             const shuffledPlayers = [...entities.PLAYERS].sort(() => 0.5 - Math.random());
                             const selectedPlayers = shuffledPlayers.slice(0, Math.min(10, entities.PLAYERS.length));
                             selectedPlayers.forEach(player => {
                                 popupContent += `<li><a href="nostr.html?hex=${player.hex}" target="_blank">${player.astromail}</a></li>`;
                             });
-                            popupContent += `</ul>`;
+                            popupContent += `</ul></section>`;
                         }
+                        popupContent += `</div>`;
                     } else if (entities.PLAYERS.length > 0) {
                         icon = playerIcon;
-                        popupContent += `<p><b>NOSTR:</b></p><ul>`;
+                        popupContent += `<div class='umap-popup' style='min-width:220px;max-width:320px;'>`;
+                        popupContent += `<h3 style='margin-bottom:4px;'>Sociétaires (PLAYERS)</h3><ul style='padding-left:18px;'>`;
                         entities.PLAYERS.forEach(player => {
                             popupContent += `<li><a href="nostr.html?hex=${player.hex}" target="_blank">${player.astromail}</a></li>`;
                         });
-                        popupContent += `</ul>`;
+                        popupContent += `</ul></div>`;
                     }
 
-                    if (icon) {
+                    // NOSTR (utilisateurs) section (if present in uPlanetData)
+                    if (uPlanetData.NOSTR && uPlanetData.NOSTR.length > 0 && getLevelByDeg(deg) !== 'ZONE') {
+                        // Only show for non-ZONE levels to avoid clutter
+                        let nostrSection = `<div class='umap-popup' style='min-width:220px;max-width:320px;'><h3 style='margin-bottom:4px;'>Utilisateurs (NOSTR)</h3><ul style='padding-left:18px;'>`;
+                        uPlanetData.NOSTR.forEach(nostr => {
+                            if (nostr.HEX && nostr.EMAIL) {
+                                nostrSection += `<li><a href='nostr.html?hex=${nostr.HEX}' target='_blank'>${nostr.EMAIL}</a></li>`;
+                            }
+                        });
+                        nostrSection += `</ul></div>`;
+                        // Add as a marker at [lat, lon] = [0,0] for now (or could be improved)
+                        L.marker([0, 0], {icon: playerIcon})
+                            .bindPopup(nostrSection, { className: 'custom-popup' })
+                            .addTo(map);
+                    }
+
+                    if (icon && popupContent) {
                         L.marker([lat, lon], {icon: icon})
                             .bindPopup(popupContent, { className: 'custom-popup' })
                             .addTo(map);
                         console.log(`Marker ajouté à LAT: ${lat}, LON: ${lon} avec entités:`, entities);
                     }
+                }
+
+                // ZONE summary (deg=10) - only if at least one count is nonzero
+                if (getLevelByDeg(deg) === 'ZONE') {
+                  let regionCount = 0, sectorCount = 0, umapCount = 0, playerCount = 0;
+                  if (uPlanetData.UMAPs) umapCount = uPlanetData.UMAPs.length;
+                  if (uPlanetData.PLAYERs) playerCount = uPlanetData.PLAYERs.length;
+                  // Try to estimate region/sector count from UMAPs if possible
+                  const regionSet = new Set(), sectorSet = new Set();
+                  if (uPlanetData.UMAPs) {
+                    uPlanetData.UMAPs.forEach(umap => {
+                      if (umap.REGIONHEX) regionSet.add(umap.REGIONHEX);
+                      if (umap.SECTORHEX) sectorSet.add(umap.SECTORHEX);
+                    });
+                  }
+                  regionCount = regionSet.size;
+                  sectorCount = sectorSet.size;
+                  if (regionCount > 0 || sectorCount > 0 || umapCount > 0 || playerCount > 0) {
+                    const summaryBox = document.createElement('div');
+                    summaryBox.style.position = 'absolute';
+                    summaryBox.style.top = '70px';
+                    summaryBox.style.right = '20px';
+                    summaryBox.style.background = 'rgba(255,255,255,0.95)';
+                    summaryBox.style.borderRadius = '10px';
+                    summaryBox.style.boxShadow = '0 2px 8px rgba(0,0,0,0.15)';
+                    summaryBox.style.padding = '16px 22px';
+                    summaryBox.style.zIndex = '2000';
+                    summaryBox.innerHTML = `<h3 style='margin-top:0;'>ZONE Summary</h3><ul style='margin:0;padding-left:18px;'><li>Regions: <b>${regionCount}</b></li><li>Sectors: <b>${sectorCount}</b></li><li>UMAPs: <b>${umapCount}</b></li><li>Players: <b>${playerCount}</b></li></ul>`;
+                    document.body.appendChild(summaryBox);
+                  }
                 }
             }
         })
@@ -431,6 +490,99 @@ if (deg <= 0.01) {
     }
   }
 }
+
+    // --- MAP/SAT Switcher ---
+    function getMapMode() {
+      // Default to SAT if on this page
+      return localStorage.getItem('uplanet_map_mode') || 'SAT';
+    }
+    function setMapMode(mode) {
+      localStorage.setItem('uplanet_map_mode', mode);
+    }
+    function updateSwitchButton() {
+      const btn = document.getElementById('view-switch');
+      if (!btn) return;
+      const mode = getMapMode();
+      if (mode === 'MAP') {
+        btn.textContent = '🛰️';
+        btn.title = 'Switch to Satellite view';
+      } else {
+        btn.textContent = '🗺️';
+        btn.title = 'Switch to Map view';
+      }
+    }
+    document.getElementById('view-switch').addEventListener('click', function() {
+      const mode = getMapMode();
+      const newMode = mode === 'MAP' ? 'SAT' : 'MAP';
+      setMapMode(newMode);
+      updateSwitchButton();
+      // Switch page, keeping all params
+      const url = new URL(window.location.href);
+      const params = url.search;
+      const newPage = newMode === 'SAT' ? 'sat_render.html' : 'map_render.html';
+      window.location.href = newPage + params;
+    });
+    updateSwitchButton();
+
+    // --- Dynamic Title by Level ---
+    function getLevelByDeg(deg) {
+      if (deg >= 10) return 'ZONE';
+      if (deg >= 1) return 'REGION';
+      if (deg >= 0.1) return 'SECTOR';
+      return 'UMAP';
+    }
+    function setDynamicTitle(deg) {
+      const level = getLevelByDeg(deg);
+      let title = 'UPlanet';
+      if (level === 'ZONE') title = 'UPlanet - ZONE';
+      else if (level === 'REGION') title = 'UPlanet - REGION';
+      else if (level === 'SECTOR') title = 'UPlanet - SECTOR';
+      else if (level === 'UMAP') title = 'UPlanet - UMAP';
+      document.title = title;
+      const t = document.getElementById('dynamic-title');
+      if (t) t.textContent = title;
+    }
+    setDynamicTitle(deg);
+
+    // --- Custom popup CSS ---
+    const style = document.createElement('style');
+    style.textContent = `
+      .custom-popup .leaflet-popup-content-wrapper {
+        background: #f8fafd;
+        color: #222;
+        border-radius: 12px;
+        padding: 16px 18px 12px 18px;
+        box-shadow: 0 3px 14px rgba(0,0,0,0.18);
+        min-width: 220px;
+        max-width: 350px;
+      }
+      .custom-popup .leaflet-popup-content h3 {
+        margin: 0 0 6px 0;
+        font-size: 1.2em;
+        color: #1a4a7a;
+      }
+      .custom-popup .leaflet-popup-content h4 {
+        margin: 8px 0 2px 0;
+        font-size: 1em;
+        color: #2b6c3e;
+      }
+      .custom-popup .leaflet-popup-content ul {
+        margin: 0 0 6px 0;
+        padding-left: 18px;
+      }
+      .custom-popup .leaflet-popup-content li {
+        margin-bottom: 2px;
+      }
+      .custom-popup .leaflet-popup-content a {
+        color: #007bff;
+        text-decoration: none;
+        font-weight: 500;
+      }
+      .custom-popup .leaflet-popup-content a:hover {
+        text-decoration: underline;
+      }
+    `;
+    document.head.appendChild(style);
 
   </script>
 </body>

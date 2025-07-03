@@ -409,6 +409,11 @@
           });
         }
 
+        // Helper function to check for valid (non-null, non-empty) values
+        function isValid(val) {
+          return val !== null && val !== undefined && val !== '';
+        }
+
         // Add markers for each location
         for (const locationKey in locationEntities) {
           const [lat, lon] = locationKey.split(',').map(parseFloat);
@@ -420,9 +425,19 @@
               icon = umapIcon; // Prioritize UMAP icon if UMAPS are present
               const umap = entities.UMAPS[0]; // Assuming only one UMAP per location, adjust if needed
               popupContent += `<p><b>UMAP</b></p>`;
-              popupContent += `<p><b>Lat:</b> ${umap.lat}, <b>Lon:</b> ${umap.lon}</p>`; // Display Lat and Lon
+              if (isValid(umap.lat) && isValid(umap.lon)) {
+                popupContent += `<p><b>Lat:</b> ${umap.lat}, <b>Lon:</b> ${umap.lon}</p>`;
+              }
               popupContent += `<ul>`;
-              popupContent += `<li><a href="nostr.html?hex=${umap.hex}" target="umap">UMAP Nostr</a> - <a href="/ipfs/${umap.umapipfs}" target="_new">IPFS Drive</a></li>`;
+              if (isValid(umap.hex)) {
+                popupContent += `<li><a href="nostr.html?hex=${umap.hex}" target="umap">UMAP Nostr</a>`;
+              }
+              if (isValid(umap.umapipfs)) {
+                popupContent += ` - <a href="/ipfs/${umap.umapipfs}" target="_new">IPFS Drive</a>`;
+              }
+              if (isValid(umap.hex) || isValid(umap.umapipfs)) {
+                popupContent += `</li>`;
+              }
               popupContent += `</ul>`;
 
               if (entities.PLAYERS.length > 0) {
@@ -431,7 +446,9 @@
                   const shuffledPlayers = [...entities.PLAYERS].sort(() => 0.5 - Math.random());
                   const selectedPlayers = shuffledPlayers.slice(0, Math.min(10, entities.PLAYERS.length));
                   selectedPlayers.forEach(player => {
-                      popupContent += `<li><a href="nostr.html?hex=${player.hex}" target="_blank">${player.astromail}</a></li>`;
+                      if (isValid(player.hex) && isValid(player.astromail)) {
+                        popupContent += `<li><a href="nostr.html?hex=${player.hex}" target="_blank">${player.astromail}</a></li>`;
+                      }
                   });
                   popupContent += `</ul>`;
               }
@@ -441,7 +458,9 @@
               icon = playerIcon; // Use player icon if only PLAYERS are present
               popupContent += `<p><b>NOSTR:</b></p><ul>`;
               entities.PLAYERS.forEach(player => {
-                  popupContent += `<li><a href="nostr.html?hex=${player.hex}" target="_blank">${player.astromail}</a></li>`; // Use player.astromail
+                  if (isValid(player.hex) && isValid(player.astromail)) {
+                    popupContent += `<li><a href="nostr.html?hex=${player.hex}" target="_blank">${player.astromail}</a></li>`;
+                  }
               });
               popupContent += `</ul>`;
           }
@@ -463,13 +482,13 @@
         const regionSet = new Set(), sectorSet = new Set();
         if (uPlanetData.UMAPs) {
           uPlanetData.UMAPs.forEach(umap => {
-            if (umap.REGIONHEX && umap.REGIONHEX !== '') regionSet.add(umap.REGIONHEX);
-            if (umap.SECTORHEX && umap.SECTORHEX !== '') sectorSet.add(umap.SECTORHEX);
+            if (isValid(umap.REGIONHEX)) regionSet.add(umap.REGIONHEX);
+            if (isValid(umap.SECTORHEX)) sectorSet.add(umap.SECTORHEX);
           });
         }
         regionCount = regionSet.size;
         sectorCount = sectorSet.size;
-        if (regionCount > 0 || sectorCount > 0 || umapCount > 0 || playerCount > 0 || nostrCount > 0) {
+        if ((isValid(regionCount) && regionCount > 0) || (isValid(sectorCount) && sectorCount > 0) || (isValid(umapCount) && umapCount > 0) || (isValid(playerCount) && playerCount > 0) || (isValid(nostrCount) && nostrCount > 0)) {
           const summaryBox = document.createElement('div');
           summaryBox.style.position = 'absolute';
           summaryBox.style.top = '70px';
@@ -486,11 +505,11 @@
           let html = `<div id='uplanet-summary-header' style='cursor:pointer;padding:16px 22px 10px 22px;user-select:none;display:flex;align-items:center;justify-content:space-between;'><span style='font-size:1.1em;font-weight:bold;'>UPlanet Summary</span><span id='uplanet-summary-arrow' style='font-size:1.2em;transition:transform 0.2s;'>▼</span></div>`;
           html += `<div id='uplanet-summary-content' style='padding:0 22px 16px 22px;display:block;'>`;
           html += `<ul style='margin:0;padding-left:18px;'>`;
-          html += `<li><span title='Regions'>🗺️</span> <b>${regionCount}</b></li>`;
-          html += `<li><span title='Sectors'>🗂️</span> <b>${sectorCount}</b></li>`;
-          html += `<li><span title='UMAPs'>🧩</span> <b>${umapCount}</b></li>`;
-          html += `<li><span title='Sociétaires (ZENCARD)'>🧑‍💼</span> <b>${playerCount}</b></li>`;
-          html += `<li><span title='Utilisateurs (MULTIPASS)'>👤</span> <b>${nostrCount}</b></li>`;
+          if (isValid(regionCount) && regionCount > 0) html += `<li><span title='Regions'>🗺️</span> <b>${regionCount}</b></li>`;
+          if (isValid(sectorCount) && sectorCount > 0) html += `<li><span title='Sectors'>🗂️</span> <b>${sectorCount}</b></li>`;
+          if (isValid(umapCount) && umapCount > 0) html += `<li><span title='UMAPs'>🧩</span> <b>${umapCount}</b></li>`;
+          if (isValid(playerCount) && playerCount > 0) html += `<li><span title='Sociétaires (ZENCARD)'>🧑‍💼</span> <b>${playerCount}</b></li>`;
+          if (isValid(nostrCount) && nostrCount > 0) html += `<li><span title='Utilisateurs (MULTIPASS)'>👤</span> <b>${nostrCount}</b></li>`;
           html += `</ul>`;
           html += `</div>`;
           summaryBox.innerHTML = html;

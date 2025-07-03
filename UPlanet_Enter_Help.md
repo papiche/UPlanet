@@ -2,7 +2,7 @@
 
 ## 🌍 Bienvenue dans UPlanet
 
-UPlanet est un système décentralisé qui transforme Internet en un réseau géographique basé sur la confiance, utilisant IPFS, NOSTR et des clés géosphériques pour créer un écosystème numérique résilient et libre.
+UPlanet est un système décentralisé qui transforme Internet en un réseau géographique basé sur la confiance, utilisant IPFS, NOSTR et des clés géosphériques pour créer un écosystème numérique résilient et libre. Développé par la SCIC CopyLaRadio, UPlanet propose une économie transparente pour un Internet qui vous appartient vraiment.
 
 ## 🚀 Comment Accéder à UPlanet
 
@@ -10,6 +10,7 @@ UPlanet est un système décentralisé qui transforme Internet en un réseau gé
 - **URL principale :** https://qo-op.com
 - **IPFS Gateway :** https://ipfs.copylaradio.com/ipns/copylaradio
 - **Redirection automatique** depuis qo-op.com vers l'interface UPlanet
+- **Interface 3D :** https://qo-op.com/earth/ pour une vue sphérique interactive
 
 ### Interface de Carte Interactive
 L'interface principale d'UPlanet présente une carte du monde divisée en grilles géographiques :
@@ -29,6 +30,7 @@ L'interface principale d'UPlanet présente une carte du monde divisée en grille
 - **Marqueurs bleus** indiquent les stations Astroport.ONE actives
 - **Compteurs** sur chaque grille montrent le nombre de DRAGONS (utilisateurs) dans la zone
 - **Texte défilant** en haut affiche les informations des DRAGONS en rotation
+- **Liens ♥️BOX** pour accéder aux contenus IPFS via IPNS
 
 #### Affichage des UMAPs et PLAYERS
 - **Icônes PLAYER** (🧑‍💼) : Utilisateurs NOSTR avec ZENCARD
@@ -51,6 +53,12 @@ Panneau d'information affichant les statistiques :
 - **🧑‍💼 Sociétaires (ZENCARD)** : Utilisateurs avec cartes ZenCard
 - **👤 Utilisateurs (MULTIPASS)** : Utilisateurs NOSTR de base
 
+### 4. Interface 3D Sphérique
+- **Vue globe terrestre** interactive
+- **Navigation** par glisser-déposer
+- **Affichage** des coordonnées géographiques
+- **Intégration** avec les services UPlanet
+
 ## 🔗 Navigation et Interactions
 
 ### Cliquer sur une Grille
@@ -62,6 +70,12 @@ Panneau d'information affichant les statistiques :
 - **NOSTR** : Accès aux profils NOSTR des utilisateurs
 - **IPFS Drive** : Accès aux drives IPFS des UMAPs
 - **♥️BOX** : Accès aux contenus IPFS via IPNS
+
+### Barre de Navigation
+- **💬** : UPlanet Geo Message (NOSTR)
+- **🛂** : MULTIPASS Scanner
+- **⌂ ?** : Géolocalisation automatique
+- **VISIO ROOM** : Salle de visioconférence IPFS
 
 ## 🛠️ Intégration avec Astroport.ONE
 
@@ -78,6 +92,45 @@ ipfs.copylaradio.com → u.copylaradio.com:54321 (UPLANET API)
 - **Port 1234** : API DRAGONS (données des stations)
 - **Port 54321** : API UPLANET (données utilisateurs et UMAPs)
 - **Port 8080** : Gateway IPFS
+
+## 💰 Modèle Économique Transparent
+
+### La Monnaie Libre Ğ1 et le Ẑen
+UPlanet utilise la Monnaie Libre Ğ1 et son stablecoin Ẑen comme base économique :
+
+- **Ẑen (Ẑ)** : Stablecoin de la Monnaie Libre Ğ1
+- **Transparence totale** : Tous les flux financiers sont publics
+- **Pas de profit caché** : Économie basée sur la confiance et la coopération
+- **Dividende Universel** : Revenu de base pour tous les citoyens
+
+### Services et Tarification
+
+#### 1. 🌐 MULTIPASS (1 Ẑen/semaine)
+- **Identité numérique** et assistant IA personnel
+- **Réseau social NOSTR** décentralisé
+- **Carte NOSTR** sécurisée
+- **Assistant IA** (#BRO) pour interactions
+- **Accès** à tous les services de base UPlanet
+
+#### 2. ☁️ ZENCARD (4 Ẑen/semaine)
+- **Cloud privé** NextCloud 128 GB
+- **Dé-googlisation** du smartphone
+- **Tous les avantages MULTIPASS**
+- **Stockage** décentralisé IPFS
+- **Synchronisation** multi-appareils
+
+#### 3. ⚡ CAPTAIN (Formation + Revenus)
+- **Nœud de valeur** dans le réseau
+- **Coopérative CopyLaRadio**
+- **Revenus** en proposant MULTIPASS et ZENCARD
+- **Formation complète** et support
+- **Participation** à la gouvernance
+
+### Transparence Financière
+- **OpenCollective** : https://opencollective.com/monnaie-libre
+- **Tous les comptes** publics et vérifiables
+- **Pas de frais cachés** ou de commissions
+- **Redistribution** équitable des bénéfices
 
 ## 👥 Types d'Utilisateurs UPlanet
 
@@ -165,17 +218,54 @@ UPlanet résout les problèmes du Web2 centralisé :
 - **Traitement** automatique des médias
 - **Stockage** IPFS des contenus créés
 
+### Console UPlanet
+- **✨** : Ğ1 registration
+- **📡** : Nostr Relay Console
+- **♥️** : Economic Level
+- **☯️** : CopyLaRadio Ẑen Club
+- **🛈** : Help documentation
+- **⛶** : Toggle fullscreen
+
+## 🏢 La SCIC CopyLaRadio
+
+### Statuts et Gouvernance
+CopyLaRadio est une Société Coopérative d'Intérêt Collectif (SCIC) qui développe UPlanet :
+
+- **Capital social** : 999 850 € (150 actions de 6 665 € chacune)
+- **Gestion** en Ẑen (stablecoin Ğ1)
+- **Collèges d'associés** : Salariés, bénéficiaires, collectivités, bénévoles
+- **Vote quadratique** pour les décisions importantes
+
+### Objectifs de la SCIC
+1. **Infrastructure internet décentralisée** basée sur IPFS, NextCloud, NOSTR & IA
+2. **Gestion de terrains et forêts** pour créer des espaces UPlanet
+3. **Développement d'outils numériques** favorisant la transparence
+4. **Recherche et développement** sur les modèles économiques basés sur Ğ1
+5. **Promotion de la Monnaie Libre** et de la Web of Trust
+6. **Animation de communautés** locales et en ligne
+7. **Commercialisation de services** d'hébergement décentralisé
+
+### Communautés UPlanet et Lieux Autonomes "Astroport"
+- **Autonomie et auto-gestion** des communautés
+- **Gouvernance participative** avec vote quadratique
+- **Utilisation du Dividende Universel** comme unité de compte
+- **Participation aux Frais (PAF)** au lieu de prix
+- **Accompagnement** par la SCIC CopyLaRadio
+
 ## 🔧 Support et Aide
 
 ### Ressources
 - **Documentation** : https://astroport-1.gitbook.io/astroport.one/
 - **GitHub** : https://github.com/papiche/Astroport.ONE
 - **Contact** : support@qo-op.com
+- **Goodies** : https://astroport.myspreadshop.fr/
+- **Sponsor** : https://opencollective.com/monnaie-libre
 
 ### Communauté
 - **CopyLaRadio** : Coopérative des auto-hébergeurs
 - **Monnaie Libre** : Écosystème Ğ1
 - **UPlanet Ẑen** : Réseau de confiance avancé
+- **Astroport.ONE** : Infrastructure décentralisée
 
 ## 🚀 Prochaines Étapes
 
@@ -183,7 +273,8 @@ UPlanet résout les problèmes du Web2 centralisé :
 2. **Créer** un compte UPlanet
 3. **Rejoindre** le réseau de confiance Dragon
 4. **Contribuer** à l'écosystème décentralisé
+5. **Devenir CAPTAIN** pour participer à la gouvernance
 
 ---
 
-*UPlanet : Vers un Internet de meilleure qualité informationnelle, où le sens des messages n'est pas noyé par le bruit, et où la transmission redevient un acte de partage et non de contrôle.* 
+*UPlanet : Vers un Internet de meilleure qualité informationnelle, où le sens des messages n'est pas noyé par le bruit, et où la transmission redevient un acte de partage et non de contrôle. Une économie transparente pour un Internet qui vous appartient vraiment.* 

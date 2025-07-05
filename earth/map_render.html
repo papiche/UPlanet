@@ -492,8 +492,9 @@ function overlayGridNumbers(rectangle, number) {
                     }
                 }
 
-                // ZONE summary (deg=10) - only if at least one count is nonzero
-                if (getLevelByDeg(deg) === 'ZONE') {
+                // Summary boxes for ZONE, REGION, and SECTOR levels
+                const level = getLevelByDeg(deg);
+                if (level === 'ZONE' || level === 'REGION' || level === 'SECTOR') {
                   let regionCount = 0, sectorCount = 0, umapCount = 0, playerCount = 0;
                   if (uPlanetData.UMAPs) umapCount = uPlanetData.UMAPs.length;
                   if (uPlanetData.PLAYERs) playerCount = uPlanetData.PLAYERs.length;
@@ -509,6 +510,7 @@ function overlayGridNumbers(rectangle, number) {
                   sectorCount = sectorSet.size;
                   if (regionCount > 0 || sectorCount > 0 || umapCount > 0 || playerCount > 0) {
                     const summaryBox = document.createElement('div');
+                    summaryBox.id = 'summary-box';
                     summaryBox.style.position = 'absolute';
                     summaryBox.style.top = '70px';
                     summaryBox.style.right = '20px';
@@ -517,8 +519,62 @@ function overlayGridNumbers(rectangle, number) {
                     summaryBox.style.boxShadow = '0 2px 8px rgba(0,0,0,0.15)';
                     summaryBox.style.padding = '16px 22px';
                     summaryBox.style.zIndex = '2000';
-                    summaryBox.innerHTML = `<h3 style='margin-top:0;'>ZONE Summary</h3><ul style='margin:0;padding-left:18px;'><li>Regions: <b>${regionCount}</b></li><li>Sectors: <b>${sectorCount}</b></li><li>UMAPs: <b>${umapCount}</b></li><li>Players: <b>${playerCount}</b></li></ul>`;
+                    summaryBox.style.transition = 'all 0.3s ease';
+                    summaryBox.style.cursor = 'pointer';
+                    summaryBox.style.minWidth = '200px';
+                    
+                    const summaryContent = document.createElement('div');
+                    summaryContent.id = 'summary-content';
+                    let title = '';
+                    let content = '';
+                    
+                    if (level === 'ZONE') {
+                      title = 'ZONE Summary';
+                      content = `<li><span title='Regions'>🗺️</span> <b>${regionCount}</b></li><li><span title='Sectors'>🗂️</span> <b>${sectorCount}</b></li><li><span title='UMAPs'>🧩</span> <b>${umapCount}</b></li><li><span title='Players'>🧑‍💼</span> <b>${playerCount}</b></li>`;
+                    } else if (level === 'REGION') {
+                      title = 'REGION Summary';
+                      content = `<li><span title='Sectors'>🗂️</span> <b>${sectorCount}</b></li><li><span title='UMAPs'>🧩</span> <b>${umapCount}</b></li><li><span title='Players'>🧑‍💼</span> <b>${playerCount}</b></li>`;
+                    } else if (level === 'SECTOR') {
+                      title = 'SECTOR Summary';
+                      content = `<li><span title='UMAPs'>🧩</span> <b>${umapCount}</b></li><li><span title='Players'>🧑‍💼</span> <b>${playerCount}</b></li>`;
+                    }
+                    
+                    summaryContent.innerHTML = `<h3 style='margin-top:0;'>${title}</h3><ul style='margin:0;padding-left:18px;'>${content}</ul>`;
+                    
+                    summaryBox.appendChild(summaryContent);
                     document.body.appendChild(summaryBox);
+                    
+                    // Add accordion functionality
+                    let isCollapsed = false;
+                    summaryBox.addEventListener('click', function() {
+                      const content = document.getElementById('summary-content');
+                      if (isCollapsed) {
+                        content.style.display = 'block';
+                        summaryBox.style.padding = '16px 22px';
+                        summaryBox.style.minWidth = '200px';
+                        isCollapsed = false;
+                      } else {
+                        content.style.display = 'none';
+                        summaryBox.style.padding = '8px 12px';
+                        summaryBox.style.minWidth = 'auto';
+                        isCollapsed = true;
+                      }
+                    });
+                    
+                    // Add hover effect
+                    summaryBox.addEventListener('mouseenter', function() {
+                      if (!isCollapsed) {
+                        summaryBox.style.background = 'rgba(255,255,255,0.98)';
+                        summaryBox.style.boxShadow = '0 4px 12px rgba(0,0,0,0.2)';
+                      }
+                    });
+                    
+                    summaryBox.addEventListener('mouseleave', function() {
+                      if (!isCollapsed) {
+                        summaryBox.style.background = 'rgba(255,255,255,0.95)';
+                        summaryBox.style.boxShadow = '0 2px 8px rgba(0,0,0,0.15)';
+                      }
+                    });
                   }
                 }
             }

@@ -253,6 +253,7 @@
             border-bottom: 1px dotted var(--terminal-border);
             padding: 10px 0;
             word-wrap: break-word;
+            gap: 5px;
         }
         .message-item:last-child { border-bottom: none; }
 
@@ -267,17 +268,7 @@
             margin: 0;
             line-height: 1.4;
         }
-        .message-radio {
-            margin-right: 10px;
-            margin-top: 5px;
-            accent-color: var(--terminal-green); /* Style radio button if browser supports */
-            cursor: pointer;
-        }
-        /* Custom radio button appearance (optional, more complex) */
-        .message-radio + label {
-            cursor: pointer;
-            width: calc(100% - 30px); /* Adjust based on radio size + margin */
-        }
+
 
         /* Loading text */
         #profile-content, #messages-content {
@@ -285,6 +276,38 @@
         }
         #profile-content p, #messages-content p { /* Ensure p inside loading also gets color */
              color: var(--terminal-cyan);
+        }
+
+        /* Heart/Like button styles */
+        .heart-button {
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 1.2em;
+            margin-right: 10px;
+            margin-top: 5px;
+            padding: 5px;
+            transition: all 0.2s ease;
+            color: var(--terminal-border);
+            text-shadow: 0 0 2px rgba(255, 255, 255, 0.3);
+        }
+        .heart-button:hover {
+            color: var(--terminal-red);
+            text-shadow: 0 0 5px var(--terminal-red);
+            transform: scale(1.1);
+        }
+        .heart-button.liked {
+            color: var(--terminal-red);
+            text-shadow: 0 0 8px var(--terminal-red);
+        }
+        .heart-button.loading {
+            color: var(--terminal-cyan);
+            text-shadow: 0 0 5px var(--terminal-cyan);
+            animation: pulse 1s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
         }
 
 
@@ -361,7 +384,6 @@
 
 
         // --- Original Nostr Profile JavaScript ---
-        let selectedMessageId = null;
         const followButton = document.getElementById('follow-button');
         const originalButtonBgColor = getComputedStyle(followButton).backgroundColor; // Get initial dynamic color
 
@@ -552,13 +574,15 @@
                         // Already sorted by fetchNostrMessages
                         messagesData.forEach(message => {
                             const date = new Date(message.created_at * 1000);
-                            const content = message.content.replace(/</g, "<").replace(/>/g, ">"); // XSS protection
+                            const content = message.content.replace(/</g, "&lt;").replace(/>/g, "&gt;"); // XSS protection
                             messagesHTML += `<div class="message-item">
-                                                <input type="radio" name="selectedMessage" class="message-radio" value="${message.id}" id="message-${message.id}" onclick="selectMessage('${message.id}')">
-                                                <label for="message-${message.id}">
+                                                <button class="heart-button" onclick="likeMessage('${message.id}', '${hexKey}', this)" title="Like this message">
+                                                    ♡
+                                                </button>
+                                                <div style="flex: 1;">
                                                     <strong>${date.toLocaleDateString()} ${date.toLocaleTimeString()}</strong>
                                                     <p>${content}</p>
-                                                </label>
+                                                </div>
                                             </div>`;
                         });
                     } else {
@@ -574,9 +598,60 @@
             displayNostrData();
         }
 
-        function selectMessage(messageId) {
-            selectedMessageId = messageId;
-            // console.log("Selected message ID:", selectedMessageId);
+        async function likeMessage(messageId, authorPubkey, heartButton) {
+            if (!window.nostr) {
+                alert("Nostr extension (NOSTR Connect, Alby, nos2x) not detected.");
+                return;
+            }
+
+            try {
+                // Show loading state
+                heartButton.classList.add('loading');
+                const originalContent = heartButton.innerHTML;
+                heartButton.innerHTML = '♡';
+                heartButton.disabled = true;
+
+                const userPublicKey = await window.nostr.getPublicKey();
+                // relayUrl should be set by displayNostrData, if not, get it again
+                if (!relayUrl) relayUrl = await getRelayURL();
+
+                // Create like event (kind 7 - reaction)
+                const likeEvent = {
+                    kind: 7,
+                    pubkey: userPublicKey,
+                    created_at: Math.floor(Date.now() / 1000),
+                    tags: [
+                        ["e", messageId], // Reference to the liked event
+                        ["p", authorPubkey] // Reference to the author's pubkey
+                    ],
+                    content: "♥" // The reaction content
+                };
+
+                const signedEvent = await window.nostr.signEvent(likeEvent);
+                const relay = nostrTools.relayInit(relayUrl);
+                await relay.connect();
+                await relay.publish(signedEvent);
+                relay.close();
+
+                // Success state
+                heartButton.classList.remove('loading');
+                heartButton.classList.add('liked');
+                heartButton.innerHTML = '♥';
+                heartButton.title = 'Liked!';
+                
+                // Keep the liked state - don't reset
+                heartButton.disabled = false;
+
+            } catch (error) {
+                console.error("Error during like action:", error);
+                
+                // Error state
+                heartButton.classList.remove('loading');
+                heartButton.innerHTML = originalContent;
+                heartButton.disabled = false;
+                
+                alert(`Error liking message: ${error.message || error}`);
+            }
         }
 
         followButton.addEventListener('click', async function(event) {

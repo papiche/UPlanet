@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+    <title>U Planet. Welcome in U World</title>
+          <link rel="icon" type="image/x-icon" href="./favicon.ico">
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="leaflet.css">
+  <style>
+    #map {
+      width: 100%;
+      height: 100vh;
+    }
+
+    .clickable-area {
+      fill-opacity: 0.2; /* Adjust the opacity as needed */
+      fill: #0074d9; /* Adjust the color as needed */
+      stroke: #001f3f;
+    }
+
+    .button {
+        background-color: #3498db;
+        color: #fff;
+        padding: 10px 20px;
+        border: none;
+        cursor: pointer;
+    }
+    .rolling-text-container {
+      position: fixed;
+      top: 20px;
+      left: 0px;
+      width: 100%;
+      background-color: #fff;
+      color: #000;
+      padding: 20px;
+      text-align: center;
+      font-size: 20px;
+      overflow: hidden;
+      z-index: 99; /* Ensure the rolling text is above the map */
+    }
+
+    #back-button {
+        position: absolute;
+        top: 10px;
+        left: 50px;
+        z-index: 1002;
+        background-color: #3498db;
+        color: #fff;
+        padding: 8px 12px;
+        border: none;
+        cursor: pointer;
+        border-radius: 5px;
+        font-size: 18px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 40px;
+        height: 40px;
+    }
+    #back-button:hover {
+        background-color: #2980b9;
+    }
+
+    /* Style pour les marqueurs */
+    .leaflet-marker-icon {
+        border: none; /* Supprime la bordure par défaut des marqueurs */
+    }
+
+    /* Styles pour les popups (encarts) */
+    .custom-popup .leaflet-popup-content-wrapper {
+      background-color: #ffffff; /* White background */
+      color: #333;
+      border-radius: 10px; /* Rounded corners */
+      padding: 12px;
+      box-shadow: 0 3px 14px rgba(0,0,0,0.4); /* Nice shadow */
+    }
+
+    .custom-popup .leaflet-popup-content {
+      margin: 0;
+      line-height: 1.6; /* Better line spacing */
+    }
+
+    .custom-popup .leaflet-popup-content a {
+      color: #007bff; /* Link color */
+      text-decoration: none;
+      font-weight: bold;
+    }
+
+    .custom-popup .leaflet-popup-content a:hover {
+      text-decoration: underline; /* Underline on hover */
+    }
+
+    .custom-popup .leaflet-popup-tip-container {
+      width: 20px;
+      height: 10px;
+    }
+
+    .custom-popup .leaflet-popup-tip {
+      background: #ffffff; /* White tip to match popup */
+      border: none;
+      box-shadow: 0 3px 14px rgba(0,0,0,0.4); /* Shadow for the tip as well */
+    }
+
+  </style>
+
+  <script src="leaflet.js"></script>
+<!--
+  <script src="axios.min.js"></script>
+-->
+
+</head>
+<body>
+  <div id="map">
+    <button id="back-button" onclick="history.back()">⬅️</button>
+    <button id="view-switch" style="position:absolute;top:10px;right:10px;z-index:1003;background:#fff;border-radius:50%;border:none;width:48px;height:48px;box-shadow:0 2px 8px rgba(0,0,0,0.2);font-size:24px;cursor:pointer;display:flex;align-items:center;justify-content:center;" title="Switch to Satellite view">🛰️</button>
+  </div>
+  <div id="rollingText" class="rolling-text-container"></div>
+
+  <script>
+///////////////////////////////////////////////////////////////////////////////////
+    // Extract the hostname (e.g., "https://ipfs.domain.tld" or "http://ipfs.localhost:8080")
+    var currentURL = new URL(window.location.href);
+    var hostname = currentURL.hostname;
+    var protocol = currentURL.protocol.split(":")[0];
+
+    // Premier bloc (zoneURL)
+    var zPort = currentURL.port;  // Utilise une variable différente
+    if (zPort === "8080") {
+        zPort = "1234";
+    }
+    var zHost = hostname.replace("ipfs", "astroport");
+    var station = protocol + "://" + zHost + (zPort ? ":" + zPort : "");
+    const zoneURL = station + '/?dragons=one';
+    console.log('DRAGON URL:', zoneURL);
+
+    // Second bloc (uPlanetAPI_URL)
+    var uPort = currentURL.port;  // Nouvelle variable pour ce bloc
+    if (uPort === "8080") {
+        uPort = "54321";
+    }
+    var uHost = hostname.replace("ipfs", "u");
+    var uPlanetStation = protocol + "://" + uHost + (uPort ? ":" + uPort : "");
+    const uPlanetAPI_URL = uPlanetStation + '/';
+    console.log('UPLANET API URL:', uPlanetAPI_URL);
+
+///////////////////////////////////////////////////////////////////////////////////
+    // Function to extract URL parameters
+    function getUrlParameter(name) {
+      name = name.replace(/[\[]/, '\\[').replace(/[\]]/, '\\]');
+      const regex = new RegExp('[\\?&]' + name + '=([^&#]*)');
+      const results = regex.exec(location.search);
+      return results === null ? '' : decodeURIComponent(results[1].replace(/\+/g, ' '));
+    }
+
+  // Set up initial variables
+    const tileSize = 10; // 10° interval
+    const gridSize = 36;
+    const initialZoom = 1; // Choose an initial zoom level
+
+    // Create the map
+    const map = L.map('map').setView([0, 0], initialZoom);
+
+    // Add OpenStreetMap tile layer
+    let tileLayer;
+    function setTileLayer(mode) {
+      if (tileLayer) {
+        map.removeLayer(tileLayer);
+      }
+      if (mode === 'SAT') {
+        tileLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+          attribution: 'UPlanet Astroport'
+        });
+      } else {
+        tileLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: 'UPlanet Astroport'
+        });
+      }
+      tileLayer.addTo(map);
+    }
+    setTileLayer(getMapMode());
+
+    const rectangles = [];
+    const rectangleCounts = new Map();
+
+    // Icones pour PLAYER et UMAP
+    const playerIcon = L.icon({
+        iconUrl: 'player-icon.png', // Remplace par le chemin vers ton icône PLAYER
+        iconSize: [32, 32], // Taille de l'icône
+        iconAnchor: [16, 32], // Point de l'icône qui correspondra à la position du marker
+        popupAnchor: [0, -32] // Point d'où la popup s'ouvrira par rapport à l'icône
+    });
+
+    const umapIcon = L.icon({
+        iconUrl: 'umap-icon.png', // Remplace par le chemin vers ton icône UMAP
+        iconSize: [32, 32],
+        iconAnchor: [16, 32],
+        popupAnchor: [0, -32]
+    });
+
+    // --- MAP/SAT Switcher ---
+    function getMapMode() {
+      return localStorage.getItem('uplanet_map_mode') || 'MAP';
+    }
+    function setMapMode(mode) {
+      localStorage.setItem('uplanet_map_mode', mode);
+    }
+    function updateSwitchButton() {
+      const btn = document.getElementById('view-switch');
+      if (!btn) return;
+      const mode = getMapMode();
+      if (mode === 'MAP') {
+        btn.textContent = '🛰️';
+        btn.title = 'Switch to Satellite view';
+      } else {
+        btn.textContent = '🗺️';
+        btn.title = 'Switch to Map view';
+      }
+    }
+    document.getElementById('view-switch').addEventListener('click', function() {
+      const mode = getMapMode();
+      const newMode = mode === 'MAP' ? 'SAT' : 'MAP';
+      setMapMode(newMode);
+      updateSwitchButton();
+      setTileLayer(newMode);
+    });
+    updateSwitchButton();
+
+    // Create a clickable area for each grid cell
+    for (let latIndex = 0; latIndex < gridSize; latIndex++) {
+      for (let lonIndex = 0; lonIndex < gridSize; lonIndex++) {
+        const lat = -180 + latIndex * tileSize;
+        const lon = -180 + lonIndex * tileSize;
+
+        // Create a clickable rectangle
+        const rectangle = L.rectangle(
+          [[lat, lon], [lat + tileSize, lon + tileSize]],
+          { color: 'transparent', weight: 1, className: 'clickable-area' } // Add CSS class
+        );
+
+        // Add a click event to the rectangle
+        rectangle.on('click', () => {
+          const mode = getMapMode();
+          const urlBase = mode === 'SAT' ? 'sat_render.html' : 'map_render.html';
+          const url = `${urlBase}?southWestLat=${lat}&southWestLon=${lon}`;
+          window.location.href = url;
+        });
+
+        // Add the rectangle to the map and array
+        rectangle.addTo(map);
+        rectangles.push(rectangle);
+      }
+    }
+
+///////////////////////////////////////////////////////////////////////////////////
+    async function loadDRAGONS(myURL) {
+      try {
+        console.log('Fetching DRAGONS data from:', myURL);
+        const data = await fetchAstroport(myURL);
+        console.log('DRAGONS data loaded successfully:', data);
+        return data.filter(({ lat, lon }) => lat !== undefined && lon !== undefined) || [];
+      } catch (error) {
+        console.error('Error loading DRAGONS:', error);
+        return [];
+      }
+    }
+
+///////////////////////////////////////////////////////////////////////////////////
+    async function loadUPlanetData(myURL) {
+      try {
+        console.log('Fetching UPlanet data from:', myURL);
+        const response = await fetch(myURL);
+        const data = await response.json();
+        console.log('UPlanet data loaded successfully:', data);
+        return data;
+      } catch (error) {
+        console.error('Error loading UPlanet data:', error);
+        return null;
+      }
+    }
+
+///////////////////////////////////////////////////////////////////////////////////
+    function overlayGridNumbers(rectangle, count) {
+      const latLng = rectangle.getBounds().getCenter();
+      const containerPoint = map.latLngToContainerPoint(latLng);
+
+      const numberElement = document.createElement('div');
+      numberElement.className = 'grid-number';
+      numberElement.textContent = count;
+      numberElement.style.position = 'absolute';
+      numberElement.style.fontSize = '16px';
+      numberElement.style.zIndex = '1000';
+      numberElement.style.fontWeight = 'bold';
+      numberElement.style.color = 'white';
+      numberElement.style.top = `${containerPoint.y}px`;
+      numberElement.style.left = `${containerPoint.x}px`;
+
+      document.getElementById('map').appendChild(numberElement);
+    }
+//////////////////////////////////////////////////////////////// fetchAstroport
+    async function fetchAstroport(myURL, retryCount = 3) {
+      try {
+        let one = await fetch(myURL);
+        var doc = await one.text();
+        var regex = /url='([^']+)/i;
+        var redirectURL = doc.match(regex)[1];
+
+        return new Promise(async (resolve, reject) => {
+          let retry = 0;
+
+          const fetchData = async () => {
+            try {
+              let two = await fetch(redirectURL);
+              const data = await two.json();
+              resolve(data);
+            } catch (error) {
+              if (retry < retryCount) {
+                console.log(`Retry ${retry + 1} after 4000ms...`);
+                retry++;
+                setTimeout(fetchData, 4000);
+              } else {
+                console.log('Max retries reached. Fetch error:', error);
+                reject(error);
+              }
+            }
+          };
+
+          setTimeout(fetchData, 3000);
+        });
+      } catch (err) {
+        console.log('Fetch error:', err);
+        return Promise.reject(err);
+      }
+    }
+///////////////////////////////////////////////////////////////////////////////////
+    async function displayRollingText(dragons) {
+      const rollingTextContainer = document.getElementById('rollingText');
+      let currentIndex = 0;
+
+      function updateText() {
+        rollingTextContainer.innerHTML = `[${currentIndex}] :: ${dragons[currentIndex].title} :: _${dragons[currentIndex].lat}_${dragons[currentIndex].lon} <a href="/ipns/${dragons[currentIndex].ipfsnodeid}" title="${dragons[currentIndex].tags}" target="12345">(U) [♥️BOX] (U)</a>`;
+        currentIndex = (currentIndex + 1) % dragons.length;
+      }
+
+      setInterval(updateText, 5000);
+      updateText();
+    }
+
+///////////////////////////////////////////////////////////////////////////////////
+    loadDRAGONS(zoneURL).then(dragons => {
+      const dragonRectanglesMap = new Map();
+
+      displayRollingText(dragons);
+
+      dragons.forEach(({ lat, lon, umap, tags }) => {
+        const latLng = L.latLng(lat, lon);
+
+        const matchingRectangle = rectangles.find(rectangle =>
+          rectangle.getBounds().contains(latLng)
+        );
+
+        if (matchingRectangle) {
+          console.log(`Dragon at (${lat}, ${lon}) matched with rectangle`);
+
+          // Keep track of the number of DRAGONS for each matching rectangle
+          if (dragonRectanglesMap.has(matchingRectangle)) {
+            dragonRectanglesMap.set(matchingRectangle, dragonRectanglesMap.get(matchingRectangle) + 1);
+          } else {
+            dragonRectanglesMap.set(matchingRectangle, 1);
+          }
+        } else {
+          console.log(`No matching rectangle found for dragon at (${lat}, ${lon})`);
+        }
+      });
+
+      // Overlay grid numbers with the count of DRAGONS for each matching rectangle
+      dragonRectanglesMap.forEach((count, rectangle) => {
+        overlayGridNumbers(rectangle, count);
+        console.log(`Overlaying grid number ${count} on matching rectangle`);
+      });
+
+    });
+
+///////////////////////////////////////////////////////////////////////////////////
+    loadUPlanetData(uPlanetAPI_URL).then(uPlanetData => {
+      if (uPlanetData) {
+        const locationEntities = {};
+
+        // Group PLAYERS and UMAPS by location
+        if (uPlanetData.PLAYERs) {
+          uPlanetData.PLAYERs.forEach(player => {
+            if (player.LAT && player.LON && player.HEX && player.ASTROMAIL) { // Ensure ASTROMAIL is checked
+              const locationKey = `${player.LAT},${player.LON}`;
+              if (!locationEntities[locationKey]) {
+                locationEntities[locationKey] = { PLAYERS: [], UMAPS: [] }; // Initialize both arrays
+              }
+              locationEntities[locationKey].PLAYERS.push({ hex: player.HEX, astromail: player.ASTROMAIL }); // Store ASTROMAIL
+            }
+          });
+        }
+
+        if (uPlanetData.UMAPs) {
+          uPlanetData.UMAPs.forEach(umap => {
+            if (umap.LAT && umap.LON && umap.UMAPHEX) {
+              const locationKey = `${umap.LAT},${umap.LON}`;
+              if (!locationEntities[locationKey]) {
+                locationEntities[locationKey] = { PLAYERS: [], UMAPS: [] }; // Initialize both arrays
+              }
+              locationEntities[locationKey].UMAPS.push({ hex: umap.UMAPHEX, umapipfs: umap.UMAPROOT, lat: umap.LAT, lon: umap.LON }); // Store LAT and LON
+            }
+          });
+        }
+
+        // Helper function to check for valid (non-null, non-empty) values
+        function isValid(val) {
+          return val !== null && val !== undefined && val !== '' && val !== 'null';
+        }
+
+        // Add markers for each location
+        for (const locationKey in locationEntities) {
+          const [lat, lon] = locationKey.split(',').map(parseFloat);
+          const entities = locationEntities[locationKey];
+          let popupContent = '';
+          let icon = null;
+
+          if (entities.UMAPS.length > 0) {
+              icon = umapIcon; // Prioritize UMAP icon if UMAPS are present
+              const umap = entities.UMAPS[0]; // Assuming only one UMAP per location, adjust if needed
+              popupContent += `<div class='umap-popup' style='min-width:260px;max-width:350px;'>`;
+              popupContent += `<h3 style='margin-bottom:4px;'>UMAP</h3>`;
+              if (isValid(umap.lat) && isValid(umap.lon)) {
+                popupContent += `<div><b>Lat:</b> ${umap.lat} <b>Lon:</b> ${umap.lon}</div>`;
+              }
+              popupContent += `<ul style='margin:8px 0 8px 0;padding-left:18px;'>`;
+              if (isValid(umap.hex)) {
+                popupContent += `<li><a href="nostr_profile_viewer.html?hex=${umap.hex}" target="_blank" title="Open Nostr profile">🧑‍🚀 UMAP Nostr</a></li>`;
+              }
+              if (isValid(umap.umapipfs)) {
+                popupContent += `<li><a href="/ipfs/${umap.umapipfs}" target="_blank" title="Open IPFS Drive">📁 IPFS Drive</a></li>`;
+              }
+              if (umap.UMAPIPNS && umap.UMAPIPNS !== '') {
+                popupContent += `<li><a href="${umap.UMAPIPNS}" target="_blank" title="Open UMAP IPNS">🌐 UMAP IPNS</a></li>`;
+              }
+              if (umap.SECTORROOT && umap.SECTORROOT !== '') {
+                popupContent += `<li><a href="/ipfs/${umap.SECTORROOT}" target="_blank" title="Open SECTOR ROOT">🗂️ Sector Root</a></li>`;
+              }
+              if (umap.SECTORIPNS && umap.SECTORIPNS !== '') {
+                popupContent += `<li><a href="${umap.SECTORIPNS}" target="_blank" title="Open SECTOR IPNS">🌐 Sector IPNS</a></li>`;
+              }
+              if (umap.SECTORHEX && umap.SECTORHEX !== '') {
+                popupContent += `<li><span title="Sector HEX">#️⃣ Sector HEX: ${umap.SECTORHEX}</span></li>`;
+              }
+              if (umap.REGIONROOT && umap.REGIONROOT !== '') {
+                popupContent += `<li><a href="/ipfs/${umap.REGIONROOT}" target="_blank" title="Open REGION ROOT">🗺️ Region Root</a></li>`;
+              }
+              if (umap.REGIONIPNS && umap.REGIONIPNS !== '') {
+                popupContent += `<li><a href="${umap.REGIONIPNS}" target="_blank" title="Open REGION IPNS">🌐 Region IPNS</a></li>`;
+              }
+              if (umap.REGIONHEX && umap.REGIONHEX !== '') {
+                popupContent += `<li><span title="Region HEX">#️⃣ Region HEX: ${umap.REGIONHEX}</span></li>`;
+              }
+              popupContent += `</ul>`;
+
+              if (entities.PLAYERS.length > 0) {
+                  popupContent += `<section><h4 style='margin:6px 0 2px 0;'>Sociétaires (PLAYERS)</h4><ul style='padding-left:18px;'>`;
+                  // Randomly select up to 10 players
+                  const shuffledPlayers = [...entities.PLAYERS].sort(() => 0.5 - Math.random());
+                  const selectedPlayers = shuffledPlayers.slice(0, Math.min(10, entities.PLAYERS.length));
+                  selectedPlayers.forEach(player => {
+                      if (isValid(player.hex) && isValid(player.astromail)) {
+                      popupContent += `<li><a href="nostr_profile_viewer.html?hex=${player.hex}" target="_blank">${player.astromail}</a></li>`;
+                      }
+                  });
+                  popupContent += `</ul></section>`;
+              }
+              popupContent += `</div>`;
+
+          } else if (entities.PLAYERS.length > 0) {
+              icon = playerIcon; // Use player icon if only PLAYERS are present
+              popupContent += `<div class='umap-popup' style='min-width:220px;max-width:320px;'>`;
+              popupContent += `<h3 style='margin-bottom:4px;'>Sociétaires (PLAYERS)</h3><ul style='padding-left:18px;'>`;
+              entities.PLAYERS.forEach(player => {
+                  if (isValid(player.hex) && isValid(player.astromail)) {
+                    popupContent += `<li><a href="nostr_profile_viewer.html?hex=${player.hex}" target="_blank">${player.astromail}</a></li>`;
+                  }
+              });
+              popupContent += `</ul></div>`;
+          }
+
+          if (icon) { // Only add marker if there's an icon (either UMAP or PLAYER present)
+              L.marker([lat, lon], {icon: icon})
+                  .bindPopup(popupContent, { className: 'custom-popup' })
+                  .addTo(map);
+              console.log(`Marker ajouté à LAT: ${lat}, LON: ${lon} avec entités:`, entities);
+          }
+        }
+
+        // NOSTR (utilisateurs) section (if present in uPlanetData)
+        if (uPlanetData.NOSTR && uPlanetData.NOSTR.length > 0) {
+            let nostrSection = `<div class='umap-popup' style='min-width:220px;max-width:320px;'><h3 style='margin-bottom:4px;'>Utilisateurs (NOSTR)</h3><ul style='padding-left:18px;'>`;
+            uPlanetData.NOSTR.forEach(nostr => {
+                if (isValid(nostr.HEX) && isValid(nostr.EMAIL)) {
+                    nostrSection += `<li><a href='nostr_profile_viewer.html?hex=${nostr.HEX}' target='_blank'>${nostr.EMAIL}</a></li>`;
+                }
+            });
+            nostrSection += `</ul></div>`;
+            // Add as a marker at [lat, lon] = [0,0] for now (or could be improved)
+            L.marker([0, 0], {icon: playerIcon})
+                .bindPopup(nostrSection, { className: 'custom-popup' })
+                .addTo(map);
+        }
+
+        // --- UPlanet Summary (like ZONE summary) ---
+        // Count regions, sectors, umaps, players, nostr
+        let regionCount = 0, sectorCount = 0, umapCount = 0, playerCount = 0, nostrCount = 0;
+        if (uPlanetData.UMAPs) umapCount = uPlanetData.UMAPs.length;
+        if (uPlanetData.PLAYERs) playerCount = uPlanetData.PLAYERs.length;
+        if (uPlanetData.NOSTR) nostrCount = uPlanetData.NOSTR.length;
+        const regionSet = new Set(), sectorSet = new Set();
+        if (uPlanetData.UMAPs) {
+          uPlanetData.UMAPs.forEach(umap => {
+            if (isValid(umap.REGIONHEX)) regionSet.add(umap.REGIONHEX);
+            if (isValid(umap.SECTORHEX)) sectorSet.add(umap.SECTORHEX);
+          });
+        }
+        regionCount = regionSet.size;
+        sectorCount = sectorSet.size;
+        if ((isValid(regionCount) && regionCount > 0) || (isValid(sectorCount) && sectorCount > 0) || (isValid(umapCount) && umapCount > 0) || (isValid(playerCount) && playerCount > 0) || (isValid(nostrCount) && nostrCount > 0)) {
+          const summaryBox = document.createElement('div');
+          summaryBox.id = 'summary-box';
+          summaryBox.style.position = 'absolute';
+          summaryBox.style.top = '70px';
+          summaryBox.style.right = '20px';
+          summaryBox.style.background = 'rgba(255,255,255,0.95)';
+          summaryBox.style.borderRadius = '10px';
+          summaryBox.style.boxShadow = '0 2px 8px rgba(0,0,0,0.15)';
+          summaryBox.style.padding = '16px 22px';
+          summaryBox.style.zIndex = '2000';
+          summaryBox.style.transition = 'all 0.3s ease';
+          summaryBox.style.cursor = 'pointer';
+          summaryBox.style.minWidth = '200px';
+          
+          const summaryContent = document.createElement('div');
+          summaryContent.id = 'summary-content';
+          summaryContent.innerHTML = `<h3 style='margin-top:0;'>UPlanet Summary</h3><ul style='margin:0;padding-left:18px;'>`;
+          if (isValid(regionCount) && regionCount > 0) summaryContent.innerHTML += `<li><span title='Regions'>🗺️</span> <b>${regionCount}</b></li>`;
+          if (isValid(sectorCount) && sectorCount > 0) summaryContent.innerHTML += `<li><span title='Sectors'>🗂️</span> <b>${sectorCount}</b></li>`;
+          if (isValid(umapCount) && umapCount > 0) summaryContent.innerHTML += `<li><span title='UMAPs'>🧩</span> <b>${umapCount}</b></li>`;
+          if (isValid(playerCount) && playerCount > 0) summaryContent.innerHTML += `<li><span title='Sociétaires (ZENCARD)'>🧑‍💼</span> <b>${playerCount}</b></li>`;
+          if (isValid(nostrCount) && nostrCount > 0) summaryContent.innerHTML += `<li><span title='Utilisateurs (MULTIPASS)'>👤</span> <b>${nostrCount}</b></li>`;
+          summaryContent.innerHTML += `</ul>`;
+          
+          summaryBox.appendChild(summaryContent);
+          document.body.appendChild(summaryBox);
+          
+          // Add accordion functionality
+          let isCollapsed = false;
+          summaryBox.addEventListener('click', function() {
+            const content = document.getElementById('summary-content');
+            if (isCollapsed) {
+              content.style.display = 'block';
+              summaryBox.style.padding = '16px 22px';
+              summaryBox.style.minWidth = '200px';
+              isCollapsed = false;
+            } else {
+              content.style.display = 'none';
+              summaryBox.style.padding = '8px 12px';
+              summaryBox.style.minWidth = 'auto';
+              isCollapsed = true;
+            }
+          });
+          
+          // Add hover effect
+          summaryBox.addEventListener('mouseenter', function() {
+            if (!isCollapsed) {
+              summaryBox.style.background = 'rgba(255,255,255,0.98)';
+              summaryBox.style.boxShadow = '0 4px 12px rgba(0,0,0,0.2)';
+            }
+          });
+          
+          summaryBox.addEventListener('mouseleave', function() {
+            if (!isCollapsed) {
+              summaryBox.style.background = 'rgba(255,255,255,0.95)';
+              summaryBox.style.boxShadow = '0 2px 8px rgba(0,0,0,0.15)';
+            }
+          });
+        }
+      }
+    });
+
+    // --- Custom popup CSS ---
+    const style = document.createElement('style');
+    style.textContent = `
+      .custom-popup .leaflet-popup-content-wrapper {
+        background: #f8fafd;
+        color: #222;
+        border-radius: 12px;
+        padding: 16px 18px 12px 18px;
+        box-shadow: 0 3px 14px rgba(0,0,0,0.18);
+        min-width: 220px;
+        max-width: 350px;
+      }
+      .custom-popup .leaflet-popup-content h3 {
+        margin: 0 0 6px 0;
+        font-size: 1.2em;
+        color: #1a4a7a;
+      }
+      .custom-popup .leaflet-popup-content h4 {
+        margin: 8px 0 2px 0;
+        font-size: 1em;
+        color: #2b6c3e;
+      }
+      .custom-popup .leaflet-popup-content ul {
+        margin: 0 0 6px 0;
+        padding-left: 18px;
+      }
+      .custom-popup .leaflet-popup-content li {
+        margin-bottom: 2px;
+      }
+      .custom-popup .leaflet-popup-content a {
+        color: #007bff;
+        text-decoration: none;
+        font-weight: 500;
+      }
+      .custom-popup .leaflet-popup-content a:hover {
+        text-decoration: underline;
+      }
+    `;
+    document.head.appendChild(style);
+
+</script>
+</body>
+</html>
+cd 

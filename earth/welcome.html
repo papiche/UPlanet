@@ -1,634 +1,1798 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-    <title>U Planet. Welcome in U World</title>
-          <link rel="icon" type="image/x-icon" href="./favicon.ico">
+    <meta charset="UTF-8">
+    <link rel="icon" type="image/x-icon" href="./favicon.ico">
+    <title id="dynamic-title">UPlanet Enhanced - Welcome to U World</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="leaflet.css" />
+    <style>
+        :root {
+            --primary-color: #0074d9;
+            --secondary-color: #2ecc71;
+            --accent-color: #f39c12;
+            --background-color: #ffffff;
+            --text-color: #333333;
+            --border-color: #e0e0e0;
+            --shadow-color: rgba(0,0,0,0.15);
+            --surface-color: #f8fafd;
+        }
 
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="stylesheet" href="leaflet.css">
-  <style>
-    #map {
-      width: 100%;
-      height: 100vh;
-    }
+        [data-theme="dark"] {
+            --background-color: #1a1a2e;
+            --text-color: #ecf0f1;
+            --border-color: #34495e;
+            --shadow-color: rgba(255,255,255,0.1);
+            --surface-color: #16213e;
+        }
 
-    .clickable-area {
-      fill-opacity: 0.2; /* Adjust the opacity as needed */
-      fill: #0074d9; /* Adjust the color as needed */
-      stroke: #001f3f;
-    }
+        * {
+            box-sizing: border-box;
+        }
 
-    .button {
-        background-color: #3498db;
-        color: #fff;
-        padding: 10px 20px;
-        border: none;
-        cursor: pointer;
-    }
-    .rolling-text-container {
-      position: fixed;
-      top: 20px;
-      left: 0px;
-      width: 100%;
-      background-color: #fff;
-      color: #000;
-      padding: 20px;
-      text-align: center;
-      font-size: 20px;
-      overflow: hidden;
-      z-index: 99; /* Ensure the rolling text is above the map */
-    }
+        body {
+            margin: 0;
+            font-family: 'Arial', sans-serif;
+            background: var(--background-color);
+            color: var(--text-color);
+            transition: all 0.3s ease;
+        }
 
-    #back-button {
-        position: absolute;
-        top: 10px;
-        left: 50px;
-        z-index: 1002;
-        background-color: #3498db;
-        color: #fff;
-        padding: 8px 12px;
-        border: none;
-        cursor: pointer;
-        border-radius: 5px;
-        font-size: 18px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        width: 40px;
-        height: 40px;
-    }
-    #back-button:hover {
-        background-color: #2980b9;
-    }
+        #map {
+            width: 100%;
+            height: 100vh;
+        }
 
-    /* Style pour les marqueurs */
-    .leaflet-marker-icon {
-        border: none; /* Supprime la bordure par défaut des marqueurs */
-    }
+        /* ⚡ OPTIMIZED: Consolidated grid and clickable styles */
+        .clickable-area {
+            fill-opacity: 0.1;
+            fill: var(--primary-color);
+            stroke: var(--primary-color);
+            stroke-width: 1;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
 
-    /* Styles pour les popups (encarts) */
-    .custom-popup .leaflet-popup-content-wrapper {
-      background-color: #ffffff; /* White background */
-      color: #333;
-      border-radius: 10px; /* Rounded corners */
-      padding: 12px;
-      box-shadow: 0 3px 14px rgba(0,0,0,0.4); /* Nice shadow */
-    }
+        .clickable-area:hover {
+            fill-opacity: 0.3;
+            stroke-width: 2;
+        }
 
-    .custom-popup .leaflet-popup-content {
-      margin: 0;
-      line-height: 1.6; /* Better line spacing */
-    }
+        .grid-number {
+            background: rgba(0, 116, 217, 0.9);
+            color: white;
+            border-radius: 15px;
+            padding: 6px 10px;
+            font-weight: bold;
+            border: 2px solid white;
+            box-shadow: 0 3px 8px rgba(0,0,0,0.3);
+            font-size: 14px;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            backdrop-filter: blur(10px);
+            user-select: none;
+        }
 
-    .custom-popup .leaflet-popup-content a {
-      color: #007bff; /* Link color */
-      text-decoration: none;
-      font-weight: bold;
-    }
+        .grid-number:hover {
+            background: rgba(0, 116, 217, 1);
+            transform: scale(1.1);
+        }
 
-    .custom-popup .leaflet-popup-content a:hover {
-      text-decoration: underline; /* Underline on hover */
-    }
+        /* Enhanced control buttons */
+        .control-button {
+            position: absolute;
+            z-index: 1002;
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 48px;
+            height: 48px;
+            font-size: 20px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 12px rgba(0, 116, 217, 0.3);
+            backdrop-filter: blur(10px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
 
-    .custom-popup .leaflet-popup-tip-container {
-      width: 20px;
-      height: 10px;
-    }
+        .control-button:hover {
+            background: #0056b3;
+            transform: scale(1.1);
+            box-shadow: 0 6px 20px rgba(0, 116, 217, 0.4);
+        }
 
-    .custom-popup .leaflet-popup-tip {
-      background: #ffffff; /* White tip to match popup */
-      border: none;
-      box-shadow: 0 3px 14px rgba(0,0,0,0.4); /* Shadow for the tip as well */
-    }
+        #back-button {
+            top: 20px;
+            left: 20px;
+        }
 
-  </style>
+        .unified-toggle {
+            top: 20px;
+            right: 20px;
+            position: relative;
+            overflow: hidden;
+        }
 
-  <script src="leaflet.js"></script>
-<!--
-  <script src="axios.min.js"></script>
--->
+        .unified-toggle::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(45deg, transparent 45%, rgba(255,255,255,0.1) 50%, transparent 55%);
+            transition: all 0.3s ease;
+            opacity: 0;
+        }
 
+        .unified-toggle:hover::before {
+            opacity: 1;
+            transform: translateX(100%);
+        }
+
+        .unified-toggle:active {
+            transform: scale(0.95);
+        }
+
+        /* Special styling for unified states */
+        [data-theme="dark"] .unified-toggle {
+            background: rgba(44, 62, 80, 0.9);
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+
+        [data-theme="dark"] .unified-toggle:hover {
+            background: rgba(52, 73, 94, 0.9);
+        }
+
+        /* Enhanced rolling text container */
+        .rolling-text-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            background: linear-gradient(135deg, var(--surface-color), var(--background-color));
+            color: var(--text-color);
+            padding: 16px 20px;
+            text-align: center;
+            font-size: 16px;
+            overflow: hidden;
+            z-index: 999;
+            box-shadow: 0 2px 8px var(--shadow-color);
+            backdrop-filter: blur(15px);
+            border-bottom: 1px solid var(--border-color);
+            transition: all 0.3s ease;
+        }
+
+        .rolling-text-container a {
+            color: var(--primary-color);
+            text-decoration: none;
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+
+        .rolling-text-container a:hover {
+            color: var(--accent-color);
+            text-decoration: underline;
+        }
+
+        /* Enhanced summary box */
+        .summary-box {
+            position: absolute;
+            top: 80px;
+            right: 20px;
+            background: var(--surface-color);
+            border-radius: 12px;
+            box-shadow: 0 4px 16px var(--shadow-color);
+            padding: 16px 20px;
+            z-index: 2000;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            min-width: 200px;
+            backdrop-filter: blur(15px);
+            border: 1px solid var(--border-color);
+        }
+
+        .summary-box:hover {
+            background: var(--background-color);
+            box-shadow: 0 6px 24px var(--shadow-color);
+            transform: translateY(-2px);
+        }
+
+        .summary-box h3 {
+            margin: 0 0 12px 0;
+            color: var(--primary-color);
+            font-size: 18px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .summary-box ul {
+            margin: 0;
+            padding-left: 20px;
+            list-style: none;
+        }
+
+        .summary-box li {
+            margin: 6px 0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+        }
+
+        .summary-box .summary-icon {
+            width: 20px;
+            text-align: center;
+            font-size: 16px;
+        }
+
+        /* Enhanced popup styles */
+        .custom-popup .leaflet-popup-content-wrapper {
+            background: var(--surface-color) !important;
+            color: var(--text-color) !important;
+            border-radius: 12px !important;
+            padding: 16px 18px 12px 18px !important;
+            box-shadow: 0 8px 32px var(--shadow-color) !important;
+            min-width: 220px !important;
+            max-width: 350px !important;
+            backdrop-filter: blur(15px) !important;
+            border: 1px solid var(--border-color) !important;
+        }
+
+        .custom-popup .leaflet-popup-content h3 {
+            margin: 0 0 8px 0 !important;
+            font-size: 18px !important;
+            color: var(--primary-color) !important;
+            font-weight: bold !important;
+        }
+
+        .custom-popup .leaflet-popup-content h4 {
+            margin: 12px 0 6px 0 !important;
+            font-size: 14px !important;
+            color: var(--secondary-color) !important;
+            font-weight: 600 !important;
+        }
+
+        .custom-popup .leaflet-popup-content ul {
+            margin: 0 0 8px 0 !important;
+            padding-left: 20px !important;
+        }
+
+        .custom-popup .leaflet-popup-content li {
+            margin-bottom: 4px !important;
+            line-height: 1.4 !important;
+        }
+
+        .custom-popup .leaflet-popup-content a {
+            color: var(--primary-color) !important;
+            text-decoration: none !important;
+            font-weight: 500 !important;
+            transition: all 0.3s ease !important;
+        }
+
+        .custom-popup .leaflet-popup-content a:hover {
+            color: var(--accent-color) !important;
+            text-decoration: underline !important;
+        }
+
+        .custom-popup .leaflet-popup-tip {
+            background: var(--surface-color) !important;
+            border: 1px solid var(--border-color) !important;
+            box-shadow: 0 2px 8px var(--shadow-color) !important;
+        }
+
+        /* Profile modal styles */
+        .profile-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 10000;
+            animation: modalFadeIn 0.3s ease;
+        }
+
+        .profile-modal.show {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .profile-modal-content {
+            background: var(--background-color);
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            width: 95%;
+            max-width: 1200px;
+            height: 90%;
+            max-height: 800px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .profile-modal-content.fullscreen {
+            width: 100vw;
+            height: 100vh;
+            max-width: none;
+            max-height: none;
+            border-radius: 0;
+            box-shadow: none;
+        }
+
+        .profile-modal.fullscreen {
+            background: rgba(0, 0, 0, 1);
+        }
+
+        .profile-modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 16px;
+            background: var(--primary-color);
+            color: white;
+        }
+
+        .profile-modal-header h3 {
+            margin: 0;
+            font-size: 16px;
+            font-weight: bold;
+        }
+
+        .modal-controls {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .profile-modal-close,
+        .profile-modal-fullscreen {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 24px;
+            cursor: pointer;
+            padding: 4px 8px;
+            border-radius: 4px;
+            transition: all 0.3s ease;
+            width: 36px;
+            height: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .profile-modal-close:hover,
+        .profile-modal-fullscreen:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: scale(1.1);
+        }
+
+        .profile-modal-fullscreen {
+            font-size: 20px;
+        }
+
+        .profile-modal-fullscreen.active {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .profile-iframe {
+            flex: 1;
+            border: none;
+            width: 100%;
+            background: white;
+        }
+
+        /* Loading states */
+        .loading-spinner {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 2000;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid var(--primary-color);
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+
+        /* Notification system */
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: var(--secondary-color);
+            color: white;
+            padding: 12px 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            z-index: 9999;
+            transform: translateX(100%);
+            transition: transform 0.3s ease;
+        }
+
+        .notification.show {
+            transform: translateX(0);
+        }
+
+        .notification.error {
+            background: #e74c3c;
+        }
+
+        .notification.success {
+            background: var(--secondary-color);
+        }
+
+        /* Mobile optimizations */
+        @media (max-width: 768px) {
+            .control-button {
+                width: 44px;
+                height: 44px;
+                font-size: 18px;
+            }
+
+            #back-button {
+                top: 15px;
+                left: 15px;
+            }
+
+            .unified-toggle {
+                top: 15px;
+                right: 15px;
+            }
+
+            .rolling-text-container {
+                padding: 12px 15px;
+                font-size: 14px;
+            }
+
+            .summary-box {
+                top: 70px;
+                right: 15px;
+                left: 15px;
+                min-width: auto;
+            }
+
+            .grid-number {
+                font-size: 12px;
+                padding: 4px 8px;
+            }
+
+            .custom-popup .leaflet-popup-content-wrapper {
+                min-width: 200px !important;
+                max-width: 90vw !important;
+            }
+
+            .profile-modal-content {
+                width: 95%;
+                height: 90%;
+                margin: 10px;
+            }
+
+            .profile-modal-content.fullscreen {
+                margin: 0;
+                width: 100vw;
+                height: 100vh;
+            }
+
+            .modal-controls {
+                gap: 6px;
+            }
+
+            .profile-modal-close,
+            .profile-modal-fullscreen {
+                width: 44px;
+                height: 44px;
+                font-size: 20px;
+                touch-action: manipulation;
+            }
+        }
+
+        /* Animations */
+        @keyframes modalFadeIn {
+            from {
+                opacity: 0;
+                transform: scale(0.9);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .fade-in-up {
+            animation: fadeInUp 0.6s ease-out;
+        }
+
+        /* Enhanced tile transitions */
+        .leaflet-tile {
+            transition: opacity 0.3s ease;
+        }
+
+        /* Loading overlay */
+        .page-loading {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: var(--background-color);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            transition: opacity 0.5s ease;
+        }
+
+        .page-loading.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .loading-text {
+            margin-top: 20px;
+            font-size: 18px;
+            color: var(--primary-color);
+            font-weight: bold;
+        }
+    </style>
 </head>
 <body>
-  <div id="map">
-    <button id="back-button" onclick="history.back()">⬅️</button>
-    <button id="view-switch" style="position:absolute;top:10px;right:10px;z-index:1003;background:#fff;border-radius:50%;border:none;width:48px;height:48px;box-shadow:0 2px 8px rgba(0,0,0,0.2);font-size:24px;cursor:pointer;display:flex;align-items:center;justify-content:center;" title="Switch to Satellite view">🛰️</button>
-  </div>
-  <div id="rollingText" class="rolling-text-container"></div>
+    <!-- Page loading overlay -->
+    <div id="page-loading" class="page-loading">
+        <div class="loading-spinner">
+            <div class="spinner"></div>
+        </div>
+        <div class="loading-text">🌍 Loading UPlanet World...</div>
+    </div>
 
-  <script>
-///////////////////////////////////////////////////////////////////////////////////
-    // Extract the hostname (e.g., "https://ipfs.domain.tld" or "http://ipfs.localhost:8080")
-    var currentURL = new URL(window.location.href);
-    var hostname = currentURL.hostname;
-    var protocol = currentURL.protocol.split(":")[0];
+    <!-- Map container -->
+    <div id="map">
+        <button id="back-button" class="control-button" onclick="history.back()" title="Go back">⬅️</button>
+        <button class="control-button unified-toggle" onclick="toggleTheme()" title="Mode clair + Vue carte">🗺️</button>
+    </div>
 
-    // Premier bloc (zoneURL)
-    var zPort = currentURL.port;  // Utilise une variable différente
-    if (zPort === "8080") {
-        zPort = "1234";
-    }
-    var zHost = hostname.replace("ipfs", "astroport");
-    var station = protocol + "://" + zHost + (zPort ? ":" + zPort : "");
-    const zoneURL = station + '/?dragons=one';
-    console.log('DRAGON URL:', zoneURL);
+    <!-- Rolling text -->
+    <div id="rollingText" class="rolling-text-container"></div>
 
-    // Second bloc (uPlanetAPI_URL)
-    var uPort = currentURL.port;  // Nouvelle variable pour ce bloc
-    if (uPort === "8080") {
-        uPort = "54321";
-    }
-    var uHost = hostname.replace("ipfs", "u");
-    var uPlanetStation = protocol + "://" + uHost + (uPort ? ":" + uPort : "");
-    const uPlanetAPI_URL = uPlanetStation + '/';
-    console.log('UPLANET API URL:', uPlanetAPI_URL);
+    <!-- Profile modal -->
+    <div id="profile-modal" class="profile-modal">
+        <div class="profile-modal-content">
+            <div class="profile-modal-header">
+                <h3 id="profile-modal-title">Profile</h3>
+                <div class="modal-controls">
+                    <button class="profile-modal-fullscreen" onclick="toggleFullscreenModal()" title="Fullscreen (F11)">⛶</button>
+                    <button class="profile-modal-close" onclick="closeProfileModal()" title="Close (Esc)">✕</button>
+                </div>
+            </div>
+            <iframe id="profile-iframe" class="profile-iframe" src="about:blank"></iframe>
+        </div>
+    </div>
 
-///////////////////////////////////////////////////////////////////////////////////
-    // Function to extract URL parameters
-    function getUrlParameter(name) {
-      name = name.replace(/[\[]/, '\\[').replace(/[\]]/, '\\]');
-      const regex = new RegExp('[\\?&]' + name + '=([^&#]*)');
-      const results = regex.exec(location.search);
-      return results === null ? '' : decodeURIComponent(results[1].replace(/\+/g, ' '));
-    }
+    <script src="leaflet.js"></script>
+    <script>
+        // ⚡ PERFORMANCE: Constants and configuration
+        const CONFIG = {
+            CACHE_SIZE: 20,
+            API_TIMEOUT: 15000,
+            CACHE_DURATION: 600000, // 10 minutes
+            DEBOUNCE_DELAY: 200,
+            GRID_SIZE: 36,
+            TILE_SIZE: 10,
+            MOBILE_BREAKPOINT: 768,
+            NOTIFICATION_DURATION: 4000,
+            MODAL_TIMEOUT: 30000,
+            HAPTIC_DURATION: 10
+        };
 
-  // Set up initial variables
-    const tileSize = 10; // 10° interval
-    const gridSize = 36;
-    const initialZoom = 1; // Choose an initial zoom level
-
-    // Create the map
-    const map = L.map('map').setView([0, 0], initialZoom);
-
-    // Add OpenStreetMap tile layer
-    let tileLayer;
-    function setTileLayer(mode) {
-      if (tileLayer) {
-        map.removeLayer(tileLayer);
-      }
-      if (mode === 'SAT') {
-        tileLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-          attribution: 'UPlanet Astroport'
-        });
-      } else {
-        tileLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: 'UPlanet Astroport'
-        });
-      }
-      tileLayer.addTo(map);
-    }
-    setTileLayer(getMapMode());
-
-    const rectangles = [];
-    const rectangleCounts = new Map();
-
-    // Icones pour PLAYER et UMAP
-    const playerIcon = L.icon({
-        iconUrl: 'player-icon.png', // Remplace par le chemin vers ton icône PLAYER
-        iconSize: [32, 32], // Taille de l'icône
-        iconAnchor: [16, 32], // Point de l'icône qui correspondra à la position du marker
-        popupAnchor: [0, -32] // Point d'où la popup s'ouvrira par rapport à l'icône
-    });
-
-    const umapIcon = L.icon({
-        iconUrl: 'umap-icon.png', // Remplace par le chemin vers ton icône UMAP
-        iconSize: [32, 32],
-        iconAnchor: [16, 32],
-        popupAnchor: [0, -32]
-    });
-
-    // --- MAP/SAT Switcher ---
-    function getMapMode() {
-      return localStorage.getItem('uplanet_map_mode') || 'MAP';
-    }
-    function setMapMode(mode) {
-      localStorage.setItem('uplanet_map_mode', mode);
-    }
-    function updateSwitchButton() {
-      const btn = document.getElementById('view-switch');
-      if (!btn) return;
-      const mode = getMapMode();
-      if (mode === 'MAP') {
-        btn.textContent = '🛰️';
-        btn.title = 'Switch to Satellite view';
-      } else {
-        btn.textContent = '🗺️';
-        btn.title = 'Switch to Map view';
-      }
-    }
-    document.getElementById('view-switch').addEventListener('click', function() {
-      const mode = getMapMode();
-      const newMode = mode === 'MAP' ? 'SAT' : 'MAP';
-      setMapMode(newMode);
-      updateSwitchButton();
-      setTileLayer(newMode);
-    });
-    updateSwitchButton();
-
-    // Create a clickable area for each grid cell
-    for (let latIndex = 0; latIndex < gridSize; latIndex++) {
-      for (let lonIndex = 0; lonIndex < gridSize; lonIndex++) {
-        const lat = -180 + latIndex * tileSize;
-        const lon = -180 + lonIndex * tileSize;
-
-        // Create a clickable rectangle
-        const rectangle = L.rectangle(
-          [[lat, lon], [lat + tileSize, lon + tileSize]],
-          { color: 'transparent', weight: 1, className: 'clickable-area' } // Add CSS class
-        );
-
-        // Add a click event to the rectangle
-        rectangle.on('click', () => {
-          const mode = getMapMode();
-          const urlBase = mode === 'SAT' ? 'sat_render.html' : 'map_render.html';
-          const url = `${urlBase}?southWestLat=${lat}&southWestLon=${lon}`;
-          window.location.href = url;
-        });
-
-        // Add the rectangle to the map and array
-        rectangle.addTo(map);
-        rectangles.push(rectangle);
-      }
-    }
-
-///////////////////////////////////////////////////////////////////////////////////
-    async function loadDRAGONS(myURL) {
-      try {
-        console.log('Fetching DRAGONS data from:', myURL);
-        const data = await fetchAstroport(myURL);
-        console.log('DRAGONS data loaded successfully:', data);
-        return data.filter(({ lat, lon }) => lat !== undefined && lon !== undefined) || [];
-      } catch (error) {
-        console.error('Error loading DRAGONS:', error);
-        return [];
-      }
-    }
-
-///////////////////////////////////////////////////////////////////////////////////
-    async function loadUPlanetData(myURL) {
-      try {
-        console.log('Fetching UPlanet data from:', myURL);
-        const response = await fetch(myURL);
-        const data = await response.json();
-        console.log('UPlanet data loaded successfully:', data);
-        return data;
-      } catch (error) {
-        console.error('Error loading UPlanet data:', error);
-        return null;
-      }
-    }
-
-///////////////////////////////////////////////////////////////////////////////////
-    function overlayGridNumbers(rectangle, count) {
-      const latLng = rectangle.getBounds().getCenter();
-      const containerPoint = map.latLngToContainerPoint(latLng);
-
-      const numberElement = document.createElement('div');
-      numberElement.className = 'grid-number';
-      numberElement.textContent = count;
-      numberElement.style.position = 'absolute';
-      numberElement.style.fontSize = '16px';
-      numberElement.style.zIndex = '1000';
-      numberElement.style.fontWeight = 'bold';
-      numberElement.style.color = 'white';
-      numberElement.style.top = `${containerPoint.y}px`;
-      numberElement.style.left = `${containerPoint.x}px`;
-
-      document.getElementById('map').appendChild(numberElement);
-    }
-//////////////////////////////////////////////////////////////// fetchAstroport
-    async function fetchAstroport(myURL, retryCount = 3) {
-      try {
-        let one = await fetch(myURL);
-        var doc = await one.text();
-        var regex = /url='([^']+)/i;
-        var redirectURL = doc.match(regex)[1];
-
-        return new Promise(async (resolve, reject) => {
-          let retry = 0;
-
-          const fetchData = async () => {
-            try {
-              let two = await fetch(redirectURL);
-              const data = await two.json();
-              resolve(data);
-            } catch (error) {
-              if (retry < retryCount) {
-                console.log(`Retry ${retry + 1} after 4000ms...`);
-                retry++;
-                setTimeout(fetchData, 4000);
-              } else {
-                console.log('Max retries reached. Fetch error:', error);
-                reject(error);
-              }
+        // ⚡ PERFORMANCE: DOM Cache System
+        class DOMCache {
+            constructor() {
+                this.cache = new Map();
+                this.observers = new Map();
             }
-          };
 
-          setTimeout(fetchData, 3000);
-        });
-      } catch (err) {
-        console.log('Fetch error:', err);
-        return Promise.reject(err);
-      }
-    }
-///////////////////////////////////////////////////////////////////////////////////
-    async function displayRollingText(dragons) {
-      const rollingTextContainer = document.getElementById('rollingText');
-      let currentIndex = 0;
-
-      function updateText() {
-        rollingTextContainer.innerHTML = `[${currentIndex}] :: ${dragons[currentIndex].title} :: _${dragons[currentIndex].lat}_${dragons[currentIndex].lon} <a href="/ipns/${dragons[currentIndex].ipfsnodeid}" title="${dragons[currentIndex].tags}" target="12345">(U) [♥️BOX] (U)</a>`;
-        currentIndex = (currentIndex + 1) % dragons.length;
-      }
-
-      setInterval(updateText, 5000);
-      updateText();
-    }
-
-///////////////////////////////////////////////////////////////////////////////////
-    loadDRAGONS(zoneURL).then(dragons => {
-      const dragonRectanglesMap = new Map();
-
-      displayRollingText(dragons);
-
-      dragons.forEach(({ lat, lon, umap, tags }) => {
-        const latLng = L.latLng(lat, lon);
-
-        const matchingRectangle = rectangles.find(rectangle =>
-          rectangle.getBounds().contains(latLng)
-        );
-
-        if (matchingRectangle) {
-          console.log(`Dragon at (${lat}, ${lon}) matched with rectangle`);
-
-          // Keep track of the number of DRAGONS for each matching rectangle
-          if (dragonRectanglesMap.has(matchingRectangle)) {
-            dragonRectanglesMap.set(matchingRectangle, dragonRectanglesMap.get(matchingRectangle) + 1);
-          } else {
-            dragonRectanglesMap.set(matchingRectangle, 1);
-          }
-        } else {
-          console.log(`No matching rectangle found for dragon at (${lat}, ${lon})`);
-        }
-      });
-
-      // Overlay grid numbers with the count of DRAGONS for each matching rectangle
-      dragonRectanglesMap.forEach((count, rectangle) => {
-        overlayGridNumbers(rectangle, count);
-        console.log(`Overlaying grid number ${count} on matching rectangle`);
-      });
-
-    });
-
-///////////////////////////////////////////////////////////////////////////////////
-    loadUPlanetData(uPlanetAPI_URL).then(uPlanetData => {
-      if (uPlanetData) {
-        const locationEntities = {};
-
-        // Group PLAYERS and UMAPS by location
-        if (uPlanetData.PLAYERs) {
-          uPlanetData.PLAYERs.forEach(player => {
-            if (player.LAT && player.LON && player.HEX && player.ASTROMAIL) { // Ensure ASTROMAIL is checked
-              const locationKey = `${player.LAT},${player.LON}`;
-              if (!locationEntities[locationKey]) {
-                locationEntities[locationKey] = { PLAYERS: [], UMAPS: [] }; // Initialize both arrays
-              }
-              locationEntities[locationKey].PLAYERS.push({ hex: player.HEX, astromail: player.ASTROMAIL }); // Store ASTROMAIL
-            }
-          });
-        }
-
-        if (uPlanetData.UMAPs) {
-          uPlanetData.UMAPs.forEach(umap => {
-            if (umap.LAT && umap.LON && umap.UMAPHEX) {
-              const locationKey = `${umap.LAT},${umap.LON}`;
-              if (!locationEntities[locationKey]) {
-                locationEntities[locationKey] = { PLAYERS: [], UMAPS: [] }; // Initialize both arrays
-              }
-              locationEntities[locationKey].UMAPS.push({ hex: umap.UMAPHEX, umapipfs: umap.UMAPROOT, lat: umap.LAT, lon: umap.LON }); // Store LAT and LON
-            }
-          });
-        }
-
-        // Helper function to check for valid (non-null, non-empty) values
-        function isValid(val) {
-          return val !== null && val !== undefined && val !== '' && val !== 'null';
-        }
-
-        // Add markers for each location
-        for (const locationKey in locationEntities) {
-          const [lat, lon] = locationKey.split(',').map(parseFloat);
-          const entities = locationEntities[locationKey];
-          let popupContent = '';
-          let icon = null;
-
-          if (entities.UMAPS.length > 0) {
-              icon = umapIcon; // Prioritize UMAP icon if UMAPS are present
-              const umap = entities.UMAPS[0]; // Assuming only one UMAP per location, adjust if needed
-              popupContent += `<div class='umap-popup' style='min-width:260px;max-width:350px;'>`;
-              popupContent += `<h3 style='margin-bottom:4px;'>UMAP</h3>`;
-              if (isValid(umap.lat) && isValid(umap.lon)) {
-                popupContent += `<div><b>Lat:</b> ${umap.lat} <b>Lon:</b> ${umap.lon}</div>`;
-              }
-              popupContent += `<ul style='margin:8px 0 8px 0;padding-left:18px;'>`;
-              if (isValid(umap.hex)) {
-                popupContent += `<li><a href="nostr_profile_viewer.html?hex=${umap.hex}" target="_blank" title="Open Nostr profile">🧑‍🚀 UMAP Nostr</a></li>`;
-              }
-              if (isValid(umap.umapipfs)) {
-                popupContent += `<li><a href="/ipfs/${umap.umapipfs}" target="_blank" title="Open IPFS Drive">📁 IPFS Drive</a></li>`;
-              }
-              if (umap.UMAPIPNS && umap.UMAPIPNS !== '') {
-                popupContent += `<li><a href="${umap.UMAPIPNS}" target="_blank" title="Open UMAP IPNS">🌐 UMAP IPNS</a></li>`;
-              }
-              if (umap.SECTORROOT && umap.SECTORROOT !== '') {
-                popupContent += `<li><a href="/ipfs/${umap.SECTORROOT}" target="_blank" title="Open SECTOR ROOT">🗂️ Sector Root</a></li>`;
-              }
-              if (umap.SECTORIPNS && umap.SECTORIPNS !== '') {
-                popupContent += `<li><a href="${umap.SECTORIPNS}" target="_blank" title="Open SECTOR IPNS">🌐 Sector IPNS</a></li>`;
-              }
-              if (umap.SECTORHEX && umap.SECTORHEX !== '') {
-                popupContent += `<li><span title="Sector HEX">#️⃣ Sector HEX: ${umap.SECTORHEX}</span></li>`;
-              }
-              if (umap.REGIONROOT && umap.REGIONROOT !== '') {
-                popupContent += `<li><a href="/ipfs/${umap.REGIONROOT}" target="_blank" title="Open REGION ROOT">🗺️ Region Root</a></li>`;
-              }
-              if (umap.REGIONIPNS && umap.REGIONIPNS !== '') {
-                popupContent += `<li><a href="${umap.REGIONIPNS}" target="_blank" title="Open REGION IPNS">🌐 Region IPNS</a></li>`;
-              }
-              if (umap.REGIONHEX && umap.REGIONHEX !== '') {
-                popupContent += `<li><span title="Region HEX">#️⃣ Region HEX: ${umap.REGIONHEX}</span></li>`;
-              }
-              popupContent += `</ul>`;
-
-              if (entities.PLAYERS.length > 0) {
-                  popupContent += `<section><h4 style='margin:6px 0 2px 0;'>Sociétaires (PLAYERS)</h4><ul style='padding-left:18px;'>`;
-                  // Randomly select up to 10 players
-                  const shuffledPlayers = [...entities.PLAYERS].sort(() => 0.5 - Math.random());
-                  const selectedPlayers = shuffledPlayers.slice(0, Math.min(10, entities.PLAYERS.length));
-                  selectedPlayers.forEach(player => {
-                      if (isValid(player.hex) && isValid(player.astromail)) {
-                      popupContent += `<li><a href="nostr_profile_viewer.html?hex=${player.hex}" target="_blank">${player.astromail}</a></li>`;
-                      }
-                  });
-                  popupContent += `</ul></section>`;
-              }
-              popupContent += `</div>`;
-
-          } else if (entities.PLAYERS.length > 0) {
-              icon = playerIcon; // Use player icon if only PLAYERS are present
-              popupContent += `<div class='umap-popup' style='min-width:220px;max-width:320px;'>`;
-              popupContent += `<h3 style='margin-bottom:4px;'>Sociétaires (PLAYERS)</h3><ul style='padding-left:18px;'>`;
-              entities.PLAYERS.forEach(player => {
-                  if (isValid(player.hex) && isValid(player.astromail)) {
-                    popupContent += `<li><a href="nostr_profile_viewer.html?hex=${player.hex}" target="_blank">${player.astromail}</a></li>`;
-                  }
-              });
-              popupContent += `</ul></div>`;
-          }
-
-          if (icon) { // Only add marker if there's an icon (either UMAP or PLAYER present)
-              L.marker([lat, lon], {icon: icon})
-                  .bindPopup(popupContent, { className: 'custom-popup' })
-                  .addTo(map);
-              console.log(`Marker ajouté à LAT: ${lat}, LON: ${lon} avec entités:`, entities);
-          }
-        }
-
-        // NOSTR (utilisateurs) section (if present in uPlanetData)
-        if (uPlanetData.NOSTR && uPlanetData.NOSTR.length > 0) {
-            let nostrSection = `<div class='umap-popup' style='min-width:220px;max-width:320px;'><h3 style='margin-bottom:4px;'>Utilisateurs (NOSTR)</h3><ul style='padding-left:18px;'>`;
-            uPlanetData.NOSTR.forEach(nostr => {
-                if (isValid(nostr.HEX) && isValid(nostr.EMAIL)) {
-                    nostrSection += `<li><a href='nostr_profile_viewer.html?hex=${nostr.HEX}' target='_blank'>${nostr.EMAIL}</a></li>`;
+            get(selector, context = document) {
+                const key = `${selector}:${context === document ? 'doc' : 'ctx'}`;
+                if (!this.cache.has(key)) {
+                    const element = context.querySelector(selector);
+                    if (element) {
+                        this.cache.set(key, element);
+                        this.watchForRemoval(key, element);
+                    }
+                    return element;
                 }
-            });
-            nostrSection += `</ul></div>`;
-            // Add as a marker at [lat, lon] = [0,0] for now (or could be improved)
-            L.marker([0, 0], {icon: playerIcon})
-                .bindPopup(nostrSection, { className: 'custom-popup' })
-                .addTo(map);
+                return this.cache.get(key);
+            }
+
+            getAll(selector, context = document) {
+                const key = `${selector}:all:${context === document ? 'doc' : 'ctx'}`;
+                if (!this.cache.has(key)) {
+                    const elements = Array.from(context.querySelectorAll(selector));
+                    this.cache.set(key, elements);
+                }
+                return this.cache.get(key);
+            }
+
+            watchForRemoval(key, element) {
+                if ('MutationObserver' in window && element.parentNode) {
+                    const observer = new MutationObserver((mutations) => {
+                        mutations.forEach((mutation) => {
+                            mutation.removedNodes.forEach((node) => {
+                                if (node === element || node.contains?.(element)) {
+                                    this.cache.delete(key);
+                                    observer.disconnect();
+                                    this.observers.delete(key);
+                                }
+                            });
+                        });
+                    });
+                    
+                    observer.observe(document.body, { childList: true, subtree: true });
+                    this.observers.set(key, observer);
+                }
+            }
+
+            clear() {
+                this.cache.clear();
+                this.observers.forEach(observer => observer.disconnect());
+                this.observers.clear();
+            }
+
+            invalidate(selector) {
+                const keysToDelete = Array.from(this.cache.keys()).filter(key => key.startsWith(selector));
+                keysToDelete.forEach(key => {
+                    this.cache.delete(key);
+                    if (this.observers.has(key)) {
+                        this.observers.get(key).disconnect();
+                        this.observers.delete(key);
+                    }
+                });
+            }
         }
 
-        // --- UPlanet Summary (like ZONE summary) ---
-        // Count regions, sectors, umaps, players, nostr
-        let regionCount = 0, sectorCount = 0, umapCount = 0, playerCount = 0, nostrCount = 0;
-        if (uPlanetData.UMAPs) umapCount = uPlanetData.UMAPs.length;
-        if (uPlanetData.PLAYERs) playerCount = uPlanetData.PLAYERs.length;
-        if (uPlanetData.NOSTR) nostrCount = uPlanetData.NOSTR.length;
-        const regionSet = new Set(), sectorSet = new Set();
-        if (uPlanetData.UMAPs) {
-          uPlanetData.UMAPs.forEach(umap => {
-            if (isValid(umap.REGIONHEX)) regionSet.add(umap.REGIONHEX);
-            if (isValid(umap.SECTORHEX)) sectorSet.add(umap.SECTORHEX);
-          });
-        }
-        regionCount = regionSet.size;
-        sectorCount = sectorSet.size;
-        if ((isValid(regionCount) && regionCount > 0) || (isValid(sectorCount) && sectorCount > 0) || (isValid(umapCount) && umapCount > 0) || (isValid(playerCount) && playerCount > 0) || (isValid(nostrCount) && nostrCount > 0)) {
-          const summaryBox = document.createElement('div');
-          summaryBox.id = 'summary-box';
-          summaryBox.style.position = 'absolute';
-          summaryBox.style.top = '70px';
-          summaryBox.style.right = '20px';
-          summaryBox.style.background = 'rgba(255,255,255,0.95)';
-          summaryBox.style.borderRadius = '10px';
-          summaryBox.style.boxShadow = '0 2px 8px rgba(0,0,0,0.15)';
-          summaryBox.style.padding = '16px 22px';
-          summaryBox.style.zIndex = '2000';
-          summaryBox.style.transition = 'all 0.3s ease';
-          summaryBox.style.cursor = 'pointer';
-          summaryBox.style.minWidth = '200px';
-          
-          const summaryContent = document.createElement('div');
-          summaryContent.id = 'summary-content';
-          summaryContent.innerHTML = `<h3 style='margin-top:0;'>UPlanet Summary</h3><ul style='margin:0;padding-left:18px;'>`;
-          if (isValid(regionCount) && regionCount > 0) summaryContent.innerHTML += `<li><span title='Regions'>🗺️</span> <b>${regionCount}</b></li>`;
-          if (isValid(sectorCount) && sectorCount > 0) summaryContent.innerHTML += `<li><span title='Sectors'>🗂️</span> <b>${sectorCount}</b></li>`;
-          if (isValid(umapCount) && umapCount > 0) summaryContent.innerHTML += `<li><span title='UMAPs'>🧩</span> <b>${umapCount}</b></li>`;
-          if (isValid(playerCount) && playerCount > 0) summaryContent.innerHTML += `<li><span title='Sociétaires (ZENCARD)'>🧑‍💼</span> <b>${playerCount}</b></li>`;
-          if (isValid(nostrCount) && nostrCount > 0) summaryContent.innerHTML += `<li><span title='Utilisateurs (MULTIPASS)'>👤</span> <b>${nostrCount}</b></li>`;
-          summaryContent.innerHTML += `</ul>`;
-          
-          summaryBox.appendChild(summaryContent);
-          document.body.appendChild(summaryBox);
-          
-          // Add accordion functionality
-          let isCollapsed = false;
-          summaryBox.addEventListener('click', function() {
-            const content = document.getElementById('summary-content');
-            if (isCollapsed) {
-              content.style.display = 'block';
-              summaryBox.style.padding = '16px 22px';
-              summaryBox.style.minWidth = '200px';
-              isCollapsed = false;
-            } else {
-              content.style.display = 'none';
-              summaryBox.style.padding = '8px 12px';
-              summaryBox.style.minWidth = 'auto';
-              isCollapsed = true;
-            }
-          });
-          
-          // Add hover effect
-          summaryBox.addEventListener('mouseenter', function() {
-            if (!isCollapsed) {
-              summaryBox.style.background = 'rgba(255,255,255,0.98)';
-              summaryBox.style.boxShadow = '0 4px 12px rgba(0,0,0,0.2)';
-            }
-          });
-          
-          summaryBox.addEventListener('mouseleave', function() {
-            if (!isCollapsed) {
-              summaryBox.style.background = 'rgba(255,255,255,0.95)';
-              summaryBox.style.boxShadow = '0 2px 8px rgba(0,0,0,0.15)';
-            }
-          });
-        }
-      }
-    });
+        // ⚡ PERFORMANCE: Utility functions
+        const Utils = {
+            debounce(func, wait, immediate = false) {
+                let timeout;
+                return function executedFunction(...args) {
+                    const later = () => {
+                        timeout = null;
+                        if (!immediate) func.apply(this, args);
+                    };
+                    const callNow = immediate && !timeout;
+                    clearTimeout(timeout);
+                    timeout = setTimeout(later, wait);
+                    if (callNow) func.apply(this, args);
+                };
+            },
 
-    // --- Custom popup CSS ---
-    const style = document.createElement('style');
-    style.textContent = `
-      .custom-popup .leaflet-popup-content-wrapper {
-        background: #f8fafd;
-        color: #222;
-        border-radius: 12px;
-        padding: 16px 18px 12px 18px;
-        box-shadow: 0 3px 14px rgba(0,0,0,0.18);
-        min-width: 220px;
-        max-width: 350px;
-      }
-      .custom-popup .leaflet-popup-content h3 {
-        margin: 0 0 6px 0;
-        font-size: 1.2em;
-        color: #1a4a7a;
-      }
-      .custom-popup .leaflet-popup-content h4 {
-        margin: 8px 0 2px 0;
-        font-size: 1em;
-        color: #2b6c3e;
-      }
-      .custom-popup .leaflet-popup-content ul {
-        margin: 0 0 6px 0;
-        padding-left: 18px;
-      }
-      .custom-popup .leaflet-popup-content li {
-        margin-bottom: 2px;
-      }
-      .custom-popup .leaflet-popup-content a {
-        color: #007bff;
-        text-decoration: none;
-        font-weight: 500;
-      }
-      .custom-popup .leaflet-popup-content a:hover {
-        text-decoration: underline;
-      }
-    `;
-    document.head.appendChild(style);
+            throttle(func, limit) {
+                let inThrottle;
+                return function executedFunction(...args) {
+                    if (!inThrottle) {
+                        func.apply(this, args);
+                        inThrottle = true;
+                        setTimeout(() => inThrottle = false, limit);
+                    }
+                };
+            },
 
-</script>
+            createElement(tag, attributes = {}, textContent = '') {
+                const element = document.createElement(tag);
+                Object.entries(attributes).forEach(([key, value]) => {
+                    if (key === 'className') {
+                        element.className = value;
+                    } else if (key === 'dataset') {
+                        Object.entries(value).forEach(([dataKey, dataValue]) => {
+                            element.dataset[dataKey] = dataValue;
+                        });
+                    } else if (key.startsWith('on')) {
+                        const eventName = key.slice(2).toLowerCase();
+                        element.addEventListener(eventName, value);
+                    } else {
+                        element.setAttribute(key, value);
+                    }
+                });
+                if (textContent) {
+                    element.textContent = textContent;
+                }
+                return element;
+            },
+
+            sanitizeHTML(str) {
+                if (typeof str !== 'string') return String(str);
+                const temp = document.createElement('div');
+                temp.textContent = str;
+                return temp.innerHTML;
+            },
+
+            isValidCoordinate(lat, lon) {
+                return (
+                    typeof lat === 'number' && typeof lon === 'number' &&
+                    lat >= -90 && lat <= 90 &&
+                    lon >= -180 && lon <= 180 &&
+                    !isNaN(lat) && !isNaN(lon) &&
+                    !(lat === 0 && lon === 0) // Exclude 0,0 as it usually means no geolocation
+                );
+            },
+
+            getStorageItem(key, defaultValue = null) {
+                try {
+                    const item = localStorage.getItem(key);
+                    return item !== null ? item : defaultValue;
+                } catch (error) {
+                    console.warn('localStorage access failed:', error);
+                    return defaultValue;
+                }
+            },
+
+            setStorageItem(key, value) {
+                try {
+                    localStorage.setItem(key, value);
+                    return true;
+                } catch (error) {
+                    console.warn('localStorage write failed:', error);
+                    return false;
+                }
+            },
+
+            vibrate(pattern = CONFIG.HAPTIC_DURATION) {
+                if (navigator.vibrate && window.innerWidth <= CONFIG.MOBILE_BREAKPOINT) {
+                    navigator.vibrate(pattern);
+                }
+            },
+
+            showNotification(message, type = 'success') {
+                const notification = Utils.createElement('div', {
+                    className: `notification ${type}`
+                }, message);
+                
+                document.body.appendChild(notification);
+                
+                setTimeout(() => notification.classList.add('show'), 100);
+                setTimeout(() => {
+                    notification.classList.remove('show');
+                    setTimeout(() => {
+                        if (notification.parentNode) {
+                            document.body.removeChild(notification);
+                        }
+                    }, 300);
+                }, CONFIG.NOTIFICATION_DURATION);
+            }
+        };
+
+        // Global instances
+        const domCache = new DOMCache();
+        let map, tileLayer, rectangles = [], rectangleCounts = new Map();
+        let currentModalTimeoutId = null;
+
+        // Enhanced UPlanet Welcome implementation
+        class EnhancedUPlanetWelcome {
+            constructor() {
+                this.dataCache = new Map();
+                this.eventListeners = [];
+                this.isDestroyed = false;
+                this.init();
+            }
+
+            init() {
+                console.log('🚀 UPlanet Enhanced Welcome - Initializing...');
+                this.initMap();
+                this.loadData();
+            }
+
+            initMap() {
+                try {
+                    // Create the map
+                    map = L.map('map').setView([0, 0], 1);
+                    
+                    // Set initial tile layer based on theme
+                    this.updateMapLayer();
+                    
+                    // Setup theme toggle
+                    this.setupThemeToggle();
+                    
+                    // Create grid rectangles
+                    this.createGridRectangles();
+                    
+                    console.log('✅ Map initialized successfully');
+                } catch (error) {
+                    console.error('❌ Failed to initialize map:', error);
+                    Utils.showNotification('Erreur d\'initialisation de la carte', 'error');
+                }
+            }
+
+
+
+            setTileLayer(mode) {
+                try {
+                    if (tileLayer) {
+                        map.removeLayer(tileLayer);
+                    }
+                    
+                    if (mode === 'SAT') {
+                        tileLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+                            attribution: 'UPlanet Enhanced | © Esri'
+                        });
+                    } else {
+                        tileLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                            attribution: 'UPlanet Enhanced | © OpenStreetMap contributors'
+                        });
+                    }
+                    
+                    tileLayer.addTo(map);
+                } catch (error) {
+                    console.error('Error setting tile layer:', error);
+                }
+            }
+
+            updateMapLayer() {
+                try {
+                    const savedTheme = Utils.getStorageItem('uplanet-theme', 'light');
+                    
+                    // Automatically set map mode based on theme
+                    // Light theme = MAP, Dark theme = SAT
+                    if (savedTheme === 'dark') {
+                        this.setTileLayer('SAT');
+                        console.log('🌙 Dark theme → Satellite view');
+                    } else {
+                        this.setTileLayer('MAP');
+                        console.log('☀️ Light theme → Map view');
+                    }
+                } catch (error) {
+                    console.error('Error updating map layer:', error);
+                }
+            }
+
+            setupThemeToggle() {
+                const themeBtn = domCache.get('.unified-toggle');
+                if (!themeBtn) return;
+
+                const updateThemeButton = () => {
+                    const theme = Utils.getStorageItem('uplanet-theme', 'light');
+                    
+                    const themeConfig = {
+                        dark: { icon: '🛰️', title: 'Mode sombre + Vue satellite' },
+                        light: { icon: '🗺️', title: 'Mode clair + Vue carte' }
+                    };
+                    
+                    const config = themeConfig[theme] || themeConfig.light;
+                    
+                    themeBtn.textContent = config.icon;
+                    themeBtn.title = config.title;
+                };
+
+                // Initialize button display
+                updateThemeButton();
+                
+                // Store reference for global access
+                window.updateThemeButton = updateThemeButton;
+            }
+
+            createGridRectangles() {
+                try {
+                    rectangles = [];
+                    
+                    for (let latIndex = 0; latIndex < CONFIG.GRID_SIZE; latIndex++) {
+                        for (let lonIndex = 0; lonIndex < CONFIG.GRID_SIZE; lonIndex++) {
+                            const lat = -180 + latIndex * CONFIG.TILE_SIZE;
+                            const lon = -180 + lonIndex * CONFIG.TILE_SIZE;
+
+                            const rectangle = L.rectangle(
+                                [[lat, lon], [lat + CONFIG.TILE_SIZE, lon + CONFIG.TILE_SIZE]],
+                                { 
+                                    color: 'transparent', 
+                                    weight: 1, 
+                                    className: 'clickable-area',
+                                    interactive: true
+                                }
+                            );
+
+                            rectangle.on('click', () => {
+                                try {
+                                    // Always navigate to enhanced version (theme will be preserved)
+                                    const url = `map_render.html?southWestLat=${lat}&southWestLon=${lon}&deg=${CONFIG.TILE_SIZE}`;
+                                    
+                                    Utils.vibrate();
+                                    console.log('🗺️ Navigating to:', url);
+                                    window.location.href = url;
+                                } catch (error) {
+                                    console.error('Navigation error:', error);
+                                    Utils.showNotification('Erreur de navigation', 'error');
+                                }
+                            });
+
+                            rectangle.addTo(map);
+                            rectangles.push(rectangle);
+                        }
+                    }
+                    
+                    console.log(`✅ Created ${rectangles.length} grid rectangles`);
+                } catch (error) {
+                    console.error('Error creating grid rectangles:', error);
+                }
+            }
+
+            async loadData() {
+                try {
+                    // Hide page loading
+                    const pageLoading = domCache.get('#page-loading');
+                    if (pageLoading) {
+                        pageLoading.classList.add('hidden');
+                    }
+
+                    // Build API URLs
+                    const urls = this.buildAPIUrls();
+                    
+                    // 🚀 Load UPlanet data immediately (priority)
+                    this.loadUPlanetData(urls.uPlanetAPI_URL)
+                        .then(uplanetData => {
+                            if (uplanetData) {
+                                this.processUPlanetData(uplanetData);
+                                console.log('✅ UPlanet data loaded and processed successfully');
+                                Utils.showNotification('🌍 UPlanet data loaded!', 'success');
+                            }
+                        })
+                        .catch(err => {
+                            console.warn('UPlanet data loading failed:', err);
+                            Utils.showNotification('Erreur de chargement UPlanet', 'error');
+                        });
+
+                    // 🐉 Load DRAGONS data in background (optional)
+                    this.loadDRAGONS(urls.zoneURL)
+                        .then(dragonsData => {
+                            if (dragonsData && dragonsData.length > 0) {
+                                this.processDragonsData(dragonsData);
+                                console.log('✅ DRAGONS data loaded and processed successfully');
+                                Utils.showNotification('🐉 DRAGONS data loaded!', 'success');
+                            } else {
+                                console.log('⚠️ No DRAGONS data received');
+                            }
+                        })
+                        .catch(err => {
+                            console.warn('🐉 DRAGONS loading failed (optional):', err);
+                            // Don't show error notification for DRAGONS as it's optional
+                        });
+
+                    console.log('✅ Data loading initiated (UPlanet priority, DRAGONS background)');
+
+                } catch (error) {
+                    console.error('❌ Error loading data:', error);
+                    Utils.showNotification('Erreur de chargement des données', 'error');
+                }
+            }
+
+            buildAPIUrls() {
+                const currentURL = new URL(window.location.href);
+                const hostname = currentURL.hostname;
+                const protocol = currentURL.protocol.split(":")[0];
+
+                // Dragons URL
+                let zPort = currentURL.port;
+                if (zPort === "8080") zPort = "1234";
+                const zHost = hostname.replace("ipfs", "astroport");
+                const station = `${protocol}://${zHost}${zPort ? ":" + zPort : ""}`;
+                const zoneURL = `${station}/?dragons=one`;
+
+                // UPlanet API URL
+                let uPort = currentURL.port;
+                if (uPort === "8080") uPort = "54321";
+                const uHost = hostname.replace("ipfs", "u");
+                const uPlanetStation = `${protocol}://${uHost}${uPort ? ":" + uPort : ""}`;
+                const uPlanetAPI_URL = `${uPlanetStation}/`;
+
+                console.log('🔗 API URLs:', { zoneURL, uPlanetAPI_URL });
+                return { zoneURL, uPlanetAPI_URL };
+            }
+
+            async loadDRAGONS(myURL) {
+                try {
+                    console.log('📡 Fetching DRAGONS data from:', myURL);
+                    const data = await this.fetchAstroport(myURL);
+                    console.log('✅ DRAGONS data loaded:', data?.length || 0, 'items');
+                    return data?.filter(({ lat, lon }) => 
+                        Utils.isValidCoordinate(lat, lon)
+                    ) || [];
+                } catch (error) {
+                    console.error('❌ Error loading DRAGONS:', error);
+                    return [];
+                }
+            }
+
+            async loadUPlanetData(myURL) {
+                try {
+                    console.log('📡 Fetching UPlanet data from:', myURL);
+                    
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), CONFIG.API_TIMEOUT);
+                    
+                    const response = await fetch(myURL, { 
+                        signal: controller.signal,
+                        headers: {
+                            'Cache-Control': 'max-age=600' // 10 minutes cache
+                        }
+                    });
+                    clearTimeout(timeoutId);
+                    
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
+                    
+                    const data = await response.json();
+                    console.log('✅ UPlanet data loaded successfully');
+                    return data;
+                } catch (error) {
+                    console.error('❌ Error loading UPlanet data:', error);
+                    return null;
+                }
+            }
+
+            async fetchAstroport(myURL, retryCount = 3) {
+                try {
+                    const one = await fetch(myURL);
+                    const doc = await one.text();
+                    const regex = /url='([^']+)/i;
+                    const match = doc.match(regex);
+                    
+                    if (!match || !match[1]) {
+                        throw new Error('No redirect URL found in response');
+                    }
+                    
+                    const redirectURL = match[1];
+
+                    return new Promise(async (resolve, reject) => {
+                        let retry = 0;
+
+                        const fetchData = async () => {
+                            try {
+                                const two = await fetch(redirectURL);
+                                if (!two.ok) {
+                                    throw new Error(`HTTP ${two.status}: ${two.statusText}`);
+                                }
+                                const data = await two.json();
+                                resolve(data);
+                            } catch (error) {
+                                if (retry < retryCount) {
+                                    console.log(`🔄 Retry ${retry + 1}/${retryCount} after 4000ms...`);
+                                    retry++;
+                                    setTimeout(fetchData, 4000);
+                                } else {
+                                    console.log('❌ Max retries reached. Fetch error:', error);
+                                    reject(error);
+                                }
+                            }
+                        };
+
+                        setTimeout(fetchData, 3000);
+                    });
+                } catch (err) {
+                    console.log('❌ Fetch error:', err);
+                    return Promise.reject(err);
+                }
+            }
+
+            processDragonsData(dragons) {
+                if (!Array.isArray(dragons) || dragons.length === 0) {
+                    console.log('⚠️ No DRAGONS data to process');
+                    return;
+                }
+
+                try {
+                    this.displayRollingText(dragons);
+                    this.overlayDragonsCount(dragons);
+                    console.log(`✅ Processed ${dragons.length} DRAGONS`);
+                } catch (error) {
+                    console.error('Error processing DRAGONS data:', error);
+                }
+            }
+
+            displayRollingText(dragons) {
+                const rollingTextContainer = domCache.get('#rollingText');
+                if (!rollingTextContainer || dragons.length === 0) return;
+
+                let currentIndex = 0;
+
+                const updateText = () => {
+                    const dragon = dragons[currentIndex];
+                    if (dragon) {
+                        const title = Utils.sanitizeHTML(dragon.title || 'Unnamed');
+                        const lat = Utils.sanitizeHTML(dragon.lat || '0');
+                        const lon = Utils.sanitizeHTML(dragon.lon || '0');
+                        const tags = Utils.sanitizeHTML(dragon.tags || '');
+                        const ipfsnodeid = Utils.sanitizeHTML(dragon.ipfsnodeid || '');
+                        
+                        rollingTextContainer.innerHTML = `
+                            [${currentIndex + 1}/${dragons.length}] :: ${title} :: 
+                            _${lat}_${lon} 
+                            <a href="/ipns/${ipfsnodeid}" title="${tags}" target="12345">
+                                (U) [♥️BOX] (U)
+                            </a>
+                        `;
+                    }
+                    currentIndex = (currentIndex + 1) % dragons.length;
+                };
+
+                // Update immediately and then every 5 seconds
+                updateText();
+                setInterval(updateText, 5000);
+            }
+
+            overlayDragonsCount(dragons) {
+                const dragonRectanglesMap = new Map();
+
+                dragons.forEach(({ lat, lon }) => {
+                    if (!Utils.isValidCoordinate(lat, lon)) return;
+
+                    const latLng = L.latLng(lat, lon);
+                    const matchingRectangle = rectangles.find(rectangle =>
+                        rectangle.getBounds().contains(latLng)
+                    );
+
+                    if (matchingRectangle) {
+                        const count = dragonRectanglesMap.get(matchingRectangle) || 0;
+                        dragonRectanglesMap.set(matchingRectangle, count + 1);
+                    }
+                });
+
+                // Overlay grid numbers
+                dragonRectanglesMap.forEach((count, rectangle) => {
+                    this.overlayGridNumbers(rectangle, count);
+                });
+
+                console.log(`✅ Overlaid ${dragonRectanglesMap.size} grid numbers`);
+            }
+
+            overlayGridNumbers(rectangle, count) {
+                try {
+                    const latLng = rectangle.getBounds().getCenter();
+                    const containerPoint = map.latLngToContainerPoint(latLng);
+
+                    const numberElement = Utils.createElement('div', {
+                        className: 'grid-number',
+                        style: `
+                            position: absolute;
+                            z-index: 1000;
+                            top: ${containerPoint.y}px;
+                            left: ${containerPoint.x}px;
+                            transform: translate(-50%, -50%);
+                        `
+                    }, String(count));
+
+                    domCache.get('#map').appendChild(numberElement);
+
+                    // Update position on map move
+                    const updatePosition = () => {
+                        const newPoint = map.latLngToContainerPoint(latLng);
+                        numberElement.style.top = `${newPoint.y}px`;
+                        numberElement.style.left = `${newPoint.x}px`;
+                    };
+
+                    map.on('zoomend moveend', updatePosition);
+                } catch (error) {
+                    console.warn('Error overlaying grid number:', error);
+                }
+            }
+
+            processUPlanetData(uPlanetData) {
+                if (!uPlanetData) {
+                    console.log('⚠️ No UPlanet data to process');
+                    return;
+                }
+
+                try {
+                    this.createLocationMarkers(uPlanetData);
+                    this.createSummaryBox(uPlanetData);
+                    console.log('✅ UPlanet data processed successfully');
+                } catch (error) {
+                    console.error('Error processing UPlanet data:', error);
+                }
+            }
+
+            createLocationMarkers(uPlanetData) {
+                const locationEntities = {};
+
+                // Helper function to check for valid values (including string "null")
+                const isValid = (val) => val !== null && val !== undefined && val !== '' && val !== 'null' && val !== 'NULL';
+
+                console.log('🔍 Processing UPlanet data for markers:', {
+                    NOSTR: uPlanetData.NOSTR?.length || 0,
+                    PLAYERs: uPlanetData.PLAYERs?.length || 0,
+                    UMAPs: uPlanetData.UMAPs?.length || 0
+                });
+
+                // Group NOSTR users by location
+                if (Array.isArray(uPlanetData.NOSTR)) {
+                    console.log('📡 Processing NOSTR data:', uPlanetData.NOSTR);
+                    uPlanetData.NOSTR.forEach((nostr, index) => {
+                        console.log(`📡 NOSTR[${index}]:`, { EMAIL: nostr.EMAIL, HEX: nostr.HEX, LAT: nostr.LAT, LON: nostr.LON });
+                        
+                        if (nostr.LAT && nostr.LON && isValid(nostr.HEX) && nostr.EMAIL) {
+                            const locationKey = `${nostr.LAT},${nostr.LON}`;
+                            if (!locationEntities[locationKey]) {
+                                locationEntities[locationKey] = { PLAYERS: [], UMAPS: [], NOSTR: [] };
+                            }
+                            if (!locationEntities[locationKey].NOSTR) {
+                                locationEntities[locationKey].NOSTR = [];
+                            }
+                            locationEntities[locationKey].NOSTR.push({
+                                hex: nostr.HEX,
+                                email: nostr.EMAIL,
+                                zen: nostr.ZEN,
+                                g1pub: nostr.G1PUBNOSTR
+                            });
+                            console.log(`✅ Added NOSTR user ${nostr.EMAIL} at ${locationKey}`);
+                        } else {
+                            console.log(`❌ Skipped NOSTR user:`, {
+                                EMAIL: nostr.EMAIL,
+                                hasLAT: !!nostr.LAT,
+                                hasLON: !!nostr.LON,
+                                HEX: nostr.HEX,
+                                validHEX: isValid(nostr.HEX)
+                            });
+                        }
+                    });
+                }
+
+                // Group PLAYERS by location
+                if (Array.isArray(uPlanetData.PLAYERs)) {
+                    console.log('🎮 Processing PLAYERs data:', uPlanetData.PLAYERs);
+                    uPlanetData.PLAYERs.forEach((player, index) => {
+                        console.log(`🎮 PLAYER[${index}]:`, { ASTROMAIL: player.ASTROMAIL, HEX: player.HEX, LAT: player.LAT, LON: player.LON });
+                        
+                        // Accept players even without valid HEX (ZEN Card only)
+                        if (player.LAT && player.LON && player.ASTROMAIL) {
+                            const locationKey = `${player.LAT},${player.LON}`;
+                            if (!locationEntities[locationKey]) {
+                                locationEntities[locationKey] = { PLAYERS: [], UMAPS: [], NOSTR: [] };
+                            }
+                            locationEntities[locationKey].PLAYERS.push({
+                                hex: isValid(player.HEX) ? player.HEX : null,
+                                astromail: player.ASTROMAIL,
+                                zen: player.ZEN,
+                                astroport: player.ASTROPORT,
+                                astrotw: player.ASTROTW,
+                                astrofeed: player.ASTROFEED
+                            });
+                            console.log(`✅ Added PLAYER ${player.ASTROMAIL} at ${locationKey}`);
+                        } else {
+                            console.log(`❌ Skipped PLAYER:`, {
+                                ASTROMAIL: player.ASTROMAIL,
+                                hasLAT: !!player.LAT,
+                                hasLON: !!player.LON,
+                                HEX: player.HEX
+                            });
+                        }
+                    });
+                }
+
+                // Group UMAPs by location
+                if (Array.isArray(uPlanetData.UMAPs)) {
+                    console.log('🧩 Processing UMAPs data:', uPlanetData.UMAPs);
+                    uPlanetData.UMAPs.forEach((umap, index) => {
+                        console.log(`🧩 UMAP[${index}]:`, { LAT: umap.LAT, LON: umap.LON, UMAPHEX: umap.UMAPHEX });
+                        
+                        if (umap.LAT && umap.LON && umap.UMAPHEX) {
+                            const locationKey = `${umap.LAT},${umap.LON}`;
+                            if (!locationEntities[locationKey]) {
+                                locationEntities[locationKey] = { PLAYERS: [], UMAPS: [], NOSTR: [] };
+                            }
+                            locationEntities[locationKey].UMAPS.push({
+                                hex: umap.UMAPHEX,
+                                umapipfs: umap.UMAPROOT,
+                                lat: umap.LAT,
+                                lon: umap.LON,
+                                ...umap
+                            });
+                            console.log(`✅ Added UMAP at ${locationKey}`);
+                        } else {
+                            console.log(`❌ Skipped UMAP:`, {
+                                hasLAT: !!umap.LAT,
+                                hasLON: !!umap.LON,
+                                UMAPHEX: umap.UMAPHEX
+                            });
+                        }
+                    });
+                }
+
+                // Create markers for each location
+                console.log('🗺️ Creating markers for locations:', Object.keys(locationEntities));
+                Object.entries(locationEntities).forEach(([locationKey, entities]) => {
+                    const [lat, lon] = locationKey.split(',').map(parseFloat);
+                    
+                    console.log(`📍 Processing location ${locationKey}:`, {
+                        lat, lon,
+                        validCoords: Utils.isValidCoordinate(lat, lon),
+                        NOSTR: entities.NOSTR?.length || 0,
+                        PLAYERS: entities.PLAYERS?.length || 0,
+                        UMAPS: entities.UMAPS?.length || 0
+                    });
+                    
+                    if (!Utils.isValidCoordinate(lat, lon)) {
+                        console.log(`❌ Invalid coordinates for ${locationKey}: ${lat}, ${lon}`);
+                        return;
+                    }
+
+                    let popupContent = '';
+                    let iconUrl = null;
+
+                    // Priority: UMAP > NOSTR > PLAYERS
+                    if (entities.UMAPS && entities.UMAPS.length > 0) {
+                        iconUrl = 'umap-icon.png';
+                        popupContent = this.createUMAPPopupContent(entities.UMAPS[0], entities.PLAYERS, entities.NOSTR, isValid);
+                        console.log(`🧩 Creating UMAP marker at ${locationKey}`);
+                    } else if (entities.NOSTR && entities.NOSTR.length > 0) {
+                        iconUrl = 'player-icon.png'; // Use player icon for NOSTR
+                        popupContent = this.createNOSTRPopupContent(entities.NOSTR, entities.PLAYERS, isValid);
+                        console.log(`📡 Creating NOSTR marker at ${locationKey}`);
+                    } else if (entities.PLAYERS && entities.PLAYERS.length > 0) {
+                        iconUrl = 'player-icon.png';
+                        popupContent = this.createPlayersPopupContent(entities.PLAYERS, isValid);
+                        console.log(`🎮 Creating PLAYER marker at ${locationKey}`);
+                    }
+
+                    if (iconUrl && popupContent) {
+                        try {
+                            const icon = L.icon({
+                                iconUrl: iconUrl,
+                                iconSize: [32, 32],
+                                iconAnchor: [16, 32],
+                                popupAnchor: [0, -32]
+                            });
+
+                            L.marker([lat, lon], { icon })
+                                .bindPopup(popupContent, { className: 'custom-popup' })
+                                .addTo(map);
+                                
+                            console.log(`✅ Marker created successfully at ${locationKey}`);
+                        } catch (markerError) {
+                            console.error(`❌ Error creating marker at ${locationKey}:`, markerError);
+                        }
+                    } else {
+                        console.log(`⚠️ No valid content for marker at ${locationKey}:`, { iconUrl, hasContent: !!popupContent });
+                    }
+                });
+                
+                console.log('📊 Marker creation summary:', {
+                    totalLocations: Object.keys(locationEntities).length,
+                    locationsWithMarkers: Object.entries(locationEntities).filter(([key, entities]) => {
+                        const [lat, lon] = key.split(',').map(parseFloat);
+                        return Utils.isValidCoordinate(lat, lon) && 
+                               ((entities.UMAPS && entities.UMAPS.length > 0) ||
+                                (entities.NOSTR && entities.NOSTR.length > 0) ||
+                                (entities.PLAYERS && entities.PLAYERS.length > 0));
+                    }).length
+                });
+            }
+
+            createUMAPPopupContent(umap, players, nostrUsers, isValid) {
+                let content = `<div class='umap-popup' style='min-width:260px;max-width:350px;'>`;
+                content += `<h3>🧩 UMAP</h3>`;
+                
+                if (isValid(umap.lat) && isValid(umap.lon)) {
+                    content += `<div><b>Lat:</b> ${umap.lat} <b>Lon:</b> ${umap.lon}</div>`;
+                }
+                
+                content += `<ul style='margin:8px 0;padding-left:18px;'>`;
+                
+                if (isValid(umap.hex)) {
+                    content += `<li><a href="#" onclick="openProfileModal('nostr_profile_viewer.html?hex=${umap.hex}', 'UMAP Profile')" title="Open Nostr profile">🧑‍🚀 UMAP Nostr</a></li>`;
+                }
+                
+                if (isValid(umap.umapipfs)) {
+                    content += `<li><a href="/ipfs/${umap.umapipfs}" target="_blank" title="Open IPFS Drive">📁 IPFS Drive</a></li>`;
+                }
+                
+                content += `</ul>`;
+
+                // Show NOSTR users first (MULTIPASS)
+                if (nostrUsers && nostrUsers.length > 0) {
+                    content += `<section><h4>🚀 Utilisateurs (MULTIPASS)</h4><ul style='padding-left:18px;'>`;
+                    const selectedNostr = nostrUsers.slice(0, Math.min(10, nostrUsers.length));
+                    selectedNostr.forEach(nostr => {
+                        if (isValid(nostr.hex) && isValid(nostr.email)) {
+                            const zenInfo = nostr.zen ? ` (${nostr.zen} Ẑen)` : '';
+                            content += `<li><a href="#" onclick="openProfileModal('nostr_profile_viewer.html?hex=${nostr.hex}', '${Utils.sanitizeHTML(nostr.email)}')">${Utils.sanitizeHTML(nostr.email)}${zenInfo}</a></li>`;
+                        }
+                    });
+                    content += `</ul></section>`;
+                }
+
+                // Show PLAYERS (ZEN Card)
+                if (players && players.length > 0) {
+                    content += `<section><h4>👤 Sociétaires (ZEN Card)</h4><ul style='padding-left:18px;'>`;
+                    const selectedPlayers = players.slice(0, Math.min(10, players.length));
+                    selectedPlayers.forEach(player => {
+                        if (isValid(player.astromail)) {
+                            const zenInfo = player.zen ? ` (${player.zen} Ẑen)` : '';
+                            if (isValid(player.hex)) {
+                                content += `<li><a href="#" onclick="openProfileModal('nostr_profile_viewer.html?hex=${player.hex}', '${Utils.sanitizeHTML(player.astromail)}')">${Utils.sanitizeHTML(player.astromail)}${zenInfo}</a></li>`;
+                            } else {
+                                content += `<li>${Utils.sanitizeHTML(player.astromail)}${zenInfo} (ZEN only)</li>`;
+                            }
+                        }
+                    });
+                    content += `</ul></section>`;
+                }
+                
+                content += `</div>`;
+                return content;
+            }
+
+            createNOSTRPopupContent(nostrUsers, players, isValid) {
+                let content = `<div class='umap-popup' style='min-width:260px;max-width:350px;'>`;
+                content += `<h3>🚀 Utilisateurs (MULTIPASS)</h3>`;
+                
+                if (nostrUsers && nostrUsers.length > 0) {
+                    content += `<ul style='margin:8px 0;padding-left:18px;'>`;
+                    const selectedNostr = nostrUsers.slice(0, Math.min(10, nostrUsers.length));
+                    selectedNostr.forEach(nostr => {
+                        if (isValid(nostr.hex) && isValid(nostr.email)) {
+                            const zenInfo = nostr.zen ? ` (${nostr.zen} Ẑen)` : '';
+                            content += `<li><a href="#" onclick="openProfileModal('nostr_profile_viewer.html?hex=${nostr.hex}', '${Utils.sanitizeHTML(nostr.email)}')">${Utils.sanitizeHTML(nostr.email)}${zenInfo}</a></li>`;
+                        }
+                    });
+                    content += `</ul>`;
+                }
+
+                // Show additional PLAYERS if any at same location
+                if (players && players.length > 0) {
+                    content += `<section><h4>👤 Sociétaires (ZEN Card)</h4><ul style='padding-left:18px;'>`;
+                    const selectedPlayers = players.slice(0, Math.min(5, players.length));
+                    selectedPlayers.forEach(player => {
+                        if (isValid(player.astromail)) {
+                            const zenInfo = player.zen ? ` (${player.zen} Ẑen)` : '';
+                            if (isValid(player.hex)) {
+                                content += `<li><a href="#" onclick="openProfileModal('nostr_profile_viewer.html?hex=${player.hex}', '${Utils.sanitizeHTML(player.astromail)}')">${Utils.sanitizeHTML(player.astromail)}${zenInfo}</a></li>`;
+                            } else {
+                                content += `<li>${Utils.sanitizeHTML(player.astromail)}${zenInfo} (ZEN only)</li>`;
+                            }
+                        }
+                    });
+                    content += `</ul></section>`;
+                }
+                
+                content += `</div>`;
+                return content;
+            }
+
+            createPlayersPopupContent(players, isValid) {
+                let content = `<div class='umap-popup' style='min-width:220px;max-width:320px;'>`;
+                content += `<h3>👤 Sociétaires (ZEN Card)</h3><ul style='padding-left:18px;'>`;
+                
+                players.forEach(player => {
+                    if (isValid(player.astromail)) {
+                        const zenInfo = player.zen ? ` (${player.zen} Ẑen)` : '';
+                        if (isValid(player.hex)) {
+                            content += `<li><a href="#" onclick="openProfileModal('nostr_profile_viewer.html?hex=${player.hex}', '${Utils.sanitizeHTML(player.astromail)}')">${Utils.sanitizeHTML(player.astromail)}${zenInfo}</a></li>`;
+                        } else {
+                            content += `<li>${Utils.sanitizeHTML(player.astromail)}${zenInfo} (ZEN only)</li>`;
+                        }
+                    }
+                });
+                
+                content += `</ul></div>`;
+                return content;
+            }
+
+            createSummaryBox(uPlanetData) {
+                const isValid = (val) => val !== null && val !== undefined && val !== '' && val !== 'null';
+                
+                let regionCount = 0, sectorCount = 0, umapCount = 0, playerCount = 0, nostrCount = 0;
+                
+                if (Array.isArray(uPlanetData.UMAPs)) umapCount = uPlanetData.UMAPs.length;
+                if (Array.isArray(uPlanetData.PLAYERs)) playerCount = uPlanetData.PLAYERs.length;
+                if (Array.isArray(uPlanetData.NOSTR)) nostrCount = uPlanetData.NOSTR.length;
+                
+                const regionSet = new Set(), sectorSet = new Set();
+                if (Array.isArray(uPlanetData.UMAPs)) {
+                    uPlanetData.UMAPs.forEach(umap => {
+                        if (isValid(umap.REGIONHEX)) regionSet.add(umap.REGIONHEX);
+                        if (isValid(umap.SECTORHEX)) sectorSet.add(umap.SECTORHEX);
+                    });
+                }
+                regionCount = regionSet.size;
+                sectorCount = sectorSet.size;
+
+                if (regionCount > 0 || sectorCount > 0 || umapCount > 0 || playerCount > 0 || nostrCount > 0) {
+                    const summaryBox = Utils.createElement('div', {
+                        className: 'summary-box fade-in-up',
+                        id: 'summary-box'
+                    });
+
+                    const summaryContent = Utils.createElement('div', { id: 'summary-content' });
+                    
+                    let contentHTML = `<h3>🌍 UPlanet Summary</h3><ul>`;
+                    if (regionCount > 0) contentHTML += `<li><span class="summary-icon">🗺️</span><b>${regionCount}</b> Regions</li>`;
+                    if (sectorCount > 0) contentHTML += `<li><span class="summary-icon">🗂️</span><b>${sectorCount}</b> Sectors</li>`;
+                    if (umapCount > 0) contentHTML += `<li><span class="summary-icon">🧩</span><b>${umapCount}</b> UMAPs</li>`;
+                    if (playerCount > 0) contentHTML += `<li><span class="summary-icon">🧑‍💼</span><b>${playerCount}</b> ZEN Card</li>`;
+                    if (nostrCount > 0) contentHTML += `<li><span class="summary-icon">👤</span><b>${nostrCount}</b> MULTIPASS</li>`;
+                    contentHTML += `</ul>`;
+                    
+                    summaryContent.innerHTML = contentHTML;
+                    summaryBox.appendChild(summaryContent);
+                    document.body.appendChild(summaryBox);
+
+                    // Add accordion functionality
+                    let isCollapsed = false;
+                    summaryBox.addEventListener('click', function() {
+                        const content = domCache.get('#summary-content');
+                        if (content) {
+                            if (isCollapsed) {
+                                content.style.display = 'block';
+                                summaryBox.style.padding = '16px 20px';
+                                summaryBox.style.minWidth = '200px';
+                                isCollapsed = false;
+                            } else {
+                                content.style.display = 'none';
+                                summaryBox.style.padding = '8px 12px';
+                                summaryBox.style.minWidth = 'auto';
+                                isCollapsed = true;
+                            }
+                        }
+                        Utils.vibrate();
+                    });
+                }
+            }
+
+            destroy() {
+                this.isDestroyed = true;
+                this.eventListeners.forEach(({ element, event, handler }) => {
+                    element.removeEventListener(event, handler);
+                });
+                this.eventListeners = [];
+                this.dataCache.clear();
+                domCache.clear();
+            }
+        }
+
+        // Theme toggle management (simple: light=MAP, dark=SAT)
+        function toggleTheme() {
+            try {
+                const currentTheme = document.body.dataset.theme || 'light';
+                const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+                
+                // Validate theme value
+                if (!['light', 'dark'].includes(newTheme)) {
+                    console.warn('Invalid theme value, defaulting to light');
+                    newTheme = 'light';
+                }
+                
+                // Apply theme
+                document.body.dataset.theme = newTheme;
+                Utils.setStorageItem('uplanet-theme', newTheme);
+                
+                // Update button display
+                if (window.updateThemeButton) {
+                    window.updateThemeButton();
+                }
+                
+                // Update map layer automatically based on theme
+                if (window.uplanetWelcome && window.uplanetWelcome.updateMapLayer) {
+                    window.uplanetWelcome.updateMapLayer();
+                }
+                
+                Utils.vibrate();
+                console.log(`🎨 Theme switched to: ${newTheme}`);
+                
+                // Show notification to user
+                const themeLabels = {
+                    'light': '☀️ Mode clair + Carte',
+                    'dark': '🌙 Mode sombre + Satellite'
+                };
+                const label = themeLabels[newTheme] || 'Unknown Theme';
+                Utils.showNotification(label, 'success');
+                
+                // Dispatch custom event for theme change
+                window.dispatchEvent(new CustomEvent('themeChanged', { 
+                    detail: { theme: newTheme } 
+                }));
+                
+            } catch (error) {
+                console.error('Error toggling theme:', error);
+                Utils.showNotification('Erreur de changement de thème', 'error');
+            }
+        }
+
+        // Profile modal functions
+        function openProfileModal(url, title = 'Profile') {
+            try {
+                const modal = domCache.get('#profile-modal');
+                const iframe = domCache.get('#profile-iframe');
+                const titleEl = domCache.get('#profile-modal-title');
+                
+                if (!modal || !iframe || !titleEl || !url) {
+                    console.error('Modal elements not found or invalid URL');
+                    return;
+                }
+                
+                titleEl.textContent = Utils.sanitizeHTML(title);
+                modal.classList.add('show');
+                iframe.src = url;
+                
+                Utils.vibrate();
+                console.log('📱 Profile modal opened:', url);
+                
+            } catch (error) {
+                console.error('Error opening profile modal:', error);
+                Utils.showNotification('Erreur d\'ouverture du profil', 'error');
+            }
+        }
+
+        function closeProfileModal() {
+            try {
+                const modal = domCache.get('#profile-modal');
+                const iframe = domCache.get('#profile-iframe');
+                
+                if (modal && iframe) {
+                    resetFullscreenModal();
+                    modal.classList.remove('show');
+                    setTimeout(() => {
+                        iframe.src = 'about:blank';
+                    }, 300);
+                }
+                
+                Utils.vibrate();
+                console.log('📱 Profile modal closed');
+                
+            } catch (error) {
+                console.error('Error closing profile modal:', error);
+            }
+        }
+
+        function toggleFullscreenModal() {
+            try {
+                const modal = domCache.get('#profile-modal');
+                const modalContent = domCache.get('.profile-modal-content');
+                const fullscreenBtn = domCache.get('.profile-modal-fullscreen');
+                
+                if (!modal || !modalContent || !fullscreenBtn) return;
+                
+                const isFullscreen = modalContent.classList.contains('fullscreen');
+                
+                if (isFullscreen) {
+                    modal.classList.remove('fullscreen');
+                    modalContent.classList.remove('fullscreen');
+                    fullscreenBtn.classList.remove('active');
+                    fullscreenBtn.textContent = '⛶';
+                    fullscreenBtn.title = 'Fullscreen (F11)';
+                } else {
+                    modal.classList.add('fullscreen');
+                    modalContent.classList.add('fullscreen');
+                    fullscreenBtn.classList.add('active');
+                    fullscreenBtn.textContent = '🗗';
+                    fullscreenBtn.title = 'Exit fullscreen (F11)';
+                }
+                
+                Utils.vibrate([10, 20]);
+                console.log(`📱 Modal fullscreen: ${!isFullscreen ? 'ON' : 'OFF'}`);
+                
+            } catch (error) {
+                console.error('Error toggling modal fullscreen:', error);
+            }
+        }
+
+        function resetFullscreenModal() {
+            try {
+                const modal = domCache.get('#profile-modal');
+                const modalContent = domCache.get('.profile-modal-content');
+                const fullscreenBtn = domCache.get('.profile-modal-fullscreen');
+                
+                if (modal && modalContent && fullscreenBtn) {
+                    modal.classList.remove('fullscreen');
+                    modalContent.classList.remove('fullscreen');
+                    fullscreenBtn.classList.remove('active');
+                    fullscreenBtn.textContent = '⛶';
+                    fullscreenBtn.title = 'Fullscreen (F11)';
+                }
+            } catch (error) {
+                console.warn('Error resetting fullscreen modal:', error);
+            }
+        }
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', function(e) {
+            const modal = domCache.get('#profile-modal');
+            if (modal && modal.classList.contains('show')) {
+                if (e.key === 'Escape') {
+                    closeProfileModal();
+                } else if (e.key === 'F11') {
+                    e.preventDefault();
+                    toggleFullscreenModal();
+                }
+            }
+        });
+
+        // Enhanced initialization
+        document.addEventListener('DOMContentLoaded', () => {
+            const startTime = performance.now();
+            
+            try {
+                console.log('🚀 UPlanet Enhanced Welcome - Starting initialization...');
+                
+                // Load and apply saved theme
+                const savedTheme = Utils.getStorageItem('uplanet-theme', 'light');
+                document.body.dataset.theme = savedTheme;
+                
+                // Initialize main application
+                window.uplanetWelcome = new EnhancedUPlanetWelcome();
+                
+                // Log initial state
+                console.log(`🎨🗺️ Initial state: ${savedTheme} theme (auto view)`);
+                
+                // Performance monitoring
+                const endTime = performance.now();
+                console.log(`✅ UPlanet Enhanced Welcome initialized in ${(endTime - startTime).toFixed(2)}ms`);
+                
+            } catch (error) {
+                console.error('❌ Failed to initialize UPlanet Enhanced Welcome:', error);
+                Utils.showNotification('Erreur d\'initialisation', 'error');
+                
+                // Hide loading overlay even on error
+                const pageLoading = domCache.get('#page-loading');
+                if (pageLoading) {
+                    pageLoading.classList.add('hidden');
+                }
+            }
+        });
+
+        // Enhanced error handler
+        window.addEventListener('error', function(event) {
+            if (event.message?.includes('UPlanet') || event.filename?.includes('welcome')) {
+                console.error('🚨 UPlanet Welcome Error:', {
+                    message: event.message,
+                    filename: event.filename,
+                    lineno: event.lineno,
+                    colno: event.colno,
+                    stack: event.error?.stack
+                });
+            }
+            return false;
+        });
+
+        // Cleanup on unload
+        window.addEventListener('beforeunload', function() {
+            try {
+                domCache.clear();
+                if (window.uplanetWelcome?.destroy) {
+                    window.uplanetWelcome.destroy();
+                }
+                console.log('🧹 UPlanet Welcome cleanup completed');
+            } catch (error) {
+                console.warn('Cleanup error:', error);
+            }
+        });
+
+    </script>
 </body>
-</html>
-cd 
+</html> 

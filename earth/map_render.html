@@ -1,766 +1,3698 @@
 <!DOCTYPE html>
 <html>
 <head>
-      <meta charset="UTF-8">
-          <link rel="icon" type="image/x-icon" href="./favicon.ico">
-  <title id="dynamic-title">UPlanet</title>
-  <link rel="stylesheet" href="leaflet.css" />
+    <meta charset="UTF-8">
+    <link rel="icon" type="image/x-icon" href="./favicon.ico">
+    <title id="dynamic-title">UPlanet Enhanced</title>
+    <link rel="stylesheet" href="leaflet.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.Default.css" />
     <style>
-  .clickable-area {
-      fill-opacity: 0.2; /* Adjust the opacity as needed */
-      fill: #0074d9; /* Adjust the color as needed */
-      stroke: #001f3f;
-    }
-    #coordinates-display {
-      position: absolute;
-      bottom: 20px; /* Adjust the bottom position as needed */
-      left: 10px; /* Adjust the left position as needed */
-      background-color: white;
-      padding: 5px;
-      border: 1px solid black;
-      z-index: 1000;
-    }
-     #map-container {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-    }
-    .button {
-        background-color: #3498db;
-        color: #fff;
-        padding: 10px 20px;
-        border: none;
-        cursor: pointer;
-    }
-    .grid-number {
-        position: absolute;
-        font-size: 16px;
-        font-weight: bold;
-        color: #fff;
-        z-index: 1300;
+        :root {
+            --primary-color: #0074d9;
+            --secondary-color: #2ecc71;
+            --background-color: #ffffff;
+            --text-color: #333333;
+            --border-color: #e0e0e0;
+            --shadow-color: rgba(0,0,0,0.15);
+        }
 
-    }
-    #upper-layer-button {
-        position: absolute;
-        top: 10px;
-        right: 10px;
-        z-index: 1002;
-        background-color: #3498db;
-        color: #fff;
-        padding: 10px 20px;
-        border: none;
-        cursor: pointer;
-    }
-    #back-button {
-        position: absolute;
-        top: 10px;
-        left: 50px;
-        z-index: 1002;
-        background-color: #3498db;
-        color: #fff;
-        padding: 8px 12px;
-        border: none;
-        cursor: pointer;
-        border-radius: 5px;
-        font-size: 18px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        width: 40px;
-        height: 40px;
-    }sat
-    #back-button:hover {
-        background-color: #2980b9;
-    }
-</style>
+        [data-theme="dark"] {
+            --background-color: #2c3e50;
+            --text-color: #ecf0f1;
+            --border-color: #34495e;
+            --shadow-color: rgba(255,255,255,0.1);
+        }
 
+        body {
+            margin: 0;
+            font-family: 'Arial', sans-serif;
+            background: var(--background-color);
+            color: var(--text-color);
+        }
+
+        /* ⚡ OPTIMIZED: Consolidated grid and clickable styles */
+        .clickable-area,
+        .grid-number {
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .clickable-area {
+            fill-opacity: 0.1;
+            fill: var(--primary-color);
+            stroke: var(--primary-color);
+            stroke-width: 1;
+        }
+
+        .clickable-area:hover {
+            fill-opacity: 0.3;
+            stroke-width: 2;
+        }
+
+        .grid-number {
+            background: rgba(0, 116, 217, 0.9);
+            color: white;
+            border-radius: 15px;
+            padding: 4px 8px;
+            font-weight: bold;
+            border: 2px solid white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+            font-size: 14px;
+        }
+
+        .grid-number:hover {
+            background: rgba(0, 116, 217, 1);
+        }
+
+        #map-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        .map-control-panel {
+            position: absolute;
+            background: var(--background-color);
+            color: var(--text-color);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            box-shadow: 0 4px 12px var(--shadow-color);
+            padding: 16px;
+            z-index: 1000;
+            backdrop-filter: blur(10px);
+            transition: all 0.3s ease;
+        }
+
+        .map-control-panel:hover {
+            box-shadow: 0 6px 20px var(--shadow-color);
+        }
+
+        #filter-panel {
+            top: 80px;
+            left: 20px;
+            max-width: 240px;
+            max-height: calc(100vh - 200px);
+            overflow-y: auto;
+        }
+
+
+
+        #level-indicator {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1000;
+        }
+
+        #coordinates-display {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--background-color);
+            color: var(--text-color);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 6px 12px;
+            font-family: 'Courier New', monospace;
+            font-size: 11px;
+            font-weight: bold;
+            z-index: 1100;
+            box-shadow: 0 2px 8px var(--shadow-color);
+            backdrop-filter: blur(10px);
+            transition: all 0.3s ease;
+            min-width: 180px;
+            text-align: center;
+            white-space: nowrap;
+        }
+
+        #coordinates-display:not(:empty) {
+            background: var(--primary-color);
+            color: white;
+            border-color: var(--primary-color);
+        }
+
+
+
+        .legend-icon {
+            width: 20px;
+            height: 20px;
+            margin-right: 10px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+        }
+
+        .legend-icon.umap { background: #0074d9; color: white; }
+        .legend-icon.player { background: #2ecc71; color: white; }
+        .legend-icon.nostr { background: #f39c12; color: white; }
+        .legend-icon.unified { background: linear-gradient(45deg, #f39c12 50%, #2ecc71 50%); color: white; font-size: 10px; }
+
+        .filter-item {
+            display: flex;
+            align-items: center;
+            margin: 8px 0;
+            padding: 4px 0;
+            transition: all 0.3s ease;
+        }
+
+        .filter-item:hover {
+            background: rgba(0, 116, 217, 0.05);
+            border-radius: 8px;
+            padding: 6px 8px;
+            margin: 6px -8px;
+        }
+
+        .filter-item input[type="checkbox"] {
+            margin-right: 8px;
+            transform: scale(1.2);
+        }
+
+        .filter-item .legend-icon {
+            margin-right: 8px;
+        }
+
+        .filter-item label {
+            cursor: pointer;
+            flex: 1;
+        }
+
+
+
+        .level-badge {
+            display: inline-block;
+            background: var(--primary-color);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+            box-shadow: 0 4px 12px rgba(0, 116, 217, 0.3);
+            backdrop-filter: blur(10px);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            transition: all 0.3s ease;
+            cursor: default;
+            white-space: nowrap;
+            max-width: 90vw;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .level-badge:hover {
+            transform: scale(1.05);
+            box-shadow: 0 6px 20px rgba(0, 116, 217, 0.4);
+        }
+
+        [data-theme="dark"] .level-badge {
+            background: rgba(0, 116, 217, 0.9);
+            border-color: rgba(255, 255, 255, 0.1);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+        }
+
+        .enhanced-popup {
+            min-width: 280px;
+            max-width: 400px;
+            background: var(--background-color) !important;
+            color: var(--text-color) !important;
+            border: 2px solid var(--border-color) !important;
+            border-radius: 16px !important;
+            box-shadow: 0 8px 32px var(--shadow-color) !important;
+            backdrop-filter: blur(15px) !important;
+            overflow: hidden !important;
+            font-family: 'Arial', sans-serif !important;
+        }
+
+        .popup-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 12px;
+            padding: 12px 16px 8px 16px;
+            background: linear-gradient(135deg, var(--primary-color), #0056b3);
+            color: white !important;
+            border-bottom: none;
+            margin: -8px -8px 12px -8px;
+            border-radius: 12px 12px 0 0;
+        }
+
+        .popup-header h3 {
+            margin: 0;
+            font-size: 14px;
+            font-weight: bold;
+            color: white !important;
+        }
+
+        .popup-icon {
+            margin-right: 10px;
+            font-size: 20px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 50%;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .popup-content {
+            padding: 0 16px;
+            color: var(--text-color) !important;
+        }
+
+        .popup-content p {
+            margin: 8px 0;
+            color: var(--text-color) !important;
+            font-size: 13px;
+            line-height: 1.4;
+        }
+
+        .popup-content strong {
+            color: var(--primary-color);
+            font-weight: 600;
+        }
+
+        .popup-actions {
+            margin-top: 12px;
+            padding: 12px 16px 16px 16px;
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            background: rgba(0, 116, 217, 0.03);
+            margin-left: -8px;
+            margin-right: -8px;
+            margin-bottom: -8px;
+        }
+
+        .popup-action-btn {
+            padding: 8px 16px;
+            border: 2px solid var(--primary-color);
+            border-radius: 20px;
+            background: var(--primary-color);
+            color: white;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 8px rgba(0, 116, 217, 0.3);
+            backdrop-filter: blur(10px);
+            white-space: nowrap;
+        }
+
+        .popup-action-btn:hover {
+            background: transparent;
+            color: var(--primary-color);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0, 116, 217, 0.4);
+        }
+
+        .popup-action-btn:active {
+            transform: translateY(0);
+            box-shadow: 0 2px 6px rgba(0, 116, 217, 0.3);
+        }
+
+        /* Dark theme specific popup styles */
+        [data-theme="dark"] .enhanced-popup {
+            background: rgba(44, 62, 80, 0.95) !important;
+            border-color: rgba(255, 255, 255, 0.1) !important;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5) !important;
+        }
+
+        [data-theme="dark"] .popup-header {
+            background: linear-gradient(135deg, rgba(0, 116, 217, 0.9), rgba(0, 86, 179, 0.9));
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+        }
+
+        [data-theme="dark"] .popup-content strong {
+            color: #74b9ff;
+        }
+
+        [data-theme="dark"] .popup-actions {
+            background: rgba(255, 255, 255, 0.05);
+            border-top-color: rgba(255, 255, 255, 0.1);
+        }
+
+        [data-theme="dark"] .popup-action-btn {
+            border-color: #74b9ff;
+            background: #74b9ff;
+            box-shadow: 0 2px 8px rgba(116, 185, 255, 0.3);
+        }
+
+        [data-theme="dark"] .popup-action-btn:hover {
+            background: transparent;
+            color: #74b9ff;
+            box-shadow: 0 4px 12px rgba(116, 185, 255, 0.4);
+        }
+
+        /* Enhanced popup types styling */
+        .enhanced-popup.nostr .popup-header {
+            background: linear-gradient(135deg, #f39c12, #e67e22);
+        }
+
+        .enhanced-popup.player .popup-header {
+            background: linear-gradient(135deg, #2ecc71, #27ae60);
+        }
+
+        .enhanced-popup.umap .popup-header {
+            background: linear-gradient(135deg, #9b59b6, #8e44ad);
+        }
+
+        .enhanced-popup.unified .popup-header {
+            background: linear-gradient(135deg, #f39c12 0%, #2ecc71 50%, #0074d9 100%);
+        }
+
+        /* Mobile popup optimizations */
+        @media (max-width: 768px) {
+            .enhanced-popup {
+                min-width: 250px;
+                max-width: 90vw;
+                font-size: 14px;
+            }
+
+            .popup-header {
+                padding: 10px 12px 6px 12px;
+            }
+
+            .popup-header h3 {
+                font-size: 13px;
+            }
+
+            .popup-icon {
+                width: 28px;
+                height: 28px;
+                font-size: 16px;
+            }
+
+            .popup-content {
+                padding: 0 12px;
+            }
+
+            .popup-actions {
+                padding: 10px 12px 12px 12px;
+            }
+
+            .popup-action-btn {
+                padding: 10px 14px;
+                font-size: 13px;
+                min-height: 40px;
+                flex: 1;
+                text-align: center;
+            }
+        }
+
+        .swarm-accordion {
+            position: absolute;
+            top: 65px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--background-color);
+            border-radius: 12px;
+            box-shadow: 0 4px 12px var(--shadow-color);
+            z-index: 1000;
+            min-width: 300px;
+            max-width: 400px;
+            transition: all 0.3s ease;
+        }
+
+        .swarm-header {
+            padding: 12px 16px;
+            background: var(--primary-color);
+            color: white;
+            border-radius: 12px 12px 0 0;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: bold;
+            transition: background 0.3s ease;
+        }
+
+        .swarm-header:hover {
+            background: #0056b3;
+        }
+
+        .accordion-arrow {
+            transition: transform 0.3s ease;
+        }
+
+        .swarm-accordion.collapsed .accordion-arrow {
+            transform: rotate(-90deg);
+        }
+
+        .swarm-content {
+            max-height: 300px;
+            overflow-y: auto;
+            background: var(--background-color);
+            border-radius: 0 0 12px 12px;
+            transition: all 0.3s ease;
+        }
+
+        .swarm-accordion.collapsed .swarm-content {
+            display: none;
+        }
+
+        .swarm-node {
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--border-color);
+            transition: background 0.2s ease;
+        }
+
+        .swarm-node:hover {
+            background: rgba(0, 116, 217, 0.05);
+        }
+
+        .swarm-node:last-child {
+            border-bottom: none;
+        }
+
+        .swarm-node-header {
+            font-weight: bold;
+            margin-bottom: 6px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .swarm-hostname {
+            color: var(--primary-color);
+        }
+
+        .swarm-paf {
+            background: rgba(231, 76, 60, 0.1);
+            color: #e74c3c;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 11px;
+        }
+
+        .swarm-services {
+            display: flex;
+            gap: 4px;
+            flex-wrap: wrap;
+            margin-top: 6px;
+        }
+
+        .service-badge {
+            background: rgba(46, 204, 113, 0.1);
+            color: #27ae60;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 10px;
+        }
+
+        .service-badge.inactive {
+            background: rgba(231, 76, 60, 0.1);
+            color: #e74c3c;
+        }
+
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: var(--secondary-color);
+            color: white;
+            padding: 12px 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            z-index: 2000;
+            transform: translateX(100%);
+            transition: transform 0.3s ease;
+        }
+
+        .notification.show {
+            transform: translateX(0);
+        }
+
+        .theme-toggle {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(255, 255, 255, 0.9);
+            border: 2px solid var(--primary-color);
+            border-radius: 50%;
+            width: 48px;
+            height: 48px;
+            font-size: 20px;
+            cursor: pointer;
+            z-index: 1001;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        .theme-toggle:hover {
+            transform: scale(1.1);
+            background: var(--primary-color);
+            color: white;
+        }
+
+        [data-theme="dark"] .theme-toggle {
+            background: rgba(44, 62, 80, 0.9);
+            color: white;
+        }
+
+        /* Smooth tile layer transitions */
+        .leaflet-tile {
+            transition: opacity 0.3s ease;
+        }
+
+        /* Hide mobile elements on desktop */
+        .mobile-fab-container,
+        .mobile-bottom-sheet {
+            display: none;
+        }
+
+        /* Desktop-only styles */
+        @media (min-width: 769px) {
+            .mobile-fab-container,
+            .mobile-bottom-sheet {
+                display: none !important;
+            }
+            
+                         #filter-panel {
+                 display: block !important;
+             }
+            
+            .swarm-accordion {
+                position: absolute !important;
+                top: 20px !important;
+                left: 50% !important;
+                transform: translateX(-50%) !important;
+                opacity: 1 !important;
+                pointer-events: all !important;
+            }
+        }
+
+        #back-button, #upper-layer-button {
+            position: absolute;
+            top: 20px;
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 48px;
+            height: 48px;
+            font-size: 24px;
+            cursor: pointer;
+            z-index: 1002;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        }
+
+        #back-button {
+            left: 20px;
+        }
+
+        #upper-layer-button {
+            left: 80px;
+        }
+
+        #back-button:hover, #upper-layer-button:hover {
+            background-color: #0056b3;
+        }
+
+        .marker-appear {
+            opacity: 1;
+        }
+
+        /* Mobile-first responsive design */
+        @media (max-width: 768px) {
+                         /* Hide desktop panel on mobile */
+             #filter-panel {
+                 display: none;
+             }
+            
+                         /* Mobile bottom sheet - corrected positioning */
+             .mobile-bottom-sheet {
+                 position: fixed;
+                 bottom: 0;
+                 left: 0;
+                 right: 0;
+                 background: var(--background-color);
+                 border-radius: 20px 20px 0 0;
+                 box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.15);
+                 z-index: 800;
+                 transform: translateY(calc(100% - 70px));
+                 transition: transform 0.3s ease;
+                 max-height: 65vh;
+                 pointer-events: auto;
+                 /* 🔧 FIX: Ensure proper bottom anchoring */
+                 min-height: 70px;
+             }
+             
+             /* 📱 FIX: Ensure bottom sheet doesn't block grid clicks when collapsed */
+             .mobile-bottom-sheet:not(.open) {
+                 pointer-events: none;
+             }
+             
+             .mobile-bottom-sheet:not(.open) .mobile-sheet-header {
+                 pointer-events: auto;
+                 cursor: pointer;
+                 z-index: 850;
+                 position: relative;
+             }
+             
+             /* 📱 FIX: Ensure open bottom sheet is fully interactive */
+             .mobile-bottom-sheet.open {
+                 pointer-events: auto;
+                 z-index: 850;
+             }
+             
+             .mobile-bottom-sheet.open * {
+                 pointer-events: auto;
+             }
+            
+            .mobile-bottom-sheet.open {
+                transform: translateY(0);
+            }
+            
+                         .mobile-sheet-handle {
+                 width: 40px;
+                 height: 4px;
+                 background: rgba(0, 0, 0, 0.3);
+                 border-radius: 2px;
+                 margin: 8px auto;
+                 cursor: pointer;
+             }
+             
+             .mobile-sheet-header {
+                 padding: 12px 20px;
+                 cursor: pointer;
+                 background: rgba(0, 116, 217, 0.05);
+                 border-radius: 20px 20px 0 0;
+                 margin: -8px -20px 0 -20px;
+                 text-align: center;
+                 font-weight: bold;
+                 color: var(--primary-color);
+                 transition: background 0.3s ease;
+             }
+             
+             .mobile-sheet-header:hover {
+                 background: rgba(0, 116, 217, 0.1);
+             }
+            
+            .mobile-sheet-content {
+                padding: 0 20px 20px;
+                overflow-y: auto;
+                max-height: calc(80vh - 60px);
+            }
+            
+            .mobile-section {
+                margin-bottom: 24px;
+            }
+            
+            .mobile-section h3 {
+                margin: 0 0 12px 0;
+                font-size: 16px;
+                color: var(--primary-color);
+                border-bottom: 1px solid var(--border-color);
+                padding-bottom: 8px;
+            }
+            
+            /* Mobile filter toggles */
+                         .mobile-filter-grid {
+                 display: flex;
+                 flex-direction: column;
+                 gap: 12px;
+             }
+            
+            .mobile-filter-item {
+                display: flex;
+                align-items: center;
+                padding: 12px;
+                background: rgba(0, 116, 217, 0.05);
+                border-radius: 8px;
+                border: 2px solid transparent;
+                transition: all 0.3s ease;
+            }
+            
+            .mobile-filter-item.active {
+                border-color: var(--primary-color);
+                background: rgba(0, 116, 217, 0.1);
+            }
+            
+            .mobile-filter-item input[type="checkbox"] {
+                display: none;
+            }
+            
+            .mobile-filter-item .legend-icon {
+                margin-right: 8px;
+                width: 24px;
+                height: 24px;
+            }
+            
+                         /* Floating action buttons - adjusted for corrected bottom sheet */
+             .mobile-fab-container {
+                 position: fixed;
+                 bottom: 90px;
+                 right: 20px;
+                 z-index: 850;
+                 display: flex;
+                 flex-direction: column;
+                 gap: 12px;
+                 pointer-events: auto;
+             }
+            
+            .mobile-fab {
+                width: 56px;
+                height: 56px;
+                border-radius: 50%;
+                background: var(--primary-color);
+                color: white;
+                border: none;
+                font-size: 24px;
+                cursor: pointer;
+                box-shadow: 0 4px 12px rgba(0, 116, 217, 0.3);
+                transition: all 0.3s ease;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+            
+            .mobile-fab:hover, .mobile-fab:active {
+                transform: scale(1.1);
+                box-shadow: 0 6px 20px rgba(0, 116, 217, 0.4);
+            }
+            
+            .mobile-fab.secondary {
+                background: var(--secondary-color);
+                width: 48px;
+                height: 48px;
+                font-size: 20px;
+            }
+            
+            /* Mobile navigation */
+            #back-button, #upper-layer-button {
+                position: fixed;
+                top: 20px;
+                width: 44px;
+                height: 44px;
+                font-size: 20px;
+                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+            }
+            
+            #back-button {
+                left: 20px;
+            }
+            
+            #upper-layer-button {
+                left: 75px;
+            }
+            
+            .theme-toggle {
+                top: 20px;
+                right: 20px;
+                width: 44px;
+                height: 44px;
+                font-size: 18px;
+            }
+            
+                         /* Mobile level indicator */
+             #level-indicator {
+                 position: fixed;
+                 top: 75px;
+                 left: 50%;
+                 transform: translateX(-50%);
+             }
+             
+             .level-badge {
+                 padding: 6px 12px;
+                 font-size: 10px;
+                 box-shadow: 0 2px 8px rgba(0, 116, 217, 0.2);
+                 max-width: 85vw;
+             }
+            
+            /* SWARM accordion mobile */
+            .swarm-accordion {
+                position: fixed;
+                top: 60px;
+                left: 20px;
+                right: 20px;
+                max-width: none;
+                min-width: auto;
+                transform: none;
+            }
+            
+            .swarm-accordion.collapsed {
+                transform: translateY(-100%);
+                opacity: 0;
+                pointer-events: none;
+            }
+            
+                         /* Mobile grid enhancement - ensure high priority */
+             .clickable-area {
+                 stroke-width: 3;
+                 fill-opacity: 0.2;
+                 cursor: pointer;
+                 pointer-events: auto !important;
+             }
+             
+             .clickable-area:hover, .clickable-area:active {
+                 fill-opacity: 0.4;
+                 stroke-width: 4;
+             }
+             
+             /* Make grid more touch-friendly with high z-index */
+             .leaflet-interactive {
+                 cursor: pointer !important;
+                 pointer-events: auto !important;
+             }
+             
+             /* Ensure overlay pane is above mobile elements */
+             .leaflet-overlay-pane {
+                 z-index: 1200 !important;
+             }
+             
+             .leaflet-overlay-pane svg {
+                 pointer-events: auto !important;
+             }
+             
+             /* Ensure zoom controls are accessible - adjusted for corrected bottom sheet */
+             .leaflet-control-zoom {
+                 z-index: 1000 !important;
+                 margin-bottom: 80px !important;
+                 margin-left: 10px !important;
+             }
+             
+             /* Ensure markers are clickable - priority over mobile elements */
+             .leaflet-marker-icon {
+                 z-index: 1100 !important;
+                 pointer-events: auto !important;
+             }
+             
+             .leaflet-marker-pane {
+                 z-index: 1100 !important;
+             }
+             
+             .leaflet-popup {
+                 z-index: 1200 !important;
+             }
+             
+             /* Mobile touch feedback */
+             .mobile-filter-item:active {
+                 transform: scale(0.98);
+             }
+             
+             .mobile-fab:active {
+                 transform: scale(0.95);
+             }
+             
+             /* Improved mobile typography */
+             body {
+                 font-size: 14px;
+                 line-height: 1.4;
+             }
+             
+             /* Mobile-specific popup adjustments */
+             .enhanced-popup {
+                 min-width: 250px;
+                 max-width: 90vw;
+             }
+             
+             .popup-action-btn {
+                 padding: 10px 16px;
+                 font-size: 14px;
+                 min-height: 44px;
+             }
+
+             /* Mobile coordinates display */
+             #coordinates-display {
+                 top: 15px;
+                 left: 50%;
+                 transform: translateX(-50%);
+                 font-size: 10px;
+                 padding: 4px 8px;
+                 max-width: calc(100vw - 100px);
+                 min-width: 150px;
+                 z-index: 1200;
+                 pointer-events: none;
+             }
+            
+            /* Mobile profile modal */
+            .profile-modal-content {
+                width: 98%;
+                height: 95%;
+                margin: 10px auto;
+            }
+            
+            .profile-modal-header {
+                padding: 8px 12px;
+            }
+            
+            .profile-modal-header h3 {
+                font-size: 12px;
+            }
+            
+            .profile-modal-close {
+                font-size: 20px;
+                padding: 2px 6px;
+            }
+        }
+
+        /* Custom marker cluster styles */
+        .marker-cluster-small {
+            background-color: rgba(46, 204, 113, 0.8);
+        }
+        .marker-cluster-medium {
+            background-color: rgba(241, 196, 15, 0.8);
+        }
+        .marker-cluster-large {
+            background-color: rgba(231, 76, 60, 0.8);
+        }
+
+        .marker-cluster {
+            border-radius: 50%;
+            color: white;
+            font-weight: bold;
+        }
+
+        .loading-spinner {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 2000;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid var(--primary-color);
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+
+        /* Profile iframe modal */
+        .profile-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 10000;
+            animation: modalFadeIn 0.3s ease;
+        }
+
+        .profile-modal.show {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .profile-modal-content {
+            background: var(--background-color);
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            width: 95%;
+            max-width: 1200px;
+            height: 90%;
+            max-height: 800px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .profile-modal-content.fullscreen {
+            width: 100vw;
+            height: 100vh;
+            max-width: none;
+            max-height: none;
+            border-radius: 0;
+            box-shadow: none;
+        }
+
+        .profile-modal.fullscreen {
+            background: rgba(0, 0, 0, 1);
+        }
+
+        .profile-modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 16px;
+            background: var(--primary-color);
+            color: white;
+        }
+
+        .profile-modal-header h3 {
+            margin: 0;
+            font-size: 14px;
+        }
+
+        .modal-controls {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .profile-modal-close,
+        .profile-modal-fullscreen {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 24px;
+            cursor: pointer;
+            padding: 4px 8px;
+            border-radius: 4px;
+            transition: all 0.3s ease;
+            width: 36px;
+            height: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .profile-modal-close:hover,
+        .profile-modal-fullscreen:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: scale(1.1);
+        }
+
+        .profile-modal-fullscreen {
+            font-size: 20px;
+        }
+
+        .profile-modal-fullscreen:hover {
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        .profile-modal-fullscreen.active {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .profile-iframe {
+            flex: 1;
+            border: none;
+            width: 100%;
+            background: white;
+        }
+
+        .profile-loading-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: var(--background-color);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10001;
+            margin-top: 48px; /* Height of header */
+        }
+
+        .profile-loading-overlay.hidden {
+            display: none;
+        }
+
+        .loading-spinner-modal {
+            text-align: center;
+            color: var(--text-color);
+        }
+
+        .hourglass {
+            font-size: 48px;
+            animation: hourglassRotate 2s ease-in-out infinite;
+            display: block;
+            margin-bottom: 16px;
+        }
+
+        .loading-spinner-modal p {
+            margin: 0 0 20px 0;
+            font-size: 16px;
+            color: var(--primary-color);
+        }
+
+        .cancel-loading-btn {
+            margin-top: 20px;
+            padding: 10px 20px;
+            background: rgba(255, 255, 255, 0.1);
+            color: var(--text-color);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s ease;
+        }
+
+        .cancel-loading-btn:hover {
+            background: var(--primary-color);
+            color: white;
+            border-color: var(--primary-color);
+        }
+
+        .loading-progress {
+            width: 200px;
+            height: 4px;
+            background: rgba(0, 116, 217, 0.2);
+            border-radius: 2px;
+            margin: 0 auto;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .loading-progress::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: var(--primary-color);
+            animation: loadingProgress 2s ease-in-out infinite;
+        }
+
+        @keyframes hourglassRotate {
+            0%, 100% { transform: rotate(0deg); }
+            50% { transform: rotate(180deg); }
+        }
+
+        @keyframes loadingProgress {
+            0% { left: -100%; }
+            100% { left: 100%; }
+        }
+
+        .loading-timeout {
+            color: var(--terminal-red, #f44);
+            background: rgba(244, 67, 54, 0.1);
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+            margin: 20px;
+        }
+
+        .loading-timeout h3 {
+            margin: 0 0 10px 0;
+            color: var(--terminal-red, #f44);
+        }
+
+        .loading-timeout p {
+            margin: 0;
+        }
+
+        @keyframes modalFadeIn {
+            from {
+                opacity: 0;
+                transform: scale(0.9);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        /* Enhanced popup interactivity */
+        .enhanced-popup * {
+            pointer-events: auto !important;
+        }
+        
+        .popup-icon {
+            cursor: pointer !important;
+            pointer-events: auto !important;
+            z-index: 10000 !important;
+        }
+        
+        .popup-action-btn {
+            pointer-events: auto !important;
+            z-index: 10001 !important;
+            cursor: pointer !important;
+        }
+        
+        .popup-content {
+            pointer-events: auto !important;
+        }
+        
+        .popup-header {
+            pointer-events: auto !important;
+        }
+        
+        /* Enhanced Leaflet popup wrapper */
+        .leaflet-popup-content-wrapper {
+            pointer-events: auto !important;
+        }
+        
+        .leaflet-popup-content {
+            pointer-events: auto !important;
+            margin: 0 !important;
+            min-height: auto !important;
+        }
+        
+        .leaflet-popup {
+            pointer-events: auto !important;
+            z-index: 10000 !important;
+        }
+
+        /* Mobile responsive for modal */
+        @media (max-width: 768px) {
+            .profile-modal-content {
+                width: 95%;
+                height: 85%;
+                margin: 10px;
+            }
+            
+            .profile-modal-content.fullscreen {
+                margin: 0;
+                width: 100vw;
+                height: 100vh;
+            }
+            
+            .profile-modal-header {
+                padding: 12px 16px;
+            }
+            
+            .profile-modal-header h3 {
+                font-size: 16px;
+            }
+            
+            .modal-controls {
+                gap: 6px;
+            }
+            
+            .profile-modal-close,
+            .profile-modal-fullscreen {
+                width: 44px;
+                height: 44px;
+                font-size: 20px;
+                touch-action: manipulation;
+            }
+            
+            .profile-modal-fullscreen {
+                font-size: 18px;
+            }
+            
+            .popup-action-btn {
+                min-height: 44px !important;
+                font-size: 14px !important;
+                padding: 12px 16px !important;
+            }
+        }
+    </style>
 </head>
 <body>
-<div id="map-container" style="position: relative;">
-    <button id="back-button" onclick="history.back()">⬅️</button>
-    <button id="view-switch" style="position:absolute;top:10px;right:10px;z-index:1003;background:#fff;border-radius:50%;border:none;width:48px;height:48px;box-shadow:0 2px 8px rgba(0,0,0,0.2);font-size:24px;cursor:pointer;display:flex;align-items:center;justify-content:center;" title="Switch to Satellite view">🛰️</button>
-    <div id="coordinates-display"></div> <!-- Coordinates display element -->
+
+<div id="map-container">
+    <!-- Theme and map layer toggle -->
+    <button class="theme-toggle" onclick="toggleTheme()" title="Mode clair + Vue carte">🗺️</button>
+
+    <!-- Loading spinner -->
+    <div id="loading-spinner" class="loading-spinner">
+        <div class="spinner"></div>
+    </div>
+
+    <!-- Coordinates display -->
+    <div id="coordinates-display"></div>
+
+
+
+    <!-- SWARM Accordéon -->
+    <div id="swarm-accordion" class="swarm-accordion collapsed">
+        <div class="swarm-header" onclick="toggleSwarmAccordion()">
+            <span>🌐 SWARM Relays</span>
+            <span id="swarm-count">(0)</span>
+            <span class="accordion-arrow">▼</span>
+        </div>
+        <div id="swarm-content" class="swarm-content">
+            <div id="swarm-list">Chargement...</div>
+        </div>
+    </div>
+
+    <!-- Unified filters panel -->
+    <div id="filter-panel" class="map-control-panel">
+        <h3 id="filter-panel-header" onclick="toggleFilterPanel()" style="cursor: pointer; user-select: none;">
+            🔍 Filtres & Légende <span id="filter-arrow" style="float: right; transition: transform 0.3s ease;">▼</span>
+        </h3>
+        <div id="filter-content" class="filter-content">
+            <div class="filter-item">
+                <input type="checkbox" id="filter-umaps" checked>
+                <div class="legend-icon umap" title="UMAPs - Micro-zones géographiques">🧩</div>
+                <label for="filter-umaps">UMAPs</label>
+            </div>
+            <div class="filter-item">
+                <input type="checkbox" id="filter-accounts" checked>
+                <div class="legend-icon unified" title="Comptes UPlanet - MULTIPASS 🚀 et/ou ZEN Card 👤">🚀👤</div>
+                <label for="filter-accounts">PLAYERs</label>
+            </div>
+        </div>
+    </div>
+
+    <!-- Current level indicator -->
+    <div id="level-indicator">
+        <span id="current-level-badge" class="level-badge">🗺️ REGION_0.0_0.0 (1.0°)</span>
+    </div>
+
+    <!-- Navigation buttons -->
+    <button id="back-button" onclick="window.uplanetMap.navigateToUpperLevel()">⬅️</button>
+    <button id="upper-layer-button" onclick="window.uplanetMap.navigateToUpperLevel()">⬆️</button>
+
+    <!-- Mobile FAB container -->
+    <div class="mobile-fab-container">
+        <button class="mobile-fab secondary" onclick="toggleSwarmAccordion()" title="Toggle SWARM">
+            🌐
+        </button>
+    </div>
+
+    <!-- Mobile bottom sheet -->
+    <div id="mobile-bottom-sheet" class="mobile-bottom-sheet">
+        <div class="mobile-sheet-header" onclick="toggleMobileBottomSheet()">
+            <div class="mobile-sheet-handle"></div>
+            <span>🔍 Filtres & Légende</span>
+        </div>
+        <div class="mobile-sheet-content">
+            <div class="mobile-section">
+                <div class="mobile-filter-grid">
+                    <div class="mobile-filter-item active" data-filter="umaps" title="UMAPs - Micro-zones géographiques">
+                        <div class="legend-icon umap">🧩</div>
+                        <span>UMAPs</span>
+                    </div>
+                    <div class="mobile-filter-item active" data-filter="accounts" title="Comptes UPlanet - MULTIPASS 🚀 et/ou ZEN Card 👤">
+                        <div class="legend-icon unified">🚀👤</div>
+                        <span>MULTIPASS</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main map -->
     <div id="map" style="width: 100%; height: 100vh;"></div>
+
+    <!-- Profile iframe modal -->
+    <div id="profile-modal" class="profile-modal">
+        <div class="profile-modal-content">
+            <div class="profile-modal-header">
+                <h3 id="profile-modal-title">Profil</h3>
+                <div class="modal-controls">
+                    <button class="profile-modal-fullscreen" onclick="toggleFullscreenModal()" title="Mode plein écran (F11)">⛶</button>
+                    <button class="profile-modal-close" onclick="closeProfileModal()" title="Fermer (Échap)">✕</button>
+                </div>
+            </div>
+            <div id="profile-loading" class="profile-loading-overlay">
+                <div class="loading-spinner-modal">
+                    <div class="hourglass">⏳</div>
+                    <p>Chargement en cours...</p>
+                    <small style="color: var(--text-color); opacity: 0.7; font-size: 12px;">
+                        Utilisez le bouton Annuler, la touche Échap, ou cliquez à l'extérieur pour fermer
+                    </small>
+                    <div class="loading-progress"></div>
+                    <button onclick="closeProfileModal()" class="cancel-loading-btn">
+                        Annuler
+                    </button>
+                </div>
+            </div>
+            <iframe id="profile-iframe" class="profile-iframe" src="about:blank"></iframe>
+        </div>
+    </div>
 </div>
-<button id="upper-layer-button">⬆️</button>
+
+<!-- Scripts -->
 <script src="leaflet.js"></script>
+<script src="https://unpkg.com/leaflet.markercluster@1.4.1/dist/leaflet.markercluster.js"></script>
 
 <script>
+// ⚡ PERFORMANCE: Constants and configuration
+const CONFIG = {
+    CACHE_SIZE: 10,
+    API_TIMEOUT: 10000,
+    CACHE_DURATION: 300000, // 5 minutes
+    DEBOUNCE_DELAY: 150,
+    GRID_SIZE: 10,
+    MOBILE_BREAKPOINT: 768,
+    NOTIFICATION_DURATION: 3000,
+    MODAL_TIMEOUT: 30000,
+    HAPTIC_DURATION: 10
+};
 
-    // Function to extract URL parameters
-    function getUrlParameter(name) {
-      name = name.replace(/[\[]/, '\\[').replace(/[\]]/, '\\]');
-      const regex = new RegExp('[\\?&]' + name + '=([^&#]*)');
-      const results = regex.exec(location.search);
-      return results === null ? '' : decodeURIComponent(results[1].replace(/\+/g, ' '));
+const LEVELS = {
+    ZONE: { min: 10, name: 'zone', icon: '🌍', precision: 0 },
+    REGION: { min: 1, name: 'region', icon: '🗺️', precision: 1 },
+    SECTOR: { min: 0.1, name: 'sector', icon: '🗂️', precision: 2 },
+    UMAP: { min: 0, name: 'umap', icon: '🧩', precision: 3 }
+};
+
+// ⚡ PERFORMANCE: DOM Cache System
+class DOMCache {
+    constructor() {
+        this.cache = new Map();
+        this.observers = new Map();
     }
 
-    // const desiredImageWidthInKm = 11; // Now Is calculated from northEastLon - southWestLon
-    const tileSizeInPixels = 256;
-
-    // Define custom icons at global scope
-    const umapIcon = L.icon({
-        iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png',
-        shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
-        iconSize: [25, 41],
-        iconAnchor: [12, 41],
-        popupAnchor: [1, -34],
-        shadowSize: [41, 41]
-    });
-
-    const playerIcon = L.icon({
-        iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png',
-        shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
-        iconSize: [25, 41],
-        iconAnchor: [12, 41],
-        popupAnchor: [1, -34],
-        shadowSize: [41, 41]
-    });
-
-    function calculateZoomLevel(desiredImageWidthInKm, latitude) {
-      const earthEquatorialCircumference = 40075016.686; // Earth's equatorial circumference in meters
-      // Calculate the distance covered by one degree of longitude at the given latitude
-      const metersPerLongitudeDegree = earthEquatorialCircumference * Math.cos((Math.PI / 180) * latitude) / 360;
-      const metersPerPixel = metersPerLongitudeDegree * 360 / (tileSizeInPixels * Math.pow(2, 20));
-      // Calculate the number of pixels needed to achieve the desired width
-      const numberOfPixelsHorizontally = (desiredImageWidthInKm * 1000) / metersPerPixel;
-      // Calculate the appropriate zoom level
-      const zoomLevel = Math.log2(tileSizeInPixels * Math.pow(2, 20) / numberOfPixelsHorizontally);
-      return zoomLevel;
-    }
-
-///////////////////////////////////////////////////////////////////////////////////
-    // Extract the hostname (e.g., "https://ipfs.domain.tld" or "http://ipfs.localhost:8080")
-    var currentURL = new URL(window.location.href);
-    var hostname = currentURL.hostname;
-    var port = currentURL.port;
-    var protocol = currentURL.protocol.split(":")[0];
-
-    // Store the initial port
-    var initialPort = port;
-
-    // Check and replace the port if it's 8080 for station
-    if (port === "8080") {
-        port = "1234";
-    }
-    var zHost = hostname.replace("ipfs", "astroport");
-
-    // Create the "station" variable with the specified format
-    var station = protocol + "://" + zHost + (port ? (":" + port) : "");
-    console.log(station);
-
-    hostname = currentURL.hostname;
-    var uHost = hostname.replace("ipfs", "u");
-
-    // Reset port to its initial value
-    port = initialPort;
-
-    // Check and replace the port if it's 8080 for uPlanetStation
-    if (port === "8080") {
-        port = "54321";
-    }
-    var uPlanetStation = protocol + "://" + uHost + (port ? (":" + port) : "");
-    const uPlanetSCAN_URL = uPlanetStation + '/scan';
-
-    console.log('UPLANET SCAN URL:', uPlanetSCAN_URL);
-
-//////////////////////////////////////////////////////////////// fetchAstroport
-    async function fetchAstroport(myURL, retryCount = 3) {
-      try {
-        let one = await fetch(myURL);
-        var doc = await one.text();
-        var regex = /url='([^']+)/i;
-        var redirectURL = doc.match(regex)[1];
-
-        console.log(redirectURL);
-
-        return new Promise(async (resolve, reject) => {
-          let retry = 0;
-
-          const fetchData = async () => {
-            try {
-              let two = await fetch(redirectURL);
-              const data = await two.json();
-              console.log(data);
-              resolve(data);
-            } catch (error) {
-              if (retry < retryCount) {
-                console.log(`Retry ${retry + 1} after 3000ms...`);
-                retry++;
-                setTimeout(fetchData, 3000);
-              } else {
-                console.log('Max retries reached. Fetch error:', error);
-                reject(error);
-              }
+    get(selector, context = document) {
+        const key = `${selector}:${context === document ? 'doc' : 'ctx'}`;
+        if (!this.cache.has(key)) {
+            const element = context.querySelector(selector);
+            if (element) {
+                this.cache.set(key, element);
+                // Auto-cleanup if element is removed from DOM
+                this.watchForRemoval(key, element);
             }
-          };
-
-          setTimeout(fetchData, 3000);
-        });
-      } catch (err) {
-        console.log('Fetch error:', err);
-        return Promise.reject(err);
-      }
+            return element;
+        }
+        return this.cache.get(key);
     }
 
-///////////////////////////////////////////////////////////////////////////////////
-
-
-    const defaultIPNS = '';
-    const sectorIPNS = getUrlParameter('ipns') || defaultIPNS;
-    console.log('sectorIPNS: /ipns/', sectorIPNS);
-
-    if (sectorIPNS !== '') {
-        const buttonContainer = document.createElement('div');
-        buttonContainer.id = 'button-container'
-        buttonContainer.style.position = 'absolute';
-        buttonContainer.style.bottom = '10px';
-        buttonContainer.style.left = '10px';
-        buttonContainer.style.width = '200px';
-        buttonContainer.style.height = '150px';
-        buttonContainer.style.zIndex = '1001';
-        buttonContainer.style.display = 'flex';
-        buttonContainer.style.flexDirection = 'column';
-        buttonContainer.style.alignItems = 'center';
-        buttonContainer.style.justifyContent = 'center';
-
-        const button = document.createElement('button');
-        button.innerText = 'INLINE LINK';
-        button.className = 'button';
-
-        // Add an event listener to the button
-        button.addEventListener('click', function() {
-            window.open( '/ipns/'+ sectorIPNS, "_blank");
-        });
-
-        // Append the button to the button container
-        buttonContainer.appendChild(button);
-        document.body.appendChild(buttonContainer);
+    getAll(selector, context = document) {
+        const key = `${selector}:all:${context === document ? 'doc' : 'ctx'}`;
+        if (!this.cache.has(key)) {
+            const elements = Array.from(context.querySelectorAll(selector));
+            this.cache.set(key, elements);
+        }
+        return this.cache.get(key);
     }
 
-    const defaultSouthWestLat = 0.00;
-    const defaultSouthWestLon = 0.00;
-    const defaultOffsetDegrees = 10.00; // 10° offset
-
-    const southWestLat = parseFloat(getUrlParameter('southWestLat')) || defaultSouthWestLat;
-    console.log('Lat:', southWestLat);
-    const southWestLon = parseFloat(getUrlParameter('southWestLon')) || defaultSouthWestLon;
-    console.log('Lon:', southWestLon);
-    const deg = parseFloat(getUrlParameter('deg')) || defaultOffsetDegrees;
-    console.log('Offset:', deg);
-
-    // Calculate northEastLat and northEastLon with deg° offset only if parameters are empty
-    const northEastLatParam = getUrlParameter('northEastLat');
-    const northEastLonParam = getUrlParameter('northEastLon');
-
-    const northEastLat = northEastLatParam ? parseFloat(northEastLatParam) : southWestLat + deg;
-    const northEastLon = northEastLonParam ? parseFloat(northEastLonParam) : southWestLon + deg;
-
-     // Calculate the longitudinal distance in degrees
-    const lonDistanceInDegrees = Math.abs(northEastLon - southWestLon);
-    console.log('lonDistanceInDegrees:', lonDistanceInDegrees);
-
-    // Calculate the desired image width in kilometers
-    const earthEquatorialCircumference = 40075016.686; // Earth's equatorial circumference in meters
-    const metersPerLongitudeDegree = Math.abs(earthEquatorialCircumference * Math.cos((Math.PI / 180) * southWestLat) / 360);
-    const desiredImageWidthInMeters = lonDistanceInDegrees * metersPerLongitudeDegree;
-    const desiredImageWidthInKm = desiredImageWidthInMeters / 1000;
-    console.log('desiredImageWidthInKm:', desiredImageWidthInKm);
-
-    const centerLat = (southWestLat + northEastLat) / 2;
-    const centerLon = (southWestLon + northEastLon) / 2;
-
-    // Provide the latitude for adjustment
-    const latitude = centerLat;
-    const zoomLevel = calculateZoomLevel(desiredImageWidthInKm, latitude);
-    console.log('Recommended zoom level:', zoomLevel);
-
-    const map = L.map('map').setView([centerLat, centerLon], zoomLevel);
-
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: 'U Planet'
-    }).addTo(map);
-
-
-const gridSize = 10; // Number of rows and columns in the grid
-const NSize = deg / 10; // Size of each grid cell
-
-document.getElementById('upper-layer-button').addEventListener('click', function() {
-    if (deg >= 10) {
-        window.location.href = 'welcome.html';
-    } else {
-        const newDeg = deg * 10;
-        const decalage = 2.5 * deg;
-        const adjustedSouthWestLat = (parseFloat(southWestLat) - decalage).toFixed(2);
-        const adjustedSouthWestLon = (parseFloat(southWestLon) - decalage).toFixed(2);
-        const url = `map_render.html?southWestLat=${adjustedSouthWestLat}&southWestLon=${adjustedSouthWestLon}&deg=${newDeg}`;
-        window.location.href = url;
-    }
-});
-
-
-// Create a HTML element for displaying coordinates
-const coordinatesDisplay = document.getElementById('coordinates-display');
-
-// Check if deg is less than or equal to 0.01
-if (deg <= 0.01) {
-  const container = document.createElement('div');
-  container.style.position = 'fixed';
-  container.style.top = '0';
-  container.style.left = '0';
-  container.style.width = '100vw';
-  container.style.height = '100vh';
-  container.style.backgroundColor = 'rgba(255, 255, 255, 0.4)';
-  container.style.border = 'none';
-  container.style.zIndex = '999';
-  container.style.display = 'flex';
-  container.style.flexDirection = 'column';
-  container.style.alignItems = 'center';
-  container.style.justifyContent = 'center';
-
-
-  const button = document.createElement('button');
-  button.textContent = '>>> OK <<<';
-  button.style.width = '100%';
-  button.style.height = '100px'; // Customize the button height
-  button.style.backgroundColor = '#0074d9';
-  button.style.border = 'none';
-  button.style.fontFamily = 'Arial, sans-serif'; // Customize the font family
-  button.style.fontSize = '24px'; // Customize the font size
-  button.style.color = '#fff'; // Customize the font color
-
-  button.addEventListener('click', () => {
-    //~ const url = `${station}/?uplanet=@&zlat=${southWestLat}&zlon=${southWestLon}`;
-    const url = `${uPlanetSCAN_URL}?zlat=${southWestLat}&zlon=${southWestLon}`;
-    window.location.href = url;
-  });
-
-  container.appendChild(button);
-
-  document.body.appendChild(container);
-
-} else {
-
-  // Add a mousemove event listener to the map
-  map.on('mousemove', (event) => {
-    const latLng = event.latlng;
-    const lat = latLng.lat.toFixed(6);
-    const lng = latLng.lng.toFixed(6);
-    coordinatesDisplay.textContent = `Latitude: ${lat}, Longitude: ${lng}`;
-  });
-
-///// UPPER THAN 0.01
-}
-
-/////////////////
-async function loadGridNumbers(myURL) {
-try {
-      const data = await fetchAstroport(myURL);
-      return data.gridNumbers || [];
-} catch (error) {
-      console.error('Error loading grid numbers:', error);
-      return [];
-    }
-}
-
-  // Function to overlay grid numbers on the map
-function overlayGridNumbers(rectangle, number) {
-    const latLng = rectangle.getBounds().getCenter();
-    const containerPoint = map.latLngToContainerPoint(latLng);
-
-    const numberElement = document.createElement('div');
-    numberElement.className = 'grid-number';
-    numberElement.textContent = number;
-    numberElement.style.position = 'absolute';
-    numberElement.style.fontSize = '16px';
-    numberElement.style.fontWeight = 'bold';
-    numberElement.style.color = 'red';
-    numberElement.style.top = `${containerPoint.y}px`;
-    numberElement.style.left = `${containerPoint.x}px`;
-
-    document.getElementById('map-container').appendChild(numberElement);
-}
-
-    const zquery = 'zone='+NSize+'&ulat='+southWestLat+'&ulon='+southWestLon; // Replace with your actual query parameters
-    const zoneURL = station+'/?' + zquery;
-
-    console.log('ZONE URL:', zoneURL);
-
-    // Add UPlanet API call
-    const uPlanetAPI_URL = `${uPlanetStation}/?lat=${southWestLat}&lon=${southWestLon}&deg=${deg}`;
-    console.log('UPLANET API URL:', uPlanetAPI_URL);
-
-    // Load UPlanet data
-    fetch(uPlanetAPI_URL)
-        .then(response => response.json())
-        .then(uPlanetData => {
-            if (uPlanetData) {
-                const locationEntities = {};
-
-                // Group PLAYERS and UMAPS by location
-                if (uPlanetData.PLAYERs) {
-                    uPlanetData.PLAYERs.forEach(player => {
-                        if (player.LAT && player.LON && player.HEX && player.ASTROMAIL) {
-                            const locationKey = `${player.LAT},${player.LON}`;
-                            if (!locationEntities[locationKey]) {
-                                locationEntities[locationKey] = { PLAYERS: [], UMAPS: [] };
-                            }
-                            locationEntities[locationKey].PLAYERS.push({ hex: player.HEX, astromail: player.ASTROMAIL });
+    watchForRemoval(key, element) {
+        if ('MutationObserver' in window) {
+            const observer = new MutationObserver((mutations) => {
+                mutations.forEach((mutation) => {
+                    mutation.removedNodes.forEach((node) => {
+                        if (node === element || node.contains?.(element)) {
+                            this.cache.delete(key);
+                            observer.disconnect();
+                            this.observers.delete(key);
                         }
                     });
-                }
+                });
+            });
+            
+            observer.observe(document.body, { childList: true, subtree: true });
+            this.observers.set(key, observer);
+        }
+    }
 
-                if (uPlanetData.UMAPs) {
-                    uPlanetData.UMAPs.forEach(umap => {
-                        if (umap.LAT && umap.LON && umap.UMAPHEX) {
-                            const locationKey = `${umap.LAT},${umap.LON}`;
-                            if (!locationEntities[locationKey]) {
-                                locationEntities[locationKey] = { PLAYERS: [], UMAPS: [] };
-                            }
-                            locationEntities[locationKey].UMAPS.push({ hex: umap.UMAPHEX, umapipfs: umap.UMAPROOT, lat: umap.LAT, lon: umap.LON });
+    clear() {
+        this.cache.clear();
+        this.observers.forEach(observer => observer.disconnect());
+        this.observers.clear();
+    }
+
+    invalidate(selector) {
+        const keysToDelete = Array.from(this.cache.keys()).filter(key => key.startsWith(selector));
+        keysToDelete.forEach(key => {
+            this.cache.delete(key);
+            if (this.observers.has(key)) {
+                this.observers.get(key).disconnect();
+                this.observers.delete(key);
+            }
+        });
+    }
+}
+
+// Global DOM cache instance
+const domCache = new DOMCache();
+
+// ⚡ PERFORMANCE: Utility functions
+const Utils = {
+    // Debouncing function to limit rapid function calls
+    debounce(func, wait, immediate = false) {
+        let timeout;
+        return function executedFunction(...args) {
+            const later = () => {
+                timeout = null;
+                if (!immediate) func.apply(this, args);
+            };
+            const callNow = immediate && !timeout;
+            clearTimeout(timeout);
+            timeout = setTimeout(later, wait);
+            if (callNow) func.apply(this, args);
+        };
+    },
+
+    // Throttling function for high-frequency events
+    throttle(func, limit) {
+        let inThrottle;
+        return function executedFunction(...args) {
+            if (!inThrottle) {
+                func.apply(this, args);
+                inThrottle = true;
+                setTimeout(() => inThrottle = false, limit);
+            }
+        };
+    },
+
+    // Safe element creation to prevent XSS
+    createElement(tag, attributes = {}, textContent = '') {
+        const element = document.createElement(tag);
+        Object.entries(attributes).forEach(([key, value]) => {
+            if (key === 'className') {
+                element.className = value;
+            } else if (key === 'dataset') {
+                Object.entries(value).forEach(([dataKey, dataValue]) => {
+                    element.dataset[dataKey] = dataValue;
+                });
+            } else if (key.startsWith('on')) {
+                // Event listeners - handle safely
+                const eventName = key.slice(2).toLowerCase();
+                element.addEventListener(eventName, value);
+            } else {
+                element.setAttribute(key, value);
+            }
+        });
+        if (textContent) {
+            element.textContent = textContent;
+        }
+        return element;
+    },
+
+    // Safe HTML sanitization
+    sanitizeHTML(str) {
+        if (typeof str !== 'string') return String(str);
+        const temp = document.createElement('div');
+        temp.textContent = str;
+        return temp.innerHTML;
+    },
+
+    // Validate coordinates
+    isValidCoordinate(lat, lon) {
+        return (
+            typeof lat === 'number' && typeof lon === 'number' &&
+            lat >= -90 && lat <= 90 &&
+            lon >= -180 && lon <= 180 &&
+            !isNaN(lat) && !isNaN(lon)
+        );
+    },
+
+    // Safe localStorage access
+    getStorageItem(key, defaultValue = null) {
+        try {
+            const item = localStorage.getItem(key);
+            return item !== null ? item : defaultValue;
+        } catch (error) {
+            console.warn('localStorage access failed:', error);
+            return defaultValue;
+        }
+    },
+
+    setStorageItem(key, value) {
+        try {
+            localStorage.setItem(key, value);
+            return true;
+        } catch (error) {
+            console.warn('localStorage write failed:', error);
+            return false;
+        }
+    },
+
+    // Haptic feedback helper
+    vibrate(pattern = CONFIG.HAPTIC_DURATION) {
+        if (navigator.vibrate && window.innerWidth <= CONFIG.MOBILE_BREAKPOINT) {
+            navigator.vibrate(pattern);
+        }
+    }
+};
+
+// Enhanced UPlanet Map Implementation
+class EnhancedUPlanetMap {
+    constructor() {
+        this.map = null;
+        this.markerClusters = null;
+        this.currentData = null;
+        this.activeFilters = {
+            umaps: true,
+            accounts: true
+        };
+        // ⚡ PERFORMANCE: Add caching and event management
+        this.dataCache = new Map();
+        this.eventListeners = [];
+        this.isDestroyed = false;
+        this.init();
+    }
+
+    init() {
+        this.initMap();
+        this.setupControls();
+        this.loadData();
+        this.setupFilters();
+        this.setupMobileOptimizations();
+    }
+
+    initMap() {
+        // URL parameters
+        const urlParams = new URLSearchParams(window.location.search);
+        const southWestLat = parseFloat(urlParams.get('southWestLat')) || 0.00;
+        const southWestLon = parseFloat(urlParams.get('southWestLon')) || 0.00;
+        const deg = parseFloat(urlParams.get('deg')) || 10.00;
+
+        const centerLat = southWestLat + deg / 2;
+        const centerLon = southWestLon + deg / 2;
+
+        // Initialize map
+        this.map = L.map('map', {
+            zoomControl: false
+        }).setView([centerLat, centerLon], this.calculateZoomLevel(deg, centerLat));
+
+        // Initialize tile layers
+        this.mapLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: 'UPlanet Enhanced | © OpenStreetMap contributors',
+            className: 'map-tiles'
+        });
+
+        this.satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+            attribution: 'UPlanet Enhanced | © Esri',
+            className: 'satellite-tiles'
+        });
+
+        // Add initial layer based on theme
+        this.updateMapLayer();
+
+        // Initialize marker clusters
+        this.markerClusters = L.markerClusterGroup({
+            iconCreateFunction: this.createClusterIcon,
+            maxClusterRadius: 50,
+            spiderfyOnMaxZoom: true,
+            showCoverageOnHover: false,
+            zoomToBoundsOnClick: true
+        });
+        
+        this.map.addLayer(this.markerClusters);
+
+        // Add zoom control in custom position
+        L.control.zoom({
+            position: 'bottomleft'
+        }).addTo(this.map);
+
+        // Add coordinates display on mouse move with UMAP grid precision (0.01°)
+        const coordinatesDisplay = document.getElementById('coordinates-display');
+        this.map.on('mousemove', (event) => {
+            const latLng = event.latlng;
+            // Calculate nearest UMAP grid coordinates (0.01° precision)
+            const umapLat = Math.floor(latLng.lat * 100) / 100;
+            const umapLon = Math.floor(latLng.lng * 100) / 100;
+            coordinatesDisplay.textContent = `UMAP: ${umapLat.toFixed(2)}, ${umapLon.toFixed(2)}`;
+        });
+
+        // 🔧 FIX: Only hide coordinates when actually leaving map container
+        const mapContainer = document.getElementById('map-container');
+        if (mapContainer) {
+            mapContainer.addEventListener('mouseleave', () => {
+            coordinatesDisplay.textContent = '';
+        });
+        }
+
+        // Store parameters
+        this.mapParams = { southWestLat, southWestLon, deg };
+        
+        // Initialize breadcrumb immediately with URL params
+        this.updateBreadcrumb(deg);
+    }
+
+    createClusterIcon(cluster) {
+        const count = cluster.getChildCount();
+        let className = 'marker-cluster-';
+        
+        if (count < 10) className += 'small';
+        else if (count < 100) className += 'medium';
+        else className += 'large';
+        
+        return new L.DivIcon({
+            html: `<div><span>${count}</span></div>`,
+            className: 'marker-cluster ' + className,
+            iconSize: new L.Point(40, 40)
+        });
+    }
+
+    calculateZoomLevel(deg, latitude) {
+        const earthCircumference = 40075016.686;
+        const metersPerDegree = earthCircumference * Math.cos((Math.PI / 180) * latitude) / 360;
+        const metersWidth = deg * metersPerDegree;
+        const kmWidth = metersWidth / 1000;
+        
+        // Simplified zoom calculation
+        if (kmWidth > 1000) return 4;
+        if (kmWidth > 100) return 6;
+        if (kmWidth > 10) return 9;
+        if (kmWidth > 1) return 12;
+        return 15;
+    }
+
+    updateMapLayer() {
+        try {
+            const savedTheme = Utils.getStorageItem('uplanet-theme', 'light');
+        
+            // Remove existing layers safely
+            if (this.map && this.mapLayer && this.map.hasLayer(this.mapLayer)) {
+            this.map.removeLayer(this.mapLayer);
+        }
+            if (this.map && this.satelliteLayer && this.map.hasLayer(this.satelliteLayer)) {
+            this.map.removeLayer(this.satelliteLayer);
+        }
+        
+        // Add appropriate layer based on theme
+            if (this.map) {
+                if (savedTheme === 'dark' && this.satelliteLayer) {
+            this.map.addLayer(this.satelliteLayer);
+                } else if (this.mapLayer) {
+            this.map.addLayer(this.mapLayer);
+                }
+            }
+        } catch (error) {
+            console.error('Error updating map layer:', error);
+            this.showNotification('Erreur lors du changement de vue', 'error');
+        }
+    }
+
+    async loadData() {
+        try {
+            const { southWestLat, southWestLon, deg } = this.mapParams;
+            
+            // ⚡ PERFORMANCE: Create cache key
+            const cacheKey = `${southWestLat}_${southWestLon}_${deg}`;
+            
+            // Check cache first
+            if (this.dataCache.has(cacheKey)) {
+                console.log('Loading data from cache:', cacheKey);
+                this.currentData = this.dataCache.get(cacheKey);
+                this.updateSwarmAccordion(this.currentData);
+                this.renderMarkers(this.currentData);
+                this.updateBreadcrumb(deg);
+                updateFabVisibility();
+                document.getElementById('loading-spinner').style.display = 'none';
+                return;
+            }
+            
+            // Build API URL - Cohérent avec Ustats.sh
+            const currentURL = new URL(window.location.href);
+            const hostname = currentURL.hostname;
+            let port = currentURL.port;
+            const protocol = currentURL.protocol.split(":")[0];
+            
+            // Port adjustment like in original files
+            if (port === "8080") {
+                port = "54321";
+            }
+            const uHost = hostname.replace("ipfs", "u");
+            const uPlanetStation = `${protocol}://${uHost}${port ? ":" + port : ""}`;
+            const apiURL = `${uPlanetStation}/?lat=${southWestLat}&lon=${southWestLon}&deg=${deg}`;
+
+            console.log('Loading data from API:', apiURL);
+            
+            // ⚡ PERFORMANCE: Add timeout and AbortController
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), CONFIG.API_TIMEOUT);
+            
+            const response = await fetch(apiURL, { 
+                signal: controller.signal,
+                headers: {
+                    'Cache-Control': 'max-age=300' // 5 minutes cache
+                }
+            });
+            clearTimeout(timeoutId);
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            
+            this.currentData = await response.json();
+            
+            // ⚡ PERFORMANCE: Store in cache (max CONFIG.CACHE_SIZE items)
+            if (this.dataCache.size >= CONFIG.CACHE_SIZE) {
+                const firstKey = this.dataCache.keys().next().value;
+                this.dataCache.delete(firstKey);
+            }
+            this.dataCache.set(cacheKey, this.currentData);
+            
+            this.updateSwarmAccordion(this.currentData);
+            this.renderMarkers(this.currentData);
+            this.updateBreadcrumb(deg);
+            
+            // Update mobile FAB visibility based on data
+            updateFabVisibility();
+            
+            // Hide loading spinner
+            document.getElementById('loading-spinner').style.display = 'none';
+            
+        } catch (error) {
+            console.error('Error loading data:', error);
+            
+            if (error.name === 'AbortError') {
+                this.showNotification('Timeout de chargement des données (10s)', 'error');
+                console.log('API timeout - vérifiez la connexion réseau');
+            } else if (error.message.includes('Failed to fetch')) {
+                this.showNotification('Erreur de connexion réseau', 'error');
+            } else {
+                this.showNotification('Erreur de chargement des données', 'error');
+            }
+            
+            // Keep the breadcrumb even if data loading fails
+            document.getElementById('loading-spinner').style.display = 'none';
+            updateFabVisibility();
+        }
+    }
+
+    updateSwarmAccordion(data) {
+        try {
+            const swarmNodes = Array.isArray(data.SWARM) ? data.SWARM : [];
+            const swarmCount = domCache.get('#swarm-count');
+            const swarmList = domCache.get('#swarm-list');
+            
+            if (!swarmCount || !swarmList) {
+                console.warn('SWARM accordion elements not found');
+                return;
+            }
+        
+        swarmCount.textContent = `(${swarmNodes.length})`;
+        
+        if (swarmNodes.length === 0) {
+                // Use safe element creation instead of innerHTML
+                swarmList.innerHTML = '';
+                const noSwarmDiv = Utils.createElement('div', {
+                    style: 'padding: 16px; text-align: center; color: #666;'
+                }, 'Aucun relais SWARM détecté');
+                swarmList.appendChild(noSwarmDiv);
+            return;
+        }
+        
+            // Clear existing content
+            swarmList.innerHTML = '';
+            
+            // Create document fragment for better performance
+            const fragment = document.createDocumentFragment();
+        
+            swarmNodes.forEach((node, index) => {
+                try {
+            const services = node.services || {};
+            
+                    // Sanitize input data with validation
+                    const paf = Utils.sanitizeHTML(node.PAF || data.PAF || '?');
+                    const captain = Utils.sanitizeHTML(node.captain || 'Non défini');
+                    const hostname = Utils.sanitizeHTML(node.hostname || node.myIP || 'Inconnu');
+            
+                    // Create main container
+                    const swarmNodeDiv = Utils.createElement('div', { 
+                        className: 'swarm-node',
+                        dataset: { nodeIndex: index }
+                    });
+            
+                    // Create header
+                    const headerDiv = Utils.createElement('div', { className: 'swarm-node-header' });
+                    const hostnameSpan = Utils.createElement('span', { className: 'swarm-hostname' }, hostname);
+                    const pafSpan = Utils.createElement('span', { className: 'swarm-paf' }, `PAF: ${paf}`);
+            
+            headerDiv.appendChild(hostnameSpan);
+            headerDiv.appendChild(pafSpan);
+            
+                    // Create captain info
+                    const captainDiv = Utils.createElement('div', {
+                        style: 'font-size: 11px; color: #666; margin-bottom: 4px;'
+                    }, `Captain: ${captain}`);
+            
+                    // Create services container
+                    const servicesDiv = Utils.createElement('div', { className: 'swarm-services' });
+            
+                    // Create service badges
+                    Object.entries(services).forEach(([serviceName, service]) => {
+                const isActive = service?.active === true;
+                        const serviceSpan = Utils.createElement('span', {
+                            className: isActive ? 'service-badge' : 'service-badge inactive',
+                            title: `${serviceName}: ${isActive ? 'Actif' : 'Inactif'}`
+                        }, `${isActive ? '✅' : '❌'} ${Utils.sanitizeHTML(serviceName)}`);
+                servicesDiv.appendChild(serviceSpan);
+            });
+            
+                    // Assemble node
+            swarmNodeDiv.appendChild(headerDiv);
+            swarmNodeDiv.appendChild(captainDiv);
+            swarmNodeDiv.appendChild(servicesDiv);
+                    fragment.appendChild(swarmNodeDiv);
+                    
+                } catch (nodeError) {
+                    console.warn('Error processing SWARM node:', nodeError, node);
+                }
+            });
+            
+            swarmList.appendChild(fragment);
+            
+        } catch (error) {
+            console.error('Error updating SWARM accordion:', error);
+            this.showNotification('Erreur lors de la mise à jour SWARM', 'error');
+        }
+    }
+
+    renderMarkers(data) {
+        this.markerClusters.clearLayers();
+        const { deg } = this.mapParams;
+        const level = this.getLevelByDeg(deg);
+        
+        // Combine MULTIPASS and PLAYER data by email
+        const unifiedAccounts = this.combineAccountsByEmail(data);
+        
+        // Au niveau UMAP, afficher seulement les données locales
+        if (level === 'umap') {
+            // Filtrer uniquement les données dans la zone UMAP courante
+            if (data.UMAPs && this.activeFilters.umaps) {
+                const { southWestLat, southWestLon } = this.mapParams;
+                const localUmaps = data.UMAPs.filter(umap => {
+                    const lat = parseFloat(umap.LAT);
+                    const lon = parseFloat(umap.LON);
+                    return lat >= southWestLat && lat <= southWestLat + deg &&
+                           lon >= southWestLon && lon <= southWestLon + deg;
+                });
+                
+                localUmaps.forEach(umap => {
+                    const marker = this.createUmapMarker(umap);
+                    this.markerClusters.addLayer(marker);
+                });
+            }
+            
+            // Afficher les comptes unifiés locaux si le filtre est activé
+            if (this.activeFilters.accounts && unifiedAccounts.length > 0) {
+                const { southWestLat, southWestLon } = this.mapParams;
+                const localAccounts = unifiedAccounts.filter(account => {
+                    const lat = parseFloat(account.LAT);
+                    const lon = parseFloat(account.LON);
+                    return lat >= southWestLat && lat <= southWestLat + deg &&
+                           lon >= southWestLon && lon <= southWestLon + deg;
+                });
+                
+                localAccounts.forEach(account => {
+                    const marker = this.createUnifiedAccountMarker(account);
+                    if (marker) {
+                        this.markerClusters.addLayer(marker);
+                    }
+                });
+            }
+        } else {
+            // Affichage normal pour les autres niveaux - comptes unifiés
+            if (this.activeFilters.accounts && unifiedAccounts.length > 0) {
+                unifiedAccounts.forEach(account => {
+                    if (account.LAT && account.LON) {
+                        const marker = this.createUnifiedAccountMarker(account);
+                        if (marker) {
+                            this.markerClusters.addLayer(marker);
                         }
+                    }
+                });
+            }
+
+            // Render UMAPs
+            if (data.UMAPs && this.activeFilters.umaps) {
+                data.UMAPs.forEach(umap => {
+                    if (umap.LAT && umap.LON) {
+                        const marker = this.createUmapMarker(umap);
+                        if (marker) {
+                            this.markerClusters.addLayer(marker);
+                        }
+                    }
+                });
+            }
+        }
+
+        // Render interactive grid for navigation
+        this.renderNavigationGrid();
+    }
+
+    combineAccountsByEmail(data) {
+        const accountsMap = new Map();
+        
+        // Process MULTIPASS users
+        if (data.NOSTR) {
+            data.NOSTR.forEach(user => {
+                if (user.EMAIL && user.LAT && user.LON) {
+                    const email = user.EMAIL.toLowerCase();
+                    accountsMap.set(email, {
+                        EMAIL: user.EMAIL,
+                        LAT: user.LAT,
+                        LON: user.LON,
+                        hasNOSTR: true,
+                        hasZEN: false,
+                        nostrData: user,
+                        zenData: null
                     });
                 }
+            });
+        }
+        
+        // Process PLAYER (ZEN Card) users
+        if (data.PLAYERs) {
+            data.PLAYERs.forEach(player => {
+                if (player.ASTROMAIL && player.LAT && player.LON) {
+                    const email = player.ASTROMAIL.toLowerCase();
+                    
+                    if (accountsMap.has(email)) {
+                        // Update existing account with ZEN data
+                        const account = accountsMap.get(email);
+                        account.hasZEN = true;
+                        account.zenData = player;
+                    } else {
+                        // Create new account for ZEN-only user
+                        accountsMap.set(email, {
+                            EMAIL: player.ASTROMAIL,
+                            LAT: player.LAT,
+                            LON: player.LON,
+                            hasNOSTR: false,
+                            hasZEN: true,
+                            nostrData: null,
+                            zenData: player
+                        });
+                    }
+                }
+            });
+        }
+        
+        return Array.from(accountsMap.values());
+    }
 
-                // Add markers for each location
-                for (const locationKey in locationEntities) {
-                    const [lat, lon] = locationKey.split(',').map(parseFloat);
-                    const entities = locationEntities[locationKey];
-                    let popupContent = '';
-                    let icon = null;
-                    const level = getLevelByDeg(deg);
+    renderNavigationGrid() {
+        const { southWestLat, southWestLon, deg } = this.mapParams;
+        
+        // Special case for UMAP level (deg <= 0.01)
+        if (deg <= 0.01) {
+            this.showUmapInterface();
+            // Ne pas afficher la grille au niveau UMAP
+            return;
+        }
 
-                    // UMAP popup (most detailed)
-                    if (entities.UMAPS.length > 0) {
-                        icon = umapIcon;
-                        const umap = entities.UMAPS[0];
-                        popupContent += `<div class='umap-popup' style='min-width:260px;max-width:350px;'>`;
-                        popupContent += `<h3 style='margin-bottom:4px;'>UMAP</h3>`;
-                        popupContent += `<div><b>Lat:</b> ${umap.lat} <b>Lon:</b> ${umap.lon}</div>`;
-                        popupContent += `<ul style='margin:8px 0 8px 0;padding-left:18px;'>`;
-                        if (umap.hex && umap.hex !== 'null' && umap.hex !== '') popupContent += `<li><a href="nostr_profile_viewer.html?hex=${umap.hex}" target="_blank" title="Open Nostr profile">🧑‍🚀 UMAP Nostr</a></li>`;
-                        if (umap.umapipfs && umap.umapipfs !== '') popupContent += `<li><a href="/ipfs/${umap.umapipfs}" target="_blank" title="Open IPFS Drive">📁 IPFS Drive</a></li>`;
-                        if (umap.UMAPIPNS && umap.UMAPIPNS !== '') popupContent += `<li><a href="${umap.UMAPIPNS}" target="_blank" title="Open UMAP IPNS">🌐 UMAP IPNS</a></li>`;
-                        if (umap.SECTORROOT && umap.SECTORROOT !== '') popupContent += `<li><a href="/ipfs/${umap.SECTORROOT}" target="_blank" title="Open SECTOR ROOT">🗂️ Sector Root</a></li>`;
-                        if (umap.SECTORIPNS && umap.SECTORIPNS !== '') popupContent += `<li><a href="${umap.SECTORIPNS}" target="_blank" title="Open SECTOR IPNS">🌐 Sector IPNS</a></li>`;
-                        if (umap.SECTORHEX && umap.SECTORHEX !== '') popupContent += `<li><span title="Sector HEX">#️⃣ Sector HEX: ${umap.SECTORHEX}</span></li>`;
-                        if (umap.REGIONROOT && umap.REGIONROOT !== '') popupContent += `<li><a href="/ipfs/${umap.REGIONROOT}" target="_blank" title="Open REGION ROOT">🗺️ Region Root</a></li>`;
-                        if (umap.REGIONIPNS && umap.REGIONIPNS !== '') popupContent += `<li><a href="${umap.REGIONIPNS}" target="_blank" title="Open REGION IPNS">🌐 Region IPNS</a></li>`;
-                        if (umap.REGIONHEX && umap.REGIONHEX !== '') popupContent += `<li><span title="Region HEX">#️⃣ Region HEX: ${umap.REGIONHEX}</span></li>`;
-                        popupContent += `</ul>`;
-                        if (entities.PLAYERS.length > 0) {
-                            popupContent += `<section><h4 style='margin:6px 0 2px 0;'>Sociétaires (PLAYERS)</h4><ul style='padding-left:18px;'>`;
-                            const shuffledPlayers = [...entities.PLAYERS].sort(() => 0.5 - Math.random());
-                            const selectedPlayers = shuffledPlayers.slice(0, Math.min(10, entities.PLAYERS.length));
-                            selectedPlayers.forEach(player => {
-                                popupContent += `<li><a href="nostr_profile_viewer.html?hex=${player.hex}" target="_blank">${player.astromail}</a></li>`;
+        const gridSize = 10;
+        const cellSize = deg / gridSize;
+
+        // Clear existing grid
+        if (this.gridLayer) {
+            this.map.removeLayer(this.gridLayer);
+        }
+
+        this.gridLayer = L.layerGroup();
+        
+        // Create 10x10 grid of clickable rectangles
+        for (let latIndex = 0; latIndex < gridSize; latIndex++) {
+            for (let lonIndex = 0; lonIndex < gridSize; lonIndex++) {
+                // Calcul précis des coordonnées de cellule alignées sur la grille
+                const cellLat = southWestLat + latIndex * cellSize;
+                const cellLon = southWestLon + lonIndex * cellSize;
+
+                // Create clickable rectangle with mobile-optimized settings
+                const isMobile = window.innerWidth <= CONFIG.MOBILE_BREAKPOINT;
+                const rectangle = L.rectangle(
+                    [[cellLat, cellLon], [cellLat + cellSize, cellLon + cellSize]], 
+                    { 
+                        color: 'rgba(0, 116, 217, 0.8)', 
+                        weight: isMobile ? 3 : 2, 
+                        fillOpacity: isMobile ? 0.2 : 0.15,
+                        className: 'clickable-area',
+                        interactive: true,
+                        bubblingMouseEvents: false,
+                        // 📱 FIX: Ensure high z-index for mobile and desktop
+                        pane: 'overlayPane'
+                    }
+                );
+                
+                // 🔧 FIX: Force high z-index after creation
+                rectangle.on('add', function() {
+                    if (rectangle._path) {
+                        rectangle._path.style.zIndex = '9999';
+                        rectangle._path.style.pointerEvents = 'auto';
+                        rectangle._path.style.cursor = 'pointer';
+                    }
+                });
+
+                // 📱 FIX: Enhanced click/touch handler for mobile
+                const handleNavigation = (e) => {
+                    // Leaflet event handling - only prevent if methods exist
+                    if (e.originalEvent) {
+                        e.originalEvent.preventDefault();
+                        e.originalEvent.stopPropagation();
+                    }
+                    
+                    // Haptic feedback on mobile
+                    if (isMobile && navigator.vibrate) {
+                        navigator.vibrate(50);
+                    }
+                    
+                    // Suivre exactement la logique de map_render.html
+                    const targetPrecision = this.getPrecisionForDeg(cellSize);
+                    const newLat = cellLat.toFixed(targetPrecision);
+                    const newLon = cellLon.toFixed(targetPrecision);
+                    
+                    console.log(`Navigation: cellLat=${cellLat}, cellLon=${cellLon}, newLat=${newLat}, newLon=${newLon}, cellSize=${cellSize}`);
+                    
+                    const url = `map_render.html?southWestLat=${newLat}&southWestLon=${newLon}&deg=${this.formatDegValue(cellSize)}`;
+                    window.location.href = url;
+                };
+
+                // Add both click and touch handlers
+                rectangle.on('click', handleNavigation);
+                if (isMobile) {
+                    rectangle.on('touchend', handleNavigation);
+                }
+
+                // Enhanced hover/touch effects for mobile
+                if (isMobile) {
+                    rectangle.on('touchstart', function(e) {
+                        this.setStyle({
+                            fillOpacity: 0.4,
+                            weight: 3,
+                            color: 'rgba(0, 116, 217, 0.8)'
+                        });
+                    });
+                    
+                    rectangle.on('touchend', function(e) {
+                        setTimeout(() => {
+                            this.setStyle({
+                                fillOpacity: 0.2,
+                                weight: 3,
+                                color: 'rgba(0, 116, 217, 0.8)'
                             });
-                            popupContent += `</ul></section>`;
+                        }, 150);
+                    });
+                } else {
+                    // Desktop hover effects with coordinate forwarding
+                    rectangle.on('mouseover', function(e) {
+                        this.setStyle({
+                            fillOpacity: 0.3,
+                            weight: 3,
+                            color: 'rgba(0, 116, 217, 1.0)'
+                        });
+                        
+                        // Forward coordinates display with UMAP grid precision
+                        const coordinatesDisplay = document.getElementById('coordinates-display');
+                        if (coordinatesDisplay && e.latlng) {
+                            const umapLat = Math.floor(e.latlng.lat * 100) / 100;
+                            const umapLon = Math.floor(e.latlng.lng * 100) / 100;
+                            coordinatesDisplay.textContent = `UMAP: ${umapLat.toFixed(2)}, ${umapLon.toFixed(2)}`;
                         }
-                        popupContent += `</div>`;
-                    } else if (entities.PLAYERS.length > 0) {
-                        icon = playerIcon;
-                        popupContent += `<div class='umap-popup' style='min-width:220px;max-width:320px;'>`;
-                        popupContent += `<h3 style='margin-bottom:4px;'>Sociétaires (PLAYERS)</h3><ul style='padding-left:18px;'>`;
-                        entities.PLAYERS.forEach(player => {
-                            popupContent += `<li><a href="nostr_profile_viewer.html?hex=${player.hex}" target="_blank">${player.astromail}</a></li>`;
-                        });
-                        popupContent += `</ul></div>`;
-                    }
+                    });
 
-                    // NOSTR (utilisateurs) section (if present in uPlanetData)
-                    if (uPlanetData.NOSTR && uPlanetData.NOSTR.length > 0 && getLevelByDeg(deg) !== 'ZONE') {
-                        // Only show for non-ZONE levels to avoid clutter
-                        let nostrSection = `<div class='umap-popup' style='min-width:220px;max-width:320px;'><h3 style='margin-bottom:4px;'>Utilisateurs (NOSTR)</h3><ul style='padding-left:18px;'>`;
-                        uPlanetData.NOSTR.forEach(nostr => {
-                            if (nostr.HEX && nostr.EMAIL) {
-                                nostrSection += `<li><a href='nostr_profile_viewer.html?hex=${nostr.HEX}' target='_blank'>${nostr.EMAIL}</a></li>`;
-                            }
+                    rectangle.on('mouseout', function(e) {
+                        this.setStyle({
+                            fillOpacity: 0.15,
+                            weight: 2,
+                            color: 'rgba(0, 116, 217, 0.8)'
                         });
-                        nostrSection += `</ul></div>`;
-                        // Add as a marker at [lat, lon] = [0,0] for now (or could be improved)
-                        L.marker([0, 0], {icon: playerIcon})
-                            .bindPopup(nostrSection, { className: 'custom-popup' })
-                            .addTo(map);
-                    }
-
-                    if (icon && popupContent) {
-                        L.marker([lat, lon], {icon: icon})
-                            .bindPopup(popupContent, { className: 'custom-popup' })
-                            .addTo(map);
-                        console.log(`Marker ajouté à LAT: ${lat}, LON: ${lon} avec entités:`, entities);
-                    }
+                        
+                        // Clear coordinates when leaving grid cell
+                        const coordinatesDisplay = document.getElementById('coordinates-display');
+                        if (coordinatesDisplay) {
+                            coordinatesDisplay.textContent = '';
+                        }
+                    });
+                    
+                    // Forward mousemove to show coordinates with UMAP grid precision
+                    rectangle.on('mousemove', function(e) {
+                        const coordinatesDisplay = document.getElementById('coordinates-display');
+                        if (coordinatesDisplay && e.latlng) {
+                            const umapLat = Math.floor(e.latlng.lat * 100) / 100;
+                            const umapLon = Math.floor(e.latlng.lng * 100) / 100;
+                            coordinatesDisplay.textContent = `UMAP: ${umapLat.toFixed(2)}, ${umapLon.toFixed(2)}`;
+                        }
+                    });
                 }
 
-                // Summary boxes for ZONE, REGION, and SECTOR levels
-                const level = getLevelByDeg(deg);
-                if (level === 'ZONE' || level === 'REGION' || level === 'SECTOR') {
-                  let regionCount = 0, sectorCount = 0, umapCount = 0, playerCount = 0;
-                  if (uPlanetData.UMAPs) umapCount = uPlanetData.UMAPs.length;
-                  if (uPlanetData.PLAYERs) playerCount = uPlanetData.PLAYERs.length;
-                  // Try to estimate region/sector count from UMAPs if possible
-                  const regionSet = new Set(), sectorSet = new Set();
-                  if (uPlanetData.UMAPs) {
-                    uPlanetData.UMAPs.forEach(umap => {
-                      if (umap.REGIONHEX) regionSet.add(umap.REGIONHEX);
-                      if (umap.SECTORHEX) sectorSet.add(umap.SECTORHEX);
-                    });
-                  }
-                  regionCount = regionSet.size;
-                  sectorCount = sectorSet.size;
-                  if (regionCount > 0 || sectorCount > 0 || umapCount > 0 || playerCount > 0) {
-                    const summaryBox = document.createElement('div');
-                    summaryBox.id = 'summary-box';
-                    summaryBox.style.position = 'absolute';
-                    summaryBox.style.top = '70px';
-                    summaryBox.style.right = '20px';
-                    summaryBox.style.background = 'rgba(255,255,255,0.95)';
-                    summaryBox.style.borderRadius = '10px';
-                    summaryBox.style.boxShadow = '0 2px 8px rgba(0,0,0,0.15)';
-                    summaryBox.style.padding = '16px 22px';
-                    summaryBox.style.zIndex = '2000';
-                    summaryBox.style.transition = 'all 0.3s ease';
-                    summaryBox.style.cursor = 'pointer';
-                    summaryBox.style.minWidth = '200px';
-                    
-                    const summaryContent = document.createElement('div');
-                    summaryContent.id = 'summary-content';
-                    let title = '';
-                    let content = '';
-                    
-                    if (level === 'ZONE') {
-                      title = 'ZONE Summary';
-                      content = `<li><span title='Regions'>🗺️</span> <b>${regionCount}</b></li><li><span title='Sectors'>🗂️</span> <b>${sectorCount}</b></li><li><span title='UMAPs'>🧩</span> <b>${umapCount}</b></li><li><span title='Players'>🧑‍💼</span> <b>${playerCount}</b></li>`;
-                    } else if (level === 'REGION') {
-                      title = 'REGION Summary';
-                      content = `<li><span title='Sectors'>🗂️</span> <b>${sectorCount}</b></li><li><span title='UMAPs'>🧩</span> <b>${umapCount}</b></li><li><span title='Players'>🧑‍💼</span> <b>${playerCount}</b></li>`;
-                    } else if (level === 'SECTOR') {
-                      title = 'SECTOR Summary';
-                      content = `<li><span title='UMAPs'>🧩</span> <b>${umapCount}</b></li><li><span title='Players'>🧑‍💼</span> <b>${playerCount}</b></li>`;
-                    }
-                    
-                    summaryContent.innerHTML = `<h3 style='margin-top:0;'>${title}</h3><ul style='margin:0;padding-left:18px;'>${content}</ul>`;
-                    
-                    summaryBox.appendChild(summaryContent);
-                    document.body.appendChild(summaryBox);
-                    
-                    // Add accordion functionality
-                    let isCollapsed = false;
-                    summaryBox.addEventListener('click', function() {
-                      const content = document.getElementById('summary-content');
-                      if (isCollapsed) {
-                        content.style.display = 'block';
-                        summaryBox.style.padding = '16px 22px';
-                        summaryBox.style.minWidth = '200px';
-                        isCollapsed = false;
-                      } else {
-                        content.style.display = 'none';
-                        summaryBox.style.padding = '8px 12px';
-                        summaryBox.style.minWidth = 'auto';
-                        isCollapsed = true;
-                      }
-                    });
-                    
-                    // Add hover effect
-                    summaryBox.addEventListener('mouseenter', function() {
-                      if (!isCollapsed) {
-                        summaryBox.style.background = 'rgba(255,255,255,0.98)';
-                        summaryBox.style.boxShadow = '0 4px 12px rgba(0,0,0,0.2)';
-                      }
-                    });
-                    
-                    summaryBox.addEventListener('mouseleave', function() {
-                      if (!isCollapsed) {
-                        summaryBox.style.background = 'rgba(255,255,255,0.95)';
-                        summaryBox.style.boxShadow = '0 2px 8px rgba(0,0,0,0.15)';
-                      }
-                    });
-                  }
-                }
+                this.gridLayer.addLayer(rectangle);
             }
-        })
-        .catch(error => {
-            console.error('Error loading UPlanet data:', error);
-        });
+        }
 
-// Create a clickable rectangle for each grid cell
-const rectangles = [];
-for (let latIndex = 0; latIndex < gridSize; latIndex++) {
-  for (let lonIndex = 0; lonIndex < gridSize; lonIndex++) {
-    const lat = southWestLat + latIndex * NSize;
-    const lon = southWestLon + lonIndex * NSize;
-    //~ const lat = southWestLat + (southWestLat < 0 ? -latIndex * NSize : latIndex * NSize);
-    //~ const lon = southWestLon + (southWestLon < 0 ? -lonIndex * NSize : lonIndex * NSize);
-
-    // Create a clickable rectangle
-    const rectangle = L.rectangle(
-      [[lat, lon], [lat + NSize, lon + NSize]],
-      { color: 'transparent', weight: 1, className: 'clickable-area' } // Add CSS class
-    );
-
-    // Add a click event to the rectangle
-    rectangle.on('click', () => {
-      // Calculate new northEastLat and northEastLon based on the clicked grid cell
-      const newNorthEastLat = lat.toFixed(2);
-      const newNorthEastLon = lon.toFixed(2);
-
-      // Update URL parameters with the new values
-      const url = `map_render.html?southWestLat=${newNorthEastLat}&southWestLon=${newNorthEastLon}&deg=${NSize}`;
-      window.location.href = url;
-    });
-
-    // Add the rectangle to the map and to the array
-    rectangle.addTo(map);
-    rectangles.push(rectangle);
-  }
-}
-
-// Load grid numbers and overlay them on the map
-loadGridNumbers(zoneURL).then(gridNumbers => {
-  gridNumbers.forEach(({ lat, lon, number, ipns }) => {
-    // Calculate the center of the rectangle based on lat + NSize and lon + NSize
-    const latCenter = lat + (lat < 0 ? -NSize / 2 : NSize / 2);
-    const lonCenter = lon + (lon < 0 ? -NSize / 2 : NSize / 2);
-
-    const latLng = L.latLng(latCenter, lonCenter);
-
-    // Find the corresponding rectangle
-    const matchingRectangle = rectangles.find(rectangle =>
-      rectangle.getBounds().contains(latLng)
-    );
-
-    if (matchingRectangle) {
-      overlayGridNumbers(matchingRectangle, number);
+        this.map.addLayer(this.gridLayer);
+        
+        // 📱 FIX: Show temporary grid helper on mobile
+        if (window.innerWidth <= CONFIG.MOBILE_BREAKPOINT) {
+            this.showMobileGridHelper();
+        }
     }
 
-    if (ipns !== '') {
-        const buttonContainer = document.createElement('div');
-        buttonContainer.id = 'button-container'
-        buttonContainer.style.position = 'absolute';
-        buttonContainer.style.bottom = '10px';
-        buttonContainer.style.left = '10px';
-        buttonContainer.style.width = '200px';
-        buttonContainer.style.height = '150px';
-        buttonContainer.style.zIndex = '1001';
-        buttonContainer.style.display = 'flex';
-        buttonContainer.style.flexDirection = 'column';
-        buttonContainer.style.alignItems = 'center';
-        buttonContainer.style.justifyContent = 'center';
+    // 📱 FIX: Show mobile grid helper
+    showMobileGridHelper() {
+        const helper = document.createElement('div');
+        helper.id = 'mobile-grid-helper';
+        helper.style.cssText = `
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 116, 217, 0.9);
+            color: white;
+            padding: 12px 20px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: bold;
+            z-index: 9999;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            backdrop-filter: blur(10px);
+            animation: fadeInOut 3s ease-in-out;
+            pointer-events: none;
+        `;
+        helper.textContent = '📱 Touchez une case pour naviguer';
+        
+        // Add CSS animation
+        if (!document.getElementById('mobile-grid-helper-style')) {
+            const style = document.createElement('style');
+            style.id = 'mobile-grid-helper-style';
+            style.textContent = `
+                @keyframes fadeInOut {
+                    0%, 100% { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
+                    20%, 80% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+                }
+            `;
+            document.head.appendChild(style);
+        }
+        
+        document.body.appendChild(helper);
+        
+        // Remove after animation
+        setTimeout(() => {
+            if (helper.parentNode) {
+                helper.parentNode.removeChild(helper);
+            }
+        }, 3000);
+    }
+
+    showUmapInterface() {
+        // Create UMAP level interface overlay
+        const container = document.createElement('div');
+        container.id = 'umap-overlay';
+        container.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background-color: rgba(255, 255, 255, 0.9);
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        `;
 
         const button = document.createElement('button');
-        if (NSize === 0.001) { button.innerText = 'EXPLORE UMAP'; }
-        if (NSize === 0.01) { button.innerText = 'EXPLORE SECTOR'; }
-        if (NSize === 0.1) { button.innerText = 'EXPLORE REGION'; }
-        if (NSize == "") { button.innerText = 'EXPLORE ZONE'; }
-        button.className = 'button';
+        button.textContent = '🚀 MULTIPASS';
+        button.style.cssText = `
+            width: 280px;
+            height: 70px;
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-family: Arial, sans-serif;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 12px rgba(0, 116, 217, 0.3);
+            margin-bottom: 15px;
+        `;
 
-        // Add an event listener to the button
-        button.addEventListener('click', function() {
-            window.open( ipns , "_blank");
+        button.addEventListener('click', () => {
+            const { southWestLat, southWestLon } = this.mapParams;
+            
+            // Build uPlanet scan URL following map_render.html logic
+            const currentURL = new URL(window.location.href);
+            const hostname = currentURL.hostname;
+            let port = currentURL.port;
+            const protocol = currentURL.protocol.split(":")[0];
+            
+            // Store the initial port
+            const initialPort = port;
+            
+            // Transform hostname ipfs -> u
+            const uHost = hostname.replace("ipfs", "u");
+            
+            // Port logic: only add 54321 if original port was 8080 (localhost case)
+            if (port === "8080") {
+                port = "54321";
+            } else if (!port || port === "80" || port === "443") {
+                // No port for standard HTTP/HTTPS on public domains
+                port = "";
+            }
+            
+            // Build the station URL
+            const uPlanetStation = `${protocol}://${uHost}${port ? ":" + port : ""}`;
+            const scanURL = `${uPlanetStation}/scan?zlat=${parseFloat(southWestLat).toFixed(2)}&zlon=${parseFloat(southWestLon).toFixed(2)}`;
+            
+            console.log('🌐 UMAP Scan URL generated:', {
+                original: window.location.href,
+                hostname: hostname,
+                port: initialPort,
+                newPort: port,
+                uHost: uHost,
+                scanURL: scanURL
+            });
+            
+            window.location.href = scanURL;
         });
 
-        // Append the button to the button container
-        buttonContainer.appendChild(button);
-        document.body.appendChild(buttonContainer);
+        // Bouton retour pour choisir une autre UMAP
+        const backButton = document.createElement('button');
+        backButton.textContent = '⬅️ Choisir autre UMAP';
+        backButton.style.cssText = `
+            width: 280px;
+            height: 50px;
+            background-color: var(--secondary-color);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-family: Arial, sans-serif;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 8px rgba(46, 204, 113, 0.3);
+        `;
+
+        backButton.addEventListener('click', () => {
+            // Retour historique pour choisir une autre UMAP
+            window.history.back();
+        });
+
+        container.appendChild(button);
+        container.appendChild(backButton);
+        document.body.appendChild(container);
     }
 
-  });
+
+
+    getPrecisionForDeg(deg) {
+        // ⚡ PERFORMANCE: Use constants for precision determination
+        const level = this.getLevelByDeg(deg);
+        return LEVELS[level.toUpperCase()]?.precision || LEVELS.UMAP.precision;
+    }
+
+    getCoordinatesPrecisionForDeg(deg) {
+        // NOTE: Coordonnées toujours affichées avec 2 décimales dans l'interface
+        // Cette fonction est conservée pour d'autres usages (calculs, URL, etc.)
+        if (deg >= 10) return 0;     // ZONE: 43, 1 (0 décimales)
+        if (deg >= 1) return 1;      // REGION: 43.6, 1.4 (1 décimale)
+        if (deg >= 0.1) return 2;    // SECTOR: 43.60, 1.40 (2 décimales)
+        return 3;                    // UMAP: 43.600, 1.400 (3 décimales max)
+    }
+
+    formatDegValue(deg) {
+        // Clean deg formatting
+        if (deg >= 1) return deg.toFixed(1);
+        if (deg >= 0.1) return deg.toFixed(2);
+        return deg.toFixed(3);
+    }
+
+
+
+    // Legacy functions removed - now using createUnifiedAccountMarker()
+
+    createUmapMarker(umap) {
+        const icon = L.divIcon({
+            className: 'custom-marker umap-marker',
+            html: '<div class="legend-icon umap">🧩</div>',
+            iconSize: [30, 30],
+            iconAnchor: [15, 15]
+        });
+
+        const marker = L.marker([parseFloat(umap.LAT), parseFloat(umap.LON)], { icon });
+        
+        const popup = this.createEnhancedPopup({
+            type: 'umap',
+            title: 'UMAP',
+            content: `
+                <p><strong>Lat:</strong> ${umap.LAT} <strong>Lon:</strong> ${umap.LON}</p>
+                ${umap.UMAPROOT ? `<p><strong>IPFS:</strong> ${umap.UMAPROOT.substring(0, 16)}...</p>` : ''}
+            `,
+            actions: umap.UMAPROOT ? [
+                { 
+                    label: 'Explorer', 
+                    type: 'openProfile',
+                    url: `/ipfs/${encodeURIComponent(umap.UMAPROOT)}`,
+                    title: `UMAP ${umap.LAT},${umap.LON} - Explorer IPFS`
+                }
+            ] : []
+        });
+        
+        marker.bindPopup(popup);
+        return marker;
+    }
+
+    createUnifiedAccountMarker(account) {
+        // Determine icon based on available services
+        let iconHtml = '';
+        let markerClass = 'custom-marker unified-marker';
+        
+        if (account.hasNOSTR && account.hasZEN) {
+            // Both services - combined icon
+            iconHtml = '<div class="legend-icon unified">🚀👤</div>';
+            markerClass += ' both-services';
+        } else if (account.hasNOSTR) {
+            // MULTIPASS only
+            iconHtml = '<div class="legend-icon nostr">🚀</div>';
+            markerClass += ' nostr-only';
+        } else if (account.hasZEN) {
+            // ZEN only
+            iconHtml = '<div class="legend-icon player">👤</div>';
+            markerClass += ' zen-only';
+        }
+
+        const icon = L.divIcon({
+            className: markerClass,
+            html: iconHtml,
+            iconSize: [30, 30],
+            iconAnchor: [15, 15]
+        });
+
+        const marker = L.marker([parseFloat(account.LAT), parseFloat(account.LON)], { icon });
+        
+        // Build unified popup content
+        let content = `<p><strong>Email:</strong> ${account.EMAIL}</p>`;
+        let actions = [];
+        
+        // Add MULTIPASS information if available
+        if (account.hasNOSTR && account.nostrData) {
+            const nostr = account.nostrData;
+            const hasValidHex = nostr.HEX && nostr.HEX !== 'null' && nostr.HEX !== null && nostr.HEX.length > 10;
+            
+            if (hasValidHex) {
+                const hexDisplay = nostr.HEX.length > 16 ? nostr.HEX.substring(0, 16) + '...' : nostr.HEX;
+                content += `<p><strong>💬 </strong> ${hexDisplay}</p>`;
+                actions.push({
+                    label: 'NOSTR',
+                    type: 'openProfile',
+                    url: `nostr_profile_viewer.html?hex=${encodeURIComponent(nostr.HEX)}`,
+                    title: `${account.EMAIL} - MULTIPASS Profile`
+                });
+            }
+            
+            if (nostr.ZEN) {
+                content += `<p><strong>🚀 MULTIPASS:</strong> ${nostr.ZEN} Ẑen</p>`;
+            }
+        }
+        
+        // Add ZEN Card information if available
+        if (account.hasZEN && account.zenData) {
+            const zen = account.zenData;
+            
+            if (zen.ZEN) {
+                content += `<p><strong>👤 ZEN Card:</strong> ${zen.ZEN} Ẑen</p>`;
+            }
+            
+            // Add alternative links for ZEN Card with gateway rewriting
+            if (zen.ASTROTW) {
+                actions.push({
+                    label: 'TW',
+                    type: 'openProfile',
+                    url: this.rewriteGatewayUrl(zen.ASTROTW),
+                    title: `${account.EMAIL} - TiddlyWiki`
+                });
+            }
+            
+            if (zen.ASTROFEED) {
+                actions.push({
+                    label: '🚧 RSS',
+                    type: 'openProfile',
+                    url: this.rewriteGatewayUrl(zen.ASTROFEED),
+                    title: `${account.EMAIL} - RSS Feed`
+                });
+            }
+            
+            if (zen.ASTROPORT) {
+                actions.push({
+                    label: '🚧 Astroport',
+                    type: 'openProfile',
+                    url: this.rewriteGatewayUrl(zen.ASTROPORT),
+                    title: `${account.EMAIL} - Astroport`
+                });
+            }
+        }
+        
+        const popup = this.createEnhancedPopup({
+            type: account.hasNOSTR && account.hasZEN ? 'unified' : (account.hasNOSTR ? 'nostr' : 'player'),
+            title: account.EMAIL,
+            content: content,
+            actions: actions
+        });
+        
+        marker.bindPopup(popup);
+        return marker;
+    }
+
+        createEnhancedPopup({ type, title, content, actions = [] }) {
+        const iconMap = {
+            nostr: '🚀',
+            player: '👤',
+            umap: '🧩',
+            unified: '🚀👤'
+        };
+
+        // Create popup HTML with data attributes (Leaflet compatible)
+        let popupHTML = `
+            <div class="enhanced-popup ${type}">
+                <header class="popup-header">
+                    <span class="popup-icon">${iconMap[type] || '📍'}</span>
+                    <h3>${this.sanitizeHTML(title)}</h3>
+                </header>
+                <div class="popup-content">
+                    ${content}
+                </div>
+        `;
+        
+        if (actions.length > 0) {
+            popupHTML += `<footer class="popup-actions">`;
+            
+            actions.forEach((action, index) => {
+                // Generate unique action ID for this popup
+                const actionId = `uplanet_action_${Date.now()}_${index}`;
+                
+                // Store action in global registry
+                if (!window.uplanetActionRegistry) {
+                    window.uplanetActionRegistry = new Map();
+                }
+                window.uplanetActionRegistry.set(actionId, {
+                    ...action,
+                    mapInstance: this
+                });
+                
+                popupHTML += `
+                    <button class="popup-action-btn" 
+                            onclick="window.handleUPlanetAction('${actionId}')"
+                            data-action-id="${actionId}">
+                        ${this.sanitizeHTML(action.label)}
+                    </button>
+                `;
+            });
+            
+            popupHTML += `</footer>`;
+        }
+        
+        popupHTML += `</div>`;
+        return popupHTML;
+    }
+
+    // 🔒 FIX: Secure action handler
+    handlePopupAction(action) {
+        console.log('🔘 Popup action triggered:', action.type, action.url);
+        try {
+            switch(action.type) {
+                case 'openProfile':
+                    console.log('Opening profile modal for:', action.url);
+                    openProfileModal(action.url, action.title);
+                    break;
+                case 'openLink':
+                    console.log('Opening external link:', action.url);
+                    window.open(action.url, '_blank');
+                    break;
+                default:
+                    console.warn('Unknown action type:', action.type);
+            }
+        } catch (error) {
+            console.error('Error handling popup action:', error);
+        }
+    }
+
+    // 🔒 FIX: HTML sanitization function
+    sanitizeHTML(str) {
+        if (typeof str !== 'string') return String(str);
+        
+        const temp = document.createElement('div');
+        temp.textContent = str;
+        return temp.innerHTML;
+    }
+
+    // 🌐 Gateway URL rewriting for ZEN Card links
+    rewriteGatewayUrl(originalUrl) {
+        if (!originalUrl || typeof originalUrl !== 'string') {
+            return originalUrl;
+        }
+        
+        try {
+            // Get current page gateway
+            const currentLocation = new URL(window.location.href);
+            const currentGateway = `${currentLocation.protocol}//${currentLocation.host}`;
+            
+            // Remove @ prefix if present
+            let cleanUrl = originalUrl.startsWith('@') ? originalUrl.substring(1) : originalUrl;
+            
+            // Check if URL starts with a different gateway
+            const urlObj = new URL(cleanUrl);
+            const originalGateway = `${urlObj.protocol}//${urlObj.host}`;
+            
+            // If it's the same gateway, return as-is
+            if (originalGateway === currentGateway) {
+                console.log('🌐 Gateway unchanged:', cleanUrl);
+                return cleanUrl;
+            }
+            
+            // Extract IPFS/IPNS path from the original URL
+            const pathMatch = cleanUrl.match(/\/(ipfs|ipns)\/(.+)$/);
+            if (pathMatch) {
+                const [, protocol, hash] = pathMatch;
+                const newUrl = `${currentGateway}/${protocol}/${hash}`;
+                console.log('🔄 Gateway rewritten:', {
+                    original: originalUrl,
+                    from: originalGateway,
+                    to: currentGateway,
+                    newUrl: newUrl
+                });
+                return newUrl;
+            }
+            
+            // If no IPFS/IPNS path found, return original
+            console.log('⚠️ No IPFS/IPNS path found in URL:', originalUrl);
+            return cleanUrl;
+            
+        } catch (error) {
+            console.error('❌ Error rewriting gateway URL:', error, originalUrl);
+            return originalUrl; // Return original on error
+        }
+    }
+
+
+
+    setupFilters() {
+        const filters = ['umaps', 'accounts'];
+        
+        filters.forEach(filter => {
+            const checkbox = document.getElementById(`filter-${filter}`);
+            checkbox.addEventListener('change', (e) => {
+                this.activeFilters[filter] = e.target.checked;
+                this.renderMarkers(this.currentData);
+            });
+        });
+    }
+
+    setupControls() {
+        // Mobile panel expansion
+        this.setupMobilePanels();
+        
+        // Level indicator - no setup needed, purely visual
+    }
+
+    setupMobilePanels() {
+        if (window.innerWidth <= 768) {
+            const panels = document.querySelectorAll('.map-control-panel');
+            panels.forEach(panel => {
+                panel.addEventListener('click', () => {
+                    panel.classList.toggle('expanded');
+                });
+            });
+        }
+    }
+
+
+
+    updateBreadcrumb(deg) {
+        const level = this.getLevelByDeg(deg);
+        const levelBadge = document.getElementById('current-level-badge');
+        const { southWestLat, southWestLon } = this.mapParams;
+        
+        if (levelBadge) {
+            // Afficher les coordonnées de référence (coin sud-ouest) selon la logique de map_render.html
+            switch(level) {
+                case 'zone':
+                    levelBadge.textContent = `🌍 ZONE_${Math.round(southWestLat)}_${Math.round(southWestLon)} (${deg}°)`;
+                    break;
+                case 'region':
+                    levelBadge.textContent = `🗺️ REGION_${southWestLat.toFixed(1)}_${southWestLon.toFixed(1)} (${deg}°)`;
+                    break;
+                case 'sector':
+                    levelBadge.textContent = `🗂️ SECTOR_${southWestLat.toFixed(2)}_${southWestLon.toFixed(2)} (${deg}°)`;
+                    break;
+                case 'umap':
+                    levelBadge.textContent = `🧩 UMAP_${southWestLat.toFixed(3)}_${southWestLon.toFixed(3)} (${deg}°)`;
+                    break;
+            }
+        }
+    }
+
+    getLevelByDeg(deg) {
+        // ⚡ PERFORMANCE: Use constants for level determination
+        for (const [levelName, config] of Object.entries(LEVELS)) {
+            if (deg >= config.min) {
+                return config.name;
+            }
+        }
+        return LEVELS.UMAP.name;
+    }
+
+
+
+    setupMobileOptimizations() {
+        // Touch gestures for navigation
+        let touchStartY;
+
+        this.map.on('touchstart', (e) => {
+            touchStartY = e.originalEvent.touches[0].clientY;
+        });
+
+        this.map.on('touchend', (e) => {
+            const touchEndY = e.originalEvent.changedTouches[0].clientY;
+            
+            // Swipe up = go to upper level
+            if (touchStartY - touchEndY > 50) {
+                this.navigateToUpperLevel();
+            }
+        });
+    }
+
+    navigateToUpperLevel() {
+        const { southWestLat, southWestLon, deg } = this.mapParams;
+        
+        // Suivre exactement la logique de map_render.html
+        if (deg >= 10) {
+            window.location.href = 'welcome.html';
+        } else {
+            const newDeg = deg * 10;
+            const decalage = 2.5 * deg;
+            const adjustedSouthWestLat = (parseFloat(southWestLat) - decalage).toFixed(2);
+            const adjustedSouthWestLon = (parseFloat(southWestLon) - decalage).toFixed(2);
+            const url = `map_render.html?southWestLat=${adjustedSouthWestLat}&southWestLon=${adjustedSouthWestLon}&deg=${newDeg}`;
+            window.location.href = url;
+        }
+    }
+
+    showNotification(message, type = 'success') {
+        const notification = document.createElement('div');
+        notification.className = `notification ${type}`;
+        notification.textContent = message;
+        document.body.appendChild(notification);
+
+        setTimeout(() => notification.classList.add('show'), 100);
+        setTimeout(() => {
+            notification.classList.remove('show');
+            setTimeout(() => {
+                if (notification.parentNode) {
+                    document.body.removeChild(notification);
+                }
+            }, 300);
+        }, 3000);
+    }
+
+    // ⚡ PERFORMANCE: Clean up method
+    destroy() {
+        this.isDestroyed = true;
+        
+        // Remove all event listeners
+        this.eventListeners.forEach(({ element, event, handler }) => {
+            element.removeEventListener(event, handler);
+        });
+        this.eventListeners = [];
+        
+        // Clean up action registry
+        if (window.uplanetActionRegistry) {
+            const registrySize = window.uplanetActionRegistry.size;
+            window.uplanetActionRegistry.clear();
+            console.log('🧹 Cleaned up action registry:', registrySize, 'actions removed');
+        }
+        
+        // Clear cache
+        this.dataCache.clear();
+        
+        // Clear map
+        if (this.map) {
+            this.map.remove();
+        }
+    }
+
+    // ⚡ PERFORMANCE: Event listener management
+    addEventListenerTracked(element, event, handler) {
+        element.addEventListener(event, handler);
+        this.eventListeners.push({ element, event, handler });
+    }
+}
+
+// SWARM Accordion management
+function toggleSwarmAccordion() {
+    const accordion = document.getElementById('swarm-accordion');
+    accordion.classList.toggle('collapsed');
+}
+
+// Filter Panel Accordion management
+function toggleFilterPanel() {
+    const filterContent = document.getElementById('filter-content');
+    const arrow = document.getElementById('filter-arrow');
+    
+    if (filterContent.style.display === 'none') {
+        filterContent.style.display = 'block';
+        arrow.style.transform = 'rotate(0deg)';
+    } else {
+        filterContent.style.display = 'none';
+        arrow.style.transform = 'rotate(-90deg)';
+    }
+}
+
+// Mobile bottom sheet management
+function toggleMobileBottomSheet() {
+    const sheet = document.getElementById('mobile-bottom-sheet');
+    const isOpen = sheet.classList.contains('open');
+    
+    if (isOpen) {
+        sheet.classList.remove('open');
+        console.log('📱 Bottom sheet closed');
+    } else {
+        sheet.classList.add('open');
+        console.log('📱 Bottom sheet opened');
+    }
+    
+    // Add haptic feedback if available
+    if (navigator.vibrate) {
+        navigator.vibrate(isOpen ? 20 : 10);
+    }
+    
+    // Force z-index update
+    setTimeout(() => {
+        if (sheet.classList.contains('open')) {
+            sheet.style.zIndex = '900';
+            sheet.style.pointerEvents = 'auto';
+        } else {
+            sheet.style.zIndex = '800';
+        }
+    }, 50);
+}
+
+// Mobile filter management
+function setupMobileFilters() {
+    const filterItems = document.querySelectorAll('.mobile-filter-item');
+    
+    filterItems.forEach(item => {
+        // Ensure clickability
+        item.style.cursor = 'pointer';
+        item.style.pointerEvents = 'auto';
+        item.style.position = 'relative';
+        item.style.zIndex = '900';
+        
+        item.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            const filter = this.dataset.filter;
+            console.log('📱 Mobile filter clicked:', filter);
+            
+            if (filter === 'info') {
+                // Toggle info display (future feature)
+                return;
+            }
+            
+            // Toggle filter state with visual feedback
+            const isActive = this.classList.contains('active');
+            if (isActive) {
+                this.classList.remove('active');
+            } else {
+                this.classList.add('active');
+            }
+            
+            // Update checkbox state
+            const newState = this.classList.contains('active');
+            const checkbox = document.getElementById(`filter-${filter}`);
+            if (checkbox) {
+                checkbox.checked = newState;
+                checkbox.dispatchEvent(new Event('change'));
+            }
+            
+            // Update filter in map
+            if (window.uplanetMap) {
+                window.uplanetMap.activeFilters[filter] = newState;
+                window.uplanetMap.renderMarkers(window.uplanetMap.currentData);
+            }
+            
+            // Haptic feedback
+            if (navigator.vibrate) {
+                navigator.vibrate(10);
+            }
+            
+            console.log('📱 Filter state updated:', filter, newState);
+        });
+        
+        // Touch feedback
+        item.addEventListener('touchstart', function(e) {
+            this.style.transform = 'scale(0.98)';
+            this.style.backgroundColor = 'rgba(0, 116, 217, 0.15)';
+        });
+        
+        item.addEventListener('touchend', function(e) {
+            setTimeout(() => {
+                this.style.transform = '';
+                this.style.backgroundColor = '';
+            }, 150);
+        });
+    });
+}
+
+// Mobile-specific touch gestures
+function setupMobileGestures() {
+    let startY = 0;
+    let currentY = 0;
+    let sheet = document.getElementById('mobile-bottom-sheet');
+    let header = document.querySelector('.mobile-sheet-header');
+    
+    // Sheet drag handling on header
+    header.addEventListener('touchstart', function(e) {
+        startY = e.touches[0].clientY;
+        sheet.style.transition = 'none';
+    });
+    
+    header.addEventListener('touchmove', function(e) {
+        currentY = e.touches[0].clientY;
+        let deltaY = currentY - startY;
+        
+        if (sheet.classList.contains('open')) {
+            // If open, allow dragging down to close
+            if (deltaY > 0) {
+                let translateY = Math.min(deltaY, window.innerHeight * 0.8);
+                sheet.style.transform = `translateY(${translateY}px)`;
+            }
+        } else {
+            // If closed, allow dragging up to open
+            if (deltaY < 0) {
+                let translateY = Math.max(deltaY, -window.innerHeight * 0.6);
+                sheet.style.transform = `translateY(calc(100% - 70px + ${translateY}px))`;
+            }
+        }
+    });
+    
+    header.addEventListener('touchend', function(e) {
+        sheet.style.transition = 'transform 0.3s ease';
+        let deltaY = currentY - startY;
+        
+        // Determine if should open or close based on drag distance
+        if (Math.abs(deltaY) > 50) {
+            if (deltaY > 0 && sheet.classList.contains('open')) {
+                // Dragged down, close sheet
+                sheet.classList.remove('open');
+            } else if (deltaY < 0 && !sheet.classList.contains('open')) {
+                // Dragged up, open sheet
+                sheet.classList.add('open');
+            }
+        }
+        
+        // Reset transform
+        sheet.style.transform = '';
+    });
+}
+
+// ⚡ PERFORMANCE: Optimized resize handler with debouncing
+const handleResize = Utils.debounce(() => {
+    try {
+        const isMobile = window.innerWidth <= CONFIG.MOBILE_BREAKPOINT;
+        const fabContainer = domCache.get('.mobile-fab-container');
+        const bottomSheet = domCache.get('.mobile-bottom-sheet');
+        
+        if (isMobile) {
+            // Show mobile elements
+            if (fabContainer) fabContainer.style.display = 'flex';
+            if (bottomSheet) bottomSheet.style.display = 'block';
+            
+            // Sync mobile filters with desktop checkboxes
+            syncMobileFilters();
+            updateFabVisibility();
+        } else {
+            // Hide mobile elements
+            if (fabContainer) fabContainer.style.display = 'none';
+            if (bottomSheet) {
+                bottomSheet.style.display = 'none';
+                bottomSheet.classList.remove('open');
+            }
+        }
+        
+        // Invalidate cache for responsive elements
+        domCache.invalidate('.mobile-');
+        
+    } catch (error) {
+        console.error('Error in resize handler:', error);
+}
+}, CONFIG.DEBOUNCE_DELAY);
+
+function syncMobileFilters() {
+    const filters = ['umaps', 'accounts'];
+    
+    filters.forEach(filter => {
+        const checkbox = document.getElementById(`filter-${filter}`);
+        const mobileItem = document.querySelector(`[data-filter="${filter}"]`);
+        
+        if (checkbox && mobileItem) {
+            if (checkbox.checked) {
+                mobileItem.classList.add('active');
+            } else {
+                mobileItem.classList.remove('active');
+            }
+        }
+    });
+}
+
+// Smart FAB management
+function updateFabVisibility() {
+    if (window.innerWidth > 768) return;
+    
+    const fabContainer = document.querySelector('.mobile-fab-container');
+    if (!fabContainer) return;
+    
+    const swarmFab = fabContainer.querySelector('.mobile-fab.secondary');
+    const accordion = document.getElementById('swarm-accordion');
+    
+    // Hide SWARM FAB if no SWARM data
+    if (window.uplanetMap && window.uplanetMap.currentData) {
+        const hasSwarm = window.uplanetMap.currentData.SWARM && 
+                        window.uplanetMap.currentData.SWARM.length > 0;
+        
+        if (hasSwarm) {
+            if (swarmFab) swarmFab.style.display = 'flex';
+            if (accordion) accordion.style.display = 'block';
+        } else {
+            if (swarmFab) swarmFab.style.display = 'none';
+            if (accordion) {
+                accordion.style.display = 'none';
+                accordion.classList.add('collapsed');
+            }
+        }
+    } else {
+        // No data yet, hide SWARM elements
+        if (swarmFab) swarmFab.style.display = 'none';
+        if (accordion) accordion.style.display = 'none';
+    }
+}
+
+// ⚡ OPTIMIZED: Consolidated haptic feedback system
+function addHapticFeedback() {
+    if (window.innerWidth > CONFIG.MOBILE_BREAKPOINT) return;
+    
+    // Use event delegation for better performance
+    const mobileContainer = document.body;
+    
+    const handleTouchStart = Utils.throttle((e) => {
+        const target = e.target.closest('.mobile-fab, .mobile-filter-item, .popup-action-btn, .mobile-sheet-header');
+        if (target) {
+            Utils.vibrate();
+            
+            // Add visual feedback
+            target.style.transform = 'scale(0.95)';
+            target.style.transition = 'transform 0.1s ease';
+        }
+    }, 50);
+    
+    const handleTouchEnd = Utils.debounce((e) => {
+        const target = e.target.closest('.mobile-fab, .mobile-filter-item, .popup-action-btn, .mobile-sheet-header');
+        if (target) {
+            // Reset visual feedback
+            setTimeout(() => {
+                target.style.transform = '';
+            }, 100);
+        }
+    }, 50);
+    
+    // Remove existing listeners to prevent duplicates
+    mobileContainer.removeEventListener('touchstart', handleTouchStart);
+    mobileContainer.removeEventListener('touchend', handleTouchEnd);
+    
+    // Add new listeners
+    mobileContainer.addEventListener('touchstart', handleTouchStart, { passive: true });
+    mobileContainer.addEventListener('touchend', handleTouchEnd, { passive: true });
+}
+
+// 🚀 Global UPlanet Action Handler - Single function for all popup actions
+window.handleUPlanetAction = function(actionId) {
+    try {
+        // Check if action exists in registry
+        if (!window.uplanetActionRegistry || !window.uplanetActionRegistry.has(actionId)) {
+            console.error('❌ Action not found in registry:', actionId);
+            return;
+        }
+        
+        const actionData = window.uplanetActionRegistry.get(actionId);
+        const { mapInstance, type, url, title, label } = actionData;
+        
+        // Find the button element for visual feedback
+        const button = document.querySelector(`[data-action-id="${actionId}"]`);
+        
+        // Prevent multiple rapid clicks
+        if (button && button.dataset.executing === 'true') {
+            console.log('🔄 Action already executing, skipping:', actionId);
+            return;
+        }
+        
+        // Set executing state and visual feedback
+        if (button) {
+            button.dataset.executing = 'true';
+            button.style.opacity = '0.6';
+            button.style.pointerEvents = 'none';
+        }
+        
+        console.log('🚀 Executing UPlanet action:', { actionId, type, url, label });
+        
+        // Execute the action through the map instance
+        mapInstance.handlePopupAction(actionData);
+        
+        // Reset button state after delay
+        setTimeout(() => {
+            if (button) {
+                button.style.opacity = '';
+                button.style.pointerEvents = '';
+                button.dataset.executing = 'false';
+            }
+        }, 1000);
+        
+        // Clean up this action from registry after use
+        setTimeout(() => {
+            if (window.uplanetActionRegistry && window.uplanetActionRegistry.has(actionId)) {
+                window.uplanetActionRegistry.delete(actionId);
+                console.log('🧹 Cleaned up action from registry:', actionId);
+            }
+        }, 5000);
+        
+    } catch (error) {
+        console.error('❌ Error executing UPlanet action:', error, actionId);
+        
+        // Reset button state on error
+        const button = document.querySelector(`[data-action-id="${actionId}"]`);
+        if (button) {
+            button.style.opacity = '';
+            button.style.pointerEvents = '';
+            button.dataset.executing = 'false';
+        }
+    }
+};
+
+// ⚡ OPTIMIZED: Theme management with validation and error handling
+function toggleTheme() {
+    try {
+        const currentTheme = document.body.dataset.theme || 'light';
+    const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+        
+        // Validate theme value
+        if (!['light', 'dark'].includes(newTheme)) {
+            console.warn('Invalid theme value, defaulting to light');
+            newTheme = 'light';
+        }
+    
+    document.body.dataset.theme = newTheme;
+        Utils.setStorageItem('uplanet-theme', newTheme);
+    
+        // Update toggle icon and title with cached element
+        const toggle = domCache.get('.theme-toggle');
+        if (toggle) {
+            const themeConfig = {
+                dark: { icon: '🛰️', title: 'Mode sombre + Vue satellite' },
+                light: { icon: '🗺️', title: 'Mode clair + Vue carte' }
+            };
+            
+            const config = themeConfig[newTheme];
+            toggle.textContent = config.icon;
+            toggle.title = config.title;
+    }
+    
+    // Update map layer if map is initialized
+        if (window.uplanetMap?.updateMapLayer) {
+        window.uplanetMap.updateMapLayer();
+        }
+        
+        // Dispatch custom event for theme change
+        window.dispatchEvent(new CustomEvent('themeChanged', { 
+            detail: { theme: newTheme } 
+        }));
+        
+    } catch (error) {
+        console.error('Error toggling theme:', error);
+    }
+}
+
+// Profile modal functions - global timeout management
+let currentModalTimeoutId = null;
+
+function openProfileModal(url, title = 'Profil') {
+    try {
+        // ⚡ OPTIMIZED: Use cached DOM elements
+        const modal = domCache.get('#profile-modal');
+        const iframe = domCache.get('#profile-iframe');
+        const titleEl = domCache.get('#profile-modal-title');
+        const loadingOverlay = domCache.get('#profile-loading');
+    
+        // Validate inputs and elements
+    if (!url || typeof url !== 'string') {
+        console.error('Invalid URL provided to openProfileModal');
+        return;
+    }
+    
+        if (!modal || !iframe || !titleEl || !loadingOverlay) {
+            console.error('Profile modal elements not found');
+            return;
+        }
+        
+        titleEl.textContent = Utils.sanitizeHTML(title);
+    modal.classList.add('show');
+    
+    // Show loading overlay
+    loadingOverlay.classList.remove('hidden');
+        const loadingText = loadingOverlay.querySelector('p');
+        if (loadingText) {
+            loadingText.textContent = 'Chargement en cours...';
+        }
+    
+    // Reset iframe
+    iframe.src = 'about:blank';
+    iframe.style.background = 'transparent';
+    
+    // Timeout management
+    let isLoaded = false;
+    
+    // Clear any existing timeout
+    if (currentModalTimeoutId) {
+        clearTimeout(currentModalTimeoutId);
+        currentModalTimeoutId = null;
+    }
+    
+        // Setup timeout using config constant
+    currentModalTimeoutId = setTimeout(() => {
+        if (!isLoaded) {
+                console.warn(`Iframe loading timeout after ${CONFIG.MODAL_TIMEOUT/1000} seconds:`, url);
+                
+                // Create timeout content using safe DOM creation
+                const timeoutDiv = Utils.createElement('div', { className: 'loading-timeout' });
+                const title = Utils.createElement('h3', {}, '⏱️ Timeout');
+                const desc1 = Utils.createElement('p', {}, `Le contenu n'a pas pu être chargé dans les ${CONFIG.MODAL_TIMEOUT/1000} secondes.`);
+                const desc2 = Utils.createElement('p', {}, 'Veuillez réessayer ou vérifier votre connexion.');
+                const closeBtn = Utils.createElement('button', {
+                    style: `margin-top: 15px; padding: 10px 20px; background: var(--primary-color); 
+                           color: white; border: none; border-radius: 6px; cursor: pointer;`,
+                    onclick: closeProfileModal
+                }, 'Fermer');
+                
+                timeoutDiv.appendChild(title);
+                timeoutDiv.appendChild(desc1);
+                timeoutDiv.appendChild(desc2);
+                timeoutDiv.appendChild(closeBtn);
+                
+                                 loadingOverlay.innerHTML = '';
+                 loadingOverlay.appendChild(timeoutDiv);
+        }
+         }, CONFIG.MODAL_TIMEOUT);
+    
+         // Load the actual URL with validation - continue with existing logic
+    setTimeout(() => {
+        try {
+                 // URL validation and loading logic here
+            let validatedUrl;
+            if (url.startsWith('http://') || url.startsWith('https://')) {
+                validatedUrl = new URL(url);
+            } else {
+                const currentLocation = new URL(window.location.href);
+                const basePath = currentLocation.pathname.substring(0, currentLocation.pathname.lastIndexOf('/') + 1);
+                validatedUrl = new URL(url, currentLocation.origin + basePath);
+            }
+            
+            const handleLoad = function() {
+                isLoaded = true;
+                if (currentModalTimeoutId) {
+                    clearTimeout(currentModalTimeoutId);
+                    currentModalTimeoutId = null;
+                }
+                loadingOverlay.classList.add('hidden');
+            iframe.style.background = 'white';
+                console.log('Iframe loaded successfully:', validatedUrl.href);
+            };
+            
+            const handleError = function() {
+                isLoaded = true;
+                if (currentModalTimeoutId) {
+                    clearTimeout(currentModalTimeoutId);
+                    currentModalTimeoutId = null;
+                }
+            console.error('Erreur de chargement du profil:', url);
+                     
+                     const errorDiv = Utils.createElement('div', { className: 'loading-timeout' });
+                     const title = Utils.createElement('h3', {}, '❌ Erreur de chargement');
+                     const desc1 = Utils.createElement('p', {}, 'Impossible de charger le contenu demandé.');
+                     const desc2 = Utils.createElement('p', {}, 'Veuillez vérifier l\'URL ou réessayer plus tard.');
+                     const closeBtn = Utils.createElement('button', {
+                         style: `margin-top: 15px; padding: 10px 20px; background: var(--primary-color); 
+                                color: white; border: none; border-radius: 6px; cursor: pointer;`,
+                         onclick: closeProfileModal
+                     }, 'Fermer');
+                     
+                     errorDiv.appendChild(title);
+                     errorDiv.appendChild(desc1);
+                     errorDiv.appendChild(desc2);
+                     errorDiv.appendChild(closeBtn);
+                     
+                     loadingOverlay.innerHTML = '';
+                     loadingOverlay.appendChild(errorDiv);
+                 };
+                 
+            iframe.onload = handleLoad;
+            iframe.onerror = handleError;
+            iframe.src = validatedUrl.href;
+            
+             } catch (urlError) {
+            isLoaded = true;
+            if (currentModalTimeoutId) {
+                clearTimeout(currentModalTimeoutId);
+                currentModalTimeoutId = null;
+            }
+                 console.error('Invalid URL:', url, urlError);
+                 
+                 const invalidUrlDiv = Utils.createElement('div', { className: 'loading-timeout' });
+                 const title = Utils.createElement('h3', {}, '❌ URL invalide');
+                 const desc1 = Utils.createElement('p', {}, 'L\'adresse fournie n\'est pas valide.');
+                 const desc2 = Utils.createElement('p', {}, `URL: ${Utils.sanitizeHTML(url)}`);
+                 const closeBtn = Utils.createElement('button', {
+                     style: `margin-top: 15px; padding: 10px 20px; background: var(--primary-color); 
+                            color: white; border: none; border-radius: 6px; cursor: pointer;`,
+                     onclick: closeProfileModal
+                 }, 'Fermer');
+                 
+                 invalidUrlDiv.appendChild(title);
+                 invalidUrlDiv.appendChild(desc1);
+                 invalidUrlDiv.appendChild(desc2);
+                 invalidUrlDiv.appendChild(closeBtn);
+                 
+                 loadingOverlay.innerHTML = '';
+                 loadingOverlay.appendChild(invalidUrlDiv);
+        }
+    }, 100);
+    
+         // Set click handler only once
+    if (!modal.hasAttribute('data-click-handler')) {
+        modal.addEventListener('click', function(e) {
+            if (e.target === modal) {
+                closeProfileModal();
+            }
+        });
+        modal.setAttribute('data-click-handler', 'true');
+         }
+         
+           } catch (error) {
+          console.error('Error opening profile modal:', error);
+    }
+}
+
+// Close modal with ESC key and fullscreen with F11 (global listener)
+document.addEventListener('keydown', function(e) {
+    const modal = document.getElementById('profile-modal');
+    if (modal && modal.classList.contains('show')) {
+        if (e.key === 'Escape') {
+        closeProfileModal();
+        } else if (e.key === 'F11') {
+            e.preventDefault(); // Prevent browser fullscreen
+            toggleFullscreenModal();
+        }
+    }
 });
 
-    // --- MAP/SAT Switcher ---
-    function getMapMode() {
-      return localStorage.getItem('uplanet_map_mode') || 'MAP';
+function closeProfileModal() {
+    const modal = document.getElementById('profile-modal');
+    const iframe = document.getElementById('profile-iframe');
+    const loadingOverlay = document.getElementById('profile-loading');
+    
+    // Cancel any ongoing timeout
+    if (currentModalTimeoutId) {
+        clearTimeout(currentModalTimeoutId);
+        currentModalTimeoutId = null;
+        console.log('Modal timeout cancelled by user');
     }
-    function setMapMode(mode) {
-      localStorage.setItem('uplanet_map_mode', mode);
+    
+    // Reset fullscreen mode when closing
+    resetFullscreenModal();
+    
+    modal.classList.remove('show');
+    
+    // Reset loading overlay to initial state
+    if (loadingOverlay) {
+        loadingOverlay.classList.add('hidden');
+        loadingOverlay.innerHTML = `
+            <div class="loading-spinner-modal">
+                <div class="hourglass">⏳</div>
+                <p>Chargement en cours...</p>
+                <small style="color: var(--text-color); opacity: 0.7; font-size: 12px;">
+                    Utilisez le bouton Annuler, la touche Échap, ou cliquez à l'extérieur pour fermer
+                </small>
+                <div class="loading-progress"></div>
+                <button onclick="closeProfileModal()" class="cancel-loading-btn">
+                    Annuler
+                </button>
+            </div>
+        `;
     }
-    function updateSwitchButton() {
-      const btn = document.getElementById('view-switch');
-      if (!btn) return;
-      const mode = getMapMode();
-      if (mode === 'MAP') {
-        btn.textContent = '🛰️';
-        btn.title = 'Switch to Satellite view';
-      } else {
-        btn.textContent = '🗺️';
-        btn.title = 'Switch to Map view';
-      }
-    }
-    document.getElementById('view-switch').addEventListener('click', function() {
-      const mode = getMapMode();
-      const newMode = mode === 'MAP' ? 'SAT' : 'MAP';
-      setMapMode(newMode);
-      updateSwitchButton();
-      // Switch page, keeping all params
-      const url = new URL(window.location.href);
-      const params = url.search;
-      const newPage = newMode === 'SAT' ? 'sat_render.html' : 'map_render.html';
-      window.location.href = newPage + params;
-    });
-    updateSwitchButton();
+    
+    // Clear iframe source after animation
+    setTimeout(() => {
+        iframe.src = 'about:blank';
+        iframe.onload = null;
+        iframe.onerror = null;
+    }, 300);
+}
 
-    // --- Dynamic Title by Level ---
-    function getLevelByDeg(deg) {
-      if (deg >= 10) return 'ZONE';
-      if (deg >= 1) return 'REGION';
-      if (deg >= 0.1) return 'SECTOR';
-      return 'UMAP';
+// ⚡ NEW: Fullscreen modal functionality
+function toggleFullscreenModal() {
+    try {
+        const modal = domCache.get('#profile-modal');
+        const modalContent = domCache.get('.profile-modal-content');
+        const fullscreenBtn = domCache.get('.profile-modal-fullscreen');
+        
+        if (!modal || !modalContent || !fullscreenBtn) {
+            console.warn('Modal elements not found for fullscreen toggle');
+            return;
+        }
+        
+        const isFullscreen = modalContent.classList.contains('fullscreen');
+        
+        if (isFullscreen) {
+            // Exit fullscreen
+            modal.classList.remove('fullscreen');
+            modalContent.classList.remove('fullscreen');
+            fullscreenBtn.classList.remove('active');
+            fullscreenBtn.textContent = '⛶';
+            fullscreenBtn.title = 'Mode plein écran (F11)';
+            
+            // Haptic feedback
+            Utils.vibrate();
+            
+            console.log('📱 Modal fullscreen: OFF');
+        } else {
+            // Enter fullscreen
+            modal.classList.add('fullscreen');
+            modalContent.classList.add('fullscreen');
+            fullscreenBtn.classList.add('active');
+            fullscreenBtn.textContent = '🗗';
+            fullscreenBtn.title = 'Quitter le plein écran (F11)';
+            
+            // Haptic feedback
+            Utils.vibrate([10, 20]);
+            
+            console.log('📱 Modal fullscreen: ON');
+        }
+        
+        // Dispatch custom event for fullscreen change
+        window.dispatchEvent(new CustomEvent('modalFullscreenToggle', { 
+            detail: { 
+                isFullscreen: !isFullscreen,
+                modal: modal,
+                content: modalContent 
+            } 
+        }));
+        
+    } catch (error) {
+        console.error('Error toggling modal fullscreen:', error);
     }
-    function setDynamicTitle(deg) {
-      const level = getLevelByDeg(deg);
-      let title = 'UPlanet';
-      if (level === 'ZONE') title = 'UPlanet - ZONE';
-      else if (level === 'REGION') title = 'UPlanet - REGION';
-      else if (level === 'SECTOR') title = 'UPlanet - SECTOR';
-      else if (level === 'UMAP') title = 'UPlanet - UMAP';
-      document.title = title;
-      const t = document.getElementById('dynamic-title');
-      if (t) t.textContent = title;
+}
+
+// ⚡ NEW: Reset fullscreen modal state
+function resetFullscreenModal() {
+    try {
+        const modal = domCache.get('#profile-modal');
+        const modalContent = domCache.get('.profile-modal-content');
+        const fullscreenBtn = domCache.get('.profile-modal-fullscreen');
+        
+        if (modal && modalContent && fullscreenBtn) {
+            modal.classList.remove('fullscreen');
+            modalContent.classList.remove('fullscreen');
+            fullscreenBtn.classList.remove('active');
+            fullscreenBtn.textContent = '⛶';
+            fullscreenBtn.title = 'Mode plein écran (F11)';
+        }
+    } catch (error) {
+        console.warn('Error resetting fullscreen modal:', error);
     }
-    setDynamicTitle(deg);
+}
 
-    // --- Custom popup CSS ---
-    const style = document.createElement('style');
-    style.textContent = `
-      .custom-popup .leaflet-popup-content-wrapper {
-        background: #f8fafd;
-        color: #222;
-        border-radius: 12px;
-        padding: 16px 18px 12px 18px;
-        box-shadow: 0 3px 14px rgba(0,0,0,0.18);
-        min-width: 220px;
-        max-width: 350px;
-      }
-      .custom-popup .leaflet-popup-content h3 {
-        margin: 0 0 6px 0;
-        font-size: 1.2em;
-        color: #1a4a7a;
-      }
-      .custom-popup .leaflet-popup-content h4 {
-        margin: 8px 0 2px 0;
-        font-size: 1em;
-        color: #2b6c3e;
-      }
-      .custom-popup .leaflet-popup-content ul {
-        margin: 0 0 6px 0;
-        padding-left: 18px;
-      }
-      .custom-popup .leaflet-popup-content li {
-        margin-bottom: 2px;
-      }
-      .custom-popup .leaflet-popup-content a {
-        color: #007bff;
-        text-decoration: none;
-        font-weight: 500;
-      }
-      .custom-popup .leaflet-popup-content a:hover {
-        text-decoration: underline;
-      }
-    `;
-    document.head.appendChild(style);
+// ⚡ OPTIMIZED: Enhanced initialization with error handling and performance monitoring
+document.addEventListener('DOMContentLoaded', () => {
+    const startTime = performance.now();
+    
+    try {
+        console.log('🚀 UPlanet Enhanced Map - Initializing...');
+        
+        // Load and apply saved theme
+        const savedTheme = Utils.getStorageItem('uplanet-theme', 'light');
+    document.body.dataset.theme = savedTheme;
+    
+    // Update toggle icon and title based on saved theme
+        const toggle = domCache.get('.theme-toggle');
+        if (toggle) {
+            const themeConfig = {
+                dark: { icon: '🛰️', title: 'Mode sombre + Vue satellite' },
+                light: { icon: '🗺️', title: 'Mode clair + Vue carte' }
+            };
+            const config = themeConfig[savedTheme] || themeConfig.light;
+            toggle.textContent = config.icon;
+            toggle.title = config.title;
+    }
+    
+        // Initialize enhanced map with error handling
+        try {
+    window.uplanetMap = new EnhancedUPlanetMap();
+            console.log('✅ Map instance created successfully');
+        } catch (mapError) {
+            console.error('❌ Failed to create map instance:', mapError);
+            throw new Error('Map initialization failed');
+        }
+    
+        // Setup mobile features with error boundaries
+        const mobileSetupTasks = [
+            { name: 'Mobile Filters', fn: setupMobileFilters },
+            { name: 'Mobile Gestures', fn: setupMobileGestures },
+            { name: 'Haptic Feedback', fn: addHapticFeedback }
+        ];
+        
+        mobileSetupTasks.forEach(({ name, fn }) => {
+            try {
+                fn();
+                console.log(`✅ ${name} initialized`);
+            } catch (error) {
+                console.warn(`⚠️ ${name} setup failed:`, error);
+            }
+        });
+    
+        // Handle responsive design with optimized handler
+    handleResize();
+        window.addEventListener('resize', handleResize, { passive: true });
+    
+        // Enhanced map interaction handler with error handling
+        const mapElement = domCache.get('#map');
+        const handleMapInteraction = Utils.throttle((e) => {
+            try {
+        if (window.innerWidth <= CONFIG.MOBILE_BREAKPOINT) {
+                    const sheet = domCache.get('#mobile-bottom-sheet');
+                    if (sheet?.classList.contains('open') && !sheet.contains(e.target)) {
+                    sheet.classList.remove('open');
+                        console.log('📱 Bottom sheet auto-closed by map interaction');
+                }
+            }
+            } catch (error) {
+                console.warn('Error in map interaction handler:', error);
+            }
+        }, 100);
+        
+        if (mapElement) {
+            mapElement.addEventListener('click', handleMapInteraction, { passive: true });
+            mapElement.addEventListener('touchstart', handleMapInteraction, { passive: true });
+        }
+        
+        // Optimize mobile bottom sheet header with cached elements
+        const mobileSheetHeader = domCache.get('.mobile-sheet-header');
+        if (mobileSheetHeader) {
+            Object.assign(mobileSheetHeader.style, {
+                zIndex: '900',
+                position: 'relative',
+                pointerEvents: 'auto'
+            });
+        
+            // Enhanced touch feedback with throttling
+            const touchStartHandler = Utils.throttle(function(e) {
+                this.style.backgroundColor = 'rgba(0, 116, 217, 0.15)';
+                Utils.vibrate();
+            }, 100);
+            
+            const touchEndHandler = Utils.debounce(function(e) {
+                setTimeout(() => {
+                    this.style.backgroundColor = 'rgba(0, 116, 217, 0.05)';
+                }, 150);
+            }, 50);
+            
+                         mobileSheetHeader.addEventListener('touchstart', touchStartHandler, { passive: true });
+             mobileSheetHeader.addEventListener('touchend', touchEndHandler, { passive: true });
+         }
+         
+         // Enhanced mobile optimizations for touch devices
+         if (window.innerWidth <= CONFIG.MOBILE_BREAKPOINT) {
+             const map = domCache.get('#map');
+             if (map) {
+                 map.style.touchAction = 'manipulation';
+             }
+             
+             // Initial bottom sheet positioning
+        setTimeout(() => {
+                 const sheet = domCache.get('#mobile-bottom-sheet');
+            if (sheet && !sheet.classList.contains('open')) {
+                     console.log('📱 Mobile UI initialized');
+            }
+        }, 1000);
+    }
+         
+         // Performance monitoring
+         const endTime = performance.now();
+         console.log(`✅ UPlanet Enhanced Map initialized in ${(endTime - startTime).toFixed(2)}ms`);
+         
+     } catch (error) {
+         console.error('❌ Failed to initialize UPlanet Enhanced Map:', error);
 
-  </script>
+         // Fallback error display
+         const errorDiv = Utils.createElement('div', {
+             style: `
+                 position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+                 background: rgba(231, 76, 60, 0.9); color: white; padding: 20px;
+                 border-radius: 8px; z-index: 10000; text-align: center;
+                 box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+             `
+         });
+         
+         const title = Utils.createElement('h3', {}, '⚠️ Erreur d\'initialisation');
+         const desc = Utils.createElement('p', {}, 'Une erreur est survenue lors du chargement de la carte.');
+         const reload = Utils.createElement('button', {
+             style: `
+                 margin-top: 10px; padding: 8px 16px; background: white; color: #e74c3c;
+                 border: none; border-radius: 4px; cursor: pointer; font-weight: bold;
+             `,
+             onclick: () => window.location.reload()
+         }, 'Recharger la page');
+         
+         errorDiv.appendChild(title);
+         errorDiv.appendChild(desc);
+         errorDiv.appendChild(reload);
+         document.body.appendChild(errorDiv);
+     }
+ });
+ 
+ // ⚡ OPTIMIZED: Enhanced error handler with better reporting
+window.addEventListener('error', function(event) {
+     // Log UPlanet specific errors for debugging
+     if (event.message?.includes('UPlanet') || event.filename?.includes('map_render_enhanced')) {
+         console.error('🚨 UPlanet Error:', {
+             message: event.message,
+             filename: event.filename,
+             lineno: event.lineno,
+             colno: event.colno,
+             stack: event.error?.stack
+         });
+    }
+    return false; // Let all errors through normally
+ });
+ 
+ // ⚡ PERFORMANCE: Enhanced unload cleanup
+ window.addEventListener('beforeunload', function() {
+     try {
+         // Clear caches and cleanup resources
+         domCache.clear();
+         
+         // Cleanup map instance
+         if (window.uplanetMap?.destroy) {
+             window.uplanetMap.destroy();
+         }
+         
+         // Clear timeouts
+         if (currentModalTimeoutId) {
+             clearTimeout(currentModalTimeoutId);
+         }
+         
+         console.log('🧹 UPlanet cleanup completed');
+     } catch (error) {
+         console.warn('Cleanup error:', error);
+           }
+});
+
+</script>
+
 </body>
-</html>
+</html> 

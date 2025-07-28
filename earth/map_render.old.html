@@ -1,0 +1,766 @@
+<!DOCTYPE html>
+<html>
+<head>
+      <meta charset="UTF-8">
+          <link rel="icon" type="image/x-icon" href="./favicon.ico">
+  <title id="dynamic-title">UPlanet</title>
+  <link rel="stylesheet" href="leaflet.css" />
+    <style>
+  .clickable-area {
+      fill-opacity: 0.2; /* Adjust the opacity as needed */
+      fill: #0074d9; /* Adjust the color as needed */
+      stroke: #001f3f;
+    }
+    #coordinates-display {
+      position: absolute;
+      bottom: 20px; /* Adjust the bottom position as needed */
+      left: 10px; /* Adjust the left position as needed */
+      background-color: white;
+      padding: 5px;
+      border: 1px solid black;
+      z-index: 1000;
+    }
+     #map-container {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+    }
+    .button {
+        background-color: #3498db;
+        color: #fff;
+        padding: 10px 20px;
+        border: none;
+        cursor: pointer;
+    }
+    .grid-number {
+        position: absolute;
+        font-size: 16px;
+        font-weight: bold;
+        color: #fff;
+        z-index: 1300;
+
+    }
+    #upper-layer-button {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        z-index: 1002;
+        background-color: #3498db;
+        color: #fff;
+        padding: 10px 20px;
+        border: none;
+        cursor: pointer;
+    }
+    #back-button {
+        position: absolute;
+        top: 10px;
+        left: 50px;
+        z-index: 1002;
+        background-color: #3498db;
+        color: #fff;
+        padding: 8px 12px;
+        border: none;
+        cursor: pointer;
+        border-radius: 5px;
+        font-size: 18px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 40px;
+        height: 40px;
+    }sat
+    #back-button:hover {
+        background-color: #2980b9;
+    }
+</style>
+
+</head>
+<body>
+<div id="map-container" style="position: relative;">
+    <button id="back-button" onclick="history.back()">⬅️</button>
+    <button id="view-switch" style="position:absolute;top:10px;right:10px;z-index:1003;background:#fff;border-radius:50%;border:none;width:48px;height:48px;box-shadow:0 2px 8px rgba(0,0,0,0.2);font-size:24px;cursor:pointer;display:flex;align-items:center;justify-content:center;" title="Switch to Satellite view">🛰️</button>
+    <div id="coordinates-display"></div> <!-- Coordinates display element -->
+    <div id="map" style="width: 100%; height: 100vh;"></div>
+</div>
+<button id="upper-layer-button">⬆️</button>
+<script src="leaflet.js"></script>
+
+<script>
+
+    // Function to extract URL parameters
+    function getUrlParameter(name) {
+      name = name.replace(/[\[]/, '\\[').replace(/[\]]/, '\\]');
+      const regex = new RegExp('[\\?&]' + name + '=([^&#]*)');
+      const results = regex.exec(location.search);
+      return results === null ? '' : decodeURIComponent(results[1].replace(/\+/g, ' '));
+    }
+
+    // const desiredImageWidthInKm = 11; // Now Is calculated from northEastLon - southWestLon
+    const tileSizeInPixels = 256;
+
+    // Define custom icons at global scope
+    const umapIcon = L.icon({
+        iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png',
+        shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+        iconSize: [25, 41],
+        iconAnchor: [12, 41],
+        popupAnchor: [1, -34],
+        shadowSize: [41, 41]
+    });
+
+    const playerIcon = L.icon({
+        iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png',
+        shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+        iconSize: [25, 41],
+        iconAnchor: [12, 41],
+        popupAnchor: [1, -34],
+        shadowSize: [41, 41]
+    });
+
+    function calculateZoomLevel(desiredImageWidthInKm, latitude) {
+      const earthEquatorialCircumference = 40075016.686; // Earth's equatorial circumference in meters
+      // Calculate the distance covered by one degree of longitude at the given latitude
+      const metersPerLongitudeDegree = earthEquatorialCircumference * Math.cos((Math.PI / 180) * latitude) / 360;
+      const metersPerPixel = metersPerLongitudeDegree * 360 / (tileSizeInPixels * Math.pow(2, 20));
+      // Calculate the number of pixels needed to achieve the desired width
+      const numberOfPixelsHorizontally = (desiredImageWidthInKm * 1000) / metersPerPixel;
+      // Calculate the appropriate zoom level
+      const zoomLevel = Math.log2(tileSizeInPixels * Math.pow(2, 20) / numberOfPixelsHorizontally);
+      return zoomLevel;
+    }
+
+///////////////////////////////////////////////////////////////////////////////////
+    // Extract the hostname (e.g., "https://ipfs.domain.tld" or "http://ipfs.localhost:8080")
+    var currentURL = new URL(window.location.href);
+    var hostname = currentURL.hostname;
+    var port = currentURL.port;
+    var protocol = currentURL.protocol.split(":")[0];
+
+    // Store the initial port
+    var initialPort = port;
+
+    // Check and replace the port if it's 8080 for station
+    if (port === "8080") {
+        port = "1234";
+    }
+    var zHost = hostname.replace("ipfs", "astroport");
+
+    // Create the "station" variable with the specified format
+    var station = protocol + "://" + zHost + (port ? (":" + port) : "");
+    console.log(station);
+
+    hostname = currentURL.hostname;
+    var uHost = hostname.replace("ipfs", "u");
+
+    // Reset port to its initial value
+    port = initialPort;
+
+    // Check and replace the port if it's 8080 for uPlanetStation
+    if (port === "8080") {
+        port = "54321";
+    }
+    var uPlanetStation = protocol + "://" + uHost + (port ? (":" + port) : "");
+    const uPlanetSCAN_URL = uPlanetStation + '/scan';
+
+    console.log('UPLANET SCAN URL:', uPlanetSCAN_URL);
+
+//////////////////////////////////////////////////////////////// fetchAstroport
+    async function fetchAstroport(myURL, retryCount = 3) {
+      try {
+        let one = await fetch(myURL);
+        var doc = await one.text();
+        var regex = /url='([^']+)/i;
+        var redirectURL = doc.match(regex)[1];
+
+        console.log(redirectURL);
+
+        return new Promise(async (resolve, reject) => {
+          let retry = 0;
+
+          const fetchData = async () => {
+            try {
+              let two = await fetch(redirectURL);
+              const data = await two.json();
+              console.log(data);
+              resolve(data);
+            } catch (error) {
+              if (retry < retryCount) {
+                console.log(`Retry ${retry + 1} after 3000ms...`);
+                retry++;
+                setTimeout(fetchData, 3000);
+              } else {
+                console.log('Max retries reached. Fetch error:', error);
+                reject(error);
+              }
+            }
+          };
+
+          setTimeout(fetchData, 3000);
+        });
+      } catch (err) {
+        console.log('Fetch error:', err);
+        return Promise.reject(err);
+      }
+    }
+
+///////////////////////////////////////////////////////////////////////////////////
+
+
+    const defaultIPNS = '';
+    const sectorIPNS = getUrlParameter('ipns') || defaultIPNS;
+    console.log('sectorIPNS: /ipns/', sectorIPNS);
+
+    if (sectorIPNS !== '') {
+        const buttonContainer = document.createElement('div');
+        buttonContainer.id = 'button-container'
+        buttonContainer.style.position = 'absolute';
+        buttonContainer.style.bottom = '10px';
+        buttonContainer.style.left = '10px';
+        buttonContainer.style.width = '200px';
+        buttonContainer.style.height = '150px';
+        buttonContainer.style.zIndex = '1001';
+        buttonContainer.style.display = 'flex';
+        buttonContainer.style.flexDirection = 'column';
+        buttonContainer.style.alignItems = 'center';
+        buttonContainer.style.justifyContent = 'center';
+
+        const button = document.createElement('button');
+        button.innerText = 'INLINE LINK';
+        button.className = 'button';
+
+        // Add an event listener to the button
+        button.addEventListener('click', function() {
+            window.open( '/ipns/'+ sectorIPNS, "_blank");
+        });
+
+        // Append the button to the button container
+        buttonContainer.appendChild(button);
+        document.body.appendChild(buttonContainer);
+    }
+
+    const defaultSouthWestLat = 0.00;
+    const defaultSouthWestLon = 0.00;
+    const defaultOffsetDegrees = 10.00; // 10° offset
+
+    const southWestLat = parseFloat(getUrlParameter('southWestLat')) || defaultSouthWestLat;
+    console.log('Lat:', southWestLat);
+    const southWestLon = parseFloat(getUrlParameter('southWestLon')) || defaultSouthWestLon;
+    console.log('Lon:', southWestLon);
+    const deg = parseFloat(getUrlParameter('deg')) || defaultOffsetDegrees;
+    console.log('Offset:', deg);
+
+    // Calculate northEastLat and northEastLon with deg° offset only if parameters are empty
+    const northEastLatParam = getUrlParameter('northEastLat');
+    const northEastLonParam = getUrlParameter('northEastLon');
+
+    const northEastLat = northEastLatParam ? parseFloat(northEastLatParam) : southWestLat + deg;
+    const northEastLon = northEastLonParam ? parseFloat(northEastLonParam) : southWestLon + deg;
+
+     // Calculate the longitudinal distance in degrees
+    const lonDistanceInDegrees = Math.abs(northEastLon - southWestLon);
+    console.log('lonDistanceInDegrees:', lonDistanceInDegrees);
+
+    // Calculate the desired image width in kilometers
+    const earthEquatorialCircumference = 40075016.686; // Earth's equatorial circumference in meters
+    const metersPerLongitudeDegree = Math.abs(earthEquatorialCircumference * Math.cos((Math.PI / 180) * southWestLat) / 360);
+    const desiredImageWidthInMeters = lonDistanceInDegrees * metersPerLongitudeDegree;
+    const desiredImageWidthInKm = desiredImageWidthInMeters / 1000;
+    console.log('desiredImageWidthInKm:', desiredImageWidthInKm);
+
+    const centerLat = (southWestLat + northEastLat) / 2;
+    const centerLon = (southWestLon + northEastLon) / 2;
+
+    // Provide the latitude for adjustment
+    const latitude = centerLat;
+    const zoomLevel = calculateZoomLevel(desiredImageWidthInKm, latitude);
+    console.log('Recommended zoom level:', zoomLevel);
+
+    const map = L.map('map').setView([centerLat, centerLon], zoomLevel);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: 'U Planet'
+    }).addTo(map);
+
+
+const gridSize = 10; // Number of rows and columns in the grid
+const NSize = deg / 10; // Size of each grid cell
+
+document.getElementById('upper-layer-button').addEventListener('click', function() {
+    if (deg >= 10) {
+        window.location.href = 'welcome.html';
+    } else {
+        const newDeg = deg * 10;
+        const decalage = 2.5 * deg;
+        const adjustedSouthWestLat = (parseFloat(southWestLat) - decalage).toFixed(2);
+        const adjustedSouthWestLon = (parseFloat(southWestLon) - decalage).toFixed(2);
+        const url = `map_render.html?southWestLat=${adjustedSouthWestLat}&southWestLon=${adjustedSouthWestLon}&deg=${newDeg}`;
+        window.location.href = url;
+    }
+});
+
+
+// Create a HTML element for displaying coordinates
+const coordinatesDisplay = document.getElementById('coordinates-display');
+
+// Check if deg is less than or equal to 0.01
+if (deg <= 0.01) {
+  const container = document.createElement('div');
+  container.style.position = 'fixed';
+  container.style.top = '0';
+  container.style.left = '0';
+  container.style.width = '100vw';
+  container.style.height = '100vh';
+  container.style.backgroundColor = 'rgba(255, 255, 255, 0.4)';
+  container.style.border = 'none';
+  container.style.zIndex = '999';
+  container.style.display = 'flex';
+  container.style.flexDirection = 'column';
+  container.style.alignItems = 'center';
+  container.style.justifyContent = 'center';
+
+
+  const button = document.createElement('button');
+  button.textContent = '>>> OK <<<';
+  button.style.width = '100%';
+  button.style.height = '100px'; // Customize the button height
+  button.style.backgroundColor = '#0074d9';
+  button.style.border = 'none';
+  button.style.fontFamily = 'Arial, sans-serif'; // Customize the font family
+  button.style.fontSize = '24px'; // Customize the font size
+  button.style.color = '#fff'; // Customize the font color
+
+  button.addEventListener('click', () => {
+    //~ const url = `${station}/?uplanet=@&zlat=${southWestLat}&zlon=${southWestLon}`;
+    const url = `${uPlanetSCAN_URL}?zlat=${southWestLat}&zlon=${southWestLon}`;
+    window.location.href = url;
+  });
+
+  container.appendChild(button);
+
+  document.body.appendChild(container);
+
+} else {
+
+  // Add a mousemove event listener to the map
+  map.on('mousemove', (event) => {
+    const latLng = event.latlng;
+    const lat = latLng.lat.toFixed(6);
+    const lng = latLng.lng.toFixed(6);
+    coordinatesDisplay.textContent = `Latitude: ${lat}, Longitude: ${lng}`;
+  });
+
+///// UPPER THAN 0.01
+}
+
+/////////////////
+async function loadGridNumbers(myURL) {
+try {
+      const data = await fetchAstroport(myURL);
+      return data.gridNumbers || [];
+} catch (error) {
+      console.error('Error loading grid numbers:', error);
+      return [];
+    }
+}
+
+  // Function to overlay grid numbers on the map
+function overlayGridNumbers(rectangle, number) {
+    const latLng = rectangle.getBounds().getCenter();
+    const containerPoint = map.latLngToContainerPoint(latLng);
+
+    const numberElement = document.createElement('div');
+    numberElement.className = 'grid-number';
+    numberElement.textContent = number;
+    numberElement.style.position = 'absolute';
+    numberElement.style.fontSize = '16px';
+    numberElement.style.fontWeight = 'bold';
+    numberElement.style.color = 'red';
+    numberElement.style.top = `${containerPoint.y}px`;
+    numberElement.style.left = `${containerPoint.x}px`;
+
+    document.getElementById('map-container').appendChild(numberElement);
+}
+
+    const zquery = 'zone='+NSize+'&ulat='+southWestLat+'&ulon='+southWestLon; // Replace with your actual query parameters
+    const zoneURL = station+'/?' + zquery;
+
+    console.log('ZONE URL:', zoneURL);
+
+    // Add UPlanet API call
+    const uPlanetAPI_URL = `${uPlanetStation}/?lat=${southWestLat}&lon=${southWestLon}&deg=${deg}`;
+    console.log('UPLANET API URL:', uPlanetAPI_URL);
+
+    // Load UPlanet data
+    fetch(uPlanetAPI_URL)
+        .then(response => response.json())
+        .then(uPlanetData => {
+            if (uPlanetData) {
+                const locationEntities = {};
+
+                // Group PLAYERS and UMAPS by location
+                if (uPlanetData.PLAYERs) {
+                    uPlanetData.PLAYERs.forEach(player => {
+                        if (player.LAT && player.LON && player.HEX && player.ASTROMAIL) {
+                            const locationKey = `${player.LAT},${player.LON}`;
+                            if (!locationEntities[locationKey]) {
+                                locationEntities[locationKey] = { PLAYERS: [], UMAPS: [] };
+                            }
+                            locationEntities[locationKey].PLAYERS.push({ hex: player.HEX, astromail: player.ASTROMAIL });
+                        }
+                    });
+                }
+
+                if (uPlanetData.UMAPs) {
+                    uPlanetData.UMAPs.forEach(umap => {
+                        if (umap.LAT && umap.LON && umap.UMAPHEX) {
+                            const locationKey = `${umap.LAT},${umap.LON}`;
+                            if (!locationEntities[locationKey]) {
+                                locationEntities[locationKey] = { PLAYERS: [], UMAPS: [] };
+                            }
+                            locationEntities[locationKey].UMAPS.push({ hex: umap.UMAPHEX, umapipfs: umap.UMAPROOT, lat: umap.LAT, lon: umap.LON });
+                        }
+                    });
+                }
+
+                // Add markers for each location
+                for (const locationKey in locationEntities) {
+                    const [lat, lon] = locationKey.split(',').map(parseFloat);
+                    const entities = locationEntities[locationKey];
+                    let popupContent = '';
+                    let icon = null;
+                    const level = getLevelByDeg(deg);
+
+                    // UMAP popup (most detailed)
+                    if (entities.UMAPS.length > 0) {
+                        icon = umapIcon;
+                        const umap = entities.UMAPS[0];
+                        popupContent += `<div class='umap-popup' style='min-width:260px;max-width:350px;'>`;
+                        popupContent += `<h3 style='margin-bottom:4px;'>UMAP</h3>`;
+                        popupContent += `<div><b>Lat:</b> ${umap.lat} <b>Lon:</b> ${umap.lon}</div>`;
+                        popupContent += `<ul style='margin:8px 0 8px 0;padding-left:18px;'>`;
+                        if (umap.hex && umap.hex !== 'null' && umap.hex !== '') popupContent += `<li><a href="nostr_profile_viewer.html?hex=${umap.hex}" target="_blank" title="Open Nostr profile">🧑‍🚀 UMAP Nostr</a></li>`;
+                        if (umap.umapipfs && umap.umapipfs !== '') popupContent += `<li><a href="/ipfs/${umap.umapipfs}" target="_blank" title="Open IPFS Drive">📁 IPFS Drive</a></li>`;
+                        if (umap.UMAPIPNS && umap.UMAPIPNS !== '') popupContent += `<li><a href="${umap.UMAPIPNS}" target="_blank" title="Open UMAP IPNS">🌐 UMAP IPNS</a></li>`;
+                        if (umap.SECTORROOT && umap.SECTORROOT !== '') popupContent += `<li><a href="/ipfs/${umap.SECTORROOT}" target="_blank" title="Open SECTOR ROOT">🗂️ Sector Root</a></li>`;
+                        if (umap.SECTORIPNS && umap.SECTORIPNS !== '') popupContent += `<li><a href="${umap.SECTORIPNS}" target="_blank" title="Open SECTOR IPNS">🌐 Sector IPNS</a></li>`;
+                        if (umap.SECTORHEX && umap.SECTORHEX !== '') popupContent += `<li><span title="Sector HEX">#️⃣ Sector HEX: ${umap.SECTORHEX}</span></li>`;
+                        if (umap.REGIONROOT && umap.REGIONROOT !== '') popupContent += `<li><a href="/ipfs/${umap.REGIONROOT}" target="_blank" title="Open REGION ROOT">🗺️ Region Root</a></li>`;
+                        if (umap.REGIONIPNS && umap.REGIONIPNS !== '') popupContent += `<li><a href="${umap.REGIONIPNS}" target="_blank" title="Open REGION IPNS">🌐 Region IPNS</a></li>`;
+                        if (umap.REGIONHEX && umap.REGIONHEX !== '') popupContent += `<li><span title="Region HEX">#️⃣ Region HEX: ${umap.REGIONHEX}</span></li>`;
+                        popupContent += `</ul>`;
+                        if (entities.PLAYERS.length > 0) {
+                            popupContent += `<section><h4 style='margin:6px 0 2px 0;'>Sociétaires (PLAYERS)</h4><ul style='padding-left:18px;'>`;
+                            const shuffledPlayers = [...entities.PLAYERS].sort(() => 0.5 - Math.random());
+                            const selectedPlayers = shuffledPlayers.slice(0, Math.min(10, entities.PLAYERS.length));
+                            selectedPlayers.forEach(player => {
+                                popupContent += `<li><a href="nostr_profile_viewer.html?hex=${player.hex}" target="_blank">${player.astromail}</a></li>`;
+                            });
+                            popupContent += `</ul></section>`;
+                        }
+                        popupContent += `</div>`;
+                    } else if (entities.PLAYERS.length > 0) {
+                        icon = playerIcon;
+                        popupContent += `<div class='umap-popup' style='min-width:220px;max-width:320px;'>`;
+                        popupContent += `<h3 style='margin-bottom:4px;'>Sociétaires (PLAYERS)</h3><ul style='padding-left:18px;'>`;
+                        entities.PLAYERS.forEach(player => {
+                            popupContent += `<li><a href="nostr_profile_viewer.html?hex=${player.hex}" target="_blank">${player.astromail}</a></li>`;
+                        });
+                        popupContent += `</ul></div>`;
+                    }
+
+                    // NOSTR (utilisateurs) section (if present in uPlanetData)
+                    if (uPlanetData.NOSTR && uPlanetData.NOSTR.length > 0 && getLevelByDeg(deg) !== 'ZONE') {
+                        // Only show for non-ZONE levels to avoid clutter
+                        let nostrSection = `<div class='umap-popup' style='min-width:220px;max-width:320px;'><h3 style='margin-bottom:4px;'>Utilisateurs (NOSTR)</h3><ul style='padding-left:18px;'>`;
+                        uPlanetData.NOSTR.forEach(nostr => {
+                            if (nostr.HEX && nostr.EMAIL) {
+                                nostrSection += `<li><a href='nostr_profile_viewer.html?hex=${nostr.HEX}' target='_blank'>${nostr.EMAIL}</a></li>`;
+                            }
+                        });
+                        nostrSection += `</ul></div>`;
+                        // Add as a marker at [lat, lon] = [0,0] for now (or could be improved)
+                        L.marker([0, 0], {icon: playerIcon})
+                            .bindPopup(nostrSection, { className: 'custom-popup' })
+                            .addTo(map);
+                    }
+
+                    if (icon && popupContent) {
+                        L.marker([lat, lon], {icon: icon})
+                            .bindPopup(popupContent, { className: 'custom-popup' })
+                            .addTo(map);
+                        console.log(`Marker ajouté à LAT: ${lat}, LON: ${lon} avec entités:`, entities);
+                    }
+                }
+
+                // Summary boxes for ZONE, REGION, and SECTOR levels
+                const level = getLevelByDeg(deg);
+                if (level === 'ZONE' || level === 'REGION' || level === 'SECTOR') {
+                  let regionCount = 0, sectorCount = 0, umapCount = 0, playerCount = 0;
+                  if (uPlanetData.UMAPs) umapCount = uPlanetData.UMAPs.length;
+                  if (uPlanetData.PLAYERs) playerCount = uPlanetData.PLAYERs.length;
+                  // Try to estimate region/sector count from UMAPs if possible
+                  const regionSet = new Set(), sectorSet = new Set();
+                  if (uPlanetData.UMAPs) {
+                    uPlanetData.UMAPs.forEach(umap => {
+                      if (umap.REGIONHEX) regionSet.add(umap.REGIONHEX);
+                      if (umap.SECTORHEX) sectorSet.add(umap.SECTORHEX);
+                    });
+                  }
+                  regionCount = regionSet.size;
+                  sectorCount = sectorSet.size;
+                  if (regionCount > 0 || sectorCount > 0 || umapCount > 0 || playerCount > 0) {
+                    const summaryBox = document.createElement('div');
+                    summaryBox.id = 'summary-box';
+                    summaryBox.style.position = 'absolute';
+                    summaryBox.style.top = '70px';
+                    summaryBox.style.right = '20px';
+                    summaryBox.style.background = 'rgba(255,255,255,0.95)';
+                    summaryBox.style.borderRadius = '10px';
+                    summaryBox.style.boxShadow = '0 2px 8px rgba(0,0,0,0.15)';
+                    summaryBox.style.padding = '16px 22px';
+                    summaryBox.style.zIndex = '2000';
+                    summaryBox.style.transition = 'all 0.3s ease';
+                    summaryBox.style.cursor = 'pointer';
+                    summaryBox.style.minWidth = '200px';
+                    
+                    const summaryContent = document.createElement('div');
+                    summaryContent.id = 'summary-content';
+                    let title = '';
+                    let content = '';
+                    
+                    if (level === 'ZONE') {
+                      title = 'ZONE Summary';
+                      content = `<li><span title='Regions'>🗺️</span> <b>${regionCount}</b></li><li><span title='Sectors'>🗂️</span> <b>${sectorCount}</b></li><li><span title='UMAPs'>🧩</span> <b>${umapCount}</b></li><li><span title='Players'>🧑‍💼</span> <b>${playerCount}</b></li>`;
+                    } else if (level === 'REGION') {
+                      title = 'REGION Summary';
+                      content = `<li><span title='Sectors'>🗂️</span> <b>${sectorCount}</b></li><li><span title='UMAPs'>🧩</span> <b>${umapCount}</b></li><li><span title='Players'>🧑‍💼</span> <b>${playerCount}</b></li>`;
+                    } else if (level === 'SECTOR') {
+                      title = 'SECTOR Summary';
+                      content = `<li><span title='UMAPs'>🧩</span> <b>${umapCount}</b></li><li><span title='Players'>🧑‍💼</span> <b>${playerCount}</b></li>`;
+                    }
+                    
+                    summaryContent.innerHTML = `<h3 style='margin-top:0;'>${title}</h3><ul style='margin:0;padding-left:18px;'>${content}</ul>`;
+                    
+                    summaryBox.appendChild(summaryContent);
+                    document.body.appendChild(summaryBox);
+                    
+                    // Add accordion functionality
+                    let isCollapsed = false;
+                    summaryBox.addEventListener('click', function() {
+                      const content = document.getElementById('summary-content');
+                      if (isCollapsed) {
+                        content.style.display = 'block';
+                        summaryBox.style.padding = '16px 22px';
+                        summaryBox.style.minWidth = '200px';
+                        isCollapsed = false;
+                      } else {
+                        content.style.display = 'none';
+                        summaryBox.style.padding = '8px 12px';
+                        summaryBox.style.minWidth = 'auto';
+                        isCollapsed = true;
+                      }
+                    });
+                    
+                    // Add hover effect
+                    summaryBox.addEventListener('mouseenter', function() {
+                      if (!isCollapsed) {
+                        summaryBox.style.background = 'rgba(255,255,255,0.98)';
+                        summaryBox.style.boxShadow = '0 4px 12px rgba(0,0,0,0.2)';
+                      }
+                    });
+                    
+                    summaryBox.addEventListener('mouseleave', function() {
+                      if (!isCollapsed) {
+                        summaryBox.style.background = 'rgba(255,255,255,0.95)';
+                        summaryBox.style.boxShadow = '0 2px 8px rgba(0,0,0,0.15)';
+                      }
+                    });
+                  }
+                }
+            }
+        })
+        .catch(error => {
+            console.error('Error loading UPlanet data:', error);
+        });
+
+// Create a clickable rectangle for each grid cell
+const rectangles = [];
+for (let latIndex = 0; latIndex < gridSize; latIndex++) {
+  for (let lonIndex = 0; lonIndex < gridSize; lonIndex++) {
+    const lat = southWestLat + latIndex * NSize;
+    const lon = southWestLon + lonIndex * NSize;
+    //~ const lat = southWestLat + (southWestLat < 0 ? -latIndex * NSize : latIndex * NSize);
+    //~ const lon = southWestLon + (southWestLon < 0 ? -lonIndex * NSize : lonIndex * NSize);
+
+    // Create a clickable rectangle
+    const rectangle = L.rectangle(
+      [[lat, lon], [lat + NSize, lon + NSize]],
+      { color: 'transparent', weight: 1, className: 'clickable-area' } // Add CSS class
+    );
+
+    // Add a click event to the rectangle
+    rectangle.on('click', () => {
+      // Calculate new northEastLat and northEastLon based on the clicked grid cell
+      const newNorthEastLat = lat.toFixed(2);
+      const newNorthEastLon = lon.toFixed(2);
+
+      // Update URL parameters with the new values
+      const url = `map_render.html?southWestLat=${newNorthEastLat}&southWestLon=${newNorthEastLon}&deg=${NSize}`;
+      window.location.href = url;
+    });
+
+    // Add the rectangle to the map and to the array
+    rectangle.addTo(map);
+    rectangles.push(rectangle);
+  }
+}
+
+// Load grid numbers and overlay them on the map
+loadGridNumbers(zoneURL).then(gridNumbers => {
+  gridNumbers.forEach(({ lat, lon, number, ipns }) => {
+    // Calculate the center of the rectangle based on lat + NSize and lon + NSize
+    const latCenter = lat + (lat < 0 ? -NSize / 2 : NSize / 2);
+    const lonCenter = lon + (lon < 0 ? -NSize / 2 : NSize / 2);
+
+    const latLng = L.latLng(latCenter, lonCenter);
+
+    // Find the corresponding rectangle
+    const matchingRectangle = rectangles.find(rectangle =>
+      rectangle.getBounds().contains(latLng)
+    );
+
+    if (matchingRectangle) {
+      overlayGridNumbers(matchingRectangle, number);
+    }
+
+    if (ipns !== '') {
+        const buttonContainer = document.createElement('div');
+        buttonContainer.id = 'button-container'
+        buttonContainer.style.position = 'absolute';
+        buttonContainer.style.bottom = '10px';
+        buttonContainer.style.left = '10px';
+        buttonContainer.style.width = '200px';
+        buttonContainer.style.height = '150px';
+        buttonContainer.style.zIndex = '1001';
+        buttonContainer.style.display = 'flex';
+        buttonContainer.style.flexDirection = 'column';
+        buttonContainer.style.alignItems = 'center';
+        buttonContainer.style.justifyContent = 'center';
+
+        const button = document.createElement('button');
+        if (NSize === 0.001) { button.innerText = 'EXPLORE UMAP'; }
+        if (NSize === 0.01) { button.innerText = 'EXPLORE SECTOR'; }
+        if (NSize === 0.1) { button.innerText = 'EXPLORE REGION'; }
+        if (NSize == "") { button.innerText = 'EXPLORE ZONE'; }
+        button.className = 'button';
+
+        // Add an event listener to the button
+        button.addEventListener('click', function() {
+            window.open( ipns , "_blank");
+        });
+
+        // Append the button to the button container
+        buttonContainer.appendChild(button);
+        document.body.appendChild(buttonContainer);
+    }
+
+  });
+});
+
+    // --- MAP/SAT Switcher ---
+    function getMapMode() {
+      return localStorage.getItem('uplanet_map_mode') || 'MAP';
+    }
+    function setMapMode(mode) {
+      localStorage.setItem('uplanet_map_mode', mode);
+    }
+    function updateSwitchButton() {
+      const btn = document.getElementById('view-switch');
+      if (!btn) return;
+      const mode = getMapMode();
+      if (mode === 'MAP') {
+        btn.textContent = '🛰️';
+        btn.title = 'Switch to Satellite view';
+      } else {
+        btn.textContent = '🗺️';
+        btn.title = 'Switch to Map view';
+      }
+    }
+    document.getElementById('view-switch').addEventListener('click', function() {
+      const mode = getMapMode();
+      const newMode = mode === 'MAP' ? 'SAT' : 'MAP';
+      setMapMode(newMode);
+      updateSwitchButton();
+      // Switch page, keeping all params
+      const url = new URL(window.location.href);
+      const params = url.search;
+      const newPage = newMode === 'SAT' ? 'sat_render.html' : 'map_render.html';
+      window.location.href = newPage + params;
+    });
+    updateSwitchButton();
+
+    // --- Dynamic Title by Level ---
+    function getLevelByDeg(deg) {
+      if (deg >= 10) return 'ZONE';
+      if (deg >= 1) return 'REGION';
+      if (deg >= 0.1) return 'SECTOR';
+      return 'UMAP';
+    }
+    function setDynamicTitle(deg) {
+      const level = getLevelByDeg(deg);
+      let title = 'UPlanet';
+      if (level === 'ZONE') title = 'UPlanet - ZONE';
+      else if (level === 'REGION') title = 'UPlanet - REGION';
+      else if (level === 'SECTOR') title = 'UPlanet - SECTOR';
+      else if (level === 'UMAP') title = 'UPlanet - UMAP';
+      document.title = title;
+      const t = document.getElementById('dynamic-title');
+      if (t) t.textContent = title;
+    }
+    setDynamicTitle(deg);
+
+    // --- Custom popup CSS ---
+    const style = document.createElement('style');
+    style.textContent = `
+      .custom-popup .leaflet-popup-content-wrapper {
+        background: #f8fafd;
+        color: #222;
+        border-radius: 12px;
+        padding: 16px 18px 12px 18px;
+        box-shadow: 0 3px 14px rgba(0,0,0,0.18);
+        min-width: 220px;
+        max-width: 350px;
+      }
+      .custom-popup .leaflet-popup-content h3 {
+        margin: 0 0 6px 0;
+        font-size: 1.2em;
+        color: #1a4a7a;
+      }
+      .custom-popup .leaflet-popup-content h4 {
+        margin: 8px 0 2px 0;
+        font-size: 1em;
+        color: #2b6c3e;
+      }
+      .custom-popup .leaflet-popup-content ul {
+        margin: 0 0 6px 0;
+        padding-left: 18px;
+      }
+      .custom-popup .leaflet-popup-content li {
+        margin-bottom: 2px;
+      }
+      .custom-popup .leaflet-popup-content a {
+        color: #007bff;
+        text-decoration: none;
+        font-weight: 500;
+      }
+      .custom-popup .leaflet-popup-content a:hover {
+        text-decoration: underline;
+      }
+    `;
+    document.head.appendChild(style);
+
+  </script>
+</body>
+</html>

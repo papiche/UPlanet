@@ -348,38 +348,90 @@
     </div>
 
     <script>
-        // Matrix effect
-        const canvas = document.getElementById('matrix');
-        const ctx = canvas.getContext('2d');
-        canvas.width = window.innerWidth;
-        canvas.height = window.innerHeight;
+                // Matrix effect with iframe protection
+        let canvas, ctx, columns, rainDrops;
+        let animationRunning = false;
+        
+        // Global constants for matrix animation
         const alphabet = 'アァカサタナハマヤャラワガザダバパイィキシチニヒミリヰギジヂビピウゥクスツヌフムユュルグズブヅプエェケセテネヘメレヱゲゼデベペオォコソトノホモヨョロヲゴゾドボポヴッンABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!"#$%&\'()*+,-./:;<=>?@[\\]^_`{|}~01';
         const fontSize = 16;
-        let columns = canvas.width / fontSize; // Make columns dynamic
-        let rainDrops = Array(Math.floor(columns)).fill(1);
-
-        function drawMatrix() {
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.05)';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-            ctx.fillStyle = 'var(--terminal-green)'; // Use CSS variable
-            ctx.font = fontSize + 'px monospace';
-            for (let i = 0; i < rainDrops.length; i++) {
-                const text = alphabet.charAt(Math.floor(Math.random() * alphabet.length));
-                ctx.fillText(text, i * fontSize, rainDrops[i] * fontSize);
-                if (rainDrops[i] * fontSize > canvas.height && Math.random() > 0.975) {
-                    rainDrops[i] = 0;
-                }
-                rainDrops[i]++;
+        
+        try {
+            canvas = document.getElementById('matrix');
+            if (canvas && canvas.getContext) {
+                ctx = canvas.getContext('2d');
+                canvas.width = window.innerWidth;
+                canvas.height = window.innerHeight;
+                columns = canvas.width / fontSize;
+                rainDrops = Array(Math.floor(columns)).fill(1);
+                
+                animationRunning = true;
+            } else {
+                console.log('Canvas not available, skipping matrix animation');
             }
-            requestAnimationFrame(drawMatrix);
+        } catch (error) {
+            console.log('Matrix initialization failed (normal in some iframe contexts)');
+            animationRunning = false;
         }
-        drawMatrix(); // Start matrix
+        
+        function drawMatrix() {
+            // Check if animation should continue and all required variables are valid
+            if (!animationRunning || !ctx || !canvas || !canvas.getContext || !rainDrops || !alphabet) {
+                return;
+            }
+            
+            try {
+                // Check if we're in an iframe and if so, reduce animation intensity
+                const isInIframe = window.self !== window.top;
+                if (isInIframe && Math.random() > 0.1) {
+                    // Only animate 10% of the time when in iframe to reduce load
+                    requestAnimationFrame(drawMatrix);
+                    return;
+                }
+                
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.05)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = '#0f0'; // Fallback color instead of CSS variable in iframe
+                ctx.font = fontSize + 'px monospace';
+                
+                for (let i = 0; i < rainDrops.length; i++) {
+                    const text = alphabet.charAt(Math.floor(Math.random() * alphabet.length));
+                    ctx.fillText(text, i * fontSize, rainDrops[i] * fontSize);
+                    if (rainDrops[i] * fontSize > canvas.height && Math.random() > 0.975) {
+                        rainDrops[i] = 0;
+                    }
+                    rainDrops[i]++;
+                }
+                
+                if (animationRunning) {
+                    requestAnimationFrame(drawMatrix);
+                }
+            } catch (error) {
+                console.log('Matrix animation stopped due to context error (normal in iframe)');
+                animationRunning = false;
+            }
+        }
+        
+        // Start matrix animation
+        drawMatrix();
 
         window.addEventListener('resize', function() {
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
-            columns = canvas.width / fontSize;
-            rainDrops = Array(Math.floor(columns)).fill(1).map(() => Math.floor(Math.random() * canvas.height / fontSize)); // Reinitialize drops on resize
+            try {
+                if (!canvas || !animationRunning) return;
+                
+                canvas.width = window.innerWidth;
+                canvas.height = window.innerHeight;
+                columns = canvas.width / fontSize;
+                rainDrops = Array(Math.floor(columns)).fill(1).map(() => Math.floor(Math.random() * canvas.height / fontSize)); // Reinitialize drops on resize
+            } catch (error) {
+                console.log('Matrix resize handler error (normal in iframe)');
+                animationRunning = false;
+            }
+        });
+        
+        // Stop matrix animation when page is about to unload (cleanup)
+        window.addEventListener('beforeunload', function() {
+            animationRunning = false;
         });
 
 

@@ -41,6 +41,7 @@
         #map {
             width: 100%;
             height: 100vh;
+            position: relative;
         }
 
         /* ⚡ OPTIMIZED: Consolidated grid and clickable styles */
@@ -109,42 +110,34 @@
             left: 20px;
         }
 
-        .unified-toggle {
+        .theme-toggle {
+            position: absolute;
             top: 20px;
             right: 20px;
-            position: relative;
-            overflow: hidden;
-        }
-
-        .unified-toggle::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: linear-gradient(45deg, transparent 45%, rgba(255,255,255,0.1) 50%, transparent 55%);
+            background: rgba(255, 255, 255, 0.9);
+            border: 2px solid var(--primary-color);
+            border-radius: 50%;
+            width: 48px;
+            height: 48px;
+            font-size: 20px;
+            cursor: pointer;
+            z-index: 1001;
             transition: all 0.3s ease;
-            opacity: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
         }
 
-        .unified-toggle:hover::before {
-            opacity: 1;
-            transform: translateX(100%);
+        .theme-toggle:hover {
+            transform: scale(1.1);
+            background: var(--primary-color);
+            color: white;
         }
 
-        .unified-toggle:active {
-            transform: scale(0.95);
-        }
-
-        /* Special styling for unified states */
-        [data-theme="dark"] .unified-toggle {
+        [data-theme="dark"] .theme-toggle {
             background: rgba(44, 62, 80, 0.9);
-            border-color: rgba(255, 255, 255, 0.2);
-        }
-
-        [data-theme="dark"] .unified-toggle:hover {
-            background: rgba(52, 73, 94, 0.9);
+            color: white;
         }
 
         /* Enhanced rolling text container */
@@ -453,7 +446,7 @@
                 left: 15px;
             }
 
-            .unified-toggle {
+            .theme-toggle {
                 top: 15px;
                 right: 15px;
             }
@@ -537,6 +530,13 @@
             transition: opacity 0.3s ease;
         }
 
+        /* Zoom control positioning */
+        .leaflet-control-zoom {
+            z-index: 1000;
+            margin-left: 10px;
+            margin-bottom: 10px;
+        }
+
         /* Loading overlay */
         .page-loading {
             position: fixed;
@@ -578,7 +578,7 @@
     <!-- Map container -->
     <div id="map">
         <button id="back-button" class="control-button" onclick="history.back()" title="Go back">⬅️</button>
-        <button class="control-button unified-toggle" onclick="toggleTheme()" title="Mode clair + Vue carte">🗺️</button>
+        <button class="control-button theme-toggle" onclick="toggleTheme()" title="Mode clair + Vue carte">🗺️</button>
     </div>
 
     <!-- Rolling text -->
@@ -814,7 +814,14 @@
             initMap() {
                 try {
                     // Create the map
-                    map = L.map('map').setView([0, 0], 1);
+                    map = L.map('map', {
+                        zoomControl: false // Disable default zoom control
+                    }).setView([0, 0], 1);
+                    
+                    // Add zoom control in bottom left
+                    L.control.zoom({
+                        position: 'bottomleft'
+                    }).addTo(map);
                     
                     // Set initial tile layer based on theme
                     this.updateMapLayer();
@@ -875,7 +882,7 @@
             }
 
             setupThemeToggle() {
-                const themeBtn = domCache.get('.unified-toggle');
+                const themeBtn = domCache.get('.theme-toggle');
                 if (!themeBtn) return;
 
                 const updateThemeButton = () => {
@@ -894,9 +901,6 @@
 
                 // Initialize button display
                 updateThemeButton();
-                
-                // Store reference for global access
-                window.updateThemeButton = updateThemeButton;
             }
 
             createGridRectangles() {
@@ -1592,9 +1596,17 @@
                 document.body.dataset.theme = newTheme;
                 Utils.setStorageItem('uplanet-theme', newTheme);
                 
-                // Update button display
-                if (window.updateThemeButton) {
-                    window.updateThemeButton();
+                // Update toggle icon and title with cached element
+                const toggle = domCache.get('.theme-toggle');
+                if (toggle) {
+                    const themeConfig = {
+                        dark: { icon: '🛰️', title: 'Mode sombre + Vue satellite' },
+                        light: { icon: '🗺️', title: 'Mode clair + Vue carte' }
+                    };
+                    
+                    const config = themeConfig[newTheme];
+                    toggle.textContent = config.icon;
+                    toggle.title = config.title;
                 }
                 
                 // Update map layer automatically based on theme
@@ -1743,6 +1755,18 @@
                 // Load and apply saved theme
                 const savedTheme = Utils.getStorageItem('uplanet-theme', 'light');
                 document.body.dataset.theme = savedTheme;
+                
+                // Update theme toggle button immediately
+                const toggle = domCache.get('.theme-toggle');
+                if (toggle) {
+                    const themeConfig = {
+                        dark: { icon: '🛰️', title: 'Mode sombre + Vue satellite' },
+                        light: { icon: '🗺️', title: 'Mode clair + Vue carte' }
+                    };
+                    const config = themeConfig[savedTheme] || themeConfig.light;
+                    toggle.textContent = config.icon;
+                    toggle.title = config.title;
+                }
                 
                 // Initialize main application
                 window.uplanetWelcome = new EnhancedUPlanetWelcome();

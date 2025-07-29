@@ -912,7 +912,15 @@
              .leaflet-marker-pane {
                  z-index: 1200 !important;
              }
+             
+             .leaflet-tooltip-pane {
+                z-index: 1250 !important;
+             }
                           
+             .leaflet-popup-pane {
+                z-index: 1300 !important;
+             }
+             
              .leaflet-popup {
                  z-index: 1300 !important;
              }
@@ -1799,9 +1807,29 @@ class EnhancedUPlanetMap {
     }
 
     async loadData() {
-        try {
-            const { southWestLat, southWestLon, deg } = this.mapParams;
+        const { southWestLat, southWestLon, deg } = this.mapParams;
+
+        // At UMAP level, no need to fetch data, just show the interface
+        if (deg <= 0.01) {
+            console.log('UMAP level detected, skipping API call and hiding map.');
+            this.showUmapInterface();
+            this.domCache.get('#loading-spinner').style.display = 'none';
+            this.domCache.get('#map').style.display = 'none';
             
+            // Hide all other map UI elements
+            const controlsToHide = [
+                '#coordinates-display', '#level-indicator', '.theme-toggle', 
+                '#back-button', '#upper-layer-button', '.mobile-fab-container', 
+                '#mobile-bottom-sheet', '#filter-panel', '#swarm-accordion'
+            ];
+            controlsToHide.forEach(sel => {
+                const el = this.domCache.get(sel);
+                if (el) el.style.display = 'none';
+            });
+            return;
+        }
+
+        try {
             // ⚡ PERFORMANCE: Create cache key
             const cacheKey = `${southWestLat}_${southWestLon}_${deg}`;
             

@@ -66,13 +66,14 @@ Imaginez Internet comme une ville numérique où vous avez trois options pour "h
 ### 🛠️ **Avec Quoi ? Les Outils de Votre Écosystème**
 
 #### **MULTIPASS (1 Ẑen/semaine) - Votre "Studio Numérique"**
-- **Identité sécurisée** : Carte NOSTR personnelle
-- **Assistant IA personnel** : #BRO pour toutes vos questions
+- **Identité sécurisée** : Carte MULTIPASS personnelle
+- **Assistant IA personnel** (demo) : #BRO pour toutes vos questions
 - **Réseau social libre** : NOSTR sans censure
-- **Revenus passifs** : Gagnez des Ẑen en créant du contenu
+- **Revenus passifs** : Recevez des Ẑen quand on aime vos publications
 
 #### **ZENCARD (4 Ẑen/semaine) - Votre "Appartement Numérique"**
 - **Cloud privé** : NextCloud 128 GB décentralisé
+- **Assistant IA personnel** : #12 mémoires pour vous assister dans vos réponses
 - **Dé-googlisation** : Remplace tous les services GAFAM
 - **Stockage résistant** : IPFS distribué et sécurisé
 - **Tous les avantages MULTIPASS** inclus
@@ -87,7 +88,7 @@ Imaginez Internet comme une ville numérique où vous avez trois options pour "h
 
 #### **Pour Vous**
 - **Souveraineté numérique** : Contrôle total de votre vie en ligne
-- **Revenus supplémentaires** : Monétisation de vos créations
+- **Revenus supplémentaires** : Monétisation Ẑen de vos créations
 - **Communauté authentique** : Connexions basées sur la confiance
 - **Apprentissage continu** : Développement de compétences numériques
 
@@ -111,9 +112,8 @@ Imaginez Internet comme une ville numérique où vous avez trois options pour "h
 ## 🚀 Comment Accéder à UPlanet
 
 ### Accès Principal
-- **URL principale :** https://qo-op.com
-- **UPlanet ORIGIN :** https://ipfs.copylaradio.com/ipns/copylaradio
-- **UPlanet Zen** : https://ipfs.g1sms.fr/ipns/copylaradio (ou votre propre domaine !)
+- **UPlanet ORIGIN :** https://ipfs.copylaradio.com/ipns/copylaradio.com
+- **UPlanet Zen [0]** : https://ipfs.g1sms.fr/ipns/copylaradio.com
 
 ### Interface de Carte Interactive
 L'interface principale d'UPlanet présente une carte du monde divisée en grilles géographiques :
@@ -130,7 +130,7 @@ L'interface principale d'UPlanet présente une carte du monde divisée en grille
 
 ### 1. Carte Interactive avec Données en Temps Réel
 
-#### Affichage des DRAGONS (API :1234 - optionnel)
+#### Affichage des DRAGONS (API :1234 - localhost)
 - **Marqueurs bleus** indiquent les stations Astroport.ONE actives
 - **Compteurs** sur chaque grille montrent le nombre de DRAGONS (utilisateurs) dans la zone
 - **Texte défilant** en haut affiche les informations des DRAGONS en rotation
@@ -161,7 +161,7 @@ Panneau d'information affichant les statistiques :
 
 ### Cliquer sur une Grille
 - **Grille 10°** → Zoom vers grilles 1°, 0.1°, 0.01°
-- **Grille 0.01°** → Affichage du bandeau d'inscription
+- **Grille 0.01°** → Affichage du bandeau d'inscription MULTIPASS (UMAP)
 - **Vues** "carte routière" ou "satellite"
 
 ### Liens dans les Popups
@@ -170,7 +170,7 @@ Panneau d'information affichant les statistiques :
 - **♥️BOX** : Accès aux contenus IPFS via IPNS (activable sur UPlanet Zen uniquement avec l'option vanguard)
 
 ### Barre de Navigation
-- **💬** : UPlanet Geo Message (NOSTR)
+- **💬** : UPlanet Geo Message
 - **🛂** : MULTIPASS Scanner
 - **⌂ ?** : Géolocalisation automatique
 - **VISIO ROOM** : Salle de visioconférence vdo.ninja
@@ -199,13 +199,13 @@ UPlanet utilise la Monnaie Libre Ğ1 et son "stablecoin" multivaleur Ẑen comme
 - **Ẑen (Ẑ)** : Stablecoin type "0.1" de la Monnaie Libre Ğ1
 - **Transparence totale** : Tous les flux financiers sont publics
 - **Pas de profit caché** : Économie basée sur la confiance et la coopération
-- **Dividende Universel** : Revenu de base pour tous les citoyens
+- **Dividende Universel** : Dividende Universel (DU) pour tous les "citoyens"
 
 ### Économie Circulaire et Micro-paiements
 UPlanet implémente un système économique unique où chaque interaction sociale génère de la valeur :
 
 - **+1 Ẑen par like** : Chaque réaction positive sur le contenu génère automatiquement 0.1 Ğ1 (équivalent à 1 Ẑen) pour son créateur
-- **Paiements automatiques** : Les micro-paiements sont traités instantanément via le relais NOSTR
+- **Paiements automatiques** : Les micro-paiements sont traités instantanément via le relais NOSTR / Ğ1
 - **Économie participative** : Les utilisateurs récompensent directement la qualité du contenu
 - **Transparence blockchain** : Tous les paiements sont visibles sur la blockchain Ğ1
 
@@ -233,7 +233,7 @@ UPlanet implémente un système économique unique où chaque interaction social
 - **Participation** à la gouvernance
 
 ### Transparence Financière
-- **OpenCollective** : https://opencollective.com/monnaie-libre
+- **G1FabLab OpenCollective** : https://opencollective.com/monnaie-libre
 - **Tous les comptes** publics et vérifiables
 - **Pas de frais cachés** ou de commissions
 - **Redistribution** équitable des bénéfices
@@ -245,7 +245,7 @@ UPlanet implémente un système économique unique où chaque interaction social
 #### Services Inclus
 - **MULTIPASS** : Identité numérique et assistant IA personnel
 - **Réseau social NOSTR** décentralisé avec relais privé
-- **Carte NOSTR** sécurisée et authentification
+- **Carte Zine MULTIPASS** sécurisée et authentification
 - **Assistant IA** (#BRO) pour interactions intelligentes
 - **Accès** à tous les services de base UPlanet
 - **Micro-paiements** : +1 Ẑen par like reçu sur votre contenu
@@ -338,34 +338,13 @@ UPlanet implémente un système économique unique où chaque interaction social
 | **Revenus** | Passifs uniquement | Passifs uniquement | Actifs + Passifs |
 | **Impact** | Utilisateur | Utilisateur | Acteur du changement |
 
-## 👥 Types d'Utilisateurs UPlanet
-
-### 1. 🌐 MULTIPASS
-- **Identité numérique** et assistant IA personnel
-- **Réseau social NOSTR** décentralisé
-- **Carte NOSTR** sécurisée
-- **Assistant IA** (#BRO) pour interactions
-- **Coût :** 1 Ẑen par semaine
-
-### 2. ☁️ ZENCARD  
-- **Cloud privé** NextCloud 128 GB
-- **Dé-googlisation** du smartphone
-- **Tous les avantages MULTIPASS**
-- **Coût :** 4 Ẑen par semaine
-
-### 3. ⚡ CAPTAIN
-- **Nœud de valeur** dans le réseau
-- **Coopérative CopyLaRadio**
-- **Revenus** en proposant MULTIPASS et ZENCARD
-- **Formation complète** et support
-
 ## 🔐 Authentification et Sécurité
 
 ### NOSTR Authentication (NIP-42)
 - **Authentification** via événements NOSTR kind 22242
 - **Relai local** : `ws://127.0.0.1:7777`
 - **Validité** : 24 heures
-- **Sécurité** : Clés privées jamais stockées côté serveur
+- **Sécurité** : Clés privées stockées 2/3 côté serveur
 
 ### Twin-Key Mechanism
 - **Clés jumelles** : NOSTR ↔ IPFS ↔ G1 ↔ Bitcoin ↔ Monero ...

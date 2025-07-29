@@ -265,10 +265,14 @@
         .messages-scrollable {
             max-height: 350px;
             overflow-y: auto;
+            overflow-x: hidden;
             border: 1px solid var(--terminal-border);
             border-radius: 5px;
             padding: 10px;
             background-color: rgba(0,0,0, 0.1); /* Slightly darker than terminal-bg */
+            word-wrap: break-word;
+            word-break: break-word;
+            overflow-wrap: break-word;
         }
         .message-item {
             display: flex;
@@ -276,6 +280,9 @@
             border-bottom: 1px dotted var(--terminal-border);
             padding: 10px 0;
             word-wrap: break-word;
+            word-break: break-word;
+            overflow-wrap: break-word;
+            max-width: 100%;
             gap: 5px;
         }
         .message-item:last-child { border-bottom: none; }
@@ -290,6 +297,10 @@
             color: var(--text-color);
             margin: 0;
             line-height: 1.4;
+            word-wrap: break-word;
+            word-break: break-word;
+            overflow-wrap: break-word;
+            max-width: 100%;
         }
 
 
@@ -339,6 +350,10 @@
             text-decoration: underline;
             transition: all 0.2s ease;
             text-shadow: 0 0 3px rgba(0, 255, 255, 0.3);
+            word-wrap: break-word;
+            word-break: break-all;
+            overflow-wrap: break-word;
+            max-width: 100%;
         }
         .terminal-body a:hover {
             color: var(--terminal-green);
@@ -450,9 +465,13 @@
         }
         
         .profile-field {
-            display: inline-block;
-            margin-right: 15px;
-            margin-bottom: 5px;
+            display: flex;
+            align-items: center;
+            margin-bottom: 8px;
+            padding: 6px 10px;
+            background: rgba(0, 255, 255, 0.05);
+            border-radius: 4px;
+            border-left: 3px solid var(--terminal-cyan);
         }
         
         .profile-field strong {
@@ -469,6 +488,23 @@
         .profile-field a:hover {
             color: var(--terminal-cyan);
             text-shadow: 0 0 5px rgba(0, 255, 255, 0.5);
+        }
+        
+        .balance-info {
+            color: var(--terminal-green);
+            font-weight: bold;
+            font-size: 0.95em;
+            background: rgba(0, 255, 0, 0.1);
+            padding: 2px 6px;
+            border-radius: 4px;
+            border: 1px solid var(--terminal-green);
+            margin-left: 8px;
+        }
+        
+        .balance-info.na {
+            color: var(--terminal-orange);
+            background: rgba(255, 165, 0, 0.1);
+            border-color: var(--terminal-orange);
         }
 
         /* Modal styles */
@@ -1854,11 +1890,10 @@
                     <div class="profile-picture no-image">TU</div>
                 </div>
                 <h3>Test User</h3>
-                <p>This is a test profile with additional fields from nostr_setup_profile.py</p>
                 <div class="profile-additional-fields">
-                    <span class="profile-field"><strong>🔑 G1:</strong> MULTIPASS • PRIMAL</span> • 
-                    <span class="profile-field"><strong>🌐 Website:</strong> <a href="https://example.com" target="_blank" rel="noopener noreferrer">https://example.com</a></span> • 
+                    <span class="profile-field"><strong>🌐 uDRIVE:</strong> <a href="https://example.com" target="_blank" rel="noopener noreferrer">https://example.com</a></span> • 
                     <span class="profile-field"><strong>🐘 Mastodon:</strong> <a href="https://mastodon.social/@testuser" target="_blank" rel="noopener noreferrer">https://mastodon.social/@testuser</a></span> • 
+                    <span class="profile-field"><strong>🔑 MULTIPASS:</strong> MULTIPASS • PRIMAL</span> • 
                     <span class="profile-field"><strong>💳 ZenCard:</strong> zen1qwerty123456789</span>
                 </div>
             `;
@@ -2111,38 +2146,63 @@
                     console.log('website:', profileData.website);
                     console.log('mastodon:', profileData.mastodon);
                     console.log('zencard:', profileData.zencard);
-                    
-                    // G1 Pubkey (can contain multiple keys like "MULTIPASS:PRIMAL")
-                    if (profileData.g1pub) {
-                        const g1pubText = profileData.g1pub.includes(':') ? 
-                            profileData.g1pub.split(':').join(' • ') : 
-                            profileData.g1pub;
-                        additionalFields.push(`<span class="profile-field"><strong>🔑 G1:</strong> ${g1pubText}</span>`);
-                        console.log('Added G1 field:', g1pubText);
-                    } else {
-                        console.log('G1 field is empty or undefined');
-                    }
-                    
+
                     // Website
                     if (profileData.website) {
-                        additionalFields.push(`<span class="profile-field"><strong>🌐 Website:</strong> <a href="${profileData.website}" target="_blank" rel="noopener noreferrer">${profileData.website}</a></span>`);
+                        additionalFields.push(`<span class="profile-field"><strong>🌐 uDRIVE:</strong> <a href="${profileData.website}" target="_blank" rel="noopener noreferrer">${profileData.website}</a></span>`);
                     }
                     
                     // Mastodon
                     if (profileData.mastodon) {
                         additionalFields.push(`<span class="profile-field"><strong>🐘 Mastodon:</strong> <a href="${profileData.mastodon}" target="_blank" rel="noopener noreferrer">${profileData.mastodon}</a></span>`);
                     }
+
+                    // Check ZEN balances for g1pub and zencard
+                    console.log('Checking ZEN balances...');
+                    const balanceResults = await checkAllZenBalances(profileData);
+                    console.log('Balance results:', balanceResults);
+                    
+                    // Ğ1 Pubkey (can contain multiple keys like "MULTIPASS:PRIMAL")
+                    if (profileData.g1pub) {
+                        const g1pubText = profileData.g1pub.includes(':') ? 
+                            profileData.g1pub.split(':').join(' • ') : 
+                            profileData.g1pub;
+                        
+                        // Add balance information if available
+                        let balanceInfo = '';
+                        if (balanceResults.multipass) {
+                            balanceInfo = ` <span class="balance-info">${balanceResults.multipass.zenBalance} ẐEN</span>`;
+                        } else if (balanceResults.g1pub) {
+                            balanceInfo = ` <span class="balance-info">${balanceResults.g1pub.zenBalance} ẐEN</span>`;
+                        } else {
+                            balanceInfo = ` <span class="balance-info na">N/A ẐEN</span>`;
+                        }
+                        
+                        additionalFields.push(`<span class="profile-field"><strong>🔑 MULTIPASS: </strong> ${g1pubText}${balanceInfo}</span>`);
+                        console.log('Added Ğ1 field:', g1pubText, balanceInfo);
+                    } else {
+                        console.log('Ğ1 field is empty or undefined');
+                    }
+
                     
                     // ZenCard
                     if (profileData.zencard && profileData.zencard !== 'None' && profileData.zencard.trim() !== '') {
-                        additionalFields.push(`<span class="profile-field"><strong>💳 ZenCard:</strong> ${profileData.zencard}</span>`);
+                        // Add balance information if available
+                        let balanceInfo = '';
+                        if (balanceResults.zencard) {
+                            balanceInfo = ` <span class="balance-info">${balanceResults.zencard.zenBalance} ẐEN</span>`;
+                        } else {
+                            balanceInfo = ` <span class="balance-info na">N/A ẐEN</span>`;
+                        }
+                        
+                        additionalFields.push(`<span class="profile-field"><strong>💳 ZenCard:</strong> ${profileData.zencard}${balanceInfo}</span>`);
                     } else if (profileData.zencard === 'None' || profileData.zencard === '') {
-                        additionalFields.push(`<span class="profile-field"><strong>💳 ZenCard:</strong> <span style="color: var(--terminal-orange); font-style: italic;">Aucune</span></span>`);
+                        additionalFields.push(`<span class="profile-field"><strong>💳 ZenCard:</strong> <span style="color: var(--terminal-orange); font-style: italic;">____</span></span>`);
                     }
                     
                     // Display additional fields if any
                     if (additionalFields.length > 0) {
-                        profileHTML += `<div class="profile-additional-fields">${additionalFields.join(' • ')}</div>`;
+                        profileHTML += `<div class="profile-additional-fields">${additionalFields.join('')}</div>`;
                     }
                     
                     profileContentDiv.innerHTML = profileHTML;
@@ -2367,6 +2427,97 @@
                 console.log('❌ FAILED: Regex did not match');
             }
         };
+
+        // Function to calculate API server URL from current location
+        function getApiServerUrl() {
+            const currentUrl = window.location.href;
+            const url = new URL(currentUrl);
+            
+            // Replace ipfs. with u. in hostname
+            let hostname = url.hostname.replace(/^ipfs\./, 'u.');
+            
+            // Replace port 8080 with 54321 if present
+            let port = url.port;
+            if (port === '8080') {
+                port = '54321';
+            }
+            
+            // Build the API URL
+            const protocol = url.protocol;
+            const apiUrl = port ? `${protocol}//${hostname}:${port}` : `${protocol}//${hostname}`;
+            
+            console.log('Calculated API server URL:', apiUrl);
+            return apiUrl;
+        }
+
+        // Function to check ZEN balance for a g1pub
+        async function checkZenBalance(g1pub) {
+            try {
+                const apiUrl = getApiServerUrl();
+                const response = await fetch(`${apiUrl}/check_balance?g1pub=${g1pub}`);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                console.log('Balance response for', g1pub, ':', data);
+                
+                if (data.balance && data.g1pub) {
+                    // Convert Ğ1 to ZEN: (Ğ1_BALANCE - 1) * 10
+                    const g1Balance = parseFloat(data.balance);
+                    const zenBalance = Math.floor((g1Balance - 1) * 10);
+                    
+                    return {
+                        g1Balance: g1Balance,
+                        zenBalance: zenBalance,
+                        g1pub: data.g1pub
+                    };
+                } else {
+                    throw new Error('Invalid balance response format');
+                }
+            } catch (error) {
+                console.error('Error checking ZEN balance for', g1pub, ':', error);
+                return null;
+            }
+        }
+
+        // Function to check balances for all g1pub addresses in a profile
+        async function checkAllZenBalances(profileData) {
+            const balanceResults = {};
+            
+            // Check Ğ1 balance (handles both MULTIPASS:PRIMAL format and simple g1pub)
+            if (profileData.g1pub) {
+                const g1pubParts = profileData.g1pub.split(':');
+                if (g1pubParts.length >= 2) {
+                    // MULTIPASS:PRIMAL format - check MULTIPASS part only
+                    const multipassPub = g1pubParts[0]; // MULTIPASS part only
+                    console.log('Checking MULTIPASS balance for:', multipassPub);
+                    const multipassBalance = await checkZenBalance(multipassPub);
+                    if (multipassBalance) {
+                        balanceResults.multipass = multipassBalance;
+                    }
+                } else {
+                    // Simple g1pub format - check the entire address
+                    console.log('Checking simple Ğ1 balance for:', profileData.g1pub);
+                    const g1Balance = await checkZenBalance(profileData.g1pub);
+                    if (g1Balance) {
+                        balanceResults.g1pub = g1Balance;
+                    }
+                }
+            }
+            
+            // Check ZenCard balance if available
+            if (profileData.zencard && profileData.zencard !== 'None' && profileData.zencard.trim() !== '') {
+                console.log('Checking ZenCard balance for:', profileData.zencard);
+                const zencardBalance = await checkZenBalance(profileData.zencard);
+                if (zencardBalance) {
+                    balanceResults.zencard = zencardBalance;
+                }
+            }
+            
+            return balanceResults;
+        }
     </script>
 </body>
 </html>

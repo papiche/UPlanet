@@ -249,6 +249,28 @@
             box-shadow: none;
         }
         canvas { display: block; } /* For matrix */
+
+        /* Enhanced message/media rendering */
+        .media-container { margin-top: 8px; }
+        .message-image {
+            max-width: 150px;
+            height: auto;
+            border: 1px solid var(--terminal-border);
+            border-radius: 4px;
+            display: block;
+        }
+        .message-video, .message-audio {
+            max-width: 200px;
+            height: auto;
+            border: 1px solid var(--terminal-border);
+            border-radius: 4px;
+            display: block;
+        }
+        .media-link { display: inline-block; font-size: 0.85em; margin-top: 4px; color: var(--terminal-cyan); }
+        .diagnostic { margin: 8px 0; padding: 8px; border: 1px dashed var(--terminal-border); font-family: 'Share Tech Mono', monospace; }
+        .diagnostic.ok { color: var(--terminal-green); }
+        .diagnostic.warn { color: #ffc107; }
+        .diagnostic.err { color: var(--terminal-red); }
     </style>
 </head>
 <body>
@@ -315,46 +337,14 @@
         const initialTypingTextElement = document.getElementById('initial-typing-text');
         const nostrContentArea = document.getElementById('nostr-content-area');
 
-        const initialMessages = [
-            { text: "Booting UPlanet Nostr Stream OS...", delay: 50, style: "color: var(--terminal-purple);" },
-            { text: "\nConnecting to decentralized data sources...", delay: 40 },
-            { text: "\n[INFO] Fetching planetary entity map...", delay: 30 },
-            { text: "\n[OK] Entity map `UPlanet data json` loaded.", delay: 60, style: "color: var(--terminal-green);" },
-            { text: "\n[INFO] Establishing Nostr relay connection...", delay: 30 },
-            { text: "\n[OK] Relay handshake successful.", delay: 60, style: "color: var(--terminal-green);" },
-            { text: "\nInitializing Nostr Data Feed...", delay: 50 },
-            { text: "\n██████████████ 100% COMPLETE", delay: 70, style: "color: var(--terminal-cyan)" },
-            { text: "\n\nSYSTEM READY. STREAMING NOSTR DATA...\n\n", delay: 100, style: "font-weight: bold; color: var(--terminal-green);" }
-        ];
-
-        let currentInitialMessageIndex = 0;
-        let currentInitialCharIndex = 0;
-
-        function typeInitialMessage() {
-            if (currentInitialMessageIndex >= initialMessages.length) {
-                initialTypingTextElement.style.display = 'none'; // Hide initial text
-                nostrContentArea.style.display = 'block';      // Show Nostr content
-                startNostrStream(); // Start the main application logic
-                return;
-            }
-
-            const currentMessage = initialMessages[currentInitialMessageIndex];
-            const textToType = currentMessage.text;
-
-            if (currentInitialCharIndex < textToType.length) {
-                const char = textToType.charAt(currentInitialCharIndex);
-                const span = document.createElement('span');
-                span.textContent = char;
-                if (currentMessage.style) span.style = currentMessage.style;
-                initialTypingTextElement.appendChild(span);
-                currentInitialCharIndex++;
-                setTimeout(typeInitialMessage, currentMessage.delay);
-            } else {
-                currentInitialMessageIndex++;
-                currentInitialCharIndex = 0;
-                setTimeout(typeInitialMessage, 100); // Delay before next message
-            }
+        function logProgress(text, style) {
+            const span = document.createElement('span');
+            span.textContent = (initialTypingTextElement.textContent ? "\n" : "") + text;
+            if (style) span.style = style;
+            initialTypingTextElement.appendChild(span);
         }
+
+        function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
         // --- Main Application Logic ---
         let uPlanetDataGlobal = null;
@@ -362,6 +352,8 @@
         let currentKeyIndex = 0;
         let nostrDataCache = {}; // { pubkey: { profile: {}, messages: [], currentMessageIndex: 0 } }
         let relayUrl = ''; // To be set from data.json or default
+        let upassportUrl = '';
+        let derivedRelayUrl = '';
 
         let userInteracted = false; // Flag to track user interaction
         let autoRefreshInterval;    // Variable to hold the interval ID
@@ -371,6 +363,298 @@
         const prevMsgBtn = document.getElementById('prev-msg-btn');
         const nextMsgBtn = document.getElementById('next-msg-btn');
         const navStatusText = document.getElementById('nav-status-text');
+
+        // ---------- Utilities: safe escaping ----------
+        function escapeHtml(text) {
+            if (typeof text !== 'string') return '';
+            return text.replace(/&/g, '&amp;')
+                       .replace(/</g, '&lt;')
+                       .replace(/>/g, '&gt;');
+        }
+
+        // ---------- bech32 helpers (for npub/nprofile detection) ----------
+        function bech32Polymod(values) {
+            const GENERATORS = [0x3b6a57b2, 0x26508e6d, 0x1ea119fa, 0x3d4233dd, 0x2a1462b3];
+            let chk = 1;
+            for (let p = 0; p < values.length; ++p) {
+                const top = chk >>> 25;
+                chk = (chk & 0x1ffffff) << 5 ^ values[p];
+                for (let i = 0; i < 5; ++i) {
+                    chk ^= ((top >>> i) & 1) ? GENERATORS[i] : 0;
+                }
+            }
+            return chk;
+        }
+        function bech32HrpExpand(hrp) {
+            const ret = [];
+            for (let p = 0; p < hrp.length; ++p) ret.push(hrp.charCodeAt(p) >>> 5);
+            ret.push(0);
+            for (let p = 0; p < hrp.length; ++p) ret.push(hrp.charCodeAt(p) & 31);
+            return ret;
+        }
+        function bech32CharToVal(c) {
+            const v = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l'.indexOf(c);
+            return v;
+        }
+        function bech32Decode(str) {
+            const lower = str.toLowerCase();
+            if (lower !== str && str.toUpperCase() !== str) return null;
+            str = lower;
+            const pos = str.lastIndexOf('1');
+            if (pos < 1 || pos + 7 > str.length) return null;
+            const hrp = str.substring(0, pos);
+            const data = [];
+            for (let p = pos + 1; p < str.length; ++p) {
+                const c = bech32CharToVal(str.charAt(p));
+                if (c === -1) return null;
+                data.push(c);
+            }
+            if (bech32Polymod(bech32HrpExpand(hrp).concat(data)) !== 1) return null;
+            return { hrp, data: data.slice(0, -6) };
+        }
+        function convertBits(data, fromBits, toBits, pad) {
+            let acc = 0;
+            let bits = 0;
+            const ret = [];
+            const maxv = (1 << toBits) - 1;
+            const maxAcc = (1 << (fromBits + toBits - 1)) - 1;
+            for (let p = 0; p < data.length; ++p) {
+                const value = data[p];
+                if (value < 0 || (value >>> fromBits) !== 0) return null;
+                acc = ((acc << fromBits) | value) & maxAcc;
+                bits += fromBits;
+                while (bits >= toBits) {
+                    bits -= toBits;
+                    ret.push((acc >>> bits) & maxv);
+                }
+            }
+            if (pad) {
+                if (bits > 0) ret.push((acc << (toBits - bits)) & maxv);
+            } else if (bits >= fromBits || ((acc << (toBits - bits)) & maxv)) {
+                return null;
+            }
+            return ret;
+        }
+
+        // ---------- nprofile → hex decoder ----------
+        function nprofileToHex(nprofile) {
+            try {
+                const decoded = bech32Decode(nprofile);
+                if (!decoded || decoded.hrp !== 'nprofile') return null;
+                const bytes = convertBits(decoded.data, 5, 8, false);
+                if (!bytes || bytes.length === 0) return null;
+                let i = 0;
+                while (i < bytes.length) {
+                    if (i + 1 >= bytes.length) break;
+                    const type = bytes[i];
+                    const length = bytes[i + 1];
+                    if (i + 2 + length > bytes.length) break;
+                    if (type === 0 && length === 32) {
+                        const pubkey = bytes.slice(i + 2, i + 2 + length);
+                        return Array.from(pubkey, b => b.toString(16).padStart(2, '0')).join('');
+                    }
+                    i += 2 + length;
+                }
+                return null;
+            } catch (e) {
+                return null;
+            }
+        }
+
+        // ---------- Linkification and media rendering ----------
+        function processMediaLink(url) {
+            const u = url.toLowerCase();
+            if (u.match(/\.(jpg|jpeg|png|gif|webp|svg|bmp|ico)(\?.*)?$/)) {
+                return `<div class="media-container">
+                    <img src="${url}" alt="Image" class="message-image">
+                    <a class="media-link" href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>
+                </div>`;
+            } else if (u.match(/\.(mp4|webm|ogg|mov|avi|mkv)(\?.*)?$/)) {
+                const type = `video/${u.split('.').pop().split('?')[0]}`;
+                return `<div class="media-container">
+                    <video controls class="message-video" preload="metadata">
+                        <source src="${url}" type="${type}">
+                    </video>
+                    <a class="media-link" href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>
+                </div>`;
+            } else if (u.match(/\.(mp3|wav|ogg|flac|aac|m4a)(\?.*)?$/)) {
+                const type = `audio/${u.split('.').pop().split('?')[0]}`;
+                return `<div class="media-container">
+                    <audio controls class="message-audio" preload="metadata">
+                        <source src="${url}" type="${type}">
+                    </audio>
+                    <a class="media-link" href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>
+                </div>`;
+            }
+            return `<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`;
+        }
+
+        function makeLinksClickable(text) {
+            if (typeof text !== 'string') return '';
+            // Escape first
+            let safe = escapeHtml(text);
+            const urlRegex = /(https?:\/\/[^\s<>"{}|\\^`\[\]]+)/gi;
+            const nprofileRegex = /(nostr:)?(nprofile1[a-z0-9]+)/gi;
+            const npubRegex = /(nostr:)?(npub1[a-z0-9]+)/gi;
+
+            // URLs to media or links
+            safe = safe.replace(urlRegex, (m) => processMediaLink(m));
+
+            // nprofile → link to profile viewer
+            safe = safe.replace(nprofileRegex, (match, _pre, np) => {
+                const hex = nprofileToHex(np);
+                if (hex) {
+                    return `<a href="./nostr_profile_viewer.html?hex=${hex}" target="_blank" rel="noopener noreferrer">${match}</a>`;
+                }
+                return match;
+            });
+
+            // npub → hex and link to viewer if possible
+            safe = safe.replace(npubRegex, (match, _pre, npub) => {
+                try {
+                    const dec = bech32Decode(npub);
+                    if (dec && dec.hrp === 'npub') {
+                        const bytes = convertBits(dec.data, 5, 8, false);
+                        if (bytes && bytes.length === 32) {
+                            const hex = Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
+                            return `<a href="./nostr_profile_viewer.html?hex=${hex}" target="_blank" rel="noopener noreferrer">${match}</a>`;
+                        }
+                    }
+                } catch (_) {}
+                return match;
+            });
+
+            return safe;
+        }
+
+        // ---------- Diagnostics UI ----------
+        function appendDiagnostic(message, cls) {
+            const div = document.createElement('div');
+            div.className = `diagnostic ${cls || ''}`;
+            div.textContent = message;
+            nostrContentArea.prepend(div);
+        }
+
+        function checkNostrExtension() {
+            const available = typeof window.nostr !== 'undefined';
+            const hasGetPk = available && typeof window.nostr.getPublicKey === 'function';
+            const hasSign = available && typeof window.nostr.signEvent === 'function';
+            if (available && hasGetPk && hasSign) {
+                appendDiagnostic('NOSTR extension detected and ready.', 'ok');
+            } else if (available) {
+                appendDiagnostic('NOSTR extension partially available.', 'warn');
+            } else {
+                appendDiagnostic('NOSTR extension not detected.', 'err');
+            }
+            return { available, hasGetPk, hasSign };
+        }
+
+        async function testRelayConnection(nostrRelayUrl) {
+            try {
+                const relay = nostrTools.relayInit(nostrRelayUrl);
+                relay.on('connect', () => appendDiagnostic(`Connected to relay: ${nostrRelayUrl}`, 'ok'));
+                relay.on('error', (e) => appendDiagnostic(`Relay error: ${e?.message || e}`, 'err'));
+                relay.on('auth', async (challenge) => {
+                    try {
+                        const pub = (typeof window.nostr !== 'undefined' && typeof window.nostr.getPublicKey === 'function') ? await window.nostr.getPublicKey() : '';
+                        if (!pub) return;
+                        const authEvent = {
+                            kind: 22242,
+                            created_at: Math.floor(Date.now() / 1000),
+                            tags: [ ['relay', nostrRelayUrl], ['challenge', challenge || ''] ],
+                            content: '',
+                            pubkey: pub
+                        };
+                        const signed = await window.nostr.signEvent(authEvent);
+                        await relay.publish(signed);
+                        appendDiagnostic('NIP-42 auth event sent.', 'ok');
+                    } catch (err) {
+                        appendDiagnostic(`NIP-42 auth failed: ${err?.message || err}`, 'err');
+                    }
+                });
+                await relay.connect();
+                // Briefly keep connection, then close
+                setTimeout(() => { try { relay.close(); } catch(_){} }, 1000);
+            } catch (e) {
+                appendDiagnostic(`Failed to connect relay: ${nostrRelayUrl}`, 'err');
+            }
+        }
+
+        // ---------- uSPOT / Relay detection and tests ----------
+        function detectUSPOTAPI() {
+            const currentURL = new URL(window.location.href);
+            const hostname = currentURL.hostname;
+            const port = currentURL.port;
+            const protocol = currentURL.protocol.split(":")[0];
+
+            if (hostname === "127.0.0.1" && port === "8080") {
+                upassportUrl = `http://127.0.0.1:54321`;
+                derivedRelayUrl = `ws://127.0.0.1:7777`;
+            } else if (hostname.startsWith("ipfs.")) {
+                const baseDomain = hostname.substring("ipfs.".length);
+                upassportUrl = `${protocol}://u.${baseDomain}`;
+                derivedRelayUrl = `wss://relay.${baseDomain}`;
+            } else {
+                upassportUrl = `https://u.copylaradio.com`;
+                derivedRelayUrl = `wss://relay.copylaradio.com`;
+            }
+            return { upassportUrl, derivedRelayUrl };
+        }
+
+        async function testUSPOTConnection() {
+            try {
+                const res = await fetch(`${upassportUrl}/health`);
+                if (res.ok) {
+                    const data = await res.json().catch(() => ({}));
+                    logProgress(`uSPOT reachable: ${upassportUrl}`, 'color: var(--terminal-green)');
+                    return { ok: true, data };
+                }
+                logProgress(`uSPOT error HTTP ${res.status}`, 'color: var(--terminal-red)');
+                return { ok: false };
+            } catch (e) {
+                logProgress(`uSPOT connection failed: ${e?.message || e}`, 'color: var(--terminal-red)');
+                return { ok: false, error: e };
+            }
+        }
+
+        // ---------- Orchestrate real boot sequence ----------
+        async function runBootSequence() {
+            // Keep initialTypingTextElement visible as a live log
+            nostrContentArea.style.display = 'block';
+
+            logProgress('Booting UPlanet Nostr Stream OS...', 'color: var(--terminal-purple)');
+            logProgress('Detecting environment...');
+            const det = detectUSPOTAPI();
+            logProgress(`Calculated uSPOT: ${det.upassportUrl}`);
+            await sleep(1000);
+            logProgress(`Calculated wsRELAY: ${det.derivedRelayUrl}`);
+            await sleep(1000);
+
+            const ext = checkNostrExtension();
+            if (ext.available) {
+                logProgress('NOSTR extension detected.', 'color: var(--terminal-green)');
+            } else {
+                logProgress('NOSTR extension not detected.', 'color: var(--terminal-yellow)');
+            }
+            await sleep(1000);
+
+            logProgress('[INFO] Fetching planetary entity map...');
+            // Start stream (will compute final relayUrl from data or fallback)
+            await startNostrStreamWithProgress();
+
+            // After we know relayUrl, test connections
+            logProgress('Testing uSPOT connectivity...');
+            await testUSPOTConnection();
+            await sleep(1000);
+            logProgress('Testing relay connectivity (NIP-42 if required)...');
+            await testRelayConnection(relayUrl || derivedRelayUrl);
+            await sleep(1000);
+
+            logProgress('SYSTEM READY. STREAMING NOSTR DATA...', 'font-weight: bold; color: var(--terminal-green)');
+            // Clear boot log after a short pause, then show profiles area only
+            await sleep(1000);
+            initialTypingTextElement.textContent = '';
+        }
 
         function stopAutoRefresh() {
             if (autoRefreshInterval) {
@@ -636,7 +920,7 @@
 
 
             let html = `<div class="nostr-entry">`;
-            html += `<h3>PROFILE: ${profile.name || 'N/A'} ${profile.display_name ? '('+profile.display_name+')' : ''}</h3>`;
+            html += `<h3>PROFILE: ${escapeHtml(profile.name || 'N/A')} ${profile.display_name ? '('+escapeHtml(profile.display_name)+')' : ''}</h3>`;
             html += `<p class="pubkey">Pubkey: ${pubkey}</p>`;
             if (profile.picture) {
                 html += `<img src="${profile.picture}" alt="Profile Pic" class="profile-pic">`;
@@ -649,7 +933,8 @@
             if (messages.length > 0) {
                 const message = messages[currentMessageIdx];
                 html += `<h4>MESSAGE (${currentMessageIdx + 1}/${messages.length})</h4>`;
-                html += `<p class="message-content">${message.content.replace(/</g, "<").replace(/>/g, ">")}</p>`;
+                const clickableContent = makeLinksClickable(message.content || '');
+                html += `<div class="message-content">${clickableContent}</div>`;
                 html += `<p class="message-date">Posted: ${new Date(message.created_at * 1000).toLocaleString()}</p>`;
                 const repliedToEvents = message.tags.filter(t => t[0] === 'e' && t[1]).map(t => t[1]);
                 if (repliedToEvents.length > 0) {
@@ -694,7 +979,7 @@
             }
         }
 
-        async function startNostrStream() {
+        async function startNostrStreamWithProgress() {
             nostrContentArea.innerHTML = `<p style="color:var(--terminal-cyan);">Connecting to UPlanet Network...</p>`;
 
             const currentURL = new URL(window.location.href);
@@ -714,18 +999,20 @@
             // Assuming data json is at the root of this uPlanetBase
             const uPlanetDataURL = uPlanetBase + '/'; // Construct full URL to get json
             console.log('UPLANET DATA URL:', uPlanetDataURL);
-
-
+            logProgress(`[INFO] Loading uPlanetData from ${uPlanetDataURL}...`);
             uPlanetDataGlobal = await loadUPlanetData(uPlanetDataURL);
 
             if (uPlanetDataGlobal) {
                 relayUrl = await getUPlanetRelayURL(uPlanetDataGlobal);
                 console.log('Using Nostr Relay:', relayUrl);
+                logProgress(`[OK] Entity map loaded. Using relay: ${relayUrl}`, 'color: var(--terminal-green)');
+
                 allNostrKeys = extractNostrKeys(uPlanetDataGlobal);
                 console.log('Extracted Nostr Keys:', allNostrKeys.length > 0 ? allNostrKeys : "None");
 
                 if (allNostrKeys.length > 0) {
                     currentKeyIndex = 0; // Start with the first key
+                    logProgress('Initializing Nostr Data Feed...');
                     await displayCurrentKeyData();
                     startAutoRefresh();
                 } else {
@@ -749,7 +1036,7 @@
         // Start animations and app
         window.addEventListener('load', function() {
             drawMatrix();
-            typeInitialMessage();
+            runBootSequence();
         });
 
         window.addEventListener('resize', function() {

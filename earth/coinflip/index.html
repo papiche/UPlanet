@@ -6,66 +6,155 @@
   <link rel="icon" type="image/x-icon" href="./favicon.ico">
   <title>Coin Flip App</title>
   <style>
+    :root {
+      --bg: linear-gradient(180deg, #f8fbff, #ffffff);
+      --text: #0f172a;
+      --muted: #64748b;
+      --accent: #0ea5e9;
+      --accent-2: #22c55e;
+      --card: #ffffff;
+      --border: rgba(2, 6, 23, 0.08);
+      --shadow: 0 10px 30px rgba(2, 6, 23, 0.08);
+    }
+    * { box-sizing: border-box; }
     body {
-      font-family: Arial, sans-serif;
-      text-align: center;
+      margin: 0;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
     }
+    .container {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 24px 16px 80px;
+    }
+    header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+    .title { font-size: 28px; font-weight: 800; }
+    .subtitle { color: var(--muted); margin-top: 4px; }
+    .status { display:inline-flex; align-items:center; gap:8px; padding:6px 10px; border-radius:999px; border:1px solid var(--border); background: var(--card); font-size: 13px; color: var(--muted); }
+    .status.live { border-color: rgba(34,197,94,0.25); color:#166534; background: #ecfdf5; }
+    .status.practice { border-color: rgba(14,165,233,0.25); color:#075985; background: #f0f9ff; }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      box-shadow: var(--shadow);
+      padding: 20px;
+      margin-top: 16px;
+    }
+
+    #arena { display:grid; grid-template-columns: 1fr 320px; gap: 16px; align-items: center; }
+    @media (max-width: 860px) { #arena { grid-template-columns: 1fr; } }
+
     #coin {
-      width: 100px;
-      height: 100px;
+      width: 140px;
+      height: 140px;
       cursor: pointer;
-      transition: transform 0.6s ease-out; /* Transition for flipping effect */
+      transition: transform 0.6s ease-out, filter .2s ease;
+      filter: drop-shadow(0 6px 16px rgba(2,6,23,0.15));
     }
+    #coin:hover { transform: scale(1.03); }
+
     #countdown {
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        color: #0e2c4c;
-        font-size: 40px;
-        width: 200px;
-        height: 125px;
-        background-color: #e7d9fc;
-        border-radius: 50%;
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
+      display: flex; justify-content: center; align-items: center;
+      color: #0e2c4c; font-size: 40px; width: 220px; height: 220px;
+      background: radial-gradient(70% 70% at 50% 35%, #e7f3ff, #dbeafe);
+      border-radius: 50%; margin: 0 auto;
     }
+
+    .panel h3 { margin: 0 0 8px; }
+    .panel p { margin: 6px 0; color: var(--muted); }
+    .stat { font-weight: 700; }
+    .actions { display:flex; gap:8px; align-items:center; margin-top: 10px; }
+    .btn { padding:10px 14px; border-radius: 12px; border:1px solid var(--border); background: var(--card); cursor: pointer; font-weight:600; }
+    .btn.primary { background: var(--accent); color: white; border-color: transparent; }
+    .btn.pay { background: var(--accent-2); color: white; border-color: transparent; }
+    .muted { color: var(--muted); font-size: 14px; }
+    /* Profile mini card */
+    .p-card { border:1px solid var(--border); border-radius:12px; background: var(--card); margin-top:10px; overflow:hidden; }
+    .p-banner { width:100%; height:90px; background: linear-gradient(45deg,#06b6d4,#8b5cf6); background-size:cover; background-position:center; }
+    .p-body { display:flex; gap:10px; padding:10px; align-items:center; }
+    .p-pic { width:48px; height:48px; border-radius:50%; object-fit:cover; border:1px solid var(--border); }
+    .p-name { font-weight:700; }
+    .p-about { color: var(--muted); font-size: 13px; margin-top:4px; }
+    .p-fields { display:flex; gap:8px; flex-wrap:wrap; margin:8px 10px 10px; }
+    .p-chip { background:#f1f5f9; color:#0f172a; border:1px solid var(--border); padding:4px 8px; border-radius:999px; font-size:12px; }
   </style>
   <script src="/ipfs/Qmae5v9zydax9u6C9ceDijURu5PYdd5avmv4NkenCw7RFv/astro.js"></script>
   <script src="/ipfs/QmXEmaPRUaGcvhuyeG99mHHNyP43nn8GtNeuDok8jdpG4a/nostr.bundle.js"></script>
 </head>
 <body>
 
-  <h1><div id="title">Coin Flip Game</div></h1>
+  <div class="container">
+    <header>
+      <div>
+        <div class="title">Coin Flip</div>
+        <div class="subtitle">St. Petersburg paradox — flip until tails. Payout doubles on each head.</div>
+      </div>
+      <div id="modeBadge" class="status practice">Practice mode • no payout</div>
+    </header>
 
-  <div id="auth" style="margin:12px 0;">
-    <button id="loginBtn" style="padding:8px 14px;border-radius:999px;border:1px solid #0e2c4c;background:#0e2c4c;color:white;cursor:pointer;">Connect with Nostr</button>
-    <button id="payBtn" disabled style="padding:8px 14px;border-radius:999px;border:1px solid #059669;background:#059669;color:white;cursor:not-allowed;margin-left:8px;">Pay 10 Ẑen to play</button>
-    <span id="authStatus" style="margin-left:10px;color:#64748b;font-size:14px;"></span>
+    <div class="card" id="auth">
+      <div class="actions">
+        <button id="loginBtn" class="btn primary">Connect with Nostr</button>
+        <button id="payBtn" class="btn pay" disabled>Pay 10 Ẑen to play</button>
+        <span id="authStatus" class="muted"></span>
+      </div>
+      <div id="profileCard" class="p-card" style="display:none">
+        <div id="pBanner" class="p-banner"></div>
+        <div class="p-body">
+          <img id="pPic" class="p-pic" alt="profile"/>
+          <div>
+            <div id="pName" class="p-name"></div>
+            <div id="pAbout" class="p-about"></div>
+          </div>
+        </div>
+        <div id="pFields" class="p-fields"></div>
+      </div>
+    </div>
+
+    <div id="arena" class="card">
+      <div>
+        <div id="countdown">
+          <img id="coin" src="/ipfs/QmYCKyYnYDGq6U7WuMmUoF7v5okvzoEThgYyKj9AzJPeP2" alt="Coin">
+        </div>
+      </div>
+      <div class="panel">
+        <h3>Game status</h3>
+        <p>Heads streak: <span class="stat" id="streak">0</span></p>
+        <p>Last result: <span class="stat" id="last">-</span></p>
+        <div id="ainfo" style="margin-top:8px">
+          <div id="message"><p>Click the coin to flip.</p></div>
+        </div>
+      </div>
+    </div>
   </div>
 
 
-<div id="countdown">
-  <img id="coin" src="/ipfs/QmYCKyYnYDGq6U7WuMmUoF7v5okvzoEThgYyKj9AzJPeP2" alt="Coin">
-  
-  
-</div>
-
-<div id="ainfo">
-    <div id="message"><p>Click on the coin to flip!</p></div>
-</div>
+ 
 
   <script>
     // Nostr and uSPOT integration (NIP-42 auth + uSPOT API detection)
     let upassportUrl = '';
-    let DEFAULT_RELAYS = [
-      'wss://relay.copylaradio.com',
-      'ws://127.0.0.1:7777'
-    ];
+    let DEFAULT_RELAYS = [ 'wss://relay.copylaradio.com', 'ws://127.0.0.1:7777', 'wss://relay.damus.io', 'wss://nos.lol' ];
+    let NOSTRws = '';
     let nostrRelay = null;
     let isNostrConnected = false;
+    let authCompleted = false;
     let userPubkey = null;
+    let authEventPublished = false;
+    const DEFAULT_PROFILE_RELAYS = ['wss://relay.copylaradio.com'];
+    function updateModeBadge() {
+      const badge = document.getElementById('modeBadge');
+      if (window.isPaid && userPubkey) {
+        badge.className = 'status live';
+        badge.textContent = 'Live mode • payout enabled';
+      } else {
+        badge.className = 'status practice';
+        badge.textContent = 'Practice mode • no payout';
+      }
+    }
 
     function detectUSPOTAPI() {
       const currentURL = new URL(window.location.href);
@@ -73,24 +162,36 @@
       const port = currentURL.port;
       const protocol = currentURL.protocol.split(":")[0];
 
-      let determinedUpassportUrl = '';
-      let determinedRelay = '';
+      // Compute uPassport base URL
+      let uPort = port;
+      if (uPort === '8080') uPort = '54321';
+      const uHost = hostname.replace(/^ipfs\./, 'u.');
+      upassportUrl = `${protocol}://${uHost}${uPort ? `:${uPort}` : ''}`;
+      // Expose API base also for profile/balance fetches
+      window.__UPASSPORT_API__ = upassportUrl;
 
-      if (hostname === "127.0.0.1" && port === "8080") {
-        determinedUpassportUrl = `http://127.0.0.1:54321`;
-        determinedRelay = `ws://127.0.0.1:7777`;
-      } else if (hostname.startsWith("ipfs.")) {
-        const baseDomain = hostname.substring("ipfs.".length);
-        determinedUpassportUrl = `${protocol}://u.${baseDomain}`;
-        determinedRelay = `wss://relay.${baseDomain}`;
-      } else {
-        determinedUpassportUrl = `https://u.copylaradio.com`;
-        determinedRelay = `wss://relay.copylaradio.com`;
+      // Compute relay websocket URL robustly
+      let rPort = port;
+      if (rPort === '8080') rPort = '7777';
+      const rHost = hostname.replace(/^ipfs\./, 'relay.').replace(/^127\.0\.0\.1$/, '127.0.0.1');
+      const wsProtocol = protocol === 'https' ? 'wss' : 'ws';
+      NOSTRws = `${wsProtocol}://${(hostname === '127.0.0.1' || hostname === 'localhost') && port === '8080' ? '127.0.0.1' : rHost}${rPort ? `:${rPort}` : ''}`;
+      NOSTRws = sanitizeRelayUrl(NOSTRws);
+
+      // Fall back to defaults if detection failed
+      if (!NOSTRws || NOSTRws.includes('//:')) {
+        NOSTRws = 'wss://relay.copylaradio.com';
       }
 
-      upassportUrl = determinedUpassportUrl;
-      DEFAULT_RELAYS = [determinedRelay, 'wss://relay.damus.io', 'wss://nos.lol'];
-      console.log(`uSPOT API: ${upassportUrl} | Relay: ${DEFAULT_RELAYS[0]}`);
+      DEFAULT_RELAYS = [NOSTRws, 'wss://relay.damus.io', 'wss://nos.lol']; // Non-Astroport fallback relays (yet)
+      console.log(`uSPOT API: ${upassportUrl} | Relay: ${NOSTRws}`);
+    }
+
+    // Ensure relay URLs contain no hidden/control characters and normalized scheme
+    function sanitizeRelayUrl(url) {
+      if (!url || typeof url !== 'string') return url;
+      const cleaned = url.replace(/[\u200B-\u200D\uFEFF\u2060\uFE0F\uFFFC\u0000-\u001F\u007F]/g, '');
+      return cleaned.replace(/^(wss?):\/*/, (m, p1) => `${p1}://`);
     }
 
     async function handleLogin() {
@@ -106,12 +207,11 @@
         const pubkey = await window.nostr.getPublicKey();
         if (!pubkey) throw new Error('No public key returned');
         userPubkey = pubkey;
-        loginBtn.textContent = `Connected: ${pubkey.substring(0,6)}...${pubkey.substring(pubkey.length-4)}`;
-        document.getElementById('payBtn').disabled = false;
-        document.getElementById('payBtn').style.cursor = 'pointer';
+        loginBtn.textContent = 'Authorizing...';
         authStatus.textContent = 'Connecting to Nostr relay...';
         await connectToRelay();
-        authStatus.textContent = 'Ready to pay 10 Ẑen to play.';
+        // Profile will be fetched after relay connection is established
+        // UI will be updated after NIP-42 completes or timeout
       } catch (e) {
         alert('Login failed. Please authorize in your Nostr extension.');
         console.error(e);
@@ -120,31 +220,340 @@
       }
     }
 
-    async function connectToRelay() {
-      const NOSTRws = DEFAULT_RELAYS[0];
+    async function fetchAndDisplayProfile(hexPubkey) {
       try {
-        nostrRelay = NostrTools.relayInit(NOSTRws);
-        nostrRelay.on('connect', () => { isNostrConnected = true; console.log('Connected to relay'); });
+        const profileCard = document.getElementById('profileCard');
+        const pBanner = document.getElementById('pBanner');
+        const pPic = document.getElementById('pPic');
+        const pName = document.getElementById('pName');
+        const pAbout = document.getElementById('pAbout');
+        const pFields = document.getElementById('pFields');
+        profileCard.style.display = 'block';
+        pName.textContent = 'Loading profile...';
+
+        // Minimal profile fetch (kind 0) via SimplePool when available
+        let name = hexPubkey.substring(0, 16);
+        let picture = '';
+        let g1pubFromProfile = '';
+        try {
+          // Hybrid approach: use direct WebSocket for reliable communication
+          console.log('[Profile] Using direct WebSocket for profile fetch');
+          
+          const parseAndAssign = (ev) => {
+            try { 
+              const content = JSON.parse(ev.content); 
+              name = content.display_name || content.name || name; 
+              picture = content.picture || picture; 
+            } catch {}
+            try {
+              if (Array.isArray(ev.tags)) {
+                for (const t of ev.tags) {
+                  if (Array.isArray(t) && t[0] === 'i' && typeof t[1] === 'string') {
+                    if (t[1].startsWith('g1pub:')) { g1pubFromProfile = t[1].slice('g1pub:'.length); break; }
+                    else if (t[1].startsWith('g1pubv2:') && !g1pubFromProfile) { g1pubFromProfile = t[1].slice('g1pubv2:'.length); }
+                    else if (t[1].startsWith('zencard:') && !g1pubFromProfile) { g1pubFromProfile = t[1].slice('zencard:'.length); }
+                  }
+                }
+              }
+            } catch {}
+          };
+
+          // Create a dedicated WebSocket for profile fetching
+          const relayUrl = sanitizeRelayUrl(NOSTRws || DEFAULT_RELAYS[0] || DEFAULT_PROFILE_RELAYS[0]);
+          console.log('[Profile] Creating dedicated WebSocket to:', relayUrl);
+          
+          await new Promise((resolve) => {
+            let done = false;
+            const timeout = setTimeout(() => { 
+              if (!done) {
+                console.log('[Profile] WebSocket timeout, resolving');
+                resolve(); 
+              }
+            }, 8000);
+            
+            const ws = new WebSocket(relayUrl);
+            
+            ws.onopen = () => {
+              console.log('[Profile] WebSocket connected, sending REQ');
+              const subId = `profile_${Date.now()}`;
+              const req = JSON.stringify(['REQ', subId, { kinds: [0], authors: [hexPubkey], limit: 1 }]);
+              ws.send(req);
+              console.log('[Profile] Sent REQ:', req);
+            };
+            
+            ws.onmessage = (event) => {
+              try {
+                const data = JSON.parse(event.data);
+                console.log('[Profile] Received:', data[0], data[1]);
+                
+                if (data[0] === 'EVENT' && data[2]?.kind === 0) {
+                  console.log('[Profile] Parsing profile event:', data[2]);
+                  parseAndAssign(data[2]);
+                } else if (data[0] === 'EOSE') {
+                  console.log('[Profile] EOSE received');
+                  done = true;
+                  clearTimeout(timeout);
+                  ws.close();
+                  resolve();
+                }
+              } catch (e) {
+                console.warn('[Profile] Message parse error:', e);
+              }
+            };
+            
+            ws.onerror = (error) => {
+              console.error('[Profile] WebSocket error:', error);
+            };
+            
+            ws.onclose = () => {
+              console.log('[Profile] WebSocket closed');
+              if (!done) {
+                clearTimeout(timeout);
+                resolve();
+              }
+            };
+          });
+          
+        } catch (e) { console.warn('Profile fetch failed', e); }
+
+        const short = `${hexPubkey.substring(0,10)}...${hexPubkey.substring(hexPubkey.length-6)}`;
+        pBanner.style.backgroundImage = picture ? `url('${picture}')` : '';
+        pPic.src = picture || '/ipfs/QmQRq211EMmQJ7QE44FrVZt8EMF7JJWnayDXHyKzes4pX1';
+        pName.innerHTML = `${name} <span class="muted">(${short})</span>${g1pubFromProfile ? ' • <span style="color:#22c55e">MULTIPASS</span>' : ''}`;
+        pAbout.textContent = '';
+        pFields.innerHTML = '';
+        if (g1pubFromProfile) {
+          const g1Short = `${g1pubFromProfile.substring(0,6)}...${g1pubFromProfile.substring(g1pubFromProfile.length-6)}`;
+          const chip = document.createElement('span');
+          chip.className = 'p-chip';
+          chip.textContent = `🔑 ${g1Short}`;
+          pFields.appendChild(chip);
+        }
+
+        // Balance fetch only if member (g1pub present in profile tags)
+        const apiBase = window.__UPASSPORT_API__ || upassportUrl;
+        if (g1pubFromProfile) {
+          try {
+            const r = await fetch(`${apiBase}/check_balance?g1pub=${encodeURIComponent(g1pubFromProfile)}`);
+            if (r.ok) {
+              const js = await r.json();
+              const g1 = Number(js.balance || js.g1_balance || 0);
+              const zen = Math.max(0, Math.floor((g1 - 1) * 10));
+              const chip = document.createElement('span');
+              chip.className = 'p-chip';
+              chip.textContent = `G1: ${g1} • ZEN: ${zen}`;
+              pFields.appendChild(chip);
+            } else {
+              const chip = document.createElement('span');
+              chip.className = 'p-chip';
+              chip.textContent = 'Balance unavailable';
+              pFields.appendChild(chip);
+            }
+          } catch (e) {
+            console.warn('Balance fetch failed', e);
+            const chip = document.createElement('span');
+            chip.className = 'p-chip';
+            chip.textContent = 'Balance unavailable';
+            pFields.appendChild(chip);
+          }
+        }
+      } catch (e) {
+        console.warn('fetchAndDisplayProfile error', e);
+      }
+    }
+
+    async function connectToRelay() {
+      const relayUrl = sanitizeRelayUrl(NOSTRws || DEFAULT_RELAYS[0]);
+      try {
+        nostrRelay = NostrTools.relayInit(relayUrl);
+        nostrRelay.on('connect', () => {
+          isNostrConnected = true;
+          console.log('[NIP-42] Connected to relay', relayUrl);
+          // Proactively publish a 22242 EVENT to be discoverable by backend
+          if (!authEventPublished) {
+            console.log('[NIP-42] Proactive 22242 EVENT publish starting');
+            sendProactiveAuth(relayUrl).catch(err => console.warn('[NIP-42] Proactive EVENT publish failed:', err));
+          }
+        });
         nostrRelay.on('error', (err) => { isNostrConnected = false; console.error('Relay error', err); });
         nostrRelay.on('auth', async (challenge) => {
-          // Respond with NIP-42 signed auth
-          const authEvent = {
-            kind: 22242,
-            created_at: Math.floor(Date.now() / 1000),
-            tags: [ ['relay', NOSTRws], ['challenge', challenge] ],
-            content: '',
-            pubkey: userPubkey
-          };
-          let signedAuthEvent = null;
-          if (window.nostr && typeof window.nostr.signEvent === 'function') {
-            signedAuthEvent = await window.nostr.signEvent(authEvent);
+          // Respond with NIP-42 signed AUTH (not EVENT)
+          try {
+            console.log('[NIP-42] Relay challenged with', challenge);
+            const authEvent = {
+              kind: 22242,
+              created_at: Math.floor(Date.now() / 1000),
+              tags: [ ['relay', sanitizeRelayUrl(relayUrl) ], ['challenge', challenge] ],
+              content: '',
+              pubkey: userPubkey
+            };
+            console.log('[NIP-42] Building 22242 for challenge', authEvent);
+            let signedAuthEvent = null;
+            if (window.nostr && typeof window.nostr.signEvent === 'function') {
+              signedAuthEvent = await window.nostr.signEvent(authEvent);
+              console.log('[NIP-42] Signed 22242 (challenge) id:', signedAuthEvent?.id, 'sig len:', signedAuthEvent?.sig?.length);
+            }
+            if (signedAuthEvent) {
+              // Publish as EVENT so writePolicy 22242.sh can log it if allowed
+              try {
+                if (typeof nostrRelay.publish === 'function') {
+                  console.log('[NIP-42] Publishing 22242 as EVENT (challenge)');
+                  await nostrRelay.publish(signedAuthEvent);
+                } else {
+                  // Create dedicated WebSocket for challenge response
+                  console.log('[NIP-42] Creating dedicated WebSocket for challenge EVENT');
+                  const ws = new WebSocket(relayUrl);
+                  
+                  ws.onopen = () => {
+                    console.log('[NIP-42] Challenge WebSocket connected, sending EVENT');
+                    const eventMsg = JSON.stringify(['EVENT', signedAuthEvent]);
+                    ws.send(eventMsg);
+                    console.log('[NIP-42] Sent challenge EVENT via dedicated WebSocket');
+                    ws.close();
+                  };
+                  
+                  ws.onerror = (error) => {
+                    console.error('[NIP-42] Challenge WebSocket error:', error);
+                  };
+                  
+                  ws.onclose = () => {
+                    console.log('[NIP-42] Challenge WebSocket closed');
+                  };
+                }
+                 // Event already sent via dedicated WebSocket above
+              } catch (e) { console.warn('[NIP-42] EVENT publish (challenge) failed', e); }
+              authCompleted = true;
+              authEventPublished = true;
+              const loginBtn = document.getElementById('loginBtn');
+              const payBtn = document.getElementById('payBtn');
+              const authStatus = document.getElementById('authStatus');
+              loginBtn.textContent = `Connected: ${userPubkey.substring(0,6)}...${userPubkey.substring(userPubkey.length-4)}`;
+              payBtn.disabled = false;
+              payBtn.style.cursor = 'pointer';
+              authStatus.textContent = 'NIP-42 authorized. Ready to pay 10 Ẑen to play.';
+              updateModeBadge();
+              // Fetch profile now that we're fully connected
+              fetchAndDisplayProfile(userPubkey).catch(console.warn);
+            }
+          } catch (e) {
+            console.error('NIP-42 AUTH failed', e);
           }
-          if (signedAuthEvent) await nostrRelay.publish(signedAuthEvent);
         });
         await nostrRelay.connect();
+        // Fallback: if relay does not require auth, enable UI after short delay
+        setTimeout(() => {
+          if (!authCompleted) {
+            console.log('[NIP-42] No relay challenge; proactive AUTH/EVENT was attempted earlier');
+            const loginBtn = document.getElementById('loginBtn');
+            const payBtn = document.getElementById('payBtn');
+            const authStatus = document.getElementById('authStatus');
+            loginBtn.textContent = `Connected: ${userPubkey.substring(0,6)}...${userPubkey.substring(userPubkey.length-4)}`;
+            payBtn.disabled = false;
+            payBtn.style.cursor = 'pointer';
+            authStatus.textContent = 'Relay did not request NIP-42. Ready to pay 10 Ẑen to play.';
+            updateModeBadge();
+            // Fetch profile now that we're fully connected
+            fetchAndDisplayProfile(userPubkey).catch(console.warn);
+          }
+        }, 1500);
       } catch (e) {
         console.error('Failed to connect to relay', e);
       }
+    }
+
+    async function sendProactiveAuth(relayUrl) {
+      try {
+        if (!userPubkey || !nostrRelay || authEventPublished) return;
+        const challenge = `client-init-${Date.now()}`;
+        const authEvent = {
+          kind: 22242,
+          created_at: Math.floor(Date.now() / 1000),
+          tags: [ ['relay', sanitizeRelayUrl(relayUrl) ], ['challenge', challenge] ],
+          content: '',
+          pubkey: userPubkey
+        };
+        console.log('[NIP-42] Proactive 22242 authEvent:', authEvent);
+        let signedAuthEvent = null;
+        if (window.nostr && typeof window.nostr.signEvent === 'function') {
+          signedAuthEvent = await window.nostr.signEvent(authEvent);
+        }
+        if (!signedAuthEvent) { console.warn('[NIP-42] Proactive signEvent returned null'); return; }
+        console.log('[NIP-42] Proactive signed id:', signedAuthEvent?.id, 'sig len:', signedAuthEvent?.sig?.length);
+        // Publish as EVENT so server-side filter/22242.sh logs it
+        try {
+          if (typeof nostrRelay.publish === 'function') {
+            console.log('[NIP-42] Proactive EVENT publish via relay.publish');
+            await nostrRelay.publish(signedAuthEvent);
+          }
+          // Create dedicated WebSocket for NIP-42 event publishing
+          console.log('[NIP-42] Creating dedicated WebSocket for event publishing');
+          const ws = new WebSocket(relayUrl);
+          
+          ws.onopen = () => {
+            console.log('[NIP-42] WebSocket connected, sending EVENT');
+            const eventMsg = JSON.stringify(['EVENT', signedAuthEvent]);
+            ws.send(eventMsg);
+            console.log('[NIP-42] Sent EVENT via dedicated WebSocket');
+            ws.close();
+          };
+          
+          ws.onerror = (error) => {
+            console.error('[NIP-42] WebSocket error:', error);
+          };
+          
+          ws.onclose = () => {
+            console.log('[NIP-42] Dedicated WebSocket closed');
+          };
+          authCompleted = true;
+          authEventPublished = true;
+          const loginBtn = document.getElementById('loginBtn');
+          const payBtn = document.getElementById('payBtn');
+          const authStatus = document.getElementById('authStatus');
+          loginBtn.textContent = `Connected: ${userPubkey.substring(0,6)}...${userPubkey.substring(userPubkey.length-4)}`;
+          payBtn.disabled = false;
+          payBtn.style.cursor = 'pointer';
+          authStatus.textContent = 'NIP-42 event sent.';
+          updateModeBadge();
+        } catch (e) { console.warn('EVENT 22242 publish failed', e); }
+      } catch (e) { console.warn('sendProactiveAuth error', e); }
+    }
+
+    // Direct WebSocket fallback - create dedicated connection
+    function tryDirectWebSocketSend(signedAuthEvent, kind = 'EVENT') {
+      try {
+        const relayUrl = sanitizeRelayUrl(NOSTRws || DEFAULT_RELAYS[0]);
+        console.log('[NIP-42] Creating fallback WebSocket to:', relayUrl);
+        
+        const ws = new WebSocket(relayUrl);
+        
+        ws.onopen = () => {
+          console.log('[NIP-42] Fallback WebSocket connected, sending', kind);
+          const msg = JSON.stringify([kind === 'AUTH' ? 'AUTH' : 'EVENT', signedAuthEvent]);
+          ws.send(msg);
+          console.log('[NIP-42] Sent via fallback WebSocket:', msg.substring(0, 120) + '...');
+          ws.close();
+        };
+        
+        ws.onerror = (error) => {
+          console.error('[NIP-42] Fallback WebSocket error:', error);
+        };
+        
+        ws.onclose = () => {
+          console.log('[NIP-42] Fallback WebSocket closed');
+        };
+      } catch (e) {
+        console.error('tryDirectWebSocketSend failed', e);
+      }
+    }
+
+    function sendViaWebSocket(ws, event, kind) {
+      if (!ws || ws.readyState !== WebSocket.OPEN) {
+        console.error('WebSocket not open for send');
+        return;
+      }
+      const msg = JSON.stringify([kind === 'AUTH' ? 'AUTH' : 'EVENT', event]);
+      ws.send(msg);
+      console.log('Sent via direct WebSocket:', msg.substring(0, 120) + '...');
     }
 
     async function payToPlay() {
@@ -165,13 +574,36 @@
         if (G1PUB) { form.append('g1source', G1PUB); }
         const resp = await fetch(`${upassportUrl}/zen_send`, { method: 'POST', body: form, mode: 'cors' });
         if (!resp.ok) throw new Error(`Payment failed (${resp.status})`);
-        window.isPaid = true;
-        authStatus.textContent = 'Payment OK. You can play.';
-        payBtn.textContent = 'Paid ✓';
+        
+        const result = await resp.json();
+        console.log('Payment response:', result);
+        
+        if (result.ok && result.zen_send_result?.success) {
+          // Payment successful
+          window.isPaid = true;
+          authStatus.textContent = `Payment OK: ${result.zen_send_result.message}`;
+          payBtn.textContent = 'Paid ✓';
+          
+          // Store session info if available
+          if (result.token) {
+            window.coinflipToken = result.token;
+            window.coinflipSid = result.sid;
+            window.coinflipExp = result.exp;
+          }
+        } else {
+          // Payment failed
+          const errorMsg = result.error || result.zen_send_result?.error || 'Unknown error';
+          const errorType = result.type || result.zen_send_result?.type || 'unknown';
+          console.error('Payment failed:', errorMsg, 'Type:', errorType);
+          alert(`Payment failed: ${errorMsg}`);
+          payBtn.disabled = false;
+          payBtn.textContent = 'Pay 10 Ẑen to play';
+        }
       } catch (e) {
-        console.error(e);
+        console.error('Payment error:', e);
         alert('Payment failed. Please try again.');
-        payBtn.disabled = false; payBtn.textContent = 'Pay 10 Ẑen to play';
+        payBtn.disabled = false;
+        payBtn.textContent = 'Pay 10 Ẑen to play';
       }
     }
     // Function to extract URL parameters
@@ -187,18 +619,21 @@
     const G1PUB = getUrlParameter('g1pub') || "";
     const MAX = getUrlParameter('coins') || "";
 
-    var title = document.getElementById("title");
-    title.innerHTML = "MAX : " + MAX ;
+    const titleEl = document.getElementById("title");
+    if (titleEl) {
+      titleEl.innerHTML = "MAX : " + MAX;
+    } else {
+      const authStatus = document.getElementById('authStatus');
+      if (authStatus && MAX) {
+        authStatus.textContent = `MAX: ${MAX}`;
+      }
+    }
 
     let isFlipping = false;
     window.isPaid = false;
     let consecutiveHeads = 1;
 
     document.getElementById('coin').addEventListener('click', (event) => {
-      if (!window.isPaid) {
-        alert('Please pay 10 Ẑen to play.');
-        return;
-      }
       if (!isFlipping) {
 
         isFlipping = true;
@@ -208,10 +643,13 @@
           const buf = new Uint32Array(1);
           (window.crypto || window.msCrypto).getRandomValues(buf);
           const result = (buf[0] & 1) === 0 ? 'Heads' : 'Tails';
+            document.getElementById('last').textContent = result;
             if (result === 'Heads') {
               consecutiveHeads++;
+              document.getElementById('streak').textContent = consecutiveHeads - 1;
               document.getElementById('coin').src = '/ipfs/QmZ6jrZGTWo4eimrGxu7BfKjYfRLqknb18WhmekNxppFg9';
-              document.getElementById('message').innerHTML = `<p>Pile! ${consecutiveHeads - 1} fois.</p>`;
+              const msgEl1 = document.getElementById('message');
+              if (msgEl1) { msgEl1.innerHTML = `<p>Heads! Streak: ${consecutiveHeads - 1}</p>`; }
 
             } else {
              // as descibed in https://en.wikipedia.org/wiki/St._Petersburg_paradox
@@ -229,22 +667,26 @@
                 event.stopPropagation();
                 event.preventDefault();
 
-            // Open coinflip Application
-            var myZenCoinFlip = '/ipfs/QmP7duzqBr6jszapZ9adSe8dBgZyWAdVHsPGep2bNX5Hj3/getreceiver/index.html?qrcode=' + AstroID +'&pass=' + AstroPASS + '&pay=' + vousgagnez + '&max=' + MAX ;
-
             var info = document.getElementById("ainfo");
-            info.innerHTML = "<h2>" + capped + " Ẑen</h2>";
-            console.log(myZenCoinFlip);
-            window.history.replaceState({}, document.title, "/"); // Forget Page URL in Browser History
-            window.open( myZenCoinFlip, "ZENFlipMachine");
+            if (window.isPaid && userPubkey) {
+              // Winner
+              const msgEl2 = document.getElementById('message');
+              if (msgEl2) { msgEl2.innerHTML = `<p><b>Tails!<br>YOU WIN</b><h2>${capped} ZEN</h2></p>`; }
+            } else {
+              // Practice mode: no payout, just display simulated gain
+              info.innerHTML = `<h2>${capped} Ẑen (simulated)</h2>`;
+              const msgEl3 = document.getElementById('message');
+              if (msgEl3) { msgEl3.innerHTML = `<p><b>Tails!</b><br><small>Practice mode — no payout</small></p>`; }
+            }
 
-              document.getElementById('message').innerHTML = `<p><b>Face!<br>YOU WIN</b><h2>${capped} ZEN</h2></p>`;
-
-              // Reset game state; require a new payment for a new game
+              // Reset game state; in live mode, require a new payment for a new game
               consecutiveHeads = 1;
-              window.isPaid = false;
-              const payBtnEl = document.getElementById('payBtn');
-              if (payBtnEl) { payBtnEl.disabled = false; payBtnEl.textContent = 'Pay 10 Ẑen to play'; payBtnEl.style.cursor = 'pointer'; }
+              if (window.isPaid) {
+                window.isPaid = false;
+                const payBtnEl = document.getElementById('payBtn');
+                if (payBtnEl) { payBtnEl.disabled = false; payBtnEl.textContent = 'Pay 10 Ẑen to play'; payBtnEl.style.cursor = 'pointer'; }
+                updateModeBadge();
+              }
               document.getElementById('coin').src = '/ipfs/QmeZhZ6yR6YHhiZ9qfBUCA1RKUP83dZL6MtU4PCBrdzjWn'; // Coin Pile Icon
 
             }

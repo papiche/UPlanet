@@ -33,14 +33,23 @@
     }
   </style>
   <script src="/ipfs/Qmae5v9zydax9u6C9ceDijURu5PYdd5avmv4NkenCw7RFv/astro.js"></script>
+  <script src="/ipfs/QmXEmaPRUaGcvhuyeG99mHHNyP43nn8GtNeuDok8jdpG4a/nostr.bundle.js"></script>
 </head>
 <body>
 
   <h1><div id="title">Coin Flip Game</div></h1>
 
+  <div id="auth" style="margin:12px 0;">
+    <button id="loginBtn" style="padding:8px 14px;border-radius:999px;border:1px solid #0e2c4c;background:#0e2c4c;color:white;cursor:pointer;">Connect with Nostr</button>
+    <button id="payBtn" disabled style="padding:8px 14px;border-radius:999px;border:1px solid #059669;background:#059669;color:white;cursor:not-allowed;margin-left:8px;">Pay 10 Ẑen to play</button>
+    <span id="authStatus" style="margin-left:10px;color:#64748b;font-size:14px;"></span>
+  </div>
+
 
 <div id="countdown">
   <img id="coin" src="/ipfs/QmYCKyYnYDGq6U7WuMmUoF7v5okvzoEThgYyKj9AzJPeP2" alt="Coin">
+  
+  
 </div>
 
 <div id="ainfo">
@@ -48,6 +57,123 @@
 </div>
 
   <script>
+    // Nostr and uSPOT integration (NIP-42 auth + uSPOT API detection)
+    let upassportUrl = '';
+    let DEFAULT_RELAYS = [
+      'wss://relay.copylaradio.com',
+      'ws://127.0.0.1:7777'
+    ];
+    let nostrRelay = null;
+    let isNostrConnected = false;
+    let userPubkey = null;
+
+    function detectUSPOTAPI() {
+      const currentURL = new URL(window.location.href);
+      const hostname = currentURL.hostname;
+      const port = currentURL.port;
+      const protocol = currentURL.protocol.split(":")[0];
+
+      let determinedUpassportUrl = '';
+      let determinedRelay = '';
+
+      if (hostname === "127.0.0.1" && port === "8080") {
+        determinedUpassportUrl = `http://127.0.0.1:54321`;
+        determinedRelay = `ws://127.0.0.1:7777`;
+      } else if (hostname.startsWith("ipfs.")) {
+        const baseDomain = hostname.substring("ipfs.".length);
+        determinedUpassportUrl = `${protocol}://u.${baseDomain}`;
+        determinedRelay = `wss://relay.${baseDomain}`;
+      } else {
+        determinedUpassportUrl = `https://u.copylaradio.com`;
+        determinedRelay = `wss://relay.copylaradio.com`;
+      }
+
+      upassportUrl = determinedUpassportUrl;
+      DEFAULT_RELAYS = [determinedRelay, 'wss://relay.damus.io', 'wss://nos.lol'];
+      console.log(`uSPOT API: ${upassportUrl} | Relay: ${DEFAULT_RELAYS[0]}`);
+    }
+
+    async function handleLogin() {
+      const loginBtn = document.getElementById('loginBtn');
+      const authStatus = document.getElementById('authStatus');
+      if (!window.nostr || typeof window.nostr.getPublicKey !== 'function') {
+        alert('Nostr extension required to login.');
+        return;
+      }
+      try {
+        loginBtn.disabled = true;
+        authStatus.textContent = 'Requesting public key...';
+        const pubkey = await window.nostr.getPublicKey();
+        if (!pubkey) throw new Error('No public key returned');
+        userPubkey = pubkey;
+        loginBtn.textContent = `Connected: ${pubkey.substring(0,6)}...${pubkey.substring(pubkey.length-4)}`;
+        document.getElementById('payBtn').disabled = false;
+        document.getElementById('payBtn').style.cursor = 'pointer';
+        authStatus.textContent = 'Connecting to Nostr relay...';
+        await connectToRelay();
+        authStatus.textContent = 'Ready to pay 10 Ẑen to play.';
+      } catch (e) {
+        alert('Login failed. Please authorize in your Nostr extension.');
+        console.error(e);
+        loginBtn.disabled = false;
+        authStatus.textContent = '';
+      }
+    }
+
+    async function connectToRelay() {
+      const NOSTRws = DEFAULT_RELAYS[0];
+      try {
+        nostrRelay = NostrTools.relayInit(NOSTRws);
+        nostrRelay.on('connect', () => { isNostrConnected = true; console.log('Connected to relay'); });
+        nostrRelay.on('error', (err) => { isNostrConnected = false; console.error('Relay error', err); });
+        nostrRelay.on('auth', async (challenge) => {
+          // Respond with NIP-42 signed auth
+          const authEvent = {
+            kind: 22242,
+            created_at: Math.floor(Date.now() / 1000),
+            tags: [ ['relay', NOSTRws], ['challenge', challenge] ],
+            content: '',
+            pubkey: userPubkey
+          };
+          let signedAuthEvent = null;
+          if (window.nostr && typeof window.nostr.signEvent === 'function') {
+            signedAuthEvent = await window.nostr.signEvent(authEvent);
+          }
+          if (signedAuthEvent) await nostrRelay.publish(signedAuthEvent);
+        });
+        await nostrRelay.connect();
+      } catch (e) {
+        console.error('Failed to connect to relay', e);
+      }
+    }
+
+    async function payToPlay() {
+      if (!userPubkey) {
+        alert('Please connect with Nostr first.');
+        return;
+      }
+      if (!upassportUrl) detectUSPOTAPI();
+      const payBtn = document.getElementById('payBtn');
+      const authStatus = document.getElementById('authStatus');
+      try {
+        payBtn.disabled = true; payBtn.textContent = 'Paying...';
+        const form = new FormData();
+        form.append('zen', '10');
+        form.append('g1dest', 'CAPTAIN');
+        form.append('npub', userPubkey);
+        // If a G1PUB was provided in URL, include it to help source resolution
+        if (G1PUB) { form.append('g1source', G1PUB); }
+        const resp = await fetch(`${upassportUrl}/zen_send`, { method: 'POST', body: form, mode: 'cors' });
+        if (!resp.ok) throw new Error(`Payment failed (${resp.status})`);
+        window.isPaid = true;
+        authStatus.textContent = 'Payment OK. You can play.';
+        payBtn.textContent = 'Paid ✓';
+      } catch (e) {
+        console.error(e);
+        alert('Payment failed. Please try again.');
+        payBtn.disabled = false; payBtn.textContent = 'Pay 10 Ẑen to play';
+      }
+    }
     // Function to extract URL parameters
     function getUrlParameter(name) {
       name = name.replace(/[\[]/, '\\[').replace(/[\]]/, '\\]');
@@ -65,15 +191,23 @@
     title.innerHTML = "MAX : " + MAX ;
 
     let isFlipping = false;
+    window.isPaid = false;
     let consecutiveHeads = 1;
 
     document.getElementById('coin').addEventListener('click', (event) => {
+      if (!window.isPaid) {
+        alert('Please pay 10 Ẑen to play.');
+        return;
+      }
       if (!isFlipping) {
 
         isFlipping = true;
         document.getElementById('coin').style.transform = 'rotateY(360deg)';
         setTimeout(() => {
-          const result = Math.random() < 0.5 ? 'Heads' : 'Tails';
+          // Use cryptographically strong randomness instead of Math.random()
+          const buf = new Uint32Array(1);
+          (window.crypto || window.msCrypto).getRandomValues(buf);
+          const result = (buf[0] & 1) === 0 ? 'Heads' : 'Tails';
             if (result === 'Heads') {
               consecutiveHeads++;
               document.getElementById('coin').src = '/ipfs/QmZ6jrZGTWo4eimrGxu7BfKjYfRLqknb18WhmekNxppFg9';
@@ -82,8 +216,14 @@
             } else {
              // as descibed in https://en.wikipedia.org/wiki/St._Petersburg_paradox
              // TODO : make use of MAX parameter
-             var vousgagnez = Math.pow(2, (consecutiveHeads - 1));
-             vousgagnez /= 10; // ZEN CONVERSION
+             let raw = Math.pow(2, (consecutiveHeads - 1));
+             // Enforce MAX cap if provided
+             let capped = raw;
+             const maxNum = Number(MAX);
+             if (!Number.isNaN(maxNum) && maxNum > 0) {
+               capped = Math.min(raw, maxNum);
+             }
+             let vousgagnez = capped / 10; // ZEN conversion
 
                 // STOP CLIC
                 event.stopPropagation();
@@ -93,14 +233,18 @@
             var myZenCoinFlip = '/ipfs/QmP7duzqBr6jszapZ9adSe8dBgZyWAdVHsPGep2bNX5Hj3/getreceiver/index.html?qrcode=' + AstroID +'&pass=' + AstroPASS + '&pay=' + vousgagnez + '&max=' + MAX ;
 
             var info = document.getElementById("ainfo");
-            info.innerHTML = "<h2>" + Math.pow(2, (consecutiveHeads - 1)) + " Ẑen</h2>";
+            info.innerHTML = "<h2>" + capped + " Ẑen</h2>";
             console.log(myZenCoinFlip);
             window.history.replaceState({}, document.title, "/"); // Forget Page URL in Browser History
             window.open( myZenCoinFlip, "ZENFlipMachine");
 
-              document.getElementById('message').innerHTML = `<p><b>Face!<br>VOUS GAGNEZ</b><h2>${Math.pow(2, (consecutiveHeads - 1))} ZEN</h2></p>`;
+              document.getElementById('message').innerHTML = `<p><b>Face!<br>YOU WIN</b><h2>${capped} ZEN</h2></p>`;
 
-              consecutiveHeads = 1; // Reset the count for consecutive heads
+              // Reset game state; require a new payment for a new game
+              consecutiveHeads = 1;
+              window.isPaid = false;
+              const payBtnEl = document.getElementById('payBtn');
+              if (payBtnEl) { payBtnEl.disabled = false; payBtnEl.textContent = 'Pay 10 Ẑen to play'; payBtnEl.style.cursor = 'pointer'; }
               document.getElementById('coin').src = '/ipfs/QmeZhZ6yR6YHhiZ9qfBUCA1RKUP83dZL6MtU4PCBrdzjWn'; // Coin Pile Icon
 
             }
@@ -108,6 +252,22 @@
           document.getElementById('coin').style.transform = 'rotateY(0deg)';
         }, 600); // Delay must match the transition time in CSS
       }
+    });
+
+    // Wire up auth UI
+    document.addEventListener('DOMContentLoaded', () => {
+      detectUSPOTAPI();
+      const loginBtn = document.getElementById('loginBtn');
+      const payBtn = document.getElementById('payBtn');
+      // Check Nostr extension quickly
+      setTimeout(() => {
+        if (!window.nostr || typeof window.nostr.getPublicKey !== 'function') {
+          loginBtn.disabled = true;
+          loginBtn.textContent = 'Nostr Extension Required';
+        }
+      }, 400);
+      loginBtn.addEventListener('click', handleLogin);
+      payBtn.addEventListener('click', payToPlay);
     });
   </script>
 

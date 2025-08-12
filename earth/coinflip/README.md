@@ -1,61 +1,160 @@
-# St Petersbourg
+# St Petersburg Coin Flip
 
-Basé sur le paradoxe du même nom.
-Pour cesser de donner sans qu'on vous rende, voici la solution.
-Ajoutez à la cagnote Zen,
+## Overview
 
-Donation "OpenCollective"
-1€ = 1 Zen
+A web-based implementation of the St. Petersburg paradox coin flip game, integrated with NOSTR authentication and UPlanet ZEN payments. Players use their MULTIPASS to play, and all transactions are processed through the CAPTAIN's MULTIPASS.
 
-nnn participant(s) à X € / mois
-donne la cagnote C = nnn * X
+## Game Mechanics
 
-Redistribution par pile/face
+### St. Petersburg Paradox
+- **Progressive Payouts**: Payout doubles on each consecutive heads (2⁰ = 1, 2¹ = 2, 2² = 4, 2³ = 8...)
+- **Risk vs Reward**: Players can choose to cash out at any time or continue flipping
+- **Game End**: Game ends when tails appears, player loses and sends like to CAPTAIN
 
-C1 = 2^(N-1) >= nnn * X >= 2^N = C2
-N est le nombre de coup "Pile" de suite qu'il faut pour obtenir le "gros lot C2" et couler la banque
+### Player Choice System
+- **Cash Out**: Secure current winnings and end the game successfully
+- **Continue**: Risk everything for double the payout on next flip
+- **Lose Everything**: If tails appears, player loses all potential winnings and sends like to CAPTAIN
 
-A la STI, on est cash !
-On est la seule crypto qui apporte une telle garantie.
-Connaissez-vous une autre "banque" qui vous propose cela ?
-Grâce à notre technologie blockchain, nous avons réduit à néant nos coûts d'infrastrucure.
-Même les banques Web peuvent planter ;) La notre est enregistré dans IPFS, vous pouvez même l'héberger, pas moyen de couper.
+## Authentication & Payment System
 
-Avec OpenCollective nos livres de comptes sont ouverts.
-Nous basons nous services sur des algorithmes clairs.
+### MULTIPASS Requirement
+- **MULTIPASS Only**: Only players with a valid MULTIPASS (g1pub in NOSTR profile) can play
+- **Astroport Restriction**: Game can only be played on the Astroport where the player's MULTIPASS is registered (required for NOSTR relay to find player's key when sending like to CAPTAIN)
 
-Pour vous, 3 clics, un virement et voilà.
-1. Inscivez-vous sur, https://qo-op.com
-2. Recevez par email votre "portefeuille" Zen et ses identifiants
-3. Finissez votre inscription https://opencollective/monnaie-libre
+### Payment Flow
+1. **Player MULTIPASS**: Used for player identification and balance checking
+2. **CAPTAIN MULTIPASS**: All transactions are processed through CAPTAIN's wallet
+3. **Like System**: Each flip (after first) sends a like to CAPTAIN → triggers 1 ẐEN payment
+4. **Winnings**: Paid directly to player's MULTIPASS from CAPTAIN's wallet
 
-Chaque jour vous jouez à des jeux qui vous rapportent des Zen
+## Game Modes
 
-chez vous
-* la base pile+...+pile+face
-* du cochon - tech - adapte le nombre de tirage à la cagnote (jeu du cochon) en fonction de OC
-* good feeling = + de zen (interface spirituellement interactive !)
+### Practice Mode
+- **No Authentication**: Available to all users
+- **Simulated Payments**: No real money involved
+- **Like Simulation**: Likes to CAPTAIN are simulated, no real payments
+- **Educational**: Learn game mechanics without financial risk
 
-chez votre commerçant
-* comme points fidélité interprofessionnelle (test cagnotte foddtruck joao)
-*
+### Live Mode
+- **MULTIPASS Required**: Must have valid MULTIPASS in NOSTR profile
+- **Real Payments**: All transactions use real ZEN currency
+- **Like Payments**: Each flip sends like to CAPTAIN → 1 ẐEN payment processed
+- **Winning Payouts**: Real ZEN payments sent to winner's MULTIPASS
 
-La traçabilté est totale
-* Nous capturons vos euros pour que vous soyez plus Zen
-Envoyez vos factures à OpenCollective accompagné du nombre de Zen correspondant et nous vous remboursons votre facture.
+## Technical Implementation
 
-Grâce au recoupement de factures fournisseurs nous seront en mesure d'établir une liste de ceux-ci afin que vous puissiez encore mieux comparer.
+### NOSTR Integration
+- **Profile Fetching**: Retrieves player profile from NOSTR relays
+- **MULTIPASS Detection**: Checks for g1pub or g1pubv2 tags in profile
+- **Balance Checking**: Fetches player's ZEN balance via uSPOT API
+- **Authentication**: NIP-42 relay authentication for secure communication
 
-La Carte Zen est à renouveler chaque année
-Les portefeuilles avec moins de 10 Zen sont détruit (assure le financement de LASTI)
+### Payment Processing
+- **CAPTAIN Data**: Fetched from ASTROPORT station API
+- **Transaction Source**: CAPTAIN's MULTIPASS (g1source parameter)
+- **Transaction Destination**: Player's MULTIPASS (g1dest parameter)
+- **API Endpoint**: `/zen_send` via uSPOT API
 
-Chaque détenteur de Carte Zen peut jouer chaque jour, pour récupérer sa mise...
+### Like System
+- **NOSTR Event**: Kind 7 (reaction) sent to CAPTAIN's first message
+- **Payment Trigger**: Like triggers 1 ẐEN payment from CAPTAIN to player
+- **Relay Processing**: 7.sh script on relay processes the payment
 
-Il peut également personnaliser et fabriquer ses cartes Zen
-pour les offrir en cadeaux à ses amis. Ou comme point de fidélité offert à ses clients
+## Game Flow
 
-Chacun est libre de participer à la cagnotte
-Rejoignez notre opération "St Persbourg" OpenCollective,
-vous recevez en bonus 5% des zen du forfait auquel ils souscrivent.
+### 1. Connection & Authentication
+- Connect with NOSTR extension
+- Profile is fetched and validated
+- MULTIPASS parameter is checked
+- Balance is verified via uSPOT API
 
-rédige la page à publier sur OpenColletive pour expliquer le principe et donner envie de s'inscrire
+### 2. Game Initialization
+- First flip is free (no like sent to CAPTAIN)
+- Game mode determined (Practice vs Live)
+- CAPTAIN data fetched for payment processing
+
+### 3. Gameplay Loop
+- **Heads**: Continue flipping, payout doubles, like sent to CAPTAIN
+- **Tails**: Game ends, player loses all potential winnings, like sent to CAPTAIN
+- **Cash Out**: Player can secure winnings at any time and end game successfully
+
+### 4. Payment Processing
+- **Like Payment**: 1 ẐEN sent to player for each flip (after first)
+- **Winning Payment**: Final winnings sent to player's MULTIPASS (only if player cashes out)
+- **Losing Payment**: When tails appears, player loses all potential winnings and sends like to CAPTAIN
+- **Transaction Source**: CAPTAIN's MULTIPASS wallet
+- **Confirmation**: Payment status displayed to player
+
+## API Integration
+
+### uSPOT API
+- **Balance Check**: `GET /check_balance?g1pub={G1PUB}`
+- **Payment**: `POST /zen_send` with form data
+- **Parameters**: g1source, g1dest, zen, npub, zencard
+
+### ASTROPORT Station API
+- **CAPTAIN Data**: Fetches captainHEX, captainG1pub, captainZencardG1pub
+- **Endpoint**: Station URL configured via hostname detection
+
+### NOSTR Relays
+- **Profile Fetching**: Kind 0 events for player profiles
+- **Like Publishing**: Kind 7 events for CAPTAIN reactions
+- **Authentication**: NIP-42 challenge/response
+
+## Security Features
+
+### Authentication
+- **NIP-42**: Secure relay authentication
+- **MULTIPASS Verification**: Only verified profiles can play live mode
+- **Astroport Restriction**: Prevents cross-domain gameplay
+
+### Payment Security
+- **CAPTAIN Source**: All payments originate from CAPTAIN's wallet
+- **Player Destination**: Payments sent to verified player MULTIPASS
+- **Transaction Validation**: All payments require valid MULTIPASS
+
+### Session Management
+- **Profile Validation**: Continuous verification of player credentials
+- **Balance Checking**: Real-time balance updates
+- **Payment Confirmation**: Detailed transaction status reporting
+
+## Error Handling
+
+### Common Issues
+1. **"MULTIPASS required"**: Add g1pub tag to NOSTR profile
+2. **"Astroport Required"**: Play only on registered Astroport domain
+3. **Payment failed**: Check CAPTAIN balance and network connectivity
+4. **Authentication failed**: Verify NOSTR extension and relay access
+
+### Debug Information
+- Console logging for all operations
+- Payment request/response tracking
+- Profile validation details
+- Error condition reporting
+
+## URL Parameters
+
+- `qrcode`: AstroID QR code (optional)
+- `pass`: AstroPASS (optional)
+- `g1pub`: Source G1PUB for payment resolution (optional)
+
+## Development Notes
+
+### Local Testing
+1. Start local UPlanet instance
+2. Configure NOSTR relay (strfry)
+3. Set up test MULTIPASS profiles
+4. Test payment flows with CAPTAIN data
+
+### Key Components
+- **processIPFSMediaLinks()**: Handles media content in messages
+- **fetchCaptainData()**: Retrieves CAPTAIN information
+- **sendLikeToCaptain()**: Processes like payments
+- **processWinningPayment()**: Handles final winnings
+
+### Future Enhancements
+- **Tournament Mode**: Multi-player competitions
+- **Leaderboards**: Global and local rankings
+- **Advanced Statistics**: Detailed game analytics
+- **Mobile Optimization**: Responsive design improvements

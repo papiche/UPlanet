@@ -585,11 +585,10 @@ Les clones formés par Made In Zen peuvent choisir :
 5. **Passer** à ZENCARD si besoin de cloud privé
 
 ### Pour S'Engager (Sociétaire)
-1. **Comprendre** l'écosystème Ğ1 et UPlanet
-2. **Contacter** la SCIC CopyLaRadio
-3. **Acquérir** une ou plusieurs actions (6 665 € chacune)
-4. **Participer** aux assemblées générales
-5. **Contribuer** au développement de l'écosystème
+1. **Comprendre** l'écosystème Ğ1 et UPlanet ẐEN
+2. **Acquérir** une ou plusieurs parts de la SCIC CopyLaRadio (50€ sur Satellite ou 540€ sur PC GAMER)
+3. **Participer** aux assemblées générales (validez votre identité en devenant forgeron DU(Ğ1))
+4. **Contribuer** au développement de l'écosystème (votes DU², convertibles en Ğ1 pour alimenter une UPlanet Ẑen de votre choix)
 
 ### Pour Maximiser ses Revenus
 1. **Créer** du contenu de qualité sur NOSTR

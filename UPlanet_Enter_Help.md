@@ -111,7 +111,7 @@ Imaginez Internet comme une ville numérique où vous avez trois options pour "h
 
 ### Accès Principal
 - **UPlanet ORIGIN :** https://ipfs.copylaradio.com/ipns/copylaradio.com
-- **UPlanet Zen [0] :** https://ipfs.g1sms.fr/ipns/copylaradio.com
+- Les sociétaires seront installés sur **UPlanet Zen [0] :** https://ipfs.g1sms.fr/ipns/copylaradio.com
 
 ### Interface de Carte Interactive
 L'interface principale d'UPlanet présente une carte du monde divisée en grilles géographiques :
@@ -180,14 +180,15 @@ UPlanet se connecte automatiquement aux APIs Astroport.ONE :
 
 ```javascript
 // Conversion automatique des URLs
-ipfs.copylaradio.com → astroport.copylaradio.com:1234 (DRAGONS API)
-ipfs.copylaradio.com → u.copylaradio.com:54321 (UPLANET API)
+ipfs.copylaradio.com → astroport.copylaradio.com/12345 (DRAGONS API :12345)
+ipfs.copylaradio.com → u.copylaradio.com (UPLANET API :54321)
 ```
 
 ### Services Disponibles
-- **Port 1234** : API DRAGONS (données des stations)
+- **Port 12345** : API DRAGONS (données des stations)
 - **Port 54321** : API UPassport (données utilisateurs et UMAPs)
 - **Port 8080** : Gateway IPFS
+- **Port 7777** : Gateway NOSTR
 
 ## 💰 Modèle Économique Transparent
 

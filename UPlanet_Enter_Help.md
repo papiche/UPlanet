@@ -44,66 +44,64 @@ Imaginez Internet comme une ville numérique où vous avez trois options pour "h
 - **Participation aux bénéfices** : Dividendes pour les sociétaires
 - **Pas de frais cachés** : Tarification claire et équitable
 
-### 🚀 **Comment Commencer ?**
+## 🚀 Comment Commencer ?
 
-#### **Étape 1 : Comprendre l'Écosystème**
+### Étape 1 : Comprendre l'Écosystème
 - **Lisez cette documentation** pour comprendre les services
 - **Explorez la carte** UPlanet pour voir les communautés actives
 - **Identifiez un Captain** proche de chez vous sur la carte
 
-#### **Étape 2 : Contacter un Captain**
+### Étape 2 : Contacter un Captain
 - **Les Captains** sont vos "agents immobiliers" numériques
 - **Ils vous accompagnent** dans votre installation et formation
 - **Ils gèrent** l'infrastructure technique locale
 - **Ils vous forment** aux outils et à l'écosystème
 
-#### **Étape 3 : Libérer votre Avatar Numérique**
+### Étape 3 : Libérer votre Avatar Numérique
 - **Création d'identité** : Génération de vos clés cryptographiques
 - **Installation des services** : MULTIPASS ou ZENCARD selon vos besoins
 - **Formation personnalisée** : Apprentissage des outils et bonnes pratiques
 - **Intégration communautaire** : Connexion avec les autres utilisateurs
 
-### 🛠️ **Avec Quoi ? Les Outils de Votre Écosystème**
+## 🛠️ Avec Quoi ? Les Outils de Votre Écosystème
 
-#### **MULTIPASS (1 Ẑen/semaine) - Votre "Studio Numérique"**
+### MULTIPASS (1 Ẑen/semaine) - Votre "Studio Numérique"
 - **Identité sécurisée** : Carte MULTIPASS personnelle
 - **Assistant IA personnel** (demo) : #BRO pour toutes vos questions
 - **Réseau social libre** : NOSTR sans censure
 - **Revenus passifs** : Recevez des Ẑen quand on aime vos publications
 
-#### **ZENCARD (4 Ẑen/semaine) - Votre "Appartement Numérique"**
+### ZENCARD (4 Ẑen/semaine) - Votre "Appartement Numérique"
 - **Cloud privé** : NextCloud 128 GB décentralisé
 - **Assistant IA personnel** : #12 mémoires pour vous assister dans vos réponses
 - **Dé-googlisation** : Remplace tous les services GAFAM
 - **Stockage résistant** : IPFS distribué et sécurisé
 - **Tous les avantages MULTIPASS** inclus
 
-#### **Sociétaire CopyLaRadio - Votre "Maison Numérique"**
+### Sociétaire CopyLaRadio - Votre "Maison Numérique"
 - **Propriété partielle** : Actionnaire de la SCIC
 - **Gouvernance** : Participation aux décisions stratégiques
 - **Revenus actifs** : Commissions et dividendes
 - **Formation complète** et support prioritaire
 
-### 🎯 **L'Impact de Votre Choix**
+## 🎯 L'Impact de Votre Choix
 
-#### **Pour Vous**
+### Pour Vous
 - **Souveraineté numérique** : Contrôle total de votre vie en ligne
 - **Revenus supplémentaires** : Monétisation Ẑen de vos créations
 - **Communauté authentique** : Connexions basées sur la confiance
 - **Apprentissage continu** : Développement de compétences numériques
 
-#### **Pour la Société**
+### Pour la Société
 - **Internet libre** : Alternative aux monopoles numériques
 - **Économie locale** : Développement de communautés résilientes
 - **Innovation ouverte** : Technologies libres et accessibles
 - **Démocratie numérique** : Gouvernance participative et transparente
 
-### 📞 **Prochaines Étapes Immédiates**
+### 📞 Prochaines Étapes Immédiates
 
-1. **Explorez la carte** : https://ipfs.copylaradio.com/ipns/copylaradio
-2. **Identifiez un Captain** proche de chez vous
-3. **Contactez-le** pour un accompagnement personnalisé
-4. **Libérez votre avatar numérique** et rejoignez l'écosystème libre
+1. **Explorez la carte** : https://qo-op.com
+2. **Créez un MULTIPASS** le Captain le plus proche vous contactera pour un accompagnement personnalisé
 
 ---
 
@@ -113,7 +111,7 @@ Imaginez Internet comme une ville numérique où vous avez trois options pour "h
 
 ### Accès Principal
 - **UPlanet ORIGIN :** https://ipfs.copylaradio.com/ipns/copylaradio.com
-- **UPlanet Zen [0]** : https://ipfs.g1sms.fr/ipns/copylaradio.com
+- **UPlanet Zen [0] :** https://ipfs.g1sms.fr/ipns/copylaradio.com
 
 ### Interface de Carte Interactive
 L'interface principale d'UPlanet présente une carte du monde divisée en grilles géographiques :
@@ -378,8 +376,9 @@ GET /?uplanet=${EMAIL}&zlat=${LATITUDE}&zlon=${LONGITUDE}&g1pub=${LANGUAGE}
 UPlanet résout les problèmes du Web2 centralisé :
 
 1. **IPFS** : Stockage distribué résistant à la censure
-2. **NOSTR** : Diffusion ouverte sans filtrage algorithmique
+2. **NOSTR** : Diffusion ouverte sans filtrage algorithmique autre que N²
 3. **Clés Géosphériques** : Identité et confiance décentralisées
+4. **Applications Fédiverse** : Profitez de NextCloud (partager vos fichiers avec vos amis) et Peertube (diffuser vos créations sans censure). Chaque Capitaine assure que tous vos besoins logiciels sont couverts !!
 
 ### Qualité vs Quantité
 - **Objectif** : Améliorer la qualité informationnelle
@@ -398,7 +397,8 @@ UPlanet résout les problèmes du Web2 centralisé :
 - `#pierre` / `#amelie` : Synthèse vocale
 - `#mem` : Historique de conversation
 - `#reset` : Réinitialisation mémoire
-- `#rec` : Memorisation IA personnelle
+- `#rec` : Memorisation message par votre IA personnelle
+- `#rec2` : Memorisation de la réponse IA
 
 ### Experimental : Intégration OBS Studio
 - **Enregistrement** à distance via interface web
@@ -413,15 +413,116 @@ UPlanet résout les problèmes du Web2 centralisé :
 - **🛈** : Help this documentation
 - **⛶** : Toggle fullscreen
 
-## 🏢 La SCIC CopyLaRadio
+## 🏢 Made In Zen -> CopyLaRadio -> UPlanet ẐEN[0] 
 
 ### Statuts et Gouvernance
-CopyLaRadio est une Société Coopérative d'Intérêt Collectif (SCIC) qui développe UPlanet :
+Made In Zen est l'entité qui assure et distribue les formations aux créateurs de UPlanet ẐEN[n] :
 
-- **Capital social** : 999 850 € (150 actions de 6 665 € chacune)
-- **Gestion** en Ẑen (stablecoin Ğ1)
+- **Capital social** : 999 850 € (150 actions de 6 665 € chacune - attribuable contre apport liquide ou matériel) 
+- **Gestion** en NEẐ (stablecoin Ğ1)
 - **Collèges d'associés** : Salariés, bénéficiaires, collectivités, bénévoles
 - **Vote quadratique** pour les décisions importantes
+
+### Architecture Multi-Essaim UPlanet
+
+```mermaid
+flowchart TD
+    %% ----- ENTITÉS PRINCIPALES -----
+    subgraph "🏛️ Made In Zen (SCIC Formation)"
+        MIZ[Made In Zen<br/>SCIC Formation<br/>Capital: 999 850€]
+        FORM[Formation<br/>Créateurs UPlanet]
+        CODE[Code Astroport.ONE<br/>Maintenance & Évolution]
+    end
+
+    subgraph "🏢 CopyLaRadio (SCIC Opérationnelle)"
+        CLR[CopyLaRadio<br/>UPlanet ORIGIN<br/>Capital: 6 665€/action]
+        CASH[1/3 Cash Flow<br/>Trésorerie]
+        FAB[1/3 G1FabLab<br/>R&D & Maintenance]
+        FOREST[1/3 Made In Zion<br/>Achat Forêts]
+    end
+
+    subgraph "🌍 Clones UPlanet Zen [n]"
+        CLONE1[Clone 1<br/>UPlanet Zen [1]]
+        CLONE2[Clone 2<br/>UPlanet Zen [2]]
+        CLONE3[Clone N<br/>UPlanet Zen [n]]
+        CHOICE{Choix de<br/>Reversement}
+    end
+
+    %% ----- FLUX DE FORMATION -----
+    MIZ --> FORM
+    FORM --> CLONE1
+    FORM --> CLONE2
+    FORM --> CLONE3
+
+    %% ----- FLUX DE CODE -----
+    CODE --> CLR
+    CODE --> CLONE1
+    CODE --> CLONE2
+    CODE --> CLONE3
+
+    %% ----- REVERSEMENT COPYLARADIO -----
+    CLR --> CASH
+    CLR --> FAB
+    CLR --> FOREST
+
+    %% ----- CHOIX DES CLONES -----
+    CLONE1 --> CHOICE
+    CLONE2 --> CHOICE
+    CLONE3 --> CHOICE
+
+    %% ----- OPTIONS DE REVERSEMENT -----
+    subgraph "📊 Options de Reversement"
+        OPT1[Option 1:<br/>Même système CopyLaRadio<br/>1/3 + 1/3 + 1/3]
+        OPT2[Option 2:<br/>Pacte d'actionnaire<br/>personnalisé]
+    end
+
+    CHOICE --> OPT1
+    CHOICE --> OPT2
+
+    %% ----- STYLING -----
+    style MIZ fill:#A78BFA,stroke:#333,stroke-width:2px,color:white
+    style CLR fill:#F0ABFC,stroke:#333,stroke-width:2px,color:white
+    style CLONE1 fill:#86EFAC,stroke:#333,stroke-width:2px,color:black
+    style CLONE2 fill:#86EFAC,stroke:#333,stroke-width:2px,color:black
+    style CLONE3 fill:#86EFAC,stroke:#333,stroke-width:2px,color:black
+    style CASH fill:#FCA5A5,stroke:#333,stroke-width:2px,color:white
+    style FAB fill:#FCD34D,stroke:#333,stroke-width:2px,color:black
+    style FOREST fill:#10B981,stroke:#333,stroke-width:2px,color:white
+    style OPT1 fill:#93C5FD,stroke:#333,stroke-width:2px,color:white
+    style OPT2 fill:#5EEAD4,stroke:#333,stroke-width:2px,color:black
+
+    %% ----- COULEURS DES LIENS -----
+    linkStyle 0 stroke:#8B5CF6,stroke-width:3px
+    linkStyle 1 stroke:#8B5CF6,stroke-width:3px
+    linkStyle 2 stroke:#8B5CF6,stroke-width:3px
+    linkStyle 3 stroke:#F0ABFC,stroke-width:3px
+    linkStyle 4 stroke:#F0ABFC,stroke-width:3px
+    linkStyle 5 stroke:#F0ABFC,stroke-width:3px
+    linkStyle 6 stroke:#EC4899,stroke-width:3px
+    linkStyle 7 stroke:#EC4899,stroke-width:3px
+    linkStyle 8 stroke:#EC4899,stroke-width:3px
+    linkStyle 9 stroke:#86EFAC,stroke-width:3px
+    linkStyle 10 stroke:#86EFAC,stroke-width:3px
+    linkStyle 11 stroke:#86EFAC,stroke-width:3px
+    linkStyle 12 stroke:#3B82F6,stroke-width:2px
+    linkStyle 13 stroke:#10B981,stroke-width:2px
+```
+
+### Système de Reversement CopyLaRadio
+
+#### Répartition Équitable des Surplus
+CopyLaRadio applique un système de reversement transparent et équitable :
+
+1. **1/3 Cash Flow** : Trésorerie pour le fonctionnement quotidien
+2. **1/3 G1FabLab** : Recherche & Développement, maintenance technique
+3. **1/3 Made In Zion** : Impact environnemental (achat de forêts)
+
+#### Flexibilité pour les Clones
+Les clones formés par Made In Zen peuvent choisir :
+
+- **Option 1** : Adopter le même système de reversement que CopyLaRadio
+- **Option 2** : Créer leur propre pacte d'actionnaire personnalisé
+- **Avantage** : Bénéficier du code Astroport.ONE maintenu par la communauté
 
 ### Pourquoi Devenir Sociétaire ?
 

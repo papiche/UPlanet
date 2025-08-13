@@ -441,10 +441,10 @@ flowchart TD
         FOREST[1/3 Made In Zion<br/>Achat Forêts]
     end
 
-    subgraph "🌍 Clones UPlanet Zen [n]"
-        CLONE1[Clone 1<br/>UPlanet Zen [1]]
-        CLONE2[Clone 2<br/>UPlanet Zen [2]]
-        CLONE3[Clone N<br/>UPlanet Zen [n]]
+    subgraph "🌍 Clones UPlanet Zen"
+        CLONE1[Clone 1<br/>UPlanet Zen 1]
+        CLONE2[Clone 2<br/>UPlanet Zen 2]
+        CLONE3[Clone N<br/>UPlanet Zen N]
         CHOICE{Choix de<br/>Reversement}
     end
 

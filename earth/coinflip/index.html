@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="fr">
 <head>
   <meta charset="UTF-8">
   <meta http-equiv="content-type" content="text/html; charset=UTF-8">
   <link rel="icon" type="image/x-icon" href="./favicon.ico">
-  <title>Coin Flip App</title>
+  <title>Jeu de Pile ou Face</title>
   <style>
     :root {
       --bg: linear-gradient(180deg, #f8fbff, #ffffff);
@@ -510,34 +510,34 @@
   <div class="container">
     <header>
       <div>
-        <div class="title">Coin Flip</div>
-        <div class="subtitle">St. Petersburg paradox — flip until tails. Payout doubles on each head. Each flip (after first) sends like to CAPTAIN → 1 ẐEN received. See CAPTAIN balances below!</div>
+        <div class="title">Pile ou Face</div>
+        <div class="subtitle">Paradoxe de Saint-Pétersbourg — lancez jusqu'à obtenir face. Les gains doublent à chaque pile. Quand vous obtenez FACE (défaite), vous envoyez 1 ẐEN au CAPITAINE via like. Voir les soldes du CAPITAINE ci-dessous !</div>
       </div>
-      <div id="modeBadge" class="status practice">Practice mode • no payout</div>
+      <div id="modeBadge" class="status practice">Mode entraînement • pas de gains</div>
     </header>
     <div id="arena" class="card">
       <div>
         <div id="countdown">
-          <img id="coin" src="/ipfs/QmYCKyYnYDGq6U7WuMmUoF7v5okvzoEThgYyKj9AzJPeP2" alt="Coin">
+          <img id="coin" src="/ipfs/QmYCKyYnYDGq6U7WuMmUoF7v5okvzoEThgYyKj9AzJPeP2" alt="Pièce">
         </div>
       </div>
       <div class="panel">
-        <h3>Game status</h3>
+        <h3>État du jeu</h3>
         <div id="ainfo" style="margin-top:8px">
-          <div id="message"><p>Click the coin to flip.</p></div>
+          <div id="message"><p>Cliquez sur la pièce pour la lancer.</p></div>
         </div>
       </div>
     </div>
     
     <div class="card" id="auth">
       <div class="actions">
-        <button id="loginBtn" class="btn primary">Connect with Nostr</button>
+        <button id="loginBtn" class="btn primary">Se connecter avec Nostr</button>
         <span id="authStatus" class="muted"></span>
       </div>
       <div id="profileCard" class="p-card" style="display:none">
         <div id="pBanner" class="p-banner"></div>
         <div class="p-body">
-          <img id="pPic" class="p-pic" alt="profile"/>
+          <img id="pPic" class="p-pic" alt="profil"/>
           <div>
             <div id="pName" class="p-name"></div>
             <div id="pAbout" class="p-about"></div>
@@ -609,7 +609,8 @@
         // Display CAPTAIN balances in the UI
         displayCaptainBalances(captainBalances, firstMessage, captainProfile);
         
-        return { 
+        // Store CAPTAIN data globally for use in game
+        window.captainData = { 
           captainHex, 
           firstMessage, 
           captainG1pub, 
@@ -618,6 +619,8 @@
           captainProfile,
           sruUrl 
         };
+        
+        return window.captainData;
       } catch (error) {
         console.error('[CAPTAIN] Error fetching ASTROPORT data:', error);
         return null;
@@ -831,7 +834,7 @@
       }
     }
 
-    // Function to send like to CAPTAIN (triggers 1 Ẑen payment via relay 7.sh)
+    // Function to send like to CAPTAIN (triggers 1 Ẑen payment FROM player TO captain via relay 7.sh)
     async function sendLikeToCaptain() {
       try {
         console.log('[LIKE] Starting like send to CAPTAIN');
@@ -1009,9 +1012,9 @@
       // Add info about likes and payments
       const isLiveMode = window.isPaid && userPubkey;
       if (isLiveMode) {
-        balanceHTML += '<div class="balance-info">💡 Live mode: Likes trigger real 1 ẐEN payments</div>';
+        balanceHTML += '<div class="balance-info">💡 Mode réel : FACE déclenche un vrai paiement de 1 ẐEN du joueur au CAPITAINE</div>';
       } else {
-        balanceHTML += '<div class="balance-info">💡 Practice mode: Likes simulated, no real payments</div>';
+        balanceHTML += '<div class="balance-info">💡 Mode entraînement : Paiement FACE simulé, pas de vrais paiements</div>';
       }
       
       balanceHTML += '</div>'; // Close accordion content
@@ -1029,36 +1032,36 @@
       if (userPubkey && window.userProfile && window.userProfile.g1pub) {
         // Live mode: process real payment
         messageEl.innerHTML = `<div class="win-display">
-          <div class="win-label">💰 CASHED OUT! 💰</div>
+          <div class="win-label">💰 ENCAISSÉ ! 💰</div>
           <div class="win-amount">${amount}</div>
           <div class="win-currency">ZEN</div>
-          <div class="win-status">Processing payment...</div>
+          <div class="win-status">Traitement du paiement...</div>
         </div>`;
         
         // Process winning payment
         const success = await processWinningPayment(amount, userPubkey);
         if (success) {
           messageEl.innerHTML = `<div class="win-display">
-            <div class="win-label">💰 CASHED OUT! 💰</div>
+            <div class="win-label">💰 ENCAISSÉ ! 💰</div>
             <div class="win-amount">${amount}</div>
             <div class="win-currency">ZEN</div>
-            <div class="win-status success">✓ Payment sent!</div>
+            <div class="win-status success">✓ Paiement envoyé !</div>
           </div>`;
         } else {
           messageEl.innerHTML = `<div class="win-display">
-            <div class="win-label">💰 CASHED OUT! 💰</div>
+            <div class="win-label">💰 ENCAISSÉ ! 💰</div>
             <div class="win-amount">${amount}</div>
             <div class="win-currency">ZEN</div>
-            <div class="win-status error">⚠ Payment failed</div>
+            <div class="win-status error">⚠ Paiement échoué</div>
           </div>`;
         }
       } else {
         // Practice mode: show simulated cashout
         messageEl.innerHTML = `<div class="win-display">
-          <div class="win-label">💰 CASHED OUT! 💰</div>
+          <div class="win-label">💰 ENCAISSÉ ! 💰</div>
           <div class="win-amount">${amount}</div>
           <div class="win-currency">Ẑen</div>
-          <div class="win-status">Simulated</div>
+          <div class="win-status">Simulé</div>
         </div>`;
       }
       
@@ -1090,10 +1093,10 @@
       if (userPubkey && window.userProfile && window.userProfile.g1pub) {
         badge.className = 'status ready';
         if (window.userProfile.balance !== undefined) {
-          badge.textContent = `Ready to play • Balance: ${window.userProfile.balance} ẐEN • Likes → 1 ẐEN`;
+          badge.textContent = `Prêt à jouer • Solde : ${window.userProfile.balance} ẐEN • FACE → envoyer 1 ẐEN au CAPITAINE`;
           console.log('[MODE] Set to READY mode with balance:', window.userProfile.balance);
         } else {
-          badge.textContent = 'Ready to play • MULTIPASS verified • Likes → 1 ẐEN';
+          badge.textContent = 'Prêt à jouer • MULTIPASS vérifié • FACE → envoyer 1 ẐEN au CAPITAINE';
           console.log('[MODE] Set to READY mode without balance');
         }
         
@@ -1107,7 +1110,7 @@
           // Update initial message for live mode
           const messageEl = document.getElementById('message');
           if (messageEl) {
-            messageEl.innerHTML = '<p>Click the coin to flip.<br><small>💡 Live mode: Real payouts! First flip free, then each flip sends like to CAPTAIN → 1 ẐEN received</small></p>';
+            messageEl.innerHTML = '<p>Cliquez sur la pièce pour la lancer.<br><small>💡 Mode réel : PILE = doubler la cagnotte, FACE = perdre la cagnotte et envoyer 1 ẐEN au CAPITAINE</small></p>';
           }
           
           // Reset coin image for live mode
@@ -1118,13 +1121,13 @@
         }
       } else if (userPubkey) {
         badge.className = 'status practice';
-        badge.textContent = 'Practice mode • MULTIPASS required • Likes simulated';
+        badge.textContent = 'Mode entraînement • MULTIPASS requis • Paiement FACE simulé';
         console.log('[MODE] Set to PRACTICE mode - no MULTIPASS');
         // Reset game state for practice mode
         window.gameResetForLiveMode = false;
       } else {
         badge.className = 'status practice';
-        badge.textContent = 'Practice mode • connect to play • Likes simulated';
+        badge.textContent = 'Mode entraînement • se connecter pour jouer • Paiement FACE simulé';
         console.log('[MODE] Set to PRACTICE mode - not connected');
         // Reset game state for practice mode
         window.gameResetForLiveMode = false;
@@ -1188,20 +1191,20 @@
       const loginBtn = document.getElementById('loginBtn');
       const authStatus = document.getElementById('authStatus');
       if (!window.nostr || typeof window.nostr.getPublicKey !== 'function') {
-        alert('Nostr extension required to login.');
+        alert('Extension Nostr requise pour se connecter.');
         return;
       }
       try {
         console.log('[LOGIN] Starting login sequence');
         loginBtn.disabled = true;
-        authStatus.textContent = 'Requesting public key...';
+        authStatus.textContent = 'Demande de clé publique...';
         const pubkey = await window.nostr.getPublicKey();
-        if (!pubkey) throw new Error('No public key returned');
+        if (!pubkey) throw new Error('Aucune clé publique retournée');
         userPubkey = pubkey;
         console.log('[LOGIN] Got public key:', pubkey.substring(0, 8) + '...');
         
-        loginBtn.textContent = 'Authorizing...';
-        authStatus.textContent = 'Connecting to Nostr relay...';
+        loginBtn.textContent = 'Autorisation...';
+        authStatus.textContent = 'Connexion au relais Nostr...';
         console.log('[LOGIN] Connecting to relay...');
         await connectToRelay();
         
@@ -1212,7 +1215,7 @@
         // CAPTAIN data is already fetched once at page load, no need to fetch again
       } catch (e) {
         console.error('[LOGIN] Login failed:', e);
-        alert('Login failed. Please authorize in your Nostr extension.');
+        alert('Connexion échouée. Veuillez autoriser dans votre extension Nostr.');
         loginBtn.disabled = false;
         authStatus.textContent = '';
       }
@@ -1228,7 +1231,7 @@
         const pFields = document.getElementById('pFields');
         const payBtn = document.getElementById('payBtn');
         profileCard.style.display = 'block';
-        pName.textContent = 'Loading profile...';
+        pName.textContent = 'Chargement du profil...';
 
         // Minimal profile fetch (kind 0) via SimplePool when available
         let name = hexPubkey.substring(0, 16);
@@ -1348,7 +1351,7 @@
           g1pubFromProfile
         });
         
-        pName.innerHTML = `${name} <span class="muted">(${short})</span>${hasG1pub ? ' • <span style="color:#22c55e">MULTIPASS</span>' : ''}${hasZencard ? ' • <span style="color:#f59e0b">ZENCARD</span>' : ''}`;
+        pName.innerHTML = `${name} <span class="muted">(${short})</span>${hasG1pub ? ' • <span style="color:#22c55e">MULTIPASS</span>' : ' • <span style="color:#ef4444">Pas de MULTIPASS</span>'}${hasZencard ? ' • <span style="color:#f59e0b">ZENCARD</span>' : ''}`;
         pAbout.textContent = about || '';
         pFields.innerHTML = '';
         
@@ -1471,6 +1474,18 @@
           // Clear profile information for non-MULTIPASS users
           window.userProfile = null;
           console.log('[Profile] No MULTIPASS detected');
+          
+          // Add help message for getting MULTIPASS
+          const helpChip = document.createElement('div');
+          helpChip.className = 'p-chip';
+          helpChip.style.backgroundColor = '#fef3c7';
+          helpChip.style.color = '#92400e';
+          helpChip.style.cursor = 'pointer';
+          helpChip.textContent = '💡 Comment obtenir un MULTIPASS ?';
+          helpChip.onclick = () => {
+            alert('Pour obtenir un MULTIPASS :\n\n1. Ajoutez un tag "i" avec "g1pub:VOTRE_CLE_G1" dans votre profil NOSTR\n2. Ou visitez votre Astroport local pour créer un MULTIPASS\n3. Le MULTIPASS vous permet de jouer en mode réel avec de vrais paiements ZEN');
+          };
+          pFields.appendChild(helpChip);
         }
         
         // Update mode badge to reflect current state (only once after profile is complete)
@@ -1547,8 +1562,8 @@
               authEventPublished = true;
               const loginBtn = document.getElementById('loginBtn');
               const authStatus = document.getElementById('authStatus');
-              loginBtn.textContent = `Connected: ${userPubkey.substring(0,6)}...${userPubkey.substring(userPubkey.length-4)}`;
-              authStatus.textContent = 'NIP-42 authorized. Ready to play.';
+              loginBtn.textContent = `Connecté: ${userPubkey.substring(0,6)}...${userPubkey.substring(userPubkey.length-4)}`;
+              authStatus.textContent = 'NIP-42 autorisé. Prêt à jouer.';
               updateModeBadge();
               // Fetch profile now that we're fully connected
               fetchAndDisplayProfile(userPubkey).catch(console.warn);
@@ -1566,8 +1581,8 @@
             console.log('[NIP-42] No relay challenge; proactive AUTH/EVENT was attempted earlier');
             const loginBtn = document.getElementById('loginBtn');
             const authStatus = document.getElementById('authStatus');
-            loginBtn.textContent = `Connected: ${userPubkey.substring(0,6)}...${userPubkey.substring(userPubkey.length-4)}`;
-            authStatus.textContent = 'Relay did not request NIP-42. Ready to play.';
+            loginBtn.textContent = `Connecté: ${userPubkey.substring(0,6)}...${userPubkey.substring(userPubkey.length-4)}`;
+            authStatus.textContent = 'Le relais n\'a pas demandé NIP-42. Prêt à jouer.';
             // Fetch profile now that we're fully connected
             fetchAndDisplayProfile(userPubkey).catch(console.warn);
             // No need to update mode badge again, it will be done in fetchAndDisplayProfile
@@ -1625,9 +1640,12 @@
             authEventPublished = true;
             const loginBtn = document.getElementById('loginBtn');
             const authStatus = document.getElementById('authStatus');
-            loginBtn.textContent = `Connected: ${userPubkey.substring(0,6)}...${userPubkey.substring(userPubkey.length-4)}`;
-            authStatus.textContent = 'NIP-42 event sent.';
-            // No need to update mode badge here, it will be done after profile fetch
+          loginBtn.textContent = `Connecté: ${userPubkey.substring(0,6)}...${userPubkey.substring(userPubkey.length-4)}`;
+          authStatus.textContent = 'Événement NIP-42 envoyé. Récupération du profil...';
+          // Fetch profile now that we're connected
+          fetchAndDisplayProfile(userPubkey).catch(console.warn);
+          // Update mode badge after profile fetch
+          setTimeout(() => updateModeBadge(), 1000);
         } catch (e) { console.warn('EVENT 22242 publish failed', e); }
       } catch (e) { console.warn('sendProactiveAuth error', e); }
     }
@@ -1775,17 +1793,33 @@
         // Check if user is on the correct Astroport for their MULTIPASS
         if (userPubkey && window.userProfile && window.userProfile.g1pub) {
           const currentHostname = window.location.hostname;
-          const isOnAstroport = currentHostname.includes('astroport.') || currentHostname.includes('127.0.0.1') || currentHostname.includes('localhost');
+          // Allow Astroport domains and their IPFS gateways
+          const isOnAstroport = currentHostname.includes('astroport.') || 
+                                currentHostname.includes('127.0.0.1') || 
+                                currentHostname.includes('localhost') ||
+                                currentHostname.includes('copylaradio.com') || // Allow all copylaradio.com subdomains
+                                currentHostname.includes('ipfs.') && currentHostname.includes('.com'); // Allow IPFS gateways
+          
+          console.log('[GAME] Astroport check:', {
+            hostname: currentHostname,
+            isOnAstroport: isOnAstroport,
+            checks: {
+              astroport: currentHostname.includes('astroport.'),
+              localhost: currentHostname.includes('127.0.0.1') || currentHostname.includes('localhost'),
+              copylaradio: currentHostname.includes('copylaradio.com'),
+              ipfs: currentHostname.includes('ipfs.') && currentHostname.includes('.com')
+            }
+          });
           
           if (!isOnAstroport) {
             console.warn('[GAME] User with MULTIPASS trying to play outside Astroport');
             const messageEl = document.getElementById('message');
             if (messageEl) {
               messageEl.innerHTML = `<div class="win-display">
-                <div class="win-label">⚠️ Astroport Required</div>
+                <div class="win-label">⚠️ Astroport Requis</div>
                 <div class="win-amount">MULTIPASS</div>
-                <div class="win-currency">Only</div>
-                <div class="win-status">This game can only be played on the Astroport where your MULTIPASS is registered</div>
+                <div class="win-currency">Seulement</div>
+                <div class="win-status">Ce jeu ne peut être joué que sur l'Astroport où votre MULTIPASS est enregistré</div>
               </div>`;
             }
             return;
@@ -1796,24 +1830,8 @@
 
           isFlipping = true;
           
-          // Send like to CAPTAIN if not first click (triggers 1 Ẑen payment)
-          if (!isFirstClick) {
-            console.log('[GAME] Not first click, sending like to CAPTAIN');
-            if (userPubkey && window.userProfile && window.userProfile.g1pub) {
-              console.log('[GAME] Live mode: Sending like to CAPTAIN for coin flip (1 Ẑen payment)');
-              sendLikeToCaptain().then(success => {
-                if (success) {
-                  console.log('[GAME] Like sent successfully, 1 Ẑen payment should be processed');
-                } else {
-                  console.warn('[GAME] Failed to send like to CAPTAIN');
-                }
-              });
-            } else {
-              console.log('[GAME] Practice mode: Like would be sent to CAPTAIN (1 Ẑen payment)');
-            }
-          } else {
-            console.log('[GAME] First click - no like sent to CAPTAIN');
-          }
+          // Note: Like to CAPTAIN will be sent only if TAILS (game loss) occurs
+          console.log('[GAME] Coin flip initiated - like will be sent to CAPTAIN only if TAILS (loss)');
           
           // Show flipping message
           const messageEl = document.getElementById('message');
@@ -1824,7 +1842,7 @@
             return;
           }
           
-          messageEl.innerHTML = '<div class="flipping-display"><div class="flipping-icon">🪙</div><div class="flipping-text">Flipping coin...</div></div>';
+          messageEl.innerHTML = '<div class="flipping-display"><div class="flipping-icon">🪙</div><div class="flipping-text">Lancement de la pièce...</div></div>';
           coinEl.style.transform = 'rotateY(360deg)';
         setTimeout(() => {
           // Use cryptographically strong randomness instead of Math.random()
@@ -1853,29 +1871,49 @@
                   msgEl1.innerHTML = `<div class="gain-display">
                     <div class="gain-amount">${potentialGain}</div>
                     <div class="gain-currency">ZEN</div>
-                    <div class="gain-streak">Streak: ${consecutiveHeads}</div>
-                    <div class="gain-next">Next: ${Math.pow(2, consecutiveHeads + 1)} ZEN</div>
+                    <div class="gain-streak">Série : ${consecutiveHeads} PILE</div>
+                    <div class="gain-next">Prochain PILE : ${Math.pow(2, consecutiveHeads + 1)} ZEN • FACE : tout perdre + envoyer 1 ẐEN au CAPITAINE</div>
                     <button class="cashout-btn" onclick="cashoutGains(${potentialGain})">💰 ENCAISSER</button>
-                    <div class="practice-info">💡 Live mode: Real payouts! Continue or cash out now</div>
+                    <div class="practice-info">💡 Mode réel : Continuez pour doubler ou encaissez maintenant !</div>
                   </div>`;
                 } else {
                   msgEl1.innerHTML = `<div class="gain-display">
                     <div class="gain-amount">${potentialGain}</div>
                     <div class="gain-currency">Ẑen</div>
-                    <div class="gain-streak">Streak: ${consecutiveHeads}</div>
-                    <div class="gain-next">Next: ${Math.pow(2, consecutiveHeads + 1)} Ẑen</div>
+                    <div class="gain-streak">Série : ${consecutiveHeads} PILE</div>
+                    <div class="gain-next">Prochain PILE : ${Math.pow(2, consecutiveHeads + 1)} Ẑen • FACE : tout perdre + envoyer 1 Ẑen au CAPITAINE</div>
                     <button class="cashout-btn" onclick="cashoutGains(${potentialGain})">💰 ENCAISSER</button>
-                    <div class="practice-info">💡 Practice mode: Continue or cash out now</div>
+                    <div class="practice-info">💡 Mode entraînement : Continuez pour doubler ou encaissez maintenant !</div>
                   </div>`;
                 }
               }
 
             } else {
-             // St. Petersburg paradox: 2⁰ = 1, 2¹ = 2, 2² = 4, 2³ = 8, 2⁴ = 16...
-             // When tails is flipped, the game ends and user wins the current streak value
-             let capped = Math.pow(2, consecutiveHeads);
+             // St. Petersburg paradox: When TAILS appears, player loses everything and sends 1 ZEN to CAPTAIN
+             // Send like to CAPTAIN (triggers 1 Ẑen payment FROM player TO captain)
+             console.log('[GAME] Tails result - game ends, player loses cagnotte and sends 1 ZEN to CAPTAIN');
              
-             console.log('[GAME] Tails result - game ends, final gain:', capped, 'from streak:', consecutiveHeads, 'formula: 2^' + consecutiveHeads + ' = ' + capped);
+             // Send like to CAPTAIN (player pays 1 ZEN to captain)
+             console.log('[GAME] TAILS - checking conditions for like sending:');
+             console.log('[GAME] - userPubkey:', userPubkey ? userPubkey.substring(0, 8) + '...' : 'none');
+             console.log('[GAME] - window.userProfile:', window.userProfile);
+             console.log('[GAME] - window.captainData:', window.captainData);
+             
+             if (userPubkey && window.userProfile && window.userProfile.g1pub) {
+               console.log('[GAME] Live mode: Sending like to CAPTAIN for TAILS (player pays 1 Ẑen to captain)');
+               sendLikeToCaptain().then(success => {
+                 if (success) {
+                   console.log('[GAME] Like sent successfully, player paid 1 Ẑen to CAPTAIN');
+                 } else {
+                   console.warn('[GAME] Failed to send like to CAPTAIN');
+                 }
+               }).catch(error => {
+                 console.error('[GAME] Error sending like to CAPTAIN:', error);
+               });
+             } else {
+               console.log('[GAME] Practice mode: Like would be sent to CAPTAIN (player would pay 1 Ẑen to captain)');
+               console.log('[GAME] Conditions not met for live mode like sending');
+             }
 
                 // STOP CLIC
                 event.stopPropagation();
@@ -1883,59 +1921,40 @@
 
                         var info = document.getElementById("ainfo");
             if (userPubkey && window.userProfile && window.userProfile.g1pub) {
-              // Winner - process payment
+              // TAILS = Loss but with 1 ZEN compensation
               const msgEl2 = document.getElementById('message');
               if (msgEl2) { 
-                msgEl2.innerHTML = `<div class="win-display">
-                  <div class="win-label">🎉 YOU WIN! 🎉</div>
-                  <div class="win-amount">${capped}</div>
+                msgEl2.innerHTML = `<div class="win-display" style="background: linear-gradient(135deg, #fecaca, #fca5a5); border-color: #ef4444;">
+                  <div class="win-label">💔 FACE - JEU TERMINÉ 💔</div>
+                  <div class="win-amount">1</div>
                   <div class="win-currency">ZEN</div>
-                  <div class="win-status">Processing payment...</div>
+                  <div class="win-status">Envoi du paiement au CAPITAINE...</div>
+                  <div class="practice-info">Cagnotte perdue : ${Math.pow(2, consecutiveHeads)} ZEN • Paiement au CAPITAINE : 1 ZEN</div>
                 </div>`; 
               }
               
-              // Process winning payment
-              processWinningPayment(capped, userPubkey).then(success => {
-                if (success) {
+              // No winning payment - just the 1 ZEN compensation from like
+              setTimeout(() => {
                   if (msgEl2) {
-                    msgEl2.innerHTML = `<div class="win-display">
-                      <div class="win-label">🎉 YOU WIN! 🎉</div>
-                      <div class="win-amount">${capped}</div>
+                  msgEl2.innerHTML = `<div class="win-display" style="background: linear-gradient(135deg, #fecaca, #fca5a5); border-color: #ef4444;">
+                    <div class="win-label">💔 TAILS - GAME OVER 💔</div>
+                    <div class="win-amount">1</div>
                       <div class="win-currency">ZEN</div>
-                      <div class="win-status success">✓ Payment sent!</div>
+                    <div class="win-status success">✓ Paiement envoyé au CAPITAINE !</div>
+                    <div class="practice-info">Cagnotte perdue : ${Math.pow(2, consecutiveHeads)} ZEN • Paiement au CAPITAINE : 1 ZEN</div>
                     </div>`;
                   }
+              }, 2000);
                 } else {
-                  if (msgEl2) {
-                    msgEl2.innerHTML = `<div class="win-display">
-                      <div class="win-label">🎉 YOU WIN! 🎉</div>
-                      <div class="win-amount">${capped}</div>
-                      <div class="win-currency">ZEN</div>
-                      <div class="win-status error">⚠ Payment failed</div>
-                    </div>`;
-                  }
-                }
-              }).catch(error => {
-                console.error('Payment processing error:', error);
-                if (msgEl2) {
-                  msgEl2.innerHTML = `<div class="win-display">
-                    <div class="win-label">🎉 YOU WIN! 🎉</div>
-                    <div class="win-amount">${capped}</div>
-                    <div class="win-currency">ZEN</div>
-                    <div class="win-status error">⚠ Payment error</div>
-                  </div>`;
-                }
-              });
-            } else {
-                // Practice mode: no payout, just display simulated gain
+                // Practice mode: show simulated loss with compensation
                 const msgEl3 = document.getElementById('message');
                 if (msgEl3) { 
-                  msgEl3.innerHTML = `<div class="win-display">
-                    <div class="win-label">🎯 Practice Win! 🎯</div>
-                    <div class="win-amount">${capped}</div>
+                  msgEl3.innerHTML = `<div class="win-display" style="background: linear-gradient(135deg, #fecaca, #fca5a5); border-color: #ef4444;">
+                    <div class="win-label">💔 FACE - JEU TERMINÉ 💔</div>
+                    <div class="win-amount">1</div>
                     <div class="win-currency">Ẑen</div>
-                    <div class="win-status">Simulated</div>
-                    <div class="practice-info">💡 In live mode: Like sent to CAPTAIN → 1 Ẑen received</div>
+                    <div class="win-status">Paiement (simulé)</div>
+                    <div class="practice-info">Cagnotte perdue : ${Math.pow(2, consecutiveHeads)} Ẑen • Paiement au CAPITAINE : 1 Ẑen</div>
                   </div>`; 
                 }
               }
@@ -1948,7 +1967,7 @@
                 
                 // Reset message to initial state
                 if (messageEl) {
-                  messageEl.innerHTML = '<p>Click the coin to flip.<br><small>💡 First flip free, then each flip sends like to CAPTAIN → 1 ẐEN received</small></p>';
+                  messageEl.innerHTML = '<p>Cliquez sur la pièce pour la lancer.<br><small>💡 PILE = doubler la cagnotte, FACE = perdre la cagnotte et envoyer 1 ẐEN au CAPITAINE</small></p>';
                 }
               if (coinEl) {
                 coinEl.src = '/ipfs/QmeZhZ6yR6YHhiZ9qfBUCA1RKUP83dZL6MtU4PCBrdzjWn'; // Coin Pile Icon
@@ -1973,7 +1992,7 @@
       // Set initial message
       const messageEl = document.getElementById('message');
       if (messageEl) {
-        messageEl.innerHTML = '<p>Click the coin to flip.<br><small>💡 First flip free, then each flip sends like to CAPTAIN → 1 ẐEN received</small></p>';
+        messageEl.innerHTML = '<p>Cliquez sur la pièce pour la lancer.<br><small>💡 PILE = doubler la cagnotte, FACE = perdre la cagnotte et envoyer 1 ẐEN au CAPITAINE</small></p>';
       }
       
       // Fetch CAPTAIN data ONCE at page load (not related to user login)
@@ -1997,7 +2016,7 @@
       setTimeout(() => {
         if (!window.nostr || typeof window.nostr.getPublicKey !== 'function') {
           loginBtn.disabled = true;
-          loginBtn.textContent = 'Nostr Extension Required';
+          loginBtn.textContent = 'Extension Nostr Requise';
         }
       }, 400);
       loginBtn.addEventListener('click', handleLogin);

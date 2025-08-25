@@ -9,12 +9,12 @@ A web-based implementation of the St. Petersburg paradox coin flip game, integra
 ### St. Petersburg Paradox
 - **Progressive Payouts**: Payout doubles on each consecutive heads (2⁰ = 1, 2¹ = 2, 2² = 4, 2³ = 8...)
 - **Risk vs Reward**: Players can choose to cash out at any time or continue flipping
-- **Game End**: Game ends when tails appears, player loses and sends like to CAPTAIN
+- **Game End**: Game ends when tails appears, player loses cagnotte and sends 1 ẐEN to CAPTAIN
 
 ### Player Choice System
 - **Cash Out**: Secure current winnings and end the game successfully
 - **Continue**: Risk everything for double the payout on next flip
-- **Lose Everything**: If tails appears, player loses all potential winnings and sends like to CAPTAIN
+- **Tails Result**: Player loses all potential winnings and sends 1 ẐEN to CAPTAIN
 
 ## Authentication & Payment System
 
@@ -25,22 +25,22 @@ A web-based implementation of the St. Petersburg paradox coin flip game, integra
 ### Payment Flow
 1. **Player MULTIPASS**: Used for player identification and balance checking
 2. **CAPTAIN MULTIPASS**: All transactions are processed through CAPTAIN's wallet
-3. **Like System**: Each flip (after first) sends a like to CAPTAIN → triggers 1 ẐEN payment
-4. **Winnings**: Paid directly to player's MULTIPASS from CAPTAIN's wallet
+3. **Payment System**: When TAILS appears, player sends like to CAPTAIN → triggers 1 ẐEN payment from player to CAPTAIN
+4. **Winnings**: Paid directly to player's MULTIPASS from CAPTAIN's wallet when cashing out
 
 ## Game Modes
 
 ### Practice Mode
 - **No Authentication**: Available to all users
 - **Simulated Payments**: No real money involved
-- **Like Simulation**: Likes to CAPTAIN are simulated, no real payments
+- **Payment Simulation**: TAILS payment from player to CAPTAIN is simulated, no real payments
 - **Educational**: Learn game mechanics without financial risk
 
 ### Live Mode
 - **MULTIPASS Required**: Must have valid MULTIPASS in NOSTR profile
 - **Real Payments**: All transactions use real ZEN currency
-- **Like Payments**: Each flip sends like to CAPTAIN → 1 ẐEN payment processed
-- **Winning Payouts**: Real ZEN payments sent to winner's MULTIPASS
+- **Loss Payments**: TAILS sends like to CAPTAIN → 1 ẐEN payment from player to CAPTAIN processed
+- **Winning Payouts**: Real ZEN payments sent to winner's MULTIPASS when cashing out
 
 ## Technical Implementation
 
@@ -56,10 +56,10 @@ A web-based implementation of the St. Petersburg paradox coin flip game, integra
 - **Transaction Destination**: Player's MULTIPASS (g1dest parameter)
 - **API Endpoint**: `/zen_send` via uSPOT API
 
-### Like System
-- **NOSTR Event**: Kind 7 (reaction) sent to CAPTAIN's first message
-- **Payment Trigger**: Like triggers 1 ẐEN payment from CAPTAIN to player
-- **Relay Processing**: 7.sh script on relay processes the payment
+### Loss Payment System
+- **NOSTR Event**: Kind 7 (reaction) sent to CAPTAIN's first message when TAILS occurs
+- **Payment Trigger**: Like triggers 1 ẐEN payment from player to CAPTAIN
+- **Relay Processing**: 7.sh script on relay processes the payment from player to CAPTAIN
 
 ## Game Flow
 
@@ -70,19 +70,19 @@ A web-based implementation of the St. Petersburg paradox coin flip game, integra
 - Balance is verified via uSPOT API
 
 ### 2. Game Initialization
-- First flip is free (no like sent to CAPTAIN)
+- Game starts immediately with first flip
 - Game mode determined (Practice vs Live)
 - CAPTAIN data fetched for payment processing
 
 ### 3. Gameplay Loop
-- **Heads**: Continue flipping, payout doubles, like sent to CAPTAIN
-- **Tails**: Game ends, player loses all potential winnings, like sent to CAPTAIN
+- **Heads**: Continue flipping, payout doubles, no payment
+- **Tails**: Game ends, player loses all potential winnings, like sent to CAPTAIN → 1 ẐEN payment sent to CAPTAIN
 - **Cash Out**: Player can secure winnings at any time and end game successfully
 
 ### 4. Payment Processing
-- **Like Payment**: 1 ẐEN sent to player for each flip (after first)
+- **Loss Payment**: 1 ẐEN sent from player to CAPTAIN when TAILS appears
 - **Winning Payment**: Final winnings sent to player's MULTIPASS (only if player cashes out)
-- **Losing Payment**: When tails appears, player loses all potential winnings and sends like to CAPTAIN
+- **Loss Event**: When tails appears, player loses all potential winnings and sends 1 ẐEN to CAPTAIN
 - **Transaction Source**: CAPTAIN's MULTIPASS wallet
 - **Confirmation**: Payment status displayed to player
 

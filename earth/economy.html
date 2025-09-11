@@ -947,16 +947,48 @@
             return apiUrl.toString();
         }
 
-        // Fonction pour charger les données UPlanet
+        // Fonction pour charger les données UPlanet (two-step approach)
         async function loadUPlanetData(myURL) {
             try {
-                // Si aucune URL n'est fournie, utiliser l'URL de l'API par défaut
+                // Step 1: Get IPFSNODEID from Ustats API
                 const apiUrl = myURL || getAPIUrl();
-                console.log('Fetching UPlanet data from:', apiUrl);
-                const response = await fetch(apiUrl);
-                const data = await response.json();
-                console.log('UPlanet data loaded successfully:', data);
-                return data;
+                console.log('Step 1: Fetching Ustats data from:', apiUrl);
+                const ustatsResponse = await fetch(apiUrl);
+                const ustatsData = await ustatsResponse.json();
+                console.log('Ustats data loaded successfully:', ustatsData);
+
+                // Extract IPFSNODEID from Ustats
+                const ipfsNodeId = ustatsData.IPFSNODEID;
+                if (!ipfsNodeId) {
+                    console.error('No IPFSNODEID found in Ustats data');
+                    return ustatsData; // Return Ustats data anyway
+                }
+
+                // Step 2: Get mynode data from /ipns/IPFSNODEID/12345.json
+                // Construct the IPFS gateway URL for the mynode data
+                const baseUrl = new URL(apiUrl);
+                const ipfsGatewayUrl = `${baseUrl.protocol}//${baseUrl.hostname.replace('u.', 'ipfs.')}${baseUrl.port ? ':' + (baseUrl.port === '54321' ? '8080' : baseUrl.port) : ''}`;
+                const mynodeDataUrl = `${ipfsGatewayUrl}/ipns/${ipfsNodeId}/12345.json`;
+                console.log('Step 2: Fetching mynode data from:', mynodeDataUrl);
+                
+                try {
+                    const mynodeResponse = await fetch(mynodeDataUrl);
+                    const mynodeData = await mynodeResponse.json();
+                    console.log('Wallet data loaded successfully:', mynodeData);
+
+                    // Merge Ustats data with mynode data (mynode data takes precedence for overlapping keys)
+                    const mergedData = { ...ustatsData, ...mynodeData };
+                    // Store the original API URL for balance checking
+                    mergedData._originalApiUrl = apiUrl;
+                    console.log('Merged data:', mergedData);
+                    return mergedData;
+                } catch (mynodeError) {
+                    console.warn('Failed to fetch mynode data, using Ustats data only:', mynodeError);
+                    // Store the original API URL even in fallback case
+                    ustatsData._originalApiUrl = apiUrl;
+                    return ustatsData; // Fallback to Ustats data only
+                }
+
             } catch (error) {
                 console.error('Error loading UPlanet data:', error);
                 return null;
@@ -996,7 +1028,7 @@
         }
 
         // Fonction pour créer la section des portefeuilles légaux
-        async function createLegalWalletsSection(data) {
+        async function createLegalWalletsSection(data, originalApiUrl) {
             const legalWalletsGrid = document.getElementById('legal-wallets-grid');
             
             // Define the legal wallets with their properties
@@ -1045,8 +1077,8 @@
                 }
             ];
 
-            // Get API base URL for balance checking
-            const apiBaseUrl = getAPIUrl();
+            // Use the original API URL for balance checking (uSPOT API)
+            const apiBaseUrl = originalApiUrl || getAPIUrl();
 
             // Create initial HTML with loading states
             let walletsHTML = '';
@@ -1225,32 +1257,6 @@
                     </div>
                 </div>
 
-                <!-- Legal Wallets Section -->
-                <div class="status-section" style="
-                    background: linear-gradient(145deg, #232733, #1e252a);
-                    border-left: 4px solid #3498db;
-                    transition: all 0.3s ease;
-                    padding: 12px;
-                    margin-top: 12px;
-                ">
-                    <div class="metric" style="display: flex; flex-direction: column; gap: 8px;">
-                        <div class="metric-title" style="
-                            font-size: 1.1em;
-                            color: #eaf6ff;
-                            display: flex;
-                            align-items: center;
-                            gap: 8px;
-                            margin-bottom: 8px;
-                        ">
-                            <span style="font-size: 1.2em;">⚖️</span>
-                            <span>Portefeuilles Coopératifs</span>
-                        </div>
-                        <div class="legal-wallets-grid" id="legal-wallets-grid">
-                            <!-- Legal wallets will be populated here -->
-                        </div>
-                    </div>
-                </div>
-
                 <!-- Simulator Section -->
                 <div class="simulator-section">
                     <div class="simulator-controls">
@@ -1282,10 +1288,36 @@
                         <!-- Results will be displayed here -->
                     </div>
                 </div>
+
+                <!-- Legal Wallets Section -->
+                <div class="status-section" style="
+                    background: linear-gradient(145deg, #232733, #1e252a);
+                    border-left: 4px solid #3498db;
+                    transition: all 0.3s ease;
+                    padding: 12px;
+                    margin-top: 12px;
+                ">
+                    <div class="metric" style="display: flex; flex-direction: column; gap: 8px;">
+                        <div class="metric-title" style="
+                            font-size: 1.1em;
+                            color: #eaf6ff;
+                            display: flex;
+                            align-items: center;
+                            gap: 8px;
+                            margin-bottom: 8px;
+                        ">
+                            <span style="font-size: 1.2em;">⚖️</span>
+                            <span>Portefeuilles Coopératifs</span>
+                        </div>
+                        <div class="legal-wallets-grid" id="legal-wallets-grid">
+                            <!-- Legal wallets will be populated here -->
+                        </div>
+                    </div>
+                </div>
             `;
 
             // Create the legal wallets section (async - will load balances in background)
-            createLegalWalletsSection(data);
+            createLegalWalletsSection(data, data._originalApiUrl);
 
             // Add event listeners for dynamic simulation
             const newNostrInput = document.getElementById('new-nostr');

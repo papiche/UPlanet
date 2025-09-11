@@ -789,6 +789,138 @@
             text-shadow: 0 2px 4px rgba(0,0,0,0.9);
             font-weight: bold;
         }
+
+        /* Legal Wallets Styles */
+        .legal-wallets-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 8px;
+            margin-top: 8px;
+        }
+
+        .legal-wallet-card {
+            background: linear-gradient(145deg, #232733, #1e2a22);
+            border-radius: 8px;
+            padding: 12px;
+            border: 1px solid rgba(255,255,255,0.08);
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .legal-wallet-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+            border-color: rgba(52,152,219,0.3);
+        }
+
+        .legal-wallet-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: var(--wallet-color, #3498db);
+        }
+
+        .legal-wallet-card.treasury::before {
+            background: linear-gradient(90deg, #3498db, #2980b9);
+        }
+
+        .legal-wallet-card.rnd::before {
+            background: linear-gradient(90deg, #f1c40f, #f39c12);
+        }
+
+        .legal-wallet-card.assets::before {
+            background: linear-gradient(90deg, #2ecc71, #27ae60);
+        }
+
+        .legal-wallet-card.impot::before {
+            background: linear-gradient(90deg, #e74c3c, #c0392b);
+        }
+
+        .legal-wallet-card.g1::before {
+            background: linear-gradient(90deg, #9b59b6, #8e44ad);
+        }
+
+        .legal-wallet-card.society::before {
+            background: linear-gradient(90deg, #34495e, #2c3e50);
+        }
+
+        .legal-wallet-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+
+        .legal-wallet-icon {
+            font-size: 1.2em;
+        }
+
+        .legal-wallet-name {
+            font-size: 0.9em;
+            font-weight: 600;
+            color: #eaf6ff;
+        }
+
+        .legal-wallet-balance {
+            font-size: 1.3em;
+            font-weight: bold;
+            color: #eaf6ff;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+            margin-bottom: 4px;
+            min-height: 2em;
+            display: flex;
+            align-items: center;
+        }
+
+        .legal-wallet-balance .loading {
+            animation: pulse 1.5s ease-in-out infinite alternate;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 0.6; }
+            100% { opacity: 1; }
+        }
+
+        .legal-wallet-description {
+            font-size: 0.75em;
+            color: #b8c6e0;
+            line-height: 1.3;
+        }
+
+        .legal-wallet-pubkey {
+            font-size: 0.7em;
+            color: #7f8c8d;
+            font-family: monospace;
+            margin-top: 4px;
+            word-break: break-all;
+        }
+
+        @media (max-width: 768px) {
+            .legal-wallets-grid {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 6px;
+            }
+
+            .legal-wallet-card {
+                padding: 8px;
+            }
+
+            .legal-wallet-balance {
+                font-size: 1.1em;
+            }
+
+            .legal-wallet-name {
+                font-size: 0.8em;
+            }
+
+            .legal-wallet-description {
+                font-size: 0.7em;
+            }
+        }
     </style>
 </head>
 <body>
@@ -829,6 +961,145 @@
                 console.error('Error loading UPlanet data:', error);
                 return null;
             }
+        }
+
+        // Fonction pour récupérer le solde d'un portefeuille
+        async function fetchWalletBalance(g1pub, apiBaseUrl) {
+            try {
+                if (!g1pub || g1pub === 'N/A') {
+                    return { balance: '0.00', zen: '0.00' };
+                }
+
+                const balanceUrl = `${apiBaseUrl}/check_balance?g1pub=${g1pub}`;
+                console.log('Fetching balance from:', balanceUrl);
+                
+                const response = await fetch(balanceUrl);
+                const data = await response.json();
+                
+                if (data && data.balance) {
+                    const g1Balance = parseFloat(data.balance);
+                    // Convert Ğ1 to ẐEN (1 Ğ1 = 10 ẐEN, but we need to subtract 1 first)
+                    const zenBalance = (g1Balance - 1) * 10;
+                    
+                    return {
+                        balance: g1Balance.toFixed(2),
+                        zen: Math.max(0, zenBalance).toFixed(2) // Ensure non-negative
+                    };
+                } else {
+                    console.warn('Invalid balance response for', g1pub, data);
+                    return { balance: '0.00', zen: '0.00' };
+                }
+            } catch (error) {
+                console.error('Error fetching balance for', g1pub, error);
+                return { balance: '0.00', zen: '0.00' };
+            }
+        }
+
+        // Fonction pour créer la section des portefeuilles légaux
+        async function createLegalWalletsSection(data) {
+            const legalWalletsGrid = document.getElementById('legal-wallets-grid');
+            
+            // Define the legal wallets with their properties
+            const legalWallets = [
+                {
+                    key: 'UPLANETNAME_G1',
+                    name: 'Réserve & Stabilité',
+                    icon: '🏛️',
+                    description: 'Émet et "brûle" les Ẑen lors des conversions avec l\'Euro',
+                    className: 'g1'
+                },
+                {
+                    key: 'UPLANETNAME_SOCIETY',
+                    name: 'Capital Social',
+                    icon: '⭐',
+                    description: 'Gère les apports des sociétaires et l\'émission des parts',
+                    className: 'society'
+                },
+                {
+                    key: 'UPLANETNAME_TREASURY',
+                    name: 'Trésorerie (1/3)',
+                    icon: '💰',
+                    description: 'Réserves impartageables pour la liquidité',
+                    className: 'treasury'
+                },
+                {
+                    key: 'UPLANETNAME_RND',
+                    name: 'R&D (1/3)',
+                    icon: '🔬',
+                    description: 'Financement du G1FabLab et de l\'innovation',
+                    className: 'rnd'
+                },
+                {
+                    key: 'UPLANETNAME_ASSETS',
+                    name: 'Actifs Réels (1/3)',
+                    icon: '🌳',
+                    description: 'Acquisition des forêts-jardins et biens communs',
+                    className: 'assets'
+                },
+                {
+                    key: 'UPLANETNAME_IMPOT',
+                    name: 'Provision Fiscale',
+                    icon: '📊',
+                    description: 'Isole la TVA et l\'IS pour garantir la conformité',
+                    className: 'impot'
+                }
+            ];
+
+            // Get API base URL for balance checking
+            const apiBaseUrl = getAPIUrl();
+
+            // Create initial HTML with loading states
+            let walletsHTML = '';
+            
+            legalWallets.forEach(wallet => {
+                const pubkey = data[wallet.key] || 'N/A';
+                const shortPubkey = pubkey !== 'N/A' ? `${pubkey.substring(0, 8)}...${pubkey.substring(pubkey.length - 4)}` : 'N/A';
+                
+                walletsHTML += `
+                    <div class="legal-wallet-card ${wallet.className}" id="wallet-${wallet.key}">
+                        <div class="legal-wallet-header">
+                            <span class="legal-wallet-icon">${wallet.icon}</span>
+                            <span class="legal-wallet-name">${wallet.name}</span>
+                        </div>
+                        <div class="legal-wallet-balance" id="balance-${wallet.key}">
+                            <span class="loading" style="color: #7f8c8d; font-size: 0.9em;">⏳ Chargement...</span>
+                        </div>
+                        <div class="legal-wallet-description">${wallet.description}</div>
+                        <div class="legal-wallet-pubkey" title="${pubkey}">${shortPubkey}</div>
+                    </div>
+                `;
+            });
+
+            legalWalletsGrid.innerHTML = walletsHTML;
+
+            // Fetch balances for each wallet in the background
+            legalWallets.forEach(async (wallet) => {
+                const pubkey = data[wallet.key];
+                const balanceElement = document.getElementById(`balance-${wallet.key}`);
+                
+                if (pubkey && pubkey !== 'N/A') {
+                    try {
+                        const balanceData = await fetchWalletBalance(pubkey, apiBaseUrl);
+                        
+                        // Update the balance display
+                        balanceElement.innerHTML = `
+                            <div style="display: flex; flex-direction: column; gap: 2px;">
+                                <div style="font-size: 1.3em; font-weight: bold;">${balanceData.zen} Ẑ</div>
+                                <div style="font-size: 0.8em; color: #7f8c8d;">${balanceData.balance} Ğ1</div>
+                            </div>
+                        `;
+                    } catch (error) {
+                        console.error(`Error loading balance for ${wallet.key}:`, error);
+                        balanceElement.innerHTML = `
+                            <div style="color: #e74c3c; font-size: 0.9em;">❌ Erreur</div>
+                        `;
+                    }
+                } else {
+                    balanceElement.innerHTML = `
+                        <div style="color: #7f8c8d; font-size: 0.9em;">N/A</div>
+                    `;
+                }
+            });
         }
 
         // Fonction pour créer le dashboard économique
@@ -954,6 +1225,32 @@
                     </div>
                 </div>
 
+                <!-- Legal Wallets Section -->
+                <div class="status-section" style="
+                    background: linear-gradient(145deg, #232733, #1e252a);
+                    border-left: 4px solid #3498db;
+                    transition: all 0.3s ease;
+                    padding: 12px;
+                    margin-top: 12px;
+                ">
+                    <div class="metric" style="display: flex; flex-direction: column; gap: 8px;">
+                        <div class="metric-title" style="
+                            font-size: 1.1em;
+                            color: #eaf6ff;
+                            display: flex;
+                            align-items: center;
+                            gap: 8px;
+                            margin-bottom: 8px;
+                        ">
+                            <span style="font-size: 1.2em;">⚖️</span>
+                            <span>Portefeuilles Coopératifs</span>
+                        </div>
+                        <div class="legal-wallets-grid" id="legal-wallets-grid">
+                            <!-- Legal wallets will be populated here -->
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Simulator Section -->
                 <div class="simulator-section">
                     <div class="simulator-controls">
@@ -986,6 +1283,9 @@
                     </div>
                 </div>
             `;
+
+            // Create the legal wallets section (async - will load balances in background)
+            createLegalWalletsSection(data);
 
             // Add event listeners for dynamic simulation
             const newNostrInput = document.getElementById('new-nostr');

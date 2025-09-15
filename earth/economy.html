@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>UPlanet Economy Dashboard</title>
+    <title>♥️BOX : ẐEN Economic Dashboard</title>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
@@ -948,15 +948,23 @@
             return apiUrl.toString().replace(/\/+$/, '');
         }
 
-        // Fonction pour charger les données UPlanet (two-step approach)
-        async function loadUPlanetData(myURL) {
+        // Fonction pour charger les données UPlanet (progressive loading)
+        async function loadUPlanetData(myURL, onUstatsLoaded = null, onMynodeLoaded = null) {
             try {
-                // Step 1: Get IPFSNODEID from Ustats API
+                // Step 1: Get IPFSNODEID from Ustats API (fast)
                 const apiUrl = myURL || getAPIUrl();
                 console.log('Step 1: Fetching Ustats data from:', apiUrl);
                 const ustatsResponse = await fetch(apiUrl);
                 const ustatsData = await ustatsResponse.json();
                 console.log('Ustats data loaded successfully:', ustatsData);
+
+                // Store the original API URL for balance checking
+                ustatsData._originalApiUrl = apiUrl;
+
+                // Call callback with Ustats data immediately (for quick display)
+                if (onUstatsLoaded) {
+                    onUstatsLoaded(ustatsData);
+                }
 
                 // Extract IPFSNODEID from Ustats
                 const ipfsNodeId = ustatsData.IPFSNODEID;
@@ -965,7 +973,7 @@
                     return ustatsData; // Return Ustats data anyway
                 }
 
-                // Step 2: Get mynode data from /ipns/IPFSNODEID/12345.json
+                // Step 2: Get mynode data from /ipns/IPFSNODEID/12345.json (slow)
                 // Construct the IPFS gateway URL for the mynode data
                 const baseUrl = new URL(apiUrl);
                 const ipfsGatewayUrl = `${baseUrl.protocol}//${baseUrl.hostname.replace('u.', 'ipfs.')}${baseUrl.port ? ':' + (baseUrl.port === '54321' ? '8080' : baseUrl.port) : ''}`;
@@ -982,11 +990,15 @@
                     // Store the original API URL for balance checking
                     mergedData._originalApiUrl = apiUrl;
                     console.log('Merged data:', mergedData);
+
+                    // Call callback with merged data (for complete display)
+                    if (onMynodeLoaded) {
+                        onMynodeLoaded(mergedData);
+                    }
+
                     return mergedData;
                 } catch (mynodeError) {
                     console.warn('Failed to fetch mynode data, using Ustats data only:', mynodeError);
-                    // Store the original API URL even in fallback case
-                    ustatsData._originalApiUrl = apiUrl;
                     return ustatsData; // Fallback to Ustats data only
                 }
 
@@ -1138,12 +1150,13 @@
         }
 
         // Fonction pour créer le dashboard économique
-        function createEconomicDashboard(data) {
+        function createEconomicDashboard(data, isPartialData = false) {
             const dashboard = document.querySelector('.economic-dashboard');
             
-            // Get values from JSON data
-            const maxPlayers = 24;
-            const maxNostr = 250;
+            // Get values from JSON data with loading states
+            // Use real capacities from API if available, otherwise fallback to defaults
+            const maxPlayers = data.capacities?.zencard_slots || 24;
+            const maxNostr = data.capacities?.nostr_slots || 250;
             const currentPlayers = data.PLAYERs ? data.PLAYERs.length : 0;
             const currentNostr = data.NOSTR ? data.NOSTR.length : 0;
             const availablePlayers = maxPlayers - currentPlayers;
@@ -1163,10 +1176,10 @@
             const playersAboveZcard = data.PLAYERs ? data.PLAYERs.filter(player => parseInt(player.ZEN) > zcard).length : 0;
 
             // Get IPFS Node ID
-            const IPFSNODEID = data.IPFSNODEID ? data.IPFSNODEID : 'N/A';
+            const IPFSNODEID = data.IPFSNODEID ? data.IPFSNODEID : (isPartialData ? '⏳ Chargement...' : 'N/A');
 
             // Get first 8 characters of UPLANET public key
-            const planetPub = data.UPLANETG1PUB ? data.UPLANETG1PUB.substring(0, 8) : 'N/A';
+            const planetPub = data.UPLANETG1PUB ? data.UPLANETG1PUB.substring(0, 8) : (isPartialData ? '⏳' : 'N/A');
 
             dashboard.innerHTML = `
                 <!-- UPlanet Status -->
@@ -1284,7 +1297,45 @@
                             <div class="input-row">
                                 <input type="number" id="new-zen" min="0" max="${availablePlayers}" value="${playersAboveZcard}">
                             </div>
-                            <div class="max-value">${availablePlayers}/${maxPlayers} dispo</div>
+                            <div class="max-value">${availablePlayers}/${maxPlayers} dispo${maxPlayers === 0 ? ' ⚠️' : ''}</div>
+                            ${maxPlayers === 0 ? `<div style="font-size: 0.7em; color: #e74c3c; margin-top: 2px;">Slots ZEN Card désactivés</div>` : ''}
+                        </div>
+                    </div>
+                    
+                    <!-- Tax Configuration Section -->
+                    <div style="margin-top: 16px; padding: 12px; background: rgba(52,152,219,0.1); border-radius: 8px; border-left: 3px solid #3498db;">
+                        <div style="font-size: 0.9em; color: #3498db; font-weight: 600; margin-bottom: 8px;">⚖️ Configuration Fiscale</div>
+                        <div style="display: flex; gap: 16px; align-items: center; flex-wrap: wrap; margin-bottom: 8px;">
+                            <div style="display: flex; align-items: center; gap: 6px;">
+                                <label style="font-size: 0.8em; color: #b8c6e0;">Structure:</label>
+                                <select id="legal-structure" style="padding: 2px 4px; font-size: 0.8em; border-radius: 4px; border: 1px solid #232733; background: #181c24; color: #eaf6ff;">
+                                    <option value="association">Association Loi 1901</option>
+                                    <option value="scic" selected>SCIC SAS ⭐ (Recommandé UPlanet)</option>
+                                    <option value="gie">GIE (Groupement d'Intérêt Économique)</option>
+                                    <option value="sas">SAS (Société par Actions Simplifiée)</option>
+                                    <option value="sarl">SARL (Société à Responsabilité Limitée)</option>
+                                    <option value="auto-entrepreneur">Auto-entrepreneur / Micro-entreprise</option>
+                                    <option value="sci">SCI (Société Civile Immobilière)</option>
+                                    <option value="federation">Fédération Commerciale</option>
+                                    <option value="startup">Startup (SAS + levée de fonds)</option>
+                                    <option value="cooperative">Coopérative (SCOP)</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div style="display: flex; gap: 16px; align-items: center; flex-wrap: wrap;">
+                            <div style="display: flex; align-items: center; gap: 6px;">
+                                <label style="font-size: 0.8em; color: #b8c6e0;">TVA Locations:</label>
+                                <input type="number" id="vat-rate" min="0" max="30" step="0.1" value="0.0" style="width: 50px; padding: 2px 4px; font-size: 0.8em; border-radius: 4px; border: 1px solid #232733; background: #181c24; color: #eaf6ff; text-align: center;">
+                                <span style="font-size: 0.8em; color: #b8c6e0;">%</span>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 6px;">
+                                <label style="font-size: 0.8em; color: #b8c6e0;">IS Bénéfices:</label>
+                                <input type="number" id="corporate-tax-rate" min="0" max="50" step="0.1" value="0.0" style="width: 50px; padding: 2px 4px; font-size: 0.8em; border-radius: 4px; border: 1px solid #232733; background: #181c24; color: #eaf6ff; text-align: center;">
+                                <span style="font-size: 0.8em; color: #b8c6e0;">%</span>
+                            </div>
+                        </div>
+                        <div id="tax-info" style="margin-top: 8px; font-size: 0.75em; color: #7f8c8d; line-height: 1.3;">
+                            <!-- Tax information will be displayed here -->
                         </div>
                     </div>
                     <div class="simulation-results" id="simulation-results">
@@ -1317,10 +1368,51 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- Usage-based Advice Section -->
+                <div class="status-section" style="
+                    background: linear-gradient(145deg, #232733, #1e2a1e);
+                    border-left: 4px solid #2ecc71;
+                    transition: all 0.3s ease;
+                    padding: 12px;
+                    margin-top: 12px;
+                ">
+                    <div class="metric" style="display: flex; flex-direction: column; gap: 8px;">
+                        <div class="metric-title" style="
+                            font-size: 1.1em;
+                            color: #eaf6ff;
+                            display: flex;
+                            align-items: center;
+                            gap: 8px;
+                            margin-bottom: 8px;
+                        ">
+                            <span style="font-size: 1.2em;">💡</span>
+                            <span>Conseils selon votre Usage du ẐEN</span>
+                        </div>
+                        <div id="usage-advice" style="color: #b8c6e0; line-height: 1.4;">
+                            <!-- Usage advice will be populated here -->
+                        </div>
+                    </div>
+                </div>
             `;
 
             // Create the legal wallets section (async - will load balances in background)
+            // Only create if we have wallet data (not in partial loading state)
+            if (!isPartialData || (data.UPLANETNAME_G1 || data.UPLANETNAME_TREASURY)) {
             createLegalWalletsSection(data, data._originalApiUrl);
+            } else {
+                // Show loading state for legal wallets
+                const legalWalletsGrid = document.getElementById('legal-wallets-grid');
+                if (legalWalletsGrid) {
+                    legalWalletsGrid.innerHTML = `
+                        <div style="grid-column: 1 / -1; text-align: center; padding: 20px; color: #7f8c8d;">
+                            <div style="font-size: 1.2em; margin-bottom: 8px;">⏳</div>
+                            <div>Chargement des portefeuilles coopératifs...</div>
+                            <div style="font-size: 0.8em; margin-top: 4px; opacity: 0.7;">Récupération des données IPNS en cours</div>
+                        </div>
+                    `;
+                }
+            }
 
             // Add event listeners for dynamic simulation
             const newNostrInput = document.getElementById('new-nostr');
@@ -1330,32 +1422,37 @@
                 const newNostr = parseInt(newNostrInput.value) || nostrAboveZcard;
                 const newZen = parseInt(newZenInput.value) || playersAboveZcard;
                 
+                // Get tax rates from selectors
+                const vatRate = parseFloat(document.getElementById('vat-rate')?.value || 20.0) / 100;
+                const corporateTaxRate = parseFloat(document.getElementById('corporate-tax-rate')?.value || 25.0) / 100;
+                
                 // Calculate weekly revenue (NCARD and ZCARD are per week)
                 const weeklyNostrRevenue = newNostr * ncard;
                 const weeklyZenRevenue = newZen * zcard;
                 const totalWeeklyRevenue = weeklyNostrRevenue + weeklyZenRevenue;
                 
-                // Calculate monthly revenue (4 weeks = 28 days)
-                const totalNewRevenue = totalWeeklyRevenue * 4;
+                // Calculate VAT on rental income (TVA sur locations)
+                const weeklyVAT = totalWeeklyRevenue * vatRate;
                 
-                // Calculate new monthly profit
-                const newMonthlyProfit = totalNewRevenue - paf;
+                // Calculate weekly costs (PAF is weekly)
+                const weeklyPAF = paf; // PAF is weekly cost for NODE
+                const weeklyCaptainCost = 2 * paf; // Captain gets 2x PAF weekly (target)
                 
-                // Calculate thresholds
-                const nodeThreshold = paf; // Node gets paid first (PAF)
-                const captainThreshold = 2 * paf; // Captain starts getting paid after 1x PAF
-                const uplanetThreshold = 3 * paf; // UPlanet gets what's above 3x PAF
+                // Calculate weekly thresholds based on ZEN.ECONOMY.sh and ZEN.COOPERATIVE.3x1-3.sh
+                const nodeThreshold = weeklyPAF; // Node gets weekly PAF first
+                const captainThreshold = weeklyPAF + weeklyCaptainCost; // Captain gets 2x PAF after node PAF (total 3x PAF)
+                const uplanetThreshold = captainThreshold; // UPlanet distribution starts after Captain gets his 2x PAF
                 
-                // Calculate who gets paid
-                const nodePayment = Math.min(totalNewRevenue, nodeThreshold); // PAF is paid first
-                const captainPayment = totalNewRevenue > nodeThreshold ? 
-                    Math.min(totalNewRevenue - nodeThreshold, uplanetThreshold - nodeThreshold) : 0; // Captain gets everything between 1x PAF and 3x PAF
-                const uplanetPayment = totalNewRevenue > uplanetThreshold ? 
-                    totalNewRevenue - uplanetThreshold : 0; // UPlanet gets what's above 3x PAF
+                // Calculate who gets paid (weekly amounts) - following ZEN.ECONOMY.sh logic
+                const nodePayment = Math.min(totalWeeklyRevenue, nodeThreshold); // Weekly PAF is paid first to NODE
+                const captainPayment = totalWeeklyRevenue > nodeThreshold ? 
+                    Math.min(totalWeeklyRevenue - nodeThreshold, weeklyCaptainCost) : 0; // Captain gets 2x PAF after node PAF
+                const uplanetPayment = totalWeeklyRevenue > uplanetThreshold ? 
+                    totalWeeklyRevenue - uplanetThreshold : 0; // UPlanet gets surplus above 3x PAF (1x for node + 2x for captain)
 
                 // Calculate UPlanet distribution if threshold is reached
                 let uplanetDistribution = null;
-                if (totalNewRevenue >= uplanetThreshold) {
+                if (totalWeeklyRevenue >= uplanetThreshold) {
                     const totalUPlanetProfit = uplanetPayment;
                     uplanetDistribution = {
                         cash: totalUPlanetProfit * 0.34, // 34% pour la trésorerie
@@ -1370,17 +1467,17 @@
                         <div class="metric-chart">
                             <div class="chart-title">♥️BOX</div>
                             <div class="pie-chart" style="background: conic-gradient(
-                                ${totalNewRevenue > 0 ? 
-                                    `hsl(${Math.min(120, (totalNewRevenue / paf) * 120)}, 70%, 45%)` : 
+                                ${totalWeeklyRevenue > 0 ? 
+                                    `hsl(${Math.min(120, (totalWeeklyRevenue / weeklyPAF) * 120)}, 70%, 45%)` : 
                                     '#e74c3c'
-                                } 0% ${totalNewRevenue > 0 ? Math.min(100, (totalNewRevenue / paf) * 100) : 0}%,
-                                #e0e0e0 ${totalNewRevenue > 0 ? Math.min(100, (totalNewRevenue / paf) * 100) : 0}% 100%
+                                } 0% ${totalWeeklyRevenue > 0 ? Math.min(100, (totalWeeklyRevenue / weeklyPAF) * 100) : 0}%,
+                                #e0e0e0 ${totalWeeklyRevenue > 0 ? Math.min(100, (totalWeeklyRevenue / weeklyPAF) * 100) : 0}% 100%
                             )"></div>
                             <div class="chart-value">${nodePayment.toFixed(2)} Ẑ</div>
                             <div class="chart-details">
-                                <div>PAF: ${paf.toFixed(2)} Ẑ</div>
-                                <div>Revenus: ${totalNewRevenue.toFixed(2)} Ẑ</div>
-                                <div style="font-size: 0.8em; color: #7f8c8d;">(${totalWeeklyRevenue.toFixed(2)} Ẑ/semaine)</div>
+                                <div>PAF hebdo: ${weeklyPAF.toFixed(2)} Ẑ</div>
+                                <div>Revenus hebdo: ${totalWeeklyRevenue.toFixed(2)} Ẑ</div>
+                                <div style="font-size: 0.8em; color: #7f8c8d;">Couverture: ${totalWeeklyRevenue > 0 ? (totalWeeklyRevenue / weeklyPAF * 100).toFixed(0) : 0}%</div>
                             </div>
                         </div>
 
@@ -1388,59 +1485,104 @@
                             <div class="chart-title">Capitaine</div>
                             <div class="pie-chart" style="background: conic-gradient(
                                 ${captainPayment > 0 ? 
-                                    `hsl(${Math.min(120, (captainPayment / (uplanetThreshold - nodeThreshold)) * 120)}, 70%, 45%)` : 
+                                    `hsl(${Math.min(120, (captainPayment / weeklyCaptainCost) * 120)}, 70%, 45%)` : 
                                     '#e74c3c'
-                                } 0% ${(captainPayment / (uplanetThreshold - nodeThreshold) * 100)}%,
-                                #e0e0e0 ${(captainPayment / (uplanetThreshold - nodeThreshold) * 100)}% 100%
+                                } 0% ${captainPayment > 0 ? Math.min(100, (captainPayment / weeklyCaptainCost) * 100) : 0}%,
+                                #e0e0e0 ${captainPayment > 0 ? Math.min(100, (captainPayment / weeklyCaptainCost) * 100) : 0}% 100%
                             )"></div>
                             <div class="chart-value">${captainPayment.toFixed(2)} Ẑ</div>
                             <div class="chart-details">
-                                <div>Plage: ${nodeThreshold.toFixed(2)} → ${uplanetThreshold.toFixed(2)} Ẑ</div>
-                                <div>Progression: ${((captainPayment / (uplanetThreshold - nodeThreshold)) * 100).toFixed(1)}%</div>
+                                <div>Cible hebdo: ${weeklyCaptainCost.toFixed(2)} Ẑ (2x PAF)</div>
+                                <div>Seuil: ${nodeThreshold.toFixed(2)} Ẑ (après NODE)</div>
+                                <div style="font-size: 0.8em; color: #7f8c8d;">Couverture: ${captainPayment > 0 ? (captainPayment / weeklyCaptainCost * 100).toFixed(0) : 0}%</div>
                             </div>
                         </div>
 
                         <div class="metric-chart">
                             <div class="chart-title">UPlanet</div>
                             <div class="pie-chart" style="background: conic-gradient(
-                                ${totalNewRevenue > uplanetThreshold ? 
-                                    `hsl(${Math.min(120, ((totalNewRevenue - uplanetThreshold) / (uplanetThreshold)) * 120)}, 70%, 45%)` : 
+                                ${uplanetPayment > 0 ? 
+                                    `hsl(${Math.min(120, (uplanetPayment / (totalWeeklyRevenue > 0 ? totalWeeklyRevenue * 0.3 : 1)) * 120)}, 70%, 45%)` : 
                                     '#e74c3c'
-                                } 0% ${totalNewRevenue > uplanetThreshold ? ((totalNewRevenue - uplanetThreshold) / totalNewRevenue * 100) : 0}%,
-                                #e0e0e0 ${totalNewRevenue > uplanetThreshold ? ((totalNewRevenue - uplanetThreshold) / totalNewRevenue * 100) : 0}% 100%
+                                } 0% ${uplanetPayment > 0 && totalWeeklyRevenue > 0 ? Math.min(100, (uplanetPayment / totalWeeklyRevenue * 100)) : 0}%,
+                                #e0e0e0 ${uplanetPayment > 0 && totalWeeklyRevenue > 0 ? Math.min(100, (uplanetPayment / totalWeeklyRevenue * 100)) : 0}% 100%
                             )"></div>
                             <div class="chart-value">${uplanetPayment.toFixed(2)} Ẑ</div>
                             <div class="chart-details">
-                                <div>Seuil: ${uplanetThreshold.toFixed(2)} Ẑ</div>
-                                <div>Revenus: ${totalNewRevenue.toFixed(2)} Ẑ</div>
+                                <div>Seuil: ${uplanetThreshold.toFixed(2)} Ẑ (3x PAF)</div>
+                                <div>Revenus: ${totalWeeklyRevenue.toFixed(2)} Ẑ</div>
+                                <div style="font-size: 0.8em; color: #7f8c8d;">Surplus: ${uplanetPayment > 0 ? (uplanetPayment / totalWeeklyRevenue * 100).toFixed(0) : 0}%</div>
                             </div>
                         </div>
                     </div>`;
 
-                // Always show UPlanet distribution section
+                // UPlanet distribution section - following ZEN.COOPERATIVE.3x1-3.sh logic
                 const totalUPlanetProfit = uplanetPayment;
-                const cashAmount = totalUPlanetProfit * 0.34;
-                const infraAmount = totalUPlanetProfit * 0.33;
-                const rdAmount = totalUPlanetProfit * 0.33;
+                
+                // Tax provisions (TVA + IS)
+                const corporateTaxProvision = totalUPlanetProfit * corporateTaxRate; // IS on surplus
+                const totalTaxProvision = weeklyVAT + corporateTaxProvision; // TVA + IS
+                const netSurplus = totalUPlanetProfit - corporateTaxProvision; // Only subtract IS from surplus (VAT is on revenue)
+                
+                // 3x1/3 allocation on net surplus (after tax provision)
+                const cashAmount = netSurplus * 0.3333; // Treasury (1/3)
+                const rdAmount = netSurplus * 0.3333;   // R&D (1/3)
+                const assetsAmount = netSurplus * 0.3334; // Assets (1/3)
+
+                // Get legal structure for display
+                const legalStructure = document.getElementById('legal-structure')?.value || 'association';
+                const structureTitles = {
+                    'association': 'Association Loi 1901',
+                    'scic': 'SCIC SAS',
+                    'gie': 'GIE',
+                    'sas': 'SAS',
+                    'sarl': 'SARL',
+                    'auto-entrepreneur': 'Auto-entrepreneur',
+                    'sci': 'SCI',
+                    'federation': 'Fédération Commerciale',
+                    'startup': 'Startup',
+                    'cooperative': 'SCOP'
+                };
+                const structureTitle = structureTitles[legalStructure] || 'Association Loi 1901';
 
                 html += `
-                <div class="uplanet-distribution ${totalUPlanetProfit > 0 ? 'active' : ''}" style="background:#232733;">
-                    <h3 style="color:#eaf6ff; text-shadow:0 2px 8px #181c24; letter-spacing:1px;">Distribution "3 x 1/3"</h3>
+                <div class="uplanet-distribution ${totalWeeklyRevenue > 0 ? 'active' : ''}" style="background:#232733;">
+                    <h3 style="color:#eaf6ff; text-shadow:0 2px 8px #181c24; letter-spacing:1px;">Distribution ${structureTitle}</h3>
+                    ${totalWeeklyRevenue > 0 ? `
+                    <div style="margin-bottom: 12px; padding: 8px; background: rgba(231,76,60,0.1); border-radius: 6px; border-left: 3px solid #e74c3c;">
+                        <div style="font-size: 0.9em; color: #e74c3c; font-weight: 600;">📊 Provisions Fiscales Totales</div>
+                        <div style="display: flex; justify-content: space-between; margin: 4px 0;">
+                            <span style="font-size: 0.8em; color: #b8c6e0;">TVA Locations (${(vatRate * 100).toFixed(1)}%):</span>
+                            <span style="font-size: 0.9em; color: #eaf6ff; font-weight: bold;">${weeklyVAT.toFixed(2)} Ẑ</span>
+                        </div>
+                        ${totalUPlanetProfit > 0 ? `
+                        <div style="display: flex; justify-content: space-between; margin: 4px 0;">
+                            <span style="font-size: 0.8em; color: #b8c6e0;">IS Bénéfices (${(corporateTaxRate * 100).toFixed(1)}%):</span>
+                            <span style="font-size: 0.9em; color: #eaf6ff; font-weight: bold;">${corporateTaxProvision.toFixed(2)} Ẑ</span>
+                        </div>` : ''}
+                        <div style="border-top: 1px solid rgba(231,76,60,0.3); margin: 6px 0; padding-top: 6px;">
+                            <div style="display: flex; justify-content: space-between;">
+                                <span style="font-size: 0.9em; color: #e74c3c; font-weight: 600;">Total Provisions:</span>
+                                <span style="font-size: 1.1em; color: #eaf6ff; font-weight: bold;">${totalTaxProvision.toFixed(2)} Ẑ</span>
+                            </div>
+                        </div>
+                        ${totalUPlanetProfit > 0 ? `<div style="font-size: 0.8em; color: #b8c6e0; margin-top: 4px;">Surplus net après IS: ${netSurplus.toFixed(2)} Ẑ</div>` : ''}
+                    </div>` : ''}
                     <div class="metric-container">
                         <div class="metric-box" style="background: linear-gradient(145deg, #232733, #1e2a22); border-color: #3498db; color: #eaf6ff;">
                             <div class="metric-title">Trésorerie</div>
                             <div class="metric-value">${cashAmount.toFixed(2)} Ẑ</div>
-                            <div class="metric-subtitle">34%</div>
-                        </div>
-                        <div class="metric-box" style="background: linear-gradient(145deg, #232733, #1e2a22); border-color: #2ecc71; color: #eaf6ff;">
-                            <div class="metric-title">Infrastructure</div>
-                            <div class="metric-value">${infraAmount.toFixed(2)} Ẑ</div>
-                            <div class="metric-subtitle">33%</div>
+                            <div class="metric-subtitle">1/3 du net</div>
                         </div>
                         <div class="metric-box" style="background: linear-gradient(145deg, #232733, #23271a); border-color: #f1c40f; color: #eaf6ff;">
                             <div class="metric-title">R&D</div>
                             <div class="metric-value">${rdAmount.toFixed(2)} Ẑ</div>
-                            <div class="metric-subtitle">33%</div>
+                            <div class="metric-subtitle">1/3 du net</div>
+                        </div>
+                        <div class="metric-box" style="background: linear-gradient(145deg, #232733, #1e2a22); border-color: #2ecc71; color: #eaf6ff;">
+                            <div class="metric-title">Actifs Réels</div>
+                            <div class="metric-value">${assetsAmount.toFixed(2)} Ẑ</div>
+                            <div class="metric-subtitle">1/3 du net</div>
                         </div>
                     </div>
                 </div>`;
@@ -1465,6 +1607,479 @@
             // Add input event listeners for dynamic updates
             newNostrInput.addEventListener('input', updateSimulation);
             newZenInput.addEventListener('input', updateSimulation);
+            
+            // Add event listeners for tax rate changes
+            setTimeout(() => {
+                const vatRateInput = document.getElementById('vat-rate');
+                const corporateTaxRateInput = document.getElementById('corporate-tax-rate');
+                const legalStructureSelect = document.getElementById('legal-structure');
+                const taxInfoDiv = document.getElementById('tax-info');
+                
+                // Function to update tax rates based on legal structure
+                function updateTaxRatesForStructure() {
+                    const structure = legalStructureSelect.value;
+                    
+                    if (structure === 'association') {
+                        // Association Loi 1901 - Generally tax exempt
+                        vatRateInput.value = '0.0';
+                        corporateTaxRateInput.value = '0.0';
+                        taxInfoDiv.innerHTML = `
+                            <strong>Association Loi 1901 :</strong><br>
+                            • TVA : Exonérée si activité non lucrative (monnaie locale ẐEN)<br>
+                            • IS : Exonérée si gestion désintéressée<br>
+                            • Exception : 20% TVA + 24% IS si activité commerciale > 72k€
+                        `;
+                    } else if (structure === 'scic') {
+                        // SCIC SAS - Standard commercial rates
+                        vatRateInput.value = '20.0';
+                        corporateTaxRateInput.value = '25.0';
+                        taxInfoDiv.innerHTML = `
+                            <strong>SCIC SAS :</strong><br>
+                            • TVA : 20% sur prestations de location d'infrastructure<br>
+                            • IS : 15% (≤42.5k€) ou 25% (>42.5k€) sur bénéfices<br>
+                            • Répartition coopérative : 3x1/3 après provisions fiscales
+                        `;
+                    } else if (structure === 'gie') {
+                        // GIE - Tax transparency
+                        vatRateInput.value = '20.0';
+                        corporateTaxRateInput.value = '0.0';
+                        taxInfoDiv.innerHTML = `
+                            <strong>GIE (Groupement d'Intérêt Économique) ⭐ RECOMMANDÉ :</strong><br>
+                            • TVA : 20% sur prestations aux membres<br>
+                            • IS : 0% (transparence fiscale - imposé chez les membres)<br>
+                            • Bénéfices : Répartis selon quote-parts des membres<br>
+                            • Idéal pour fédération de commerçants (modèle Intermarché)
+                        `;
+                    } else if (structure === 'sas') {
+                        // SAS - Standard commercial rates
+                        vatRateInput.value = '20.0';
+                        corporateTaxRateInput.value = '25.0';
+                        taxInfoDiv.innerHTML = `
+                            <strong>SAS (Société par Actions Simplifiée) :</strong><br>
+                            • TVA : 20% sur toutes prestations<br>
+                            • IS : 15% (≤42.5k€) ou 25% (>42.5k€) sur bénéfices<br>
+                            • Gouvernance : Flexible, statuts sur mesure<br>
+                            • Responsabilité : Limitée au capital social
+                        `;
+                    } else if (structure === 'sarl') {
+                        // SARL - Traditional commercial structure
+                        vatRateInput.value = '20.0';
+                        corporateTaxRateInput.value = '25.0';
+                        taxInfoDiv.innerHTML = `
+                            <strong>SARL (Société à Responsabilité Limitée) :</strong><br>
+                            • TVA : 20% sur toutes prestations<br>
+                            • IS : 15% (≤42.5k€) ou 25% (>42.5k€) sur bénéfices<br>
+                            • Gouvernance : Gérance + assemblée des associés<br>
+                            • Capital minimum : 1€, responsabilité limitée aux apports
+                        `;
+                    } else if (structure === 'auto-entrepreneur') {
+                        // Auto-entrepreneur - Simplified regime
+                        vatRateInput.value = '0.0';
+                        corporateTaxRateInput.value = '22.0';
+                        taxInfoDiv.innerHTML = `
+                            <strong>Auto-entrepreneur / Micro-entreprise :</strong><br>
+                            • TVA : Exonérée si CA < 36.8k€ (services) ou 91.9k€ (vente)<br>
+                            • Cotisations sociales : 22% du CA (prestations de services)<br>
+                            • Simplicité : Déclaration mensuelle/trimestrielle<br>
+                            • Limité : Plafonds de CA, pas d'investisseurs
+                        `;
+                    } else if (structure === 'sci') {
+                        // SCI - Real estate focused
+                        vatRateInput.value = '0.0';
+                        corporateTaxRateInput.value = '0.0';
+                        taxInfoDiv.innerHTML = `
+                            <strong>SCI (Société Civile Immobilière) :</strong><br>
+                            • TVA : Généralement exonérée (activité civile)<br>
+                            • IS : Transparence fiscale (IR des associés)<br>
+                            • Usage : Gestion immobilière, pas adapté pour ẐEN commercial<br>
+                            • Note : Structure inadaptée pour monnaie numérique
+                        `;
+                    } else if (structure === 'startup') {
+                        // Startup - SAS optimized for fundraising
+                        vatRateInput.value = '20.0';
+                        corporateTaxRateInput.value = '25.0';
+                        taxInfoDiv.innerHTML = `
+                            <strong>Startup (SAS + levée de fonds) :</strong><br>
+                            • TVA : 20% sur prestations numériques<br>
+                            • IS : 15% (≤42.5k€) ou 25% (>42.5k€) + CIR possible<br>
+                            • Avantages : BSPCE, JEI, levées de fonds facilitées<br>
+                            • Idéal : Croissance rapide, innovation technologique ẐEN
+                        `;
+                    } else if (structure === 'cooperative') {
+                        // SCOP - Worker cooperative
+                        vatRateInput.value = '20.0';
+                        corporateTaxRateInput.value = '25.0';
+                        taxInfoDiv.innerHTML = `
+                            <strong>Coopérative (SCOP) :</strong><br>
+                            • TVA : 20% sur prestations<br>
+                            • IS : 25% mais réserves obligatoires (45% bénéfices)<br>
+                            • Gouvernance : 1 salarié = 1 voix, gestion démocratique<br>
+                            • Avantages : Participation salariés, exonérations fiscales
+                        `;
+                    } else if (structure === 'federation') {
+                        // Commercial Federation - Mixed model
+                        vatRateInput.value = '20.0';
+                        corporateTaxRateInput.value = '15.0';
+                        taxInfoDiv.innerHTML = `
+                            <strong>Fédération Commerciale (modèle "points fidélité") :</strong><br>
+                            • TVA : 20% sur prestations de gestion ẐEN<br>
+                            • IS : 15% (taux préférentiel fédération)<br>
+                            • Statut : GIE ou SAS selon gouvernance souhaitée<br>
+                            • Revenus : Commission sur transactions + cotisations membres
+                        `;
+                    }
+                    
+                    updateSimulation();
+                    updateUsageAdvice();
+                }
+
+                // Function to update usage advice based on legal structure
+                function updateUsageAdvice() {
+                    const structure = legalStructureSelect.value;
+                    const usageAdviceDiv = document.getElementById('usage-advice');
+                    
+                    if (!usageAdviceDiv) return;
+                    
+                    // Section commune sur les usages ẐEN
+                    const zenUsageIntro = `
+                        <div style="margin-bottom: 20px; padding: 16px; background: linear-gradient(135deg, rgba(52,152,219,0.1), rgba(46,204,113,0.1)); border-radius: 8px; border: 1px solid rgba(52,152,219,0.3);">
+                            <h3 style="color: #3498db; margin: 0 0 12px 0; display: flex; align-items: center; gap: 8px;">
+                                <span>🌟</span> Écosystème ẐEN : Usages & Stratégies
+                            </h3>
+                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px;">
+                                <div>
+                                    <h4 style="color: #2ecc71; margin: 0 0 8px 0;">💰 Modèles de Revenus ẐEN</h4>
+                                    <ul style="margin: 0; padding-left: 16px; font-size: 0.9em;">
+                                        <li><strong>Locataire :</strong> 10Ẑ/sem MULTIPASS (10Go) ou 40Ẑ/sem ZEN Card (128Go)</li>
+                                        <li><strong>Capitaine :</strong> 2xPAF/semaine (≈280Ẑ) + surplus essaim</li>
+                                        <li><strong>Armateur :</strong> PAF/semaine (≈140Ẑ) pour frais matériel</li>
+                                        <li><strong>Créateur :</strong> ẐEN via likes, partages, contributions</li>
+                                        <li><strong>Sociétaire :</strong> 500Ẑ → Parts sociales + exemption loyer</li>
+                                    </ul>
+                                </div>
+                                <div>
+                                    <h4 style="color: #e67e22; margin: 0 0 8px 0;">🔄 Stratégies de Conversion</h4>
+                                    <ul style="margin: 0; padding-left: 16px; font-size: 0.9em;">
+                                        <li><strong>Règle 1/3 :</strong> Max 1/3 des ẐEN convertibles en EUR/an</li>
+                                        <li><strong>Pont de liquidité :</strong> Conversion via coopérative (1Ẑ = 0.1Ğ1 ≈ 0.10€)</li>
+                                        <li><strong>Fait générateur fiscal :</strong> Uniquement sur EUR reçus</li>
+                                        <li><strong>Réinvestissement :</strong> 2/3 restants en parts sociales</li>
+                                        <li><strong>Circulation interne :</strong> Paiements ẐEN entre membres</li>
+                                    </ul>
+                                </div>
+                            </div>
+                            <div style="margin-top: 12px; padding: 8px; background: rgba(230,126,34,0.1); border-radius: 4px; border-left: 3px solid #e67e22;">
+                                <strong>⚙️ Précision Technique ẐEN :</strong><br>
+                                • <strong>Base Ğ1 :</strong> 1 ẐEN = 0.1 Ğ1 (June/Ḡ1 libre)<br>
+                                • <strong>Précision minimale :</strong> 10 centimes d'euro (pas de centime)<br>
+                                • <strong>Avantage :</strong> Simplicité des calculs et transactions<br>
+                                • <strong>Contrainte :</strong> Arrondi automatique à la dizaine de centimes
+                            </div>
+                        </div>
+                    `;
+
+                    const adviceContent = {
+                        'association': `
+                            <h4 style="color: #2ecc71; margin: 0 0 8px 0;">🎯 Idéal pour : Monnaie Locale Citoyenne</h4>
+                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 12px;">
+                                <div>
+                                    <strong>✅ Cas d'usage recommandés :</strong>
+                                    <ul style="margin: 4px 0; padding-left: 16px;">
+                                        <li>Monnaie locale territoriale</li>
+                                        <li>Réseau d'échange local (SEL)</li>
+                                        <li>Communauté éco-responsable</li>
+                                        <li>Projet d'économie sociale</li>
+                                    </ul>
+                                </div>
+                                <div>
+                                    <strong>⚠️ Limites à considérer :</strong>
+                                    <ul style="margin: 4px 0; padding-left: 16px;">
+                                        <li>Pas de distribution de bénéfices</li>
+                                        <li>Gestion bénévole obligatoire</li>
+                                        <li>Risque fiscal si activité commerciale</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        `,
+                        'gie': `
+                            <h4 style="color: #2ecc71; margin: 0 0 8px 0;">🎯 Idéal pour : Fédération de Commerçants</h4>
+                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 12px;">
+                                <div>
+                                    <strong>✅ Cas d'usage recommandés :</strong>
+                                    <ul style="margin: 4px 0; padding-left: 16px;">
+                                        <li>Points fidélité inter-enseignes</li>
+                                        <li>Réseau de restaurateurs</li>
+                                        <li>Centre commercial virtuel</li>
+                                        <li>Mutualisation des coûts IT</li>
+                                    </ul>
+                                </div>
+                                <div>
+                                    <strong>💰 Modèle économique :</strong>
+                                    <ul style="margin: 4px 0; padding-left: 16px;">
+                                        <li>Cotisation mensuelle : 50-200€</li>
+                                        <li>Commission : 0.5-2% par transaction</li>
+                                        <li>Services premium payants</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        `,
+                        'sas': `
+                            <h4 style="color: #2ecc71; margin: 0 0 8px 0;">🎯 Idéal pour : Entreprise Innovante</h4>
+                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 12px;">
+                                <div>
+                                    <strong>✅ Cas d'usage recommandés :</strong>
+                                    <ul style="margin: 4px 0; padding-left: 16px;">
+                                        <li>Plateforme ẐEN B2B</li>
+                                        <li>Services financiers numériques</li>
+                                        <li>Marketplace avec ẐEN</li>
+                                        <li>Croissance rapide prévue</li>
+                                    </ul>
+                                </div>
+                                <div>
+                                    <strong>🚀 Avantages :</strong>
+                                    <ul style="margin: 4px 0; padding-left: 16px;">
+                                        <li>Gouvernance flexible</li>
+                                        <li>Entrée d'investisseurs facilitée</li>
+                                        <li>Responsabilité limitée</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        `,
+                        'sarl': `
+                            <h4 style="color: #2ecc71; margin: 0 0 8px 0;">🎯 Idéal pour : PME Traditionnelle</h4>
+                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 12px;">
+                                <div>
+                                    <strong>✅ Cas d'usage recommandés :</strong>
+                                    <ul style="margin: 4px 0; padding-left: 16px;">
+                                        <li>Commerce intégrant le ẐEN</li>
+                                        <li>Prestataire de services ẐEN</li>
+                                        <li>Activité stable et locale</li>
+                                        <li>Associés familiaux/amis</li>
+                                    </ul>
+                                </div>
+                                <div>
+                                    <strong>📊 Caractéristiques :</strong>
+                                    <ul style="margin: 4px 0; padding-left: 16px;">
+                                        <li>Gouvernance encadrée par la loi</li>
+                                        <li>Cession de parts réglementée</li>
+                                        <li>Stabilité juridique</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        `,
+                        'auto-entrepreneur': `
+                            <h4 style="color: #f39c12; margin: 0 0 8px 0;">🎯 Idéal pour : Démarrage ẐEN Individuel</h4>
+                            
+                            <div style="margin-bottom: 12px; padding: 8px; background: rgba(52,152,219,0.1); border-radius: 4px; border-left: 3px solid #3498db;">
+                                <strong>🌟 Usages ẐEN en Micro-Entreprise :</strong><br>
+                                • <strong>Capitaine débutant</strong> : Maintenance nœud RPi5 (rémunération 2xPAF)<br>
+                                • <strong>Créateur de contenu</strong> : Monétisation likes/partages en ẐEN<br>
+                                • <strong>Services ẐEN</strong> : Formations, consulting, développement<br>
+                                • <strong>Pont de liquidité</strong> : Conversion ẐEN → EUR occasionnelle
+                            </div>
+
+                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 12px;">
+                                <div>
+                                    <strong>✅ Avantages ẐEN :</strong>
+                                    <ul style="margin: 4px 0; padding-left: 16px;">
+                                        <li><strong>Simplicité fiscale :</strong> Déclaration uniquement sur EUR reçus</li>
+                                        <li><strong>Pas de TVA :</strong> Si < 36 800€ CA (franchise)</li>
+                                        <li><strong>Cotisations :</strong> 21.2% uniquement sur EUR encaissés</li>
+                                        <li><strong>Démarrage rapide :</strong> Création gratuite en ligne</li>
+                                    </ul>
+                                </div>
+                                <div>
+                                    <strong>⚠️ Limites importantes :</strong>
+                                    <ul style="margin: 4px 0; padding-left: 16px;">
+                                        <li><strong>CA limité :</strong> 77 700€ services (BNC)</li>
+                                        <li><strong>Pas d'associés :</strong> Activité strictement individuelle</li>
+                                        <li><strong>Pas de frais :</strong> Abattement forfaitaire 34% seulement</li>
+                                        <li><strong>Évolution :</strong> Passage SAS/SARL si croissance</li>
+                                    </ul>
+                                </div>
+                            </div>
+
+                            <div style="margin-top: 8px; padding: 8px; background: rgba(46,204,113,0.1); border-radius: 4px; border-left: 3px solid #2ecc71;">
+                                <strong>💡 Stratégie ẐEN recommandée :</strong><br>
+                                • <strong>Phase 1 :</strong> Accumuler ẐEN via services/contenu<br>
+                                • <strong>Phase 2 :</strong> Convertir partiellement selon besoins EUR<br>
+                                • <strong>Phase 3 :</strong> Réinvestir ẐEN en parts sociales coopérative<br>
+                                • <strong>Évolution :</strong> Devenir sociétaire puis Capitaine/Armateur
+                            </div>
+                        `,
+                        'sci': `
+                            <h4 style="color: #e74c3c; margin: 0 0 8px 0;">❌ Non Recommandé pour ẐEN</h4>
+                            <div style="background: rgba(231,76,60,0.1); padding: 12px; border-radius: 6px; border-left: 3px solid #e74c3c;">
+                                <strong>La SCI est inadaptée pour une monnaie numérique :</strong>
+                                <ul style="margin: 8px 0; padding-left: 16px;">
+                                    <li>Objet social limité à l'immobilier</li>
+                                    <li>Activité commerciale interdite</li>
+                                    <li>Pas de prestations de services</li>
+                                    <li>Réglementation stricte</li>
+                                </ul>
+                                <strong>Alternative :</strong> Choisissez SAS ou SARL pour activités ẐEN.
+                            </div>
+                        `,
+                        'startup': `
+                            <h4 style="color: #2ecc71; margin: 0 0 8px 0;">🎯 Idéal pour : Innovation ẐEN Disruptive</h4>
+                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 12px;">
+                                <div>
+                                    <strong>✅ Cas d'usage recommandés :</strong>
+                                    <ul style="margin: 4px 0; padding-left: 16px;">
+                                        <li>DeFi avec ẐEN</li>
+                                        <li>Plateforme d'échange ẐEN</li>
+                                        <li>Innovation blockchain</li>
+                                        <li>Croissance exponentielle visée</li>
+                                    </ul>
+                                </div>
+                                <div>
+                                    <strong>🚀 Avantages startup :</strong>
+                                    <ul style="margin: 4px 0; padding-left: 16px;">
+                                        <li>BSPCE pour équipes</li>
+                                        <li>Statut JEI possible</li>
+                                        <li>CIR/CII pour R&D</li>
+                                        <li>Levées de fonds facilitées</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        `,
+                        'cooperative': `
+                            <h4 style="color: #2ecc71; margin: 0 0 8px 0;">🎯 Idéal pour : Économie Collaborative</h4>
+                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 12px;">
+                                <div>
+                                    <strong>✅ Cas d'usage recommandés :</strong>
+                                    <ul style="margin: 4px 0; padding-left: 16px;">
+                                        <li>Plateforme coopérative ẐEN</li>
+                                        <li>Services mutualisés</li>
+                                        <li>Économie sociale et solidaire</li>
+                                        <li>Participation salariés</li>
+                                    </ul>
+                                </div>
+                                <div>
+                                    <strong>🤝 Spécificités SCOP :</strong>
+                                    <ul style="margin: 4px 0; padding-left: 16px;">
+                                        <li>Salariés = associés majoritaires</li>
+                                        <li>Participation aux bénéfices</li>
+                                        <li>Réserves impartageables</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        `,
+                        'scic': `
+                            <h4 style="color: #2ecc71; margin: 0 0 8px 0;">🎯 ⭐ PARFAIT pour : Écosystème ẐEN Coopératif</h4>
+                            
+                            <div style="margin-bottom: 12px; padding: 8px; background: rgba(52,152,219,0.1); border-radius: 4px; border-left: 3px solid #3498db;">
+                                <strong>🌟 Usages ẐEN optimaux en SCIC :</strong><br>
+                                • <strong>Infrastructure décentralisée</strong> : PC GAMER + 24 Satellites RPi5<br>
+                                • <strong>Monnaie territoriale</strong> : Circulation locale avec pont EUR<br>
+                                • <strong>Économie contributive</strong> : Récompenses création de contenu<br>
+                                • <strong>Coopérative de services</strong> : Cloud, IPFS, NOSTR, NextCloud
+                            </div>
+
+                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 12px;">
+                                <div>
+                                    <strong>✅ Modèle économique UPlanet :</strong>
+                                    <ul style="margin: 4px 0; padding-left: 16px;">
+                                        <li><strong>Location :</strong> 10Go MULTIPASS (10Ẑ/sem), 128Go ZEN Card (40Ẑ/sem)</li>
+                                        <li><strong>Parts sociales :</strong> 500Ẑ → Exemption loyer + vote</li>
+                                        <li><strong>Rémunération :</strong> PAF Armateur + 2xPAF Capitaine</li>
+                                        <li><strong>Surplus :</strong> Répartition 3x1/3 automatique</li>
+                                    </ul>
+                                </div>
+                                <div>
+                                    <strong>🏛️ Multi-sociétariat légal :</strong>
+                                    <ul style="margin: 4px 0; padding-left: 16px;">
+                                        <li><strong>Locataires :</strong> Clients → Sociétaires (parcours naturel)</li>
+                                        <li><strong>Capitaines :</strong> Opérateurs techniques rémunérés</li>
+                                        <li><strong>Armateurs :</strong> Apporteurs matériel (capital)</li>
+                                        <li><strong>Collectivités :</strong> Partenaires institutionnels</li>
+                                    </ul>
+                                </div>
+                            </div>
+
+                            <div style="margin-top: 8px; padding: 8px; background: rgba(46,204,113,0.1); border-radius: 4px; border-left: 3px solid #2ecc71;">
+                                <strong>💡 Avantages juridiques ẐEN :</strong><br>
+                                • <strong>Monnaie interne</strong> : Légale en SCIC (pas de régulation bancaire)<br>
+                                • <strong>Pont de liquidité</strong> : Conversion ẐEN → EUR via coopérative (1Ẑ = 0.1Ğ1)<br>
+                                • <strong>Fiscalité simple</strong> : Fait générateur = conversion EUR<br>
+                                • <strong>Agrément ESS</strong> : Reconnaissance utilité sociale possible
+                            </div>
+
+                            <div style="margin-top: 8px; padding: 8px; background: rgba(230,126,34,0.1); border-radius: 4px; border-left: 3px solid #e67e22;">
+                                <strong>⚠️ Contraintes SCIC à respecter :</strong><br>
+                                • <strong>Capital minimum</strong> : 18 500€ (ou 37 000€ si forme SAS)<br>
+                                • <strong>Lucrativité limitée</strong> : Pas de distribution libre des bénéfices<br>
+                                • <strong>Agrément préfectoral</strong> : Dossier d'utilité sociale obligatoire<br>
+                                • <strong>Reporting annuel</strong> : Bilan social et impact territorial
+                            </div>
+                        `,
+                        'federation': `
+                            <h4 style="color: #2ecc71; margin: 0 0 8px 0;">🎯 Idéal pour : Réseau Commercial ẐEN (Modèle "Intermarché Points")</h4>
+                            
+                            <div style="margin-bottom: 12px; padding: 8px; background: rgba(52,152,219,0.1); border-radius: 4px; border-left: 3px solid #3498db;">
+                                <strong>🌟 Usages ẐEN en Fédération Commerciale :</strong><br>
+                                • <strong>Carte fidélité inter-enseignes</strong> : 1€ d'achat = 1 ẐEN (10% cashback, précision 10cts)<br>
+                                • <strong>Cashback mutualisé</strong> : Dépenser ẐEN chez tous partenaires<br>
+                                • <strong>Marketing collaboratif</strong> : Campagnes communes financées en ẐEN<br>
+                                • <strong>Trésorerie partagée</strong> : Fonds de roulement collectif
+                            </div>
+
+                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 12px;">
+                                <div>
+                                    <strong>✅ Modèle économique ẐEN :</strong>
+                                    <ul style="margin: 4px 0; padding-left: 16px;">
+                                        <li><strong>Émission :</strong> 1€ achat = 1 ẐEN (10% cashback, précision 10cts)</li>
+                                        <li><strong>Utilisation :</strong> 1 ẐEN = 0.10€ de réduction (précision Ğ1)</li>
+                                        <li><strong>Cotisation :</strong> 0.5% CA pour alimenter fonds ẐEN</li>
+                                        <li><strong>Gouvernance :</strong> 1 commerce = 1 voix (égalitaire)</li>
+                                    </ul>
+                                </div>
+                                <div>
+                                    <strong>🏪 Secteurs optimaux :</strong>
+                                    <ul style="margin: 4px 0; padding-left: 16px;">
+                                        <li><strong>Restauration :</strong> Bars, restaurants, traiteurs</li>
+                                        <li><strong>Commerce :</strong> Épiceries, boulangeries, pharmacies</li>
+                                        <li><strong>Services :</strong> Coiffeurs, garages, pressing</li>
+                                        <li><strong>Artisanat :</strong> Menuisiers, électriciens, plombiers</li>
+                                    </ul>
+                                </div>
+                            </div>
+
+                            <div style="margin-top: 8px; padding: 8px; background: rgba(46,204,113,0.1); border-radius: 4px; border-left: 3px solid #2ecc71;">
+                                <strong>💡 Avantages ẐEN Fédération :</strong><br>
+                                • <strong>Fidélisation croisée</strong> : Clients partagés entre commerces<br>
+                                • <strong>Trésorerie optimisée</strong> : Délai de conversion ẐEN → EUR<br>
+                                • <strong>Marketing mutualisé</strong> : Coûts publicitaires partagés<br>
+                                • <strong>Données clients</strong> : Analytics comportementaux anonymisés
+                            </div>
+
+                            <div style="margin-top: 8px; padding: 8px; background: rgba(230,126,34,0.1); border-radius: 4px; border-left: 3px solid #e67e22;">
+                                <strong>⚠️ Points d'attention juridiques :</strong><br>
+                                • <strong>Statut GIE recommandé</strong> : Transparence fiscale + mutualisation<br>
+                                • <strong>Règles RGPD</strong> : Consentement clients pour données partagées<br>
+                                • <strong>Comptabilité séparée</strong> : ẐEN ≠ monnaie légale (jeton interne)<br>
+                                • <strong>Conversion EUR</strong> : Déclaration fiscale individuelle par commerce
+                            </div>
+                        `
+                    };
+                    
+                    usageAdviceDiv.innerHTML = zenUsageIntro + (adviceContent[structure] || adviceContent['association']);
+                }
+                
+                if (vatRateInput) {
+                    vatRateInput.addEventListener('input', updateSimulation);
+                }
+                if (corporateTaxRateInput) {
+                    corporateTaxRateInput.addEventListener('input', updateSimulation);
+                }
+                if (legalStructureSelect) {
+                    legalStructureSelect.addEventListener('change', updateTaxRatesForStructure);
+                    // Initialize with default values
+                    updateTaxRatesForStructure();
+                    // Initialize usage advice
+                    setTimeout(() => updateUsageAdvice(), 200);
+                }
+            }, 100);
 
             // Initial simulation
             updateSimulation();
@@ -1538,15 +2153,43 @@
             }, 0);
         }
 
+        // Fonction pour mettre à jour le dashboard avec les données complètes
+        function updateDashboardWithCompleteData(data) {
+            // Update IPFS Node ID link
+            const ipfsNodeId = data.IPFSNODEID;
+            if (ipfsNodeId && ipfsNodeId !== 'N/A') {
+                const ipfsLink = document.querySelector('a[href*="/ipns/"]');
+                if (ipfsLink) {
+                    ipfsLink.href = `/ipns/${ipfsNodeId}`;
+                    ipfsLink.textContent = ipfsNodeId;
+                }
+            }
+
+            // Update UPlanet info
+            const planetPub = data.UPLANETG1PUB ? data.UPLANETG1PUB.substring(0, 8) : 'N/A';
+            const uplanetInfoElements = document.querySelectorAll('.uplanet-info');
+            if (uplanetInfoElements.length >= 2) {
+                uplanetInfoElements[0].textContent = `UPlanet${planetPub}`;
+            }
+
+            // Update legal wallets section with complete data
+            createLegalWalletsSection(data, data._originalApiUrl);
+
+            console.log('Dashboard updated with complete IPNS data');
+        }
+
         // Charger les données au chargement de la page
         window.addEventListener('load', () => {
             const urlParams = new URLSearchParams(window.location.search);
             const uPlanetAPI_URL = urlParams.get('api_url') || '';
             
-            // Utiliser l'URL de l'API par défaut si aucun paramètre n'est fourni
-            loadUPlanetData(uPlanetAPI_URL).then(data => {
-                if (data) {
-                    createEconomicDashboard(data);
+            // Progressive loading: show page immediately with Ustats data, then update with IPNS data
+            loadUPlanetData(
+                uPlanetAPI_URL,
+                // Callback for Ustats data (fast) - show page immediately
+                (ustatsData) => {
+                    console.log('Creating dashboard with Ustats data (fast loading)');
+                    createEconomicDashboard(ustatsData, true); // true = partial data
                     
                     // Force initial update after dashboard creation
                     const newNostrInput = document.getElementById('new-nostr');
@@ -1557,8 +2200,13 @@
                         newNostrInput.dispatchEvent(new Event('input'));
                         newZenInput.dispatchEvent(new Event('input'));
                     }
+                },
+                // Callback for complete data (slow) - update with IPNS data
+                (completeData) => {
+                    console.log('Updating dashboard with complete IPNS data');
+                    updateDashboardWithCompleteData(completeData);
                 }
-            });
+            );
         });
 
     </script>

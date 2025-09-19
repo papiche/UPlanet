@@ -732,9 +732,21 @@
                         <div class="kpi-title">MARGE BRUTE</div>
                         <div class="kpi-value" id="grossMargin">0%</div>
                     </div>
-                     <div class="kpi-card">
+                    <div class="kpi-card">
                         <div class="kpi-title">EMPLOIS LOCAUX CRÉÉS</div>
                         <div class="kpi-value" id="jobsCreated">3</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-title">PRIX MOYEN/ABONNÉ</div>
+                        <div class="kpi-value" id="avgPrice">0 Ẑ</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-title">COÛTS FIXES/LUNE</div>
+                        <div class="kpi-value" id="fixedCosts">0 Ẑ</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-title">TAUX UTILISATION</div>
+                        <div class="kpi-value" id="utilizationRate">0%</div>
                     </div>
                 </div>
                 
@@ -762,6 +774,11 @@
                     </div>
                 </div>
                 
+                <!-- Répartition des abonnés -->
+                <div id="abonnes-breakdown">
+                    <!-- La répartition sera générée dynamiquement par JavaScript -->
+                </div>
+                
                 <!-- Conseils contextuels -->
                 <div class="tips-container" id="contextual-tips">
                     <!-- Les conseils seront générés dynamiquement par JavaScript -->
@@ -771,20 +788,20 @@
             <!-- Section 2: Tableau de Bord Financier avec onglets -->
             <div class="section">
                 <div class="tabs">
-                    <button class="tab-button active" onclick="openTab(event, 'monthly')">📈 Vue Mensuelle</button>
-                    <button class="tab-button" onclick="openTab(event, 'yearly')">📅 Projection Annuelle</button>
+                    <button class="tab-button active" onclick="openTab(event, 'monthly')">🌙 Vue Lunaire</button>
+                    <button class="tab-button" onclick="openTab(event, 'yearly')">📅 Projection 13 Lunes</button>
                 </div>
 
                 <div id="monthly" class="tab-content active">
-                     <h2>💰 Tableau de Bord Financier Mensuel (en Ẑen / €)</h2>
+                     <h2>🌙 Tableau de Bord Financier Lunaire (en Ẑen / €)</h2>
                      <div class="financial-grid" id="monthly-financials">
                         <!-- Le contenu sera généré par JS -->
                      </div>
                 </div>
 
                 <div id="yearly" class="tab-content">
-                    <h2>💰 Projection sur 12 mois</h2>
-                    <p style="text-align:center; margin-bottom:20px; color:#7f8c8d;">Cette projection suppose des paramètres constants sur l'année.</p>
+                    <h2>💰 Projection sur 13 lunes</h2>
+                    <p style="text-align:center; margin-bottom:20px; color:#7f8c8d;">Cette projection suppose des paramètres constants sur l'année (13 lunes de 4 semaines).</p>
                     <div class="financial-grid" id="yearly-financials">
                         <!-- Le contenu sera généré par JS -->
                     </div>
@@ -793,7 +810,7 @@
 
             <!-- Section 3: Création de Richesse -->
             <div class="section">
-                <h2>🌱 Votre Création de Richesse Commune (Mensuelle)</h2>
+                <h2>🌱 Votre Création de Richesse Commune (Lunaire)</h2>
                 <div class="wealth-grid">
                     <div class="chart-container">
                         <canvas id="wealthChart"></canvas>
@@ -803,7 +820,7 @@
                     </div>
                 </div>
                 <div class="impact-statement" id="impactStatement">
-                    🌳 Impact Écologique ce mois-ci : Votre coopérative finance l'acquisition de 0 m² de forêt-jardin !
+                    🌳 Impact Écologique cette lune : Votre coopérative finance l'acquisition de 0 m² de forêt-jardin !
                 </div>
             </div>
             
@@ -931,6 +948,8 @@
             TAUX_IS: 0.25,
             REMUNERATION_CAPITAINE: 42, // 3x PAF (14 Ẑ Armateur + 28 Ẑ Capitaine = 42 Ẑ/semaine)
             PRIX_M2_FORET: 2,
+            SEMAINES_PAR_LUNE: 4, // 4 semaines par lune (cycle lunaire)
+            LUNES_PAR_AN: 13,     // 13 lunes par an (52 semaines ÷ 4 = 13)
             // Capacités par station
             LOCATAIRES_PAR_STATION: 250,  // MULTIPASS par station
             PROPRIETAIRES_PAR_STATION: 24, // ZEN Cards par station
@@ -1011,6 +1030,38 @@
                                 <strong>Capacité max :</strong> ${formatNumber(capacity.mixed)} abonnés 
                                 (${formatNumber(capacity.multipassInMix)} MULTIPASS + ${formatNumber(capacity.zencardInMix)} ZEN Cards)
                             </div>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+        
+        // Mise à jour de l'affichage de la répartition des abonnés
+        function updateAbonnesBreakdown(nbMultipass, nbZenCards, nbTotal) {
+            const breakdownContainer = document.getElementById('abonnes-breakdown');
+            if (breakdownContainer) {
+                const values = getDynamicValues();
+                const revenuMultipass = nbMultipass * values.prixMultipass * C.SEMAINES_PAR_LUNE;
+                const revenuZenCards = nbZenCards * values.prixZenCard * C.SEMAINES_PAR_LUNE;
+                const revenuTotal = revenuMultipass + revenuZenCards;
+                
+                breakdownContainer.innerHTML = `
+                    <div style="background: #f8f9fa; padding: 15px; border-radius: 10px; margin-top: 15px;">
+                        <h4 style="color: #2c3e50; margin-bottom: 10px;">📊 Répartition des ${formatNumber(nbTotal)} Abonnés</h4>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                            <div style="background: white; padding: 12px; border-radius: 8px; border-left: 3px solid #3498db;">
+                                <div style="font-weight: 600; color: #3498db;">🏠 MULTIPASS</div>
+                                <div style="font-size: 1.2rem; font-weight: 700; color: #2c3e50;">${formatNumber(nbMultipass)} abonnés</div>
+                                <div style="font-size: 0.9rem; color: #7f8c8d;">${formatCurrency(revenuMultipass)}/lune</div>
+                            </div>
+                            <div style="background: white; padding: 12px; border-radius: 8px; border-left: 3px solid #f39c12;">
+                                <div style="font-weight: 600; color: #f39c12;">👑 ZEN CARDS</div>
+                                <div style="font-size: 1.2rem; font-weight: 700; color: #2c3e50;">${formatNumber(nbZenCards)} abonnés</div>
+                                <div style="font-size: 0.9rem; color: #7f8c8d;">${formatCurrency(revenuZenCards)}/lune</div>
+                            </div>
+                        </div>
+                        <div style="text-align: center; margin-top: 10px; padding-top: 10px; border-top: 1px solid #e9ecef;">
+                            <strong>Total CA (HT) : ${formatCurrency(revenuTotal)}/lune</strong>
                         </div>
                     </div>
                 `;
@@ -1105,10 +1156,14 @@
         // Génération du HTML pour les tableaux financiers
         function createFinancialHTML(period, data) {
             const isYearly = period === 'yearly';
-            const multiplier = isYearly ? 12 : 1;
+            const multiplier = isYearly ? C.LUNES_PAR_AN : 1;
             const container = document.getElementById(`${period}-financials`);
             
             container.innerHTML = `
+                <!-- Section Revenus -->
+                <div style="grid-column: 1 / -1; background: #e8f5e8; padding: 10px; border-radius: 8px; margin-bottom: 10px;">
+                    <h4 style="color: #27ae60; margin: 0; font-size: 0.9rem;">💰 REVENUS</h4>
+                </div>
                 <div class="financial-item revenue">
                     <div class="financial-label">💳 CA Encaissé (TTC)</div>
                     <div class="financial-value positive">${formatCurrency(data.chiffreAffairesTTC * multiplier)}</div>
@@ -1117,22 +1172,31 @@
                     <div class="financial-label">🏛️ TVA provisionnée</div>
                     <div class="financial-value negative">-${formatCurrency(data.montantTVA * multiplier)}</div>
                 </div>
-                <div style="grid-column: 1 / -1; height: 1px; background: #ddd; margin: 8px 0;"></div>
                 <div class="financial-item revenue">
                     <div class="financial-label">📈 CA Réel (HT)</div>
                     <div class="financial-value positive">${formatCurrency(data.chiffreAffairesHT * multiplier)}</div>
+                </div>
+                
+                <!-- Section Coûts -->
+                <div style="grid-column: 1 / -1; background: #fadbd8; padding: 10px; border-radius: 8px; margin: 15px 0 10px 0;">
+                    <h4 style="color: #e74c3c; margin: 0; font-size: 0.9rem;">💸 COÛTS</h4>
                 </div>
                 <div class="financial-item cost">
                     <div class="financial-label">🖥️ Coûts Infrastructure</div>
                     <div class="financial-value negative">-${formatCurrency(data.coutsInfra * multiplier)}</div>
                 </div>
-                <div class="financial-item highlight">
-                    <div class="financial-label">💡 Marge Brute</div>
-                    <div class="financial-value ${data.margeBrute >= 0 ? 'positive' : 'negative'}">${formatCurrency(data.margeBrute * multiplier)}</div>
-                </div>
                 <div class="financial-item cost">
                     <div class="financial-label">🔬 Coûts R&D</div>
                     <div class="financial-value negative">-${formatCurrency(data.coutsRD * multiplier)}</div>
+                </div>
+                
+                <!-- Section Résultats -->
+                <div style="grid-column: 1 / -1; background: #d1ecf1; padding: 10px; border-radius: 8px; margin: 15px 0 10px 0;">
+                    <h4 style="color: #0c5460; margin: 0; font-size: 0.9rem;">📊 RÉSULTATS</h4>
+                </div>
+                <div class="financial-item highlight">
+                    <div class="financial-label">💡 Marge Brute</div>
+                    <div class="financial-value ${data.margeBrute >= 0 ? 'positive' : 'negative'}">${formatCurrency(data.margeBrute * multiplier)}</div>
                 </div>
                 <div class="financial-item highlight">
                     <div class="financial-label">📊 Résultat Avant Impôt</div>
@@ -1165,13 +1229,16 @@
             const nbMultipass = Math.floor(nbAbonnes * values.ratioMultipass);
             const nbZenCards = nbAbonnes - nbMultipass;
             
+            // Mise à jour de l'affichage de la répartition
+            updateAbonnesBreakdown(nbMultipass, nbZenCards, nbAbonnes);
+            
             // Calculs mensuels
             const coutsRD = (nbDevs * values.salaireDev) + (nbCM * values.salaireCM);
             const coutsInfra = nbCapitaines * C.REMUNERATION_CAPITAINE;
             const coutsFixesHT = coutsRD + coutsInfra;
 
-            // Chiffre d'affaires avec prix dynamiques (conversion hebdomadaire -> mensuelle)
-            const chiffreAffairesHT = (nbMultipass * values.prixMultipass * 4.33) + (nbZenCards * values.prixZenCard * 4.33);
+            // Chiffre d'affaires avec prix dynamiques (conversion hebdomadaire -> lunaire)
+            const chiffreAffairesHT = (nbMultipass * values.prixMultipass * C.SEMAINES_PAR_LUNE) + (nbZenCards * values.prixZenCard * C.SEMAINES_PAR_LUNE);
             const montantTVA = chiffreAffairesHT * C.TAUX_TVA;
             const chiffreAffairesTTC = chiffreAffairesHT + montantTVA;
 
@@ -1191,7 +1258,7 @@
 
             // Mise à jour des KPIs avec classes CSS dynamiques
             // Calcul du prix moyen pondéré par abonné
-            const prixMoyenParAbonne = (values.prixMultipass * values.ratioMultipass + values.prixZenCard * values.ratioZenCard) * 4.33; // conversion hebdo -> mensuel
+            const prixMoyenParAbonne = (values.prixMultipass * values.ratioMultipass + values.prixZenCard * values.ratioZenCard) * C.SEMAINES_PAR_LUNE; // conversion hebdo -> lunaire
             const breakEven = Math.ceil(coutsFixesHT / prixMoyenParAbonne);
             const breakEvenElement = document.getElementById('breakEven');
             const breakEvenCard = breakEvenElement.closest('.kpi-card');
@@ -1223,6 +1290,29 @@
             }
             
             document.getElementById('jobsCreated').textContent = formatNumber(nbDevs + nbCM);
+            
+            // Mise à jour des KPIs supplémentaires
+            document.getElementById('avgPrice').textContent = formatCurrency(prixMoyenParAbonne);
+            document.getElementById('fixedCosts').textContent = formatCurrency(coutsFixesHT);
+            
+            // Calcul du taux d'utilisation de la constellation
+            const capacity = calculateConstellationCapacity(nbCapitaines);
+            const utilizationRate = (nbAbonnes / capacity.mixed * 100).toFixed(1);
+            const utilizationElement = document.getElementById('utilizationRate');
+            const utilizationCard = utilizationElement.closest('.kpi-card');
+            utilizationElement.textContent = utilizationRate + '%';
+            
+            // Coloration du taux d'utilisation
+            utilizationCard.className = 'kpi-card';
+            if (utilizationRate > 100) {
+                utilizationCard.classList.add('negative');
+            } else if (utilizationRate > 80) {
+                utilizationCard.classList.add('warning');
+            } else if (utilizationRate < 20) {
+                utilizationCard.classList.add('warning');
+            } else {
+                utilizationCard.classList.add('positive');
+            }
 
             // Affichage des conseils contextuels
             showContextualTips(nbAbonnes, breakEven, grossMargin);
@@ -1267,7 +1357,7 @@
                         <div style="font-weight: 700; color: #27ae60;">${formatCurrency(part)}</div>
                     </div>
                 `;
-                impactStatement.textContent = `🌳 Impact Écologique ce mois-ci : Votre coopérative finance l'acquisition de ${formatNumber(m2Foret)} m² de forêt-jardin !`;
+                impactStatement.textContent = `🌳 Impact Écologique cette lune : Votre coopérative finance l'acquisition de ${formatNumber(m2Foret)} m² de forêt-jardin !`;
                 updateChart([part, part, part], ['#3498db', '#27ae60', '#f39c12'], 'doughnut', resultatNet);
             } else {
                 legendContainer.innerHTML = `<p style="text-align:center; color:#7f8c8d;">Le résultat net doit être positif pour créer de la richesse commune.</p>`;

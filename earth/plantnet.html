@@ -453,12 +453,12 @@
             border-radius: 10px;
             background: rgba(255, 255, 255, 0.05);
             overflow: hidden;
-            max-height: 0;
+            max-height: 500px;
             transition: max-height 0.3s ease;
         }
         
-        .map-accordion.open {
-            max-height: 500px;
+        .map-accordion.closed {
+            max-height: 0;
         }
         
         .map-accordion-content {
@@ -536,6 +536,8 @@
             border-radius: 10px;
             border: 1px solid rgba(255, 255, 255, 0.2);
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+            background: #f0f0f0;
+            min-height: 250px;
         }
         
         /* Responsive Design */
@@ -1762,8 +1764,16 @@ END:VEVENT
 
         // Map functions
         function initializeMiniMap(lat = 0, lon = 0) {
+            console.log('Initializing map with coordinates:', lat, lon);
+            
             if (miniMap) {
                 miniMap.remove();
+            }
+            
+            // Check if Leaflet is loaded
+            if (typeof L === 'undefined') {
+                console.error('Leaflet library not loaded');
+                return;
             }
             
             // Ensure the map container exists and is visible
@@ -1773,42 +1783,44 @@ END:VEVENT
                 return;
             }
             
-            // Wait a bit for the accordion to fully open
-            setTimeout(() => {
-                try {
-                    miniMap = L.map('mini-map').setView([lat, lon], 10);
-                    
-                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                        attribution: '© OpenStreetMap contributors'
-                    }).addTo(miniMap);
+            console.log('Map container found:', mapContainer);
+            
+            try {
+                console.log('Creating Leaflet map...');
+                miniMap = L.map('mini-map').setView([lat, lon], 10);
+                console.log('Map created:', miniMap);
+                
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '© OpenStreetMap contributors'
+                }).addTo(miniMap);
 
-                    miniMarker = L.marker([lat, lon], {
-                        draggable: true
-                    }).addTo(miniMap);
+                miniMarker = L.marker([lat, lon], {
+                    draggable: true
+                }).addTo(miniMap);
 
-                    miniMap.on('click', function(e) {
-                        const clickedLat = Math.round(e.latlng.lat * 100) / 100;
-                        const clickedLon = Math.round(e.latlng.lng * 100) / 100;
-                        updateCoordinatesFromMap(clickedLat, clickedLon);
-                    });
+                miniMap.on('click', function(e) {
+                    const clickedLat = Math.round(e.latlng.lat * 100) / 100;
+                    const clickedLon = Math.round(e.latlng.lng * 100) / 100;
+                    updateCoordinatesFromMap(clickedLat, clickedLon);
+                });
 
-                    miniMarker.on('dragend', function(e) {
-                        const markerLat = Math.round(e.target.getLatLng().lat * 100) / 100;
-                        const markerLon = Math.round(e.target.getLatLng().lng * 100) / 100;
-                        updateCoordinatesFromMap(markerLat, markerLon);
-                    });
-                    
-                    // Invalidate size after a short delay to ensure proper rendering
-                    setTimeout(() => {
-                        if (miniMap) {
-                            miniMap.invalidateSize();
-                        }
-                    }, 100);
-                    
-                } catch (error) {
-                    console.error('Error initializing map:', error);
-                }
-            }, 50);
+                miniMarker.on('dragend', function(e) {
+                    const markerLat = Math.round(e.target.getLatLng().lat * 100) / 100;
+                    const markerLon = Math.round(e.target.getLatLng().lng * 100) / 100;
+                    updateCoordinatesFromMap(markerLat, markerLon);
+                });
+                
+                // Invalidate size after a short delay to ensure proper rendering
+                setTimeout(() => {
+                    if (miniMap) {
+                        miniMap.invalidateSize();
+                        console.log('Map size invalidated');
+                    }
+                }, 100);
+                
+            } catch (error) {
+                console.error('Error initializing map:', error);
+            }
         }
 
         function updateCoordinatesFromMap(lat, lon) {
@@ -1828,27 +1840,19 @@ END:VEVENT
 
         function toggleMapAccordion() {
             const accordion = document.getElementById('map-accordion');
-            const isOpen = accordion.classList.contains('open');
+            const isClosed = accordion.classList.contains('closed');
             
-            if (isOpen) {
-                accordion.classList.remove('open');
-            } else {
-                accordion.classList.add('open');
-                
+            if (isClosed) {
+                accordion.classList.remove('closed');
+                // Reinitialize map when accordion opens
                 setTimeout(() => {
                     const lat = currentLocation ? currentLocation.latitude : 0;
                     const lon = currentLocation ? currentLocation.longitude : 0;
+                    console.log('Reinitializing map when accordion opens:', lat, lon);
                     initializeMiniMap(lat, lon);
-                    
-                    document.getElementById('lat-display').value = lat.toFixed(2);
-                    document.getElementById('lon-display').value = lon.toFixed(2);
-                    
-                    setTimeout(() => {
-                        if (miniMap) {
-                            miniMap.invalidateSize();
-                        }
-                    }, 350);
-                }, 50);
+                }, 100);
+            } else {
+                accordion.classList.add('closed');
             }
         }
 
@@ -1906,6 +1910,12 @@ END:VEVENT
             
             // Initialize location controls
             initializeLocationSelects();
+            
+            // Initialize map after DOM is fully loaded
+            setTimeout(() => {
+                console.log('Initializing map on page load...');
+                initializeMiniMap(0, 0);
+            }, 500);
             
             // Setup location status click handler
             document.getElementById('location-status').addEventListener('click', toggleMapAccordion);

@@ -1,0 +1,1969 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🌿 uPlanet Flora Explorer - PlantNet Integration</title>
+    <!-- Nostr integration -->
+    <script src="/ipfs/QmXEmaPRUaGcvhuyeG99mHHNyP43nn8GtNeuDok8jdpG4a/nostr.bundle.js"></script>
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://ipfs.copylaradio.com/ipns/copylaradio.com/leaflet.css"/>
+    <!-- Leaflet JavaScript -->
+    <script src="https://ipfs.copylaradio.com/ipns/copylaradio.com/leaflet.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            color: #e8e8e8;
+            min-height: 100vh;
+        }
+        .container {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 30px;
+            border-radius: 20px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+        h1 {
+            color: #4ade80;
+            text-align: center;
+            margin-bottom: 10px;
+            font-size: 2.5em;
+            font-weight: 700;
+            text-shadow: 0 0 20px rgba(74, 222, 128, 0.3);
+        }
+        
+        .subtitle {
+            text-align: center;
+            color: #94a3b8;
+            font-size: 1.1em;
+            margin-bottom: 30px;
+            font-weight: 300;
+        }
+        .controls {
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 20px;
+            border-radius: 15px;
+            margin-bottom: 30px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #e2e8f0;
+        }
+        input, button {
+            padding: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            font-size: 16px;
+            background: rgba(255, 255, 255, 0.05);
+            color: #e2e8f0;
+            transition: all 0.3s ease;
+        }
+        input:focus {
+            outline: none;
+            border-color: #4ade80;
+            box-shadow: 0 0 0 3px rgba(74, 222, 128, 0.1);
+        }
+        button {
+            background: linear-gradient(135deg, #4ade80, #22c55e);
+            color: white;
+            border: none;
+            cursor: pointer;
+            margin-right: 10px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        button:hover {
+            background: linear-gradient(135deg, #22c55e, #16a34a);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(74, 222, 128, 0.3);
+        }
+        .info-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        .info-card {
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 20px;
+            border-radius: 15px;
+            border-left: 4px solid #4ade80;
+            transition: all 0.3s ease;
+        }
+        .info-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
+        }
+        .info-card.montante {
+            border-left-color: #4ade80;
+        }
+        .info-card.descendante {
+            border-left-color: #f87171;
+        }
+        .calendar-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        .calendar-table th,
+        .calendar-table td {
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 12px;
+            text-align: left;
+        }
+        .calendar-table th {
+            background: rgba(74, 222, 128, 0.2);
+            color: #e2e8f0;
+            font-weight: 600;
+        }
+        .montante-row {
+            background: rgba(74, 222, 128, 0.1);
+        }
+        .descendante-row {
+            background: rgba(248, 113, 113, 0.1);
+        }
+        .current-period {
+            font-weight: bold;
+            background: rgba(74, 222, 128, 0.2) !important;
+            border: 1px solid rgba(74, 222, 128, 0.3);
+        }
+        .export-section {
+            text-align: center;
+            margin-top: 30px;
+            padding: 20px;
+            background: rgba(74, 222, 128, 0.1);
+            border: 1px solid rgba(74, 222, 128, 0.2);
+            border-radius: 15px;
+        }
+        .moon-icon {
+            font-size: 20px;
+            margin-right: 5px;
+        }
+        .nostr-section {
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 20px;
+            border-radius: 15px;
+            margin-top: 30px;
+        }
+        .photo-upload {
+            border: 2px dashed #4ade80;
+            border-radius: 15px;
+            padding: 20px;
+            text-align: center;
+            margin: 15px 0;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: rgba(74, 222, 128, 0.05);
+        }
+        .photo-upload:hover {
+            border-color: #22c55e;
+            background: rgba(74, 222, 128, 0.1);
+            transform: translateY(-2px);
+        }
+        .photo-preview {
+            max-width: 100%;
+            max-height: 200px;
+            border-radius: 8px;
+            margin: 10px 0;
+        }
+        .location-info {
+            background: rgba(74, 222, 128, 0.1);
+            border: 1px solid rgba(74, 222, 128, 0.2);
+            padding: 10px;
+            border-radius: 8px;
+            margin: 10px 0;
+            font-size: 14px;
+            color: #e2e8f0;
+        }
+        .nostr-login {
+            background: linear-gradient(135deg, #6366f1, #4f46e5);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            margin: 10px 0;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+        .nostr-login:hover {
+            background: linear-gradient(135deg, #4f46e5, #4338ca);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+        }
+        .message-form {
+            display: none;
+            margin-top: 20px;
+        }
+        .message-form textarea {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            margin: 10px 0;
+            resize: vertical;
+            background: rgba(255, 255, 255, 0.05);
+            color: #e2e8f0;
+            transition: all 0.3s ease;
+        }
+        .message-form textarea:focus {
+            outline: none;
+            border-color: #4ade80;
+            box-shadow: 0 0 0 3px rgba(74, 222, 128, 0.1);
+        }
+        .send-button {
+            background: linear-gradient(135deg, #4ade80, #22c55e);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+        .send-button:hover {
+            background: linear-gradient(135deg, #22c55e, #16a34a);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(74, 222, 128, 0.3);
+        }
+        .send-button:disabled {
+            background: rgba(148, 163, 184, 0.5);
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+        
+        /* Profile and Messages Section Styles */
+        .profile-section {
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 20px;
+            border-radius: 15px;
+            margin-top: 20px;
+            display: none;
+        }
+        
+        .profile-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            cursor: pointer;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            transition: all 0.3s ease;
+        }
+        
+        .profile-header:hover {
+            background: rgba(255, 255, 255, 0.15);
+            transform: translateY(-1px);
+        }
+        
+        .profile-toggle {
+            font-size: 18px;
+            transition: transform 0.3s ease;
+        }
+        
+        .profile-toggle.expanded {
+            transform: rotate(180deg);
+        }
+        
+        .profile-content {
+            display: none;
+            margin-top: 15px;
+        }
+        
+        .profile-content.expanded {
+            display: block;
+        }
+        
+        .profile-info {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 20px;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .profile-picture {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 2px solid #3498db;
+        }
+        
+        .profile-details h3 {
+            margin: 0 0 5px 0;
+            color: #e2e8f0;
+            font-weight: 600;
+        }
+        
+        .profile-details p {
+            margin: 0;
+            color: #94a3b8;
+            font-size: 14px;
+        }
+        
+        .messages-section {
+            margin-top: 20px;
+        }
+        
+        .message-item {
+            display: flex;
+            gap: 10px;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+            margin-bottom: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: all 0.3s ease;
+        }
+        
+        .message-item:hover {
+            background: rgba(255, 255, 255, 0.08);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        }
+        
+        .message-content {
+            flex: 1;
+        }
+        
+        .message-meta {
+            font-size: 12px;
+            color: #94a3b8;
+            margin-bottom: 8px;
+        }
+        
+        .message-text {
+            color: #e2e8f0;
+            line-height: 1.4;
+        }
+        
+        .loading {
+            text-align: center;
+            color: #94a3b8;
+            font-style: italic;
+        }
+        
+        .no-messages {
+            text-align: center;
+            color: #94a3b8;
+            font-style: italic;
+            padding: 20px;
+        }
+        
+        /* Location Controls & Map Styles */
+        #location-controls {
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.08);
+            margin: 15px 0;
+            display: none;
+        }
+        
+        .coord-control {
+            text-align: center;
+            margin: 10px 0;
+            min-width: 200px;
+        }
+        
+        .coord-control > div {
+            justify-content: center;
+            display: flex;
+            align-items: center;
+            gap: 3px;
+            flex-wrap: nowrap;
+            min-width: 180px;
+        }
+        
+        .tumbler {
+            appearance: none;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            padding: 4px 6px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            background: rgba(255, 255, 255, 0.05);
+            color: #e2e8f0;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 0.85em;
+            font-weight: bold;
+            border-radius: 6px;
+            margin: 0 1px;
+            text-align: center;
+            cursor: pointer;
+            min-width: 28px;
+            max-width: 35px;
+            width: 32px;
+            transition: all 0.3s ease;
+        }
+        
+        .tumbler:focus {
+            outline: none;
+            border-color: #4ade80;
+            box-shadow: 0 0 5px rgba(74, 222, 128, 0.3);
+        }
+        
+        .tumbler-dot {
+            font-size: 1.2em;
+            font-weight: bold;
+            margin: 0 5px;
+            color: #94a3b8;
+        }
+        
+        #location-status {
+            min-height: 1.1em;
+            cursor: pointer;
+            padding: 8px;
+            border-radius: 6px;
+            transition: all 0.3s ease;
+            text-align: center;
+            font-size: 0.9em;
+            color: #94a3b8;
+        }
+        
+        #location-status:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+        
+        /* Map accordion styles */
+        .map-accordion {
+            margin-top: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.05);
+            overflow: hidden;
+            max-height: 0;
+            transition: max-height 0.3s ease;
+        }
+        
+        .map-accordion.open {
+            max-height: 500px;
+        }
+        
+        .map-accordion-content {
+            padding: 15px;
+        }
+        
+        .map-controls {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            margin-bottom: 10px;
+            flex-wrap: wrap;
+        }
+        
+        .coord-input {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        
+        .coord-input label {
+            font-weight: bold;
+            color: #e2e8f0;
+            margin: 0;
+            min-width: 30px;
+            font-size: 0.8em;
+        }
+        
+        .coord-input input {
+            width: 80px;
+            padding: 6px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 6px;
+            font-size: 0.85em;
+            background: rgba(255, 255, 255, 0.05);
+            color: #e2e8f0;
+        }
+        
+        .coord-input input:focus {
+            border-color: #4ade80;
+            outline: none;
+            box-shadow: 0 0 0 2px rgba(74, 222, 128, 0.1);
+        }
+        
+        .map-button {
+            padding: 8px 16px;
+            background: linear-gradient(135deg, #4ade80, #22c55e);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.8em;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+        
+        .map-button:hover {
+            background: linear-gradient(135deg, #22c55e, #16a34a);
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(74, 222, 128, 0.3);
+        }
+        
+        .map-button.secondary {
+            background: linear-gradient(135deg, #6366f1, #4f46e5);
+        }
+        
+        .map-button.secondary:hover {
+            background: linear-gradient(135deg, #4f46e5, #4338ca);
+            box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
+        }
+        
+        #mini-map {
+            height: 250px;
+            width: 100%;
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        }
+        
+        /* Responsive Design */
+        @media screen and (max-width: 768px) {
+            .container {
+                padding: 10px;
+                margin: 10px auto;
+            }
+            
+            .nostr-section {
+                margin-bottom: 15px;
+            }
+            
+            .nostr-section > div:first-child {
+                flex-direction: column;
+                gap: 10px;
+            }
+            
+            .nostr-section h3 {
+                font-size: 16px;
+                margin: 0;
+            }
+            
+            .nostr-section p {
+                font-size: 12px;
+                margin: 5px 0;
+            }
+            
+            #nostr-message-section > div:first-child {
+                flex-direction: column;
+                gap: 10px;
+            }
+            
+            .photo-upload {
+                min-width: 100%;
+            }
+            
+            textarea {
+                min-width: 100%;
+            }
+            
+            .send-button {
+                width: 100%;
+            }
+            
+            #location-controls {
+                margin-bottom: 10px;
+            }
+            
+            #location-values {
+                flex-direction: column;
+                gap: 10px;
+            }
+            
+            .coord-control {
+                width: 100%;
+            }
+            
+            .coord-control > div {
+                justify-content: center;
+                flex-wrap: wrap;
+                gap: 3px;
+            }
+            
+            .tumbler {
+                padding: 4px 6px;
+                font-size: 0.85em;
+                min-width: 28px;
+                max-width: 35px;
+            }
+            
+            .tumbler-dot {
+                font-size: 1em;
+                margin: 0 2px;
+            }
+            
+            .map-controls {
+                flex-direction: column;
+                align-items: stretch;
+                gap: 8px;
+            }
+            
+            .coord-input {
+                justify-content: center;
+            }
+            
+            #mini-map {
+                height: 200px;
+            }
+        }
+        
+        @media screen and (max-width: 480px) {
+            .tumbler {
+                padding: 3px 4px;
+                font-size: 0.8em;
+                min-width: 25px;
+                max-width: 30px;
+            }
+            
+            #mini-map {
+                height: 180px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🌿 uPlanet Flora Explorer</h1>
+        <p class="subtitle">Cataloguez la flore avec PlantNet et partagez sur la UMAP</p>
+        
+        <!-- Nostr Integration Section - Moved to top -->
+        <div class="nostr-section" style="margin-bottom: 20px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                <div>
+                    <h3 style="margin: 0; font-size: 18px;">🌱 Partagez vos Observations</h3>
+                    <p style="margin: 5px 0 0 0; font-size: 14px; color: var(--muted);">Connectez-vous pour partager vos photos de plantes avec la communauté</p>
+                </div>
+                <button class="nostr-login" id="nostrLoginBtn" onclick="handleNostrLogin()" style="margin: 0;">Se connecter avec Nostr</button>
+            </div>
+            
+            <div id="nostr-message-section" class="message-form" style="margin-top: 15px;">
+                <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                    <div class="photo-upload" onclick="document.getElementById('photoInput').click()" style="flex: 1; min-width: 200px;">
+                        <div id="photoUploadText">📷 Ajouter une photo</div>
+                        <img id="photoPreview" class="photo-preview" style="display: none;">
+                    </div>
+                    <input type="file" id="photoInput" accept="image/*" capture="environment" style="display: none;" onchange="handlePhotoUpload(event)">
+                    
+                    <textarea id="messageText" placeholder="Description (optionnel)..." rows="2" style="flex: 1; min-width: 200px; margin: 0;"></textarea>
+                    
+                    <button class="send-button" id="sendMessageBtn" onclick="sendGeolocatedMessage()" style="margin: 0;">🌱 Partager</button>
+                </div>
+                
+                <div id="locationInfo" class="location-info" style="display: none; margin-top: 10px;">
+                    <strong>📍 Position:</strong> <span id="locationText"></span>
+                </div>
+                
+                <div id="plantnetResult" class="location-info" style="display: none; margin-top: 10px; background: #e8f4fd;">
+                    <strong>🌿 PlantNet:</strong> <span id="plantnetText"></span>
+                </div>
+                
+                <!-- Location Adjustment UI -->
+                <div id="location-controls">
+                    <div id="location-values" style="display: flex; justify-content: center; background-color: #ffffff; padding: 15px; border-radius: 8px; gap: 20px; flex-wrap: wrap; align-items: flex-start;">
+                        <!-- Latitude -->
+                        <div class="coord-control">
+                            <label for="lat-sign" style="font-size: 0.8em; display: block; text-align: center; margin-bottom: 8px; color: #2c3e50; font-weight: bold;">Latitude</label>
+                            <div style="display: flex; align-items: center; justify-content: center; gap: 2px;">
+                                <select id="lat-sign" class="tumbler">
+                                    <option value="N">N</option>
+                                    <option value="S">S</option>
+                                </select>
+                                <select id="lat-deg1" class="tumbler"></select>
+                                <select id="lat-deg0" class="tumbler"></select>
+                                <span class="tumbler-dot">.</span>
+                                <select id="lat-frac1" class="tumbler"></select>
+                                <select id="lat-frac0" class="tumbler"></select>
+                            </div>
+                        </div>
+                        <!-- Longitude -->
+                        <div class="coord-control">
+                            <label for="lon-sign" style="font-size: 0.8em; display: block; text-align: center; margin-bottom: 8px; color: #2c3e50; font-weight: bold;">Longitude</label>
+                            <div style="display: flex; align-items: center; justify-content: center; gap: 2px;">
+                                <select id="lon-sign" class="tumbler">
+                                    <option value="E">E</option>
+                                    <option value="W">W</option>
+                                </select>
+                                <select id="lon-deg2" class="tumbler"></select>
+                                <select id="lon-deg1" class="tumbler"></select>
+                                <select id="lon-deg0" class="tumbler"></select>
+                                <span class="tumbler-dot">.</span>
+                                <select id="lon-frac1" class="tumbler"></select>
+                                <select id="lon-frac0" class="tumbler"></select>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="location-status" style="font-size: 0.8em; text-align: center; margin-top: 8px; color: #7f8c8d;">Fetching location...</div>
+                    
+                    <!-- Map Accordion -->
+                    <div id="map-accordion" class="map-accordion">
+                        <div class="map-accordion-content">
+                            <div class="map-controls">
+                                <div class="coord-input">
+                                    <label>Lat:</label>
+                                    <input type="number" id="lat-display" step="0.01" min="-90" max="90">
+                                </div>
+                                <div class="coord-input">
+                                    <label>Lon:</label>
+                                    <input type="number" id="lon-display" step="0.01" min="-180" max="180">
+                                </div>
+                                <button type="button" class="map-button" id="update-map">Y aller</button>
+                                <button type="button" class="map-button secondary" id="get-location">Ma position</button>
+                            </div>
+                            <div id="mini-map"></div>
+                            <div style="padding: 8px 0; font-size: 0.8em; color: #7f8c8d; text-align: center;">
+                                💡 Cliquez sur la carte pour ajuster votre position
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Profile and Messages Section -->
+        <div id="profile-section" class="profile-section">
+            <div class="profile-header" onclick="toggleProfileSection()">
+                <h3 style="margin: 0;">👤 Mon Profil & Messages Récents</h3>
+                <span class="profile-toggle">▼</span>
+            </div>
+            <div id="profile-content" class="profile-content">
+                <div id="profile-info" class="profile-info">
+                    <div class="loading">Chargement du profil...</div>
+                </div>
+                <div id="messages-section" class="messages-section">
+                    <h4>Messages Récents</h4>
+                    <div id="messages-content" class="loading">Chargement des messages...</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="controls">
+            <div class="form-group">
+                <label for="latitude">Latitude :</label>
+                <input type="number" id="latitude" value="48.8566" step="0.0001" min="-90" max="90">
+            </div>
+            <div class="form-group">
+                <label for="longitude">Longitude :</label>
+                <input type="number" id="longitude" value="2.3522" step="0.0001" min="-180" max="180">
+            </div>
+            <button onclick="calculateLunarCalendar()">Calculer le Calendrier Lunaire</button>
+            <button onclick="getCurrentLocation()">Utiliser ma position</button>
+        </div>
+
+        <div class="info-grid">
+            <div class="info-card montante">
+                <h3>🌱 Lune Montante</h3>
+                <p><strong>La sève monte</strong> dans les parties aériennes de la plante.</p>
+                <ul>
+                    <li>Semis et plantations</li>
+                    <li>Greffes</li>
+                    <li>Récolte des fruits et légumes-fruits</li>
+                    <li>Travail du sol léger</li>
+                </ul>
+            </div>
+            <div class="info-card descendante">
+                <h3>🍂 Lune Descendante</h3>
+                <p><strong>La sève redescend</strong> vers les racines.</p>
+                <ul>
+                    <li>Plantation et repiquage</li>
+                    <li>Tailles et élagages</li>
+                    <li>Bouturages</li>
+                    <li>Travail du sol profond</li>
+                    <li>Apports d'engrais</li>
+                </ul>
+            </div>
+        </div>
+
+        <div id="results">
+            <h2>Calendrier Lunaire de l'Année <span id="current-year"></span></h2>
+            <div id="calendar-table-container"></div>
+        </div>
+
+        <div class="export-section">
+            <h3>Exporter le Calendrier</h3>
+            <p>Téléchargez le calendrier lunaire complet au format iCal pour l'importer dans votre application de calendrier.</p>
+            <button onclick="generateICalFile()">📥 Télécharger le fichier .ics</button>
+        </div>
+
+    </div>
+
+    <script>
+        // Nostr Integration Variables
+        let DEFAULT_RELAYS = [ // This will be dynamically set
+            'wss://relay.copylaradio.com',
+            'ws://127.0.0.1:7777',
+            'wss://relay.damus.io',
+            'wss://nos.lol'
+        ];
+        let nostrRelay = null;
+        let isNostrConnected = false;
+        let userPubkey = null;
+        let currentLocation = null;
+        let selectedPhoto = null;
+
+        // Variables globales pour l'API uSPOT
+        let USPOT_API_BASE = '';
+        let USPOT_RELAY = '';
+
+        // Function to get API base URL (following generate_ipfs_structure.sh pattern)
+        function getAPIBaseUrl() {
+            return USPOT_API_BASE;
+        }
+
+        // Détection de l'API uSPOT et des relais par défaut
+        function detectUSPOTAPI() {
+            const currentURL = new URL(window.location.href);
+            const hostname = currentURL.hostname;
+            const port = currentURL.port;
+            const protocol = currentURL.protocol.split(":")[0];
+
+            let determinedRelay = '';
+            let apiBase = '';
+
+            if (hostname === "127.0.0.1" && port === "8080") {
+                determinedRelay = `ws://127.0.0.1:7777`;
+                apiBase = `http://127.0.0.1:54321`;
+            } else if (hostname.startsWith("ipfs.")) {
+                const baseDomain = hostname.substring("ipfs.".length);
+                determinedRelay = `wss://relay.${baseDomain}`;
+                apiBase = `https://u.${baseDomain}`;
+            } else {
+                // Fallback for other environments or if detection fails
+                determinedRelay = `wss://relay.copylaradio.com`;
+                apiBase = `https://u.copylaradio.com`;
+            }
+
+            DEFAULT_RELAYS = [determinedRelay, 'wss://relay.damus.io', 'wss://nos.lol'];
+            USPOT_API_BASE = apiBase;
+            USPOT_RELAY = determinedRelay;
+
+            console.log(`uSPOT API Base détectée: ${USPOT_API_BASE}`);
+            console.log(`Relay par défaut détecté: ${DEFAULT_RELAYS[0]}`);
+            console.log(`Gateway IPFS: ${hostname}:${port}`);
+        }
+
+        // Nostr Connection Functions
+        async function handleNostrLogin() {
+            if (typeof window.nostr === 'undefined' || typeof window.nostr.getPublicKey !== 'function') {
+                alert("L'extension Nostr est requise pour la connexion.");
+                return;
+            }
+            
+            try {
+                console.log("Attempting to get public key from Nostr extension...");
+                const pubkey = await window.nostr.getPublicKey();
+                if (pubkey) {
+                    userPubkey = pubkey;
+                    console.log("Public key obtained:", pubkey);
+                    updateNostrUI(true);
+                    console.log("Connecting to Nostr relay after successful public key retrieval...");
+                    await connectToNostrRelay();
+                    
+                    // Load profile and messages after successful connection
+                    if (isNostrConnected) {
+                        console.log("Loading profile and messages...");
+                        await loadUserProfileAndMessages();
+                    }
+                } else {
+                    alert("Impossible de récupérer la clé publique. Autorisez l'accès dans votre extension Nostr.");
+                }
+            } catch (error) {
+                alert("La connexion a échoué. Veuillez autoriser l'accès dans votre extension Nostr.");
+                console.error("Erreur de connexion Nostr:", error);
+            }
+        }
+
+        function updateNostrUI(isLoggedIn) {
+            const loginSection = document.getElementById('nostr-login-section');
+            const messageSection = document.getElementById('nostr-message-section');
+            const loginBtn = document.getElementById('nostrLoginBtn');
+            const profileSection = document.getElementById('profile-section');
+            
+            if (isLoggedIn) {
+                loginBtn.textContent = `Connecté : ${userPubkey.substring(0, 6)}...${userPubkey.substring(userPubkey.length - 4)}`;
+                loginBtn.style.background = '#27ae60';
+                messageSection.style.display = 'block';
+                profileSection.style.display = 'block';
+            } else {
+                loginBtn.textContent = 'Se connecter avec Nostr';
+                loginBtn.style.background = '#3498db';
+                messageSection.style.display = 'none';
+                profileSection.style.display = 'none';
+            }
+        }
+
+        async function connectToNostrRelay() {
+            const NOSTRws = DEFAULT_RELAYS[0];
+            
+            if (!NOSTRws) {
+                console.error("NOSTRws is not defined. Cannot connect to relay.");
+                return;
+            }
+
+            console.log('Connecting to relay:', NOSTRws);
+
+            try {
+                nostrRelay = NostrTools.relayInit(NOSTRws);
+
+                nostrRelay.on('connect', () => {
+                    console.log('✅ Connected to NOSTR relay:', NOSTRws);
+                    isNostrConnected = true;
+                });
+
+                nostrRelay.on('error', (error) => {
+                    console.error('❌ Relay connection error:', error);
+                    isNostrConnected = false;
+                });
+
+                await nostrRelay.connect();
+                console.log('✅ Connected to NOSTR relay:', NOSTRws);
+                isNostrConnected = true;
+
+            } catch (error) {
+                console.error('Failed to connect to relay:', error);
+                isNostrConnected = false;
+                throw error;
+            }
+        }
+
+        // Profile and Messages Functions
+        async function loadUserProfileAndMessages() {
+            if (!userPubkey || !nostrRelay || !isNostrConnected) {
+                console.error('Cannot load profile: missing userPubkey or relay connection');
+                return;
+            }
+
+            try {
+                // Load profile data
+                const profileData = await fetchNostrProfile(userPubkey);
+                displayProfileData(profileData);
+
+                // Load recent messages
+                const messagesData = await fetchNostrMessages(userPubkey);
+                displayMessagesData(messagesData);
+
+            } catch (error) {
+                console.error('Error loading profile and messages:', error);
+                document.getElementById('profile-info').innerHTML = '<div style="color: #e74c3c;">Erreur lors du chargement du profil</div>';
+                document.getElementById('messages-content').innerHTML = '<div style="color: #e74c3c;">Erreur lors du chargement des messages</div>';
+            }
+        }
+
+        async function fetchNostrProfile(hex) {
+            try {
+                const relay = NostrTools.relayInit(DEFAULT_RELAYS[0]);
+                await relay.connect();
+                
+                const profileEvent = await new Promise((resolve, reject) => {
+                    const sub = relay.sub([{ kinds: [0], authors: [hex], limit: 1 }]);
+                    let timeout = setTimeout(() => {
+                        sub.unsub();
+                        relay.close();
+                        reject(new Error('Profile fetch timeout'));
+                    }, 5000);
+
+                    sub.on('event', (event) => {
+                        clearTimeout(timeout);
+                        sub.unsub();
+                        relay.close();
+                        resolve(event);
+                    });
+
+                    sub.on('eose', () => {
+                        clearTimeout(timeout);
+                        sub.unsub();
+                        relay.close();
+                        resolve(null);
+                    });
+                });
+
+                if (profileEvent && profileEvent.content) {
+                    return JSON.parse(profileEvent.content);
+                }
+                return null;
+            } catch (error) {
+                console.error('Error fetching profile:', error);
+                throw error;
+            }
+        }
+
+        async function fetchNostrMessages(hex) {
+            try {
+                const relay = NostrTools.relayInit(DEFAULT_RELAYS[0]);
+                await relay.connect();
+                
+                const now = Math.floor(Date.now() / 1000);
+                const oneWeekAgo = now - (7 * 24 * 3600);
+                
+                const messages = await new Promise((resolve, reject) => {
+                    const sub = relay.sub([{ kinds: [1], authors: [hex], since: oneWeekAgo, limit: 20 }]);
+                    const messages = [];
+                    
+                    let timeout = setTimeout(() => {
+                        sub.unsub();
+                        relay.close();
+                        resolve(messages.sort((a,b) => b.created_at - a.created_at));
+                    }, 10000);
+
+                    sub.on('event', (event) => {
+                        messages.push(event);
+                    });
+
+                    sub.on('eose', () => {
+                        clearTimeout(timeout);
+                        sub.unsub();
+                        relay.close();
+                        resolve(messages.sort((a,b) => b.created_at - a.created_at));
+                    });
+                });
+
+                return messages;
+            } catch (error) {
+                console.error('Error fetching messages:', error);
+                throw error;
+            }
+        }
+
+        function displayProfileData(profileData) {
+            const profileInfo = document.getElementById('profile-info');
+            
+            if (!profileData) {
+                profileInfo.innerHTML = '<div style="color: #7f8c8d;">Aucun profil trouvé</div>';
+                return;
+            }
+
+            const name = profileData.name || profileData.display_name || 'Utilisateur';
+            const about = profileData.about || '';
+            const picture = profileData.picture || '';
+
+            let profileHTML = '';
+            
+            if (picture) {
+                profileHTML += `<img src="${picture}" alt="Profile Picture" class="profile-picture" onerror="this.style.display='none'">`;
+            }
+            
+            profileHTML += `
+                <div class="profile-details">
+                    <h3>${name}</h3>
+                    <p>${about || 'Aucune description disponible'}</p>
+                </div>
+            `;
+
+            profileInfo.innerHTML = profileHTML;
+        }
+
+        function displayMessagesData(messagesData) {
+            const messagesContent = document.getElementById('messages-content');
+            
+            if (!messagesData || messagesData.length === 0) {
+                messagesContent.innerHTML = '<div class="no-messages">Aucun message récent trouvé</div>';
+                return;
+            }
+
+            let messagesHTML = '';
+            messagesData.forEach(message => {
+                const date = new Date(message.created_at * 1000);
+                const content = message.content.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+                const clickableContent = makeLinksClickable(content);
+                
+                messagesHTML += `
+                    <div class="message-item">
+                        <div class="message-content">
+                            <div class="message-meta">
+                                ${date.toLocaleDateString('fr-FR')} ${date.toLocaleTimeString('fr-FR')}
+                            </div>
+                            <div class="message-text">${clickableContent}</div>
+                        </div>
+                    </div>
+                `;
+            });
+
+            messagesContent.innerHTML = messagesHTML;
+        }
+
+        function makeLinksClickable(text) {
+            // Simple URL detection and link creation
+            const urlRegex = /(https?:\/\/[^\s]+)/g;
+            return text.replace(urlRegex, '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>');
+        }
+
+        function toggleProfileSection() {
+            const profileContent = document.getElementById('profile-content');
+            const profileToggle = document.querySelector('.profile-toggle');
+            
+            if (profileContent.classList.contains('expanded')) {
+                profileContent.classList.remove('expanded');
+                profileToggle.classList.remove('expanded');
+            } else {
+                profileContent.classList.add('expanded');
+                profileToggle.classList.add('expanded');
+            }
+        }
+
+        // Map variables
+        let miniMap;
+        let miniMarker;
+
+        // Photo and Geolocation Functions
+        function handlePhotoUpload(event) {
+            const file = event.target.files[0];
+            if (file) {
+                selectedPhoto = file;
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const preview = document.getElementById('photoPreview');
+                    const uploadText = document.getElementById('photoUploadText');
+                    preview.src = e.target.result;
+                    preview.style.display = 'block';
+                    uploadText.style.display = 'none';
+                };
+                reader.readAsDataURL(file);
+                
+                // Get current location when photo is selected
+                getCurrentLocation();
+                
+                // Upload photo to IPFS and analyze with PlantNet
+                uploadPhotoToIPFS(file);
+            }
+        }
+
+        // IPFS Upload and PlantNet Analysis
+        async function uploadPhotoToIPFS(file) {
+            const plantnetResult = document.getElementById('plantnetResult');
+            const plantnetText = document.getElementById('plantnetText');
+            
+            plantnetResult.style.display = 'block';
+            plantnetText.textContent = '📤 Upload en cours...';
+            
+            try {
+                // Upload photo to IPFS via uSPOT API
+                const formData = new FormData();
+                formData.append('file', file);
+                
+                // Add npub if connected to NOSTR (following generate_ipfs_structure.sh pattern)
+                console.log('DEBUG photo upload - isNostrConnected:', isNostrConnected, 'userPubkey:', userPubkey ? 'présente' : 'absente');
+                
+                if ((isNostrConnected && userPubkey) || userPubkey) {
+                    // Use the key if available, even if isNostrConnected might be false
+                    if (userPubkey.length === 64) {
+                        console.log('Ajout de la clé publique à l\'upload photo:', userPubkey);
+                        formData.append('npub', userPubkey);
+                    } else {
+                        console.log('Clé publique invalide pour l\'upload:', userPubkey);
+                    }
+                } else {
+                    console.log('Aucune clé publique disponible pour l\'upload');
+                }
+                
+                const uploadUrl = `${getAPIBaseUrl()}/api/upload`;
+                console.log(`Uploading to uSPOT API: ${uploadUrl}`);
+                
+                const uploadResponse = await fetch(uploadUrl, {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (!uploadResponse.ok) {
+                    throw new Error(`Upload failed: ${uploadResponse.status}`);
+                }
+                
+                const uploadResult = await uploadResponse.json();
+                const imageUrl = uploadResult.url || uploadResult.ipfs_url;
+                
+                if (!imageUrl) {
+                    throw new Error('No URL returned from upload');
+                }
+                
+                console.log('Photo uploaded to IPFS:', imageUrl);
+                
+                // Store the IPFS URL for later use in the message
+                selectedPhoto.ipfsUrl = imageUrl;
+                
+                // Update UI to show upload success
+                plantnetText.textContent = '🌿 Analyse PlantNet en cours...';
+                
+                // The actual PlantNet analysis will be handled by the Nostr relay
+                // when the message is sent with #plantnet tag
+                
+            } catch (error) {
+                console.error('IPFS upload error:', error);
+                plantnetText.textContent = 'Erreur d\'upload - réessayez plus tard';
+            }
+        }
+
+
+        function getCurrentLocation() {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    position => {
+                        currentLocation = {
+                            latitude: position.coords.latitude,
+                            longitude: position.coords.longitude,
+                            accuracy: position.coords.accuracy
+                        };
+                        updateLocationDisplay();
+                        updateLocationUI(currentLocation.latitude, currentLocation.longitude);
+                    },
+                    error => {
+                        console.error('Error getting location:', error);
+                        alert('Impossible d\'obtenir votre position. Vous pouvez toujours partager sans géolocalisation.');
+                    }
+                );
+            } else {
+                alert('La géolocalisation n\'est pas supportée par votre navigateur.');
+            }
+        }
+
+        function updateLocationDisplay() {
+            if (currentLocation) {
+                const locationText = document.getElementById('locationText');
+                const locationInfo = document.getElementById('locationInfo');
+                locationText.textContent = `${currentLocation.latitude.toFixed(4)}, ${currentLocation.longitude.toFixed(4)} (±${Math.round(currentLocation.accuracy)}m)`;
+                locationInfo.style.display = 'block';
+            }
+        }
+
+        // Message Sending Function
+        async function sendGeolocatedMessage() {
+            if (!userPubkey) {
+                alert("Vous devez être connecté avec Nostr pour envoyer un message.");
+                return;
+            }
+
+            if (!nostrRelay || !isNostrConnected) {
+                alert("Connexion au relay Nostr requise. Veuillez réessayer.");
+                return;
+            }
+
+            const messageText = document.getElementById('messageText').value.trim();
+            const sendBtn = document.getElementById('sendMessageBtn');
+            
+            sendBtn.disabled = true;
+            sendBtn.textContent = "Envoi en cours...";
+
+            try {
+                // Get adjusted location from UI
+                const adjustedLocation = readLocationFromUI();
+                
+                // Prepare message content with tags
+                let content = messageText || "🌱 Observation de jardinage";
+                if (adjustedLocation) {
+                    content += `\n📍 Position: ${adjustedLocation.latitude.toFixed(4)}, ${adjustedLocation.longitude.toFixed(4)}`;
+                }
+                
+                // Add IPFS image URL if available (following generate_ipfs_structure.sh pattern)
+                if (selectedPhoto && selectedPhoto.ipfsUrl) {
+                    content += `\n📸 Image: ${selectedPhoto.ipfsUrl}`;
+                    console.log('Adding IPFS image URL to message:', selectedPhoto.ipfsUrl);
+                }
+                
+                content += "\n#BRO #plantnet";
+
+                // Create the Nostr event
+                const eventTemplate = {
+                    kind: 1, // Text note
+                    created_at: Math.floor(Date.now() / 1000),
+                    tags: [
+                        ["t", "BRO"],
+                        ["t", "plantnet"]
+                    ],
+                    content: content
+                };
+
+                // Add location tags if available
+                if (adjustedLocation) {
+                    eventTemplate.tags.push(["g", `${adjustedLocation.latitude},${adjustedLocation.longitude}`]);
+                }
+
+                // Sign the event
+                let signedEvent;
+                if (window.nostr && typeof window.nostr.signEvent === 'function') {
+                    signedEvent = await window.nostr.signEvent(eventTemplate);
+                } else {
+                    throw new Error("No Nostr extension found for signing.");
+                }
+
+                // Publish the event
+                console.log("Publishing event to relay:", signedEvent);
+                const publishPromise = nostrRelay.publish(signedEvent);
+
+                // Add timeout
+                const timeoutPromise = new Promise((_, reject) => {
+                    setTimeout(() => reject(new Error('Publish timeout')), 10000);
+                });
+
+                await Promise.race([publishPromise, timeoutPromise]);
+
+                console.log("Message publié avec succès:", signedEvent);
+                alert("🌱 Message partagé avec succès !");
+                
+                // Log successful upload details (following generate_ipfs_structure.sh pattern)
+                if (selectedPhoto && selectedPhoto.ipfsUrl) {
+                    console.log('✅ Photo upload successful - IPFS URL:', selectedPhoto.ipfsUrl);
+                }
+                
+                // Reset form
+                document.getElementById('messageText').value = '';
+                document.getElementById('photoInput').value = '';
+                document.getElementById('photoPreview').style.display = 'none';
+                document.getElementById('photoUploadText').style.display = 'block';
+                document.getElementById('locationInfo').style.display = 'none';
+                document.getElementById('plantnetResult').style.display = 'none';
+                selectedPhoto = null;
+                currentLocation = null;
+
+            } catch (error) {
+                alert(`Erreur lors de l'envoi du message: ${error.message}`);
+                console.error("Erreur d'envoi Nostr:", error);
+            } finally {
+                sendBtn.disabled = false;
+                sendBtn.textContent = "🌱 Partager avec #BRO #plant";
+            }
+        }
+
+        // Moon calculation functions
+        function calculateLunarCalendar() {
+            const latitude = parseFloat(document.getElementById('latitude').value);
+            const longitude = parseFloat(document.getElementById('longitude').value);
+            const currentYear = new Date().getFullYear();
+            
+            document.getElementById('current-year').textContent = currentYear;
+            
+            let calendarData = [];
+            let currentDate = new Date(currentYear, 0, 1);
+            const endDate = new Date(currentYear, 11, 31);
+            
+            let lastDeclination = null;
+            let currentPeriod = '';
+            
+            while (currentDate <= endDate) {
+                const declination = calculateMoonDeclination(currentDate);
+                const period = determineLunarPeriod(declination, lastDeclination);
+                
+                if (period !== currentPeriod) {
+                    calendarData.push({
+                        startDate: new Date(currentDate),
+                        period: period,
+                        declination: declination
+                    });
+                    currentPeriod = period;
+                }
+                
+                lastDeclination = declination;
+                currentDate.setDate(currentDate.getDate() + 1);
+            }
+            
+            displayCalendarTable(calendarData);
+        }
+
+        function calculateMoonDeclination(date) {
+            // Simplified moon declination calculation
+            // In a real implementation, you would use a more precise astronomical algorithm
+            const daysSinceJ2000 = (date - new Date('2000-01-01T12:00:00Z')) / (1000 * 60 * 60 * 24);
+            const moonOrbitInclination = 5.145; // degrees
+            const lunarCycle = 27.321582; // days
+            
+            // Simplified calculation - real implementation would be more complex
+            const moonLongitude = (360 * daysSinceJ2000 / lunarCycle) % 360;
+            const declination = Math.asin(Math.sin(moonLongitude * Math.PI / 180) * Math.sin(moonOrbitInclination * Math.PI / 180)) * 180 / Math.PI;
+            
+            return declination;
+        }
+
+        function determineLunarPeriod(currentDeclination, lastDeclination) {
+            if (lastDeclination === null) return 'montante';
+            
+            if (currentDeclination > lastDeclination) {
+                return 'montante';
+            } else {
+                return 'descendante';
+            }
+        }
+
+        function displayCalendarTable(calendarData) {
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            
+            // Trouver la phase actuelle et la suivante
+            let currentPeriod = null;
+            let nextPeriod = null;
+            let currentIndex = -1;
+            
+            for (let i = 0; i < calendarData.length; i++) {
+                const period = calendarData[i];
+                const endDate = i < calendarData.length - 1 ? 
+                    new Date(calendarData[i + 1].startDate) : 
+                    new Date(period.startDate.getFullYear(), 11, 31);
+                
+                if (today >= period.startDate && today < endDate) {
+                    currentPeriod = period;
+                    currentIndex = i;
+                    break;
+                }
+            }
+            
+            // Si pas de phase actuelle trouvée, prendre la première
+            if (!currentPeriod && calendarData.length > 0) {
+                currentPeriod = calendarData[0];
+                currentIndex = 0;
+            }
+            
+            // Trouver la phase suivante
+            if (currentIndex >= 0 && currentIndex < calendarData.length - 1) {
+                nextPeriod = calendarData[currentIndex + 1];
+            }
+            
+            let tableHTML = `
+                <table class="calendar-table">
+                    <thead>
+                        <tr>
+                            <th>Période Lunaire</th>
+                            <th>Date de Début</th>
+                            <th>Conseils de Jardinage</th>
+                            <th>Durée</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+            
+            // Afficher la phase actuelle
+            if (currentPeriod) {
+                const endDate = currentIndex < calendarData.length - 1 ? 
+                    new Date(calendarData[currentIndex + 1].startDate) : 
+                    new Date(currentPeriod.startDate.getFullYear(), 11, 31);
+                
+                const duration = Math.round((endDate - currentPeriod.startDate) / (1000 * 60 * 60 * 24));
+                const gardeningTips = currentPeriod.period === 'montante' ? 
+                    'Semis, greffes, récolte fruits/légumes-fruits' : 
+                    'Plantation, taille, bouturage, travail sol';
+                
+                tableHTML += `
+                    <tr class="${currentPeriod.period}-row current-period">
+                        <td><strong>🌙 Lune ${currentPeriod.period === 'montante' ? '🌱 Montante' : '🍂 Descendante'} (ACTUELLE)</strong></td>
+                        <td>${formatDate(currentPeriod.startDate)}</td>
+                        <td>${gardeningTips}</td>
+                        <td>${duration} jours</td>
+                    </tr>
+                `;
+            }
+            
+            // Afficher la phase suivante
+            if (nextPeriod) {
+                const nextEndDate = currentIndex + 1 < calendarData.length - 1 ? 
+                    new Date(calendarData[currentIndex + 2].startDate) : 
+                    new Date(nextPeriod.startDate.getFullYear(), 11, 31);
+                
+                const nextDuration = Math.round((nextEndDate - nextPeriod.startDate) / (1000 * 60 * 60 * 24));
+                const nextGardeningTips = nextPeriod.period === 'montante' ? 
+                    'Semis, greffes, récolte fruits/légumes-fruits' : 
+                    'Plantation, taille, bouturage, travail sol';
+                
+                tableHTML += `
+                    <tr class="${nextPeriod.period}-row">
+                        <td>🌙 Lune ${nextPeriod.period === 'montante' ? '🌱 Montante' : '🍂 Descendante'} (SUIVANTE)</td>
+                        <td>${formatDate(nextPeriod.startDate)}</td>
+                        <td>${nextGardeningTips}</td>
+                        <td>${nextDuration} jours</td>
+                    </tr>
+                `;
+            }
+            
+            tableHTML += `</tbody></table>`;
+            document.getElementById('calendar-table-container').innerHTML = tableHTML;
+        }
+
+        function generateICalFile() {
+            const currentYear = new Date().getFullYear();
+            let icalContent = `BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Jardin Lunaire//FR
+CALSCALE:GREGORIAN
+METHOD:PUBLISH
+`;
+
+            // Regenerate calendar data for iCal
+            let calendarData = [];
+            let currentDate = new Date(currentYear, 0, 1);
+            const endDate = new Date(currentYear, 11, 31);
+            let lastDeclination = null;
+            let currentPeriod = '';
+            
+            while (currentDate <= endDate) {
+                const declination = calculateMoonDeclination(currentDate);
+                const period = determineLunarPeriod(declination, lastDeclination);
+                
+                if (period !== currentPeriod) {
+                    calendarData.push({
+                        startDate: new Date(currentDate),
+                        period: period
+                    });
+                    currentPeriod = period;
+                }
+                
+                lastDeclination = declination;
+                currentDate.setDate(currentDate.getDate() + 1);
+            }
+
+            // Add events to iCal
+            for (let i = 0; i < calendarData.length; i++) {
+                const period = calendarData[i];
+                const endDate = i < calendarData.length - 1 ? 
+                    new Date(calendarData[i + 1].startDate) : 
+                    new Date(period.startDate.getFullYear(), 11, 31);
+                
+                const summary = period.period === 'montante' ? 
+                    '🌱 Lune Montante - Semis et greffes' : 
+                    '🍂 Lune Descendante - Plantation et taille';
+                
+                const description = period.period === 'montante' ? 
+                    'La sève monte: favorable pour semis, greffes et récolte des fruits' : 
+                    'La sève descend: favorable pour plantation, taille et travail du sol';
+                
+                icalContent += `BEGIN:VEVENT
+SUMMARY:${summary}
+DESCRIPTION:${description}
+DTSTART:${formatICalDate(period.startDate)}
+DTEND:${formatICalDate(endDate)}
+TRANSP:TRANSPARENT
+END:VEVENT
+`;
+            }
+
+            icalContent += 'END:VCALENDAR';
+
+            // Download the file
+            const blob = new Blob([icalContent], { type: 'text/calendar' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `calendrier-lunaire-${currentYear}.ics`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+        }
+
+        // Utility functions
+        function formatDate(date) {
+            return date.toLocaleDateString('fr-FR', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric'
+            });
+        }
+
+        function formatICalDate(date) {
+            return date.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+        }
+
+        function getCurrentLocation() {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    position => {
+                        document.getElementById('latitude').value = position.coords.latitude.toFixed(4);
+                        document.getElementById('longitude').value = position.coords.longitude.toFixed(4);
+                        calculateLunarCalendar();
+                    },
+                    error => {
+                        alert('Impossible d\'obtenir votre position. Utilisation des coordonnées par défaut (Paris).');
+                    }
+                );
+            }
+        }
+
+        // Location UI Helper Functions
+        function populateSelect(selectId, start, end) {
+            const select = document.getElementById(selectId);
+            if (!select) return;
+            select.innerHTML = '';
+            for (let i = start; i <= end; i++) {
+                const option = document.createElement('option');
+                option.value = i;
+                option.textContent = i.toString().padStart(end.toString().length > 1 && i < 10 ? end.toString().length : 1, '0');
+                select.appendChild(option);
+            }
+        }
+
+        function initializeLocationSelects() {
+            populateSelect('lat-deg1', 0, 9);
+            populateSelect('lat-deg0', 0, 9);
+            populateSelect('lat-frac1', 0, 9);
+            populateSelect('lat-frac0', 0, 9);
+
+            populateSelect('lon-deg2', 0, 1);
+            populateSelect('lon-deg1', 0, 9);
+            populateSelect('lon-deg0', 0, 9);
+            populateSelect('lon-frac1', 0, 9);
+            populateSelect('lon-frac0', 0, 9);
+
+            // Add change listeners for coordinate constraints
+            document.getElementById('lon-deg2').addEventListener('change', function() {
+                const hundreds = parseInt(this.value, 10);
+                const lonDeg1Select = document.getElementById('lon-deg1');
+                const currentLonDeg1 = parseInt(lonDeg1Select.value || '0', 10);
+                lonDeg1Select.innerHTML = '';
+
+                let maxTens = 9;
+                if (hundreds === 1) {
+                    maxTens = 8;
+                }
+
+                for (let i = 0; i <= maxTens; i++) {
+                    const option = document.createElement('option');
+                    option.value = i;
+                    option.textContent = i;
+                    lonDeg1Select.appendChild(option);
+                }
+                lonDeg1Select.value = currentLonDeg1 <= maxTens ? currentLonDeg1 : '0';
+            });
+
+            document.getElementById('lon-deg1').addEventListener('change', function() {
+                const hundreds = parseInt(document.getElementById('lon-deg2').value, 10);
+                const tens = parseInt(this.value, 10);
+                const lonDeg0Select = document.getElementById('lon-deg0');
+                const currentLonDeg0 = parseInt(lonDeg0Select.value || '0', 10);
+                lonDeg0Select.innerHTML = '';
+
+                let maxUnits = 9;
+                if (hundreds === 1 && tens === 8) {
+                    maxUnits = 0;
+                }
+
+                for (let i = 0; i <= maxUnits; i++) {
+                    const option = document.createElement('option');
+                    option.value = i;
+                    option.textContent = i;
+                    lonDeg0Select.appendChild(option);
+                }
+                lonDeg0Select.value = currentLonDeg0 <= maxUnits ? currentLonDeg0 : '0';
+            });
+
+            document.getElementById('lat-deg1').addEventListener('change', function() {
+                const tens = parseInt(this.value, 10);
+                const latDeg0Select = document.getElementById('lat-deg0');
+                const currentLatDeg0 = parseInt(latDeg0Select.value || '0', 10);
+                latDeg0Select.innerHTML = '';
+
+                let maxUnits = 9;
+                if (tens === 9) {
+                    maxUnits = 0;
+                }
+                for (let i = 0; i <= maxUnits; i++) {
+                    const option = document.createElement('option');
+                    option.value = i;
+                    option.textContent = i;
+                    latDeg0Select.appendChild(option);
+                }
+                latDeg0Select.value = currentLatDeg0 <= maxUnits ? currentLatDeg0 : '0';
+
+                if (tens === 9 && maxUnits === 0) {
+                    document.getElementById('lat-frac1').value = '0';
+                    document.getElementById('lat-frac0').value = '0';
+                    document.getElementById('lat-frac1').disabled = true;
+                    document.getElementById('lat-frac0').disabled = true;
+                } else {
+                    document.getElementById('lat-frac1').disabled = false;
+                    document.getElementById('lat-frac0').disabled = false;
+                }
+            });
+
+            document.getElementById('lat-deg1').dispatchEvent(new Event('change'));
+            document.getElementById('lon-deg2').dispatchEvent(new Event('change'));
+        }
+
+        function updateLocationUI(latitude, longitude) {
+            if (latitude == null || longitude == null) {
+                document.getElementById('location-status').textContent = 'Location unavailable.';
+                document.getElementById('lat-sign').value = 'N';
+                document.getElementById('lat-deg1').value = 0;
+                document.getElementById('lat-deg0').value = 0;
+                document.getElementById('lat-frac1').value = 0;
+                document.getElementById('lat-frac0').value = 0;
+                document.getElementById('lon-sign').value = 'E';
+                document.getElementById('lon-deg2').value = 0;
+                document.getElementById('lon-deg1').value = 0;
+                document.getElementById('lon-deg0').value = 0;
+                document.getElementById('lon-frac1').value = 0;
+                document.getElementById('lon-frac0').value = 0;
+                document.getElementById('lat-deg1').dispatchEvent(new Event('change'));
+                document.getElementById('lon-deg2').dispatchEvent(new Event('change'));
+                document.getElementById('location-controls').style.display = 'block';
+                return;
+            }
+
+            const latAbs = Math.abs(latitude);
+            const latDeg = Math.floor(latAbs);
+            const latFrac = Math.round((latAbs - latDeg) * 100);
+
+            document.getElementById('lat-sign').value = latitude >= 0 ? 'N' : 'S';
+            document.getElementById('lat-deg1').value = Math.floor(latDeg / 10) % 10;
+            document.getElementById('lat-deg0').value = latDeg % 10;
+            document.getElementById('lat-frac1').value = Math.floor(latFrac / 10) % 10;
+            document.getElementById('lat-frac0').value = latFrac % 10;
+
+            const lonAbs = Math.abs(longitude);
+            const lonDeg = Math.floor(lonAbs);
+            const lonFrac = Math.round((lonAbs - lonDeg) * 100);
+
+            document.getElementById('lon-sign').value = longitude >= 0 ? 'E' : 'W';
+            document.getElementById('lon-deg2').value = Math.floor(lonDeg / 100) % 10;
+            document.getElementById('lon-deg1').value = Math.floor(lonDeg / 10) % 10;
+            document.getElementById('lon-deg0').value = lonDeg % 10;
+            document.getElementById('lon-frac1').value = Math.floor(lonFrac / 10) % 10;
+            document.getElementById('lon-frac0').value = lonFrac % 10;
+
+            document.getElementById('lat-deg1').dispatchEvent(new Event('change'));
+            document.getElementById('lon-deg2').dispatchEvent(new Event('change'));
+
+            document.getElementById('location-status').textContent = `Location Acquired: ${latitude.toFixed(2)}, ${longitude.toFixed(2)}`;
+            document.getElementById('location-controls').style.display = 'block';
+        }
+
+        function readLocationFromUI() {
+            const latSign = document.getElementById('lat-sign').value === 'N' ? 1 : -1;
+            const latDeg1 = parseInt(document.getElementById('lat-deg1').value, 10);
+            const latDeg0 = parseInt(document.getElementById('lat-deg0').value, 10);
+            const latFrac1 = parseInt(document.getElementById('lat-frac1').value, 10);
+            const latFrac0 = parseInt(document.getElementById('lat-frac0').value, 10);
+            const latitude = latSign * (latDeg1 * 10 + latDeg0 + (latFrac1 * 10 + latFrac0) / 100.0);
+
+            const lonSign = document.getElementById('lon-sign').value === 'E' ? 1 : -1;
+            const lonDeg2 = parseInt(document.getElementById('lon-deg2').value, 10);
+            const lonDeg1 = parseInt(document.getElementById('lon-deg1').value, 10);
+            const lonDeg0 = parseInt(document.getElementById('lon-deg0').value, 10);
+            const lonFrac1 = parseInt(document.getElementById('lon-frac1').value, 10);
+            const lonFrac0 = parseInt(document.getElementById('lon-frac0').value, 10);
+            const longitude = lonSign * (lonDeg2 * 100 + lonDeg1 * 10 + lonDeg0 + (lonFrac1 * 10 + lonFrac0) / 100.0);
+
+            const finalLat = Math.max(-90, Math.min(90, latitude));
+            const finalLon = Math.max(-180, Math.min(180, longitude));
+
+            return { latitude: finalLat, longitude: finalLon };
+        }
+
+        // Map functions
+        function initializeMiniMap(lat = 0, lon = 0) {
+            if (miniMap) {
+                miniMap.remove();
+            }
+            
+            // Ensure the map container exists and is visible
+            const mapContainer = document.getElementById('mini-map');
+            if (!mapContainer) {
+                console.error('Map container not found');
+                return;
+            }
+            
+            // Wait a bit for the accordion to fully open
+            setTimeout(() => {
+                try {
+                    miniMap = L.map('mini-map').setView([lat, lon], 10);
+                    
+                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                        attribution: '© OpenStreetMap contributors'
+                    }).addTo(miniMap);
+
+                    miniMarker = L.marker([lat, lon], {
+                        draggable: true
+                    }).addTo(miniMap);
+
+                    miniMap.on('click', function(e) {
+                        const clickedLat = Math.round(e.latlng.lat * 100) / 100;
+                        const clickedLon = Math.round(e.latlng.lng * 100) / 100;
+                        updateCoordinatesFromMap(clickedLat, clickedLon);
+                    });
+
+                    miniMarker.on('dragend', function(e) {
+                        const markerLat = Math.round(e.target.getLatLng().lat * 100) / 100;
+                        const markerLon = Math.round(e.target.getLatLng().lng * 100) / 100;
+                        updateCoordinatesFromMap(markerLat, markerLon);
+                    });
+                    
+                    // Invalidate size after a short delay to ensure proper rendering
+                    setTimeout(() => {
+                        if (miniMap) {
+                            miniMap.invalidateSize();
+                        }
+                    }, 100);
+                    
+                } catch (error) {
+                    console.error('Error initializing map:', error);
+                }
+            }, 50);
+        }
+
+        function updateCoordinatesFromMap(lat, lon) {
+            const roundedLat = Math.round(lat * 100) / 100;
+            const roundedLon = Math.round(lon * 100) / 100;
+
+            document.getElementById('lat-display').value = roundedLat.toFixed(2);
+            document.getElementById('lon-display').value = roundedLon.toFixed(2);
+
+            if (miniMarker) {
+                miniMarker.setLatLng([roundedLat, roundedLon]);
+            }
+
+            currentLocation = { latitude: roundedLat, longitude: roundedLon };
+            updateLocationUI(roundedLat, roundedLon);
+        }
+
+        function toggleMapAccordion() {
+            const accordion = document.getElementById('map-accordion');
+            const isOpen = accordion.classList.contains('open');
+            
+            if (isOpen) {
+                accordion.classList.remove('open');
+            } else {
+                accordion.classList.add('open');
+                
+                setTimeout(() => {
+                    const lat = currentLocation ? currentLocation.latitude : 0;
+                    const lon = currentLocation ? currentLocation.longitude : 0;
+                    initializeMiniMap(lat, lon);
+                    
+                    document.getElementById('lat-display').value = lat.toFixed(2);
+                    document.getElementById('lon-display').value = lon.toFixed(2);
+                    
+                    setTimeout(() => {
+                        if (miniMap) {
+                            miniMap.invalidateSize();
+                        }
+                    }, 350);
+                }, 50);
+            }
+        }
+
+        function getCurrentLocationForMap() {
+            if (navigator.geolocation) {
+                const btn = document.getElementById('get-location');
+                btn.textContent = 'Localisation...';
+                btn.disabled = true;
+                
+                navigator.geolocation.getCurrentPosition(
+                    function(position) {
+                        const lat = Math.round(position.coords.latitude * 100) / 100;
+                        const lon = Math.round(position.coords.longitude * 100) / 100;
+
+                        updateCoordinatesFromMap(lat, lon);
+                        if (miniMap) {
+                            miniMap.setView([lat, lon], 13);
+                        }
+                        
+                        btn.textContent = 'Ma position';
+                        btn.disabled = false;
+                    },
+                    function(error) {
+                        let errorMessage;
+                        switch(error.code) {
+                            case error.PERMISSION_DENIED:
+                                errorMessage = "Géolocalisation refusée.";
+                                break;
+                            case error.POSITION_UNAVAILABLE:
+                                errorMessage = "Position indisponible.";
+                                break;
+                            case error.TIMEOUT:
+                                errorMessage = "Délai dépassé.";
+                                break;
+                            default:
+                                errorMessage = "Erreur géolocalisation.";
+                        }
+                        console.error(`Geolocation error: ${errorMessage}`);
+                        btn.textContent = 'Ma position';
+                        btn.disabled = false;
+                    }
+                );
+            } else {
+                console.error("Geolocation not supported by browser");
+            }
+        }
+
+        // Initialize on load
+        document.addEventListener('DOMContentLoaded', function() {
+            document.getElementById('current-year').textContent = new Date().getFullYear();
+            calculateLunarCalendar();
+            
+            // Détecter l'environnement et configurer les relais
+            detectUSPOTAPI();
+            
+            // Initialize location controls
+            initializeLocationSelects();
+            
+            // Setup location status click handler
+            document.getElementById('location-status').addEventListener('click', toggleMapAccordion);
+            
+            // Setup map controls
+            document.getElementById('update-map').addEventListener('click', function() {
+                const lat = parseFloat(document.getElementById('lat-display').value) || 0;
+                const lon = parseFloat(document.getElementById('lon-display').value) || 0;
+                
+                updateCoordinatesFromMap(lat, lon);
+                if (miniMap) {
+                    miniMap.setView([lat, lon], miniMap.getZoom());
+                }
+            });
+            
+            document.getElementById('get-location').addEventListener('click', getCurrentLocationForMap);
+            
+            // Sync display inputs with tumbler changes
+            document.getElementById('lat-display').addEventListener('change', function() {
+                const lat = parseFloat(this.value) || 0;
+                const lon = parseFloat(document.getElementById('lon-display').value) || 0;
+                
+                if (miniMarker) {
+                    miniMarker.setLatLng([lat, lon]);
+                }
+                if (miniMap) {
+                    miniMap.setView([lat, lon], miniMap.getZoom());
+                }
+            });
+            
+            document.getElementById('lon-display').addEventListener('change', function() {
+                const lat = parseFloat(document.getElementById('lat-display').value) || 0;
+                const lon = parseFloat(this.value) || 0;
+                
+                if (miniMarker) {
+                    miniMarker.setLatLng([lat, lon]);
+                }
+                if (miniMap) {
+                    miniMap.setView([lat, lon], miniMap.getZoom());
+                }
+            });
+            
+            // Check Nostr extension availability with delay
+            setTimeout(() => {
+                const nostrLoginBtn = document.getElementById('nostrLoginBtn');
+                if (typeof window.nostr === 'undefined' || typeof window.nostr.getPublicKey !== 'function') {
+                    nostrLoginBtn.textContent = "Extension Nostr requise";
+                    nostrLoginBtn.disabled = true;
+                    nostrLoginBtn.style.background = '#95a5a6';
+                    nostrLoginBtn.style.cursor = 'not-allowed';
+                } else {
+                    nostrLoginBtn.textContent = "Se connecter avec Nostr";
+                    nostrLoginBtn.disabled = false;
+                    nostrLoginBtn.style.background = '#3498db';
+                    nostrLoginBtn.style.cursor = 'pointer';
+                }
+            }, 1000); // Delay to allow extensions to load
+        });
+    </script>
+</body>
+</html>

@@ -1879,7 +1879,17 @@
             if (currentLocation) {
                 const locationText = document.getElementById('locationText');
                 const locationInfo = document.getElementById('locationInfo');
-                locationText.textContent = `${currentLocation.latitude.toFixed(4)}, ${currentLocation.longitude.toFixed(4)} (±${Math.round(currentLocation.accuracy)}m)`;
+                
+                // Display with 2 decimal precision (0.01°)
+                const lat = currentLocation.latitude.toFixed(2);
+                const lon = currentLocation.longitude.toFixed(2);
+                
+                // Add accuracy info if available (from GPS), otherwise show manual selection
+                const accuracyText = currentLocation.accuracy 
+                    ? ` (±${Math.round(currentLocation.accuracy)}m)` 
+                    : ' (position manuelle)';
+                
+                locationText.textContent = `${lat}, ${lon}${accuracyText}`;
                 locationInfo.style.display = 'block';
             }
         }
@@ -1912,7 +1922,8 @@
                 // Prepare message content with tags
                 let content = messageText || "🌱 Observation de jardinage";
                 if (adjustedLocation) {
-                    content += `\n📍 Position: ${adjustedLocation.latitude.toFixed(4)}, ${adjustedLocation.longitude.toFixed(4)}`;
+                    // Display with 2 decimal precision (0.01°)
+                    content += `\n📍 Position: ${adjustedLocation.latitude.toFixed(2)}, ${adjustedLocation.longitude.toFixed(2)}`;
                 }
                 
                 // Add IPFS image URL if available (following generate_ipfs_structure.sh pattern)
@@ -2258,15 +2269,13 @@ END:VEVENT
                 }).addTo(miniMap);
 
                 miniMap.on('click', function(e) {
-                    const clickedLat = Math.round(e.latlng.lat * 100) / 100;
-                    const clickedLon = Math.round(e.latlng.lng * 100) / 100;
-                    updateCoordinatesFromMap(clickedLat, clickedLon);
+                    // Pass raw coordinates, rounding will be done in updateCoordinatesFromMap
+                    updateCoordinatesFromMap(e.latlng.lat, e.latlng.lng);
                 });
 
                 miniMarker.on('dragend', function(e) {
-                    const markerLat = Math.round(e.target.getLatLng().lat * 100) / 100;
-                    const markerLon = Math.round(e.target.getLatLng().lng * 100) / 100;
-                    updateCoordinatesFromMap(markerLat, markerLon);
+                    // Pass raw coordinates, rounding will be done in updateCoordinatesFromMap
+                    updateCoordinatesFromMap(e.target.getLatLng().lat, e.target.getLatLng().lng);
                 });
                 
                 // Invalidate size after a short delay to ensure proper rendering
@@ -2283,17 +2292,26 @@ END:VEVENT
         }
 
         function updateCoordinatesFromMap(lat, lon) {
+            // Round to 0.01° precision (2 decimal places)
             const roundedLat = Math.round(lat * 100) / 100;
             const roundedLon = Math.round(lon * 100) / 100;
 
+            console.log(`Updating coordinates: ${roundedLat.toFixed(2)}, ${roundedLon.toFixed(2)}`);
+
+            // Update input fields
             document.getElementById('lat-display').value = roundedLat.toFixed(2);
             document.getElementById('lon-display').value = roundedLon.toFixed(2);
 
+            // Update marker position on map
             if (miniMarker) {
                 miniMarker.setLatLng([roundedLat, roundedLon]);
             }
 
+            // Update current location (used for message sending)
             currentLocation = { latitude: roundedLat, longitude: roundedLon };
+            
+            // Update location display if visible
+            updateLocationDisplay();
         }
 
         function toggleMapAccordion() {

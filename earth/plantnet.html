@@ -2434,32 +2434,37 @@ END:VEVENT
                 
                 console.log(`Total unique hex keys to query: ${allHexKeys.size}`);
                 
-                // Fetch messages from all hex keys
+                // Fetch messages directly from GeoClefs (UMAPs, SECTORS, REGIONS)
                 const allMessages = [];
+                
+                // Get messages directly from each GeoClef
                 for (const hexKey of allHexKeys) {
                     try {
                         const messages = await fetchMessagesFromHex(hexKey);
-                        console.log(`Fetched ${messages.length} messages from ${hexKey.substring(0, 10)}...`);
+                        console.log(`Fetched ${messages.length} messages from GeoClef ${hexKey.substring(0, 10)}...`);
                         allMessages.push(...messages);
                     } catch (error) {
-                        console.error(`Error fetching messages from ${hexKey}:`, error);
+                        console.error(`Error fetching messages from GeoClef ${hexKey}:`, error);
                     }
                 }
                 
                 console.log(`Total messages fetched: ${allMessages.length}`);
                 
-                // Filter messages with geolocation tags
-                const geolocatedMessages = allMessages.filter(msg => {
-                    const geoTag = msg.tags.find(tag => tag[0] === 'g');
-                    return geoTag && geoTag[1];
-                });
+                // Debug: Log sample messages to understand structure
+                if (allMessages.length > 0) {
+                    console.log('Sample message structure:', allMessages[0]);
+                    console.log('Sample message tags:', allMessages[0].tags);
+                }
                 
-                console.log(`Geolocated messages: ${geolocatedMessages.length}`);
+                // Show ALL messages from GeoClefs - no filtering
+                const relevantMessages = allMessages;
                 
-                // Display messages on map
-                displayNearbyMessagesOnMap(geolocatedMessages);
+                console.log(`Total messages to display: ${relevantMessages.length}`);
                 
-                btn.textContent = `🌍 Messages environs (${geolocatedMessages.length})`;
+                // Display messages on map (using UMAP coordinates as proxy for message location)
+                displayNearbyMessagesOnMap(relevantMessages, geolinkData);
+                
+                btn.textContent = `🌍 Messages environs (${relevantMessages.length} trouvés)`;
                 btn.disabled = false;
                 
             } catch (error) {
@@ -2470,18 +2475,18 @@ END:VEVENT
             }
         }
         
+
         async function fetchMessagesFromHex(hexKey) {
             return new Promise(async (resolve, reject) => {
                 try {
                     const relay = NostrTools.relayInit(DEFAULT_RELAYS[0]);
                     await relay.connect();
                     
-                    // Query messages from this author with #BRO or #plantnet tags
+                    // Query the 5 most recent messages from this author without tag filtering
                     const sub = relay.sub([{ 
                         kinds: [1], 
                         authors: [hexKey],
-                        '#t': ['BRO', 'plantnet'],
-                        limit: 20 
+                        limit: 5 
                     }]);
                     
                     const messages = [];
@@ -2509,22 +2514,226 @@ END:VEVENT
             });
         }
         
-        function displayNearbyMessagesOnMap(messages) {
+        function displayNearbyMessagesOnMap(messages, geolinkData) {
             if (!miniMap) {
                 console.error('Map not initialized');
                 return;
             }
             
+            console.log(`displayNearbyMessagesOnMap called with ${messages.length} messages`);
+            console.log('GeolinkData:', geolinkData);
+            
             clearNearbyMarkers();
+            
+            // Create a map of GeoClef hex to coordinates
+            const geoclefToCoords = new Map();
+            
+            console.log('Building coordinate mapping...');
+            console.log('UMAPs:', geolinkData.umaps);
+            console.log('SECTORS:', geolinkData.sectors);
+            console.log('REGIONS:', geolinkData.regions);
+            
+            // Debug: show the structure of the data
+            if (geolinkData.umaps) {
+                console.log('UMAP entries:', Object.entries(geolinkData.umaps));
+            }
+            if (geolinkData.sectors) {
+                console.log('SECTOR entries:', Object.entries(geolinkData.sectors));
+            }
+            if (geolinkData.regions) {
+                console.log('REGION entries:', Object.entries(geolinkData.regions));
+            }
+            
+            // Map UMAPs to their coordinates
+            if (geolinkData.umaps) {
+                Object.entries(geolinkData.umaps).forEach(([direction, hexKey]) => {
+                    console.log(`Processing UMAP direction: "${direction}" for hex ${hexKey.substring(0, 10)}...`);
+                    
+                    // Calculate coordinates based on direction from center point
+                    const centerLat = geolinkData.umap_coordinates.lat;
+                    const centerLon = geolinkData.umap_coordinates.lon;
+                    let lat = centerLat;
+                    let lon = centerLon;
+                    
+                    // Adjust coordinates based on direction
+                    switch(direction) {
+                        case 'north':
+                            lat = centerLat + 0.01;
+                            break;
+                        case 'south':
+                            lat = centerLat - 0.01;
+                            break;
+                        case 'east':
+                            lon = centerLon + 0.01;
+                            break;
+                        case 'west':
+                            lon = centerLon - 0.01;
+                            break;
+                        case 'northeast':
+                            lat = centerLat + 0.01;
+                            lon = centerLon + 0.01;
+                            break;
+                        case 'northwest':
+                            lat = centerLat + 0.01;
+                            lon = centerLon - 0.01;
+                            break;
+                        case 'southeast':
+                            lat = centerLat - 0.01;
+                            lon = centerLon + 0.01;
+                            break;
+                        case 'southwest':
+                            lat = centerLat - 0.01;
+                            lon = centerLon - 0.01;
+                            break;
+                        case 'here':
+                            // Use center coordinates
+                            break;
+                    }
+                    
+                    console.log(`Calculated coordinates: ${lat}, ${lon}`);
+                    geoclefToCoords.set(hexKey, { lat, lon });
+                    console.log(`Mapped UMAP ${hexKey.substring(0, 10)}... to ${lat}, ${lon}`);
+                });
+            }
+            
+            // Map SECTORS to their coordinates (same logic as UMAPs)
+            if (geolinkData.sectors) {
+                Object.entries(geolinkData.sectors).forEach(([direction, hexKey]) => {
+                    console.log(`Processing SECTOR direction: "${direction}" for hex ${hexKey.substring(0, 10)}...`);
+                    
+                    // Calculate coordinates based on direction from center point
+                    const centerLat = geolinkData.umap_coordinates.lat;
+                    const centerLon = geolinkData.umap_coordinates.lon;
+                    let lat = centerLat;
+                    let lon = centerLon;
+                    
+                    // Adjust coordinates based on direction (same as UMAPs)
+                    switch(direction) {
+                        case 'north':
+                            lat = centerLat + 0.01;
+                            break;
+                        case 'south':
+                            lat = centerLat - 0.01;
+                            break;
+                        case 'east':
+                            lon = centerLon + 0.01;
+                            break;
+                        case 'west':
+                            lon = centerLon - 0.01;
+                            break;
+                        case 'northeast':
+                            lat = centerLat + 0.01;
+                            lon = centerLon + 0.01;
+                            break;
+                        case 'northwest':
+                            lat = centerLat + 0.01;
+                            lon = centerLon - 0.01;
+                            break;
+                        case 'southeast':
+                            lat = centerLat - 0.01;
+                            lon = centerLon + 0.01;
+                            break;
+                        case 'southwest':
+                            lat = centerLat - 0.01;
+                            lon = centerLon - 0.01;
+                            break;
+                        case 'here':
+                            // Use center coordinates
+                            break;
+                    }
+                    
+                    console.log(`Calculated SECTOR coordinates: ${lat}, ${lon}`);
+                    geoclefToCoords.set(hexKey, { lat, lon });
+                    console.log(`Mapped SECTOR ${hexKey.substring(0, 10)}... to ${lat}, ${lon}`);
+                });
+            }
+            
+            // Map REGIONS to their coordinates (same logic as UMAPs)
+            if (geolinkData.regions) {
+                Object.entries(geolinkData.regions).forEach(([direction, hexKey]) => {
+                    console.log(`Processing REGION direction: "${direction}" for hex ${hexKey.substring(0, 10)}...`);
+                    
+                    // Calculate coordinates based on direction from center point
+                    const centerLat = geolinkData.umap_coordinates.lat;
+                    const centerLon = geolinkData.umap_coordinates.lon;
+                    let lat = centerLat;
+                    let lon = centerLon;
+                    
+                    // Adjust coordinates based on direction (same as UMAPs)
+                    switch(direction) {
+                        case 'north':
+                            lat = centerLat + 0.01;
+                            break;
+                        case 'south':
+                            lat = centerLat - 0.01;
+                            break;
+                        case 'east':
+                            lon = centerLon + 0.01;
+                            break;
+                        case 'west':
+                            lon = centerLon - 0.01;
+                            break;
+                        case 'northeast':
+                            lat = centerLat + 0.01;
+                            lon = centerLon + 0.01;
+                            break;
+                        case 'northwest':
+                            lat = centerLat + 0.01;
+                            lon = centerLon - 0.01;
+                            break;
+                        case 'southeast':
+                            lat = centerLat - 0.01;
+                            lon = centerLon + 0.01;
+                            break;
+                        case 'southwest':
+                            lat = centerLat - 0.01;
+                            lon = centerLon - 0.01;
+                            break;
+                        case 'here':
+                            // Use center coordinates
+                            break;
+                    }
+                    
+                    console.log(`Calculated REGION coordinates: ${lat}, ${lon}`);
+                    geoclefToCoords.set(hexKey, { lat, lon });
+                    console.log(`Mapped REGION ${hexKey.substring(0, 10)}... to ${lat}, ${lon}`);
+                });
+            }
+            
+            console.log('Total mapped coordinates:', geoclefToCoords.size);
+            console.log('Available hex keys:', Array.from(geoclefToCoords.keys()).map(k => k.substring(0, 10)));
+            
+            console.log(`Processing ${messages.length} messages for map display`);
+            console.log('Available GeoClef coordinates:', geoclefToCoords.size);
             
             messages.forEach((message, index) => {
                 try {
-                    // Extract geolocation from 'g' tag
-                    const geoTag = message.tags.find(tag => tag[0] === 'g');
-                    if (!geoTag || !geoTag[1]) return;
+                    console.log(`Processing message ${index + 1}/${messages.length}: ${message.id.substring(0, 10)}... from ${message.pubkey.substring(0, 10)}...`);
+                    console.log(`Full pubkey: ${message.pubkey}`);
                     
-                    const [msgLat, msgLon] = geoTag[1].split(',').map(parseFloat);
-                    if (isNaN(msgLat) || isNaN(msgLon)) return;
+                    // Get coordinates for this GeoClef
+                    const coords = geoclefToCoords.get(message.pubkey);
+                    console.log(`Looking for coordinates for ${message.pubkey.substring(0, 10)}...`);
+                    console.log(`Coords found:`, coords);
+                    
+                    if (!coords) {
+                        console.log(`No coordinates found for GeoClef ${message.pubkey.substring(0, 10)}...`);
+                        console.log('Available GeoClefs:', Array.from(geoclefToCoords.keys()).map(k => k.substring(0, 10)));
+                        console.log('Full available hex keys:', Array.from(geoclefToCoords.keys()));
+                        return;
+                    }
+                    
+                    let msgLat = coords.lat;
+                    let msgLon = coords.lon;
+                    
+                    console.log(`Found coordinates for message: ${msgLat}, ${msgLon}`);
+                    
+                    // Add some random offset to spread messages around the GeoClef location
+                    const offset = 0.005; // ~500m
+                    msgLat += (Math.random() - 0.5) * offset;
+                    msgLon += (Math.random() - 0.5) * offset;
+                    
+                    console.log(`Final coordinates: ${msgLat.toFixed(4)}, ${msgLon.toFixed(4)}`);
                     
                     // Create custom marker icon
                     const markerIcon = L.divIcon({

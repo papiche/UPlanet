@@ -1697,33 +1697,75 @@
                 });
                 
                 if (!uploadResponse.ok) {
-                    const errorText = await uploadResponse.text();
                     let errorMessage = `Upload failed: ${uploadResponse.status}`;
                     
-                    // Handle specific error codes
-                    if (uploadResponse.status === 403) {
-                        errorMessage = '🔐 Authentification requise - Connectez-vous avec Nostr';
-                        plantnetResult.style.background = '#fff3cd';
-                    } else if (uploadResponse.status === 429) {
-                        errorMessage = '⏱️ Trop de requêtes - Attendez quelques instants';
-                        plantnetResult.style.background = '#fff3cd';
-                    } else {
-                        errorMessage = `❌ Erreur ${uploadResponse.status} - Réessayez plus tard`;
-                        plantnetResult.style.background = '#f8d7da';
+                    try {
+                        const errorData = await uploadResponse.json();
+                        console.error('Upload error details:', errorData);
+                        
+                        // Handle specific error codes
+                        if (uploadResponse.status === 403) {
+                            errorMessage = '🔐 Authentification NOSTR requise\n\n' +
+                                         'Veuillez vous reconnecter avec votre extension NOSTR.\n' +
+                                         'L\'événement d\'authentification (NIP-42) doit être récent (< 24h).\n\n' +
+                                         'Détails: ' + (errorData.detail || 'Auth failed');
+                            plantnetResult.style.background = '#fff3cd';
+                            
+                            // Suggestion de reconnexion
+                            console.log('🔄 Suggestion: Rafraîchissez la page et reconnectez-vous avec NOSTR');
+                        } else if (uploadResponse.status === 429) {
+                            errorMessage = '⏱️ Trop de requêtes - Attendez quelques instants';
+                            plantnetResult.style.background = '#fff3cd';
+                        } else {
+                            errorMessage = `❌ Erreur ${uploadResponse.status} - ${errorData.detail || 'Réessayez plus tard'}`;
+                            plantnetResult.style.background = '#f8d7da';
+                        }
+                    } catch (e) {
+                        // Si la réponse n'est pas du JSON
+                        const errorText = await uploadResponse.text();
+                        console.error('Upload error (text):', errorText);
+                        
+                        if (uploadResponse.status === 403) {
+                            errorMessage = '🔐 Authentification NOSTR requise - Reconnectez-vous avec votre extension NOSTR';
+                            plantnetResult.style.background = '#fff3cd';
+                        }
                     }
                     
-                    console.error('Upload error details:', errorText);
                     throw new Error(errorMessage);
                 }
                 
                 const uploadResult = await uploadResponse.json();
-                const imageUrl = uploadResult.url || uploadResult.ipfs_url;
+                console.log('Upload API response:', uploadResult);
                 
-                if (!imageUrl) {
-                    throw new Error('❌ Aucune URL retournée par le serveur');
+                // Construire l'URL IPFS à partir de new_cid et file_path
+                let imageUrl = null;
+                
+                if (uploadResult.new_cid && uploadResult.file_path) {
+                    // Construction de l'URL IPFS complète
+                    const gateway = window.location.origin.includes('127.0.0.1') 
+                        ? 'http://127.0.0.1:8080' 
+                        : window.location.origin.replace('ipfs.', 'ipfs.');
+                    
+                    imageUrl = `${gateway}/ipfs/${uploadResult.new_cid}/${uploadResult.file_path}`;
+                    console.log('✅ Image URL construite:', imageUrl);
+                } else if (uploadResult.url) {
+                    // Fallback sur url si présente
+                    imageUrl = uploadResult.url;
+                    console.log('✅ Image URL depuis response.url:', imageUrl);
+                } else if (uploadResult.ipfs_url) {
+                    // Fallback sur ipfs_url si présente
+                    imageUrl = uploadResult.ipfs_url;
+                    console.log('✅ Image URL depuis response.ipfs_url:', imageUrl);
                 }
                 
-                console.log('Photo uploaded to IPFS:', imageUrl);
+                if (!imageUrl) {
+                    console.error('Response complète:', uploadResult);
+                    throw new Error('❌ Impossible de construire l\'URL IPFS\n\n' +
+                                  'CID: ' + (uploadResult.new_cid || 'manquant') + '\n' +
+                                  'Path: ' + (uploadResult.file_path || 'manquant'));
+                }
+                
+                console.log('✅ Photo uploaded to IPFS:', imageUrl);
                 
                 // Store the IPFS URL for later use in the message
                 selectedPhoto.ipfsUrl = imageUrl;

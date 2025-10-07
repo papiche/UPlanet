@@ -695,13 +695,13 @@
         }
         
         #mini-map {
-            height: 250px;
+            height: 400px;
             width: 100%;
             border-radius: 10px;
             border: 1px solid rgba(255, 255, 255, 0.2);
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
             background: #f0f0f0;
-            min-height: 250px;
+            min-height: 400px;
         }
         
         /* Nearby Messages Styles */
@@ -711,6 +711,18 @@
             border-radius: 50%;
             width: 12px;
             height: 12px;
+        }
+        
+        .umap-marker {
+            background: #4ade80 !important; /* Green for UMAPs */
+        }
+        
+        .sector-marker {
+            background: #3b82f6 !important; /* Blue for SECTORS */
+        }
+        
+        .region-marker {
+            background: #ef4444 !important; /* Red for REGIONS */
         }
         
         .nearby-popup {
@@ -844,7 +856,7 @@
             }
             
             #mini-map {
-                height: 200px;
+                height: 300px;
             }
         }
         
@@ -857,7 +869,7 @@
             }
             
             #mini-map {
-                height: 180px;
+                height: 250px;
             }
         }
     </style>
@@ -872,9 +884,9 @@
             <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
                 <div>
                     <h3 style="margin: 0; font-size: 18px;">🌱 Partagez vos Observations</h3>
-                    <p style="margin: 5px 0 0 0; font-size: 14px; color: var(--muted);">Connectez-vous pour partager vos photos de plantes avec la communauté</p>
+                    <p style="margin: 5px 0 0 0; font-size: 14px; color: var(--muted);">Connectez-vous pour répertorier les plantes sur uPlanet</p>
                 </div>
-                <button class="nostr-login" id="nostrLoginBtn" onclick="handleNostrLogin()" style="margin: 0;">Se connecter avec Nostr</button>
+                <button class="nostr-login" id="nostrLoginBtn" onclick="handleNostrLogin()" style="margin: 0;">Nostr Connect</button>
             </div>
             
             <div id="nostr-message-section" class="message-form" style="margin-top: 15px;">
@@ -924,6 +936,23 @@
                         <div id="mini-map"></div>
                         <div style="padding: 8px 0; font-size: 0.8em; color: #7f8c8d; text-align: center;">
                             💡 Cliquez sur la carte pour ajuster votre position
+                        </div>
+                        <div style="margin-top: 10px; padding: 8px; background: rgba(255, 255, 255, 0.05); border-radius: 6px; font-size: 0.75em;">
+                            <div style="margin-bottom: 4px; font-weight: bold; color: #e2e8f0;">Légende des marqueurs :</div>
+                            <div style="display: flex; justify-content: space-around; flex-wrap: wrap; gap: 8px;">
+                                <div style="display: flex; align-items: center; gap: 4px;">
+                                    <div style="width: 12px; height: 12px; background: #4ade80; border: 2px solid white; border-radius: 50%;"></div>
+                                    <span>UMAP (~500m)</span>
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 4px;">
+                                    <div style="width: 12px; height: 12px; background: #3b82f6; border: 2px solid white; border-radius: 50%;"></div>
+                                    <span>SECTOR (~10km)</span>
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 4px;">
+                                    <div style="width: 12px; height: 12px; background: #ef4444; border: 2px solid white; border-radius: 50%;"></div>
+                                    <span>REGION (~100km)</span>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -1107,7 +1136,7 @@
                 messageSection.style.display = 'block';
                 profileSection.style.display = 'block';
             } else {
-                loginBtn.textContent = 'Se connecter avec Nostr';
+                loginBtn.textContent = 'Nostr Connect';
                 loginBtn.style.background = '#3498db';
                 messageSection.style.display = 'none';
                 profileSection.style.display = 'none';
@@ -1125,10 +1154,25 @@
                 return;
             }
 
+            // Check if we already have a connected relay
+            if (nostrRelay && isNostrConnected) {
+                console.log('✅ Reusing existing relay connection');
+                return;
+            }
+
             console.log('Connecting to relay:', NOSTRws);
             authSent = false; // Reset on new connection
 
             try {
+                // Close existing connection if any
+                if (nostrRelay) {
+                    try {
+                        nostrRelay.close();
+                    } catch (e) {
+                        console.warn('Error closing existing relay:', e);
+                    }
+                }
+
                 nostrRelay = NostrTools.relayInit(NOSTRws);
 
                 nostrRelay.on('connect', async () => {
@@ -1144,6 +1188,11 @@
 
                 nostrRelay.on('error', (error) => {
                     console.error('❌ Relay connection error:', error);
+                    isNostrConnected = false;
+                });
+
+                nostrRelay.on('disconnect', () => {
+                    console.log('🔌 Relay disconnected');
                     isNostrConnected = false;
                 });
 
@@ -1195,45 +1244,92 @@
                 
                 console.log('✅ NIP-42 event signed:', signedEvent.id);
                 
-                // Try to access the WebSocket through different possible paths
-                let ws = null;
-                if (nostrRelay._ws) {
-                    ws = nostrRelay._ws;
-                } else if (nostrRelay.ws) {
-                    ws = nostrRelay.ws;
-                } else if (nostrRelay.socket) {
-                    ws = nostrRelay.socket;
-                }
+                // Publish the event to the relay so it gets stored
+                console.log('📤 Publishing NIP-42 event to relay...');
+                const publishPromise = nostrRelay.publish(signedEvent);
                 
-                if (ws && ws.readyState === WebSocket.OPEN) {
-                    const authMessage = JSON.stringify(['AUTH', signedEvent]);
-                    ws.send(authMessage);
-                    console.log('✅ NIP-42 AUTH message sent via relay WebSocket:', signedEvent.id);
-                } else {
-                    // Fallback: create a dedicated connection just for AUTH
-                    console.log('⚠️ Using fallback: creating dedicated AUTH connection');
-                    const authWs = new WebSocket(relayUrl);
+                // Add timeout for publish
+                const timeoutPromise = new Promise((_, reject) => {
+                    setTimeout(() => reject(new Error('NIP-42 publish timeout')), 10000);
+                });
+                
+                await Promise.race([publishPromise, timeoutPromise]);
+                console.log('✅ NIP-42 event published to relay:', signedEvent.id);
+                
+                // Verify the event was stored by querying it back
+                setTimeout(async () => {
+                    try {
+                        await verifyNIP42Event(signedEvent.id);
+                    } catch (verifyError) {
+                        console.warn('⚠️ Could not verify NIP-42 event:', verifyError);
+                    }
+                }, 1000);
+                
+                // Also send AUTH message for immediate authentication
+                try {
+                    let ws = null;
+                    if (nostrRelay._ws) {
+                        ws = nostrRelay._ws;
+                    } else if (nostrRelay.ws) {
+                        ws = nostrRelay.ws;
+                    } else if (nostrRelay.socket) {
+                        ws = nostrRelay.socket;
+                    }
                     
-                    authWs.onopen = () => {
+                    if (ws && ws.readyState === WebSocket.OPEN) {
                         const authMessage = JSON.stringify(['AUTH', signedEvent]);
-                        authWs.send(authMessage);
-                        console.log('✅ NIP-42 AUTH message sent via dedicated connection:', signedEvent.id);
-                        
-                        // Keep connection open for a bit to ensure message is received
-                        setTimeout(() => {
-                            if (authWs.readyState === WebSocket.OPEN) {
-                                authWs.close();
-                            }
-                        }, 2000);
-                    };
-                    
-                    authWs.onerror = (error) => {
-                        console.error('❌ WebSocket error sending AUTH:', error);
-                    };
+                        ws.send(authMessage);
+                        console.log('✅ NIP-42 AUTH message sent via relay WebSocket:', signedEvent.id);
+                    }
+                } catch (authError) {
+                    console.warn('⚠️ Could not send AUTH message, but event was published:', authError);
                 }
                 
             } catch (error) {
                 console.error('❌ Failed to send NIP-42 auth:', error);
+            }
+        }
+
+        // Verify that NIP-42 event was stored on the relay
+        async function verifyNIP42Event(eventId) {
+            if (!nostrRelay || !isNostrConnected) {
+                throw new Error('Relay not connected');
+            }
+
+            try {
+                const events = await new Promise((resolve, reject) => {
+                    const sub = nostrRelay.sub([{ kinds: [22242], ids: [eventId], limit: 1 }]);
+                    const foundEvents = [];
+                    
+                    let timeout = setTimeout(() => {
+                        sub.unsub();
+                        resolve(foundEvents);
+                    }, 5000);
+
+                    sub.on('event', (event) => {
+                        foundEvents.push(event);
+                        clearTimeout(timeout);
+                        sub.unsub();
+                        resolve(foundEvents);
+                    });
+
+                    sub.on('eose', () => {
+                        clearTimeout(timeout);
+                        sub.unsub();
+                        resolve(foundEvents);
+                    });
+                });
+
+                if (events.length > 0) {
+                    console.log('✅ NIP-42 event verified on relay:', eventId);
+                    return true;
+                } else {
+                    console.warn('⚠️ NIP-42 event not found on relay:', eventId);
+                    return false;
+                }
+            } catch (error) {
+                console.error('❌ Error verifying NIP-42 event:', error);
+                throw error;
             }
         }
 
@@ -1838,7 +1934,7 @@
                 
                 // Update UI to show upload success
                 plantnetResult.style.background = '#d4edda';
-                plantnetText.textContent = '✅ Photo uploadée - Analyse PlantNet en cours...';
+                plantnetText.textContent = '✅ Photo uploadée - Cliquez sur Partager...';
                 
                 // The actual PlantNet analysis will be handled by the Nostr relay
                 // when the message is sent with #plantnet tag
@@ -2728,24 +2824,51 @@ END:VEVENT
                     
                     console.log(`Found coordinates for message: ${msgLat}, ${msgLon}`);
                     
-                    // Add some random offset to spread messages around the GeoClef location
-                    const offset = 0.005; // ~500m
+                    // Add offset based on GeoClef type to spread messages appropriately
+                    let offset = 0.005; // Default ~500m for UMAPs
+                    
+                    // Determine offset based on GeoClef type
+                    if (geolinkData.umaps && Object.values(geolinkData.umaps).includes(message.pubkey)) {
+                        offset = 0.005; // ~500m for UMAPs (local level)
+                    } else if (geolinkData.sectors && Object.values(geolinkData.sectors).includes(message.pubkey)) {
+                        offset = 0.1; // ~10km for SECTORS (sector level)
+                    } else if (geolinkData.regions && Object.values(geolinkData.regions).includes(message.pubkey)) {
+                        offset = 1.0; // ~100km for REGIONS (regional level)
+                    }
+                    
                     msgLat += (Math.random() - 0.5) * offset;
                     msgLon += (Math.random() - 0.5) * offset;
                     
-                    console.log(`Final coordinates: ${msgLat.toFixed(4)}, ${msgLon.toFixed(4)}`);
+                    console.log(`Final coordinates: ${msgLat.toFixed(4)}, ${msgLon.toFixed(4)} (offset: ${offset}°)`);
                     
-                    // Create custom marker icon
+                    // Determine marker color based on GeoClef type
+                    let markerColor = '#f59e0b'; // Default orange
+                    let markerClass = 'nearby-message-marker';
+                    
+                    // Check if this is a UMAP, SECTOR, or REGION
+                    if (geolinkData.umaps && Object.values(geolinkData.umaps).includes(message.pubkey)) {
+                        markerColor = '#4ade80'; // Green for UMAPs
+                        markerClass = 'nearby-message-marker umap-marker';
+                    } else if (geolinkData.sectors && Object.values(geolinkData.sectors).includes(message.pubkey)) {
+                        markerColor = '#3b82f6'; // Blue for SECTORS
+                        markerClass = 'nearby-message-marker sector-marker';
+                    } else if (geolinkData.regions && Object.values(geolinkData.regions).includes(message.pubkey)) {
+                        markerColor = '#ef4444'; // Red for REGIONS
+                        markerClass = 'nearby-message-marker region-marker';
+                    }
+                    
+                    // Create custom marker icon with appropriate color
                     const markerIcon = L.divIcon({
-                        className: 'nearby-message-marker',
-                        iconSize: [12, 12]
+                        className: markerClass,
+                        iconSize: [12, 12],
+                        html: `<div style="background-color: ${markerColor}; border: 2px solid white; border-radius: 50%; width: 12px; height: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.3);"></div>`
                     });
                     
                     // Create marker
                     const marker = L.marker([msgLat, msgLon], { icon: markerIcon }).addTo(miniMap);
                     
                     // Create popup content
-                    const popupContent = createPopupContent(message);
+                    const popupContent = createPopupContent(message, geolinkData);
                     marker.bindPopup(popupContent);
                     
                     nearbyMarkers.push(marker);
@@ -2758,9 +2881,30 @@ END:VEVENT
             console.log(`Added ${nearbyMarkers.length} markers to map`);
         }
         
-        function createPopupContent(message) {
+        function createPopupContent(message, geolinkData) {
             const div = document.createElement('div');
             div.className = 'nearby-popup-content';
+            
+            // Determine GeoClef type
+            let geoclefType = 'Unknown';
+            let typeIcon = '📍';
+            if (geolinkData.umaps && Object.values(geolinkData.umaps).includes(message.pubkey)) {
+                geoclefType = 'UMAP';
+                typeIcon = '🟢';
+            } else if (geolinkData.sectors && Object.values(geolinkData.sectors).includes(message.pubkey)) {
+                geoclefType = 'SECTOR';
+                typeIcon = '🔵';
+            } else if (geolinkData.regions && Object.values(geolinkData.regions).includes(message.pubkey)) {
+                geoclefType = 'REGION';
+                typeIcon = '🔴';
+            }
+            
+            // GeoClef type indicator
+            const typeDiv = document.createElement('div');
+            typeDiv.className = 'geoclef-type';
+            typeDiv.style.cssText = 'font-size: 0.8em; color: #666; margin-bottom: 5px; font-weight: bold;';
+            typeDiv.textContent = `${typeIcon} ${geoclefType}`;
+            div.appendChild(typeDiv);
             
             // Author link
             const authorDiv = document.createElement('div');
@@ -2925,7 +3069,7 @@ END:VEVENT
                     nostrLoginBtn.style.background = '#95a5a6';
                     nostrLoginBtn.style.cursor = 'not-allowed';
                 } else {
-                    nostrLoginBtn.textContent = "Se connecter avec Nostr";
+                    nostrLoginBtn.textContent = "Nostr Connect";
                     nostrLoginBtn.disabled = false;
                     nostrLoginBtn.style.background = '#3498db';
                     nostrLoginBtn.style.cursor = 'pointer';

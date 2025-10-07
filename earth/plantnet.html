@@ -477,6 +477,49 @@
             text-decoration: underline;
         }
         
+        /* Delete Button Styles */
+        .delete-button {
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.8em;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            margin-left: 10px;
+            opacity: 0.8;
+        }
+        
+        .delete-button:hover {
+            background: linear-gradient(135deg, #dc2626, #b91c1c);
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(239, 68, 68, 0.3);
+            opacity: 1;
+        }
+        
+        .delete-button:disabled {
+            background: rgba(148, 163, 184, 0.5);
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+            opacity: 0.5;
+        }
+        
+        .message-actions {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .message-actions .delete-button {
+            margin-left: auto;
+        }
+        
         #last-message-area .message-item {
             background: rgba(255, 255, 255, 0.05);
             border: 1px solid rgba(255, 255, 255, 0.1);
@@ -1515,6 +1558,20 @@
             metaDiv.className = 'message-meta';
             metaDiv.textContent = `Message ${currentMessageIndex + 1}/${fetchedMessages.length} | ID: ${event.id.substring(0, 10)}... | ${new Date(event.created_at * 1000).toLocaleString('fr-FR')}`;
             
+            // Add delete button if this is the user's own message
+            if (userPubkey && event.pubkey === userPubkey) {
+                const actionsDiv = document.createElement('div');
+                actionsDiv.className = 'message-actions';
+                
+                const deleteBtn = document.createElement('button');
+                deleteBtn.className = 'delete-button';
+                deleteBtn.textContent = '🗑️ Supprimer';
+                deleteBtn.onclick = () => deleteMessage(event.id);
+                
+                actionsDiv.appendChild(deleteBtn);
+                messageDiv.appendChild(actionsDiv);
+            }
+            
             messageDiv.appendChild(contentDiv);
             messageDiv.appendChild(metaDiv);
             container.appendChild(messageDiv);
@@ -1710,6 +1767,20 @@
                 if (i < lines.length - 1) contentDiv.appendChild(document.createElement('br'));
             });
             
+            // Add delete button if this is the user's own reply
+            if (userPubkey && event.pubkey === userPubkey) {
+                const actionsDiv = document.createElement('div');
+                actionsDiv.className = 'message-actions';
+                
+                const deleteBtn = document.createElement('button');
+                deleteBtn.className = 'delete-button';
+                deleteBtn.textContent = '🗑️ Supprimer';
+                deleteBtn.onclick = () => deleteMessage(event.id);
+                
+                actionsDiv.appendChild(deleteBtn);
+                item.appendChild(actionsDiv);
+            }
+            
             item.appendChild(authorP);
             item.appendChild(contentDiv);
             list.appendChild(item);
@@ -1850,7 +1921,7 @@
                     console.log('Aucune clé publique disponible pour l\'upload');
                 }
                 
-                const uploadUrl = `${getAPIBaseUrl()}/api/upload`;
+                const uploadUrl = `${getAPIBaseUrl()}/api/fileupload`;
                 console.log(`Uploading to uSPOT API: ${uploadUrl}`);
                 
                 const uploadResponse = await fetch(uploadUrl, {
@@ -1899,17 +1970,26 @@
                 const uploadResult = await uploadResponse.json();
                 console.log('Upload API response:', uploadResult);
                 
-                // Construire l'URL IPFS à partir de new_cid et file_path
+                // Construire l'URL IPFS à partir des données du script upload2ipfs.sh
                 let imageUrl = null;
                 
-                if (uploadResult.new_cid && uploadResult.file_path) {
-                    // Construction de l'URL IPFS complète
+                if (uploadResult.success && uploadResult.new_cid && uploadResult.file_path) {
+                    // Construction de l'URL IPFS complète depuis le script upload2ipfs.sh
                     const gateway = window.location.origin.includes('127.0.0.1') 
                         ? 'http://127.0.0.1:8080' 
                         : window.location.origin.replace('ipfs.', 'ipfs.');
                     
-                    imageUrl = `${gateway}/ipfs/${uploadResult.new_cid}/${uploadResult.file_path}`;
-                    console.log('✅ Image URL construite:', imageUrl);
+                    // Extraire le nom de fichier du chemin complet
+                    const fileName = uploadResult.file_path.split('/').pop();
+                    imageUrl = `${gateway}/ipfs/${uploadResult.new_cid}/${fileName}`;
+                    console.log('✅ Image URL construite depuis upload2ipfs.sh:', imageUrl);
+                } else if (uploadResult.nip94_event && uploadResult.nip94_event.tags) {
+                    // Fallback: chercher l'URL dans les tags NIP-94
+                    const urlTag = uploadResult.nip94_event.tags.find(tag => tag[0] === 'url');
+                    if (urlTag && urlTag[1]) {
+                        imageUrl = urlTag[1];
+                        console.log('✅ Image URL depuis NIP-94 tags:', imageUrl);
+                    }
                 } else if (uploadResult.url) {
                     // Fallback sur url si présente
                     imageUrl = uploadResult.url;
@@ -1924,7 +2004,8 @@
                     console.error('Response complète:', uploadResult);
                     throw new Error('❌ Impossible de construire l\'URL IPFS\n\n' +
                                   'CID: ' + (uploadResult.new_cid || 'manquant') + '\n' +
-                                  'Path: ' + (uploadResult.file_path || 'manquant'));
+                                  'Path: ' + (uploadResult.file_path || 'manquant') + '\n' +
+                                  'Status: ' + (uploadResult.status || 'inconnu'));
                 }
                 
                 console.log('✅ Photo uploaded to IPFS:', imageUrl);
@@ -1934,7 +2015,12 @@
                 
                 // Update UI to show upload success
                 plantnetResult.style.background = '#d4edda';
-                plantnetText.textContent = '✅ Photo uploadée - Cliquez sur Partager...';
+                plantnetText.textContent = '✅ Photo uploadée vers IPFS - Cliquez sur Partager...';
+                
+                // Log successful upload details
+                console.log('✅ Photo upload successful - IPFS URL:', imageUrl);
+                console.log('✅ CID:', uploadResult.new_cid);
+                console.log('✅ File type:', uploadResult.file_type);
                 
                 // The actual PlantNet analysis will be handled by the Nostr relay
                 // when the message is sent with #plantnet tag
@@ -2965,6 +3051,69 @@ END:VEVENT
                 }
             });
             nearbyMarkers = [];
+        }
+
+        // Delete Message Function
+        async function deleteMessage(eventId) {
+            if (!userPubkey) {
+                alert("Vous devez être connecté pour supprimer un message.");
+                return;
+            }
+
+            if (!nostrRelay || !isNostrConnected) {
+                alert("Connexion au relay Nostr requise pour supprimer un message.");
+                return;
+            }
+
+            // Confirmation dialog
+            if (!confirm("Êtes-vous sûr de vouloir supprimer ce message ? Cette action est irréversible.")) {
+                return;
+            }
+
+            try {
+                console.log(`Deleting message: ${eventId}`);
+                
+                // Create deletion event (kind 5)
+                const deletionEvent = {
+                    kind: 5, // Deletion event
+                    created_at: Math.floor(Date.now() / 1000),
+                    tags: [
+                        ["e", eventId] // Reference to the event being deleted
+                    ],
+                    content: "Message supprimé par l'utilisateur"
+                };
+
+                // Sign the deletion event
+                let signedDeletionEvent;
+                if (window.nostr && typeof window.nostr.signEvent === 'function') {
+                    signedDeletionEvent = await window.nostr.signEvent(deletionEvent);
+                } else {
+                    throw new Error("Extension Nostr requise pour signer l'événement de suppression.");
+                }
+
+                // Publish the deletion event
+                console.log("Publishing deletion event:", signedDeletionEvent);
+                const publishPromise = nostrRelay.publish(signedDeletionEvent);
+
+                // Add timeout
+                const timeoutPromise = new Promise((_, reject) => {
+                    setTimeout(() => reject(new Error('Timeout de publication')), 10000);
+                });
+
+                await Promise.race([publishPromise, timeoutPromise]);
+
+                console.log("Message deletion event published successfully");
+                alert("🗑️ Message marqué pour suppression !");
+                
+                // Refresh the messages to show the deletion
+                if (userPubkey) {
+                    await fetchAndDisplayMessages(userPubkey);
+                }
+
+            } catch (error) {
+                alert(`Erreur lors de la suppression du message: ${error.message}`);
+                console.error("Erreur de suppression:", error);
+            }
         }
 
         // Initialize on load

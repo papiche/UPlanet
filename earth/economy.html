@@ -848,6 +848,10 @@
             background: linear-gradient(90deg, #34495e, #2c3e50);
         }
 
+        .legal-wallet-card.ca::before {
+            background: linear-gradient(90deg, #16a085, #1abc9c);
+        }
+
         .legal-wallet-header {
             display: flex;
             align-items: center;
@@ -1046,14 +1050,15 @@
         async function createLegalWalletsSection(data, originalApiUrl) {
             const legalWalletsGrid = document.getElementById('legal-wallets-grid');
             
-            // Define the legal wallets with their properties
+            // Define the legal wallets with their properties (G1 Reserve is displayed separately)
             const legalWallets = [
                 {
-                    key: 'UPLANETNAME_G1',
-                    name: 'Réserve',
-                    icon: '🏛️',
-                    description: 'Émet et "brûle" les Ẑen lors des conversions avec l\'Euro',
-                    className: 'g1'
+                    key: 'UPLANETG1PUB',
+                    name: 'Chiffre d\'Affaires',
+                    icon: '📡',
+                    description: 'Hub de distribution des services - Historique des revenus',
+                    className: 'ca',
+                    isRevenue: true  // Special flag to display CA from incoming transactions
                 },
                 {
                     key: 'UPLANETNAME_SOCIETY',
@@ -1119,6 +1124,33 @@
 
             legalWalletsGrid.innerHTML = walletsHTML;
 
+            // Fetch G1 Reserve balance separately (displayed above cooperative wallets)
+            const g1ReservePubkey = data['UPLANETNAME_G1'];
+            const g1ReserveBalanceElement = document.getElementById('g1-reserve-balance');
+            
+            if (g1ReservePubkey && g1ReservePubkey !== 'N/A') {
+                try {
+                    const balanceData = await fetchWalletBalance(g1ReservePubkey, apiBaseUrl);
+                    
+                    // Display with Ğ1 large and Ẑ small
+                    g1ReserveBalanceElement.innerHTML = `
+                        <div style="display: flex; align-items: baseline; gap: 8px;">
+                            <span style="font-size: 1.5em; font-weight: bold; color: #9b59b6;">${balanceData.balance} Ğ1</span>
+                            <span style="font-size: 0.85em; color: #7f8c8d;">(${balanceData.zen} Ẑ)</span>
+                        </div>
+                    `;
+                } catch (error) {
+                    console.error('Error loading G1 Reserve balance:', error);
+                    g1ReserveBalanceElement.innerHTML = `
+                        <span style="color: #e74c3c; font-size: 0.9em;">❌ Erreur</span>
+                    `;
+                }
+            } else {
+                g1ReserveBalanceElement.innerHTML = `
+                    <span style="color: #7f8c8d; font-size: 0.9em;">N/A</span>
+                `;
+            }
+
             // Fetch balances for each wallet in the background
             legalWallets.forEach(async (wallet) => {
                 const pubkey = data[wallet.key];
@@ -1126,8 +1158,59 @@
                 
                 if (pubkey && pubkey !== 'N/A') {
                     try {
+                        // Special handling for CA wallet (UPLANETG1PUB) - show revenue history
+                        if (wallet.key === 'UPLANETG1PUB' && wallet.isRevenue) {
+                            // Fetch revenue data to display total CA
+                            const cleanApiBaseUrl = apiBaseUrl.replace(/\/+$/, '');
+                            const revenueUrl = `${cleanApiBaseUrl}/check_revenue`;
+                            console.log('Fetching revenue data from:', revenueUrl);
+                            
+                            try {
+                                const revenueResponse = await fetch(revenueUrl);
+                                const revenueData = await revenueResponse.json();
+                                
+                                if (revenueData && revenueData.total_revenue_zen !== undefined) {
+                                    // Display total revenue with button to view history
+                                    balanceElement.innerHTML = `
+                                        <div style="display: flex; flex-direction: column; gap: 4px;">
+                                            <div style="font-size: 1.3em; font-weight: bold;">${revenueData.total_revenue_zen.toFixed(2)} Ẑ</div>
+                                            <div style="font-size: 0.7em; color: #7f8c8d;">${revenueData.total_transactions} ventes RENTAL</div>
+                                            <a href="${cleanApiBaseUrl}/check_revenue?html=1" target="_blank" style="
+                                                display: inline-block;
+                                                margin-top: 4px;
+                                                padding: 4px 8px;
+                                                background: #16a085;
+                                                color: white !important;
+                                                text-decoration: none;
+                                                border-radius: 4px;
+                                                font-size: 0.75em;
+                                                text-align: center;
+                                                transition: background 0.3s;
+                                            " onmouseover="this.style.background='#138d75'" onmouseout="this.style.background='#16a085'">
+                                                💼 Historique CA
+                                            </a>
+                                        </div>
+                                    `;
+                                } else {
+                                    throw new Error('Invalid revenue data');
+                                }
+                            } catch (error) {
+                                console.warn('Failed to fetch revenue data, showing balance only:', error);
+                                // Fallback: just display current balance
+                                const balanceData = await fetchWalletBalance(pubkey, apiBaseUrl);
+                                balanceElement.innerHTML = `
+                                    <div style="display: flex; flex-direction: column; gap: 4px;">
+                                        <div style="font-size: 1.3em; font-weight: bold;">${balanceData.zen} Ẑ</div>
+                                        <div style="font-size: 0.8em; color: #7f8c8d;">${balanceData.balance} Ğ1</div>
+                                        <div style="font-size: 0.7em; color: #16a085; margin-top: 2px;">
+                                            💼 Hub de distribution actif
+                                        </div>
+                                    </div>
+                                `;
+                            }
+                        }
                         // Special handling for SOCIETY wallet - show total outgoing transfers
-                        if (wallet.key === 'UPLANETNAME_SOCIETY') {
+                        else if (wallet.key === 'UPLANETNAME_SOCIETY') {
                             // Fetch society history (no g1pub parameter needed - read from environment)
                             const cleanApiBaseUrl = apiBaseUrl.replace(/\/+$/, '');
                             const societyUrl = `${cleanApiBaseUrl}/check_society`;
@@ -1326,13 +1409,35 @@
                     </div>
                 </div>
                 
+                <!-- G1 Reserve Section -->
+                <div class="status-section" style="
+                    background: linear-gradient(145deg, #232733, #2a2233);
+                    border-left: 4px solid #9b59b6;
+                    transition: all 0.3s ease;
+                    padding: 8px 12px;
+                    margin-top: 12px;
+                ">
+                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+                        <div style="display: flex; align-items: center; gap: 8px; flex: 0 0 auto;">
+                            <span style="font-size: 1.2em;">🏛️</span>
+                            <div style="display: flex; flex-direction: column; gap: 2px;">
+                                <span style="font-size: 0.85em; color: #b8c6e0; font-weight: 600;">Réserve Ğ1</span>
+                                <span style="font-size: 0.65em; color: #7f8c8d; line-height: 1.2;">Portefeuille source qui alimente UPlanet</span>
+                            </div>
+                        </div>
+                        <div id="g1-reserve-balance" style="display: flex; align-items: baseline; gap: 6px;">
+                            <span style="color: #7f8c8d; font-size: 0.8em;">⏳ Chargement...</span>
+                        </div>
+                    </div>
+                </div>
+                
                 <!-- Legal Wallets Section -->
                 <div class="status-section" style="
                     background: linear-gradient(145deg, #232733, #1e252a);
                     border-left: 4px solid #3498db;
                     transition: all 0.3s ease;
                     padding: 12px;
-                    margin-top: 12px;
+                    margin-top: 8px;
                 ">
                     <div class="metric" style="display: flex; flex-direction: column; gap: 8px;">
                         <div class="metric-title" style="

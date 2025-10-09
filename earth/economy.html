@@ -792,10 +792,37 @@
 
         /* Legal Wallets Styles */
         .legal-wallets-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            margin-top: 8px;
+        }
+
+        .legal-wallets-row {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
             gap: 8px;
-            margin-top: 8px;
+        }
+
+        .legal-wallets-row.two-cols {
+            grid-template-columns: repeat(2, 1fr);
+        }
+
+        .legal-wallets-row.three-cols {
+            grid-template-columns: repeat(3, 1fr);
+        }
+
+        .legal-wallets-row.one-col {
+            grid-template-columns: 1fr;
+            max-width: 400px;
+            margin: 0 auto;
+            width: 100%;
+        }
+
+        .wallet-separator {
+            height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
+            margin: 8px 0;
         }
 
         .legal-wallet-card {
@@ -905,8 +932,21 @@
 
         @media (max-width: 768px) {
             .legal-wallets-grid {
-                grid-template-columns: repeat(2, 1fr);
+                gap: 12px;
+            }
+
+            .legal-wallets-row {
                 gap: 6px;
+            }
+
+            .legal-wallets-row.two-cols,
+            .legal-wallets-row.three-cols {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .legal-wallets-row.one-col {
+                grid-template-columns: 1fr;
+                max-width: 100%;
             }
 
             .legal-wallet-card {
@@ -1051,78 +1091,125 @@
             const legalWalletsGrid = document.getElementById('legal-wallets-grid');
             
             // Define the legal wallets with their properties (G1 Reserve is displayed separately)
-            const legalWallets = [
+            // Organized in groups for visual layout
+            const walletGroups = [
                 {
-                    key: 'UPLANETG1PUB',
-                    name: 'Chiffre d\'Affaires',
-                    icon: '📡',
-                    description: 'Hub de distribution des services - Historique des revenus',
-                    className: 'ca',
-                    isRevenue: true  // Special flag to display CA from incoming transactions
+                    name: 'revenue_social',
+                    columns: 'two-cols',
+                    wallets: [
+                        {
+                            key: 'UPLANETG1PUB',
+                            name: 'Chiffre d\'Affaires',
+                            icon: '📡',
+                            description: 'Hub de distribution des services - Historique des revenus',
+                            className: 'ca',
+                            isRevenue: true  // Special flag to display CA from incoming transactions
+                        },
+                        {
+                            key: 'UPLANETNAME_SOCIETY',
+                            name: 'Capital Social',
+                            icon: '⭐',
+                            description: 'Gère les apports des sociétaires et l\'émission des parts',
+                            className: 'society'
+                        }
+                    ]
                 },
                 {
-                    key: 'UPLANETNAME_SOCIETY',
-                    name: 'Capital Social',
-                    icon: '⭐',
-                    description: 'Gère les apports des sociétaires et l\'émission des parts',
-                    className: 'society'
-                },
-                {
-                    key: 'UPLANETNAME_TREASURY',
-                    name: 'Trésorerie (1/3)',
-                    icon: '💰',
-                    description: 'Réserves impartageables pour la liquidité',
-                    className: 'treasury'
-                },
-                {
-                    key: 'UPLANETNAME_RND',
-                    name: 'R&D (1/3)',
-                    icon: '🔬',
-                    description: 'Financement du G1FabLab et de l\'innovation',
-                    className: 'rnd'
-                },
-                {
-                    key: 'UPLANETNAME_ASSETS',
-                    name: 'Actifs Réels (1/3)',
-                    icon: '🌳',
-                    description: 'Acquisition des forêts-jardins et biens communs',
-                    className: 'assets'
-                },
-                {
-                    key: 'UPLANETNAME_IMPOT',
-                    name: 'Provision Fiscale',
-                    icon: '📊',
-                    description: 'Isole la TVA et l\'IS pour garantir la conformité',
-                    className: 'impot'
+                    name: 'cooperative_distribution',
+                    columns: 'three-cols',
+                    wallets: [
+                        {
+                            key: 'UPLANETNAME_TREASURY',
+                            name: 'Trésorerie (1/3)',
+                            icon: '💰',
+                            description: 'Réserves impartageables pour la liquidité',
+                            className: 'treasury'
+                        },
+                        {
+                            key: 'UPLANETNAME_RND',
+                            name: 'R&D (1/3)',
+                            icon: '🔬',
+                            description: 'Financement du G1FabLab et de l\'innovation',
+                            className: 'rnd'
+                        },
+                        {
+                            key: 'UPLANETNAME_ASSETS',
+                            name: 'Actifs Réels (1/3)',
+                            icon: '🌳',
+                            description: 'Acquisition des forêts-jardins et biens communs',
+                            className: 'assets'
+                        }
+                    ]
                 }
             ];
 
             // Use the original API URL for balance checking (uSPOT API)
             const apiBaseUrl = originalApiUrl || getAPIUrl();
 
-            // Create initial HTML with loading states
+            // Create initial HTML with loading states organized in groups
             let walletsHTML = '';
             
-            legalWallets.forEach(wallet => {
-                const pubkey = data[wallet.key] || 'N/A';
-                const shortPubkey = pubkey !== 'N/A' ? `${pubkey.substring(0, 8)}...${pubkey.substring(pubkey.length - 4)}` : 'N/A';
+            walletGroups.forEach((group, groupIndex) => {
+                // Add separator before each group (except the first one)
+                if (groupIndex > 0) {
+                    walletsHTML += '<div class="wallet-separator"></div>';
+                }
                 
-                walletsHTML += `
-                    <div class="legal-wallet-card ${wallet.className}" id="wallet-${wallet.key}">
-                        <div class="legal-wallet-header">
-                            <span class="legal-wallet-icon">${wallet.icon}</span>
-                            <span class="legal-wallet-name">${wallet.name}</span>
+                // Start a new row with the appropriate column layout
+                walletsHTML += `<div class="legal-wallets-row ${group.columns}">`;
+                
+                group.wallets.forEach(wallet => {
+                    const pubkey = data[wallet.key] || 'N/A';
+                    const shortPubkey = pubkey !== 'N/A' ? `${pubkey.substring(0, 8)}...${pubkey.substring(pubkey.length - 4)}` : 'N/A';
+                    
+                    walletsHTML += `
+                        <div class="legal-wallet-card ${wallet.className}" id="wallet-${wallet.key}">
+                            <div class="legal-wallet-header">
+                                <span class="legal-wallet-icon">${wallet.icon}</span>
+                                <span class="legal-wallet-name">${wallet.name}</span>
+                            </div>
+                            <div class="legal-wallet-balance" id="balance-${wallet.key}">
+                                <span class="loading" style="color: #7f8c8d; font-size: 0.9em;">⏳ Chargement...</span>
+                            </div>
+                            <div class="legal-wallet-description">${wallet.description}</div>
+                            <div class="legal-wallet-pubkey" title="${pubkey}">${shortPubkey}</div>
                         </div>
-                        <div class="legal-wallet-balance" id="balance-${wallet.key}">
-                            <span class="loading" style="color: #7f8c8d; font-size: 0.9em;">⏳ Chargement...</span>
-                        </div>
-                        <div class="legal-wallet-description">${wallet.description}</div>
-                        <div class="legal-wallet-pubkey" title="${pubkey}">${shortPubkey}</div>
-                    </div>
-                `;
+                    `;
+                });
+                
+                // Close the row
+                walletsHTML += '</div>';
             });
 
             legalWalletsGrid.innerHTML = walletsHTML;
+
+            // Add Tax Provision section with same style as G1 Reserve
+            const taxProvisionHTML = `
+                <div class="wallet-separator"></div>
+                <div class="status-section" style="
+                    background: linear-gradient(145deg, #232733, #2a1e1e);
+                    border-left: 4px solid #e74c3c;
+                    transition: all 0.3s ease;
+                    padding: 8px 12px;
+                    margin-top: 0;
+                    border-radius: 8px;
+                    box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+                ">
+                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+                        <div style="display: flex; align-items: center; gap: 8px; flex: 0 0 auto;">
+                            <span style="font-size: 1.2em;">📊</span>
+                            <div style="display: flex; flex-direction: column; gap: 2px;">
+                                <span style="font-size: 0.85em; color: #b8c6e0; font-weight: 600;">Provision Fiscale</span>
+                                <span style="font-size: 0.65em; color: #7f8c8d; line-height: 1.2;">Isole la TVA et l'IS pour garantir la conformité</span>
+                            </div>
+                        </div>
+                        <div id="tax-provision-balance" style="display: flex; align-items: baseline; gap: 6px;">
+                            <span style="color: #7f8c8d; font-size: 0.8em;">⏳ Chargement...</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+            legalWalletsGrid.insertAdjacentHTML('beforeend', taxProvisionHTML);
 
             // Fetch G1 Reserve balance separately (displayed above cooperative wallets)
             const g1ReservePubkey = data['UPLANETNAME_G1'];
@@ -1151,8 +1238,38 @@
                 `;
             }
 
+            // Fetch Tax Provision balance separately
+            const taxProvisionPubkey = data['UPLANETNAME_IMPOT'];
+            const taxProvisionBalanceElement = document.getElementById('tax-provision-balance');
+            
+            if (taxProvisionPubkey && taxProvisionPubkey !== 'N/A') {
+                try {
+                    const balanceData = await fetchWalletBalance(taxProvisionPubkey, apiBaseUrl);
+                    
+                    // Display with Ẑ large and Ğ1 small
+                    taxProvisionBalanceElement.innerHTML = `
+                        <div style="display: flex; align-items: baseline; gap: 8px;">
+                            <span style="font-size: 1.5em; font-weight: bold; color: #e74c3c;">${balanceData.zen} Ẑ</span>
+                            <span style="font-size: 0.85em; color: #7f8c8d;">(${balanceData.balance} Ğ1)</span>
+                        </div>
+                    `;
+                } catch (error) {
+                    console.error('Error loading Tax Provision balance:', error);
+                    taxProvisionBalanceElement.innerHTML = `
+                        <span style="color: #e74c3c; font-size: 0.9em;">❌ Erreur</span>
+                    `;
+                }
+            } else {
+                taxProvisionBalanceElement.innerHTML = `
+                    <span style="color: #7f8c8d; font-size: 0.9em;">N/A</span>
+                `;
+            }
+
             // Fetch balances for each wallet in the background
-            legalWallets.forEach(async (wallet) => {
+            // Flatten all wallets from all groups
+            const allWallets = walletGroups.flatMap(group => group.wallets);
+            
+            allWallets.forEach(async (wallet) => {
                 const pubkey = data[wallet.key];
                 const balanceElement = document.getElementById(`balance-${wallet.key}`);
                 
@@ -1306,109 +1423,7 @@
 
             dashboard.innerHTML = `
                 <!-- UPlanet Status -->
-                <div class="status-section" style="
-                    background: ${bilan < 0 ? 
-                        'linear-gradient(145deg, #232733, #2a1e1e)' : 
-                        bilan < paf ? 
-                            'linear-gradient(145deg, #232733, #2a251e)' : 
-                            bilan < (3 * paf) ? 
-                                'linear-gradient(145deg, #232733, #1e252a)' : 
-                                'linear-gradient(145deg, #232733, #1e2a22)'
-                    };
-                    border-left: 4px solid ${bilan < 0 ? 
-                        '#e74c3c' : 
-                        bilan < paf ? 
-                            '#f39c12' : 
-                            bilan < (3 * paf) ? 
-                                '#3498db' : 
-                                '#2ecc71'
-                    };
-                    transition: all 0.3s ease;
-                    padding: 12px;
-                    margin-top: 12px;
-                ">
-                    <div class="metric" style="display: flex; flex-direction: column; gap: 6px;">
-                        <div class="metric-title" style="
-                            font-size: 1em;
-                            color: #eaf6ff;
-                            display: flex;
-                            align-items: center;
-                            gap: 6px;
-                        ">
-                            <span style="font-size: 1.2em;">🌍</span>
-                            <a href="/ipns/${IPFSNODEID}" target="_blank" style="color: #42a5f5 !important; text-shadow: 0 1px 2px rgba(0,0,0,0.8); font-weight: 600;">${IPFSNODEID}</a>
-                        </div>
-                        <div style="display: flex; flex-direction: column; gap: 8px;">
-                            <div style="display: flex; align-items: center; justify-content: space-between;">
-                                <div class="metric-value uplanet-balance" id="uplanet-balance" style="
-                                    font-size: 1.6em;
-                                    font-weight: bold;
-                                    color: ${bilan < 0 ? 
-                                        '#ff6b6b' : 
-                                        bilan < paf ? 
-                                        '#ffa726' : 
-                                        bilan < (3 * paf) ? 
-                                            '#42a5f5' : 
-                                            '#66bb6a'
-                                    };
-                                    text-shadow: 0 2px 4px rgba(0,0,0,0.9);
-                                ">${bilan.toFixed(2)} Ẑ</div>
-                                <div style="display: flex; align-items: center; gap: 6px;">
-                                    <span style="font-size: 1.2em;">🌐</span>
-                                    <span class="uplanet-info">UPlanet${planetPub}</span>
-                                    <span class="uplanet-info">${zen.toFixed(2)} Ẑ</span>
-                                </div>
-                            </div>
-                            <div style="display: flex; gap: 12px; flex-wrap: wrap; font-size: 0.85em; color: #b8c6e0;">
-                                <span style="display: flex; align-items: center; gap: 4px;">
-                                    💰 PAF: <strong style="color: #3498db;">${paf} Ẑ/sem</strong>
-                                </span>
-                                <span style="display: flex; align-items: center; gap: 4px;">
-                                    🔑 MULTIPASS: <strong style="color: #3498db;">${ncard} Ẑ/sem</strong>
-                                </span>
-                                <span style="display: flex; align-items: center; gap: 4px;">
-                                    💳 ZEN Card: <strong style="color: #2ecc71;">${zcard} Ẑ/sem</strong>
-                                </span>
-                            </div>
-                        </div>
-                        <div class="metric-subtitle" style="
-                            font-size: 0.9em;
-                            color: ${bilan < 0 ? 
-                                '#ff6b6b' : 
-                                bilan < paf ? 
-                                    '#ffa726' : 
-                                    bilan < (3 * paf) ? 
-                                        '#42a5f5' : 
-                                        '#66bb6a'
-                            };
-                            text-shadow: 0 1px 2px rgba(0,0,0,0.8);
-                            font-weight: 600;
-                            display: flex;
-                            align-items: center;
-                            gap: 6px;
-                        ">
-                            <span style="font-size: 1.1em;">
-                                ${bilan < 0 ? 
-                                    '⚠️' : 
-                                    bilan < paf ? 
-                                        '🔄' : 
-                                        bilan < (3 * paf) ? 
-                                            '✅' : 
-                                            '🌟'
-                                }
-                            </span>
-                            ${bilan < 0 ? 
-                                'Déficit' : 
-                                bilan < paf ? 
-                                    'Manque part du Capitaine' : 
-                                    bilan < (3 * paf) ? 
-                                        'PAF couvert' : 
-                                        'PAF et Capitaine couverts'
-                            }
-                        </div>
-                    </div>
-                </div>
-                
+
                 <!-- G1 Reserve Section -->
                 <div class="status-section" style="
                     background: linear-gradient(145deg, #232733, #2a2233);
@@ -1594,6 +1609,109 @@
                         </a>
                         <div style="font-size: 0.9em; color: #7f8c8d; margin-top: 8px;">
                             Modélisation interactive • Projection financière • Impact écologique
+                        </div>
+                    </div>
+                </div>
+
+                                <div class="status-section" style="
+                    background: ${bilan < 0 ? 
+                        'linear-gradient(145deg, #232733, #2a1e1e)' : 
+                        bilan < paf ? 
+                            'linear-gradient(145deg, #232733, #2a251e)' : 
+                            bilan < (3 * paf) ? 
+                                'linear-gradient(145deg, #232733, #1e252a)' : 
+                                'linear-gradient(145deg, #232733, #1e2a22)'
+                    };
+                    border-left: 4px solid ${bilan < 0 ? 
+                        '#e74c3c' : 
+                        bilan < paf ? 
+                            '#f39c12' : 
+                            bilan < (3 * paf) ? 
+                                '#3498db' : 
+                                '#2ecc71'
+                    };
+                    transition: all 0.3s ease;
+                    padding: 12px;
+                    margin-top: 12px;
+                ">
+                    <div class="metric" style="display: flex; flex-direction: column; gap: 6px;">
+                        <div class="metric-title" style="
+                            font-size: 1em;
+                            color: #eaf6ff;
+                            display: flex;
+                            align-items: center;
+                            gap: 6px;
+                        ">
+                            <span style="font-size: 1.2em;">🌍</span>
+                            <a href="/ipns/${IPFSNODEID}" target="_blank" style="color: #42a5f5 !important; text-shadow: 0 1px 2px rgba(0,0,0,0.8); font-weight: 600;">${IPFSNODEID}</a>
+                        </div>
+                        <div style="display: flex; flex-direction: column; gap: 8px;">
+                            <div style="display: flex; align-items: center; justify-content: space-between;">
+                                <div class="metric-value uplanet-balance" id="uplanet-balance" style="
+                                    font-size: 1.6em;
+                                    font-weight: bold;
+                                    color: ${bilan < 0 ? 
+                                        '#ff6b6b' : 
+                                        bilan < paf ? 
+                                        '#ffa726' : 
+                                        bilan < (3 * paf) ? 
+                                            '#42a5f5' : 
+                                            '#66bb6a'
+                                    };
+                                    text-shadow: 0 2px 4px rgba(0,0,0,0.9);
+                                ">${bilan.toFixed(2)} Ẑ</div>
+                                <div style="display: flex; align-items: center; gap: 6px;">
+                                    <span style="font-size: 1.2em;">🌐</span>
+                                    <span class="uplanet-info">UPlanet${planetPub}</span>
+                                    <span class="uplanet-info">${zen.toFixed(2)} Ẑ</span>
+                                </div>
+                            </div>
+                            <div style="display: flex; gap: 12px; flex-wrap: wrap; font-size: 0.85em; color: #b8c6e0;">
+                                <span style="display: flex; align-items: center; gap: 4px;">
+                                    💰 PAF: <strong style="color: #3498db;">${paf} Ẑ/sem</strong>
+                                </span>
+                                <span style="display: flex; align-items: center; gap: 4px;">
+                                    🔑 MULTIPASS: <strong style="color: #3498db;">${ncard} Ẑ/sem</strong>
+                                </span>
+                                <span style="display: flex; align-items: center; gap: 4px;">
+                                    💳 ZEN Card: <strong style="color: #2ecc71;">${zcard} Ẑ/sem</strong>
+                                </span>
+                            </div>
+                        </div>
+                        <div class="metric-subtitle" style="
+                            font-size: 0.9em;
+                            color: ${bilan < 0 ? 
+                                '#ff6b6b' : 
+                                bilan < paf ? 
+                                    '#ffa726' : 
+                                    bilan < (3 * paf) ? 
+                                        '#42a5f5' : 
+                                        '#66bb6a'
+                            };
+                            text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+                            font-weight: 600;
+                            display: flex;
+                            align-items: center;
+                            gap: 6px;
+                        ">
+                            <span style="font-size: 1.1em;">
+                                ${bilan < 0 ? 
+                                    '⚠️' : 
+                                    bilan < paf ? 
+                                        '🔄' : 
+                                        bilan < (3 * paf) ? 
+                                            '✅' : 
+                                            '🌟'
+                                }
+                            </span>
+                            ${bilan < 0 ? 
+                                'Déficit' : 
+                                bilan < paf ? 
+                                    'Manque part du Capitaine' : 
+                                    bilan < (3 * paf) ? 
+                                        'PAF couvert' : 
+                                        'PAF et Capitaine couverts'
+                            }
                         </div>
                     </div>
                 </div>

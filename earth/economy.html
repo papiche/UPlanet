@@ -1241,16 +1241,32 @@
                     border-radius: 8px;
                     box-shadow: 0 2px 8px rgba(0,0,0,0.18);
                 ">
-                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
-                        <div style="display: flex; align-items: center; gap: 8px; flex: 0 0 auto;">
-                            <span style="font-size: 1.2em;">📊</span>
-                            <div style="display: flex; flex-direction: column; gap: 2px;">
-                                <span style="font-size: 0.85em; color: #b8c6e0; font-weight: 600;">Provision Fiscale</span>
-                                <span style="font-size: 0.65em; color: #7f8c8d; line-height: 1.2;">Isole la TVA et l'IS pour garantir la conformité</span>
+                    <div style="display: flex; flex-direction: column; gap: 8px;">
+                        <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+                            <div style="display: flex; align-items: center; gap: 8px; flex: 0 0 auto;">
+                                <span style="font-size: 1.2em;">📊</span>
+                                <div style="display: flex; flex-direction: column; gap: 2px;">
+                                    <span style="font-size: 0.85em; color: #b8c6e0; font-weight: 600;">Provision Fiscale</span>
+                                    <span style="font-size: 0.65em; color: #7f8c8d; line-height: 1.2;">Isole la TVA et l'IS pour garantir la conformité</span>
+                                </div>
+                            </div>
+                            <div id="tax-provision-balance" style="display: flex; align-items: baseline; gap: 6px;">
+                                <span style="color: #7f8c8d; font-size: 0.8em;">⏳ Chargement...</span>
                             </div>
                         </div>
-                        <div id="tax-provision-balance" style="display: flex; align-items: baseline; gap: 6px;">
-                            <span style="color: #7f8c8d; font-size: 0.8em;">⏳ Chargement...</span>
+                        <div style="padding-left: 28px;">
+                            <a id="tax-provision-link" href="#" style="
+                                display: inline-block;
+                                font-size: 0.75em;
+                                color: #e74c3c;
+                                text-decoration: none;
+                                padding: 4px 8px;
+                                background: rgba(231,76,60,0.1);
+                                border-radius: 4px;
+                                transition: all 0.3s;
+                            " onmouseover="this.style.background='rgba(231,76,60,0.2)'" onmouseout="this.style.background='rgba(231,76,60,0.1)'">
+                                📜 Historique Fiscal
+                            </a>
                         </div>
                     </div>
                 </div>
@@ -1305,18 +1321,23 @@
             // Fetch Tax Provision balance separately
             const taxProvisionPubkey = data['UPLANETNAME_IMPOT'];
             const taxProvisionBalanceElement = document.getElementById('tax-provision-balance');
+            const taxProvisionLinkElement = document.getElementById('tax-provision-link');
             
             if (taxProvisionPubkey && taxProvisionPubkey !== 'N/A') {
                 try {
                     const balanceData = await fetchWalletBalance(taxProvisionPubkey, apiBaseUrl);
                     
-                    // Display with Ẑ large and Ğ1 small
+                    // Display with Ẑ only
                     taxProvisionBalanceElement.innerHTML = `
-                        <div style="display: flex; align-items: baseline; gap: 8px;">
-                            <span style="font-size: 1.5em; font-weight: bold; color: #e74c3c;">${balanceData.zen} Ẑ</span>
-                            <span style="font-size: 0.85em; color: #7f8c8d;">(${balanceData.balance} Ğ1)</span>
-                        </div>
+                        <span style="font-size: 1.5em; font-weight: bold; color: #e74c3c;">${balanceData.zen} Ẑ</span>
                     `;
+                    
+                    // Update link to point to check_impots with HTML output
+                    if (taxProvisionLinkElement) {
+                        const cleanApiBaseUrl = apiBaseUrl.replace(/\/+$/, '');
+                        taxProvisionLinkElement.href = `${cleanApiBaseUrl}/check_impots?html=1`;
+                        taxProvisionLinkElement.target = '_blank';
+                    }
                 } catch (error) {
                     console.error('Error loading Tax Provision balance:', error);
                     taxProvisionBalanceElement.innerHTML = `

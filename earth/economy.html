@@ -931,6 +931,24 @@
             word-break: break-all;
         }
 
+        .copyable-pubkey {
+            cursor: pointer;
+            transition: all 0.2s;
+            display: inline-block;
+            padding: 2px 4px;
+            border-radius: 3px;
+        }
+
+        .copyable-pubkey:hover {
+            color: #3498db;
+            background: rgba(52,152,219,0.1);
+            transform: scale(1.02);
+        }
+
+        .copyable-pubkey:active {
+            transform: scale(0.98);
+        }
+
         @media (max-width: 768px) {
             .legal-wallets-grid {
                 gap: 12px;
@@ -974,6 +992,33 @@
     </div>
 
     <script>
+        // Fonction pour copier dans le presse-papier avec feedback visuel
+        function copyToClipboard(text, element) {
+            navigator.clipboard.writeText(text).then(() => {
+                // Feedback visuel de succès
+                const originalContent = element.innerHTML;
+                const originalColor = element.style.color;
+                
+                element.innerHTML = '✅ Copié !';
+                element.style.color = '#2ecc71';
+                
+                setTimeout(() => {
+                    element.innerHTML = originalContent;
+                    element.style.color = originalColor;
+                }, 1500);
+            }).catch(err => {
+                console.error('Erreur lors de la copie:', err);
+                // Feedback visuel d'erreur
+                const originalContent = element.innerHTML;
+                element.innerHTML = '❌ Erreur';
+                element.style.color = '#e74c3c';
+                
+                setTimeout(() => {
+                    element.innerHTML = originalContent;
+                }, 1500);
+            });
+        }
+
         // Fonction pour transformer l'URL en URL de l'API
         function getAPIUrl() {
             const currentUrl = new URL(window.location.href);
@@ -1221,8 +1266,16 @@
                 // Display public key (shortened format)
                 const shortPubkey = `${g1ReservePubkey.substring(0, 8)}...${g1ReservePubkey.substring(g1ReservePubkey.length - 4)}`;
                 g1ReservePubkeyElement.innerHTML = `
-                    <span title="${g1ReservePubkey}">${shortPubkey}</span>
+                    <span class="copyable-pubkey" title="📋 Cliquer pour copier: ${g1ReservePubkey}">${shortPubkey}</span>
                 `;
+                
+                // Add click event to copy to clipboard
+                const copyableElement = g1ReservePubkeyElement.querySelector('.copyable-pubkey');
+                if (copyableElement) {
+                    copyableElement.addEventListener('click', (e) => {
+                        copyToClipboard(g1ReservePubkey, e.target);
+                    });
+                }
                 
                 try {
                     const balanceData = await fetchWalletBalance(g1ReservePubkey, apiBaseUrl);

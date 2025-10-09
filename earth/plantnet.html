@@ -2013,14 +2013,23 @@
                 // Store the IPFS URL for later use in the message
                 selectedPhoto.ipfsUrl = imageUrl;
                 
-                // Update UI to show upload success
+                // Extract filename from file_path
+                const aiGeneratedName = uploadResult.file_path ? uploadResult.file_path.split('/').pop() : null;
+                
+                // Update UI to show upload success with AI-generated filename
                 plantnetResult.style.background = '#d4edda';
-                plantnetText.textContent = '✅ Photo uploadée vers IPFS - Cliquez sur Partager...';
+                if (aiGeneratedName && aiGeneratedName !== file.name) {
+                    // Show AI-generated name if it's different from original
+                    plantnetText.innerHTML = `✅ Photo uploadée vers IPFS<br>📝 Nom IA: <strong>${aiGeneratedName}</strong>`;
+                } else {
+                    plantnetText.textContent = '✅ Photo uploadée vers IPFS - Cliquez sur Partager...';
+                }
                 
                 // Log successful upload details
                 console.log('✅ Photo upload successful - IPFS URL:', imageUrl);
                 console.log('✅ CID:', uploadResult.new_cid);
                 console.log('✅ File type:', uploadResult.file_type);
+                console.log('✅ AI-generated filename:', aiGeneratedName);
                 
                 // The actual PlantNet analysis will be handled by the Nostr relay
                 // when the message is sent with #plantnet tag
@@ -2102,7 +2111,7 @@
                 };
                 
                 // Prepare message content with tags
-                let content = messageText || "🌱 Observation de jardinage";
+                let content = messageText || "🌱 Observation";
                 if (adjustedLocation) {
                     // Display with 2 decimal precision (0.01°)
                     content += `\n📍 Position: ${adjustedLocation.latitude.toFixed(2)}, ${adjustedLocation.longitude.toFixed(2)}`;
@@ -2110,7 +2119,7 @@
                 
                 // Add IPFS image URL if available (following generate_ipfs_structure.sh pattern)
                 if (selectedPhoto && selectedPhoto.ipfsUrl) {
-                    content += `\n📸 Image: ${selectedPhoto.ipfsUrl}`;
+                    content += `\n📸 Photo: ${selectedPhoto.ipfsUrl}`;
                     console.log('Adding IPFS image URL to message:', selectedPhoto.ipfsUrl);
                 }
                 

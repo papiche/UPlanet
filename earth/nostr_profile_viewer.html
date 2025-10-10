@@ -666,7 +666,7 @@
             </div>
 
             <div id="messages-container" class="messages loading">
-                <h2>Messages</h2>
+                <h2>Messages & Articles</h2>
                 <div id="messages-content" class="messages-scrollable">loading messages...</div>
             </div>
             <!-- End of original content -->
@@ -1316,6 +1316,9 @@
         // Global media collection for navigation
         window.mediaCollection = [];
         window.currentMediaIndex = 0;
+        
+        // Global messages data for article expansion
+        window.currentMessagesData = [];
 
         // Function to process media links and return appropriate HTML
         function processMediaLink(url) {
@@ -2024,7 +2027,8 @@
                     await relay.connect();
                     const now = Math.floor(Date.now() / 1000);
                     const oneWeekAgo = now - (7 * 24 * 3600);
-                    const sub = relay.sub([{ kinds: [1], authors: [hex], since: oneWeekAgo, limit: 50 }]); // Added limit
+                    // Fetch both kind 1 (short messages) and kind 30023 (long-form articles)
+                    const sub = relay.sub([{ kinds: [1, 30023], authors: [hex], since: oneWeekAgo, limit: 50 }]);
                     const messages = [];
                     return new Promise((resolve, reject) => {
                         let timeout = setTimeout(() => {
@@ -2215,23 +2219,61 @@
 
                 try {
                     const messagesData = await fetchNostrMessages(hexKey, relayUrl);
+                    window.currentMessagesData = messagesData; // Store for article expansion
                     messagesContainerDiv.classList.remove('loading');
                     let messagesHTML = '';
                     if (messagesData && messagesData.length > 0) {
                         // Already sorted by fetchNostrMessages
                         messagesData.forEach(message => {
                             const date = new Date(message.created_at * 1000);
-                            const content = message.content.replace(/</g, "&lt;").replace(/>/g, "&gt;"); // XSS protection
-                            const clickableContent = makeLinksClickable(content);
-                            messagesHTML += `<div class="message-item">
-                                                <button class="heart-button" onclick="likeMessage('${message.id}', '${hexKey}', this)" title="Like this message">
-                                                    ♡
-                                                </button>
-                                                <div style="flex: 1;">
-                                                    <strong>${date.toLocaleDateString()} ${date.toLocaleTimeString()}</strong>
-                                                    <p>${clickableContent}</p>
-                                                </div>
-                                            </div>`;
+                            
+                            // Handle kind 30023 (Long-form Content) differently
+                            if (message.kind === 30023) {
+                                // Extract title from tags
+                                let title = 'Article';
+                                let articleTags = [];
+                                if (message.tags) {
+                                    const titleTag = message.tags.find(tag => tag[0] === 'title');
+                                    if (titleTag && titleTag[1]) title = titleTag[1];
+                                    
+                                    // Extract hashtags
+                                    const tTags = message.tags.filter(tag => tag[0] === 't');
+                                    articleTags = tTags.map(tag => tag[1]).filter(t => t);
+                                }
+                                
+                                // Truncate content for preview (first 200 chars)
+                                const content = message.content.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+                                const preview = content.substring(0, 200) + (content.length > 200 ? '...' : '');
+                                const clickablePreview = makeLinksClickable(preview);
+                                
+                                messagesHTML += `<div class="message-item" style="border-left: 3px solid var(--terminal-purple); padding-left: 10px;">
+                                                    <button class="heart-button" onclick="likeMessage('${message.id}', '${hexKey}', this)" title="Like this article">
+                                                        ♡
+                                                    </button>
+                                                    <div style="flex: 1;">
+                                                        <strong style="color: var(--terminal-purple);">📄 ${title}</strong>
+                                                        <div style="font-size: 0.85em; color: var(--terminal-cyan); margin: 3px 0;">
+                                                            ${date.toLocaleDateString()} ${date.toLocaleTimeString()}
+                                                            ${articleTags.length > 0 ? ' • ' + articleTags.map(t => '#' + t).join(' ') : ''}
+                                                        </div>
+                                                        <p style="margin-top: 5px;">${clickablePreview}</p>
+                                                        ${content.length > 200 ? `<a href="#" onclick="showFullArticle('${message.id}', this); return false;" style="color: var(--terminal-green); font-size: 0.9em;">Read full article ▼</a>` : ''}
+                                                    </div>
+                                                </div>`;
+                            } else {
+                                // Handle kind 1 (regular short messages)
+                                const content = message.content.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+                                const clickableContent = makeLinksClickable(content);
+                                messagesHTML += `<div class="message-item">
+                                                    <button class="heart-button" onclick="likeMessage('${message.id}', '${hexKey}', this)" title="Like this message">
+                                                        ♡
+                                                    </button>
+                                                    <div style="flex: 1;">
+                                                        <strong>${date.toLocaleDateString()} ${date.toLocaleTimeString()}</strong>
+                                                        <p>${clickableContent}</p>
+                                                    </div>
+                                                </div>`;
+                            }
                         });
                     } else {
                         messagesHTML = "<p>No recent messages found for this pubkey on this relay.</p>";
@@ -2245,6 +2287,35 @@
             }
             displayNostrData();
         }
+
+        // Function to toggle full article display
+        window.showFullArticle = function(messageId, linkElement) {
+            const messageDiv = linkElement.closest('.message-item');
+            const contentP = messageDiv.querySelector('p');
+            
+            // Find the full message from messagesData
+            const message = window.currentMessagesData.find(m => m.id === messageId);
+            if (!message) {
+                console.error('Message not found:', messageId);
+                return;
+            }
+            
+            // Check if already expanded
+            if (linkElement.dataset.expanded === 'true') {
+                // Collapse back to preview
+                const content = message.content.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+                const preview = content.substring(0, 200) + '...';
+                contentP.innerHTML = makeLinksClickable(preview);
+                linkElement.textContent = 'Read full article ▼';
+                linkElement.dataset.expanded = 'false';
+            } else {
+                // Expand to full content
+                const fullContent = message.content.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+                contentP.innerHTML = makeLinksClickable(fullContent);
+                linkElement.textContent = 'Show less ▲';
+                linkElement.dataset.expanded = 'true';
+            }
+        };
 
         async function likeMessage(messageId, authorPubkey, heartButton) {
             const nostr = getNostrExtension();

@@ -1,0 +1,1119 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🏛️ Constellation UPlanet - Simulateur Économique</title>
+    <script src="/ipfs/QmUPAAEcLVbmXBKcribNfhbpZ655BjbdCB2BsKz6tCGCfk/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
+    <script src="/ipfs/QmaksH4EXYK3Hyw8Sn6tF5BcZY8Cx89WqUdezw3Ai9Npqu/p5.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+            background: linear-gradient(135deg, #0f0f23 0%, #1a1a2e 50%, #16213e 100%);
+            margin: 0;
+            padding: 8px;
+            color: #e0e0e0;
+            font-size: 11px;
+            line-height: 1.2;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .container {
+            max-width: 100%;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 6px;
+            border: 1px solid #333;
+            overflow: hidden;
+            backdrop-filter: blur(10px);
+            display: grid;
+            grid-template-rows: auto 1fr;
+        }
+
+        .header {
+            background: linear-gradient(90deg, #1e3a8a 0%, #3b82f6 50%, #1e40af 100%);
+            color: #ffffff;
+            padding: 6px 10px;
+            text-align: center;
+            border-bottom: 1px solid #374151;
+        }
+
+        .header h1 {
+            font-size: 12px;
+            font-weight: 700;
+            margin: 0;
+            text-shadow: 0 0 8px rgba(59, 130, 246, 0.5);
+        }
+
+        .header .subtitle {
+            font-size: 9px;
+            opacity: 0.8;
+            margin-top: 1px;
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            grid-template-rows: 1fr 1fr 1fr;
+            gap: 6px;
+            padding: 6px;
+            height: calc(100vh - 40px);
+            overflow: hidden;
+        }
+
+        .panel {
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid #374151;
+            border-radius: 4px;
+            padding: 4px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .panel-header {
+            font-size: 10px;
+            font-weight: 600;
+            color: #60a5fa;
+            border-bottom: 1px solid #374151;
+            padding-bottom: 2px;
+            margin-bottom: 4px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .panel-content {
+            flex: 1;
+            overflow-y: auto;
+            font-size: 9px;
+        }
+
+        .slider-row {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-bottom: 3px;
+            padding: 2px;
+            border-radius: 2px;
+            transition: background 0.2s;
+        }
+
+        .slider-row:hover {
+            background: rgba(59, 130, 246, 0.1);
+        }
+
+        .slider-label {
+            min-width: 60px;
+            font-size: 8px;
+            color: #e0e0e0;
+            display: flex;
+            align-items: center;
+            gap: 2px;
+        }
+
+        .slider {
+            flex: 1;
+            height: 3px;
+            border-radius: 2px;
+            background: #374151;
+            outline: none;
+            -webkit-appearance: none;
+            appearance: none;
+        }
+
+        .slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #3b82f6;
+            cursor: pointer;
+            box-shadow: 0 0 3px rgba(59, 130, 246, 0.5);
+        }
+
+        .slider::-moz-range-thumb {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #3b82f6;
+            cursor: pointer;
+            border: none;
+            box-shadow: 0 0 3px rgba(59, 130, 246, 0.5);
+        }
+
+        .slider-value {
+            min-width: 35px;
+            font-size: 9px;
+            font-weight: 700;
+            color: #10b981;
+            text-align: right;
+        }
+
+        .kpi-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 3px;
+            margin-bottom: 4px;
+        }
+
+        .kpi-item {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 3px 4px;
+            border-radius: 2px;
+            border: 1px solid #374151;
+            text-align: center;
+        }
+
+        .kpi-label {
+            font-size: 7px;
+            color: #9ca3af;
+            margin-bottom: 1px;
+        }
+
+        .kpi-value {
+            font-size: 10px;
+            font-weight: 700;
+            color: #e0e0e0;
+        }
+
+        .kpi-value.positive { color: #10b981; }
+        .kpi-value.negative { color: #ef4444; }
+        .kpi-value.warning { color: #f59e0b; }
+
+        .chart-container {
+            height: 120px;
+            margin: 4px 0;
+        }
+
+        .results-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 3px;
+        }
+
+        .result-item {
+            background: rgba(0, 0, 0, 0.2);
+            padding: 3px;
+            border-radius: 2px;
+            border: 1px solid #374151;
+            font-size: 8px;
+        }
+
+        .result-label {
+            color: #9ca3af;
+            margin-bottom: 1px;
+        }
+
+        .result-value {
+            font-weight: 700;
+            color: #e0e0e0;
+        }
+
+        .tooltip {
+            position: relative;
+            cursor: help;
+        }
+
+        .tooltip:hover::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.95);
+            color: white;
+            padding: 6px 10px;
+            border-radius: 4px;
+            font-size: 9px;
+            white-space: nowrap;
+            z-index: 1000;
+            border: 1px solid #3b82f6;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            max-width: 200px;
+            text-align: center;
+        }
+
+        .icon {
+            font-size: 10px;
+            margin-right: 2px;
+        }
+
+        .status-indicator {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 3px;
+        }
+
+        .status-green { background: #10b981; }
+        .status-yellow { background: #f59e0b; }
+        .status-red { background: #ef4444; }
+
+        .scrollable {
+            overflow-y: auto;
+            scrollbar-width: thin;
+            scrollbar-color: #374151 transparent;
+        }
+
+        .scrollable::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        .scrollable::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .scrollable::-webkit-scrollbar-thumb {
+            background: #374151;
+            border-radius: 2px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🏛️ Constellation UPlanet - Simulateur Économique</h1>
+            <div class="subtitle">💡 Investisseurs & Collectivités | 🌱 Économie Circulaire & Emploi Local</div>
+        </div>
+
+        <div class="main-content">
+            <!-- PANEL 1: PARAMÈTRES ÉCONOMIQUES (2 cellules) -->
+            <div class="panel" style="grid-column: 1; grid-row: 1 / 3;">
+                <div class="panel-header">
+                    <span class="icon">💰</span>
+                    <span>Tarification Services</span>
+                </div>
+                <div class="panel-content scrollable">
+                    <div class="slider-row">
+                        <div class="slider-label tooltip" data-tooltip="Location MULTIPASS 10GB - Studio numérique (1Ẑ/semaine = 4€/mois) - Capacité max: 307 studios par machine">
+                            <span class="icon">🏠</span>Location MULTIPASS
+                        </div>
+                        <input type="range" class="slider" id="prixMultipass" min="0.5" max="3" step="0.1" value="1">
+                        <div class="slider-value" id="prixMultipassValue">1.0Ẑ</div>
+                    </div>
+                    
+                    <div class="slider-row">
+                        <div class="slider-label tooltip" data-tooltip="Location NextCloud 128GB - Appartement premium (4Ẑ/semaine = 16€/mois) - Capacité max: 24 appartements par machine">
+                            <span class="icon">👑</span>Location NextCloud
+                        </div>
+                        <input type="range" class="slider" id="prixZenCard" min="2" max="8" step="0.5" value="4">
+                        <div class="slider-value" id="prixZenCardValue">4.0Ẑ</div>
+                    </div>
+                    
+                    <div class="slider-row">
+                        <div class="slider-label tooltip" data-tooltip="Achat 128GB - Achat définitif d'espace disque (50Ẑ/an) - Propriété permanente">
+                            <span class="icon">🏢</span>Achat 128GB
+                        </div>
+                        <input type="range" class="slider" id="prixParts" min="10" max="100" step="5" value="50">
+                        <div class="slider-value" id="prixPartsValue">50Ẑ</div>
+                    </div>
+                    
+                    <div class="slider-row">
+                        <div class="slider-label tooltip" data-tooltip="PAF / machine - Participation Aux Frais infrastructure (14Ẑ/semaine) - Coût incompressible par machine">
+                            <span class="icon">⚓</span>PAF / machine
+                        </div>
+                        <input type="range" class="slider" id="pafArmateur" min="10" max="20" step="1" value="14">
+                        <div class="slider-value" id="pafArmateurValue">14Ẑ</div>
+                    </div>
+                    
+                    <div class="slider-row">
+                        <div class="slider-label tooltip" data-tooltip="Salaire Community Manager (2500€/mois) - Embauche automatique tous les 300 clients - Accélère les ventes">
+                            <span class="icon">📢</span>Salaire CM
+                        </div>
+                        <input type="range" class="slider" id="salaireCM" min="2000" max="4000" step="100" value="2500">
+                        <div class="slider-value" id="salaireCMValue">2500€</div>
+                    </div>
+                    
+                    <div class="slider-row">
+                        <div class="slider-label tooltip" data-tooltip="Salaire Développeur (3000€/mois) - Embauche automatique quand R&D suffisant - Crée nouveaux services libres">
+                            <span class="icon">👨‍💻</span>Salaire Dev
+                        </div>
+                        <input type="range" class="slider" id="salaireDev" min="2500" max="5000" step="100" value="3000">
+                        <div class="slider-value" id="salaireDevValue">3000€</div>
+                    </div>
+                    
+                    <div class="slider-row">
+                        <div class="slider-label tooltip" data-tooltip="Mode Propriété - 100% Proprio: vente pure / 50%/50%: mix vente-location / 100% Locataire: location pure">
+                            <span class="icon">🏠</span>Mode Propriété
+                        </div>
+                        <select id="modePropriete" class="slider" style="width: 100%; padding: 2px; font-size: 8px; background: #1f2937; color: #e0e0e0; border: 1px solid #374151; border-radius: 2px;">
+                            <option value="1.0">100% Proprio</option>
+                            <option value="0.5" selected>50%/50%</option>
+                            <option value="0.0">100% Locataire</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- PANEL 2: DIMENSIONNEMENT -->
+            <div class="panel">
+                <div class="panel-header">
+                    <span class="icon">🏗️</span>
+                    <span>Dimensionnement Constellation</span>
+                </div>
+                <div class="panel-content scrollable">
+                    <div class="slider-row">
+                        <div class="slider-label tooltip" data-tooltip="Clients uDRIVE 10GB - Studios numériques (capacité: 307 par machine) - Évolution automatique selon remplissage">
+                            <span class="icon">🏠</span>Clients 10GB
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 4px;">
+                            <button onclick="changeClients10GB(-10)" style="background: #ef4444; color: white; border: none; padding: 2px 6px; border-radius: 2px; font-size: 8px; cursor: pointer;">-</button>
+                            <input type="range" class="slider" id="nbClients10GB" min="0" step="10" value="250" style="flex: 1;">
+                            <button onclick="changeClients10GB(10)" style="background: #10b981; color: white; border: none; padding: 2px 6px; border-radius: 2px; font-size: 8px; cursor: pointer;">+</button>
+                        </div>
+                        <div class="slider-value" id="nbClients10GBValue">250</div>
+                    </div>
+                    
+                    <div class="slider-row">
+                        <div class="slider-label tooltip" data-tooltip="Clients NextCloud 128GB - Appartements premium (capacité: 24 par machine) - Évolution automatique selon remplissage">
+                            <span class="icon">👑</span>Clients 128GB
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 4px;">
+                            <button onclick="changeClients128GB(-1)" style="background: #ef4444; color: white; border: none; padding: 2px 6px; border-radius: 2px; font-size: 8px; cursor: pointer;">-</button>
+                            <input type="range" class="slider" id="nbClients128GB" min="0" step="1" value="24" style="flex: 1;">
+                            <button onclick="changeClients128GB(1)" style="background: #10b981; color: white; border: none; padding: 2px 6px; border-radius: 2px; font-size: 8px; cursor: pointer;">+</button>
+                        </div>
+                        <div class="slider-value" id="nbClients128GBValue">24</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- PANEL 3: KPIs PRINCIPAUX -->
+            <div class="panel">
+                <div class="panel-header">
+                    <span class="icon">📊</span>
+                    <span>Indicateurs Clés</span>
+                </div>
+                <div class="panel-content">
+                    <div class="kpi-grid">
+                        <div class="kpi-item">
+                            <div class="kpi-label">Point Mort</div>
+                            <div class="kpi-value" id="breakEven">-</div>
+                        </div>
+                        <div class="kpi-item">
+                            <div class="kpi-label">Marge Brute</div>
+                            <div class="kpi-value" id="margeBrute">-</div>
+                        </div>
+                        <div class="kpi-item">
+                            <div class="kpi-label">ROI</div>
+                            <div class="kpi-value" id="roi">-</div>
+                        </div>
+                        <div class="kpi-item">
+                            <div class="kpi-label">Impact Éco</div>
+                            <div class="kpi-value" id="impactEco">-</div>
+                        </div>
+                    </div>
+                    
+                    <div class="chart-container">
+                        <canvas id="mainChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- PANEL 4: RÉSULTATS FINANCIERS -->
+            <div class="panel">
+                <div class="panel-header">
+                    <span class="icon">💰</span>
+                    <span>Analyse Financière</span>
+                </div>
+                <div class="panel-content scrollable">
+                    <div class="results-grid">
+                        <div class="result-item">
+                            <div class="result-label">CA HT</div>
+                            <div class="result-value" id="chiffreAffairesHT">-</div>
+                        </div>
+                        <div class="result-item">
+                            <div class="result-label">TVA</div>
+                            <div class="result-value" id="montantTVA">-</div>
+                        </div>
+                        <div class="result-item">
+                            <div class="result-label">CA TTC</div>
+                            <div class="result-value" id="chiffreAffairesTTC">-</div>
+                        </div>
+                        <div class="result-item">
+                            <div class="result-label">Coûts Infra</div>
+                            <div class="result-value" id="coutsInfra">-</div>
+                        </div>
+                        <div class="result-item">
+                            <div class="result-label">Coûts RD</div>
+                            <div class="result-value" id="coutsRD">-</div>
+                        </div>
+                        <div class="result-item">
+                            <div class="result-label">Résultat Net</div>
+                            <div class="result-value" id="resultatNet">-</div>
+                        </div>
+                    </div>
+                    
+                    <div style="margin-top: 6px; padding: 4px; background: rgba(0,0,0,0.3); border-radius: 2px; font-size: 8px;">
+                        <div style="color: #9ca3af; margin-bottom: 2px;">🌳 Impact Écologique ce cycle:</div>
+                        <div id="impactStatement" style="color: #10b981; font-weight: 600;">0 m² de forêt-jardin</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- PANEL 5: RÉPARTITION ABONNÉS -->
+            <div class="panel">
+                <div class="panel-header">
+                    <span class="icon">👥</span>
+                    <span>Répartition Abonnés</span>
+                </div>
+                <div class="panel-content" id="abonnes-breakdown">
+                    <!-- Généré par JS -->
+                </div>
+            </div>
+
+            <!-- PANEL 7: VISUALISEUR ESSAIM P5.JS -->
+            <div class="panel">
+                <div class="panel-header">
+                    <span class="icon">🚀</span>
+                    <span>Visualiseur Essaim</span>
+                </div>
+                <div class="panel-content" style="padding: 4px;">
+                    <div id="p5-container" style="width: 100%; height: 120px; background: #111827; border-radius: 2px; position: relative;">
+                        <canvas id="essaim-canvas" style="width: 100%; height: 100%;"></canvas>
+                    </div>
+                    <div style="font-size: 6px; color: #9ca3af; margin-top: 2px; text-align: center;">
+                        <div>🖥️ <span id="nbMachines">1</span> machines | 👥 <span id="totalClients">274</span> clients</div>
+                        <div>📢 <span id="nbCM">0</span> CMs | 👨‍💻 <span id="nbDevs">0</span> Devs</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- PANEL 6: RÈGLE 3x1/3 -->
+            <div class="panel">
+                <div class="panel-header">
+                    <span class="icon">🌱</span>
+                    <span>Création Richesse (3x1/3)</span>
+                    <button id="runModeBtn" style="background: #3b82f6; color: white; border: none; padding: 2px 6px; border-radius: 2px; font-size: 8px; cursor: pointer; margin-left: auto;">▶️ RUN</button>
+                </div>
+                <div class="panel-content">
+                    <div class="chart-container">
+                        <canvas id="wealthChart"></canvas>
+                    </div>
+                    <div style="font-size: 8px; color: #9ca3af; margin-top: 4px;">
+                        <div>💰 .TREASURY (33.33%) - Trésorerie</div>
+                        <div>🌳 .ASSETS (33.33%) - Forêts-jardins</div>
+                        <div>🔬 .RND (33.34%) - R&D</div>
+                    </div>
+                    <div id="runStatus" style="font-size: 7px; color: #10b981; margin-top: 2px; text-align: center; display: none;">
+                        🚀 Mode RUN actif - Simulation en cours...
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Constantes économiques conformes à ZEN.ECONOMY.readme.md
+        const C = {
+            TAUX_TVA: 0.20,        // TVA 20% (services numériques France)
+            TAUX_IS: 0.25,          // Impôt sur les sociétés 25% (CA > 250k€)
+            PRIX_M2_FORET: 2,       // Prix d'acquisition forêt-jardin (2Ẑ/m²)
+            SEMAINES_PAR_CYCLE: 4,   // 4 semaines par cycle (période de facturation)
+            CYCLES_PAR_AN: 13,       // 13 cycles par an (52 semaines ÷ 4 = 13)
+            // Capacités par Machine (Raspberry Pi 5 + NVMe 4To)
+            CAPACITE_TOTALE_GO: 4096,  // 4To = 4096 Go
+            RESERVE_CAPITAINE_GO: 1024, // 1To réservé au capitaine
+            CAPACITE_COMMERCIAL_GO: 3072, // 3To commercialisés
+            TAILLE_UDRIE_GO: 10,    // uDRIVE = 10 Go
+            TAILLE_NEXTCLOUD_GO: 128, // NextCloud = 128 Go
+            CAPACITE_10GB_PAR_MACHINE: 307, // 3072 Go ÷ 10 Go = 307 studios
+            CAPACITE_128GB_PAR_MACHINE: 24, // 3072 Go ÷ 128 Go = 24 appartements
+            ZEN_TO_EURO: 1.0,       // 1Ẑ = 1€ (parité fixe UPlanet)
+            // Seuils d'embauche automatique
+            SEUIL_CM_PAR_CLIENTS: 300, // 1 CM tous les 300 clients
+            SEUIL_RND_EMBAUCHE_DEV: 10000, // Seuil R&D pour embaucher un dev
+        };
+
+        // Initialisation des graphiques et variables
+        let mainChart, wealthChart;
+        let runModeActive = false;
+        let runInterval = null;
+        let p5Sketch = null;
+
+        // Fonction de formatage
+        function formatNumber(num) {
+            if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+            if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+            return Math.round(num).toString();
+        }
+
+        function formatCurrency(num) {
+            return formatNumber(num) + 'Ẑ';
+        }
+
+        // Récupération des valeurs dynamiques
+        function getDynamicValues() {
+            console.log('🔍 DEBUG: getDynamicValues() started');
+            
+            const elements = [
+                'prixMultipass', 'prixZenCard', 'prixParts', 'pafArmateur',
+                'nbClients10GB', 'nbClients128GB', 'salaireCM', 'salaireDev', 'modePropriete'
+            ];
+            
+            elements.forEach(id => {
+                const el = document.getElementById(id);
+                console.log(`🔍 DEBUG: Element ${id} found:`, !!el);
+                if (!el) {
+                    console.error(`❌ ERROR: Element ${id} not found in getDynamicValues!`);
+                }
+            });
+            
+            const prixMultipassEl = document.getElementById('prixMultipass');
+            const prixZenCardEl = document.getElementById('prixZenCard');
+            const prixPartsEl = document.getElementById('prixParts');
+            const pafArmateurEl = document.getElementById('pafArmateur');
+            const nbClients10GBEl = document.getElementById('nbClients10GB');
+            const nbClients128GBEl = document.getElementById('nbClients128GB');
+            const salaireCMEl = document.getElementById('salaireCM');
+            const salaireDevEl = document.getElementById('salaireDev');
+            const modeProprieteEl = document.getElementById('modePropriete');
+            
+            const values = {
+                prixMultipass: prixMultipassEl ? parseFloat(prixMultipassEl.value) : 1,
+                prixZenCard: prixZenCardEl ? parseFloat(prixZenCardEl.value) : 4,
+                prixParts: prixPartsEl ? parseFloat(prixPartsEl.value) : 50,
+                pafArmateur: pafArmateurEl ? parseFloat(pafArmateurEl.value) : 14,
+                nbClients10GB: nbClients10GBEl ? parseInt(nbClients10GBEl.value) : 250,
+                nbClients128GB: nbClients128GBEl ? parseInt(nbClients128GBEl.value) : 24,
+                salaireCM: salaireCMEl ? parseInt(salaireCMEl.value) : 2500,
+                salaireDev: salaireDevEl ? parseInt(salaireDevEl.value) : 3000,
+                modePropriete: modeProprieteEl ? parseFloat(modeProprieteEl.value) : 0.5,
+            };
+            
+            console.log('🔍 DEBUG: getDynamicValues() returning:', values);
+            return values;
+        }
+
+        // Fonctions pour les boutons +/-
+        function changeClients10GB(delta) {
+            const slider = document.getElementById('nbClients10GB');
+            const newValue = Math.max(0, parseInt(slider.value) + delta);
+            slider.value = newValue;
+            updateDisplays();
+            calculateEconomy();
+        }
+
+        function changeClients128GB(delta) {
+            const slider = document.getElementById('nbClients128GB');
+            const newValue = Math.max(0, parseInt(slider.value) + delta);
+            slider.value = newValue;
+            updateDisplays();
+            calculateEconomy();
+        }
+
+        // Mise à jour des affichages
+        function updateDisplays() {
+            console.log('🔍 DEBUG: updateDisplays() started');
+            const values = getDynamicValues();
+            console.log('🔍 DEBUG: updateDisplays values =', values);
+            
+            // Mise à jour des valeurs des sliders
+            const elements = [
+                'prixMultipassValue', 'prixZenCardValue', 'prixPartsValue', 'pafArmateurValue',
+                'nbClients10GBValue', 'nbClients128GBValue', 'salaireCMValue', 'salaireDevValue'
+            ];
+            
+            elements.forEach(id => {
+                const el = document.getElementById(id);
+                console.log(`🔍 DEBUG: Element ${id} found:`, !!el);
+                if (!el) {
+                    console.error(`❌ ERROR: Element ${id} not found!`);
+                }
+            });
+            
+            const prixMultipassValueEl = document.getElementById('prixMultipassValue');
+            const prixZenCardValueEl = document.getElementById('prixZenCardValue');
+            const prixPartsValueEl = document.getElementById('prixPartsValue');
+            const pafArmateurValueEl = document.getElementById('pafArmateurValue');
+            const nbClients10GBValueEl = document.getElementById('nbClients10GBValue');
+            const nbClients128GBValueEl = document.getElementById('nbClients128GBValue');
+            const salaireCMValueEl = document.getElementById('salaireCMValue');
+            const salaireDevValueEl = document.getElementById('salaireDevValue');
+            
+            if (prixMultipassValueEl) prixMultipassValueEl.textContent = values.prixMultipass.toFixed(1) + 'Ẑ';
+            if (prixZenCardValueEl) prixZenCardValueEl.textContent = values.prixZenCard.toFixed(1) + 'Ẑ';
+            if (prixPartsValueEl) prixPartsValueEl.textContent = values.prixParts + 'Ẑ';
+            if (pafArmateurValueEl) pafArmateurValueEl.textContent = values.pafArmateur + 'Ẑ';
+            if (nbClients10GBValueEl) nbClients10GBValueEl.textContent = values.nbClients10GB;
+            if (nbClients128GBValueEl) nbClients128GBValueEl.textContent = values.nbClients128GB;
+            if (salaireCMValueEl) salaireCMValueEl.textContent = values.salaireCM + '€';
+            if (salaireDevValueEl) salaireDevValueEl.textContent = values.salaireDev + '€';
+            
+            console.log('🔍 DEBUG: updateDisplays() completed');
+        }
+
+        // Calculs économiques - Évolution d'essaim avec machines qui se remplissent
+        function calculateEconomy() {
+            console.log('🔍 DEBUG: calculateEconomy() started');
+            const values = getDynamicValues();
+            console.log('🔍 DEBUG: values =', values);
+            
+            // 1. CALCUL DU NOMBRE DE MACHINES NÉCESSAIRES
+            const nbMachines10GB = Math.ceil(values.nbClients10GB / C.CAPACITE_10GB_PAR_MACHINE);
+            const nbMachines128GB = Math.ceil(values.nbClients128GB / C.CAPACITE_128GB_PAR_MACHINE);
+            const nbMachinesTotal = Math.max(nbMachines10GB, nbMachines128GB, 1); // Au minimum 1 machine
+            console.log('🔍 DEBUG: nbMachinesTotal =', nbMachinesTotal);
+            
+            // 2. CALCUL DES EMPLOIS AUTOMATIQUES
+            const totalClients = values.nbClients10GB + values.nbClients128GB;
+            const nbCM = Math.floor(totalClients / C.SEUIL_CM_PAR_CLIENTS); // 1 CM tous les 300 clients
+            
+            // 3. CALCUL DES COÛTS INFRASTRUCTURE (PAF par machine)
+            const pafCapitaine = values.pafArmateur * 2; // Capitaine = 2x PAF Armateur
+            const coutsInfraParMachine = (values.pafArmateur + pafCapitaine) * C.SEMAINES_PAR_CYCLE; // PAF total par cycle
+            const coutsInfra = nbMachinesTotal * coutsInfraParMachine;
+            
+            // 4. CALCUL DES COÛTS R&D (salaires)
+            const coutsRD = (nbCM * values.salaireCM); // Pas de devs au début, seulement CMs
+            
+            // 5. CHIFFRE D'AFFAIRES (avec mode propriété)
+            const modePropriete = values.modePropriete; // 1.0 = 100% proprio, 0.5 = 50%/50%, 0.0 = 100% locataire
+            
+            // Calcul des revenus selon le mode propriété
+            const revenusLocation = (values.nbClients10GB * values.prixMultipass * C.SEMAINES_PAR_CYCLE) + 
+                                   (values.nbClients128GB * values.prixZenCard * C.SEMAINES_PAR_CYCLE);
+            const revenusVente = (values.nbClients128GB * values.prixParts); // Vente d'espace 128GB
+            
+            const chiffreAffairesHT = (modePropriete * revenusVente) + ((1 - modePropriete) * revenusLocation);
+            const montantTVA = chiffreAffairesHT * C.TAUX_TVA;
+            const chiffreAffairesTTC = chiffreAffairesHT + montantTVA;
+            
+            // 6. CALCUL DU SURPLUS (selon ZEN.COOPERATIVE.3x1-3.sh)
+            const margeBrute = chiffreAffairesHT - coutsInfra;
+            const resultatAvantImpot = margeBrute - coutsRD;
+            const montantIS = (resultatAvantImpot > 0) ? resultatAvantImpot * C.TAUX_IS : 0;
+            const resultatNet = resultatAvantImpot - montantIS;
+            
+            // 7. CALCUL DU SURPLUS COOPÉRATIF (3x1/3)
+            let surplusCoop = 0;
+            let treasuryAmount = 0;
+            let rndAmount = 0;
+            let assetsAmount = 0;
+            
+            if (resultatNet > 0) {
+                surplusCoop = resultatNet;
+                treasuryAmount = surplusCoop / 3;
+                rndAmount = surplusCoop / 3;
+                assetsAmount = surplusCoop / 3;
+            }
+            
+            // 8. VÉRIFICATION SEUIL R&D POUR EMBLAUCHER UN DEV
+            let nbDevs = 0;
+            if (rndAmount >= C.SEUIL_RND_EMBAUCHE_DEV) {
+                nbDevs = 1;
+                const coutsDev = nbDevs * values.salaireDev;
+                const nouveauResultatNet = resultatAvantImpot - coutsDev;
+                if (nouveauResultatNet > 0) {
+                    const nouveauSurplus = nouveauResultatNet;
+                    treasuryAmount = nouveauSurplus / 3;
+                    rndAmount = nouveauSurplus / 3;
+                    assetsAmount = nouveauSurplus / 3;
+                }
+            }
+            
+            // 9. MISE À JOUR DES AFFICHAGES
+            console.log('🔍 DEBUG: Updating abonnes breakdown');
+            updateAbonnesBreakdown(values.nbClients10GB, values.nbClients128GB, totalClients, nbMachinesTotal);
+            
+            // 10. MISE À JOUR PANEL ÉVOLUTION ESSAIM
+            console.log('🔍 DEBUG: Updating essaim panel elements');
+            const nbMachinesEl = document.getElementById('nbMachines');
+            const totalClientsEl = document.getElementById('totalClients');
+            const nbCMEl = document.getElementById('nbCM');
+            const nbDevsEl = document.getElementById('nbDevs');
+            const surplusCoopEl = document.getElementById('surplusCoop');
+            const foretsM2El = document.getElementById('foretsM2');
+            
+            console.log('🔍 DEBUG: Elements found:', {
+                nbMachinesEl: !!nbMachinesEl,
+                totalClientsEl: !!totalClientsEl,
+                nbCMEl: !!nbCMEl,
+                nbDevsEl: !!nbDevsEl,
+                surplusCoopEl: !!surplusCoopEl,
+                foretsM2El: !!foretsM2El
+            });
+            
+            if (nbMachinesEl) nbMachinesEl.textContent = nbMachinesTotal;
+            if (totalClientsEl) totalClientsEl.textContent = totalClients;
+            if (nbCMEl) nbCMEl.textContent = nbCM;
+            if (nbDevsEl) nbDevsEl.textContent = nbDevs;
+            if (surplusCoopEl) surplusCoopEl.textContent = formatCurrency(surplusCoop);
+            if (foretsM2El) foretsM2El.textContent = formatNumber(Math.floor(assetsAmount / C.PRIX_M2_FORET)) + 'm²';
+            
+            // KPIs
+            const prixMoyenParClient = ((values.nbClients10GB * values.prixMultipass) + (values.nbClients128GB * values.prixZenCard)) * C.SEMAINES_PAR_CYCLE / totalClients;
+            const breakEven = Math.ceil((coutsInfra + coutsRD) / prixMoyenParClient);
+            const margeBrutePercent = chiffreAffairesHT > 0 ? ((margeBrute / chiffreAffairesHT) * 100) : 0;
+            const roi = (coutsInfra + coutsRD) > 0 ? ((resultatNet / (coutsInfra + coutsRD)) * 100) : 0;
+            const m2Foret = Math.floor(assetsAmount / C.PRIX_M2_FORET);
+
+            // Mise à jour des affichages
+            console.log('🔍 DEBUG: Updating KPI elements');
+            const breakEvenEl = document.getElementById('breakEven');
+            const margeBruteEl = document.getElementById('margeBrute');
+            const roiEl = document.getElementById('roi');
+            const impactEcoEl = document.getElementById('impactEco');
+            
+            console.log('🔍 DEBUG: KPI elements found:', {
+                breakEvenEl: !!breakEvenEl,
+                margeBruteEl: !!margeBruteEl,
+                roiEl: !!roiEl,
+                impactEcoEl: !!impactEcoEl
+            });
+            
+            if (breakEvenEl) breakEvenEl.textContent = formatNumber(breakEven);
+            if (margeBruteEl) margeBruteEl.textContent = margeBrutePercent.toFixed(1) + '%';
+            if (roiEl) roiEl.textContent = roi.toFixed(1) + '%';
+            if (impactEcoEl) impactEcoEl.textContent = formatNumber(m2Foret) + 'm²';
+
+            // Résultats financiers
+            console.log('🔍 DEBUG: Updating financial elements');
+            const chiffreAffairesHTEl = document.getElementById('chiffreAffairesHT');
+            const montantTVAEl = document.getElementById('montantTVA');
+            const chiffreAffairesTTCEl = document.getElementById('chiffreAffairesTTC');
+            const coutsInfraEl = document.getElementById('coutsInfra');
+            const coutsRDEl = document.getElementById('coutsRD');
+            const resultatNetEl = document.getElementById('resultatNet');
+            
+            console.log('🔍 DEBUG: Financial elements found:', {
+                chiffreAffairesHTEl: !!chiffreAffairesHTEl,
+                montantTVAEl: !!montantTVAEl,
+                chiffreAffairesTTCEl: !!chiffreAffairesTTCEl,
+                coutsInfraEl: !!coutsInfraEl,
+                coutsRDEl: !!coutsRDEl,
+                resultatNetEl: !!resultatNetEl
+            });
+            
+            if (chiffreAffairesHTEl) chiffreAffairesHTEl.textContent = formatCurrency(chiffreAffairesHT);
+            if (montantTVAEl) montantTVAEl.textContent = formatCurrency(montantTVA);
+            if (chiffreAffairesTTCEl) chiffreAffairesTTCEl.textContent = formatCurrency(chiffreAffairesTTC);
+            if (coutsInfraEl) coutsInfraEl.textContent = formatCurrency(coutsInfra);
+            if (coutsRDEl) coutsRDEl.textContent = formatCurrency(coutsRD);
+            if (resultatNetEl) resultatNetEl.textContent = formatCurrency(resultatNet);
+
+            // Impact écologique
+            console.log('🔍 DEBUG: Updating impact statement');
+            const impactStatement = document.getElementById('impactStatement');
+            console.log('🔍 DEBUG: impactStatement element found:', !!impactStatement);
+            if (impactStatement) impactStatement.textContent = `${formatNumber(m2Foret)} m² de forêt-jardin`;
+
+            // Mise à jour des graphiques
+            console.log('🔍 DEBUG: Updating charts');
+            updateCharts(chiffreAffairesHT, coutsInfra, coutsRD, resultatNet, m2Foret);
+            console.log('🔍 DEBUG: calculateEconomy() completed');
+        }
+
+        // Mise à jour de la répartition des abonnés avec machines
+        function updateAbonnesBreakdown(nbClients10GB, nbClients128GB, nbTotal, nbMachines) {
+            const breakdownContainer = document.getElementById('abonnes-breakdown');
+            const values = getDynamicValues();
+            const revenu10GB = nbClients10GB * values.prixMultipass * C.SEMAINES_PAR_CYCLE;
+            const revenu128GB = nbClients128GB * values.prixZenCard * C.SEMAINES_PAR_CYCLE;
+            const revenuTotal = revenu10GB + revenu128GB;
+            
+            // Calcul des machines nécessaires
+            const machines10GB = Math.ceil(nbClients10GB / C.CAPACITE_10GB_PAR_MACHINE);
+            const machines128GB = Math.ceil(nbClients128GB / C.CAPACITE_128GB_PAR_MACHINE);
+            
+            breakdownContainer.innerHTML = `
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 3px; margin-bottom: 4px;">
+                    <div style="background: rgba(0,0,0,0.3); padding: 3px; border-radius: 2px; border: 1px solid #374151;">
+                        <div style="font-size: 8px; color: #3498db; font-weight: 600;">🏠 uDRIVE 10GB</div>
+                        <div style="font-size: 10px; font-weight: 700; color: #e0e0e0;">${formatNumber(nbClients10GB)}</div>
+                        <div style="font-size: 7px; color: #9ca3af;">${formatCurrency(revenu10GB)}/cycle</div>
+                        <div style="font-size: 6px; color: #9ca3af;">${machines10GB} machine(s)</div>
+                    </div>
+                    <div style="background: rgba(0,0,0,0.3); padding: 3px; border-radius: 2px; border: 1px solid #374151;">
+                        <div style="font-size: 8px; color: #f39c12; font-weight: 600;">👑 NextCloud 128GB</div>
+                        <div style="font-size: 10px; font-weight: 700; color: #e0e0e0;">${formatNumber(nbClients128GB)}</div>
+                        <div style="font-size: 7px; color: #9ca3af;">${formatCurrency(revenu128GB)}/cycle</div>
+                        <div style="font-size: 6px; color: #9ca3af;">${machines128GB} machine(s)</div>
+                    </div>
+                </div>
+                <div style="text-align: center; padding: 2px; background: rgba(0,0,0,0.2); border-radius: 2px; font-size: 8px;">
+                    <strong>Total CA (HT) : ${formatCurrency(revenuTotal)}/cycle</strong><br/>
+                    <span style="color: #60a5fa;">🖥️ ${nbMachines} machine(s) total</span>
+                </div>
+            `;
+        }
+
+        // Mise à jour des graphiques
+        function updateCharts(chiffreAffairesHT, coutsInfra, coutsRD, resultatNet, m2Foret) {
+            // Graphique principal
+            if (mainChart) mainChart.destroy();
+            const ctx1 = document.getElementById('mainChart').getContext('2d');
+            mainChart = new Chart(ctx1, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Revenus', 'Coûts Infra', 'Coûts RD'],
+                    datasets: [{
+                        data: [chiffreAffairesHT, coutsInfra, coutsRD],
+                        backgroundColor: ['#10b981', '#f59e0b', '#ef4444'],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    }
+                }
+            });
+
+            // Graphique richesse (3x1/3) - CORRIGÉ
+            if (wealthChart) wealthChart.destroy();
+            const ctx2 = document.getElementById('wealthChart').getContext('2d');
+            if (resultatNet > 0) {
+                const part = resultatNet / 3;
+                wealthChart = new Chart(ctx2, {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['Treasury', 'Assets', 'R&D'],
+                        datasets: [{
+                            data: [part, part, part],
+                            backgroundColor: ['#3498db', '#27ae60', '#f39c12'],
+                            borderWidth: 0
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                display: false
+                            }
+                        }
+                    }
+                });
+            } else {
+                // Afficher un message si pas de surplus
+                ctx2.clearRect(0, 0, ctx2.canvas.width, ctx2.canvas.height);
+                ctx2.fillStyle = '#9ca3af';
+                ctx2.font = '8px monospace';
+                ctx2.textAlign = 'center';
+                ctx2.fillText('Pas de surplus', ctx2.canvas.width/2, ctx2.canvas.height/2);
+            }
+        }
+
+        // Mode RUN - Simulation d'évolution d'essaim (1 à 25 machines)
+        function startRunMode() {
+            if (runModeActive) return;
+            
+            runModeActive = true;
+            const runBtn = document.getElementById('runModeBtn');
+            const runStatus = document.getElementById('runStatus');
+            
+            runBtn.textContent = '⏸️ STOP';
+            runBtn.style.background = '#ef4444';
+            runStatus.style.display = 'block';
+            
+            // Simulation d'évolution d'essaim
+            let cycle = 0;
+            let nbClients10GB = 250; // Commence avec 1 machine remplie
+            let nbClients128GB = 24;  // Commence avec 1 machine remplie
+            
+            runInterval = setInterval(() => {
+                cycle++;
+                
+                // Croissance progressive des clients 10GB (mode RUN augmente le compteur 10GB)
+                const growthRate = 1.15; // 15% de croissance par cycle
+                nbClients10GB = Math.min(Math.round(nbClients10GB * growthRate), 7500); // Max 25 machines
+                
+                // Croissance plus lente pour 128GB (achats)
+                if (cycle % 3 === 0) { // Tous les 3 cycles
+                    nbClients128GB = Math.min(Math.round(nbClients128GB * 1.05), 600); // 5% de croissance
+                }
+                
+                // Mise à jour des sliders
+                document.getElementById('nbClients10GB').value = nbClients10GB;
+                document.getElementById('nbClients128GB').value = nbClients128GB;
+                
+                // Mise à jour du statut
+                const nbMachines = Math.max(
+                    Math.ceil(nbClients10GB / C.CAPACITE_10GB_PAR_MACHINE),
+                    Math.ceil(nbClients128GB / C.CAPACITE_128GB_PAR_MACHINE)
+                );
+                runStatus.innerHTML = `🚀 Mode RUN actif - Cycle ${cycle} - ${nbMachines} machine(s) - ${nbClients10GB + nbClients128GB} clients`;
+                
+                // Recalcul avec les nouvelles valeurs
+                updateDisplays();
+                calculateEconomy();
+                if (p5Sketch) p5Sketch.redraw();
+                
+                // Arrêt après 25 cycles (évolution complète)
+                if (cycle >= 25) {
+                    stopRunMode();
+                }
+            }, 1500); // 1.5 secondes par cycle
+        }
+        
+        function stopRunMode() {
+            if (!runModeActive) return;
+            
+            runModeActive = false;
+            const runBtn = document.getElementById('runModeBtn');
+            const runStatus = document.getElementById('runStatus');
+            
+            runBtn.textContent = '▶️ RUN';
+            runBtn.style.background = '#3b82f6';
+            runStatus.style.display = 'none';
+            
+            if (runInterval) {
+                clearInterval(runInterval);
+                runInterval = null;
+            }
+        }
+
+        // Visualiseur p5.js pour l'essaim
+        function initP5Visualizer() {
+            if (p5Sketch) {
+                p5Sketch.remove();
+            }
+            
+            p5Sketch = new p5((p) => {
+                let colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444']; // bleu, vert, orange, rouge
+                
+                p.setup = function() {
+                    const canvas = p.createCanvas(280, 120);
+                    canvas.parent('p5-container');
+                    p.background(17, 24, 39); // #111827
+                };
+                
+                p.draw = function() {
+                    p.background(17, 24, 39);
+                    
+                    // Récupérer les données actuelles
+                    const values = getDynamicValues();
+                    const nbMachines = Math.max(
+                        Math.ceil(values.nbClients10GB / C.CAPACITE_10GB_PAR_MACHINE),
+                        Math.ceil(values.nbClients128GB / C.CAPACITE_128GB_PAR_MACHINE)
+                    );
+                    
+                    // Calculer le remplissage pour chaque machine
+                    const machines10GB = Math.ceil(values.nbClients10GB / C.CAPACITE_10GB_PAR_MACHINE);
+                    const machines128GB = Math.ceil(values.nbClients128GB / C.CAPACITE_128GB_PAR_MACHINE);
+                    
+                    // Afficher les nœuds
+                    const cols = Math.ceil(Math.sqrt(nbMachines));
+                    const nodeSize = 12;
+                    const spacing = 20;
+                    
+                    for (let i = 0; i < nbMachines; i++) {
+                        const x = (i % cols) * spacing + 20;
+                        const y = Math.floor(i / cols) * spacing + 20;
+                        
+                        // Calculer le niveau de remplissage
+                        let fillLevel = 0;
+                        if (i < machines10GB) {
+                            const clientsInMachine = Math.min(values.nbClients10GB - (i * C.CAPACITE_10GB_PAR_MACHINE), C.CAPACITE_10GB_PAR_MACHINE);
+                            fillLevel = clientsInMachine / C.CAPACITE_10GB_PAR_MACHINE;
+                        }
+                        if (i < machines128GB) {
+                            const clientsInMachine = Math.min(values.nbClients128GB - (i * C.CAPACITE_128GB_PAR_MACHINE), C.CAPACITE_128GB_PAR_MACHINE);
+                            const fillLevel128 = clientsInMachine / C.CAPACITE_128GB_PAR_MACHINE;
+                            fillLevel = Math.max(fillLevel, fillLevel128);
+                        }
+                        
+                        // Choisir la couleur selon le remplissage
+                        let color;
+                        if (fillLevel < 0.25) color = colors[0]; // bleu
+                        else if (fillLevel < 0.5) color = colors[1]; // vert
+                        else if (fillLevel < 0.75) color = colors[2]; // orange
+                        else color = colors[3]; // rouge
+                        
+                        // Dessiner le nœud
+                        p.fill(color);
+                        p.noStroke();
+                        p.ellipse(x, y, nodeSize, nodeSize);
+                        
+                        // Indicateur de remplissage
+                        if (fillLevel > 0) {
+                            p.fill(255, 255, 255, 100);
+                            p.ellipse(x, y, nodeSize * fillLevel, nodeSize * fillLevel);
+                        }
+                    }
+                    
+                    // Légende
+                    p.fill(156, 163, 175); // #9ca3af
+                    p.textSize(8);
+                    p.textAlign(p.LEFT);
+                    p.text('🖥️ ' + nbMachines + ' machines', 10, 110);
+                };
+            });
+        }
+
+        // Event listeners
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('🔍 DEBUG: DOMContentLoaded event fired');
+            
+            // Vérifier que tous les éléments critiques existent
+            const criticalElements = [
+                'prixMultipass', 'prixZenCard', 'prixParts', 'pafArmateur',
+                'nbClients10GB', 'nbClients128GB', 'salaireCM', 'salaireDev', 'modePropriete',
+                'breakEven', 'margeBrute', 'roi', 'impactEco',
+                'chiffreAffairesHT', 'montantTVA', 'chiffreAffairesTTC', 'coutsInfra', 'coutsRD', 'resultatNet',
+                'impactStatement', 'nbMachines', 'totalClients', 'nbCM', 'nbDevs', 'surplusCoop', 'foretsM2'
+            ];
+            
+            console.log('🔍 DEBUG: Checking critical elements...');
+            criticalElements.forEach(id => {
+                const el = document.getElementById(id);
+                console.log(`🔍 DEBUG: Element ${id} found:`, !!el);
+                if (!el) {
+                    console.error(`❌ CRITICAL ERROR: Element ${id} not found!`);
+                }
+            });
+            
+            // Ajout des event listeners sur tous les sliders
+            const sliders = document.querySelectorAll('.slider');
+            console.log('🔍 DEBUG: Found sliders:', sliders.length);
+            sliders.forEach(slider => {
+                slider.addEventListener('input', function() {
+                    console.log('🔍 DEBUG: Slider input event:', slider.id);
+                    if (!runModeActive) {
+                        updateDisplays();
+                        calculateEconomy();
+                        if (p5Sketch) p5Sketch.redraw();
+                    }
+                });
+            });
+
+            // Bouton RUN
+            const runBtn = document.getElementById('runModeBtn');
+            console.log('🔍 DEBUG: Run button found:', !!runBtn);
+            if (runBtn) {
+                runBtn.addEventListener('click', function() {
+                    console.log('🔍 DEBUG: Run button clicked');
+                    if (runModeActive) {
+                        stopRunMode();
+                    } else {
+                        startRunMode();
+                    }
+                });
+            }
+
+            // Calcul initial
+            console.log('🔍 DEBUG: Starting initial calculations...');
+            updateDisplays();
+            calculateEconomy();
+            initP5Visualizer();
+            console.log('🔍 DEBUG: Initialization completed');
+        });
+    </script>
+</body>
+</html>

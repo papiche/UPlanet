@@ -1,0 +1,475 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Nostr - Notes et Autres Trucs Transmis par Relais</title>
+  <meta name="description" content="Nostr est un protocole ouvert de communication apolitique. Un standard simple qui définit une architecture évolutive de clients et serveurs." />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🌐</text></svg>">
+
+  <style>
+    /* Reprise du style de entrance.html */
+    :root{ --bg: #f8fbf9; --card-bg: #ffffff; --accent: #059669; --muted: #64748b; --text: #0f1724; --text-light: #ffffff; --gradient-bg: linear-gradient(180deg, var(--bg), #ffffff); --gradient-accent: linear-gradient(135deg, var(--accent), #10b981); --border-color: rgba(6,95,70,0.06); --glass: rgba(255, 255, 255, 0.7); --radius: 18px; --shadow: 0 6px 20px rgba(8,15,23,0.06); --maxw: 1100px; --font-base: 18px; }
+    *, *::before, *::after { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body { margin: 0; font-size: var(--font-base); font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, 'Helvetica Neue', Arial, sans-serif; background: var(--gradient-bg); color: var(--text); transition: background 0.5s ease, color 0.5s ease; }
+    a { color:var(--accent); text-decoration:none; }
+    .container { max-width:var(--maxw); margin:0 auto; padding:0 20px; }
+    header { position: sticky; top: 0; z-index: 1000; padding: 12px 0; background: var(--glass); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border-bottom: 1px solid var(--border-color); }
+    .header-content { display:flex; align-items:center; justify-content:space-between; max-width:var(--maxw); margin:0 auto; padding:0 20px; }
+    .brand { display:flex; align-items:center; gap:12px; }
+    .logo { width:56px; height:56px; border-radius:12px; background:var(--gradient-accent); display:flex; align-items:center; justify-content:center; color:var(--text-light); font-weight:700; font-size:24px; }
+    nav { display:flex; gap:16px; align-items:center; flex-wrap: wrap; }
+    nav a { font-size: 16px; color:var(--text); opacity:0.9; }
+    .btn { display:inline-flex; align-items:center; gap:8px; padding:12px 20px; border-radius:999px; border:none; cursor:pointer; font-weight:600; font-size: 16px; transition: transform 0.2s ease, box-shadow 0.2s ease; text-decoration: none; }
+    .btn:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+    .btn-primary { background:var(--accent); color:var(--text-light); }
+    .btn-ghost { background:transparent; border:1px solid var(--accent); color:var(--accent); }
+    main { padding-top: 24px; }
+    section { padding:48px 0; }
+    h1 { font-size: 44px; line-height: 1.1; margin:0; }
+    h2 { margin:0 0 24px 0; font-size: 32px; }
+    h3 { margin:0 0 10px 0; font-size: 22px; }
+    p, li { line-height: 1.6; }
+    .subtitle { color:var(--muted); margin-top:16px; font-size: 20px; }
+    .muted { color:var(--muted); }
+    .hero { text-align: center; padding: 60px 20px; }
+    .card { background:var(--card-bg); border-radius:var(--radius); padding:24px; box-shadow:var(--shadow); border:1px solid var(--border-color); margin-bottom: 20px; }
+    .features { display:grid; grid-template-columns:repeat(auto-fit, minmax(300px,1fr)); gap:20px; margin-top: 32px; }
+    .feature { background:var(--card-bg); border-radius:var(--radius); padding:24px; box-shadow:var(--shadow); border:1px solid var(--border-color); }
+    .two-col { display:grid; grid-template-columns:1fr 1fr; gap:20px; }
+    details { transition: all 0.3s ease; cursor: pointer; }
+    details[open] { background: linear-gradient(135deg, rgba(5,150,105,0.05), rgba(16,185,129,0.05)); }
+    details summary { position: relative; padding: 16px; padding-right: 40px; font-weight: 600; cursor: pointer; list-style: none; }
+    details summary::-webkit-details-marker { display: none; }
+    details summary::after { content: '▼'; position: absolute; right: 20px; top: 50%; transform: translateY(-50%); transition: transform 0.3s ease; color: var(--accent); font-size: 14px; }
+    details[open] summary::after { transform: translateY(-50%) rotate(180deg); }
+    details summary:hover { background: rgba(5,150,105,0.05); }
+    details > div { padding: 16px; }
+    footer { border-top:1px solid var(--border-color); padding:32px 0; margin-top:32px; }
+    .footer-grid { display:grid; grid-template-columns:2fr 1fr 1fr; gap:24px; }
+    @media(max-width:920px){ .two-col { grid-template-columns:1fr; } }
+    @media(max-width:768px){ h1 { font-size: 36px; } h2 { font-size: 28px; } .footer-grid { grid-template-columns:1fr; } nav { width: 100%; } }
+    
+    /* Hero Animation */
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    
+    .hero { animation: fadeInUp 0.8s ease-out; }
+    
+    .badge { display: inline-flex; align-items: center; background: rgba(5,150,105,0.1); color: var(--accent); font-size: 14px; font-weight: 600; padding: 8px 16px; border-radius: 999px; margin-bottom: 16px; }
+    
+    .quote-card { background: var(--card-bg); border-left: 4px solid var(--accent); padding: 24px; border-radius: var(--radius); box-shadow: var(--shadow); }
+    
+    .quote-card blockquote { font-style: italic; margin: 0 0 12px 0; color: var(--text); }
+    
+    .quote-card cite { font-size: 14px; color: var(--muted); font-style: normal; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="header-content">
+      <a href="index.html" class="brand">
+        <div class="logo">Ẑ</div>
+        <div>
+          <div style="font-weight:700">UPlanet</div>
+          <div style="font-size:14px;color:var(--muted)">N² Protocol</div>
+        </div>
+      </a>
+      <nav role="navigation">
+        <a href="entrance.html">← Retour</a>
+        <a href="#apps">Commencer</a>
+        <a href="#faq">FAQ</a>
+        <a href="https://coracle.copylaradio.com" target="_blank">💬 Forum</a>
+      </nav>
+    </div>
+  </header>
+
+  <div class="container">
+    <main>
+      <!-- Hero Section -->
+      <section class="hero">
+        <h1>Un protocole ouvert avec une chance de fonctionner</h1>
+        <p class="subtitle" style="max-width: 900px; margin: 24px auto;">
+          Nostr est un bien commun de communication apolitique. Un standard simple qui définit une architecture évolutive de clients et de serveurs pouvant être utilisés pour diffuser librement l'information. Non contrôlé par une entreprise ou un gouvernement, tout le monde peut construire sur Nostr et tout le monde peut l'utiliser.
+        </p>
+        <div style="display:flex; gap:16px; justify-content:center; margin-top:32px; flex-wrap:wrap">
+          <a href="https://coracle.copylaradio.com" class="btn btn-primary">Utiliser Coracle</a>
+          <a href="https://www.youtube.com/watch?v=Tbt3jL1Ms0w" target="_blank" class="btn btn-ghost">Voir une présentation</a>
+        </div>
+      </section>
+
+      <!-- Introduction -->
+      <section>
+        <div style="text-align:center; margin-bottom: 48px;">
+          <span class="badge">Toutes sortes de contenus</span>
+          <h2>Comme Internet lui-même : ouvert et chaotique</h2>
+          <p class="muted" style="max-width: 700px; margin: 16px auto;">
+            Nostr embrasse le chaos du premier Internet : plusieurs types de données, diverses formes d'interaction utilisateur et différents clients fournissant leurs propres perspectives sur les mêmes informations sous-jacentes.
+          </p>
+        </div>
+
+        <div class="features">
+          <div class="feature">
+            <div style="font-size:32px; margin-bottom:12px">🔄</div>
+            <h3>Plusieurs clients, plusieurs serveurs</h3>
+            <p class="muted">Le client est l'application qui fonctionne sur votre ordinateur ou téléphone, le serveur est ce qui fonctionne quelque part dans le cloud avec un nom de domaine. Dans les plateformes centralisées et autres protocoles, un client parle à un seul serveur. Dans Nostr, les clients se connectent à plusieurs.</p>
+          </div>
+
+          <div class="feature">
+            <div style="font-size:32px; margin-bottom:12px">✍️</div>
+            <h3>Notes signées cryptographiquement</h3>
+            <p class="muted">L'unité d'information unique de Nostr est une note signée cryptographiquement. Celles-ci sont créées par les utilisateurs dans leur logiciel client et publiées sur un ou plusieurs relais.</p>
+          </div>
+
+          <div class="feature">
+            <div style="font-size:32px; margin-bottom:12px">🤖</div>
+            <h3>Clients intelligents comme agents utilisateurs</h3>
+            <p class="muted">Les clients sont intelligents et agissent comme des agents pour les utilisateurs qui les installent. Ils décident à quels relais se connecter, quand et quelles données demander selon les circonstances et les préférences de l'utilisateur.</p>
+          </div>
+
+          <div class="feature">
+            <div style="font-size:32px; margin-bottom:12px">🏭</div>
+            <h3>Relais comme centres de distribution</h3>
+            <p class="muted">Ce sont les serveurs sur lesquels les notes sont publiées et lues. Ils ne peuvent pas changer le contenu des notes (cela invaliderait la signature), mais ils peuvent décider quoi stocker et pour combien de temps.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Pro-Censorship Section -->
+      <section>
+        <div class="card" style="background: linear-gradient(135deg, rgba(5,150,105,0.1), rgba(16,185,129,0.05));">
+          <span class="badge">🛡️ Pro-censure</span>
+          <h2>Le protocole n'a pas de propriétaire, les relais si</h2>
+          <p class="muted">
+            Nostr ne souscrit pas aux idéaux politiques de la "liberté d'expression" — il reconnaît simplement que différentes personnes ont des morales et préférences différentes, et que chaque serveur, étant privé, peut suivre ses propres critères pour rejeter du contenu comme bon lui semble, et les utilisateurs sont libres de choisir quoi lire et d'où.
+          </p>
+          
+          <div class="two-col" style="margin-top: 24px;">
+            <div>
+              <h3 style="color: var(--accent);">🤝 Liberté d'association</h3>
+              <p class="muted">Quand l'effet réseau n'est pas lié à une seule organisation, un groupe d'utilisateurs ne peut pas nuire aux autres.</p>
+            </div>
+            <div>
+              <h3 style="color: var(--accent);">🏞️ Votre propre morceau de Nostr</h3>
+              <p class="muted">Si vous êtes programmeur ou savez gérer des serveurs, il est trivial de lancer votre propre relais avec vos propres règles.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- How it works -->
+      <section>
+        <div style="text-align:center; margin-bottom: 48px;">
+          <span class="badge">👥 Abonnements</span>
+          <h2>Comment Nostr fonctionne</h2>
+          <p class="muted" style="max-width: 700px; margin: 16px auto;">
+            Nostr permet une vraie liberté en permettant aux utilisateurs de rester connectés à leur audience même dans des scénarios adverses.
+          </p>
+        </div>
+
+        <div class="features">
+          <div class="card" style="border-left: 4px solid var(--accent);">
+            <h3>1️⃣ L'utilisateur choisit ses relais</h3>
+            <p class="muted">Patricia publie un événement spécial annonçant quels serveurs elle utilisera comme "relais de sortie" pour publier ses notes. Elle commence alors à envoyer tous ses posts à ces relais choisis, créant un endroit prévisible où les autres peuvent trouver son contenu.</p>
+          </div>
+
+          <div class="card" style="border-left: 4px solid var(--accent);">
+            <h3>2️⃣ Quelqu'un commence à suivre</h3>
+            <p class="muted">Quand Florian veut lire les posts de Patricia, son client consulte son annonce et se connecte directement à ses relais annoncés.</p>
+          </div>
+
+          <div class="card" style="border-left: 4px solid var(--accent);">
+            <h3>3️⃣ Les utilisateurs peuvent changer de relais</h3>
+            <p class="muted">Si le relais actuel de Patricia la bannit ou s'arrête, elle peut facilement passer à différents relais — peut-être gérés par des amis, un service payant, ou son propre serveur. Elle publie simplement une nouvelle annonce et continue de poster sans perdre son audience.</p>
+          </div>
+
+          <div class="card" style="border-left: 4px solid var(--accent);">
+            <h3>4️⃣ Les clients suivent les changements</h3>
+            <p class="muted">Le client de Florian surveille continuellement les mises à jour de la liste de relais de Patricia. Quand elle change de relais, son client commence éventuellement à interroger ses nouveaux emplacements, assurant qu'il ne manque jamais ses posts même si la topologie du réseau change.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Subprotocols -->
+      <section>
+        <div class="card" style="background: linear-gradient(135deg, rgba(5,150,105,0.1), rgba(16,185,129,0.05));">
+          <span class="badge">💡 Nouvelles Idées</span>
+          <h2>Explorer les communs</h2>
+          <p class="muted">
+            En plus d'être un medium naturel pour un réseau social de microblogging type Twitter, Nostr peut aussi être utilisé à d'autres fins. Et pas seulement des choses similaires comme partager des <i>vidéos</i>, des <i>articles longs</i>, des <i>images</i> ou des <i>notes vocales</i>. Il existe des initiatives sur Nostr pour le développement de sous-protocoles qui alimentent des <b>groupes fermés</b>, un <b>wikipedia décentralisé</b>, du <b>couchsurfing</b>, des <b>places de marché</b> ou des <b>annotations web</b>; ainsi que des protocoles qui n'utilisent pas Nostr pour les données principales mais comme mécanisme de coordination et de découverte, tels que la <b>collaboration de code décentralisée utilisant git</b>, l'<b>hébergement de fichiers</b>, le <b>partage de torrents</b> et le <b>livestreaming vidéo</b>.
+          </p>
+          <div style="margin-top: 24px;">
+            <a href="https://github.com/nostr-protocol/nips" target="_blank" class="btn btn-primary">Parcourir les NIPs</a>
+          </div>
+        </div>
+      </section>
+
+      <!-- FAQ Section -->
+      <section id="faq">
+        <div style="text-align:center; margin-bottom: 48px;">
+          <span class="badge">❓ FAQ</span>
+          <h2>J'ai quelques questions !</h2>
+          <p class="muted" style="max-width: 700px; margin: 16px auto;">
+            Nostr peut sembler très bien, mais qu'en est-il de ces problèmes difficiles ?
+          </p>
+        </div>
+
+        <div style="max-width: 900px; margin: 0 auto;">
+          <details class="card">
+            <summary>Qu'est-ce qu'un "protocole" ?</summary>
+            <div>
+              <p class="muted">Un protocole est comme un langage commun que plusieurs logiciels différents peuvent utiliser pour communiquer entre eux, c'est comme l'<b>e-mail</b>, le <b>HTML</b> ou le <b>HTTP</b>.</p>
+              <p class="muted" style="margin-top: 12px;">Quand nous disons "protocole", nous voulons dire qu'il n'est pas nécessaire d'utiliser une application spécifique pour être sur Nostr : il existe de nombreuses applications qui parlent le même langage et peuvent être utilisées (principalement) de manière interchangeable — et chacune a sa propre approche sur comment faire et afficher les choses.</p>
+            </div>
+          </details>
+
+          <details class="card">
+            <summary>Comment Nostr gère-t-il le spam et le contenu indésirable ?</summary>
+            <div>
+              <p class="muted">Dans le flux par défaut, vous ne voyez jamais de spam, car les clients ne récupèrent que les informations des personnes que <i>vous</i> suivez. En ce sens, personne ne peut "pousser" du spam vers vous.</p>
+              <p class="muted" style="margin-top: 12px;">C'est plus délicat quand vous voulez voir, par exemple, les réponses à vos posts. Dans ce cas, un client peut être programmé pour récupérer tout ce qui <i>prétend</i> être une réponse <i>de n'importe qui</i>, ce qui peut inclure du spam.</p>
+              <p class="muted" style="margin-top: 12px;">La façon dont nous pouvons gérer cela sur Nostr est en restreignant notre zone de contact avec le spam : par exemple, certains clients peuvent facilement décider d'afficher uniquement les réponses qui viennent de personnes suivies par des personnes que vous suivez.</p>
+            </div>
+          </details>
+
+          <details class="card">
+            <summary>Nostr passera-t-il à l'échelle avec une adoption massive ?</summary>
+            <div>
+              <p class="muted">Oui, Nostr n'est qu'une architecture client-serveur de base. Et le fait que les utilisateurs peuvent naturellement se répartir entre des centaines de relais différents pendant que les clients peuvent interroger des dizaines de relais qui les intéressent en même temps signifie que le réseau a un équilibreur de charge naturel.</p>
+            </div>
+          </details>
+
+          <details class="card">
+            <summary>Quelles protections Nostr offre-t-il contre le harcèlement en ligne ?</summary>
+            <div>
+              <p class="muted">Le harcèlement est similaire au spam en ce sens que n'importe qui peut toujours créer du contenu indésirable et le publier sur les relais qui l'acceptent. Toutes les techniques mentionnées pour éviter le spam peuvent également être appliquées dans ce cas, mais si nous parlons d'individus spécifiques avec une identité permanente et pas seulement d'une armée de bots, dans ce cas le problème devient plus facile, car ces individus peuvent simplement être bloqués par leur cible et leur contenu disparaîtra.</p>
+            </div>
+          </details>
+
+          <details class="card">
+            <summary>Pourquoi ne pas simplement utiliser Mastodon/Fediverse ?</summary>
+            <div>
+              <p class="muted">Il y a de nombreux problèmes avec Mastodon, principalement dus au fait qu'il ne repose sur aucune cryptographie. Parce qu'il ne peut pas faire l'approche multi-maître de Nostr en raison du manque de cryptographie, les identités sont supposées être "possédées" par le serveur, qui est entièrement de confiance par ses locataires. Les propriétaires de serveurs Mastodon peuvent faire tout le mal que les plateformes centralisées peuvent faire à leurs subordonnés.</p>
+              <p class="muted" style="margin-top: 12px;">Pire encore, pour beaucoup de ses fonctionnalités supposées, telles que le blocage ou les messages directs, les utilisateurs doivent également faire confiance aux propriétaires des autres serveurs.</p>
+            </div>
+          </details>
+
+          <details class="card">
+            <summary>Pourquoi ne pas simplement utiliser Bluesky/ATProto ?</summary>
+            <div>
+              <p class="muted">Bluesky a de nombreux problèmes, les deux plus prononcés sont :</p>
+              <ol style="list-style: decimal; padding-left: 24px; margin-top: 12px;" class="muted">
+                <li style="margin-bottom: 8px;">Centralisation de l'identité : tous les comptes appartiennent à <b>PLC</b>, une base de données gérée par une entité centrale qui peut censurer à volonté</li>
+                <li style="margin-bottom: 8px;">Centralisation des données : parce que le flux <code>Relay-AppView-Client</code> suppose une seule source canonique de données à chaque étape (contrairement à l'architecture multi-maître de Nostr), cette source est toujours un serveur qui a le pouvoir de censurer, shadowban, réorganiser les données, etc.</li>
+              </ol>
+            </div>
+          </details>
+
+          <details class="card">
+            <summary>Les incitations économiques sont-elles alignées pour maintenir les relais opérationnels ?</summary>
+            <div>
+              <p class="muted">Oui. Si les utilisateurs peuvent aller vers n'importe quel relais qu'ils veulent, nous verrons des relais gérés par toutes sortes de personnes et d'entités. Gérer des serveurs est très bon marché, et un relais peut fonctionner sur un serveur à 5$/mois et héberger au moins quelques milliers d'utilisateurs. Il n'est pas difficile d'imaginer des relais gérés par des communautés, des individus qui veulent juste être utiles aux autres, de grandes organisations voulant gagner de la bonne volonté auprès de certaines parties du public, mais aussi des entreprises, des créateurs de clients, et, bien sûr, des entités dédiées qui vendent de l'hébergement de relais pour très peu cher.</p>
+            </div>
+          </details>
+
+          <details class="card">
+            <summary>Comment fonctionne la recherche ?</summary>
+            <div>
+              <p class="muted">Il n'est possible de chercher que dans ce que vous avez vu, donc les moteurs de recherche devront toujours explorer certaines parties du réseau qu'ils ont choisies et les indexer pour permettre la recherche publique. Le mot "choisi" est employé car, comme nous le savons, il ne peut pas y avoir de vue "globale" du réseau (et personne ne voudrait une telle chose de toute façon car elle serait pleine de spam), donc les indexeurs doivent choisir. Ce n'est pas différent de Google décidant quels sites web indexer.</p>
+            </div>
+          </details>
+
+          <details class="card">
+            <summary>Nostr est-il lié à Bitcoin ?</summary>
+            <div>
+              <p class="muted">Nostr utilise les mêmes principes cryptographiques que Bitcoin et a été lancé principalement par une communauté de Bitcoiners, donc il a de manière disproportionnée attiré l'attention des Bitcoiners au début, mais à part cela, <strong>il n'a aucune relation avec Bitcoin</strong>. Il ne dépend de Bitcoin pour rien et vous n'avez pas besoin de connaître, avoir ou vous soucier de Bitcoin pour utiliser Nostr.</p>
+              
+              <p class="muted" style="margin-top: 16px;"><strong>Qu'en est-il des "zaps" ?</strong></p>
+              <p class="muted" style="margin-top: 8px;">Les zaps sont un standard pour donner des pourboires en Bitcoin Lightning Network sur Nostr. C'est sympathique, mais cela reste un <strong>flux linéaire</strong> : A donne à B. C'est l'aumône du 21ᵉ siècle, les "pièces jaunes" du numérique qui maintiennent l'utilisateur dans un rôle de <strong>serf numérique</strong> au sein d'un royaume dont il ne possédera jamais la terre.</p>
+              
+              <p class="muted" style="margin-top: 16px;"><strong>Bitcoin vous donne des pièces jaunes. UPlanet vous offre la forêt nourricière.</strong></p>
+              <p class="muted" style="margin-top: 8px;">Sur UPlanet, nous avons choisi une autre voie : le <strong>Ẑen</strong>, une économie circulaire où chaque "like" finance l'infrastructure commune et investit dans le vivant. Voir la FAQ suivante pour comprendre la différence.</p>
+              
+              <p class="muted" style="margin-top: 16px; font-size: 14px;">💡 Les zaps Bitcoin restent totalement optionnels sur Nostr. Si vous ne vous souciez pas de Bitcoin, vous n'avez pas à vous en préoccuper.</p>
+            </div>
+          </details>
+
+          <details class="card" style="border-left: 4px solid var(--accent);">
+            <summary>Qu'est-ce que le Ẑen et en quoi est-il différent des Zaps Bitcoin ?</summary>
+            <div>
+              <p class="muted"><strong>Le Ẑen (Ẑ)</strong> est l'unité de compte coopérative d'UPlanet, enregistrée sur la blockchain Ğ1 (Monnaie Libre). Sa valeur est fixée à 1€ pour assurer la stabilité comptable. Mais ce n'est pas qu'une monnaie : c'est un <strong>système économique complet</strong>.</p>
+              
+              <div style="background: rgba(5,150,105,0.1); padding: 16px; border-radius: 8px; margin: 16px 0;">
+                <p class="muted" style="margin: 0;"><strong>🪙 Bitcoin/Zaps :</strong> Des "pièces jaunes" pour des pourboires. Un flux linéaire (A → B) qui ne construit rien de commun. Vous restez locataire d'un système qui ne vous appartient pas.</p>
+                <p class="muted" style="margin: 12px 0 0 0;"><strong>🌍 UPlanet Ẑen :</strong> Une économie circulaire où vous êtes <strong>co-propriétaire</strong>. Chaque transaction alimente le commun et finance votre souveraineté numérique.</p>
+              </div>
+
+              <p class="muted" style="margin-top: 16px;"><strong>Comment fonctionne l'économie Ẑen ?</strong></p>
+              <ol style="list-style: decimal; padding-left: 24px; margin-top: 12px;" class="muted">
+                <li style="margin-bottom: 12px;"><strong>Vous financez le Commun :</strong> Vous payez 1Ẑ/semaine pour votre MULTIPASS ou recevez des Ẑen via les "likes" (<code>kind:7</code>) que vous collectez. Ces Ẑen entrent dans l'économie coopérative.</li>
+                
+                <li style="margin-bottom: 12px;"><strong>La Valeur Circule :</strong> Cet argent paie l'<strong>Armateur</strong> (qui héberge les serveurs) et le <strong>Capitaine</strong> (qui maintient l'infrastructure). Il ne s'évapore pas en frais bancaires, il <strong>finance l'infrastructure qui nous rend souverains</strong>.</li>
+                
+                <li style="margin-bottom: 12px;"><strong>Le Surplus est Capturé :</strong> Ce qui reste après avoir payé les coûts de fonctionnement est le bénéfice de la coopérative (SCIC CopyLaRadio).</li>
+                
+                <li style="margin-bottom: 12px;"><strong>Le Bénéfice est Réinvesti :</strong> Cet argent finance la R&D, l'expansion du réseau, et notre objectif ultime : <strong>devenir co-propriétaire d'Internet puis acheter des forêts et des terrains</strong> qui appartiendront à tous les sociétaires.</li>
+              </ol>
+
+              <div style="background: linear-gradient(135deg, rgba(5,150,105,0.1), rgba(16,185,129,0.05)); padding: 16px; border-radius: 8px; margin: 16px 0;">
+                <p class="muted" style="margin: 0; font-weight: 600;">🌳 Sur UPlanet, un "like" n'est pas une pièce jaune.</p>
+                <p class="muted" style="margin: 8px 0 0 0;">C'est une goutte d'eau qui alimente la rivière de notre économie circulaire, une rivière qui, à la fin, irrigue une <strong>forêt nourricière bien réelle</strong>.</p>
+              </div>
+
+              <p class="muted" style="margin-top: 16px;"><strong>UPlanet n'est pas "une application"</strong>, c'est un écosystème intégré qui remplace vos intermédiaires :</p>
+              <ul style="list-style: none; padding-left: 24px; margin-top: 12px;" class="muted">
+                <li style="margin-bottom: 8px;">🏦 <strong>Votre Banque :</strong> Transactions instantanées en Ẑen, sans frais</li>
+                <li style="margin-bottom: 8px;">☁️ <strong>Votre Hébergeur :</strong> Données sur relais Astroport décentralisés</li>
+                <li style="margin-bottom: 8px;">💻 <strong>Votre Éditeur :</strong> Logiciels libres, algorithmes transparents</li>
+                <li style="margin-bottom: 8px;">🤝 <strong>Votre Coopérative :</strong> Gouvernance partagée (SCIC)</li>
+              </ul>
+
+              <p class="muted" style="margin-top: 16px; font-size: 14px;">💡 <strong>Vous n'êtes plus un client ou un paysan numérique. Vous êtes actionnaire de votre propre banque, propriétaire de votre part d'Internet.</strong></p>
+              
+              <div style="margin-top: 20px;">
+                <a href="https://www.copylaradio.com/blog/blog-1/post/la-banque-vous-prend-des-frais-bitcoin-vous-donne-des-pieces-jaunes-165" target="_blank" class="btn btn-ghost" style="font-size: 14px;">📖 Lire l'article complet</a>
+                <a href="uplanet_com.html" class="btn btn-primary" style="margin-left: 12px; font-size: 14px;">🌍 Découvrir UPlanet</a>
+              </div>
+            </div>
+          </details>
+        </div>
+      </section>
+
+      <!-- Quotes Section -->
+      <section>
+        <div style="text-align:center; margin-bottom: 48px;">
+          <span class="badge">💬 Opinions</span>
+          <h2>Ce que les gens disent</h2>
+          <p class="muted" style="max-width: 700px; margin: 16px auto;">
+            Citations de ceux qui connaissent mieux et ont décidé d'aimer Nostr.
+          </p>
+        </div>
+
+        <div class="features">
+          <div class="quote-card">
+            <blockquote>
+              "Personne ne possède Nostr, personne ne peut posséder Nostr, c'est un protocole open-source. Personne ne peut construire une clôture pour arrêter le flux d'information."
+            </blockquote>
+            <cite>— <a href="https://www.youtube.com/watch?v=MaxXvcr181c" target="_blank">Uncle Bob</a></cite>
+          </div>
+
+          <div class="quote-card">
+            <blockquote>
+              "Nostr est un protocole ouvert. Si une plateforme est un silo, un protocole est une rivière : personne ne la possède, et tout le monde est libre de nager."
+            </blockquote>
+            <cite>— <a href="https://x.com/Snowden/status/1620789340199882752" target="_blank">Edward Snowden</a></cite>
+          </div>
+
+          <div class="quote-card">
+            <blockquote>
+              "Je veux affirmer que Nostr a découvert une nouvelle architecture fondamentale pour les protocoles distribués. Ni fédérée, ni P2P."
+            </blockquote>
+            <cite>— <a href="https://newsletter.squishy.computer/p/natures-many-attempts-to-evolve-a" target="_blank">Gordon Brander</a></cite>
+          </div>
+        </div>
+      </section>
+
+      <!-- Apps Section -->
+      <section id="apps">
+        <div class="card" style="background: linear-gradient(135deg, rgba(5,150,105,0.1), rgba(16,185,129,0.05)); text-align: center;">
+          <h2>Commencer avec Nostr sur UPlanet</h2>
+          <p class="muted">Créez votre MULTIPASS et rejoignez le réseau décentralisé</p>
+          <div style="margin-top: 32px; display: flex; gap: 16px; justify-content: center; flex-wrap: wrap;">
+            <button onclick="openCreateAccountPage()" class="btn btn-primary">🎫 Créer mon MULTIPASS</button>
+            <a href="https://coracle.copylaradio.com" target="_blank" class="btn btn-ghost">💬 Forum Communauté</a>
+            <a href="https://github.com/nostr-protocol/nips" target="_blank" class="btn btn-ghost">Doc Nostr</a>
+            <a href="https://github.com/papiche/Astroport.ONE" target="_blank" class="btn btn-ghost">Doc Astroport</a>         
+        </div>
+        </div>
+      </section>
+
+      <!-- UPlanet Integration -->
+      <section>
+        <div class="card" style="border: 2px solid var(--accent); background: linear-gradient(135deg, rgba(5,150,105,0.05), rgba(16,185,129,0.02));">
+          <h2 style="color: var(--accent);">🌍 Nostr dans UPlanet</h2>
+          <p class="muted">
+            UPlanet utilise le protocole Nostr pour créer des réseaux sociaux décentralisés et résistants à la censure. Chaque Astroport.ONE intègre un relais Nostr personnel et synchronise les contenus avec votre constellation (amis et amis d'amis).
+          </p>
+          <p class="muted" style="margin-top: 16px;">
+            <strong>UPlanet va plus loin :</strong> géolocalisation avec Geo Keys, automatisation avec Bot Astro (#BRO), économie ẐEN intégrée, DID W3C, stockage IPFS et bien plus encore.
+          </p>
+          <div style="margin-top: 24px;">
+            <a href="uplanet_com.html" class="btn btn-primary">🌍 Découvrir UPlanet Optimisé</a>
+            <a href="entrance.html#protocole-n2" class="btn btn-ghost" style="margin-left: 12px;">Protocole N²</a>
+            <a href="entrance.html" class="btn btn-ghost" style="margin-left: 12px;">Accueil</a>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <footer id="contact">
+    <div class="container footer-grid">
+      <div>
+        <div style="font-weight:700">Nostr • UPlanet</div>
+        <div style="margin-top:10px;color:var(--muted)">Un protocole ouvert pour un Internet décentralisé et résistant à la censure.</div>
+        <div style="margin-top:12px;color:var(--muted);font-size:14px">Contenu adapté de <a href="https://nostr.com" target="_blank">nostr.com</a> pour UPlanet</div>
+      </div>
+      <div>
+        <div style="font-weight:700;margin-bottom:8px">Ressources</div>
+        <ul style="color:var(--muted);font-size:16px;line-height:1.8;list-style:none;padding:0">
+          <li><a href="https://coracle.copylaradio.com" target="_blank">💬 Forum Communauté (Coracle)</a></li>
+          <li><a href="https://github.com/nostr-protocol/nips" target="_blank">Spécifications (NIPs)</a></li>
+          <li><a href="https://github.com/papiche/Astroport.ONE" target="_blank">Documentation</a></li>
+          <li><a href="entrance.html">Retour...</a></li>
+        </ul>
+      </div>
+      <div>
+        <div style="font-weight:700;margin-bottom:8px">Liens UPlanet</div>
+        <ul style="color:var(--muted);font-size:16px;line-height:1.8;list-style:none;padding:0">
+          <li><a href="entrance.html">Accueil UPlanet</a></li>
+          <li><a href="uplanet_com.html">🌍 Système Optimisé</a></li>
+          <li><a href="entrance.html#protocole-n2">Protocole N²</a></li>
+          <li><a href="entrance.html#rejoindre">Devenir Co-Bâtisseur</a></li>
+          <li><a href="https://github.com/papiche/Astroport.ONE" target="_blank">Code Source</a></li>
+        </ul>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Nostr Library -->
+  <script src="/ipfs/QmXEmaPRUaGcvhuyeG99mHHNyP43nn8GtNeuDok8jdpG4a/nostr.bundle.js"></script>
+  
+  <!-- Common JavaScript -->
+  <script src="common.js"></script>
+
+  <!-- Page-specific features -->
+  <script>
+    // Ajouter les boutons de partage et les commentaires
+    document.addEventListener('DOMContentLoaded', () => {
+      // Créer une section de partage dans le footer
+      const footer = document.querySelector('footer .container');
+      if (footer) {
+        const shareSection = document.createElement('div');
+        shareSection.style.cssText = 'margin-top: 32px; padding: 24px; background: var(--card-bg); border-radius: 12px; text-align: center; border: 1px solid var(--border-color);';
+        shareSection.innerHTML = `
+          <h3 style="margin: 0 0 16px 0; color: var(--accent);">📡 Partager cette page sur Nostr</h3>
+          <p class="muted" style="margin-bottom: 16px;">Partagez cette page avec votre réseau décentralisé</p>
+          <div style="display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;">
+            <button onclick="showShareModal()" class="btn btn-primary">📡 Partager sur mon mur</button>
+            <button onclick="createBookmark()" class="btn btn-ghost">🔖 Bookmarker cette page</button>
+          </div>
+        `;
+        footer.insertBefore(shareSection, footer.firstChild);
+      }
+             
+             // Activer les commentaires Nostr sur cette page
+             createCommentsSection('before-footer');
+           });
+  </script>
+</body>
+</html>
+

@@ -1,0 +1,814 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nostr Message Viewer</title>
+    <style>
+        @import url('./fonts.css');
+
+        :root {
+            --terminal-bg: #0a0a12;
+            --terminal-green: #0f0;
+            --terminal-cyan: #0ff;
+            --terminal-purple: #b19cd9;
+            --terminal-red: #f44;
+            --terminal-orange: #fb8532;
+            --terminal-glow: rgba(0, 255, 0, 0.7);
+            --terminal-border: #333;
+            --text-color: #e0e0e0;
+            --text-shadow: 0 0 8px var(--terminal-glow);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #000;
+            overflow-y: auto;
+            overflow-x: hidden;
+            font-family: 'Inconsolata', monospace;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+            align-items: center;
+            min-height: 100vh;
+            padding-top: 2rem;
+            perspective: 1000px;
+        }
+
+        .matrix-background {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            opacity: 0.15;
+        }
+
+        .terminal-container {
+            position: relative;
+            width: 85%;
+            max-width: 900px;
+            min-height: 70vh;
+            background: var(--terminal-bg);
+            border-radius: 8px;
+            box-shadow: 0 0 30px rgba(0, 255, 0, 0.5),
+                        inset 0 0 10px rgba(0, 255, 0, 0.2);
+            overflow: hidden;
+            border: 1px solid var(--terminal-green);
+            transform-style: preserve-3d;
+            animation: float 8s ease-in-out infinite;
+            margin-bottom: 2rem;
+        }
+
+        @keyframes float {
+            0%, 100% {
+                transform: translateY(0) rotateX(10deg) rotateY(5deg);
+            }
+            50% {
+                transform: translateY(-15px) rotateX(5deg) rotateY(10deg);
+            }
+        }
+
+        .terminal-header {
+            background: linear-gradient(to right, #0a0a0a, #111);
+            padding: 8px 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            color: var(--terminal-green);
+            font-family: 'Share Tech Mono', monospace;
+            border-bottom: 1px solid var(--terminal-green);
+            box-shadow: 0 2px 15px rgba(0, 255, 0, 0.3);
+        }
+
+        .terminal-buttons-group {
+            display: flex;
+            gap: 8px;
+        }
+
+        .terminal-button-ctrl {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .terminal-button-ctrl:hover {
+            transform: scale(1.2);
+            box-shadow: 0 0 8px rgba(255, 255, 255, 0.5);
+        }
+
+        .terminal-button-ctrl.red { background: #ff5f56; }
+        .terminal-button-ctrl.yellow { background: #ffbd2e; }
+        .terminal-button-ctrl.green { background: #27c93f; }
+
+        .terminal-body {
+            padding: 20px;
+            overflow-y: auto;
+            color: var(--text-color);
+            text-shadow: var(--text-shadow);
+            line-height: 1.6;
+            font-size: 0.95rem;
+        }
+
+        .glitch { position: relative; }
+        .glitch::before, .glitch::after {
+            content: attr(data-text);
+            position: absolute; top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: var(--terminal-bg);
+        }
+        .glitch::before {
+            left: 2px; text-shadow: -2px 0 var(--terminal-red);
+            clip: rect(24px, 550px, 90px, 0);
+            animation: glitch-anim-1 2s infinite linear alternate-reverse;
+        }
+        .glitch::after {
+            left: -2px; text-shadow: -2px 0 var(--terminal-cyan);
+            clip: rect(85px, 550px, 140px, 0);
+            animation: glitch-anim-2 2s infinite linear alternate-reverse;
+        }
+
+        @keyframes glitch-anim-1 {
+            0% { clip: rect(54px, 800px, 54px, 0); }
+            20% { clip: rect(27px, 800px, 86px, 0); }
+            40% { clip: rect(14px, 800px, 75px, 0); }
+            60% { clip: rect(39px, 800px, 104px, 0); }
+            80% { clip: rect(18px, 800px, 53px, 0); }
+            100% { clip: rect(73px, 800px, 112px, 0); }
+        }
+
+        @keyframes glitch-anim-2 {
+            0% { clip: rect(35px, 800px, 89px, 0); }
+            20% { clip: rect(56px, 800px, 103px, 0); }
+            40% { clip: rect(22px, 800px, 64px, 0); }
+            60% { clip: rect(88px, 800px, 120px, 0); }
+            80% { clip: rect(13px, 800px, 32px, 0); }
+            100% { clip: rect(42px, 800px, 99px, 0); }
+        }
+
+        canvas { display: block; }
+
+        /* Message styles */
+        .message-container {
+            background: rgba(0, 255, 255, 0.05);
+            border: 1px solid var(--terminal-cyan);
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 24px;
+        }
+
+        .message-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 16px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid var(--terminal-border);
+        }
+
+        .author-avatar {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            border: 2px solid var(--terminal-cyan);
+            background: var(--terminal-purple);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: white;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .author-avatar:hover {
+            transform: scale(1.1);
+            box-shadow: 0 0 15px rgba(0, 255, 255, 0.5);
+        }
+
+        .author-avatar img {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            object-fit: cover;
+        }
+
+        .author-info {
+            flex: 1;
+        }
+
+        .author-name {
+            font-size: 1.1em;
+            font-weight: bold;
+            color: var(--terminal-cyan);
+            cursor: pointer;
+            text-decoration: none;
+        }
+
+        .author-name:hover {
+            color: var(--terminal-green);
+            text-shadow: 0 0 5px var(--terminal-glow);
+        }
+
+        .author-pubkey {
+            font-size: 0.85em;
+            color: var(--terminal-purple);
+            font-family: monospace;
+        }
+
+        .message-meta {
+            display: flex;
+            gap: 16px;
+            font-size: 0.9em;
+            color: var(--terminal-cyan);
+            margin-top: 4px;
+        }
+
+        .message-content {
+            color: var(--text-color);
+            line-height: 1.8;
+            margin: 16px 0;
+            word-wrap: break-word;
+            word-break: break-word;
+        }
+
+        .message-actions {
+            display: flex;
+            gap: 16px;
+            margin-top: 16px;
+            padding-top: 16px;
+            border-top: 1px solid var(--terminal-border);
+        }
+
+        .action-button {
+            background: none;
+            border: 1px solid var(--terminal-cyan);
+            color: var(--terminal-cyan);
+            padding: 6px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-family: 'Share Tech Mono', monospace;
+            transition: all 0.2s;
+            font-size: 0.9em;
+        }
+
+        .action-button:hover {
+            background: var(--terminal-cyan);
+            color: var(--terminal-bg);
+            box-shadow: 0 0 10px rgba(0, 255, 255, 0.5);
+        }
+
+        .action-button.liked {
+            background: var(--terminal-red);
+            border-color: var(--terminal-red);
+            color: white;
+        }
+
+        /* Replies section */
+        .replies-section {
+            margin-top: 32px;
+            padding-top: 24px;
+            border-top: 2px solid var(--terminal-green);
+        }
+
+        .replies-header {
+            color: var(--terminal-green);
+            font-size: 1.2em;
+            margin-bottom: 20px;
+            font-family: 'Share Tech Mono', monospace;
+        }
+
+        .reply-item {
+            background: rgba(0, 255, 0, 0.03);
+            border-left: 3px solid var(--terminal-green);
+            padding: 16px;
+            margin-bottom: 16px;
+            border-radius: 4px;
+        }
+
+        .reply-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+
+        .reply-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            border: 2px solid var(--terminal-green);
+            background: var(--terminal-purple);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.8em;
+            font-weight: bold;
+            color: white;
+            cursor: pointer;
+        }
+
+        .reply-avatar img {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            object-fit: cover;
+        }
+
+        .reply-author {
+            font-weight: bold;
+            color: var(--terminal-green);
+            cursor: pointer;
+            text-decoration: none;
+        }
+
+        .reply-author:hover {
+            color: var(--terminal-cyan);
+        }
+
+        .reply-time {
+            font-size: 0.85em;
+            color: var(--terminal-cyan);
+        }
+
+        .reply-content {
+            color: var(--text-color);
+            line-height: 1.6;
+            margin-left: 42px;
+            word-wrap: break-word;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: var(--terminal-cyan);
+            font-size: 1.1em;
+        }
+
+        .error {
+            text-align: center;
+            padding: 40px;
+            color: var(--terminal-red);
+            font-size: 1.1em;
+        }
+
+        a {
+            color: var(--terminal-cyan);
+            text-decoration: underline;
+            transition: color 0.2s;
+        }
+
+        a:hover {
+            color: var(--terminal-green);
+            text-shadow: 0 0 5px var(--terminal-glow);
+        }
+
+        .stats {
+            display: flex;
+            gap: 20px;
+            font-size: 0.9em;
+            color: var(--terminal-purple);
+        }
+
+        .stat-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+    </style>
+    <script src="nostr.js"></script>
+</head>
+<body>
+    <canvas id="matrix" class="matrix-background"></canvas>
+    <div class="terminal-container">
+        <div class="terminal-header">
+            <div class="terminal-buttons-group">
+                <div class="terminal-button-ctrl red" onclick="window.close()" title="Fermer"></div>
+                <div class="terminal-button-ctrl yellow" onclick="window.history.back()" title="Retour"></div>
+                <div class="terminal-button-ctrl green" onclick="window.location.reload()" title="Rafraîchir"></div>
+            </div>
+            <div class="glitch" data-text="Nostr Message Viewer:~">Nostr Message Viewer:~</div>
+            <div class="terminal-buttons-group">
+                <div style="width: 20px;"></div>
+            </div>
+        </div>
+        <div class="terminal-body" id="content">
+            <div class="loading">⏳ Chargement du message...</div>
+        </div>
+    </div>
+
+    <script>
+        // Matrix effect (simplifié)
+        const canvas = document.getElementById('matrix');
+        const ctx = canvas.getContext('2d');
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        
+        const alphabet = 'アァカサタナハマヤャラワガザダバパイィキシチニヒミリヰギジヂビピウゥクスツヌフムユュルグズブヅプエェケセテネヘメレヱゲゼデベペオォコソトノホモヨョロヲゴゾドボポヴッンABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+        const fontSize = 16;
+        const columns = canvas.width / fontSize;
+        const rainDrops = Array(Math.floor(columns)).fill(1);
+
+        function drawMatrix() {
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.05)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = '#0f0';
+            ctx.font = fontSize + 'px monospace';
+            
+            for (let i = 0; i < rainDrops.length; i++) {
+                const text = alphabet.charAt(Math.floor(Math.random() * alphabet.length));
+                ctx.fillText(text, i * fontSize, rainDrops[i] * fontSize);
+                if (rainDrops[i] * fontSize > canvas.height && Math.random() > 0.975) {
+                    rainDrops[i] = 0;
+                }
+                rainDrops[i]++;
+            }
+            
+            requestAnimationFrame(drawMatrix);
+        }
+        drawMatrix();
+
+        // Utility functions
+        function getUrlParameter(name) {
+            name = name.replace(/[\[]/, '\\[').replace(/[\]]/, '\\]');
+            const regex = new RegExp('[\\?&]' + name + '=([^&#]*)');
+            const results = regex.exec(location.search);
+            return results === null ? '' : decodeURIComponent(results[1].replace(/\+/g, ' '));
+        }
+
+        async function getRelayURL() {
+            const currentUrl = new URL(window.location.href);
+            let relayName = currentUrl.hostname.replace('ipfs.', 'relay.');
+            if (currentUrl.port === '8080' || currentUrl.port !== '') {
+                return `ws://127.0.0.1:7777`;
+            }
+            return `wss://${relayName}`;
+        }
+
+        function formatRelativeTime(timestamp) {
+            const now = Math.floor(Date.now() / 1000);
+            const diff = now - timestamp;
+            
+            if (diff < 60) return 'à l\'instant';
+            if (diff < 3600) return `il y a ${Math.floor(diff / 60)} min`;
+            if (diff < 86400) return `il y a ${Math.floor(diff / 3600)}h`;
+            if (diff < 604800) return `il y a ${Math.floor(diff / 86400)}j`;
+            
+            const date = new Date(timestamp * 1000);
+            return date.toLocaleDateString('fr-FR', { 
+                day: 'numeric', 
+                month: 'short', 
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        }
+
+        function makeLinksClickable(text) {
+            const urlRegex = /(https?:\/\/[^\s<>"{}|\\^`[\]]+)/gi;
+            return text.replace(urlRegex, '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>');
+        }
+
+        function goToProfile(pubkey) {
+            window.location.href = `nostr_profile_viewer.html?hex=${pubkey}`;
+        }
+
+        // Fetch message and replies
+        async function fetchMessage(eventId, relayUrl) {
+            try {
+                const relay = nostrTools.relayInit(relayUrl);
+                await relay.connect();
+                
+                return new Promise((resolve, reject) => {
+                    const sub = relay.sub([{ ids: [eventId] }]);
+                    let message = null;
+                    
+                    const timeout = setTimeout(() => {
+                        sub.unsub();
+                        relay.close();
+                        resolve(null);
+                    }, 5000);
+
+                    sub.on('event', event => {
+                        clearTimeout(timeout);
+                        message = event;
+                        sub.unsub();
+                        relay.close();
+                        resolve(message);
+                    });
+
+                    sub.on('eose', () => {
+                        if (!message) {
+                            clearTimeout(timeout);
+                            sub.unsub();
+                            relay.close();
+                            resolve(null);
+                        }
+                    });
+
+                    relay.on('error', (err) => {
+                        clearTimeout(timeout);
+                        sub.unsub();
+                        relay.close();
+                        reject(err);
+                    });
+                });
+            } catch (error) {
+                console.error("Error fetching message:", error);
+                throw error;
+            }
+        }
+
+        async function fetchReplies(eventId, relayUrl) {
+            try {
+                const relay = nostrTools.relayInit(relayUrl);
+                await relay.connect();
+                
+                return new Promise((resolve, reject) => {
+                    const sub = relay.sub([{ 
+                        kinds: [1], 
+                        '#e': [eventId],
+                        limit: 100
+                    }]);
+                    const replies = [];
+                    
+                    const timeout = setTimeout(() => {
+                        sub.unsub();
+                        relay.close();
+                        resolve(replies.sort((a, b) => a.created_at - b.created_at));
+                    }, 5000);
+
+                    sub.on('event', event => {
+                        replies.push(event);
+                    });
+
+                    sub.on('eose', () => {
+                        clearTimeout(timeout);
+                        sub.unsub();
+                        relay.close();
+                        resolve(replies.sort((a, b) => a.created_at - b.created_at));
+                    });
+
+                    relay.on('error', (err) => {
+                        clearTimeout(timeout);
+                        sub.unsub();
+                        relay.close();
+                        reject(err);
+                    });
+                });
+            } catch (error) {
+                console.error("Error fetching replies:", error);
+                return [];
+            }
+        }
+
+        async function fetchProfile(pubkey, relayUrl) {
+            try {
+                const relay = nostrTools.relayInit(relayUrl);
+                await relay.connect();
+                
+                return new Promise((resolve) => {
+                    const sub = relay.sub([{ kinds: [0], authors: [pubkey], limit: 1 }]);
+                    let profile = null;
+                    
+                    const timeout = setTimeout(() => {
+                        sub.unsub();
+                        relay.close();
+                        resolve({});
+                    }, 3000);
+
+                    sub.on('event', event => {
+                        clearTimeout(timeout);
+                        try {
+                            profile = JSON.parse(event.content);
+                        } catch (e) {
+                            profile = {};
+                        }
+                        sub.unsub();
+                        relay.close();
+                        resolve(profile);
+                    });
+
+                    sub.on('eose', () => {
+                        if (!profile) {
+                            clearTimeout(timeout);
+                            sub.unsub();
+                            relay.close();
+                            resolve({});
+                        }
+                    });
+                });
+            } catch (error) {
+                console.error("Error fetching profile:", error);
+                return {};
+            }
+        }
+
+        // Display functions
+        function renderAuthorAvatar(profile, pubkey) {
+            if (profile.picture) {
+                return `<img src="${profile.picture}" alt="${profile.name || 'Avatar'}" onerror="this.style.display='none'">`;
+            } else {
+                const initials = (profile.name || pubkey.substring(0, 2)).substring(0, 2).toUpperCase();
+                return initials;
+            }
+        }
+
+        function renderMessage(message, profile) {
+            const timeAgo = formatRelativeTime(message.created_at);
+            const date = new Date(message.created_at * 1000);
+            const fullDate = date.toLocaleString('fr-FR');
+            const authorName = profile.name || profile.display_name || `${message.pubkey.substring(0, 8)}...`;
+            const content = makeLinksClickable(
+                message.content
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/\n/g, '<br>')
+            );
+
+            return `
+                <div class="message-container">
+                    <div class="message-header">
+                        <div class="author-avatar" onclick="goToProfile('${message.pubkey}')" title="Voir le profil">
+                            ${renderAuthorAvatar(profile, message.pubkey)}
+                        </div>
+                        <div class="author-info">
+                            <a href="nostr_profile_viewer.html?hex=${message.pubkey}" class="author-name">${authorName}</a>
+                            <div class="author-pubkey">${message.pubkey.substring(0, 16)}...</div>
+                            <div class="message-meta">
+                                <span title="${fullDate}">📅 ${timeAgo}</span>
+                                <span>🔑 ${message.id.substring(0, 8)}...</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="message-content">${content}</div>
+                    <div class="message-actions">
+                        <button class="action-button" onclick="likeMessage('${message.id}', '${message.pubkey}')">❤️ J'aime</button>
+                        <button class="action-button" onclick="replyToMessage('${message.id}')">💬 Répondre</button>
+                        <button class="action-button" onclick="copyEventId('${message.id}')">📋 Copier ID</button>
+                        <a href="nostr_profile_viewer.html?hex=${message.pubkey}" target="_blank" class="action-button" style="text-decoration: none;">👤 Profil UPlanet</a>
+                        <a href="https://njump.me/${message.pubkey}" target="_blank" class="action-button" style="text-decoration: none;">🌐 Profil externe</a>
+                        <a href="https://njump.me/${message.id}" target="_blank" class="action-button" style="text-decoration: none;">🔗 Message externe</a>
+                    </div>
+                </div>
+            `;
+        }
+
+        async function renderReply(reply, relayUrl) {
+            const profile = await fetchProfile(reply.pubkey, relayUrl);
+            const timeAgo = formatRelativeTime(reply.created_at);
+            const authorName = profile.name || profile.display_name || `${reply.pubkey.substring(0, 8)}...`;
+            const content = makeLinksClickable(
+                reply.content
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/\n/g, '<br>')
+            );
+
+            return `
+                <div class="reply-item">
+                    <div class="reply-header">
+                        <div class="reply-avatar" onclick="goToProfile('${reply.pubkey}')" title="Voir le profil">
+                            ${renderAuthorAvatar(profile, reply.pubkey)}
+                        </div>
+                        <a href="nostr_profile_viewer.html?hex=${reply.pubkey}" class="reply-author">${authorName}</a>
+                        <span class="reply-time">${timeAgo}</span>
+                    </div>
+                    <div class="reply-content">${content}</div>
+                    <div style="margin-top: 8px; display: flex; gap: 12px; font-size: 12px; opacity: 0.8; flex-wrap: wrap;">
+                        <a href="nostr_profile_viewer.html?hex=${reply.pubkey}" target="_blank" style="color: var(--terminal-cyan); text-decoration: none;">
+                            👤 Profil UPlanet
+                        </a>
+                        <a href="https://njump.me/${reply.pubkey}" target="_blank" style="color: var(--terminal-purple); text-decoration: none;">
+                            🌐 Profil externe
+                        </a>
+                        <a href="https://njump.me/${reply.id}" target="_blank" style="color: var(--terminal-orange); text-decoration: none;">
+                            🔗 Message externe
+                        </a>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Action functions
+        async function likeMessage(eventId, authorPubkey) {
+            if (!window.nostr) {
+                alert("Extension Nostr requise pour liker un message");
+                return;
+            }
+
+            try {
+                const userPubkey = await window.nostr.getPublicKey();
+                const relayUrl = await getRelayURL();
+
+                const likeEvent = {
+                    kind: 7,
+                    pubkey: userPubkey,
+                    created_at: Math.floor(Date.now() / 1000),
+                    tags: [
+                        ["e", eventId],
+                        ["p", authorPubkey]
+                    ],
+                    content: "❤️"
+                };
+
+                const signedEvent = await window.nostr.signEvent(likeEvent);
+                const relay = nostrTools.relayInit(relayUrl);
+                await relay.connect();
+                await relay.publish(signedEvent);
+                relay.close();
+
+                alert("✅ Réaction envoyée !");
+            } catch (error) {
+                console.error("Error liking message:", error);
+                alert(`Erreur : ${error.message}`);
+            }
+        }
+
+        function replyToMessage(eventId) {
+            alert("Fonctionnalité de réponse à venir...\nPour l'instant, utilisez votre client Nostr préféré.");
+        }
+
+        function copyEventId(eventId) {
+            navigator.clipboard.writeText(eventId).then(() => {
+                alert("✅ ID de l'événement copié dans le presse-papiers !");
+            }).catch(err => {
+                console.error("Error copying:", err);
+                alert("❌ Erreur lors de la copie");
+            });
+        }
+
+        // Main display function
+        async function displayMessage() {
+            const eventId = getUrlParameter('event') || getUrlParameter('id');
+            const content = document.getElementById('content');
+
+            if (!eventId) {
+                content.innerHTML = '<div class="error">❌ Aucun ID de message fourni</div>';
+                return;
+            }
+
+            try {
+                const relayUrl = await getRelayURL();
+                console.log('Fetching message:', eventId, 'from', relayUrl);
+
+                // Fetch message
+                const message = await fetchMessage(eventId, relayUrl);
+                
+                if (!message) {
+                    content.innerHTML = '<div class="error">❌ Message introuvable sur ce relay</div>';
+                    return;
+                }
+
+                // Fetch author profile
+                const profile = await fetchProfile(message.pubkey, relayUrl);
+
+                // Fetch replies
+                const replies = await fetchReplies(eventId, relayUrl);
+
+                // Render
+                let html = renderMessage(message, profile);
+
+                if (replies.length > 0) {
+                    html += `
+                        <div class="replies-section">
+                            <h2 class="replies-header">💬 Réponses (${replies.length})</h2>
+                            <div id="replies-list"></div>
+                        </div>
+                    `;
+                }
+
+                content.innerHTML = html;
+
+                // Render replies asynchronously
+                if (replies.length > 0) {
+                    const repliesList = document.getElementById('replies-list');
+                    for (const reply of replies) {
+                        const replyHtml = await renderReply(reply, relayUrl);
+                        repliesList.innerHTML += replyHtml;
+                    }
+                }
+
+            } catch (error) {
+                console.error("Error displaying message:", error);
+                content.innerHTML = `<div class="error">❌ Erreur : ${error.message}</div>`;
+            }
+        }
+
+        // Initialize
+        displayMessage();
+    </script>
+</body>
+</html>
+

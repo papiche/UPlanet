@@ -819,17 +819,45 @@ function renderComment(comment) {
         .replace(/>/g, '&gt;')
         .replace(/\n/g, '<br>');
     
+    // Create a unique ID for this comment to update it later
+    const commentId = `comment-${comment.id}`;
+    
+    // Fetch user metadata asynchronously
+    fetchUserMetadata(comment.pubkey).then(metadata => {
+        const element = document.getElementById(commentId);
+        if (element && metadata) {
+            const userName = metadata.name || metadata.display_name || displayName;
+            const userPicture = metadata.picture || null;
+            
+            // Update avatar
+            const avatarDiv = element.querySelector('.comment-avatar');
+            if (avatarDiv && userPicture) {
+                avatarDiv.innerHTML = `<img src="${userPicture}" alt="${userName}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;" onerror="this.style.display='none'; this.parentElement.innerHTML='${userName.substring(0, 2).toUpperCase()}';">`;
+            } else if (avatarDiv && userName) {
+                avatarDiv.textContent = userName.substring(0, 2).toUpperCase();
+            }
+            
+            // Update name
+            const nameLink = element.querySelector('.comment-name');
+            if (nameLink) {
+                nameLink.textContent = userName;
+            }
+        }
+    }).catch(err => {
+        console.warn('Could not fetch metadata for', comment.pubkey.substring(0, 8), err);
+    });
+    
     return `
-        <div class="comment-item" style="padding: 20px; margin-bottom: 16px; background: var(--card-bg); border-radius: 12px; border: 1px solid var(--border-color);">
+        <div class="comment-item" id="${commentId}" style="padding: 20px; margin-bottom: 16px; background: var(--card-bg); border-radius: 12px; border: 1px solid var(--border-color);">
             <div style="display: flex; align-items: flex-start; gap: 12px;">
-                <div style="width: 40px; height: 40px; border-radius: 50%; background: var(--gradient-accent); display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; flex-shrink: 0; cursor: pointer;" 
+                <div class="comment-avatar" style="width: 40px; height: 40px; border-radius: 50%; background: var(--gradient-accent); display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; flex-shrink: 0; cursor: pointer; overflow: hidden;" 
                      onclick="window.open('nostr_profile_viewer.html?hex=${comment.pubkey}', '_blank')"
                      title="Voir le profil">
                     ${displayName.substring(0, 2).toUpperCase()}
                 </div>
                 <div style="flex: 1; min-width: 0;">
                     <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px; flex-wrap: wrap;">
-                        <a href="nostr_profile_viewer.html?hex=${comment.pubkey}" target="_blank" style="font-weight: 600; color: var(--text); text-decoration: none;" title="Voir le profil">
+                        <a href="nostr_profile_viewer.html?hex=${comment.pubkey}" target="_blank" class="comment-name" style="font-weight: 600; color: var(--text); text-decoration: none;" title="Voir le profil">
                             ${displayName}...
                         </a>
                         <span class="muted" style="font-size: 14px;">${timeAgo}</span>
@@ -843,12 +871,6 @@ function renderComment(comment) {
                         </a>
                         <a href="nostr_profile_viewer.html?hex=${comment.pubkey}" target="_blank" style="color: var(--muted); text-decoration: none; display: inline-flex; align-items: center; gap: 4px;">
                             👤 Profil UPlanet
-                        </a>
-                        <a href="https://njump.me/${comment.pubkey}" target="_blank" style="color: var(--muted); text-decoration: none; display: inline-flex; align-items: center; gap: 4px;" title="Voir le profil sur njump.me">
-                            🌐 Profil externe
-                        </a>
-                        <a href="https://njump.me/${comment.id}" target="_blank" style="color: var(--muted); text-decoration: none; display: inline-flex; align-items: center; gap: 4px;" title="Voir le message sur njump.me">
-                            🔗 Message externe
                         </a>
                     </div>
                 </div>

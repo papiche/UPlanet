@@ -1,701 +1,293 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>UPlanet - Public Goods For A Better Tomorrow - 0.01° x 0.01° -  </title>
+<title>UPlanet - Public Goods For A Better Tomorrow - 0.01° x 0.01°</title>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="description" content="UPlanet - Decentralized Internet Infrastructure and Social Network Protocol">
+<meta name="keywords" content="UPlanet, decentralized, internet, social network, blockchain, Ğ1">
+<meta name="author" content="UPlanet Team">
+<meta name="robots" content="index, follow">
 <link rel="icon" type="image/x-icon" href="favicon.ring.ico">
+<link rel="preconnect" href="https://nominatim.openstreetmap.org">
+<link rel="dns-prefetch" href="https://nominatim.openstreetmap.org">
 <link rel="stylesheet" href="jquery-ui.min.css">
+<link rel="stylesheet" href="earth.css">
+<link rel="stylesheet" href="optimized-styles.css">
 
+<!-- Optimized script loading - jQuery first, then dependencies -->
 <script type="text/javascript" src="requestanimationframe.polyfill.js"></script>
-
 <script type="text/javascript" src="jquery-1.7.2.min.js"></script>
-
 <script type="text/javascript" src="jquery-ui.0.min.js"></script>
 <script type="text/javascript" src="sphere-hacked.js"></script>
-
-
 <script type="text/javascript" src="jquery.earth-3d.js"></script>
-
 <script type="text/javascript" src="world.js"></script>
-
 <script type="text/javascript" src="demo.js"></script>
-
 <script src="astro.js"></script>
 
 
 <script type="text/javascript">
 
+// Optimized URL utilities with caching
+const URL_CACHE = new Map();
+
+function getCurrentUrlInfo() {
+    const cacheKey = window.location.href;
+    if (URL_CACHE.has(cacheKey)) {
+        return URL_CACHE.get(cacheKey);
+    }
+    
+    const currentURL = new URL(window.location.href);
+    const info = {
+        hostname: currentURL.hostname,
+        port: currentURL.port,
+        protocol: currentURL.protocol.split(":")[0],
+        origin: currentURL.origin
+    };
+    
+    URL_CACHE.set(cacheKey, info);
+    return info;
+}
+
 function getStationUrl() {
-    // Extract the hostname (e.g., "https://ipfs.domain.tld" or "http://ipfs.localhost:8080")
-    var currentURL = new URL(window.location.href);
-    var hostname = currentURL.hostname;
-    var port = currentURL.port;
-    var protocol = currentURL.protocol.split(":")[0];
+    const urlInfo = getCurrentUrlInfo();
+    let port = urlInfo.port;
+    
     // Check and replace the port if it's 8080
     if (port === "8080") {
         port = "1234";
     }
-    var zHost = hostname.replace("ipfs", "astroport");
-    return protocol + "://" + zHost + (port ? (":" + port) : "");
+    
+    const zHost = urlInfo.hostname.replace("ipfs", "astroport");
+    return `${urlInfo.protocol}://${zHost}${port ? `:${port}` : ""}`;
 }
 
-function getUSPOTUrl(route) {
-        const currentUrl = new URL(window.location.href);
-        let newUrl = new URL(currentUrl.origin);
-
-        // Transformation de 'ipfs.domain.tld' en `u.domain.tld`
-        if (currentUrl.hostname.startsWith('ipfs.')) {
-            newUrl.hostname = newUrl.hostname.replace('ipfs.', 'u.');
-        }
-
-        // Changer le port en 54321 si nécessaire
-        if (currentUrl.port === '8080' || currentUrl.port !== '') {
-            newUrl.port = '54321';
-        }
-
-        return newUrl.toString() + route;
-}
-
-var station = getStationUrl();
-console.log(station);
-
-var upassport = getUSPOTUrl('');
-console.log(upassport);
-
-function go2UPassport(route, target = '_parent') {
-    const currentUrl = new URL(window.location.href);
-    let newUrl = new URL(currentUrl.origin);
+function getUSPOTUrl(route = '') {
+    const urlInfo = getCurrentUrlInfo();
+    let newUrl = new URL(urlInfo.origin);
 
     // Transformation de 'ipfs.domain.tld' en `u.domain.tld`
-    if (currentUrl.hostname.startsWith('ipfs.')) {
-        newUrl.hostname = newUrl.hostname.replace('ipfs.', 'u.');
+    if (urlInfo.hostname.startsWith('ipfs.')) {
+        newUrl.hostname = urlInfo.hostname.replace('ipfs.', 'u.');
     }
 
-    // Changer le port en 54321 si le port actuel est 8080
-    if (currentUrl.port === '8080' || currentUrl.port !== '') {
+    // Changer le port en 54321 si nécessaire
+    if (urlInfo.port === '8080' || urlInfo.port !== '') {
         newUrl.port = '54321';
     }
 
-    // Ensure proper URL construction by handling the trailing slash
-    let baseUrl = newUrl.toString();
-    if (baseUrl.endsWith('/') && route.startsWith('/')) {
-        // Remove trailing slash from baseUrl to avoid double slash
-        baseUrl = baseUrl.slice(0, -1);
-    }
-    const finalUrl = baseUrl + route;
+    return newUrl.toString() + route;
+}
 
-    if (target === '_blank') {
-        // Open in new tab/window
-        window.open(finalUrl, '_blank');
-    } else if (target === 'console') {
-        // Open in console aframe if it exists
-        const consoleFrame = document.querySelector('#aframe');
-        if (consoleFrame) {
-            consoleFrame.src = finalUrl;
-        } else {
-            // Fallback to parent if no console frame
+var station = getStationUrl();
+console.log('Station URL:', station);
+
+var upassport = getUSPOTUrl('');
+console.log('uSPOT URL:', upassport);
+
+// Debug URL construction
+console.log('Current location:', window.location.href);
+console.log('URL info:', getCurrentUrlInfo());
+
+function go2UPassport(route, target = '_parent') {
+    // Reuse optimized URL generation
+    const finalUrl = getUSPOTUrl(route);
+
+    // Optimized target handling with early returns
+    switch (target) {
+        case '_blank':
+            window.open(finalUrl, '_blank');
+            return;
+            
+        case 'console':
+            const consoleFrame = document.querySelector('#aframe');
+            if (consoleFrame) {
+                consoleFrame.src = finalUrl;
+            } else {
+                window.parent.location.href = finalUrl;
+            }
+            return;
+            
+        default:
             window.parent.location.href = finalUrl;
-        }
-    } else {
-        // Default behavior - open in parent
-        window.parent.location.href = finalUrl;
     }
 }
-    
+
+// Initialize examples object if not defined
+if (typeof examples === 'undefined') {
+    window.examples = {};
+}
+
 examples['simple_mars'] = function() {
-$('#sphere').earth3d({
-    texture: 'maps/sector0_miz.jpg', // texture used on sphere
-    dragElement: $('#locations') // where do we catch the mouse drag
+    $('#sphere').earth3d({
+        texture: 'maps/sector0_miz.jpg', // texture used on sphere
+        dragElement: $('#locations') // where do we catch the mouse drag
     });
 };
 
-// Add new function to fetch and display UPLANETG1PUB
+// Optimized function with caching and error handling
+const G1PUB_CACHE = new Map();
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+
+function generateColorFromHash(str) {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+        hash = str.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const hue = Math.abs(hash % 360);
+    return `hsl(${hue}, 70%, 50%)`;
+}
+
+function createDisplayElement() {
+    const displayElement = document.createElement('div');
+    displayElement.id = 'g1pub-display';
+    Object.assign(displayElement.style, {
+        fontSize: '24px',
+        fontWeight: 'bold',
+        textAlign: 'center',
+        textShadow: '2px 2px 4px rgba(0,0,0,0.5)'
+    });
+    return displayElement;
+}
+
+function updateAsciiArt(color) {
+    const asciiArt = document.getElementById('ascii-art');
+    if (!asciiArt) return;
+    
+    // Create wrapper link if it doesn't exist
+    if (!asciiArt.parentElement.matches('a')) {
+        const link = document.createElement('a');
+        link.href = 'https://coracle.copylaradio.com';
+        link.target = '_blank';
+        asciiArt.parentNode.insertBefore(link, asciiArt);
+        link.appendChild(asciiArt);
+    }
+    
+    Object.assign(asciiArt.style, {
+        color: color,
+        fontSize: '24px',
+        fontWeight: 'bold',
+        textShadow: '2px 2px 4px rgba(0,0,0,0.5)',
+        opacity: '1'
+    });
+}
+
 async function fetchAndDisplayUPLANETG1PUB() {
+    const cacheKey = upassport;
+    const cached = G1PUB_CACHE.get(cacheKey);
+    
+    // Return cached data if still valid
+    if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
+        displayG1PUBData(cached.data);
+        return;
+    }
+    
     try {
-        const response = await fetch(upassport);
+        console.log('Fetching from uSPOT URL:', upassport);
+        
+        const response = await fetch(upassport, {
+            headers: { 
+                'Accept': 'application/json',
+                'Content-Type': 'application/json'
+            },
+            cache: 'default',
+            mode: 'cors'
+        });
+        
+        console.log('uSPOT Response status:', response.status);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
         const data = await response.json();
+        console.log('uSPOT Data received:', data);
         
-        // Get first 8 characters of UPLANETG1PUB
-        const g1pub = data.UPLANETG1PUB.substring(0, 8);
+        // Cache the result
+        G1PUB_CACHE.set(cacheKey, {
+            data: data,
+            timestamp: Date.now()
+        });
         
-        // Create a hash of the full UPLANETG1PUB for consistent color
-        const hash = data.UPLANETG1PUB.split('').reduce((acc, char) => {
-            return char.charCodeAt(0) + ((acc << 5) - acc);
-        }, 0);
+        displayG1PUBData(data);
         
-        // Convert hash to HSL color
-        const hue = Math.abs(hash % 360);
-        const saturation = 70;
-        const lightness = 50;
-        const color = `hsl(${hue}, ${saturation}%, ${lightness}%)`;
-        
-        // Create or update the display element
-        let displayElement = document.getElementById('g1pub-display');
-        if (!displayElement) {
-            displayElement = document.createElement('div');
-            displayElement.id = 'g1pub-display';
-            displayElement.style.fontSize = '24px';
-            displayElement.style.fontWeight = 'bold';
-            displayElement.style.textAlign = 'center';
-            displayElement.style.textShadow = '2px 2px 4px rgba(0,0,0,0.5)';
-            document.getElementById('g1pub-container').appendChild(displayElement);
-        }
-        
-        // Display ORIGIN if g1pub is AwdjhpJN, otherwise display ẐEN[G1PUB]
-        displayElement.textContent = g1pub === 'AwdjhpJN' ? 'ORIGIN' : 'ẐEN[' + g1pub + ']';
-        displayElement.style.color = color;
-        
-        // Update the color of the ASCII art and add link
-        const asciiArt = document.getElementById('ascii-art');
-        if (asciiArt) {
-            // Create wrapper link if it doesn't exist
-            if (!asciiArt.parentElement.matches('a')) {
-                const link = document.createElement('a');
-                link.href = 'https://coracle.copylaradio.com';
-                link.target = '_blank';
-                asciiArt.parentNode.insertBefore(link, asciiArt);
-                link.appendChild(asciiArt);
-            }
-            
-            asciiArt.style.color = color;
-            asciiArt.style.fontSize = '24px';
-            asciiArt.style.fontWeight = 'bold';
-            asciiArt.style.textShadow = '2px 2px 4px rgba(0,0,0,0.5)';
-            
-            // Show the ASCII art with fade-in effect
-            asciiArt.style.opacity = '1';
-        }
     } catch (error) {
         console.error('Error fetching UPLANETG1PUB:', error);
-        // Show ASCII art even if there's an error, with default styling
-        const asciiArt = document.getElementById('ascii-art');
-        if (asciiArt) {
-            asciiArt.style.opacity = '1';
-            asciiArt.style.color = '#ffffff';
-        }
+        console.log('Falling back to default styling');
+        
+        // Fallback to default styling with ORIGIN
+        const fallbackData = {
+            UPLANETG1PUB: 'AwdjhpJN' // Default to ORIGIN
+        };
+        displayG1PUBData(fallbackData);
     }
 }
 
-// Call the function as soon as possible - when DOM is ready
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', fetchAndDisplayUPLANETG1PUB);
-} else {
-    // DOM is already loaded, call immediately
-    fetchAndDisplayUPLANETG1PUB();
+function displayG1PUBData(data) {
+    const g1pub = data.UPLANETG1PUB.substring(0, 8);
+    const color = generateColorFromHash(data.UPLANETG1PUB);
+    
+    // Create or update display element
+    let displayElement = document.getElementById('g1pub-display');
+    if (!displayElement) {
+        displayElement = createDisplayElement();
+        document.getElementById('g1pub-container').appendChild(displayElement);
+    }
+    
+    displayElement.textContent = g1pub === 'AwdjhpJN' ? 'ORIGIN' : `ẐEN[${g1pub}]`;
+    displayElement.style.color = color;
+    
+    updateAsciiArt(color);
 }
+
+// Safe initialization function
+function initializeUPlanet() {
+    console.log('Initializing UPlanet...');
+    
+    // Wait for jQuery to be available
+    if (typeof $ === 'undefined') {
+        console.log('jQuery not ready, retrying...');
+        setTimeout(initializeUPlanet, 100);
+        return;
+    }
+    
+    // Initialize the earth3d when DOM is ready
+    $(document).ready(function() {
+        console.log('DOM ready, initializing earth3d...');
+        
+        // Wait a bit more for all scripts to load
+        setTimeout(function() {
+            // Check if sphere element exists
+            const sphereElement = document.getElementById('sphere');
+            if (!sphereElement) {
+                console.error('Sphere element not found!');
+                return;
+            }
+            
+            // Initialize examples if needed
+            if (typeof examples !== 'undefined' && examples['simple_mars']) {
+                console.log('Initializing earth3d...');
+                try {
+                    examples['simple_mars']();
+                    console.log('earth3d initialized successfully');
+                } catch (error) {
+                    console.error('Error initializing earth3d:', error);
+                }
+            } else {
+                console.error('examples or simple_mars function not available');
+            }
+            
+            // Fetch and display G1PUB data
+            fetchAndDisplayUPLANETG1PUB();
+        }, 500); // Wait 500ms for all scripts to load
+    });
+}
+
+// Start initialization
+initializeUPlanet();
 </script>
 
-<style>
-body {
-    padding: 0;
-    margin: 0;
-    font-family: sans-serif;
-}
-
-.slidecontainer {
-    width: 80%;
-    margin: 0 auto;
-    text-align: center;
-}
-
-.gif-container {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-}
-
-.gif-container img {
-    margin: 10px;
-    max-width: 200px;
-}
-
-.slider {
-    width: 100%;
-    text-align: center;
-}
-
-.slider #prev {
-    float: left;
-    font-size: 40px;
-}
-
-.slider #next {
-    float: right;
-    font-size: 40px;
-}
-
-#glow-shadows.earth {
-    background: url(maps/earth-glow-shadows.png);
-}
-
-#glow-shadows.mars {
-    background: url(maps/mars-glow-shadows.png);
-}
-
-.flight {
-    position: absolute;
-    width: 24px;
-    height: 25px;
-    left: 10px;
-    top: 10px;
-    background: url(maps/plain.png);
-    background-size: 100% 100%;
-    margin-left: -12px;
-    margin-top: -12.5px;
-    cursor: pointer;
-}
-
-.button {
-    background-color: #3498db;
-    color: #fff;
-    padding: 10px 20px;
-    border: none;
-    cursor: pointer;
-}
-#console {
-    visibility: hidden;
-    background: rgba(0, 0, 0, 0.9);
-    color: white;
-    width: 100%;
-    height: 80%;
-    position: absolute;
-    bottom: 50px;
-    left: 0;
-    box-sizing: border-box;
-    overflow: hidden;
-    padding: 0;
-    margin: 0;
-    z-index: 999;
-}
-#aframe {
-    width: 100%;
-    height: 100%;
-    border: none;
-    margin: 0;
-    padding: 0;
-    overflow: hidden;
-}
-#addressForm {
-    text-align: center;
-    margin-top: 20px;
-}
-
-#address {
-    width: 300px;
-    padding: 10px;
-    font-size: 16px;
-    border: 2px solid #3498db;
-    border-radius: 10px;
-    outline: none;
-    transition: all 0.3s ease-in-out;
-}
-
-#address:focus {
-    border-color: #2ecc71;
-    box-shadow: 0 0 10px rgba(46, 204, 113, 0.5);
-}
-
-button {
-    background-color: #2ecc71;
-    color: white;
-    font-size: 16px;
-    padding: 10px 15px;
-    border: none;
-    border-radius: 10px;
-    cursor: pointer;
-    transition: background 0.3s ease-in-out;
-}
-
-button:hover {
-    background-color: #27ae60;
-}
-
-/* Flyover modal styles */
-#flyover-modal {
-    display: none;
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: linear-gradient(135deg, rgba(0, 0, 0, 0.95), rgba(20, 20, 40, 0.95));
-    backdrop-filter: blur(10px);
-    z-index: 99999; /* Increased z-index to be above everything */
-    overflow: auto;
-    cursor: zoom-out;
-    pointer-events: auto;
-    animation: modalFadeIn 0.4s ease-out;
-}
-
-@keyframes modalFadeIn {
-    from { opacity: 0; backdrop-filter: blur(0px); }
-    to { opacity: 1; backdrop-filter: blur(10px); }
-}
-
-#flyover-modal.hidden {
-    pointer-events: none;
-}
-
-#flyover-content {
-    position: relative;
-    width: 100%;
-    height: 100%;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    padding: 20px;
-    box-sizing: border-box;
-}
-
-#flyover-image {
-    max-width: 90%;
-    max-height: 90%;
-    width: auto;
-    height: auto;
-    cursor: zoom-in;
-    transition: all 0.3s ease;
-    object-fit: contain;
-    border-radius: 15px;
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
-    filter: brightness(1.1) contrast(1.05);
-}
-
-#flyover-image.zoomed {
-    cursor: move;
-    transform-origin: top left;
-}
-
-#flyover-close {
-    position: absolute;
-    top: 20px;
-    right: 30px;
-    color: white;
-    font-size: 40px;
-    font-weight: bold;
-    cursor: pointer;
-    z-index: 100000; /* Highest z-index for close button */
-    background: rgba(255, 255, 255, 0.1);
-    backdrop-filter: blur(10px);
-    padding: 15px;
-    border-radius: 50%;
-    width: 70px;
-    height: 70px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border: 2px solid rgba(255, 255, 255, 0.2);
-    transition: all 0.3s ease;
-}
-
-#flyover-close:hover {
-    background: rgba(255, 255, 255, 0.2);
-    transform: scale(1.1) rotate(90deg);
-    box-shadow: 0 10px 30px rgba(255, 255, 255, 0.3);
-}
-
-.flyover-trigger {
-    position: relative;
-    z-index: 1000; /* Standard z-index for triggers */
-    transition: all 0.3s ease;
-}
-
-.flyover-trigger-active {
-    z-index: 10002 !important; /* Keep active trigger visible */
-    opacity: 1 !important;
-    pointer-events: auto !important;
-}
-
-.flyover-trigger:hover {
-    transform: scale(1.05);
-    filter: brightness(1.2);
-}
-
-.flyover-trigger::after {
-    content: "ℹ️";
-    position: absolute;
-    top: -8px;
-    right: -8px;
-    background: linear-gradient(135deg, #3498db, #2ecc71);
-    color: white;
-    border-radius: 50%;
-    width: 24px;
-    height: 24px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 12px;
-    opacity: 0.8;
-    pointer-events: none;
-    transition: all 0.3s ease;
-    box-shadow: 0 4px 15px rgba(52, 152, 219, 0.4);
-    animation: pulse 2s infinite;
-}
-
-@keyframes pulse {
-    0%, 100% { transform: scale(1); }
-    50% { transform: scale(1.1); }
-}
-
-.flyover-trigger:hover::after {
-    opacity: 1;
-    transform: scale(1.2);
-    box-shadow: 0 6px 25px rgba(52, 152, 219, 0.6);
-}
-
-/* Floating action button */
-.floating-action-button {
-    position: absolute;
-    z-index: 100001; /* Higher than modal content */
-    padding: 15px 25px;
-    font-size: 24px;
-    border: none;
-    border-radius: 50px;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
-    cursor: pointer;
-    box-shadow: 0 15px 35px rgba(102, 126, 234, 0.4);
-    transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-    backdrop-filter: blur(10px);
-    border: 2px solid rgba(255, 255, 255, 0.3);
-    animation: floatIn 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-    transform-style: preserve-3d;
-}
-
-@keyframes floatIn {
-    0% { 
-        opacity: 0; 
-        transform: scale(0.3) translateY(100px) rotateX(-90deg); 
-    }
-    100% { 
-        opacity: 1; 
-        transform: scale(1) translateY(0) rotateX(0deg); 
-    }
-}
-
-.floating-action-button:hover {
-    transform: translateY(-5px) scale(1.05);
-    box-shadow: 0 25px 50px rgba(102, 126, 234, 0.6);
-    background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
-}
-
-.floating-action-button:active {
-    transform: translateY(-2px) scale(1.02);
-}
-
-.floating-action-button::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    border-radius: 50px;
-    background: linear-gradient(135deg, rgba(255,255,255,0.2), rgba(255,255,255,0.05));
-    pointer-events: none;
-}
-
-/* Button hierarchy management */
-.flyover-hidden {
-    opacity: 0.1 !important;
-    pointer-events: none !important;
-    z-index: 1 !important;
-    transition: opacity 0.3s ease !important;
-}
-
-/* Ensure main navigation buttons don't interfere */
-h1 button {
-    z-index: 1000;
-    transition: all 0.3s ease;
-}
-
-h1 button.flyover-hidden {
-    opacity: 0.05 !important;
-    transform: scale(0.9) !important;
-}
-
-/* Special handling for geo-message button */
-button[onclick*="nostr"] {
-    z-index: 1000;
-}
-
-button[onclick*="nostr"].flyover-hidden {
-    opacity: 0.05 !important;
-    transform: translateY(10px) scale(0.8) !important;
-}
-
-/* Console toggle button special treatment */
-button[onclick*="toggleConsole"] {
-    z-index: 1001; /* Slightly higher but still below modal */
-}
-
-button[onclick*="toggleConsole"].flyover-trigger-active {
-    z-index: 10002 !important;
-    box-shadow: 0 0 20px rgba(142, 68, 173, 0.8) !important;
-    transform: scale(1.1) !important;
-}
-
-/* Enhanced modal overlay */
-#flyover-modal::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: radial-gradient(circle at center, transparent 20%, rgba(0,0,0,0.3) 100%);
-    pointer-events: none;
-    z-index: 1;
-}
-
-/* Enhanced button hover effects */
-button {
-    background: linear-gradient(135deg, #2ecc71, #27ae60);
-    color: white;
-    font-size: 16px;
-    padding: 12px 18px;
-    border: none;
-    border-radius: 12px;
-    cursor: pointer;
-    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-    position: relative;
-    overflow: hidden;
-    box-shadow: 0 8px 25px rgba(46, 204, 113, 0.3);
-}
-
-button::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: -100%;
-    width: 100%;
-    height: 100%;
-    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
-    transition: left 0.5s;
-}
-
-button:hover::before {
-    left: 100%;
-}
-
-button:hover {
-    background: linear-gradient(135deg, #27ae60, #2ecc71);
-    transform: translateY(-2px) scale(1.02);
-    box-shadow: 0 12px 35px rgba(46, 204, 113, 0.4);
-}
-
-/* Mobile optimizations */
-@media (max-width: 768px) {
-    #flyover-content {
-        padding: 10px;
-    }
-    
-    #flyover-close {
-        top: 10px;
-        right: 15px;
-        font-size: 30px;
-        width: 50px;
-        height: 50px;
-    }
-    
-    #flyover-image {
-        max-width: 95%;
-        max-height: 85%;
-    }
-    
-    .floating-action-button {
-        position: fixed !important;
-        left: 50% !important;
-        bottom: 20px !important;
-        transform: translateX(-50%) !important;
-        font-size: 18px !important;
-        padding: 12px 20px !important;
-        border-radius: 25px !important;
-        min-width: 60px;
-    }
-    
-    .flyover-trigger::after {
-        width: 20px;
-        height: 20px;
-        font-size: 10px;
-        top: -6px;
-        right: -6px;
-    }
-}
-
-/* Enhanced visual effects */
-@keyframes particleEffect {
-    0% { transform: scale(1) rotate(0deg); opacity: 1; }
-    50% { transform: scale(1.3) rotate(180deg); opacity: 0.7; }
-    100% { transform: scale(1) rotate(360deg); opacity: 1; }
-}
-
-.floating-action-button:hover::after {
-    content: '✨';
-    position: absolute;
-    top: -10px;
-    right: -10px;
-    animation: particleEffect 1s infinite;
-    pointer-events: none;
-}
-
-/* Glassmorphism effect for console */
-#console {
-    visibility: hidden;
-    background: rgba(0, 0, 0, 0.85);
-    backdrop-filter: blur(15px);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    color: white;
-    width: 100%;
-    height: 80%;
-    position: absolute;
-    bottom: 50px;
-    left: 0;
-    box-sizing: border-box;
-    overflow: hidden;
-    padding: 0;
-    margin: 0;
-    z-index: 999;
-    border-radius: 15px 15px 0 0;
-    box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.3);
-}
-
-/* Enhanced button animations for console buttons */
-#console button {
-    background: rgba(255, 255, 255, 0.1);
-    backdrop-filter: blur(10px);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    color: white;
-    margin: 5px;
-    border-radius: 8px;
-    transition: all 0.3s ease;
-    position: relative;
-    overflow: hidden;
-}
-
-#console button:hover {
-    background: rgba(255, 255, 255, 0.2);
-    transform: translateY(-2px);
-    box-shadow: 0 8px 25px rgba(255, 255, 255, 0.1);
-}
-
-#console button::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: -100%;
-    width: 100%;
-    height: 100%;
-    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
-    transition: left 0.5s;
-}
-
-#console button:hover::before {
-    left: 100%;
-}
-</style>
-
-<link rel="stylesheet" href="earth.css">
+<!-- CSS moved to optimized-styles.css for better performance -->
 </head>
 
 <body>
@@ -839,40 +431,86 @@ if (sectorIPNS !== '' ) {
     document.body.appendChild(buttonContainer);
 }
 
+// Optimized geolocation with caching and better error handling
+const GEO_CACHE = new Map();
+const GEO_CACHE_DURATION = 10 * 60 * 1000; // 10 minutes
+
 function getCoordinates() {
     const addressInput = document.getElementById('address');
-    const address = addressInput.value.trim(); // Trim to remove leading/trailing spaces
+    const address = addressInput.value.trim();
 
     if (address === '') {
-        // If address is empty, proceed to retrieve geolocation
         getLocation();
-    } else {
-        // Replace spaces with '+' for the URL
-        const formattedAddress = address.replace(/ /g, '+');
+        return;
+    }
 
-        // Make a request to the Nominatim API
-        fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${formattedAddress}`)
-            .then(response => response.json())
-            .then(data => {
-                if (data.length > 0) {
-                    const latitude = (parseFloat(data[0].lat) - 0.025).toFixed(2);
-                    const longitude = (parseFloat(data[0].lon) - 0.025).toFixed(2);
-                    window.location.replace(`map_render.html?southWestLat=${latitude}&southWestLon=${longitude}&deg=0.1`);
-                } else {
-                    document.getElementById('result').innerText = 'Coordinates not found. Click on surrounding dots to zoom in.';
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                document.getElementById('result').innerText = 'An error occurred while fetching coordinates.';
+    // Check cache first
+    const cacheKey = address.toLowerCase();
+    const cached = GEO_CACHE.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < GEO_CACHE_DURATION) {
+        navigateToCoordinates(cached.lat, cached.lon);
+        return;
+    }
+
+    // Optimized API call with timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+    const formattedAddress = encodeURIComponent(address);
+    fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${formattedAddress}&limit=1`, {
+        signal: controller.signal,
+        headers: {
+            'User-Agent': 'UPlanet/1.0'
+        }
+    })
+    .then(response => {
+        clearTimeout(timeoutId);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        return response.json();
+    })
+    .then(data => {
+        if (data.length > 0) {
+            const lat = parseFloat(data[0].lat) - 0.025;
+            const lon = parseFloat(data[0].lon) - 0.025;
+            
+            // Cache the result
+            GEO_CACHE.set(cacheKey, {
+                lat: lat,
+                lon: lon,
+                timestamp: Date.now()
             });
+            
+            navigateToCoordinates(lat, lon);
+        } else {
+            showError('Coordinates not found. Click on surrounding dots to zoom in.');
+        }
+    })
+    .catch(error => {
+        clearTimeout(timeoutId);
+        console.error('Geocoding error:', error);
+        showError(error.name === 'AbortError' ? 'Request timeout. Please try again.' : 'An error occurred while fetching coordinates.');
+    });
+}
+
+function navigateToCoordinates(lat, lon) {
+    const latitude = lat.toFixed(2);
+    const longitude = lon.toFixed(2);
+    window.location.replace(`map_render.html?southWestLat=${latitude}&southWestLon=${longitude}&deg=0.1`);
+}
+
+function showError(message) {
+    const resultElement = document.getElementById('result');
+    if (resultElement) {
+        resultElement.innerText = message;
     }
 }
 
-// Add event listener for the "Enter" key
+// Optimized event listener with debouncing
+let addressInputDebounce;
 document.getElementById('address').addEventListener('keypress', function (e) {
     if (e.key === 'Enter') {
-        getCoordinates();
+        clearTimeout(addressInputDebounce);
+        addressInputDebounce = setTimeout(getCoordinates, 100);
     }
 });
 

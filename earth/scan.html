@@ -118,6 +118,44 @@
             opacity: 0.9;
         }
 
+        .countdown {
+            font-size: 3em;
+            font-weight: bold;
+            color: var(--primary-color);
+            margin: 20px 0;
+            animation: countPulse 1s ease-in-out infinite;
+        }
+
+        @keyframes countPulse {
+            0%, 100% {
+                transform: scale(1);
+            }
+            50% {
+                transform: scale(1.1);
+            }
+        }
+
+        .continue-button {
+            display: inline-block;
+            margin-top: 20px;
+            padding: 15px 30px;
+            background: var(--primary-color);
+            color: white;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 1.1em;
+            cursor: pointer;
+            border: none;
+            transition: all 0.3s;
+            box-shadow: 0 4px 12px rgba(52, 152, 219, 0.3);
+        }
+
+        .continue-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(52, 152, 219, 0.4);
+        }
+
         @media (max-width: 768px) {
             .loader-container {
                 margin: 10px;
@@ -126,6 +164,10 @@
 
             h1 {
                 font-size: 1.5em;
+            }
+
+            .countdown {
+                font-size: 2em;
             }
         }
     </style>
@@ -138,12 +180,16 @@
         
         <h1>🔍 Scanner votre MULTIPASS</h1>
         
-        <div class="loader"></div>
+        <div class="countdown" id="countdown">5</div>
         
         <div class="message">
-            <p><strong>Redirection en cours...</strong></p>
+            <p><strong>Redirection automatique dans <span id="countdown-text">5</span> secondes...</strong></p>
             <p>Vous allez être redirigé vers le scanner de QR code SSSS.</p>
         </div>
+        
+        <button class="continue-button" id="continue-button" onclick="redirectNow()">
+            ▶️ Continuer maintenant
+        </button>
 
         <div class="info-box">
             <p><strong>💡 Préparez votre MULTIPASS :</strong></p>
@@ -175,6 +221,10 @@
     <script src="common.js"></script>
     
     <script>
+        let targetUrl = '';
+        let countdownValue = 5;
+        let countdownInterval = null;
+
         // Wait for DOM and common.js to be loaded
         document.addEventListener('DOMContentLoaded', function() {
             // Ensure detectUSPOTAPI is called
@@ -186,34 +236,84 @@
             setTimeout(function() {
                 // Get the detected uSPOT URL
                 const uspotUrl = window.upassportUrl || 'https://u.copylaradio.com';
-                const targetUrl = `${uspotUrl}/scan`;
+                targetUrl = `${uspotUrl}/scan`;
 
-                console.log('Redirecting to:', targetUrl);
+                console.log('Will redirect to:', targetUrl);
 
-                // Try automatic redirection
-                try {
-                    window.location.href = targetUrl;
-                } catch (error) {
-                    console.error('Redirection error:', error);
-                    showFallback(targetUrl);
-                }
-
-                // Fallback: show manual link after 3 seconds if still on page
-                setTimeout(function() {
-                    if (window.location.href.includes('scan.html')) {
-                        showFallback(targetUrl);
-                    }
-                }, 3000);
+                // Start countdown
+                startCountdown();
             }, 500);
         });
+
+        function startCountdown() {
+            const countdownElement = document.getElementById('countdown');
+            const countdownTextElement = document.getElementById('countdown-text');
+
+            countdownInterval = setInterval(function() {
+                countdownValue--;
+                
+                if (countdownElement) {
+                    countdownElement.textContent = countdownValue;
+                }
+                if (countdownTextElement) {
+                    countdownTextElement.textContent = countdownValue;
+                }
+
+                if (countdownValue <= 0) {
+                    clearInterval(countdownInterval);
+                    redirectNow();
+                }
+            }, 1000);
+        }
+
+        function redirectNow() {
+            // Clear countdown if still running
+            if (countdownInterval) {
+                clearInterval(countdownInterval);
+            }
+
+            // Update UI
+            const countdownElement = document.getElementById('countdown');
+            const continueButton = document.getElementById('continue-button');
+            
+            if (countdownElement) {
+                countdownElement.textContent = '⏳';
+            }
+            if (continueButton) {
+                continueButton.disabled = true;
+                continueButton.textContent = '⏳ Redirection...';
+            }
+
+            console.log('Redirecting to:', targetUrl);
+
+            // Try automatic redirection
+            try {
+                window.location.href = targetUrl;
+            } catch (error) {
+                console.error('Redirection error:', error);
+                showFallback(targetUrl);
+            }
+
+            // Fallback: show manual link after 3 seconds if still on page
+            setTimeout(function() {
+                if (window.location.href.includes('scan.html')) {
+                    showFallback(targetUrl);
+                }
+            }, 3000);
+        }
 
         function showFallback(url) {
             const fallbackContainer = document.getElementById('fallback-container');
             const fallbackLink = document.getElementById('fallback-link');
+            const continueButton = document.getElementById('continue-button');
             
             if (fallbackContainer && fallbackLink) {
                 fallbackLink.href = url;
                 fallbackContainer.style.display = 'block';
+            }
+            
+            if (continueButton) {
+                continueButton.style.display = 'none';
             }
         }
     </script>

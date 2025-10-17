@@ -4,12 +4,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>🌿 uPlanet Flora Explorer - PlantNet Integration</title>
+    <!-- Common JavaScript -->
+    <script src="common.js"></script>
     <!-- Nostr integration -->
     <script src="/ipfs/QmXEmaPRUaGcvhuyeG99mHHNyP43nn8GtNeuDok8jdpG4a/nostr.bundle.js"></script>
     <!-- Leaflet CSS -->
-    <link rel="stylesheet" href="/ipns/copylaradio.com/leaflet.css"/>
+    <link rel="stylesheet" href="leaflet.css"/>
     <!-- Leaflet JavaScript -->
-    <script src="/ipns/copylaradio.com/leaflet.js"></script>
+    <script src="leaflet.js"></script>
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -1077,16 +1079,9 @@
     </div>
 
     <script>
-        // Nostr Integration Variables
-        let DEFAULT_RELAYS = [ // This will be dynamically set
-            'wss://relay.copylaradio.com',
-            'ws://127.0.0.1:7777',
-            'wss://relay.damus.io',
-            'wss://nos.lol'
-        ];
-        let nostrRelay = null;
-        let isNostrConnected = false;
-        let userPubkey = null;
+        // ========================================
+        // PLANTNET SPECIFIC VARIABLES
+        // ========================================
         let currentLocation = null;
         let selectedPhoto = null;
         
@@ -1095,82 +1090,25 @@
         let currentMessageIndex = 0;
         const MESSAGES_PER_PAGE = 20;
 
-        // Variables globales pour l'API uSPOT
-        let USPOT_API_BASE = '';
-        let USPOT_RELAY = '';
+        // Map variables
+        let miniMap;
+        let miniMarker;
+        let nearbyMarkers = [];
 
-        // Function to get API base URL (following generate_ipfs_structure.sh pattern)
-        function getAPIBaseUrl() {
-            return USPOT_API_BASE;
-        }
-
-        // Détection de l'API uSPOT et des relais par défaut
-        function detectUSPOTAPI() {
-            const currentURL = new URL(window.location.href);
-            const hostname = currentURL.hostname;
-            const port = currentURL.port;
-            const protocol = currentURL.protocol.split(":")[0];
-
-            let determinedRelay = '';
-            let apiBase = '';
-
-            if (hostname === "127.0.0.1" && port === "8080") {
-                determinedRelay = `ws://127.0.0.1:7777`;
-                apiBase = `http://127.0.0.1:54321`;
-            } else if (hostname.startsWith("ipfs.")) {
-                const baseDomain = hostname.substring("ipfs.".length);
-                determinedRelay = `wss://relay.${baseDomain}`;
-                apiBase = `https://u.${baseDomain}`;
-            } else {
-                // Fallback for other environments or if detection fails
-                determinedRelay = `wss://relay.copylaradio.com`;
-                apiBase = `https://u.copylaradio.com`;
-            }
-
-            DEFAULT_RELAYS = [determinedRelay, 'wss://relay.damus.io', 'wss://nos.lol'];
-            USPOT_API_BASE = apiBase;
-            USPOT_RELAY = determinedRelay;
-
-            console.log(`uSPOT API Base détectée: ${USPOT_API_BASE}`);
-            console.log(`Relay par défaut détecté: ${DEFAULT_RELAYS[0]}`);
-            console.log(`Gateway IPFS: ${hostname}:${port}`);
-        }
-
-        // Nostr Connection Functions
+        // ========================================
+        // NOSTR CONNECTION HANDLER (using common.js)
+        // ========================================
         async function handleNostrLogin() {
-            if (typeof window.nostr === 'undefined' || typeof window.nostr.getPublicKey !== 'function') {
-                alert("L'extension Nostr est requise pour la connexion.");
-                return;
-            }
-            
-            try {
-                console.log("Attempting to get public key from Nostr extension...");
-                const pubkey = await window.nostr.getPublicKey();
-                if (pubkey) {
-                    userPubkey = pubkey;
-                    console.log("Public key obtained:", pubkey);
-                    updateNostrUI(true);
-                    console.log("Connecting to Nostr relay after successful public key retrieval...");
-                    await connectToNostrRelay();
-                    
-                    // Load profile and messages after successful connection
-                    if (isNostrConnected) {
-                        console.log("Loading profile and messages...");
-                        await loadUserProfileAndMessages();
-                    }
-                } else {
-                    alert("Impossible de récupérer la clé publique. Autorisez l'accès dans votre extension Nostr.");
-                }
-            } catch (error) {
-                alert("La connexion a échoué. Veuillez autoriser l'accès dans votre extension Nostr.");
-                console.error("Erreur de connexion Nostr:", error);
+            const pubkey = await connectNostr(); // From common.js
+            if (pubkey) {
+                updateNostrUI(true);
+                await loadUserProfileAndMessages();
             }
         }
 
         function updateNostrUI(isLoggedIn) {
-            const loginSection = document.getElementById('nostr-login-section');
-            const messageSection = document.getElementById('nostr-message-section');
             const loginBtn = document.getElementById('nostrLoginBtn');
+            const messageSection = document.getElementById('nostr-message-section');
             const profileSection = document.getElementById('profile-section');
             
             if (isLoggedIn) {
@@ -1183,196 +1121,6 @@
                 loginBtn.style.background = '#3498db';
                 messageSection.style.display = 'none';
                 profileSection.style.display = 'none';
-            }
-        }
-
-        // Track if AUTH has been sent to avoid duplicates
-        let authSent = false;
-        
-        async function connectToNostrRelay() {
-            const NOSTRws = DEFAULT_RELAYS[0];
-            
-            if (!NOSTRws) {
-                console.error("NOSTRws is not defined. Cannot connect to relay.");
-                return;
-            }
-
-            // Check if we already have a connected relay
-            if (nostrRelay && isNostrConnected) {
-                console.log('✅ Reusing existing relay connection');
-                return;
-            }
-
-            console.log('Connecting to relay:', NOSTRws);
-            authSent = false; // Reset on new connection
-
-            try {
-                // Close existing connection if any
-                if (nostrRelay) {
-                    try {
-                        nostrRelay.close();
-                    } catch (e) {
-                        console.warn('Error closing existing relay:', e);
-                    }
-                }
-
-                nostrRelay = NostrTools.relayInit(NOSTRws);
-
-                nostrRelay.on('connect', async () => {
-                    console.log('✅ Connected to NOSTR relay:', NOSTRws);
-                    isNostrConnected = true;
-                    
-                    // Send NIP-42 authentication event once
-                    if (userPubkey && !authSent) {
-                        authSent = true;
-                        setTimeout(() => sendNIP42Auth(NOSTRws), 500);
-                    }
-                });
-
-                nostrRelay.on('error', (error) => {
-                    console.error('❌ Relay connection error:', error);
-                    isNostrConnected = false;
-                });
-
-                nostrRelay.on('disconnect', () => {
-                    console.log('🔌 Relay disconnected');
-                    isNostrConnected = false;
-                });
-
-                await nostrRelay.connect();
-                console.log('✅ Connected to NOSTR relay:', NOSTRws);
-                isNostrConnected = true;
-
-            } catch (error) {
-                console.error('Failed to connect to relay:', error);
-                isNostrConnected = false;
-                throw error;
-            }
-        }
-        
-        // Send NIP-42 authentication event using nostr-tools publish method
-        async function sendNIP42Auth(relayUrl) {
-            if (!window.nostr || !userPubkey) {
-                console.warn('Cannot send NIP-42 auth: missing nostr extension or pubkey');
-                return;
-            }
-            
-            if (!nostrRelay || !isNostrConnected) {
-                console.warn('Cannot send NIP-42 auth: relay not connected');
-                return;
-            }
-            
-            try {
-                console.log('📝 Sending NIP-42 authentication event...');
-                
-                // Create NIP-42 authentication event (kind 22242)
-                const authEvent = {
-                    kind: 22242,
-                    created_at: Math.floor(Date.now() / 1000),
-                    tags: [
-                        ['relay', relayUrl],
-                        ['challenge', 'auth-' + Date.now()]
-                    ],
-                    content: '',
-                    pubkey: userPubkey
-                };
-                
-                // Sign the event with the user's extension
-                const signedEvent = await window.nostr.signEvent(authEvent);
-                
-                if (!signedEvent || !signedEvent.id) {
-                    console.error('❌ Failed to sign NIP-42 event');
-                    return;
-                }
-                
-                console.log('✅ NIP-42 event signed:', signedEvent.id);
-                
-                // Publish the event to the relay so it gets stored
-                console.log('📤 Publishing NIP-42 event to relay...');
-                const publishPromise = nostrRelay.publish(signedEvent);
-                
-                // Add timeout for publish
-                const timeoutPromise = new Promise((_, reject) => {
-                    setTimeout(() => reject(new Error('NIP-42 publish timeout')), 10000);
-                });
-                
-                await Promise.race([publishPromise, timeoutPromise]);
-                console.log('✅ NIP-42 event published to relay:', signedEvent.id);
-                
-                // Verify the event was stored by querying it back
-                setTimeout(async () => {
-                    try {
-                        await verifyNIP42Event(signedEvent.id);
-                    } catch (verifyError) {
-                        console.warn('⚠️ Could not verify NIP-42 event:', verifyError);
-                    }
-                }, 1000);
-                
-                // Also send AUTH message for immediate authentication
-                try {
-                    let ws = null;
-                    if (nostrRelay._ws) {
-                        ws = nostrRelay._ws;
-                    } else if (nostrRelay.ws) {
-                        ws = nostrRelay.ws;
-                    } else if (nostrRelay.socket) {
-                        ws = nostrRelay.socket;
-                    }
-                    
-                    if (ws && ws.readyState === WebSocket.OPEN) {
-                        const authMessage = JSON.stringify(['AUTH', signedEvent]);
-                        ws.send(authMessage);
-                        console.log('✅ NIP-42 AUTH message sent via relay WebSocket:', signedEvent.id);
-                    }
-                } catch (authError) {
-                    console.warn('⚠️ Could not send AUTH message, but event was published:', authError);
-                }
-                
-            } catch (error) {
-                console.error('❌ Failed to send NIP-42 auth:', error);
-            }
-        }
-
-        // Verify that NIP-42 event was stored on the relay
-        async function verifyNIP42Event(eventId) {
-            if (!nostrRelay || !isNostrConnected) {
-                throw new Error('Relay not connected');
-            }
-
-            try {
-                const events = await new Promise((resolve, reject) => {
-                    const sub = nostrRelay.sub([{ kinds: [22242], ids: [eventId], limit: 1 }]);
-                    const foundEvents = [];
-                    
-                    let timeout = setTimeout(() => {
-                        sub.unsub();
-                        resolve(foundEvents);
-                    }, 5000);
-
-                    sub.on('event', (event) => {
-                        foundEvents.push(event);
-                        clearTimeout(timeout);
-                        sub.unsub();
-                        resolve(foundEvents);
-                    });
-
-                    sub.on('eose', () => {
-                        clearTimeout(timeout);
-                        sub.unsub();
-                        resolve(foundEvents);
-                    });
-                });
-
-                if (events.length > 0) {
-                    console.log('✅ NIP-42 event verified on relay:', eventId);
-                    return true;
-                } else {
-                    console.warn('⚠️ NIP-42 event not found on relay:', eventId);
-                    return false;
-                }
-            } catch (error) {
-                console.error('❌ Error verifying NIP-42 event:', error);
-                throw error;
             }
         }
 
@@ -1888,13 +1636,13 @@
                 // Get current location when photo is selected
                 getCurrentLocation();
                 
-                // Upload photo to IPFS and analyze with PlantNet
-                uploadPhotoToIPFS(file);
+                // Upload photo to IPFS using common.js
+                handleIPFSUpload(file);
             }
         }
 
-        // IPFS Upload and PlantNet Analysis
-        async function uploadPhotoToIPFS(file) {
+        // IPFS Upload (using common.js uploadPhotoToIPFS)
+        async function handleIPFSUpload(file) {
             const plantnetResult = document.getElementById('plantnetResult');
             const plantnetText = document.getElementById('plantnetText');
             
@@ -1902,142 +1650,27 @@
             plantnetText.textContent = '📤 Upload en cours...';
             
             try {
-                // Upload photo to IPFS via uSPOT API
-                const formData = new FormData();
-                formData.append('file', file);
+                // Use common.js uploadPhotoToIPFS function
+                const result = await uploadPhotoToIPFS(file); // From common.js
                 
-                // Add npub if connected to NOSTR (following generate_ipfs_structure.sh pattern)
-                console.log('DEBUG photo upload - isNostrConnected:', isNostrConnected, 'userPubkey:', userPubkey ? 'présente' : 'absente');
-                
-                if ((isNostrConnected && userPubkey) || userPubkey) {
-                    // Use the key if available, even if isNostrConnected might be false
-                    if (userPubkey.length === 64) {
-                        console.log('Ajout de la clé publique à l\'upload photo:', userPubkey);
-                        formData.append('npub', userPubkey);
+                if (result.success) {
+                    selectedPhoto.ipfsUrl = result.url;
+                    
+                    plantnetResult.style.background = '#d4edda';
+                    if (result.fileName && result.fileName !== file.name) {
+                        plantnetText.innerHTML = `✅ Photo uploadée vers IPFS<br>📝 Nom IA: <strong>${result.fileName}</strong>`;
                     } else {
-                        console.log('Clé publique invalide pour l\'upload:', userPubkey);
-                    }
-                } else {
-                    console.log('Aucune clé publique disponible pour l\'upload');
-                }
-                
-                const uploadUrl = `${getAPIBaseUrl()}/api/fileupload`;
-                console.log(`Uploading to uSPOT API: ${uploadUrl}`);
-                
-                const uploadResponse = await fetch(uploadUrl, {
-                    method: 'POST',
-                    body: formData
-                });
-                
-                if (!uploadResponse.ok) {
-                    let errorMessage = `Upload failed: ${uploadResponse.status}`;
-                    
-                    try {
-                        const errorData = await uploadResponse.json();
-                        console.error('Upload error details:', errorData);
-                        
-                        // Handle specific error codes
-                        if (uploadResponse.status === 403) {
-                            errorMessage = '🔐 Authentification NOSTR requise\n\n' +
-                                         'Veuillez vous reconnecter avec votre extension NOSTR.\n' +
-                                         'L\'événement d\'authentification (NIP-42) doit être récent (< 24h).\n\n' +
-                                         'Détails: ' + (errorData.detail || 'Auth failed');
-                            plantnetResult.style.background = '#fff3cd';
-                            
-                            // Suggestion de reconnexion
-                            console.log('🔄 Suggestion: Rafraîchissez la page et reconnectez-vous avec NOSTR');
-                        } else if (uploadResponse.status === 429) {
-                            errorMessage = '⏱️ Trop de requêtes - Attendez quelques instants';
-                            plantnetResult.style.background = '#fff3cd';
-                        } else {
-                            errorMessage = `❌ Erreur ${uploadResponse.status} - ${errorData.detail || 'Réessayez plus tard'}`;
-                            plantnetResult.style.background = '#f8d7da';
-                        }
-                    } catch (e) {
-                        // Si la réponse n'est pas du JSON
-                        const errorText = await uploadResponse.text();
-                        console.error('Upload error (text):', errorText);
-                        
-                        if (uploadResponse.status === 403) {
-                            errorMessage = '🔐 Authentification NOSTR requise - Reconnectez-vous avec votre extension NOSTR';
-                            plantnetResult.style.background = '#fff3cd';
-                        }
+                        plantnetText.textContent = '✅ Photo uploadée vers IPFS - Cliquez sur Partager...';
                     }
                     
-                    throw new Error(errorMessage);
+                    console.log('✅ Photo upload successful - IPFS URL:', result.url);
+                    console.log('✅ CID:', result.cid);
+                    console.log('✅ AI-generated filename:', result.fileName);
                 }
-                
-                const uploadResult = await uploadResponse.json();
-                console.log('Upload API response:', uploadResult);
-                
-                // Construire l'URL IPFS à partir des données du script upload2ipfs.sh
-                let imageUrl = null;
-                
-                if (uploadResult.success && uploadResult.new_cid && uploadResult.file_path) {
-                    // Construction de l'URL IPFS complète depuis le script upload2ipfs.sh
-                    const gateway = window.location.origin.includes('127.0.0.1') 
-                        ? 'http://127.0.0.1:8080' 
-                        : window.location.origin.replace('ipfs.', 'ipfs.');
-                    
-                    // Extraire le nom de fichier du chemin complet
-                    const fileName = uploadResult.file_path.split('/').pop();
-                    imageUrl = `${gateway}/ipfs/${uploadResult.new_cid}/${fileName}`;
-                    console.log('✅ Image URL construite depuis upload2ipfs.sh:', imageUrl);
-                } else if (uploadResult.nip94_event && uploadResult.nip94_event.tags) {
-                    // Fallback: chercher l'URL dans les tags NIP-94
-                    const urlTag = uploadResult.nip94_event.tags.find(tag => tag[0] === 'url');
-                    if (urlTag && urlTag[1]) {
-                        imageUrl = urlTag[1];
-                        console.log('✅ Image URL depuis NIP-94 tags:', imageUrl);
-                    }
-                } else if (uploadResult.url) {
-                    // Fallback sur url si présente
-                    imageUrl = uploadResult.url;
-                    console.log('✅ Image URL depuis response.url:', imageUrl);
-                } else if (uploadResult.ipfs_url) {
-                    // Fallback sur ipfs_url si présente
-                    imageUrl = uploadResult.ipfs_url;
-                    console.log('✅ Image URL depuis response.ipfs_url:', imageUrl);
-                }
-                
-                if (!imageUrl) {
-                    console.error('Response complète:', uploadResult);
-                    throw new Error('❌ Impossible de construire l\'URL IPFS\n\n' +
-                                  'CID: ' + (uploadResult.new_cid || 'manquant') + '\n' +
-                                  'Path: ' + (uploadResult.file_path || 'manquant') + '\n' +
-                                  'Status: ' + (uploadResult.status || 'inconnu'));
-                }
-                
-                console.log('✅ Photo uploaded to IPFS:', imageUrl);
-                
-                // Store the IPFS URL for later use in the message
-                selectedPhoto.ipfsUrl = imageUrl;
-                
-                // Extract filename from file_path
-                const aiGeneratedName = uploadResult.file_path ? uploadResult.file_path.split('/').pop() : null;
-                
-                // Update UI to show upload success with AI-generated filename
-                plantnetResult.style.background = '#d4edda';
-                if (aiGeneratedName && aiGeneratedName !== file.name) {
-                    // Show AI-generated name if it's different from original
-                    plantnetText.innerHTML = `✅ Photo uploadée vers IPFS<br>📝 Nom IA: <strong>${aiGeneratedName}</strong>`;
-                } else {
-                    plantnetText.textContent = '✅ Photo uploadée vers IPFS - Cliquez sur Partager...';
-                }
-                
-                // Log successful upload details
-                console.log('✅ Photo upload successful - IPFS URL:', imageUrl);
-                console.log('✅ CID:', uploadResult.new_cid);
-                console.log('✅ File type:', uploadResult.file_type);
-                console.log('✅ AI-generated filename:', aiGeneratedName);
-                
-                // The actual PlantNet analysis will be handled by the Nostr relay
-                // when the message is sent with #plantnet tag
-                
             } catch (error) {
                 console.error('IPFS upload error:', error);
                 plantnetResult.style.background = '#f8d7da';
-                plantnetText.innerHTML = error.message || '❌ Erreur d\'upload - Réessayez plus tard';
+                plantnetText.textContent = error.message || '❌ Erreur d\'upload - Réessayez plus tard';
             }
         }
 
@@ -2515,8 +2148,8 @@ END:VEVENT
                 mapToggle.classList.add('expanded');
                 // Reinitialize map when accordion opens
                 setTimeout(() => {
-                    const lat = currentLocation ? currentLocation.latitude : (parseFloat(document.getElementById('lat-display').value) || 48.86);
-                    const lon = currentLocation ? currentLocation.longitude : (parseFloat(document.getElementById('lon-display').value) || 2.35);
+                    const lat = currentLocation ? currentLocation.latitude : (parseFloat(document.getElementById('lat-display').value) || 0.00);
+                    const lon = currentLocation ? currentLocation.longitude : (parseFloat(document.getElementById('lon-display').value) || 0.00);
                     console.log('Reinitializing map when accordion opens:', lat, lon);
                     initializeMiniMap(lat, lon);
                 }, 100);
@@ -2667,43 +2300,7 @@ END:VEVENT
         }
         
 
-        async function fetchMessagesFromHex(hexKey) {
-            return new Promise(async (resolve, reject) => {
-                try {
-                    const relay = NostrTools.relayInit(DEFAULT_RELAYS[0]);
-                    await relay.connect();
-                    
-                    // Query the 5 most recent messages from this author without tag filtering
-                    const sub = relay.sub([{ 
-                        kinds: [1], 
-                        authors: [hexKey],
-                        limit: 5 
-                    }]);
-                    
-                    const messages = [];
-                    let timeout = setTimeout(() => {
-                        sub.unsub();
-                        relay.close();
-                        resolve(messages);
-                    }, 5000);
-                    
-                    sub.on('event', (event) => {
-                        messages.push(event);
-                    });
-                    
-                    sub.on('eose', () => {
-                        clearTimeout(timeout);
-                        sub.unsub();
-                        relay.close();
-                        resolve(messages);
-                    });
-                    
-                } catch (error) {
-                    console.error(`Failed to fetch from ${hexKey}:`, error);
-                    resolve([]);
-                }
-            });
-        }
+        // fetchMessagesFromHex - Now using common.js fetchMessagesFromHex()
         
         function displayNearbyMessagesOnMap(messages, geolinkData) {
             if (!miniMap) {
@@ -3062,75 +2659,14 @@ END:VEVENT
             nearbyMarkers = [];
         }
 
-        // Delete Message Function
-        async function deleteMessage(eventId) {
-            if (!userPubkey) {
-                alert("Vous devez être connecté pour supprimer un message.");
-                return;
-            }
-
-            if (!nostrRelay || !isNostrConnected) {
-                alert("Connexion au relay Nostr requise pour supprimer un message.");
-                return;
-            }
-
-            // Confirmation dialog
-            if (!confirm("Êtes-vous sûr de vouloir supprimer ce message ? Cette action est irréversible.")) {
-                return;
-            }
-
-            try {
-                console.log(`Deleting message: ${eventId}`);
-                
-                // Create deletion event (kind 5)
-                const deletionEvent = {
-                    kind: 5, // Deletion event
-                    created_at: Math.floor(Date.now() / 1000),
-                    tags: [
-                        ["e", eventId] // Reference to the event being deleted
-                    ],
-                    content: "Message supprimé par l'utilisateur"
-                };
-
-                // Sign the deletion event
-                let signedDeletionEvent;
-                if (window.nostr && typeof window.nostr.signEvent === 'function') {
-                    signedDeletionEvent = await window.nostr.signEvent(deletionEvent);
-                } else {
-                    throw new Error("Extension Nostr requise pour signer l'événement de suppression.");
-                }
-
-                // Publish the deletion event
-                console.log("Publishing deletion event:", signedDeletionEvent);
-                const publishPromise = nostrRelay.publish(signedDeletionEvent);
-
-                // Add timeout
-                const timeoutPromise = new Promise((_, reject) => {
-                    setTimeout(() => reject(new Error('Timeout de publication')), 10000);
-                });
-
-                await Promise.race([publishPromise, timeoutPromise]);
-
-                console.log("Message deletion event published successfully");
-                alert("🗑️ Message marqué pour suppression !");
-                
-                // Refresh the messages to show the deletion
-                if (userPubkey) {
-                    await fetchAndDisplayMessages(userPubkey);
-                }
-
-            } catch (error) {
-                alert(`Erreur lors de la suppression du message: ${error.message}`);
-                console.error("Erreur de suppression:", error);
-            }
-        }
+        // Delete Message Function - Now using common.js deleteMessage()
 
         // Initialize on load
         document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('current-year').textContent = new Date().getFullYear();
             calculateLunarCalendar();
             
-            // Détecter l'environnement et configurer les relais
+            // Use common.js detectUSPOTAPI()
             detectUSPOTAPI();
             
             // Initialize map accordion icon as expanded (since it's open by default)

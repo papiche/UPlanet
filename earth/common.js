@@ -20,9 +20,11 @@ let nostrRelay = null;
 let isNostrConnected = false;
 let userPubkey = null;
 let userPrivateKey = null;
+let authSent = false; // Track if AUTH has been sent to avoid duplicates
 
 /**
  * Détecte l'API uSPOT et les relais par défaut selon l'environnement
+ * @returns {string} L'URL de l'API uSPOT détectée
  */
 function detectUSPOTAPI() {
     const currentURL = new URL(window.location.href);
@@ -52,6 +54,16 @@ function detectUSPOTAPI() {
     console.log(`API uSPOT détectée: ${upassportUrl}`);
     console.log(`Relay par défaut: ${DEFAULT_RELAYS[0]}`);
     console.log(`Gateway IPFS: ${hostname}:${port}`);
+    
+    return upassportUrl;
+}
+
+/**
+ * Get API base URL
+ * @returns {string}
+ */
+function getAPIBaseUrl() {
+    return upassportUrl || 'https://u.copylaradio.com';
 }
 
 /**
@@ -198,6 +210,83 @@ async function connectNostr() {
 }
 
 /**
+ * Send NIP-42 authentication event using nostr-tools publish method
+ * @param {string} relayUrl - URL of the relay
+ */
+async function sendNIP42Auth(relayUrl) {
+    if (!window.nostr || !userPubkey) {
+        console.warn('Cannot send NIP-42 auth: missing nostr extension or pubkey');
+        return;
+    }
+    
+    if (!nostrRelay || !isNostrConnected) {
+        console.warn('Cannot send NIP-42 auth: relay not connected');
+        return;
+    }
+    
+    try {
+        console.log('📝 Sending NIP-42 authentication event...');
+        
+        // Create NIP-42 authentication event (kind 22242)
+        const authEvent = {
+            kind: 22242,
+            created_at: Math.floor(Date.now() / 1000),
+            tags: [
+                ['relay', relayUrl],
+                ['challenge', 'auth-' + Date.now()]
+            ],
+            content: '',
+            pubkey: userPubkey
+        };
+        
+        // Sign the event with the user's extension
+        const signedEvent = await window.nostr.signEvent(authEvent);
+        
+        if (!signedEvent || !signedEvent.id) {
+            console.error('❌ Failed to sign NIP-42 event');
+            return;
+        }
+        
+        console.log('✅ NIP-42 event signed:', signedEvent.id);
+        
+        // Publish the event to the relay
+        console.log('📤 Publishing NIP-42 event to relay...');
+        const publishPromise = nostrRelay.publish(signedEvent);
+        
+        // Add timeout for publish
+        const timeoutPromise = new Promise((_, reject) => {
+            setTimeout(() => reject(new Error('NIP-42 publish timeout')), 10000);
+        });
+        
+        await Promise.race([publishPromise, timeoutPromise]);
+        console.log('✅ NIP-42 event published to relay:', signedEvent.id);
+        
+        // Also send AUTH message for immediate authentication
+        try {
+            let ws = null;
+            if (nostrRelay._ws) {
+                ws = nostrRelay._ws;
+            } else if (nostrRelay.ws) {
+                ws = nostrRelay.ws;
+            } else if (nostrRelay.socket) {
+                ws = nostrRelay.socket;
+            }
+            
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                const authMessage = JSON.stringify(['AUTH', signedEvent]);
+                ws.send(authMessage);
+                console.log('✅ NIP-42 AUTH message sent via relay WebSocket:', signedEvent.id);
+            }
+        } catch (authError) {
+            console.warn('⚠️ Could not send AUTH message, but event was published:', authError);
+        }
+        
+    } catch (error) {
+        console.error('❌ Failed to send NIP-42 auth:', error);
+    }
+}
+
+/**
  * Connexion au relay Nostr
  */
 async function connectToRelay() {
@@ -213,19 +302,47 @@ async function connectToRelay() {
         return false;
     }
 
+    // Check if we already have a connected relay
+    if (nostrRelay && isNostrConnected) {
+        console.log('✅ Reusing existing relay connection');
+        return true;
+    }
+
     console.log(`🔌 Connexion au relay: ${NOSTRws}`);
+    authSent = false; // Reset on new connection
 
     try {
+        // Close existing connection if any
+        if (nostrRelay) {
+            try {
+                nostrRelay.close();
+            } catch (e) {
+                console.warn('Error closing existing relay:', e);
+            }
+        }
+
         nostrRelay = NostrTools.relayInit(NOSTRws);
 
-        nostrRelay.on('connect', () => {
+        nostrRelay.on('connect', async () => {
             console.log(`✅ Connecté au relay: ${NOSTRws}`);
             isNostrConnected = true;
+            
+            // Send NIP-42 authentication event once
+            if (userPubkey && !authSent) {
+                authSent = true;
+                setTimeout(() => sendNIP42Auth(NOSTRws), 500);
+            }
         });
 
         nostrRelay.on('error', (error) => {
             console.error('❌ Erreur de connexion au relay:', error);
             isNostrConnected = false;
+        });
+
+        nostrRelay.on('disconnect', () => {
+            console.log('🔌 Relay disconnected');
+            isNostrConnected = false;
+            authSent = false;
         });
 
         nostrRelay.on('auth', async (challenge) => {
@@ -822,8 +939,225 @@ function createCommentsSection(position = 'before-footer') {
     displayComments();
 }
 
+/**
+ * Fetch and display messages with navigation
+ * @param {string} pubkey - Public key of the author
+ * @param {number} limit - Number of messages to fetch
+ * @returns {Promise<Array>} Array of messages
+ */
+async function fetchMessages(pubkey, limit = 20) {
+    console.log(`Fetching messages for ${pubkey.substring(0, 10)}...`);
+    
+    try {
+        const relay = NostrTools.relayInit(DEFAULT_RELAYS[0]);
+        await relay.connect();
+        
+        const events = await new Promise((resolve, reject) => {
+            const sub = relay.sub([{ kinds: [1], authors: [pubkey], limit }]);
+            const messages = [];
+            
+            let timeout = setTimeout(() => {
+                sub.unsub();
+                relay.close();
+                resolve(messages.sort((a,b) => b.created_at - a.created_at));
+            }, 10000);
+
+            sub.on('event', (event) => {
+                messages.push(event);
+            });
+
+            sub.on('eose', () => {
+                clearTimeout(timeout);
+                sub.unsub();
+                relay.close();
+                resolve(messages.sort((a,b) => b.created_at - a.created_at));
+            });
+        });
+
+        return events;
+    } catch (error) {
+        console.error('Error fetching messages:', error);
+        return [];
+    }
+}
+
+/**
+ * Fetch messages from a specific hex key
+ * @param {string} hexKey - Hex public key
+ * @param {number} limit - Number of messages to fetch
+ * @returns {Promise<Array>}
+ */
+async function fetchMessagesFromHex(hexKey, limit = 5) {
+    return new Promise(async (resolve) => {
+        try {
+            const relay = NostrTools.relayInit(DEFAULT_RELAYS[0]);
+            await relay.connect();
+            
+            const sub = relay.sub([{ 
+                kinds: [1], 
+                authors: [hexKey],
+                limit 
+            }]);
+            
+            const messages = [];
+            let timeout = setTimeout(() => {
+                sub.unsub();
+                relay.close();
+                resolve(messages);
+            }, 5000);
+            
+            sub.on('event', (event) => {
+                messages.push(event);
+            });
+            
+            sub.on('eose', () => {
+                clearTimeout(timeout);
+                sub.unsub();
+                relay.close();
+                resolve(messages);
+            });
+            
+        } catch (error) {
+            console.error(`Failed to fetch from ${hexKey}:`, error);
+            resolve([]);
+        }
+    });
+}
+
+/**
+ * Delete a message (kind 5 deletion event)
+ * @param {string} eventId - Event ID to delete
+ * @returns {Promise<boolean>}
+ */
+async function deleteMessage(eventId) {
+    if (!userPubkey) {
+        alert("You must be logged in to delete a message.");
+        return false;
+    }
+
+    if (!nostrRelay || !isNostrConnected) {
+        alert("Nostr relay connection required to delete a message.");
+        return false;
+    }
+
+    // Confirmation dialog
+    if (!confirm("Are you sure you want to delete this message? This action is irreversible.")) {
+        return false;
+    }
+
+    try {
+        console.log(`Deleting message: ${eventId}`);
+        
+        // Create deletion event (kind 5)
+        const deletionEvent = {
+            kind: 5, // Deletion event
+            created_at: Math.floor(Date.now() / 1000),
+            tags: [
+                ["e", eventId] // Reference to the event being deleted
+            ],
+            content: "Message deleted by user"
+        };
+
+        // Sign the deletion event
+        let signedDeletionEvent;
+        if (window.nostr && typeof window.nostr.signEvent === 'function') {
+            signedDeletionEvent = await window.nostr.signEvent(deletionEvent);
+        } else {
+            throw new Error("Nostr extension required to sign deletion event.");
+        }
+
+        // Publish the deletion event
+        console.log("Publishing deletion event:", signedDeletionEvent);
+        const publishPromise = nostrRelay.publish(signedDeletionEvent);
+
+        // Add timeout
+        const timeoutPromise = new Promise((_, reject) => {
+            setTimeout(() => reject(new Error('Publish timeout')), 10000);
+        });
+
+        await Promise.race([publishPromise, timeoutPromise]);
+
+        console.log("Message deletion event published successfully");
+        alert("🗑️ Message marked for deletion!");
+        
+        return true;
+
+    } catch (error) {
+        alert(`Error deleting message: ${error.message}`);
+        console.error("Deletion error:", error);
+        return false;
+    }
+}
+
+/**
+ * Upload photo to IPFS via uSPOT API
+ * @param {File} file - Photo file to upload
+ * @returns {Promise<object>} Upload result with IPFS URL
+ */
+async function uploadPhotoToIPFS(file) {
+    try {
+        const formData = new FormData();
+        formData.append('file', file);
+        
+        // Add npub if connected to NOSTR
+        if (userPubkey && userPubkey.length === 64) {
+            console.log('Adding public key to photo upload:', userPubkey);
+            formData.append('npub', userPubkey);
+        }
+        
+        const uploadUrl = `${getAPIBaseUrl()}/api/fileupload`;
+        console.log(`Uploading to uSPOT API: ${uploadUrl}`);
+        
+        const uploadResponse = await fetch(uploadUrl, {
+            method: 'POST',
+            body: formData
+        });
+        
+        if (!uploadResponse.ok) {
+            const errorData = await uploadResponse.json().catch(() => ({}));
+            throw new Error(errorData.detail || `Upload failed: ${uploadResponse.status}`);
+        }
+        
+        const uploadResult = await uploadResponse.json();
+        console.log('Upload API response:', uploadResult);
+        
+        // Build IPFS URL
+        let imageUrl = null;
+        
+        if (uploadResult.success && uploadResult.new_cid && uploadResult.file_path) {
+            const gateway = window.location.origin.includes('127.0.0.1') 
+                ? 'http://127.0.0.1:8080' 
+                : window.location.origin;
+            
+            const fileName = uploadResult.file_path.split('/').pop();
+            imageUrl = `${gateway}/ipfs/${uploadResult.new_cid}/${fileName}`;
+            console.log('✅ Image URL from upload2ipfs.sh:', imageUrl);
+        } else if (uploadResult.nip94_event && uploadResult.nip94_event.tags) {
+            const urlTag = uploadResult.nip94_event.tags.find(tag => tag[0] === 'url');
+            if (urlTag && urlTag[1]) {
+                imageUrl = urlTag[1];
+            }
+        }
+        
+        if (!imageUrl) {
+            throw new Error('Unable to build IPFS URL');
+        }
+        
+        return {
+            success: true,
+            url: imageUrl,
+            cid: uploadResult.new_cid,
+            fileName: uploadResult.file_path ? uploadResult.file_path.split('/').pop() : null
+        };
+        
+    } catch (error) {
+        console.error('IPFS upload error:', error);
+        throw error;
+    }
+}
+
 // ========================================
-// INITIALISATION
+// EXPORTS FOR BACKWARD COMPATIBILITY
 // ========================================
 
 /**

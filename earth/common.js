@@ -1739,3 +1739,520 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
+// ========================================
+// MULTIPASS PAYMENT FUNCTIONS
+// ========================================
+
+/**
+ * Initialize MULTIPASS payment terminal with NOSTR authentication
+ * @param {string} userEmail - User email for authentication
+ * @param {Object} options - Payment options
+ */
+function initMultipassPayment(userEmail, options = {}) {
+    const defaultOptions = {
+        enableNostr: true,
+        autoConnect: false,
+        requireAuth: true
+    };
+
+    const config = { ...defaultOptions, ...options };
+
+    console.log('💳 Initializing MULTIPASS payment terminal with NOSTR support');
+
+    return {
+        connectNostr: () => connectToNostrForPayment(userEmail, config),
+        sendPayment: (amount, destination, source, userPubkey) => sendMultipassPayment(amount, destination, source, userEmail, userPubkey),
+        verifyPayment: (transactionId) => verifyMultipassPayment(transactionId),
+        getBalance: (g1Address) => getMultipassBalance(g1Address)
+    };
+}
+
+/**
+ * Connect to NOSTR for payment authentication
+ * @param {string} userEmail - User email
+ * @param {Object} config - Configuration options
+ */
+async function connectToNostrForPayment(userEmail, config) {
+    try {
+        console.log('🔐 Connecting to NOSTR for payment authentication');
+        
+        // Get NOSTR public key
+        const pubkey = await window.nostr.getPublicKey();
+        
+        // Connect to relay
+        await connectToRelay();
+        
+        // Send NIP-42 auth
+        await sendNIP42Auth(DEFAULT_RELAYS[0]);
+        
+        // Publish payment authentication event
+        await publishPaymentAuthEvent(pubkey, userEmail);
+        
+        return {
+            success: true,
+            pubkey: pubkey,
+            message: 'NOSTR authentication successful for payments'
+        };
+        
+    } catch (error) {
+        console.error('NOSTR payment authentication failed:', error);
+        return {
+            success: false,
+            error: error.message
+        };
+    }
+}
+
+/**
+ * Send MULTIPASS payment with NOSTR authentication
+ * @param {number} amount - Payment amount in ẐEN
+ * @param {string} destination - Destination G1 address
+ * @param {string} source - Source G1 address
+ * @param {string} userEmail - User email
+ * @param {string} userPubkey - User's NOSTR public key
+ */
+async function sendMultipassPayment(amount, destination, source, userEmail, userPubkey) {
+    try {
+        console.log(`💸 Sending MULTIPASS payment: ${amount} ẐEN from ${source} to ${destination}`);
+        
+        // Prepare payment data
+        const paymentData = {
+            zen: amount,
+            g1dest: destination,
+            g1source: source,
+            user: userEmail,
+            timestamp: Date.now()
+        };
+        
+        // Send payment to server using FormData (as expected by /zen_send)
+        const formData = new FormData();
+        formData.append('zen', amount.toString());
+        formData.append('g1dest', destination);
+        formData.append('g1source', source);
+        formData.append('npub', userPubkey); // Add NOSTR pubkey for authentication
+        
+        const response = await fetch('/zen_send', {
+            method: 'POST',
+            body: formData
+        });
+        
+        if (!response.ok) {
+            throw new Error(`Payment failed: ${response.status} ${response.statusText}`);
+        }
+        
+        const result = await response.text();
+        
+        // Try to parse JSON response
+        let jsonResult = null;
+        try {
+            jsonResult = JSON.parse(result);
+        } catch (e) {
+            console.warn('Response is not JSON, treating as text:', result);
+        }
+        
+        // Check if payment was successful
+        if (jsonResult && jsonResult.ok === false) {
+            throw new Error(jsonResult.error || 'Payment failed');
+        }
+        
+        // Publish payment event to NOSTR
+        await publishPaymentEvent(paymentData, result);
+        
+        return {
+            success: true,
+            result: result,
+            jsonResult: jsonResult,
+            transactionId: extractTransactionId(result)
+        };
+        
+    } catch (error) {
+        console.error('MULTIPASS payment failed:', error);
+        return {
+            success: false,
+            error: error.message
+        };
+    }
+}
+
+/**
+ * Publish payment authentication event to NOSTR
+ * @param {string} pubkey - User's NOSTR public key
+ * @param {string} userEmail - User email
+ */
+async function publishPaymentAuthEvent(pubkey, userEmail) {
+    try {
+        const content = `🔐 Payment authentication for ${userEmail}`;
+        const tags = [
+            ['t', 'PaymentAuth'],
+            ['t', 'MULTIPASS'],
+            ['p', pubkey],
+            ['client', 'MULTIPASS-Payment-Terminal']
+        ];
+        
+        const event = {
+            kind: 1,
+            content: content,
+            tags: tags,
+            created_at: Math.floor(Date.now() / 1000)
+        };
+        
+        await publishEvent(event);
+        console.log('✅ Payment authentication event published');
+        
+    } catch (error) {
+        console.error('Failed to publish payment auth event:', error);
+    }
+}
+
+/**
+ * Publish payment event to NOSTR
+ * @param {Object} paymentData - Payment data
+ * @param {string} result - Payment result
+ */
+async function publishPaymentEvent(paymentData, result) {
+    try {
+        const content = `💸 MULTIPASS Payment: ${paymentData.zen} ẐEN from ${paymentData.g1source} to ${paymentData.g1dest}`;
+        const tags = [
+            ['t', 'Payment'],
+            ['t', 'MULTIPASS'],
+            ['amount', paymentData.zen.toString()],
+            ['source', paymentData.g1source],
+            ['destination', paymentData.g1dest],
+            ['client', 'MULTIPASS-Payment-Terminal']
+        ];
+        
+        const event = {
+            kind: 1,
+            content: content,
+            tags: tags,
+            created_at: Math.floor(Date.now() / 1000)
+        };
+        
+        await publishEvent(event);
+        console.log('✅ Payment event published to NOSTR');
+        
+    } catch (error) {
+        console.error('Failed to publish payment event:', error);
+    }
+}
+
+/**
+ * Verify MULTIPASS payment status
+ * @param {string} transactionId - Transaction ID to verify
+ */
+async function verifyMultipassPayment(transactionId) {
+    try {
+        console.log(`🔍 Verifying payment transaction: ${transactionId}`);
+        
+        // Query NOSTR for payment events
+        const filter = {
+            kinds: [1],
+            '#t': ['Payment'],
+            since: Math.floor(Date.now() / 1000) - 3600 // Last hour
+        };
+        
+        const events = await queryEvents(filter);
+        const paymentEvent = events.find(event => 
+            event.tags.some(tag => tag[0] === 'transaction' && tag[1] === transactionId)
+        );
+        
+        return {
+            found: !!paymentEvent,
+            event: paymentEvent,
+            status: paymentEvent ? 'confirmed' : 'not_found'
+        };
+        
+    } catch (error) {
+        console.error('Payment verification failed:', error);
+        return {
+            found: false,
+            error: error.message
+        };
+    }
+}
+
+/**
+ * Get MULTIPASS balance for G1 address
+ * @param {string} g1Address - G1 address to check
+ */
+async function getMultipassBalance(g1Address) {
+    try {
+        console.log(`💰 Getting balance for G1 address: ${g1Address}`);
+        
+        const response = await fetch(`/api/balance/${g1Address}`);
+        if (!response.ok) {
+            throw new Error(`Balance check failed: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        return {
+            success: true,
+            balance: data.balance,
+            zen: data.zen
+        };
+        
+    } catch (error) {
+        console.error('Balance check failed:', error);
+        return {
+            success: false,
+            error: error.message
+        };
+    }
+}
+
+/**
+ * Extract transaction ID from payment result
+ * @param {string} result - Payment result HTML/text
+ */
+function extractTransactionId(result) {
+    // Try to extract transaction ID from result
+    const match = result.match(/transaction[:\s]+([a-f0-9-]+)/i);
+    return match ? match[1] : null;
+}
+
+// ========================================
+// NOSTR REACTION FUNCTIONS (KIND 7)
+// ========================================
+
+/**
+ * Send a like reaction (kind 7) to a NOSTR event
+ * @param {string} eventId - ID of the event to react to
+ * @param {string} authorPubkey - Public key of the event author
+ * @param {string} content - Reaction content (default: "+")
+ * @returns {Promise<object|null>} The published reaction event or null on error
+ */
+async function sendLike(eventId, authorPubkey, content = "+") {
+    if (!userPubkey) {
+        alert("❌ Vous devez être connecté pour envoyer un like.");
+        return null;
+    }
+
+    if (!isNostrConnected) {
+        alert("❌ Connexion au relay en cours...");
+        await connectToRelay();
+        if (!isNostrConnected) {
+            alert("❌ Impossible de se connecter au relay.");
+            return null;
+        }
+    }
+
+    try {
+        console.log(`👍 Sending like reaction to event: ${eventId}`);
+        
+        const reactionEvent = {
+            kind: 7, // Reaction event
+            created_at: Math.floor(Date.now() / 1000),
+            tags: [
+                ['e', eventId, '', 'reply'], // Reference to the event being reacted to
+                ['p', authorPubkey] // Reference to the author of the original event
+            ],
+            content: content
+        };
+
+        console.log("👍 Création de la réaction:", reactionEvent);
+
+        let signedEvent;
+        if (window.nostr && typeof window.nostr.signEvent === 'function') {
+            signedEvent = await window.nostr.signEvent(reactionEvent);
+        } else if (userPrivateKey) {
+            signedEvent = NostrTools.finishEvent(reactionEvent, userPrivateKey);
+        } else {
+            throw new Error("Aucune méthode de signature disponible");
+        }
+
+        console.log("✍️ Réaction signée:", signedEvent);
+
+        // Publication avec timeout
+        const publishPromise = nostrRelay.publish(signedEvent);
+        const timeoutPromise = new Promise((_, reject) => {
+            setTimeout(() => reject(new Error('Timeout de publication')), 5000);
+        });
+
+        await Promise.race([publishPromise, timeoutPromise]);
+
+        console.log("✅ Like envoyé avec succès:", signedEvent.id);
+        return signedEvent;
+    } catch (error) {
+        console.error("❌ Erreur lors de l'envoi du like:", error);
+        alert(`Erreur: ${error.message}`);
+        return null;
+    }
+}
+
+/**
+ * Send a dislike reaction (kind 7) to a NOSTR event
+ * @param {string} eventId - ID of the event to react to
+ * @param {string} authorPubkey - Public key of the event author
+ * @returns {Promise<object|null>} The published reaction event or null on error
+ */
+async function sendDislike(eventId, authorPubkey) {
+    return await sendLike(eventId, authorPubkey, "-");
+}
+
+/**
+ * Send a custom reaction (kind 7) to a NOSTR event
+ * @param {string} eventId - ID of the event to react to
+ * @param {string} authorPubkey - Public key of the event author
+ * @param {string} emoji - Custom emoji or text for the reaction
+ * @returns {Promise<object|null>} The published reaction event or null on error
+ */
+async function sendCustomReaction(eventId, authorPubkey, emoji) {
+    return await sendLike(eventId, authorPubkey, emoji);
+}
+
+/**
+ * Fetch reactions for a specific event
+ * @param {string} eventId - ID of the event to get reactions for
+ * @param {number} limit - Maximum number of reactions to fetch
+ * @returns {Promise<Array>} Array of reaction events
+ */
+async function fetchReactions(eventId, limit = 50) {
+    if (!isNostrConnected) {
+        console.log('🔌 Connexion au relay pour récupérer les réactions...');
+        await connectToRelay();
+    }
+
+    if (!nostrRelay || !isNostrConnected) {
+        console.error('❌ Impossible de se connecter au relay');
+        return [];
+    }
+
+    try {
+        console.log(`📥 Récupération des réactions pour: ${eventId}`);
+        
+        const filter = {
+            kinds: [7], // Reaction events
+            '#e': [eventId], // Reactions to this specific event
+            limit: limit
+        };
+
+        const reactions = [];
+        
+        return new Promise((resolve) => {
+            const sub = nostrRelay.sub([filter]);
+            
+            // Timeout de 5 secondes pour la récupération
+            const timeout = setTimeout(() => {
+                sub.unsub();
+                console.log(`✅ ${reactions.length} réaction(s) récupérée(s)`);
+                resolve(reactions.sort((a, b) => b.created_at - a.created_at)); // Plus récent en premier
+            }, 5000);
+
+            sub.on('event', (event) => {
+                reactions.push(event);
+            });
+
+            sub.on('eose', () => {
+                clearTimeout(timeout);
+                sub.unsub();
+                console.log(`✅ ${reactions.length} réaction(s) récupérée(s)`);
+                resolve(reactions.sort((a, b) => b.created_at - a.created_at));
+            });
+        });
+    } catch (error) {
+        console.error('❌ Erreur lors de la récupération des réactions:', error);
+        return [];
+    }
+}
+
+/**
+ * Get reaction statistics for an event
+ * @param {string} eventId - ID of the event to analyze
+ * @returns {Promise<object>} Statistics object with counts by reaction type
+ */
+async function getReactionStats(eventId) {
+    const reactions = await fetchReactions(eventId);
+    
+    const stats = {
+        total: reactions.length,
+        likes: 0,
+        dislikes: 0,
+        custom: {},
+        byUser: {}
+    };
+    
+    reactions.forEach(reaction => {
+        const content = reaction.content || "+";
+        const user = reaction.pubkey;
+        
+        // Count by reaction type
+        if (content === "+") {
+            stats.likes++;
+        } else if (content === "-") {
+            stats.dislikes++;
+        } else {
+            stats.custom[content] = (stats.custom[content] || 0) + 1;
+        }
+        
+        // Count by user
+        stats.byUser[user] = (stats.byUser[user] || 0) + 1;
+    });
+    
+    return stats;
+}
+
+/**
+ * Create a like button for a specific event
+ * @param {string} eventId - ID of the event to react to
+ * @param {string} authorPubkey - Public key of the event author
+ * @param {string} containerId - ID of the container to insert the button
+ */
+function createLikeButton(eventId, authorPubkey, containerId = 'like-container') {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+
+    const button = document.createElement('button');
+    button.className = 'btn btn-ghost like-button';
+    button.innerHTML = '👍 Like';
+    button.onclick = async () => {
+        if (!userPubkey) {
+            await connectNostr();
+        }
+        if (userPubkey) {
+            const result = await sendLike(eventId, authorPubkey);
+            if (result) {
+                button.innerHTML = '✅ Liked!';
+                button.disabled = true;
+                // Refresh reaction stats
+                setTimeout(() => updateReactionDisplay(eventId, containerId), 1000);
+            }
+        }
+    };
+
+    container.appendChild(button);
+}
+
+/**
+ * Update reaction display for an event
+ * @param {string} eventId - ID of the event
+ * @param {string} containerId - ID of the container
+ */
+async function updateReactionDisplay(eventId, containerId) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+
+    const stats = await getReactionStats(eventId);
+    
+    const statsHtml = `
+        <div class="reaction-stats">
+            <span class="reaction-count">👍 ${stats.likes}</span>
+            <span class="reaction-count">👎 ${stats.dislikes}</span>
+            ${Object.entries(stats.custom).map(([emoji, count]) => 
+                `<span class="reaction-count">${emoji} ${count}</span>`
+            ).join('')}
+            <span class="total-reactions">Total: ${stats.total}</span>
+        </div>
+    `;
+    
+    // Update or create stats display
+    let statsDiv = container.querySelector('.reaction-stats');
+    if (statsDiv) {
+        statsDiv.innerHTML = statsHtml;
+    } else {
+        statsDiv = document.createElement('div');
+        statsDiv.className = 'reaction-stats';
+        statsDiv.innerHTML = statsHtml;
+        container.appendChild(statsDiv);
+    }
+}
+

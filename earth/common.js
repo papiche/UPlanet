@@ -677,6 +677,219 @@ async function fetchUserMetadata(pubkey) {
     }
 }
 
+/**
+ * Fetch user email from NOSTR DID document (kind 30311)
+ * @param {string} pubkey - Public key of the user
+ * @returns {Promise<string|null>} User email or null if not found
+ */
+async function fetchUserEmailFromDID(pubkey) {
+    if (!isNostrConnected) {
+        await connectToRelay();
+    }
+
+    if (!nostrRelay || !isNostrConnected) {
+        return null;
+    }
+
+    try {
+        console.log(`📧 Fetching user email from DID document for: ${pubkey.substring(0, 8)}...`);
+        
+        const filter = {
+            kinds: [30311], // DID document events
+            authors: [pubkey],
+            '#d': ['did'], // DID tag identifier
+            limit: 1
+        };
+
+        return new Promise((resolve) => {
+            const sub = nostrRelay.sub([filter]);
+            let didDocument = null;
+
+            const timeout = setTimeout(() => {
+                sub.unsub();
+                if (didDocument) {
+                    try {
+                        const didData = JSON.parse(didDocument.content);
+                        const email = didData.metadata?.email || null;
+                        console.log(`✅ Email found in DID: ${email || 'not found'}`);
+                        resolve(email);
+                    } catch (e) {
+                        console.error('Error parsing DID document:', e);
+                        resolve(null);
+                    }
+                } else {
+                    console.log('⚠️ No DID document found');
+                    resolve(null);
+                }
+            }, 5000);
+
+            sub.on('event', (event) => {
+                console.log(`📄 DID document found: ${event.id}`);
+                didDocument = event;
+            });
+
+            sub.on('eose', () => {
+                clearTimeout(timeout);
+                sub.unsub();
+                if (didDocument) {
+                    try {
+                        const didData = JSON.parse(didDocument.content);
+                        const email = didData.metadata?.email || null;
+                        console.log(`✅ Email found in DID: ${email || 'not found'}`);
+                        resolve(email);
+                    } catch (e) {
+                        console.error('Error parsing DID document:', e);
+                        resolve(null);
+                    }
+                } else {
+                    console.log('⚠️ No DID document found');
+                    resolve(null);
+                }
+            });
+        });
+    } catch (error) {
+        console.error('❌ Error fetching DID document:', error);
+        return null;
+    }
+}
+
+/**
+ * Fetch user email with fallback strategy (DID -> Metadata -> Pubkey)
+ * @param {string} pubkey - Public key of the user
+ * @returns {Promise<string>} User email or pubkey as fallback
+ */
+async function fetchUserEmailWithFallback(pubkey) {
+    try {
+        // Strategy 1: Try DID document first (most reliable)
+        console.log('🔍 Strategy 1: Checking DID document...');
+        const didEmail = await fetchUserEmailFromDID(pubkey);
+        if (didEmail) {
+            console.log('✅ Email found in DID document:', didEmail);
+            return didEmail;
+        }
+
+        // Strategy 2: Try metadata (kind 0)
+        console.log('🔍 Strategy 2: Checking user metadata...');
+        const metadata = await fetchUserMetadata(pubkey);
+        if (metadata && metadata.email) {
+            console.log('✅ Email found in metadata:', metadata.email);
+            return metadata.email;
+        }
+
+        // Strategy 3: Fallback to pubkey
+        console.log('⚠️ No email found, using pubkey as fallback');
+        return pubkey;
+
+    } catch (error) {
+        console.error('❌ Error in email fetch strategy:', error);
+        return pubkey; // Fallback to pubkey
+    }
+}
+
+/**
+ * Create a basic DID document for a user (if they don't have one)
+ * @param {string} pubkey - Public key of the user
+ * @param {string} email - User email
+ * @returns {Promise<object|null>} Created DID document or null on error
+ */
+async function createBasicDIDDocument(pubkey, email) {
+    if (!isNostrConnected) {
+        await connectToRelay();
+    }
+
+    if (!nostrRelay || !isNostrConnected) {
+        return null;
+    }
+
+    try {
+        console.log(`📝 Creating basic DID document for: ${email}`);
+        
+        // Convert pubkey to hex for DID Nostr spec
+        const hexPubkey = pubkey; // Assuming pubkey is already in hex format
+        
+        // Generate DID ID based on hex pubkey (DID Nostr spec)
+        const didId = `did:nostr:${hexPubkey}`;
+        
+        // Create Multikey verification method (DID Nostr spec)
+        const multikeyPubkey = `fe70102${hexPubkey}`;
+        
+        // Create basic DID structure compliant with DID Nostr spec
+        const didDocument = {
+            "@context": [
+                "https://w3id.org/did/v1",
+                "https://w3id.org/nostr/context"
+            ],
+            "id": didId,
+            "type": "DIDNostr",
+            "verificationMethod": [
+                {
+                    "id": `${didId}#key1`,
+                    "type": "Multikey",
+                    "controller": didId,
+                    "publicKeyMultibase": multikeyPubkey
+                }
+            ],
+            "authentication": [
+                `${didId}#key1`
+            ],
+            "assertionMethod": [
+                `${didId}#key1`
+            ],
+            "service": [
+                {
+                    "id": `${didId}#uplanet`,
+                    "type": "UPlanetService",
+                    "serviceEndpoint": "https://copylaradio.com"
+                }
+            ],
+            "metadata": {
+                "email": email,
+                "created": new Date().toISOString(),
+                "updated": new Date().toISOString(),
+                "version": "1.0",
+                "contractStatus": "new_user"
+            }
+        };
+
+        // Create NOSTR event for DID document
+        const didEvent = {
+            kind: 30311, // Parameterized Replaceable Event for DID documents
+            created_at: Math.floor(Date.now() / 1000),
+            tags: [
+                ['d', 'did'], // DID tag identifier
+                ['t', 'DIDNostr'],
+                ['client', 'UPlanet-Webcam']
+            ],
+            content: JSON.stringify(didDocument, null, 2)
+        };
+
+        console.log('📄 DID document created:', didEvent);
+
+        // Sign and publish the DID document
+        let signedEvent;
+        if (window.nostr && typeof window.nostr.signEvent === 'function') {
+            signedEvent = await window.nostr.signEvent(didEvent);
+        } else {
+            throw new Error("NOSTR extension required to sign DID document");
+        }
+
+        // Publish to relay
+        const publishPromise = nostrRelay.publish(signedEvent);
+        const timeoutPromise = new Promise((_, reject) => {
+            setTimeout(() => reject(new Error('DID publish timeout')), 10000);
+        });
+
+        await Promise.race([publishPromise, timeoutPromise]);
+
+        console.log('✅ DID document published:', signedEvent.id);
+        return signedEvent;
+
+    } catch (error) {
+        console.error('❌ Error creating DID document:', error);
+        return null;
+    }
+}
+
 // ========================================
 // UI HELPER - BOUTONS D'ACTION
 // ========================================

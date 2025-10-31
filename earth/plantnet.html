@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🌿 uPlanet Flora Explorer - PlantNet Integration</title>
+    <title>🌿 Flora Quest - Collect & Protect with ORE</title>
     <!-- Common JavaScript -->
     <script src="common.js"></script>
     <!-- Nostr integration -->
@@ -13,39 +13,365 @@
     <!-- Leaflet JavaScript -->
     <script src="leaflet.js"></script>
     <style>
+        :root {
+            --primary-green: #4ade80;
+            --secondary-green: #22c55e;
+            --dark-green: #16a34a;
+            --gold: #fbbf24;
+            --silver: #cbd5e1;
+            --bronze: #f59e0b;
+        }
+        
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             max-width: 1200px;
             margin: 0 auto;
             padding: 20px;
-            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #334155 100%);
             color: #e8e8e8;
             min-height: 100vh;
+            position: relative;
         }
+        
+        /* Animated background particles */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: 
+                radial-gradient(2px 2px at 20% 30%, rgba(74, 222, 128, 0.3), transparent),
+                radial-gradient(2px 2px at 60% 70%, rgba(34, 197, 94, 0.3), transparent),
+                radial-gradient(1px 1px at 50% 50%, rgba(74, 222, 128, 0.2), transparent),
+                radial-gradient(2px 2px at 80% 10%, rgba(22, 163, 74, 0.3), transparent);
+            background-size: 200% 200%;
+            background-position: 0% 0%;
+            animation: particleFloat 20s ease-in-out infinite;
+            pointer-events: none;
+            z-index: 0;
+        }
+        
+        @keyframes particleFloat {
+            0%, 100% { background-position: 0% 0%; }
+            50% { background-position: 100% 100%; }
+        }
+        
         .container {
-            background: rgba(255, 255, 255, 0.05);
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(15, 23, 42, 0.8);
+            backdrop-filter: blur(20px);
+            border: 2px solid rgba(74, 222, 128, 0.3);
             padding: 30px;
-            border-radius: 20px;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            border-radius: 25px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5), 0 0 40px rgba(74, 222, 128, 0.1);
+            position: relative;
+            z-index: 1;
         }
+        
         h1 {
-            color: #4ade80;
+            color: var(--primary-green);
             text-align: center;
             margin-bottom: 10px;
-            font-size: 2.5em;
-            font-weight: 700;
-            text-shadow: 0 0 20px rgba(74, 222, 128, 0.3);
+            font-size: 3em;
+            font-weight: 800;
+            text-shadow: 0 0 30px rgba(74, 222, 128, 0.5), 0 0 60px rgba(74, 222, 128, 0.3);
+            letter-spacing: 2px;
+            animation: titlePulse 3s ease-in-out infinite;
+        }
+        
+        @keyframes titlePulse {
+            0%, 100% { text-shadow: 0 0 30px rgba(74, 222, 128, 0.5), 0 0 60px rgba(74, 222, 128, 0.3); }
+            50% { text-shadow: 0 0 40px rgba(74, 222, 128, 0.7), 0 0 80px rgba(74, 222, 128, 0.5); }
         }
         
         .subtitle {
             text-align: center;
-            color: #94a3b8;
-            font-size: 1.1em;
-            margin-bottom: 30px;
-            font-weight: 300;
+            color: var(--gold);
+            font-size: 1.3em;
+            margin-bottom: 20px;
+            font-weight: 600;
+            text-shadow: 0 0 10px rgba(251, 191, 36, 0.5);
         }
+        
+        .mission-banner {
+            background: linear-gradient(135deg, rgba(74, 222, 128, 0.2), rgba(34, 197, 94, 0.2));
+            border: 2px solid var(--primary-green);
+            border-radius: 20px;
+            padding: 25px;
+            margin-bottom: 30px;
+            text-align: center;
+            box-shadow: 0 0 30px rgba(74, 222, 128, 0.3);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .mission-banner::before {
+            content: '🎯';
+            position: absolute;
+            top: -20px;
+            left: -20px;
+            font-size: 100px;
+            opacity: 0.1;
+            transform: rotate(-15deg);
+        }
+        
+        .mission-banner h2 {
+            color: var(--gold);
+            font-size: 1.8em;
+            margin: 0 0 15px 0;
+            text-shadow: 0 0 20px rgba(251, 191, 36, 0.5);
+        }
+        
+        .mission-banner p {
+            font-size: 1.1em;
+            line-height: 1.6;
+            margin: 10px 0;
+            color: #e2e8f0;
+        }
+        
+        .mission-banner strong {
+            color: var(--primary-green);
+            font-size: 1.2em;
+            text-shadow: 0 0 10px rgba(74, 222, 128, 0.5);
+        }
+        
+        /* Stats Dashboard */
+        .stats-dashboard {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+        
+        .stat-card {
+            background: linear-gradient(135deg, rgba(74, 222, 128, 0.15), rgba(34, 197, 94, 0.15));
+            border: 2px solid rgba(74, 222, 128, 0.4);
+            border-radius: 15px;
+            padding: 20px;
+            text-align: center;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: linear-gradient(45deg, transparent, rgba(74, 222, 128, 0.1), transparent);
+            transform: rotate(45deg);
+            animation: shimmer 3s infinite;
+        }
+        
+        @keyframes shimmer {
+            0% { transform: translateX(-100%) translateY(-100%) rotate(45deg); }
+            100% { transform: translateX(100%) translateY(100%) rotate(45deg); }
+        }
+        
+        .stat-card:hover {
+            transform: translateY(-5px) scale(1.05);
+            box-shadow: 0 10px 30px rgba(74, 222, 128, 0.4);
+            border-color: var(--primary-green);
+        }
+        
+        .stat-icon {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            display: block;
+            filter: drop-shadow(0 0 10px rgba(74, 222, 128, 0.5));
+        }
+        
+        .stat-value {
+            font-size: 2.5em;
+            font-weight: bold;
+            color: var(--gold);
+            text-shadow: 0 0 15px rgba(251, 191, 36, 0.6);
+            display: block;
+            margin: 10px 0;
+        }
+        
+        .stat-label {
+            font-size: 0.9em;
+            color: #cbd5e1;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-weight: 600;
+        }
+        
+        /* Achievement Badges */
+        .achievements {
+            background: rgba(15, 23, 42, 0.6);
+            border: 2px solid rgba(251, 191, 36, 0.3);
+            border-radius: 20px;
+            padding: 25px;
+            margin-bottom: 30px;
+        }
+        
+        .achievements h3 {
+            color: var(--gold);
+            text-align: center;
+            font-size: 1.5em;
+            margin-bottom: 20px;
+            text-shadow: 0 0 15px rgba(251, 191, 36, 0.5);
+        }
+        
+        .badge-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 15px;
+        }
+        
+        .badge {
+            background: linear-gradient(135deg, rgba(251, 191, 36, 0.2), rgba(245, 158, 11, 0.2));
+            border: 2px solid rgba(251, 191, 36, 0.5);
+            border-radius: 15px;
+            padding: 15px;
+            text-align: center;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        
+        .badge.unlocked {
+            border-color: var(--gold);
+            box-shadow: 0 0 20px rgba(251, 191, 36, 0.5);
+            animation: badgeGlow 2s ease-in-out infinite;
+        }
+        
+        .badge.locked {
+            opacity: 0.3;
+            filter: grayscale(1);
+        }
+        
+        @keyframes badgeGlow {
+            0%, 100% { box-shadow: 0 0 20px rgba(251, 191, 36, 0.5); }
+            50% { box-shadow: 0 0 35px rgba(251, 191, 36, 0.8); }
+        }
+        
+        .badge-icon {
+            font-size: 2.5em;
+            display: block;
+            margin-bottom: 8px;
+            filter: drop-shadow(0 0 10px rgba(251, 191, 36, 0.5));
+        }
+        
+        .badge-name {
+            font-size: 0.8em;
+            color: #e2e8f0;
+            font-weight: 600;
+        }
+        
+        .badge-count {
+            font-size: 1.2em;
+            color: var(--gold);
+            font-weight: bold;
+            margin-top: 5px;
+        }
+        
+        /* Photo Gallery Styles */
+        .photo-gallery {
+            background: rgba(15, 23, 42, 0.6);
+            border: 2px solid rgba(74, 222, 128, 0.3);
+            border-radius: 20px;
+            padding: 25px;
+            margin-bottom: 30px;
+        }
+        
+        .gallery-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+        
+        .gallery-item {
+            position: relative;
+            border-radius: 15px;
+            overflow: hidden;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: 2px solid rgba(74, 222, 128, 0.3);
+            aspect-ratio: 1;
+        }
+        
+        .gallery-item:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 30px rgba(74, 222, 128, 0.6);
+            border-color: var(--primary-green);
+        }
+        
+        .gallery-item img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+        
+        .gallery-item-overlay {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: linear-gradient(to top, rgba(0,0,0,0.9), transparent);
+            padding: 10px;
+            color: white;
+            font-size: 0.8em;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        
+        .gallery-item:hover .gallery-item-overlay {
+            opacity: 1;
+        }
+        
+        .gallery-item-date {
+            font-size: 0.75em;
+            color: var(--gold);
+        }
+        
+        .gallery-item-location {
+            font-size: 0.7em;
+            color: var(--primary-green);
+            margin-top: 2px;
+        }
+        
+        /* Lightbox for full-size image viewing */
+        .lightbox {
+            display: none;
+            position: fixed;
+            z-index: 10000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.95);
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .lightbox.active {
+            display: flex;
+        }
+        
+        .lightbox-content {
+            max-width: 90%;
+            max-height: 90%;
+            border-radius: 10px;
+        }
+        
+        .lightbox-close {
+            position: absolute;
+            top: 20px;
+            right: 40px;
+            font-size: 40px;
+            color: white;
+            cursor: pointer;
+            z-index: 10001;
+        }
+        
         .controls {
             background: rgba(255, 255, 255, 0.08);
             border: 1px solid rgba(255, 255, 255, 0.1);
@@ -85,11 +411,32 @@
             font-weight: 600;
             text-transform: uppercase;
             letter-spacing: 0.5px;
+            position: relative;
+            overflow: hidden;
         }
+        
+        button::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.3);
+            transform: translate(-50%, -50%);
+            transition: width 0.6s, height 0.6s;
+        }
+        
+        button:hover::before {
+            width: 300px;
+            height: 300px;
+        }
+        
         button:hover {
             background: linear-gradient(135deg, #22c55e, #16a34a);
             transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(74, 222, 128, 0.3);
+            box-shadow: 0 8px 20px rgba(74, 222, 128, 0.4);
         }
         .info-grid {
             display: grid;
@@ -817,10 +1164,112 @@
         }
         
         /* Responsive Design */
+        @media screen and (max-width: 1024px) {
+            h1 {
+                font-size: 2.5em;
+            }
+            
+            .subtitle {
+                font-size: 1.1em;
+            }
+            
+            .mission-banner h2 {
+                font-size: 1.5em;
+            }
+            
+            .mission-banner p {
+                font-size: 1em;
+            }
+        }
+        
         @media screen and (max-width: 768px) {
-            .container {
+            body {
                 padding: 10px;
-                margin: 10px auto;
+            }
+            
+            .container {
+                padding: 15px;
+                margin: 5px auto;
+            }
+            
+            h1 {
+                font-size: 2em;
+                letter-spacing: 1px;
+            }
+            
+            .subtitle {
+                font-size: 0.95em;
+            }
+            
+            /* Mission Banner */
+            .mission-banner {
+                padding: 20px 15px;
+            }
+            
+            .mission-banner h2 {
+                font-size: 1.3em;
+            }
+            
+            .mission-banner p {
+                font-size: 0.9em;
+            }
+            
+            .mission-banner::before {
+                font-size: 60px;
+                top: -10px;
+                left: -10px;
+            }
+            
+            /* Stats Dashboard */
+            .stats-dashboard {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 10px;
+            }
+            
+            .stat-card {
+                padding: 15px 10px;
+            }
+            
+            .stat-icon {
+                font-size: 2em;
+            }
+            
+            .stat-value {
+                font-size: 2em;
+            }
+            
+            .stat-label {
+                font-size: 0.75em;
+            }
+            
+            /* Achievements */
+            .achievements {
+                padding: 20px 15px;
+            }
+            
+            .achievements h3 {
+                font-size: 1.2em;
+            }
+            
+            .badge-grid {
+                grid-template-columns: repeat(4, 1fr);
+                gap: 10px;
+            }
+            
+            .badge {
+                padding: 10px 5px;
+            }
+            
+            .badge-icon {
+                font-size: 2em;
+            }
+            
+            .badge-name {
+                font-size: 0.7em;
+            }
+            
+            .badge-count {
+                font-size: 0.9em;
             }
             
             .nostr-section {
@@ -900,12 +1349,94 @@
                 justify-content: center;
             }
             
+            .map-button {
+                width: 100%;
+                padding: 10px;
+                font-size: 0.9em;
+            }
+            
             #mini-map {
                 height: 300px;
+            }
+            
+            /* Calendar */
+            .info-grid {
+                grid-template-columns: 1fr;
+                gap: 15px;
+            }
+            
+            /* Button effects less aggressive on mobile */
+            button:hover::before {
+                display: none;
             }
         }
         
         @media screen and (max-width: 480px) {
+            h1 {
+                font-size: 1.6em;
+            }
+            
+            .subtitle {
+                font-size: 0.85em;
+            }
+            
+            /* Mission Banner */
+            .mission-banner {
+                padding: 15px 10px;
+            }
+            
+            .mission-banner h2 {
+                font-size: 1.1em;
+            }
+            
+            .mission-banner p {
+                font-size: 0.85em;
+            }
+            
+            /* Stats Dashboard - Single column on very small screens */
+            .stats-dashboard {
+                grid-template-columns: 1fr;
+                gap: 8px;
+            }
+            
+            .stat-card {
+                padding: 12px;
+            }
+            
+            .stat-icon {
+                font-size: 1.8em;
+            }
+            
+            .stat-value {
+                font-size: 1.8em;
+            }
+            
+            .stat-label {
+                font-size: 0.7em;
+            }
+            
+            /* Badges - 2 columns on very small screens */
+            .badge-grid {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 8px;
+            }
+            
+            .badge {
+                padding: 10px 5px;
+            }
+            
+            .badge-icon {
+                font-size: 1.8em;
+            }
+            
+            .badge-name {
+                font-size: 0.65em;
+            }
+            
+            .badge-count {
+                font-size: 0.85em;
+            }
+            
             .tumbler {
                 padding: 3px 4px;
                 font-size: 0.8em;
@@ -916,13 +1447,187 @@
             #mini-map {
                 height: 250px;
             }
+            
+            /* Badge unlock notification - smaller on mobile */
+            .badge-unlock-notification {
+                padding: 20px 30px !important;
+                font-size: 1.5em !important;
+            }
+        }
+        
+        /* Touch-friendly improvements */
+        @media (hover: none) and (pointer: coarse) {
+            /* Larger touch targets for mobile */
+            button {
+                min-height: 44px;
+                padding: 14px 16px;
+            }
+            
+            .badge {
+                min-height: 100px;
+                padding: 15px 10px;
+            }
+            
+            .stat-card {
+                min-height: 120px;
+            }
+            
+            /* Remove hover effects that don't work on touch */
+            .stat-card:hover,
+            .badge:hover,
+            button:hover {
+                transform: none;
+            }
+            
+            /* Better tap feedback */
+            button:active {
+                transform: scale(0.95);
+            }
+            
+            .stat-card:active,
+            .badge:active {
+                transform: scale(0.98);
+            }
+        }
+        
+        /* High DPI displays */
+        @media only screen and (-webkit-min-device-pixel-ratio: 2),
+               only screen and (min-resolution: 192dpi) {
+            .stat-icon,
+            .badge-icon {
+                image-rendering: -webkit-optimize-contrast;
+                image-rendering: crisp-edges;
+            }
+        }
+        
+        /* Landscape orientation on mobile */
+        @media screen and (max-height: 500px) and (orientation: landscape) {
+            h1 {
+                font-size: 1.5em;
+                margin-bottom: 5px;
+            }
+            
+            .subtitle {
+                font-size: 0.8em;
+                margin-bottom: 10px;
+            }
+            
+            .mission-banner {
+                padding: 10px;
+            }
+            
+            .stats-dashboard {
+                grid-template-columns: repeat(4, 1fr);
+                gap: 5px;
+            }
+            
+            .badge-grid {
+                grid-template-columns: repeat(8, 1fr);
+            }
+            
+            .stat-card,
+            .badge {
+                padding: 8px 5px;
+            }
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>🌿 uPlanet Flora Explorer</h1>
-        <p class="subtitle">Cataloguez la flore avec PlantNet (#BRO #plantnet)</p>
+        <h1>🌿 FLORA QUEST 🌿</h1>
+        <p class="subtitle">✨ Collect them all • Protect the Planet • Earn Ẑen ✨</p>
+        
+        <!-- Mission Banner -->
+        <div class="mission-banner">
+            <h2>🎯 MISSION: Build the Global ORE Biodiversity Atlas</h2>
+            <p>Every plant you catalog helps create <strong>ORE contracts</strong> on UMAPs!</p>
+            <p>📍 Document local flora → 🌱 Prove biodiversity → 💎 Unlock Ẑen rewards</p>
+            <p style="margin-top: 15px; font-size: 0.95em; color: #cbd5e1;">
+                Join thousands of explorers mapping Earth's biodiversity. Each observation strengthens 
+                the ecological value of your UMAP and contributes to decentralized environmental protection.
+            </p>
+        </div>
+        
+        <!-- Stats Dashboard -->
+        <div class="stats-dashboard">
+            <div class="stat-card">
+                <span class="stat-icon">🌿</span>
+                <span class="stat-value" id="total-plants">0</span>
+                <span class="stat-label">Plants Cataloged</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-icon">📍</span>
+                <span class="stat-value" id="total-umaps">0</span>
+                <span class="stat-label">UMAPs Explored</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-icon">🏆</span>
+                <span class="stat-value" id="total-badges">0/8</span>
+                <span class="stat-label">Achievements</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-icon">💎</span>
+                <span class="stat-value" id="ore-potential">0</span>
+                <span class="stat-label">ORE Contribution</span>
+            </div>
+        </div>
+        
+        <!-- Achievement Badges -->
+        <div class="achievements">
+            <h3>🏆 COLLECTION ACHIEVEMENTS 🏆</h3>
+            <div class="badge-grid">
+                <div class="badge locked" id="badge-first" title="Document your first plant">
+                    <span class="badge-icon">🌱</span>
+                    <div class="badge-name">First Step</div>
+                    <div class="badge-count">0/1</div>
+                </div>
+                <div class="badge locked" id="badge-explorer" title="Catalog 10 different plants">
+                    <span class="badge-icon">🔍</span>
+                    <div class="badge-name">Explorer</div>
+                    <div class="badge-count">0/10</div>
+                </div>
+                <div class="badge locked" id="badge-botanist" title="Reach 50 plants documented">
+                    <span class="badge-icon">🌺</span>
+                    <div class="badge-name">Botanist</div>
+                    <div class="badge-count">0/50</div>
+                </div>
+                <div class="badge locked" id="badge-master" title="Document 100+ plants">
+                    <span class="badge-icon">🌳</span>
+                    <div class="badge-name">Master</div>
+                    <div class="badge-count">0/100</div>
+                </div>
+                <div class="badge locked" id="badge-pioneer" title="First to document a plant in your UMAP">
+                    <span class="badge-icon">🚀</span>
+                    <div class="badge-name">Pioneer</div>
+                    <div class="badge-count">✓</div>
+                </div>
+                <div class="badge locked" id="badge-guardian" title="Contribute to an ORE contract">
+                    <span class="badge-icon">🛡️</span>
+                    <div class="badge-name">Guardian</div>
+                    <div class="badge-count">ORE</div>
+                </div>
+                <div class="badge locked" id="badge-nomad" title="Document plants in 5+ different UMAPs">
+                    <span class="badge-icon">🌍</span>
+                    <div class="badge-name">Nomad</div>
+                    <div class="badge-count">0/5</div>
+                </div>
+                <div class="badge locked" id="badge-legend" title="Join the top 1% of collectors">
+                    <span class="badge-icon">⭐</span>
+                    <div class="badge-name">Legend</div>
+                    <div class="badge-count">TOP 1%</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Photo Gallery Section -->
+        <div class="photo-gallery" id="photo-gallery" style="display: none;">
+            <h3 style="color: var(--gold); text-align: center; font-size: 1.5em; margin-bottom: 20px; text-shadow: 0 0 15px rgba(251, 191, 36, 0.5);">
+                📷 GALERIE PHOTO - Mes Identifications
+            </h3>
+            <div id="gallery-grid" class="gallery-grid">
+                <!-- Photos will be loaded here by JavaScript -->
+            </div>
+        </div>
         
         <!-- Nostr Integration Section - Moved to top -->
         <div class="nostr-section" style="margin-bottom: 20px;">
@@ -961,7 +1666,7 @@
                 <!-- Map Accordion -->
                 <div id="map-accordion" class="map-accordion">
                     <div class="map-accordion-header" onclick="toggleMapAccordion()">
-                        <h4 style="margin: 0; font-size: 14px; color: #e2e8f0;">🗺️ Carte Interactive</h4>
+                        <h4 style="margin: 0; font-size: 14px; color: #e2e8f0;">🗺️ Localisation</h4>
                         <span class="map-toggle">▼</span>
                     </div>
                     <div class="map-accordion-content">
@@ -1037,10 +1742,6 @@
             </div>
         </div>
         
-        <div class="controls">
-            <button onclick="calculateLunarCalendar()">Calculer le Calendrier Lunaire</button>
-        </div>
-
         <div class="info-grid">
             <div class="info-card montante">
                 <h3>🌱 Lune Montante</h3>
@@ -1094,6 +1795,287 @@
         let miniMap;
         let miniMarker;
         let nearbyMarkers = [];
+        
+        // Gamification tracking
+        let userStats = {
+            plantsCount: 0,
+            umapsCount: 0,
+            badges: {
+                first: false,
+                explorer: false,
+                botanist: false,
+                master: false,
+                pioneer: false,
+                guardian: false,
+                nomad: false,
+                legend: false
+            }
+        };
+        
+        // Load user stats from NOSTR (using common.js)
+        async function loadUserStats() {
+            if (!userPubkey) {
+                console.log('⏳ No user logged in yet, stats will load after connection');
+                return;
+            }
+            
+            console.log('🌿 Loading flora stats from NOSTR...');
+            
+            try {
+                // Fetch real stats from NOSTR using common.js function
+                const nostrStats = await fetchUserFloraStats(userPubkey);
+                
+                // Update local stats with NOSTR data
+                userStats.plantsCount = nostrStats.plantsCount;
+                userStats.umapsCount = nostrStats.umapsCount;
+                
+                // Calculate badges from real data
+                const badgeResults = calculateFloraBadges(nostrStats);
+                userStats.badges = badgeResults.badges;
+                
+                console.log(`✅ Loaded: ${userStats.plantsCount} plants, ${userStats.umapsCount} UMAPs`);
+                console.log(`📷 Loaded: ${nostrStats.images.length} plant photos`);
+                
+                // Update display
+                updateStatsDisplay();
+                updateBadges();
+                displayPhotoGallery(nostrStats.images);
+                
+            } catch (error) {
+                console.error('❌ Error loading flora stats:', error);
+            }
+        }
+        
+        // Save user stats (deprecated - keeping for backward compatibility)
+        function saveUserStats() {
+            // Stats are now fetched from NOSTR, no need to save locally
+            console.log('📊 Stats are stored on NOSTR network');
+        }
+        
+        // Update stats display
+        function updateStatsDisplay() {
+            document.getElementById('total-plants').textContent = userStats.plantsCount;
+            document.getElementById('total-umaps').textContent = userStats.umapsCount;
+            
+            const unlockedBadges = Object.values(userStats.badges).filter(b => b).length;
+            document.getElementById('total-badges').textContent = `${unlockedBadges}/8`;
+            
+            // Calculate ORE potential (plants * umaps)
+            const oreScore = userStats.plantsCount * userStats.umapsCount;
+            document.getElementById('ore-potential').textContent = oreScore;
+        }
+        
+        // Check and unlock badges
+        function updateBadges() {
+            // Badges are already calculated from NOSTR data in loadUserStats()
+            // Just update the UI display
+            Object.keys(userStats.badges).forEach(badgeName => {
+                const badgeElement = document.getElementById(`badge-${badgeName}`);
+                if (!badgeElement) return;
+                
+                if (userStats.badges[badgeName]) {
+                    if (!badgeElement.classList.contains('unlocked')) {
+                        // Badge just unlocked!
+                        badgeElement.classList.remove('locked');
+                        badgeElement.classList.add('unlocked');
+                        showBadgeUnlockAnimation(badgeName);
+                    }
+                } else {
+                    badgeElement.classList.remove('unlocked');
+                    badgeElement.classList.add('locked');
+                }
+                
+                // Update counts
+                const countElement = badgeElement.querySelector('.badge-count');
+                if (badgeName === 'first') countElement.textContent = `${Math.min(userStats.plantsCount, 1)}/1`;
+                else if (badgeName === 'explorer') countElement.textContent = `${Math.min(userStats.plantsCount, 10)}/10`;
+                else if (badgeName === 'botanist') countElement.textContent = `${Math.min(userStats.plantsCount, 50)}/50`;
+                else if (badgeName === 'master') countElement.textContent = `${Math.min(userStats.plantsCount, 100)}/100`;
+                else if (badgeName === 'nomad') countElement.textContent = `${userStats.umapsCount}/5`;
+            });
+            
+            updateStatsDisplay();
+        }
+        
+        // Show badge unlock animation
+        function showBadgeUnlockAnimation(badgeName) {
+            const badgeElement = document.getElementById(`badge-${badgeName}`);
+            const badgeTitles = {
+                first: '🌱 First Step',
+                explorer: '🔍 Explorer',
+                botanist: '🌺 Botanist',
+                master: '🌳 Master',
+                pioneer: '🚀 Pioneer',
+                guardian: '🛡️ Guardian',
+                nomad: '🌍 Nomad',
+                legend: '⭐ Legend'
+            };
+            
+            // Check if mobile for smaller notification
+            const isMobile = window.innerWidth <= 480;
+            const fontSize = isMobile ? '1.5em' : '2em';
+            const padding = isMobile ? '20px 30px' : '30px 50px';
+            const iconSize = isMobile ? '2em' : '3em';
+            
+            // Create celebration notification
+            const notification = document.createElement('div');
+            notification.className = 'badge-unlock-notification';
+            notification.style.cssText = `
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%) scale(0);
+                background: linear-gradient(135deg, #fbbf24, #f59e0b);
+                color: white;
+                padding: ${padding};
+                border-radius: 20px;
+                font-size: ${fontSize};
+                font-weight: bold;
+                text-align: center;
+                z-index: 10000;
+                box-shadow: 0 0 50px rgba(251, 191, 36, 0.8);
+                animation: badgePopup 2s ease-out forwards;
+                max-width: 90vw;
+            `;
+            notification.innerHTML = `
+                <div style="font-size: ${iconSize}; margin-bottom: 10px;">🎉</div>
+                <div>BADGE UNLOCKED!</div>
+                <div style="margin-top: 15px; font-size: 1.2em;">${badgeTitles[badgeName]}</div>
+            `;
+            
+            // Add animation
+            const style = document.createElement('style');
+            style.textContent = `
+                @keyframes badgePopup {
+                    0% { transform: translate(-50%, -50%) scale(0); opacity: 0; }
+                    50% { transform: translate(-50%, -50%) scale(1.2); opacity: 1; }
+                    70% { transform: translate(-50%, -50%) scale(0.9); opacity: 1; }
+                    100% { transform: translate(-50%, -50%) scale(1); opacity: 0; }
+                }
+            `;
+            document.head.appendChild(style);
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                notification.remove();
+                style.remove();
+            }, 2000);
+        }
+        
+        // Display photo gallery from flora observations
+        function displayPhotoGallery(images) {
+            const gallerySection = document.getElementById('photo-gallery');
+            const galleryGrid = document.getElementById('gallery-grid');
+            
+            if (!images || images.length === 0) {
+                gallerySection.style.display = 'none';
+                console.log('📷 No photos to display in gallery');
+                return;
+            }
+            
+            console.log(`📷 Displaying ${images.length} photos in gallery`);
+            gallerySection.style.display = 'block';
+            
+            // Clear existing gallery
+            galleryGrid.innerHTML = '';
+            
+            // Create gallery items
+            images.forEach((image, index) => {
+                const item = document.createElement('div');
+                item.className = 'gallery-item';
+                item.onclick = () => openLightbox(image.url);
+                
+                const img = document.createElement('img');
+                img.src = image.url;
+                img.alt = `Plant observation ${index + 1}`;
+                img.loading = 'lazy';
+                img.onerror = () => {
+                    console.warn(`Failed to load image: ${image.url}`);
+                    item.style.display = 'none';
+                };
+                
+                const overlay = document.createElement('div');
+                overlay.className = 'gallery-item-overlay';
+                
+                const dateText = document.createElement('div');
+                dateText.className = 'gallery-item-date';
+                dateText.textContent = image.date.toLocaleDateString('fr-FR');
+                
+                overlay.appendChild(dateText);
+                
+                if (image.location) {
+                    const locationText = document.createElement('div');
+                    locationText.className = 'gallery-item-location';
+                    locationText.textContent = `📍 ${image.location.umap}`;
+                    overlay.appendChild(locationText);
+                }
+                
+                item.appendChild(img);
+                item.appendChild(overlay);
+                galleryGrid.appendChild(item);
+            });
+        }
+        
+        // Open lightbox for full-size image viewing
+        function openLightbox(imageUrl) {
+            let lightbox = document.getElementById('lightbox');
+            
+            if (!lightbox) {
+                // Create lightbox if it doesn't exist
+                lightbox = document.createElement('div');
+                lightbox.id = 'lightbox';
+                lightbox.className = 'lightbox';
+                lightbox.onclick = (e) => {
+                    if (e.target === lightbox) {
+                        closeLightbox();
+                    }
+                };
+                
+                const closeBtn = document.createElement('span');
+                closeBtn.className = 'lightbox-close';
+                closeBtn.innerHTML = '&times;';
+                closeBtn.onclick = closeLightbox;
+                
+                const img = document.createElement('img');
+                img.id = 'lightbox-image';
+                img.className = 'lightbox-content';
+                
+                lightbox.appendChild(closeBtn);
+                lightbox.appendChild(img);
+                document.body.appendChild(lightbox);
+            }
+            
+            const lightboxImg = document.getElementById('lightbox-image');
+            lightboxImg.src = imageUrl;
+            lightbox.classList.add('active');
+        }
+        
+        // Close lightbox
+        function closeLightbox() {
+            const lightbox = document.getElementById('lightbox');
+            if (lightbox) {
+                lightbox.classList.remove('active');
+            }
+        }
+        
+        // Keyboard support for lightbox (ESC key)
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                closeLightbox();
+            }
+        });
+        
+        // Increment plant count when a message is sent
+        async function incrementPlantCount() {
+            // Instead of incrementing locally, reload stats from NOSTR
+            // This ensures we always show the real data from the network
+            console.log('🔄 Reloading flora stats after new plant submission...');
+            
+            // Wait a moment for the message to propagate to relays
+            setTimeout(async () => {
+                await loadUserStats();
+            }, 2000); // 2 second delay to allow relay propagation
+        }
 
         // ========================================
         // NOSTR CONNECTION HANDLER (using common.js)
@@ -1103,6 +2085,9 @@
             if (pubkey) {
                 updateNostrUI(true);
                 await loadUserProfileAndMessages();
+                
+                // Load flora stats from NOSTR after login
+                await loadUserStats();
             }
         }
 
@@ -1613,11 +2598,6 @@
             }
         }
 
-        // Map variables
-        let miniMap;
-        let miniMarker;
-        let nearbyMarkers = [];
-
         // Photo and Geolocation Functions
         function handlePhotoUpload(event) {
             const file = event.target.files[0];
@@ -1756,15 +2736,15 @@
                     console.log('Adding IPFS image URL to message:', selectedPhoto.ipfsUrl);
                 }
                 
-                content += "\n#BRO #plantnet";
+                content += "\n#plantnet #UPlanet";
 
                 // Create the Nostr event
                 const eventTemplate = {
                     kind: 1, // Text note
                     created_at: Math.floor(Date.now() / 1000),
                     tags: [
-                        ["t", "BRO"],
-                        ["t", "plantnet"]
+                        ["t", "plantnet"],
+                        ["t", "UPlanet"]
                     ],
                     content: content
                 };
@@ -1794,6 +2774,10 @@
                 await Promise.race([publishPromise, timeoutPromise]);
 
                 console.log("Message publié avec succès:", signedEvent);
+                
+                // Increment plant count for gamification
+                incrementPlantCount();
+                
                 alert("🌱 Message partagé avec succès !");
                 
                 // Log successful upload details (following generate_ipfs_structure.sh pattern)
@@ -1816,7 +2800,7 @@
                 console.error("Erreur d'envoi Nostr:", error);
             } finally {
                 sendBtn.disabled = false;
-                sendBtn.textContent = "🌱 Partager avec #BRO #plant";
+                sendBtn.textContent = "🌱 Partager avec #plantnet";
             }
         }
 
@@ -2665,6 +3649,9 @@ END:VEVENT
         document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('current-year').textContent = new Date().getFullYear();
             calculateLunarCalendar();
+            
+            // Load gamification stats
+            loadUserStats();
             
             // Use common.js detectUSPOTAPI()
             detectUSPOTAPI();

@@ -1530,6 +1530,43 @@
                 padding: 8px 5px;
             }
         }
+        
+        /* ORE Map Styles */
+        .ore-umap-marker {
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            transition: transform 0.2s ease;
+        }
+        
+        .ore-umap-marker:hover {
+            transform: scale(1.2);
+        }
+        
+        .leaflet-popup-content-wrapper.ore-popup {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+        }
+        
+        .leaflet-popup-content.ore-popup {
+            margin: 0;
+        }
+        
+        .leaflet-popup-tip-container.ore-popup {
+            display: none;
+        }
+        
+        /* ORE Map mobile responsive */
+        @media (max-width: 768px) {
+            #ore-map {
+                height: 400px !important;
+            }
+            
+            .leaflet-popup-content-wrapper.ore-popup {
+                max-width: 90vw !important;
+            }
+        }
     </style>
 </head>
 <body>
@@ -1615,6 +1652,58 @@
                     <span class="badge-icon">⭐</span>
                     <div class="badge-name">Legend</div>
                     <div class="badge-count">TOP 1%</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- ORE UMAPs Map View -->
+        <div class="photo-gallery" style="border-color: rgba(251, 191, 36, 0.3);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h3 style="color: var(--gold); text-align: left; font-size: 1.5em; margin: 0; text-shadow: 0 0 15px rgba(251, 191, 36, 0.5);">
+                    🗺️ CARTE ORE - UMAPs avec Plantes
+                </h3>
+                <button class="map-button" id="toggle-ore-map-btn" onclick="toggleOREMapView()" style="margin: 0;">
+                    🌍 Afficher la Carte
+                </button>
+            </div>
+            
+            <!-- ORE Map Container -->
+            <div id="ore-map-container" style="display: none;">
+                <div style="background: rgba(255, 255, 255, 0.05); border-radius: 10px; padding: 15px; margin-bottom: 15px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                        <div style="font-size: 0.9em; color: #cbd5e1;">
+                            <strong>🌿 UMAPs avec contrats ORE actifs:</strong> <span id="ore-umap-count">0</span>
+                        </div>
+                        <button class="map-button nearby" onclick="loadOREUMAPsForMap()" style="padding: 8px 16px; font-size: 0.8em;">
+                            🔄 Actualiser
+                        </button>
+                    </div>
+                    <div style="font-size: 0.75em; color: #94a3b8; line-height: 1.6;">
+                        💡 La carte affiche tous les UMAPs où des plantes ont été référencées via NOSTR.<br>
+                        🟢 <strong>Vert</strong> = UMAP avec contrat ORE actif (kind 30312) | 🔵 <strong>Bleu</strong> = En attente de contrat ORE
+                    </div>
+                </div>
+                
+                <div id="ore-map" style="height: 500px; width: 100%; border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.2);"></div>
+                
+                <div style="margin-top: 15px; background: rgba(255, 255, 255, 0.05); border-radius: 10px; padding: 15px;">
+                    <div style="font-size: 0.8em; color: #cbd5e1; margin-bottom: 10px;">
+                        <strong>💎 Légende des Récompenses ORE:</strong>
+                    </div>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 10px; font-size: 0.75em;">
+                        <div style="background: rgba(74, 222, 128, 0.1); padding: 8px; border-radius: 6px; border-left: 3px solid #4ade80;">
+                            <strong>Base:</strong> 10 Ẑen par observation
+                        </div>
+                        <div style="background: rgba(34, 197, 94, 0.1); padding: 8px; border-radius: 6px; border-left: 3px solid #22c55e;">
+                            <strong>Espèces:</strong> +5 Ẑen par espèce unique
+                        </div>
+                        <div style="background: rgba(251, 191, 36, 0.1); padding: 8px; border-radius: 6px; border-left: 3px solid #fbbf24;">
+                            <strong>Biodiversité:</strong> +50-100 Ẑen bonus
+                        </div>
+                        <div style="background: rgba(99, 102, 241, 0.1); padding: 8px; border-radius: 6px; border-left: 3px solid #6366f1;">
+                            <strong>Engagement:</strong> +25-50 Ẑen communauté
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -1860,8 +1949,13 @@
             const unlockedBadges = Object.values(userStats.badges).filter(b => b).length;
             document.getElementById('total-badges').textContent = `${unlockedBadges}/8`;
             
-            // Calculate ORE potential (plants * umaps)
-            const oreScore = userStats.plantsCount * userStats.umapsCount;
+            // Calculate ORE potential with real reward formula
+            const oreScore = calculateORERewards({
+                plantsCount: userStats.plantsCount,
+                species: Math.floor(userStats.plantsCount / 3), // Estimate species count
+                observers: 1,
+                complianceScore: 0.7
+            });
             document.getElementById('ore-potential').textContent = oreScore;
         }
         
@@ -3757,6 +3851,249 @@ END:VEVENT
                 }
             }, 1000); // Delay to allow extensions to load
         });
+        
+        // ========================================
+        // ORE UMAPs MAP VIEW FUNCTIONS
+        // ========================================
+        
+        let oreMap = null;
+        let oreMarkers = [];
+        
+        /**
+         * Toggle ORE Map View
+         */
+        function toggleOREMapView() {
+            const mapContainer = document.getElementById('ore-map-container');
+            const toggleBtn = document.getElementById('toggle-ore-map-btn');
+            
+            if (mapContainer.style.display === 'none') {
+                mapContainer.style.display = 'block';
+                toggleBtn.textContent = '🔽 Masquer la Carte';
+                
+                // Initialize map if not already done
+                if (!oreMap) {
+                    setTimeout(() => initializeOREMap(), 100);
+                }
+            } else {
+                mapContainer.style.display = 'none';
+                toggleBtn.textContent = '🌍 Afficher la Carte';
+            }
+        }
+        
+        /**
+         * Initialize ORE Map
+         */
+        function initializeOREMap() {
+            if (typeof L === 'undefined') {
+                console.error('Leaflet library not loaded');
+                alert('❌ Erreur: Bibliothèque de carte non chargée');
+                return;
+            }
+            
+            console.log('🗺️ Initializing ORE Map...');
+            
+            try {
+                // Create map centered on world
+                oreMap = L.map('ore-map').setView([30, 0], 2);
+                
+                // Add OpenStreetMap tiles
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '© OpenStreetMap contributors',
+                    maxZoom: 19
+                }).addTo(oreMap);
+                
+                // Load ORE UMAPs
+                loadOREUMAPsForMap();
+                
+                console.log('✅ ORE Map initialized');
+            } catch (error) {
+                console.error('❌ Error initializing ORE map:', error);
+                alert('❌ Erreur lors de l\'initialisation de la carte: ' + error.message);
+            }
+        }
+        
+        /**
+         * Load ORE UMAPs onto the map
+         */
+        async function loadOREUMAPsForMap() {
+            if (!oreMap) {
+                console.error('ORE Map not initialized');
+                return;
+            }
+            
+            console.log('🌿 Loading ORE UMAPs for map...');
+            
+            try {
+                // Clear existing markers
+                clearOREMarkers();
+                
+                // Show loading indicator
+                document.getElementById('ore-umap-count').textContent = '⏳ Chargement...';
+                
+                // Fetch ORE UMAPs using common.js function
+                const umaps = await fetchOREUMAPsForMap();
+                
+                console.log(`📊 Loaded ${umaps.length} ORE UMAPs`);
+                
+                // Update count
+                document.getElementById('ore-umap-count').textContent = umaps.length;
+                
+                // Display each UMAP on the map
+                umaps.forEach(umap => {
+                    createOREUMAPMarker(umap);
+                });
+                
+                // Fit map to show all markers
+                if (oreMarkers.length > 0) {
+                    const group = L.featureGroup(oreMarkers);
+                    oreMap.fitBounds(group.getBounds().pad(0.1));
+                }
+                
+                console.log(`✅ Displayed ${oreMarkers.length} UMAP markers on map`);
+                
+            } catch (error) {
+                console.error('❌ Error loading ORE UMAPs:', error);
+                document.getElementById('ore-umap-count').textContent = '❌ Erreur';
+                alert('❌ Erreur lors du chargement des UMAPs: ' + error.message);
+            }
+        }
+        
+        /**
+         * Create marker for an ORE UMAP
+         */
+        function createOREUMAPMarker(umap) {
+            try {
+                // Determine marker color based on ORE contract status
+                const markerColor = umap.hasOREContract ? '#4ade80' : '#3b82f6';
+                const markerLabel = umap.hasOREContract ? '🟢' : '🔵';
+                
+                // Create custom marker icon
+                const markerIcon = L.divIcon({
+                    className: 'ore-umap-marker',
+                    html: `<div style="
+                        background-color: ${markerColor};
+                        border: 3px solid white;
+                        border-radius: 50%;
+                        width: 20px;
+                        height: 20px;
+                        box-shadow: 0 3px 8px rgba(0,0,0,0.4);
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        font-size: 10px;
+                    ">${markerLabel}</div>`,
+                    iconSize: [20, 20]
+                });
+                
+                // Create marker
+                const marker = L.marker([umap.lat, umap.lon], { icon: markerIcon })
+                    .addTo(oreMap);
+                
+                // Create popup content
+                const popupContent = createOREUMAPPopup(umap);
+                marker.bindPopup(popupContent, {
+                    maxWidth: 350,
+                    className: 'ore-popup'
+                });
+                
+                oreMarkers.push(marker);
+                
+            } catch (error) {
+                console.error('Error creating UMAP marker:', error);
+            }
+        }
+        
+        /**
+         * Create popup content for ORE UMAP
+         */
+        function createOREUMAPPopup(umap) {
+            const statusBadge = umap.hasOREContract 
+                ? '<span style="background: #4ade80; color: white; padding: 4px 8px; border-radius: 4px; font-size: 0.7em; font-weight: bold;">✅ CONTRAT ORE ACTIF</span>'
+                : '<span style="background: #3b82f6; color: white; padding: 4px 8px; border-radius: 4px; font-size: 0.7em; font-weight: bold;">⏳ EN ATTENTE ORE</span>';
+            
+            const popup = `
+                <div style="padding: 12px; min-width: 280px;">
+                    <div style="margin-bottom: 12px;">
+                        <div style="font-size: 1.1em; font-weight: bold; color: #1e293b; margin-bottom: 8px;">
+                            📍 UMAP (${umap.lat.toFixed(2)}, ${umap.lon.toFixed(2)})
+                        </div>
+                        <div style="margin-bottom: 8px;">
+                            ${statusBadge}
+                        </div>
+                    </div>
+                    
+                    <div style="background: #f0fdf4; border-left: 3px solid #4ade80; padding: 10px; margin-bottom: 10px; border-radius: 4px;">
+                        <div style="font-size: 0.85em; color: #166534; font-weight: 600; margin-bottom: 6px;">
+                            🌿 Flora Statistics
+                        </div>
+                        <div style="font-size: 0.8em; color: #15803d; line-height: 1.6;">
+                            <strong>Observations:</strong> ${umap.stats.plantsCount}<br>
+                            <strong>Species:</strong> ${umap.stats.species || 'N/A'}<br>
+                            <strong>Contributors:</strong> ${umap.stats.observers}
+                        </div>
+                    </div>
+                    
+                    <div style="background: #fef9c3; border-left: 3px solid #fbbf24; padding: 10px; margin-bottom: 10px; border-radius: 4px;">
+                        <div style="font-size: 0.85em; color: #92400e; font-weight: 600; margin-bottom: 6px;">
+                            💎 Reward Potential
+                        </div>
+                        <div style="font-size: 1.2em; color: #b45309; font-weight: bold;">
+                            ${umap.rewardPotential} Ẑen
+                        </div>
+                        <div style="font-size: 0.7em; color: #92400e; margin-top: 4px;">
+                            Estimated environmental value
+                        </div>
+                    </div>
+                    
+                    ${umap.hasOREContract && umap.vdoUrl ? `
+                        <a href="${umap.vdoUrl}" target="_blank" 
+                           style="display: block; background: linear-gradient(135deg, #6366f1, #4f46e5); 
+                                  color: white; text-align: center; padding: 10px; border-radius: 6px; 
+                                  text-decoration: none; font-weight: 600; font-size: 0.85em; margin-top: 10px;">
+                            🎥 Join ORE Meeting Space
+                        </a>
+                    ` : ''}
+                    
+                    ${umap.did ? `
+                        <div style="margin-top: 10px; font-size: 0.7em; color: #64748b; word-break: break-all;">
+                            <strong>DID:</strong> ${umap.did.substring(0, 30)}...
+                        </div>
+                    ` : ''}
+                    
+                    <div style="margin-top: 12px; padding-top: 10px; border-top: 1px solid #e2e8f0; font-size: 0.7em; color: #94a3b8;">
+                        Last updated: ${new Date(umap.createdAt * 1000).toLocaleDateString('fr-FR')}
+                    </div>
+                </div>
+            `;
+            
+            return popup;
+        }
+        
+        /**
+         * Clear all ORE markers from map
+         */
+        function clearOREMarkers() {
+            oreMarkers.forEach(marker => {
+                if (oreMap) {
+                    oreMap.removeLayer(marker);
+                }
+            });
+            oreMarkers = [];
+        }
+        
+        // Update reward display in stats dashboard
+        function updateORERewardDisplay() {
+            const oreDisplay = document.getElementById('ore-potential');
+            if (oreDisplay && userStats.plantsCount > 0) {
+                const potentialReward = calculateORERewards({
+                    plantsCount: userStats.plantsCount,
+                    species: userStats.umapsCount > 0 ? Math.floor(userStats.plantsCount / 2) : 0, // estimate
+                    observers: 1,
+                    complianceScore: 0.7
+                });
+                oreDisplay.textContent = potentialReward;
+            }
+        }
     </script>
 </body>
 </html>

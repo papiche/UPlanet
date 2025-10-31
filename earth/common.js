@@ -3221,3 +3221,459 @@ ${notes ? `📝 Notes: ${notes}` : ''}
     }
 }
 
+/**
+ * Fetch ORE Meeting Space events (kind 30312) for all UMAPs with plant observations
+ * @param {Array<string>} relays - Optional list of relay URLs
+ * @returns {Promise<Array>} List of ORE Meeting Space events
+ */
+async function fetchOREMeetingSpaces(relays = null) {
+    const relayList = relays || DEFAULT_RELAYS;
+    console.log('🔍 Fetching ORE Meeting Spaces (kind 30312)...');
+    
+    const allSpaces = [];
+    
+    for (const relayUrl of relayList) {
+        try {
+            const relay = NostrTools.relayInit(relayUrl);
+            await relay.connect();
+            
+            const events = await new Promise((resolve) => {
+                const sub = relay.sub([{
+                    kinds: [30312],
+                    '#t': ['ORE'],
+                    limit: 100
+                }]);
+                
+                const spaces = [];
+                const timeout = setTimeout(() => {
+                    sub.unsub();
+                    relay.close();
+                    resolve(spaces);
+                }, 10000);
+                
+                sub.on('event', (event) => {
+                    spaces.push(event);
+                });
+                
+                sub.on('eose', () => {
+                    clearTimeout(timeout);
+                    sub.unsub();
+                    relay.close();
+                    resolve(spaces);
+                });
+            });
+            
+            allSpaces.push(...events);
+            console.log(`✅ Fetched ${events.length} ORE spaces from ${relayUrl}`);
+            
+        } catch (error) {
+            console.error(`Error fetching from ${relayUrl}:`, error);
+        }
+    }
+    
+    // Deduplicate by id
+    const uniqueSpaces = Array.from(new Map(allSpaces.map(e => [e.id, e])).values());
+    console.log(`📊 Total unique ORE Meeting Spaces: ${uniqueSpaces.length}`);
+    
+    return uniqueSpaces;
+}
+
+/**
+ * Fetch ORE verification meetings (kind 30313) for a specific UMAP
+ * @param {number} lat - Latitude
+ * @param {number} lon - Longitude
+ * @param {Array<string>} relays - Optional list of relay URLs
+ * @returns {Promise<Array>} List of ORE verification meetings
+ */
+async function fetchOREVerificationMeetings(lat, lon, relays = null) {
+    const relayList = relays || DEFAULT_RELAYS;
+    const umapKey = `${lat.toFixed(2)},${lon.toFixed(2)}`;
+    console.log(`🔍 Fetching ORE verification meetings for UMAP ${umapKey}...`);
+    
+    const allMeetings = [];
+    
+    for (const relayUrl of relayList) {
+        try {
+            const relay = NostrTools.relayInit(relayUrl);
+            await relay.connect();
+            
+            const events = await new Promise((resolve) => {
+                const sub = relay.sub([{
+                    kinds: [30313],
+                    '#g': [umapKey],
+                    limit: 50
+                }]);
+                
+                const meetings = [];
+                const timeout = setTimeout(() => {
+                    sub.unsub();
+                    relay.close();
+                    resolve(meetings);
+                }, 10000);
+                
+                sub.on('event', (event) => {
+                    meetings.push(event);
+                });
+                
+                sub.on('eose', () => {
+                    clearTimeout(timeout);
+                    sub.unsub();
+                    relay.close();
+                    resolve(meetings);
+                });
+            });
+            
+            allMeetings.push(...events);
+            console.log(`✅ Fetched ${events.length} meetings from ${relayUrl}`);
+            
+        } catch (error) {
+            console.error(`Error fetching from ${relayUrl}:`, error);
+        }
+    }
+    
+    // Deduplicate and sort by date
+    const uniqueMeetings = Array.from(new Map(allMeetings.map(e => [e.id, e])).values());
+    uniqueMeetings.sort((a, b) => b.created_at - a.created_at);
+    
+    console.log(`📊 Total meetings for UMAP: ${uniqueMeetings.length}`);
+    return uniqueMeetings;
+}
+
+/**
+ * Extract coordinates from ORE Meeting Space event
+ * @param {object} event - NOSTR event (kind 30312)
+ * @returns {object|null} {lat, lon} or null
+ */
+function extractCoordinatesFromORESpace(event) {
+    try {
+        // Look for 'g' tag with coordinates
+        const gTag = event.tags.find(tag => tag[0] === 'g');
+        if (gTag && gTag[1]) {
+            const coords = gTag[1].split(',');
+            if (coords.length === 2) {
+                return {
+                    lat: parseFloat(coords[0]),
+                    lon: parseFloat(coords[1])
+                };
+            }
+        }
+        
+        // Fallback: extract from 'd' tag (identifier)
+        const dTag = event.tags.find(tag => tag[0] === 'd');
+        if (dTag && dTag[1]) {
+            const match = dTag[1].match(/ore-space-([\d.-]+)-([\d.-]+)/);
+            if (match) {
+                return {
+                    lat: parseFloat(match[1]),
+                    lon: parseFloat(match[2])
+                };
+            }
+        }
+        
+        // Fallback: parse from content
+        const coordMatch = event.content.match(/UMAP \(([\d.-]+),\s*([\d.-]+)\)/);
+        if (coordMatch) {
+            return {
+                lat: parseFloat(coordMatch[1]),
+                lon: parseFloat(coordMatch[2])
+            };
+        }
+        
+        return null;
+    } catch (error) {
+        console.error('Error extracting coordinates:', error);
+        return null;
+    }
+}
+
+/**
+ * Extract ORE statistics from Meeting Space event tags
+ * @param {object} event - NOSTR event (kind 30312)
+ * @returns {object} Statistics object
+ */
+function extractOREStatistics(event) {
+    try {
+        const stats = {
+            plantsCount: 0,
+            species: 0,
+            observers: 0,
+            complianceScore: 0,
+            rewards: 0
+        };
+        
+        // Extract from tags
+        event.tags.forEach(tag => {
+            if (tag[0] === 'plants') stats.plantsCount = parseInt(tag[1]) || 0;
+            if (tag[0] === 'species') stats.species = parseInt(tag[1]) || 0;
+            if (tag[0] === 'observers') stats.observers = parseInt(tag[1]) || 0;
+            if (tag[0] === 'compliance_score') stats.complianceScore = parseFloat(tag[1]) || 0;
+            if (tag[0] === 'ore_reward') stats.rewards = parseFloat(tag[1]) || 0;
+            if (tag[0] === 'observations') stats.plantsCount = parseInt(tag[1]) || 0; // fallback
+            if (tag[0] === 'contributors') stats.observers = parseInt(tag[1]) || 0; // fallback
+        });
+        
+        // Try to parse from content if tags are missing
+        if (stats.plantsCount === 0) {
+            const plantsMatch = event.content.match(/(\d+)\s+plants?/i);
+            if (plantsMatch) stats.plantsCount = parseInt(plantsMatch[1]);
+        }
+        
+        return stats;
+    } catch (error) {
+        console.error('Error extracting ORE statistics:', error);
+        return {
+            plantsCount: 0,
+            species: 0,
+            observers: 0,
+            complianceScore: 0,
+            rewards: 0
+        };
+    }
+}
+
+/**
+ * Fetch all UMAPs with ORE plant observations for map display
+ * @param {Array<string>} relays - Optional list of relay URLs
+ * @returns {Promise<Array>} List of UMAP data with coordinates and stats
+ */
+async function fetchOREUMAPsForMap(relays = null) {
+    console.log('🗺️ Fetching all ORE UMAPs for map display...');
+    
+    try {
+        // Fetch all ORE Meeting Spaces (kind 30312)
+        const spaces = await fetchOREMeetingSpaces(relays);
+        
+        // Also fetch regular plant observations for UMAPs not yet having kind 30312
+        const plantMessages = await fetchAllPlantObservations(relays);
+        
+        // Process each space to extract map data
+        const umapData = spaces.map(event => {
+            const coords = extractCoordinatesFromORESpace(event);
+            if (!coords) return null;
+            
+            const stats = extractOREStatistics(event);
+            const roomTag = event.tags.find(tag => tag[0] === 'room');
+            const vdoTag = event.tags.find(tag => tag[0] === 'vdo_url' || tag[0] === 'vdo');
+            const dTag = event.tags.find(tag => tag[0] === 'd');
+            const didTag = event.tags.find(tag => tag[0] === 'did');
+            
+            // Calculate potential rewards
+            const rewardPotential = calculateORERewards(stats);
+            
+            return {
+                lat: coords.lat,
+                lon: coords.lon,
+                stats: stats,
+                rewardPotential: rewardPotential,
+                roomName: roomTag ? roomTag[1] : null,
+                vdoUrl: vdoTag ? vdoTag[1] : null,
+                did: didTag ? didTag[1] : (dTag ? dTag[1] : null),
+                eventId: event.id,
+                createdAt: event.created_at,
+                pubkey: event.pubkey,
+                content: event.content,
+                hasOREContract: true
+            };
+        }).filter(data => data !== null);
+        
+        // Add UMAPs from regular plant observations (those without kind 30312 yet)
+        const umapFromPlants = aggregatePlantObservationsByUMAP(plantMessages);
+        umapFromPlants.forEach(plantUmap => {
+            // Check if this UMAP already has an ORE space
+            const existing = umapData.find(u => 
+                u.lat === plantUmap.lat && u.lon === plantUmap.lon
+            );
+            
+            if (!existing) {
+                umapData.push({
+                    ...plantUmap,
+                    hasOREContract: false,
+                    rewardPotential: calculateORERewards(plantUmap.stats)
+                });
+            }
+        });
+        
+        console.log(`✅ Processed ${umapData.length} ORE UMAPs with coordinates`);
+        return umapData;
+        
+    } catch (error) {
+        console.error('Error fetching ORE UMAPs for map:', error);
+        return [];
+    }
+}
+
+/**
+ * Fetch all plant observations with geolocation tags
+ * @param {Array<string>} relays - Optional list of relay URLs
+ * @returns {Promise<Array>} List of plant observation events
+ */
+async function fetchAllPlantObservations(relays = null) {
+    const relayList = relays || DEFAULT_RELAYS;
+    console.log('🌿 Fetching plant observations...');
+    
+    const allMessages = [];
+    
+    for (const relayUrl of relayList) {
+        try {
+            const relay = NostrTools.relayInit(relayUrl);
+            await relay.connect();
+            
+            const events = await new Promise((resolve) => {
+                const sub = relay.sub([{
+                    kinds: [1],
+                    '#t': ['plantnet'],
+                    limit: 500
+                }]);
+                
+                const messages = [];
+                const timeout = setTimeout(() => {
+                    sub.unsub();
+                    relay.close();
+                    resolve(messages);
+                }, 15000);
+                
+                sub.on('event', (event) => {
+                    // Check if message has geolocation
+                    const hasGeoTag = event.tags.some(tag => tag[0] === 'g');
+                    const hasGeoInContent = event.content.includes('📍 Position:');
+                    
+                    if (hasGeoTag || hasGeoInContent) {
+                        messages.push(event);
+                    }
+                });
+                
+                sub.on('eose', () => {
+                    clearTimeout(timeout);
+                    sub.unsub();
+                    relay.close();
+                    resolve(messages);
+                });
+            });
+            
+            allMessages.push(...events);
+            console.log(`✅ Fetched ${events.length} plant observations from ${relayUrl}`);
+            
+        } catch (error) {
+            console.error(`Error fetching from ${relayUrl}:`, error);
+        }
+    }
+    
+    // Deduplicate
+    const uniqueMessages = Array.from(new Map(allMessages.map(e => [e.id, e])).values());
+    console.log(`📊 Total unique plant observations: ${uniqueMessages.length}`);
+    
+    return uniqueMessages;
+}
+
+/**
+ * Aggregate plant observations by UMAP coordinates
+ * @param {Array} messages - Plant observation events
+ * @returns {Array} Aggregated UMAP data
+ */
+function aggregatePlantObservationsByUMAP(messages) {
+    const umapMap = new Map();
+    
+    messages.forEach(msg => {
+        // Extract coordinates from message
+        let lat, lon;
+        
+        // Try 'g' tag first
+        const gTag = msg.tags.find(tag => tag[0] === 'g');
+        if (gTag && gTag[1]) {
+            const coords = gTag[1].split(',');
+            lat = parseFloat(coords[0]);
+            lon = parseFloat(coords[1]);
+        } else {
+            // Parse from content
+            const coordMatch = msg.content.match(/📍 Position:\s*([\d.-]+),\s*([\d.-]+)/);
+            if (coordMatch) {
+                lat = parseFloat(coordMatch[1]);
+                lon = parseFloat(coordMatch[2]);
+            }
+        }
+        
+        if (!lat || !lon) return;
+        
+        // Round to UMAP precision (0.01 degrees)
+        const umapLat = Math.round(lat * 100) / 100;
+        const umapLon = Math.round(lon * 100) / 100;
+        const umapKey = `${umapLat},${umapLon}`;
+        
+        // Aggregate
+        if (!umapMap.has(umapKey)) {
+            umapMap.set(umapKey, {
+                lat: umapLat,
+                lon: umapLon,
+                stats: {
+                    plantsCount: 0,
+                    species: 0,
+                    observers: new Set(),
+                    complianceScore: 0,
+                    rewards: 0
+                },
+                observations: [],
+                createdAt: msg.created_at
+            });
+        }
+        
+        const umapData = umapMap.get(umapKey);
+        umapData.stats.plantsCount++;
+        umapData.stats.observers.add(msg.pubkey);
+        umapData.observations.push(msg);
+        
+        // Keep the most recent creation date
+        if (msg.created_at > umapData.createdAt) {
+            umapData.createdAt = msg.created_at;
+        }
+    });
+    
+    // Convert observers Set to count
+    return Array.from(umapMap.values()).map(umap => ({
+        ...umap,
+        stats: {
+            ...umap.stats,
+            observers: umap.stats.observers.size
+        }
+    }));
+}
+
+/**
+ * Calculate ORE reward potential based on flora statistics
+ * @param {object} stats - Flora statistics
+ * @returns {number} Estimated reward in Ẑen
+ */
+function calculateORERewards(stats) {
+    if (!stats || !stats.plantsCount) return 0;
+    
+    // Reward formula (following ore_system.py logic):
+    // Base: 0.5 Ẑen per plant observation
+    // Bonus: +1 Ẑen per unique species
+    // Multiplier: x1.5 if compliance_score > 0.8
+    
+    let reward = stats.plantsCount / 2;
+    
+    if (stats.species > 0) {
+        reward += stats.species;
+    }
+    
+    if (stats.complianceScore && stats.complianceScore > 0.8) {
+        reward *= 1.5;
+    }
+    
+    // Biodiversity bonus
+    if (stats.species >= 20) {
+        reward += 100; // Exceptional biodiversity bonus
+    } else if (stats.species >= 10) {
+        reward += 50; // High biodiversity bonus
+    }
+    
+    // Observer engagement bonus
+    if (stats.observers >= 10) {
+        reward += 50; // Community engagement bonus
+    } else if (stats.observers >= 5) {
+        reward += 25;
+    }
+    
+    return Math.round(reward);
+}
+

@@ -23,15 +23,15 @@ This is the URL conversion method and principle that gives access to AstroportON
     const zoneURL = station + '/?dragons=one';
     console.log('DRAGON URL:', zoneURL);
 
-    // Second bloc (uPlanetAPI_URL)
+    // Second bloc (UPlanetAPI_URL)
     var uPort = currentURL.port;
     if (uPort === "8080") {
         uPort = "54321";
     }
     var uHost = hostname.replace("ipfs", "u");
-    var uPlanetStation = protocol + "://" + uHost + (uPort ? ":" + uPort : "");
-    const uPlanetAPI_URL = uPlanetStation + '/';
-    console.log('UPLANET API URL:', uPlanetAPI_URL);
+    var UPlanetStation = protocol + "://" + uHost + (uPort ? ":" + uPort : "");
+    const UPlanetAPI_URL = UPlanetStation + '/';
+    console.log('UPLANET API URL:', UPlanetAPI_URL);
 
 ```
 

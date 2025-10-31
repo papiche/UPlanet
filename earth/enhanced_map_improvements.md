@@ -109,8 +109,8 @@ function createEnhancedPopup(entity, type) {
 ### 5. **Exploitation des données SWARM**
 ```javascript
 // Afficher les nodes SWARM avec leurs capacités
-if (uPlanetData.SWARM) {
-    uPlanetData.SWARM.forEach(node => {
+if (UPlanetData.SWARM) {
+    UPlanetData.SWARM.forEach(node => {
         const nodeIcon = L.icon({
             iconUrl: 'icons/swarm-node.png',
             iconSize: [30, 30],
@@ -141,8 +141,8 @@ if (uPlanetData.SWARM) {
 ### 6. **Correction du positionnement NOSTR**
 ```javascript
 // Utiliser les vraies coordonnées des utilisateurs NOSTR
-if (uPlanetData.NOSTR) {
-    uPlanetData.NOSTR.forEach(nostr => {
+if (UPlanetData.NOSTR) {
+    UPlanetData.NOSTR.forEach(nostr => {
         if (nostr.LAT && nostr.LON) { // Utiliser les vraies coordonnées
             const nostrIcon = L.icon({
                 iconUrl: 'icons/nostr-user.png',
@@ -306,14 +306,14 @@ function performSearch(query) {
     const results = [];
     
     // Recherche NOSTR par email
-    uPlanetData.NOSTR?.forEach(user => {
+    UPlanetData.NOSTR?.forEach(user => {
         if (user.EMAIL.toLowerCase().includes(query.toLowerCase())) {
             results.push({type: 'nostr', data: user});
         }
     });
     
     // Recherche PLAYERs par ASTROMAIL
-    uPlanetData.PLAYERs?.forEach(player => {
+    UPlanetData.PLAYERs?.forEach(player => {
         if (player.ASTROMAIL?.toLowerCase().includes(query.toLowerCase())) {
             results.push({type: 'player', data: player});
         }

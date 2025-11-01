@@ -4,6 +4,112 @@
  */
 
 // ========================================
+// NOSTR EXTENSION PROXY FOR IFRAMES
+// ========================================
+// This allows pages loaded in iframes to access window.nostr from the parent
+(function() {
+    const pendingRequests = new Map();
+    let requestIdCounter = 0;
+    
+    // Check if we're in an iframe
+    const isInIframe = window.self !== window.top;
+    
+    if (isInIframe && typeof window.nostr === 'undefined') {
+        // Create a proxy for window.nostr that communicates with parent
+        const nostrProxy = {
+            getPublicKey: async function() {
+                return await proxyNostrMethod('getPublicKey', []);
+            },
+            signEvent: async function(event) {
+                return await proxyNostrMethod('signEvent', [event]);
+            }
+        };
+        
+        // NIP-44 (Recommended): Modern encryption using ChaCha20-Poly1305
+        // This is the replacement for NIP-04 and should be preferred for new implementations
+        Object.defineProperty(nostrProxy, 'nip44', {
+            value: {
+                encrypt: async function(pubkey, plaintext) {
+                    return await proxyNostrMethod('nip44.encrypt', [pubkey, plaintext]);
+                },
+                decrypt: async function(pubkey, ciphertext) {
+                    return await proxyNostrMethod('nip44.decrypt', [pubkey, ciphertext]);
+                }
+            },
+            writable: false,
+            configurable: false
+        });
+        
+        // NIP-04 (Deprecated): Legacy encryption - use NIP-44 instead
+        // Kept for backward compatibility only
+        Object.defineProperty(nostrProxy, 'nip04', {
+            value: {
+                encrypt: async function(pubkey, plaintext) {
+                    console.warn('⚠️ NIP-04 is deprecated. Please use NIP-44 (window.nostr.nip44.encrypt) instead.');
+                    return await proxyNostrMethod('nip04.encrypt', [pubkey, plaintext]);
+                },
+                decrypt: async function(pubkey, ciphertext) {
+                    console.warn('⚠️ NIP-04 is deprecated. Please use NIP-44 (window.nostr.nip44.decrypt) instead.');
+                    return await proxyNostrMethod('nip04.decrypt', [pubkey, ciphertext]);
+                }
+            },
+            writable: false,
+            configurable: false
+        });
+        
+        function proxyNostrMethod(method, params) {
+            return new Promise((resolve, reject) => {
+                const requestId = ++requestIdCounter;
+                pendingRequests.set(requestId, { resolve, reject });
+                
+                // Send request to parent
+                window.parent.postMessage({
+                    type: 'nostr-request',
+                    requestId: requestId,
+                    method: method,
+                    params: params
+                }, '*');
+                
+                // Timeout after 10 seconds
+                setTimeout(() => {
+                    if (pendingRequests.has(requestId)) {
+                        pendingRequests.delete(requestId);
+                        reject(new Error('NOSTR request timeout'));
+                    }
+                }, 10000);
+            });
+        }
+        
+        // Listen for responses from parent
+        window.addEventListener('message', function(event) {
+            if (event.data && event.data.type === 'nostr-response') {
+                const { requestId, success, data, error } = event.data;
+                
+                if (pendingRequests.has(requestId)) {
+                    const { resolve, reject } = pendingRequests.get(requestId);
+                    pendingRequests.delete(requestId);
+                    
+                    if (success) {
+                        resolve(data);
+                    } else {
+                        reject(new Error(error || 'NOSTR request failed'));
+                    }
+                }
+            }
+        });
+        
+        // Expose proxy as window.nostr
+        Object.defineProperty(window, 'nostr', {
+            value: nostrProxy,
+            writable: false,
+            configurable: false
+        });
+        
+        console.log('✅ NOSTR proxy initialized for iframe (via common.js)');
+    }
+})();
+
+// ========================================
 // VARIABLES GLOBALES
 // ========================================
 

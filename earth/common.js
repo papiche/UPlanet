@@ -1360,6 +1360,11 @@ async function fetchUserEmailWithFallback(pubkey) {
     }
 }
 
+// Expose fetchUserEmailWithFallback globally for use in webcam.html and other pages
+if (typeof window !== 'undefined') {
+    window.fetchUserEmailWithFallback = fetchUserEmailWithFallback;
+}
+
 /**
  * Create a basic DID document for a user (if they don't have one)
  * @param {string} pubkey - Public key of the user

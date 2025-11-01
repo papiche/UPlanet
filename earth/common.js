@@ -14,7 +14,21 @@
     // Check if we're in an iframe
     const isInIframe = window.self !== window.top;
     
-    if (isInIframe && typeof window.nostr === 'undefined') {
+    // Only create proxy if we're in an iframe AND window.nostr doesn't exist
+    // Wait a bit for NOSTR extension to initialize first
+    if (isInIframe) {
+        // Wait a moment for NOSTR extension to load (extensions usually load at document_end)
+        setTimeout(() => {
+            if (typeof window.nostr === 'undefined' || !window.nostr || typeof window.nostr.getPublicKey !== 'function') {
+                // Extension not available, create proxy
+                createNostrProxy();
+            } else {
+                console.log('✅ NOSTR extension detected in iframe, using real extension');
+            }
+        }, 100);
+    }
+    
+    function createNostrProxy() {
         // Create a proxy for window.nostr that communicates with parent
         const nostrProxy = {
             getPublicKey: async function() {
@@ -98,14 +112,17 @@
             }
         });
         
-        // Expose proxy as window.nostr
-        Object.defineProperty(window, 'nostr', {
-            value: nostrProxy,
-            writable: false,
-            configurable: false
-        });
-        
-        console.log('✅ NOSTR proxy initialized for iframe (via common.js)');
+        // Only set window.nostr if it doesn't exist or is not functional
+        if (typeof window.nostr === 'undefined' || !window.nostr || typeof window.nostr.getPublicKey !== 'function') {
+            // Expose proxy as window.nostr
+            Object.defineProperty(window, 'nostr', {
+                value: nostrProxy,
+                writable: true,  // Allow overwriting if extension loads later
+                configurable: true
+            });
+            
+            console.log('✅ NOSTR proxy initialized for iframe (via common.js)');
+        }
     }
 })();
 

@@ -1328,7 +1328,85 @@ async function fetchUserEmailFromDID(pubkey) {
 }
 
 /**
- * Fetch user email with fallback strategy (DID -> Metadata -> Pubkey)
+ * Fetch user email from kind 0 event tags (i tags with email: prefix)
+ * @param {string} pubkey - Public key of the user
+ * @returns {Promise<string|null>} User email or null if not found
+ */
+async function fetchUserEmailFromKind0Tags(pubkey) {
+    if (!isNostrConnected) {
+        await connectToRelay();
+    }
+
+    if (!nostrRelay || !isNostrConnected) {
+        return null;
+    }
+
+    try {
+        console.log('🔍 Strategy 2b: Checking kind 0 event tags for email...');
+        
+        const filter = {
+            kinds: [0],
+            authors: [pubkey],
+            limit: 1
+        };
+
+        return new Promise((resolve) => {
+            const sub = nostrRelay.sub([filter]);
+            let kind0Event = null;
+
+            const timeout = setTimeout(() => {
+                sub.unsub();
+                if (kind0Event) {
+                    // Extract email from tags
+                    const emailTag = kind0Event.tags.find(tag => 
+                        Array.isArray(tag) && tag.length >= 2 && 
+                        tag[0] === 'i' && tag[1] && tag[1].startsWith('email:')
+                    );
+                    if (emailTag) {
+                        const email = emailTag[1].substring(6); // Remove 'email:' prefix
+                        console.log('✅ Email found in kind 0 tags:', email);
+                        resolve(email);
+                    } else {
+                        resolve(null);
+                    }
+                } else {
+                    resolve(null);
+                }
+            }, 3000);
+
+            sub.on('event', (event) => {
+                kind0Event = event;
+            });
+
+            sub.on('eose', () => {
+                clearTimeout(timeout);
+                sub.unsub();
+                if (kind0Event) {
+                    // Extract email from tags
+                    const emailTag = kind0Event.tags.find(tag => 
+                        Array.isArray(tag) && tag.length >= 2 && 
+                        tag[0] === 'i' && tag[1] && tag[1].startsWith('email:')
+                    );
+                    if (emailTag) {
+                        const email = emailTag[1].substring(6); // Remove 'email:' prefix
+                        console.log('✅ Email found in kind 0 tags:', email);
+                        resolve(email);
+                    } else {
+                        resolve(null);
+                    }
+                } else {
+                    resolve(null);
+                }
+            });
+        });
+    } catch (error) {
+        console.error('❌ Error fetching email from kind 0 tags:', error);
+        return null;
+    }
+}
+
+/**
+ * Fetch user email with fallback strategy (DID -> Metadata JSON -> Kind 0 Tags -> Pubkey)
  * @param {string} pubkey - Public key of the user
  * @returns {Promise<string>} User email or pubkey as fallback
  */
@@ -1342,16 +1420,23 @@ async function fetchUserEmailWithFallback(pubkey) {
             return didEmail;
         }
 
-        // Strategy 2: Try metadata (kind 0)
-        console.log('🔍 Strategy 2: Checking user metadata...');
+        // Strategy 2a: Try metadata JSON content (kind 0)
+        console.log('🔍 Strategy 2a: Checking user metadata JSON...');
         const metadata = await fetchUserMetadata(pubkey);
         if (metadata && metadata.email) {
-            console.log('✅ Email found in metadata:', metadata.email);
+            console.log('✅ Email found in metadata JSON:', metadata.email);
             return metadata.email;
         }
 
+        // Strategy 2b: Try kind 0 event tags (i tags with email: prefix)
+        const tagEmail = await fetchUserEmailFromKind0Tags(pubkey);
+        if (tagEmail) {
+            console.log('✅ Email found in kind 0 tags:', tagEmail);
+            return tagEmail;
+        }
+
         // Strategy 3: Fallback to pubkey
-        console.log('⚠️ No email found, using pubkey as fallback');
+        console.log('⚠️ No email found in profile, using pubkey as fallback');
         return pubkey;
 
     } catch (error) {

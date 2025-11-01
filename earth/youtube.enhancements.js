@@ -317,6 +317,10 @@ async function openTheaterMode(videoData) {
 
     document.body.appendChild(modal);
 
+    // Attach event listeners to buttons (replace onclick attributes)
+    // This ensures functions are available in the parent context (youtube.html)
+    attachTheaterEventListeners(modal);
+
     // Load video
     const videoPlayer = document.getElementById('theaterVideoPlayer');
     if (videoPlayer) {
@@ -369,6 +373,149 @@ async function openTheaterMode(videoData) {
         }
     };
     document.addEventListener('keydown', escListener);
+}
+
+/**
+ * Attach event listeners to theater modal buttons
+ * This replaces onclick attributes to ensure functions are available in parent context
+ */
+function attachTheaterEventListeners(modal) {
+    // Close button - handle both handleCloseTheater and direct closeTheaterMode calls
+    const closeBtn = modal.querySelector('.theater-close-btn');
+    if (closeBtn) {
+        const existingOnclick = closeBtn.getAttribute('onclick');
+        closeBtn.removeAttribute('onclick');
+        closeBtn.addEventListener('click', () => {
+            if (typeof closeTheaterMode === 'function') {
+                closeTheaterMode();
+            } else if (typeof window.closeTheaterMode === 'function') {
+                window.closeTheaterMode();
+            } else {
+                console.error('closeTheaterMode not available');
+                // Fallback: remove modal directly
+                modal.remove();
+                document.body.style.overflow = '';
+            }
+        });
+    }
+
+    // Find all action buttons and attach listeners based on their text content or onclick attribute
+    const actionBtns = modal.querySelectorAll('.theater-action-btn');
+    actionBtns.forEach(btn => {
+        const existingOnclick = btn.getAttribute('onclick');
+        const btnText = btn.textContent.trim();
+        
+        btn.removeAttribute('onclick');
+
+        // Share button
+        if (btnText.includes('Partager') || (existingOnclick && existingOnclick.includes('Share'))) {
+            btn.addEventListener('click', async () => {
+                if (typeof theaterShareVideoWithPreview === 'function') {
+                    await theaterShareVideoWithPreview();
+                } else if (typeof window.theaterShareVideoWithPreview === 'function') {
+                    await window.theaterShareVideoWithPreview();
+                } else {
+                    console.error('theaterShareVideoWithPreview not available');
+                    alert('Fonction de partage non disponible. Assurez-vous que youtube.enhancements.js est chargé.');
+                }
+            });
+        }
+        // Bookmark button
+        else if (btnText.includes('Bookmark') || (existingOnclick && existingOnclick.includes('Bookmark'))) {
+            btn.addEventListener('click', async () => {
+                if (typeof theaterBookmarkVideo === 'function') {
+                    await theaterBookmarkVideo();
+                } else if (typeof window.theaterBookmarkVideo === 'function') {
+                    await window.theaterBookmarkVideo();
+                } else {
+                    console.error('theaterBookmarkVideo not available');
+                    alert('Fonction de bookmark non disponible. Assurez-vous que youtube.enhancements.js est chargé.');
+                }
+            });
+        }
+        // Playlist button
+        else if (btnText.includes('Playlist') || (existingOnclick && existingOnclick.includes('Playlist'))) {
+            btn.addEventListener('click', async () => {
+                try {
+                    const videoPlayer = document.getElementById('theaterVideoPlayer');
+                    if (!videoPlayer) {
+                        alert('Video player not found');
+                        return;
+                    }
+                    
+                    const eventId = videoPlayer.getAttribute('data-event-id');
+                    if (!eventId) {
+                        alert('Video event ID not found');
+                        return;
+                    }
+
+                    if (typeof addToPlaylist === 'function') {
+                        await addToPlaylist(null, eventId);
+                    } else if (typeof window.addToPlaylist === 'function') {
+                        await window.addToPlaylist(null, eventId);
+                    } else {
+                        alert('Fonction d\'ajout à la playlist non disponible. Assurez-vous que youtube.enhancements.js est chargé.');
+                    }
+                } catch (error) {
+                    console.error('Error adding to playlist:', error);
+                    alert('Erreur lors de l\'ajout à la playlist: ' + error.message);
+                }
+            });
+        }
+        // Picture in Picture button
+        else if (btnText.includes('PiP') || (existingOnclick && existingOnclick.includes('Picture'))) {
+            btn.addEventListener('click', async () => {
+                try {
+                    if (typeof enterPictureInPicture === 'function') {
+                        await enterPictureInPicture();
+                    } else if (typeof window.enterPictureInPicture === 'function') {
+                        await window.enterPictureInPicture();
+                    } else {
+                        // Fallback: try native PiP API
+                        const videoPlayer = document.getElementById('theaterVideoPlayer');
+                        if (videoPlayer && videoPlayer.requestPictureInPicture) {
+                            await videoPlayer.requestPictureInPicture();
+                        } else {
+                            alert('Le mode Picture-in-Picture n\'est pas disponible.');
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error entering picture in picture:', error);
+                    alert('Erreur lors de l\'activation du mode PiP: ' + error.message);
+                }
+            });
+        }
+    });
+
+    // Comment submit button
+    const commentSubmitBtn = modal.querySelector('.theater-comment-submit-btn');
+    if (commentSubmitBtn) {
+        commentSubmitBtn.removeAttribute('onclick');
+        commentSubmitBtn.addEventListener('click', () => {
+            if (typeof submitTheaterComment === 'function') {
+                submitTheaterComment();
+            } else if (typeof window.submitTheaterComment === 'function') {
+                window.submitTheaterComment();
+            } else {
+                console.error('submitTheaterComment not available');
+            }
+        });
+    }
+
+    // Comment timestamp button
+    const timestampBtn = modal.querySelector('.theater-comment-timestamp-btn');
+    if (timestampBtn) {
+        timestampBtn.removeAttribute('onclick');
+        timestampBtn.addEventListener('click', () => {
+            if (typeof addTimestampToComment === 'function') {
+                addTimestampToComment();
+            } else if (typeof window.addTimestampToComment === 'function') {
+                window.addTimestampToComment();
+            } else {
+                console.error('addTimestampToComment not available');
+            }
+        });
+    }
 }
 
 /**
@@ -1889,5 +2036,7 @@ window.loadRelatedVideosInTheater = loadRelatedVideosInTheater;
 window.openTheaterModeFromEvent = openTheaterModeFromEvent;
 window.theaterShareVideoWithPreview = theaterShareVideoWithPreview;
 window.theaterBookmarkVideo = theaterBookmarkVideo;
+window.submitTheaterComment = submitTheaterComment;
+window.addTimestampToComment = addTimestampToComment;
 window.escapeHtml = escapeHtml; // Make escapeHtml globally available
 

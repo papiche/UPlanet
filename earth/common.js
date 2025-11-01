@@ -35,7 +35,10 @@ function detectUSPOTAPI() {
     let determinedUpassportUrl = '';
     let determinedRelay = '';
 
-    if (hostname === "127.0.0.1" && port === "8080") {
+    if (hostname === "127.0.0.1" && (port === "8080" || port === "54321")) {
+        determinedUpassportUrl = `http://127.0.0.1:54321`;
+        determinedRelay = `ws://127.0.0.1:7777`;
+    } else if (hostname === "localhost" && (port === "8080" || port === "54321")) {
         determinedUpassportUrl = `http://127.0.0.1:54321`;
         determinedRelay = `ws://127.0.0.1:7777`;
     } else if (hostname.startsWith("ipfs.")) {

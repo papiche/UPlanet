@@ -681,7 +681,7 @@ async function fetchUserMetadata(pubkey) {
 }
 
 /**
- * Fetch user email from NOSTR DID document (kind 30311)
+ * Fetch user email from NOSTR DID document (kind 30800 - NIP-101)
  * @param {string} pubkey - Public key of the user
  * @returns {Promise<string|null>} User email or null if not found
  */
@@ -698,7 +698,7 @@ async function fetchUserEmailFromDID(pubkey) {
         console.log(`📧 Fetching user email from DID document for: ${pubkey.substring(0, 8)}...`);
         
         const filter = {
-            kinds: [30311], // DID document events
+            kinds: [30800], // DID document events (NIP-101)
             authors: [pubkey],
             '#d': ['did'], // DID tag identifier
             limit: 1
@@ -856,7 +856,7 @@ async function createBasicDIDDocument(pubkey, email) {
 
         // Create NOSTR event for DID document
         const didEvent = {
-            kind: 30311, // Parameterized Replaceable Event for DID documents
+            kind: 30800, // Parameterized Replaceable Event for DID documents (NIP-101)
             created_at: Math.floor(Date.now() / 1000),
             tags: [
                 ['d', 'did'], // DID tag identifier

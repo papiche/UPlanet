@@ -444,6 +444,10 @@ async function connectNostr() {
         
         if (pubkey) {
             userPubkey = pubkey;
+            // Attach to window for iframe access
+            if (typeof window !== 'undefined') {
+                window.userPubkey = pubkey;
+            }
             console.log(`✅ Connecté avec la clé publique: ${pubkey.substring(0, 8)}...`);
             
             // Connexion automatique au relay
@@ -654,10 +658,18 @@ async function connectToRelay() {
         }
 
         nostrRelay = NostrTools.relayInit(NOSTRws);
+        // Attach to window for iframe access
+        if (typeof window !== 'undefined') {
+            window.nostrRelay = nostrRelay;
+        }
 
         nostrRelay.on('connect', async () => {
             console.log(`✅ Connecté au relay: ${NOSTRws}`);
             isNostrConnected = true;
+            // Attach to window for iframe access
+            if (typeof window !== 'undefined') {
+                window.isNostrConnected = true;
+            }
             
             // Send NIP-42 authentication event once
             if (userPubkey && !authSent) {
@@ -686,11 +698,19 @@ async function connectToRelay() {
         nostrRelay.on('error', (error) => {
             console.error('❌ Erreur de connexion au relay:', error);
             isNostrConnected = false;
+            // Update window for iframe access
+            if (typeof window !== 'undefined') {
+                window.isNostrConnected = false;
+            }
         });
 
         nostrRelay.on('disconnect', () => {
             console.log('🔌 Relay disconnected');
             isNostrConnected = false;
+            // Update window for iframe access
+            if (typeof window !== 'undefined') {
+                window.isNostrConnected = false;
+            }
             authSent = false;
         });
 
@@ -726,6 +746,10 @@ async function connectToRelay() {
     } catch (error) {
         console.error('❌ Échec de connexion au relay:', error);
         isNostrConnected = false;
+        // Update window for iframe access
+        if (typeof window !== 'undefined') {
+            window.isNostrConnected = false;
+        }
         return false;
     }
 }

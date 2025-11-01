@@ -37,25 +37,30 @@
                         return;
                     }
                     
+                    // Save extension reference before testing (we might replace window.nostr with proxy)
+                    const savedExtension = window.nostr;
+                    
                     // Test if the promise actually resolves (with timeout)
-                    let proxyCreated = false;
+                    // If test fails, we'll create proxy
                     Promise.race([
                         testPromise,
                         new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 2000))
                     ]).then(() => {
+                        // Extension works! Don't create proxy
                         console.log('✅ NOSTR extension detected in iframe and working, using real extension');
                     }).catch((testError) => {
-                        // Extension exists but doesn't work properly
-                        if (!proxyCreated) {
-                            proxyCreated = true;
-                            console.warn('⚠️ NOSTR extension detected but not functional:', testError.message);
-                            console.warn('⚠️ Creating proxy as fallback');
+                        // Extension doesn't work properly, create proxy
+                        if (testError.message && testError.message.includes('_call')) {
+                            console.warn('⚠️ NOSTR extension detected but not functional (', testError.message, '), creating proxy');
+                        } else {
+                            console.warn('⚠️ NOSTR extension detected but test failed, creating proxy as fallback');
+                        }
+                        // Only create proxy if window.nostr is still the extension (not already replaced)
+                        if (window.nostr === savedExtension) {
                             createNostrProxy();
                         }
                     });
                     
-                    // If no immediate error, extension might work, don't create proxy yet
-                    // But if error occurs async, proxy will be created in catch handler above
                     return;
                     
                 } catch (e) {
@@ -179,8 +184,43 @@
             
             console.log('✅ NOSTR proxy initialized for iframe (via common.js) - replaced non-functional window.nostr');
         } else {
-            // Extension is present and functional, don't override
-            console.log('✅ NOSTR extension already present and functional, skipping proxy creation');
+            // window.nostr exists and has getPublicKey, but it might not be functional in iframe
+            // Try to test it quickly - if it throws _call error, replace it
+            try {
+                // Quick test: try to call getPublicKey and catch synchronous errors
+                const testCall = window.nostr.getPublicKey();
+                // If it returns a Promise, check if it will fail
+                if (testCall && typeof testCall.then === 'function') {
+                    testCall.catch(err => {
+                        // If it fails with _call error, replace with proxy
+                        if (err.message && err.message.includes('_call')) {
+                            console.warn('⚠️ window.nostr.getPublicKey() failed with _call error, replacing with proxy');
+                            Object.defineProperty(window, 'nostr', {
+                                value: nostrProxy,
+                                writable: true,
+                                configurable: true
+                            });
+                            console.log('✅ NOSTR proxy initialized (replaced non-functional extension)');
+                        }
+                    });
+                }
+                // If no immediate error, assume extension works (but proxy creation might still happen in catch handler above)
+                // Don't log "functional" yet - wait for async test result
+            } catch (syncError) {
+                // Synchronous error (like _call is not a function thrown immediately)
+                if (syncError.message && syncError.message.includes('_call')) {
+                    console.warn('⚠️ window.nostr throws synchronous _call error, replacing with proxy');
+                    Object.defineProperty(window, 'nostr', {
+                        value: nostrProxy,
+                        writable: true,
+                        configurable: true
+                    });
+                    console.log('✅ NOSTR proxy initialized (replaced non-functional extension)');
+                } else {
+                    // Different error, assume extension works
+                    console.log('✅ NOSTR extension already present, skipping proxy creation');
+                }
+            }
         }
     }
 })();

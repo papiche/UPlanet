@@ -432,7 +432,7 @@ function scrollToId(id) {
 /**
  * Connexion à l'extension Nostr et récupération de la clé publique
  */
-async function connectNostr() {
+async function connectNostr(forceAuth = false) {
     if (typeof window.nostr === 'undefined' || typeof window.nostr.getPublicKey !== 'function') {
         alert("L'extension Nostr avec la clef de votre MULTIPASS est requise pour la connexion.");
         return null;
@@ -451,7 +451,7 @@ async function connectNostr() {
             console.log(`✅ Connecté avec la clé publique: ${pubkey.substring(0, 8)}...`);
             
             // Connexion automatique au relay
-            await connectToRelay();
+            await connectToRelay(forceAuth);
             
             return pubkey;
         } else {
@@ -532,7 +532,7 @@ async function checkRecentNIP42Auth(relayUrl, maxAgeHours = 24) {
  * Checks for existing recent auth events before sending to avoid duplicates
  * @param {string} relayUrl - URL of the relay
  */
-async function sendNIP42Auth(relayUrl) {
+async function sendNIP42Auth(relayUrl, forceSend = false) {
     if (!window.nostr || !userPubkey) {
         console.warn('Cannot send NIP-42 auth: missing nostr extension or pubkey');
         return;
@@ -544,24 +544,29 @@ async function sendNIP42Auth(relayUrl) {
     }
     
     try {
-        // Check if a recent auth event already exists (within last 24 hours)
-        console.log('🔍 Checking for recent NIP-42 authentication...');
-        const hasRecentAuth = await checkRecentNIP42Auth(relayUrl, 24);
-        
-        if (hasRecentAuth) {
-            console.log('✅ Recent NIP-42 authentication found on relay, skipping new auth event');
-            // Still send AUTH message for immediate authentication without publishing event
-            try {
-                // Try to reuse existing signed event from relay if possible
-                // For now, we'll skip publishing but still send AUTH if relay requests it
+        // If forceSend is true, skip the check and always send a new auth event
+        if (!forceSend) {
+            // Check if a recent auth event already exists (within last 24 hours)
+            console.log('🔍 Checking for recent NIP-42 authentication...');
+            const hasRecentAuth = await checkRecentNIP42Auth(relayUrl, 24);
+            
+            if (hasRecentAuth) {
+                console.log('✅ Recent NIP-42 authentication found on relay, skipping new auth event');
+                // Still send AUTH message for immediate authentication without publishing event
+                try {
+                    // Try to reuse existing signed event from relay if possible
+                    // For now, we'll skip publishing but still send AUTH if relay requests it
+                    return;
+                } catch (authError) {
+                    console.warn('⚠️ Could not reuse existing auth:', authError);
+                }
                 return;
-            } catch (authError) {
-                console.warn('⚠️ Could not reuse existing auth:', authError);
             }
-            return;
+            
+            console.log('📝 No recent NIP-42 auth found, sending new authentication event...');
+        } else {
+            console.log('📝 Force sending NIP-42 authentication event (user initiated connection)...');
         }
-        
-        console.log('📝 No recent NIP-42 auth found, sending new authentication event...');
         
         // Create NIP-42 authentication event (kind 22242)
         const authEvent = {
@@ -624,8 +629,9 @@ async function sendNIP42Auth(relayUrl) {
 
 /**
  * Connexion au relay Nostr
+ * @param {boolean} forceAuth - Force sending NIP-42 auth event even if connection is reused
  */
-async function connectToRelay() {
+async function connectToRelay(forceAuth = false) {
     if (typeof NostrTools === 'undefined') {
         console.error("❌ NostrTools n'est pas chargé. Assurez-vous d'inclure nostr.bundle.js");
         return false;
@@ -638,10 +644,36 @@ async function connectToRelay() {
         return false;
     }
 
-    // Check if we already have a connected relay
+    // Check if we already have a connected relay with valid WebSocket
     if (nostrRelay && isNostrConnected) {
-        console.log('✅ Reusing existing relay connection');
-        return true;
+        // Verify the WebSocket is still open and functional
+        let ws = null;
+        if (nostrRelay._ws) {
+            ws = nostrRelay._ws;
+        } else if (nostrRelay.ws) {
+            ws = nostrRelay.ws;
+        } else if (nostrRelay.socket) {
+            ws = nostrRelay.socket;
+        }
+        
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            console.log('✅ Reusing existing relay connection (WebSocket is open)');
+            
+            // If forceAuth is true, send NIP-42 auth event even if connection is reused
+            if (forceAuth && userPubkey) {
+                console.log('📤 Force sending NIP-42 auth event on reused connection...');
+                setTimeout(() => sendNIP42Auth(NOSTRws, true), 100);
+            }
+            
+            return true;
+        } else {
+            console.warn('⚠️ Relay connection exists but WebSocket is not open, reconnecting...');
+            // Connection exists but WebSocket is closed, need to reconnect
+            isNostrConnected = false;
+            if (typeof window !== 'undefined') {
+                window.isNostrConnected = false;
+            }
+        }
     }
 
     console.log(`🔌 Connexion au relay: ${NOSTRws}`);

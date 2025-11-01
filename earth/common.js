@@ -1232,46 +1232,13 @@ async function fetchMessages(pubkey, limit = 20) {
 }
 
 /**
- * Fetch messages from a specific hex key
+ * Fetch messages from a specific hex key (wrapper for fetchMessages)
  * @param {string} hexKey - Hex public key
  * @param {number} limit - Number of messages to fetch
  * @returns {Promise<Array>}
  */
 async function fetchMessagesFromHex(hexKey, limit = 5) {
-    return new Promise(async (resolve) => {
-        try {
-            const relay = NostrTools.relayInit(DEFAULT_RELAYS[0]);
-            await relay.connect();
-            
-            const sub = relay.sub([{ 
-                kinds: [1], 
-                authors: [hexKey],
-                limit 
-            }]);
-            
-            const messages = [];
-            let timeout = setTimeout(() => {
-                sub.unsub();
-                relay.close();
-                resolve(messages);
-            }, 5000);
-            
-            sub.on('event', (event) => {
-                messages.push(event);
-            });
-            
-            sub.on('eose', () => {
-                clearTimeout(timeout);
-                sub.unsub();
-                relay.close();
-                resolve(messages);
-            });
-            
-        } catch (error) {
-            console.error(`Failed to fetch from ${hexKey}:`, error);
-            resolve([]);
-        }
-    });
+    return fetchMessages(hexKey, limit);
 }
 
 /**
@@ -2105,14 +2072,7 @@ async function publishPaymentAuthEvent(pubkey, userEmail) {
             ['client', 'MULTIPASS-Payment-Terminal']
         ];
         
-        const event = {
-            kind: 1,
-            content: content,
-            tags: tags,
-            created_at: Math.floor(Date.now() / 1000)
-        };
-        
-        await publishEvent(event);
+        await publishNote(content, tags);
         console.log('✅ Payment authentication event published');
         
     } catch (error) {
@@ -2137,14 +2097,7 @@ async function publishPaymentEvent(paymentData, result) {
             ['client', 'MULTIPASS-Payment-Terminal']
         ];
         
-        const event = {
-            kind: 1,
-            content: content,
-            tags: tags,
-            created_at: Math.floor(Date.now() / 1000)
-        };
-        
-        await publishEvent(event);
+        await publishNote(content, tags);
         console.log('✅ Payment event published to NOSTR');
         
     } catch (error) {
@@ -2160,14 +2113,44 @@ async function verifyMultipassPayment(transactionId) {
     try {
         console.log(`🔍 Verifying payment transaction: ${transactionId}`);
         
+        if (!isNostrConnected) {
+            await connectToRelay();
+        }
+
+        if (!nostrRelay || !isNostrConnected) {
+            return {
+                found: false,
+                error: 'Relay not connected'
+            };
+        }
+
         // Query NOSTR for payment events
         const filter = {
             kinds: [1],
             '#t': ['Payment'],
             since: Math.floor(Date.now() / 1000) - 3600 // Last hour
         };
-        
-        const events = await queryEvents(filter);
+
+        const events = await new Promise((resolve) => {
+            const sub = nostrRelay.sub([filter]);
+            const paymentEvents = [];
+            
+            const timeout = setTimeout(() => {
+                sub.unsub();
+                resolve(paymentEvents);
+            }, 5000);
+
+            sub.on('event', (event) => {
+                paymentEvents.push(event);
+            });
+
+            sub.on('eose', () => {
+                clearTimeout(timeout);
+                sub.unsub();
+                resolve(paymentEvents);
+            });
+        });
+
         const paymentEvent = events.find(event => 
             event.tags.some(tag => tag[0] === 'transaction' && tag[1] === transactionId)
         );
@@ -2302,7 +2285,7 @@ async function sendLike(eventId, authorPubkey, content = "+") {
  * @returns {Promise<object|null>} The published reaction event or null on error
  */
 async function sendDislike(eventId, authorPubkey) {
-    return await sendLike(eventId, authorPubkey, "-");
+    return sendLike(eventId, authorPubkey, "-");
 }
 
 /**
@@ -2313,7 +2296,7 @@ async function sendDislike(eventId, authorPubkey) {
  * @returns {Promise<object|null>} The published reaction event or null on error
  */
 async function sendCustomReaction(eventId, authorPubkey, emoji) {
-    return await sendLike(eventId, authorPubkey, emoji);
+    return sendLike(eventId, authorPubkey, emoji);
 }
 
 /**
@@ -2782,9 +2765,10 @@ async function fetchFloraLeaderboard(limit = 10, relays = null) {
         await relay.connect();
 
         // Fetch recent flora messages to discover active contributors
+        // Use same criteria as ore_system.py: plantnet AND UPlanet tags
         const filter = {
             kinds: [1],
-            '#t': ['BRO', 'plantnet'],
+            '#t': ['plantnet', 'UPlanet'], // Filter by hashtags (OR logic in NOSTR)
             limit: 1000, // Sample recent activity
             since: Math.floor(Date.now() / 1000) - (30 * 24 * 60 * 60) // Last 30 days
         };
@@ -2800,7 +2784,12 @@ async function fetchFloraLeaderboard(limit = 10, relays = null) {
             }, 15000);
 
             sub.on('event', (event) => {
-                floraMessages.push(event);
+                // Verify event has BOTH plantnet AND UPlanet tags
+                // (NOSTR #t filter with multiple values returns events with ANY tag, so verify both)
+                const tagValues = event.tags.map(t => t[1]).filter(Boolean);
+                if (tagValues.includes('plantnet') && tagValues.includes('UPlanet')) {
+                    floraMessages.push(event);
+                }
             });
 
             sub.on('eose', () => {
@@ -2987,9 +2976,10 @@ async function fetchFloraStatsForUMAP(lat, lon, relays = null) {
         await relay.connect();
 
         // Fetch flora observations with geographic tag for this UMAP
+        // Use same criteria as ore_system.py: plantnet AND UPlanet tags
         const filter = {
             kinds: [1],
-            '#t': ['BRO', 'plantnet'],
+            '#t': ['plantnet', 'UPlanet'], // Filter by hashtags (OR logic in NOSTR)
             '#g': [umapKey], // Messages tagged with this UMAP
             limit: 100
         };
@@ -3005,7 +2995,12 @@ async function fetchFloraStatsForUMAP(lat, lon, relays = null) {
             }, 10000);
 
             sub.on('event', (event) => {
-                floraMessages.push(event);
+                // Verify event has BOTH plantnet AND UPlanet tags
+                // (NOSTR #t filter with multiple values returns events with ANY tag, so verify both)
+                const tagValues = event.tags.map(t => t[1]).filter(Boolean);
+                if (tagValues.includes('plantnet') && tagValues.includes('UPlanet')) {
+                    floraMessages.push(event);
+                }
             });
 
             sub.on('eose', () => {
@@ -3524,7 +3519,7 @@ async function fetchAllPlantObservations(relays = null) {
             const events = await new Promise((resolve) => {
                 const sub = relay.sub([{
                     kinds: [1],
-                    '#t': ['plantnet'],
+                    '#t': ['plantnet', 'UPlanet'], // Filter by hashtags (OR logic in NOSTR)
                     limit: 500
                 }]);
                 
@@ -3536,6 +3531,13 @@ async function fetchAllPlantObservations(relays = null) {
                 }, 15000);
                 
                 sub.on('event', (event) => {
+                    // Verify event has BOTH plantnet AND UPlanet tags
+                    // (NOSTR #t filter with multiple values returns events with ANY tag, so verify both)
+                    const tagValues = event.tags.map(t => t[1]).filter(Boolean);
+                    if (!tagValues.includes('plantnet') || !tagValues.includes('UPlanet')) {
+                        return; // Skip events without both tags
+                    }
+                    
                     // Check if message has geolocation
                     const hasGeoTag = event.tags.some(tag => tag[0] === 'g');
                     const hasGeoInContent = event.content.includes('📍 Position:');

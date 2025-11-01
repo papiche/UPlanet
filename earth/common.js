@@ -19,13 +19,58 @@
     if (isInIframe) {
         // Wait a moment for NOSTR extension to load (extensions usually load at document_end)
         setTimeout(() => {
-            if (typeof window.nostr === 'undefined' || !window.nostr || typeof window.nostr.getPublicKey !== 'function') {
-                // Extension not available, create proxy
-                createNostrProxy();
-            } else {
-                console.log('✅ NOSTR extension detected in iframe, using real extension');
+            // Check if real extension exists and is functional
+            if (typeof window.nostr !== 'undefined' && 
+                window.nostr && 
+                typeof window.nostr.getPublicKey === 'function') {
+                // Try to test if it's actually working (not just a stub)
+                // We need to catch synchronous errors (like _call is not a function)
+                try {
+                    // Quick test call to verify extension works
+                    const testPromise = window.nostr.getPublicKey();
+                    
+                    // Check if it returned a promise
+                    if (!testPromise || typeof testPromise.then !== 'function') {
+                        // Doesn't return a promise, probably not working
+                        console.warn('⚠️ window.nostr.getPublicKey() does not return a Promise, creating proxy');
+                        createNostrProxy();
+                        return;
+                    }
+                    
+                    // Test if the promise actually resolves (with timeout)
+                    let proxyCreated = false;
+                    Promise.race([
+                        testPromise,
+                        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 2000))
+                    ]).then(() => {
+                        console.log('✅ NOSTR extension detected in iframe and working, using real extension');
+                    }).catch((testError) => {
+                        // Extension exists but doesn't work properly
+                        if (!proxyCreated) {
+                            proxyCreated = true;
+                            console.warn('⚠️ NOSTR extension detected but not functional:', testError.message);
+                            console.warn('⚠️ Creating proxy as fallback');
+                            createNostrProxy();
+                        }
+                    });
+                    
+                    // If no immediate error, extension might work, don't create proxy yet
+                    // But if error occurs async, proxy will be created in catch handler above
+                    return;
+                    
+                } catch (e) {
+                    // Extension exists but throws a synchronous error when called (e.g., _call is not a function)
+                    console.warn('⚠️ NOSTR extension detected but throws synchronous error:', e.message);
+                    console.warn('⚠️ This usually means extension is not fully initialized in iframe context');
+                    console.warn('⚠️ Creating proxy as fallback');
+                    createNostrProxy();
+                    return;
+                }
             }
-        }, 100);
+            
+            // Extension not available, create proxy
+            createNostrProxy();
+        }, 500); // Increased delay to give extension more time to initialize
     }
     
     function createNostrProxy() {
@@ -113,8 +158,9 @@
         });
         
         // Only set window.nostr if it doesn't exist or is not functional
-        if (typeof window.nostr === 'undefined' || !window.nostr || typeof window.nostr.getPublicKey !== 'function') {
-            // Expose proxy as window.nostr
+        // Double-check that extension still isn't available before overwriting
+        if (typeof window.nostr === 'undefined' || !window.nostr) {
+            // window.nostr doesn't exist, safe to set our proxy
             Object.defineProperty(window, 'nostr', {
                 value: nostrProxy,
                 writable: true,  // Allow overwriting if extension loads later
@@ -122,6 +168,19 @@
             });
             
             console.log('✅ NOSTR proxy initialized for iframe (via common.js)');
+        } else if (typeof window.nostr.getPublicKey !== 'function') {
+            // window.nostr exists but doesn't have required methods, replace with proxy
+            console.warn('⚠️ window.nostr exists but getPublicKey is not a function, replacing with proxy');
+            Object.defineProperty(window, 'nostr', {
+                value: nostrProxy,
+                writable: true,
+                configurable: true
+            });
+            
+            console.log('✅ NOSTR proxy initialized for iframe (via common.js) - replaced non-functional window.nostr');
+        } else {
+            // Extension is present and functional, don't override
+            console.log('✅ NOSTR extension already present and functional, skipping proxy creation');
         }
     }
 })();
@@ -157,29 +216,44 @@ function detectUSPOTAPI() {
 
     let determinedUpassportUrl = '';
     let determinedRelay = '';
+    let determinedIpfsGateway = '';
 
     if (hostname === "127.0.0.1" && (port === "8080" || port === "54321")) {
         determinedUpassportUrl = `http://127.0.0.1:54321`;
         determinedRelay = `ws://127.0.0.1:7777`;
+        determinedIpfsGateway = `http://127.0.0.1:8080`;
     } else if (hostname === "localhost" && (port === "8080" || port === "54321")) {
         determinedUpassportUrl = `http://127.0.0.1:54321`;
         determinedRelay = `ws://127.0.0.1:7777`;
+        determinedIpfsGateway = `http://127.0.0.1:8080`;
     } else if (hostname.startsWith("ipfs.")) {
         const baseDomain = hostname.substring("ipfs.".length);
         determinedUpassportUrl = `${protocol}://u.${baseDomain}`;
         determinedRelay = `wss://relay.${baseDomain}`;
+        determinedIpfsGateway = `${protocol}://ipfs.${baseDomain}`;
+    } else if (hostname.startsWith("u.")) {
+        const baseDomain = hostname.substring("u.".length);
+        determinedUpassportUrl = `${protocol}://u.${baseDomain}`;
+        determinedRelay = `wss://relay.${baseDomain}`;
+        determinedIpfsGateway = `${protocol === 'http' ? 'http' : 'https'}://ipfs.${baseDomain}`;
     } else {
         // Fallback for other environments or if detection fails
         determinedUpassportUrl = `https://u.copylaradio.com`;
         determinedRelay = `wss://relay.copylaradio.com`; // Uplanet ORIGIN public relay
+        determinedIpfsGateway = `https://ipfs.copylaradio.com`;
     }
 
     upassportUrl = determinedUpassportUrl;
     DEFAULT_RELAYS = [determinedRelay, 'wss://relay.damus.io', 'wss://nos.lol'];
 
+    // Set global IPFS gateway if not already set
+    if (typeof window !== 'undefined' && (!window.IPFS_GATEWAY || window.IPFS_GATEWAY === '')) {
+        window.IPFS_GATEWAY = determinedIpfsGateway;
+    }
+
     console.log(`API uSPOT détectée: ${upassportUrl}`);
     console.log(`Relay par défaut: ${DEFAULT_RELAYS[0]}`);
-    console.log(`Gateway IPFS: ${hostname}:${port}`);
+    console.log(`Gateway IPFS: ${determinedIpfsGateway}`);
     
     return upassportUrl;
 }

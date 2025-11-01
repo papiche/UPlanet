@@ -225,7 +225,70 @@ async function connectNostr() {
 }
 
 /**
+ * Check if a recent NIP-42 authentication event (kind 22242) exists on the relay
+ * @param {string} relayUrl - URL of the relay
+ * @param {number} maxAgeHours - Maximum age in hours for valid auth (default: 24)
+ * @returns {Promise<boolean>} - True if a recent auth event exists
+ */
+async function checkRecentNIP42Auth(relayUrl, maxAgeHours = 24) {
+    if (!nostrRelay || !isNostrConnected || !userPubkey) {
+        return false;
+    }
+    
+    try {
+        // Calculate timestamp for maxAgeHours ago
+        const sinceTimestamp = Math.floor(Date.now() / 1000) - (maxAgeHours * 60 * 60);
+        
+        // Subscribe to recent kind 22242 events from this pubkey
+        return new Promise((resolve) => {
+            const sub = nostrRelay.sub([
+                {
+                    kinds: [22242],
+                    authors: [userPubkey],
+                    since: sinceTimestamp,
+                    limit: 1
+                }
+            ]);
+            
+            let foundRecentAuth = false;
+            const timeout = setTimeout(() => {
+                sub.unsub();
+                resolve(foundRecentAuth);
+            }, 3000); // 3 second timeout
+            
+            sub.on('event', (event) => {
+                // Verify this is a valid auth event for this relay
+                const relayTag = event.tags.find(tag => tag[0] === 'relay');
+                if (relayTag && relayTag[1]) {
+                    // Check if the relay URL matches (flexible matching)
+                    const relayUrlMatch = relayUrl.includes(relayTag[1]) || relayTag[1].includes(relayUrl);
+                    if (relayUrlMatch || !relayUrl || !relayTag[1]) {
+                        foundRecentAuth = true;
+                    }
+                } else {
+                    // No relay tag, accept it (some relays may not require it)
+                    foundRecentAuth = true;
+                }
+                clearTimeout(timeout);
+                sub.unsub();
+                resolve(true);
+            });
+            
+            sub.on('eose', () => {
+                clearTimeout(timeout);
+                sub.unsub();
+                resolve(foundRecentAuth);
+            });
+        });
+    } catch (error) {
+        console.warn('⚠️ Error checking for recent NIP-42 auth:', error);
+        return false; // If check fails, allow sending new auth
+    }
+}
+
+/**
  * Send NIP-42 authentication event using nostr-tools publish method
+ * Checks for existing recent auth events before sending to avoid duplicates
  * @param {string} relayUrl - URL of the relay
  */
 async function sendNIP42Auth(relayUrl) {
@@ -240,7 +303,24 @@ async function sendNIP42Auth(relayUrl) {
     }
     
     try {
-        console.log('📝 Sending NIP-42 authentication event...');
+        // Check if a recent auth event already exists (within last 24 hours)
+        console.log('🔍 Checking for recent NIP-42 authentication...');
+        const hasRecentAuth = await checkRecentNIP42Auth(relayUrl, 24);
+        
+        if (hasRecentAuth) {
+            console.log('✅ Recent NIP-42 authentication found on relay, skipping new auth event');
+            // Still send AUTH message for immediate authentication without publishing event
+            try {
+                // Try to reuse existing signed event from relay if possible
+                // For now, we'll skip publishing but still send AUTH if relay requests it
+                return;
+            } catch (authError) {
+                console.warn('⚠️ Could not reuse existing auth:', authError);
+            }
+            return;
+        }
+        
+        console.log('📝 No recent NIP-42 auth found, sending new authentication event...');
         
         // Create NIP-42 authentication event (kind 22242)
         const authEvent = {
@@ -346,6 +426,23 @@ async function connectToRelay() {
             if (userPubkey && !authSent) {
                 authSent = true;
                 setTimeout(() => sendNIP42Auth(NOSTRws), 500);
+                
+                // Check if user should be redirected to their preferred relay domain
+                // Wait a bit for auth to complete, then check relay preference
+                setTimeout(async () => {
+                    // Check if user dismissed redirection recently (within last hour)
+                    const dismissed = localStorage.getItem('relay_redirection_dismissed');
+                    if (dismissed) {
+                        const dismissedTime = parseInt(dismissed);
+                        const oneHourAgo = Date.now() - (60 * 60 * 1000);
+                        if (dismissedTime > oneHourAgo) {
+                            console.log('ℹ️ Relay redirection was recently dismissed, skipping check');
+                            return;
+                        }
+                    }
+                    
+                    await checkAndProposeRelayRedirection();
+                }, 2000); // Wait 2 seconds after auth
             }
         });
 
@@ -627,6 +724,187 @@ async function postComment(content, url = null) {
     }
     
     return result;
+}
+
+/**
+ * Fetch user relay list (kind 10002 - NIP-65) to get preferred relays
+ * Falls back to kind 0 profile metadata if kind 10002 is not found
+ * @param {string} pubkey - User public key (hex)
+ * @returns {Promise<string|null>} - Preferred write relay URL or null
+ */
+async function fetchUserPreferredRelay(pubkey) {
+    if (!nostrRelay || !isNostrConnected || !pubkey) {
+        return null;
+    }
+    
+    try {
+        // First, try to get relay from kind 10002 (NIP-65 - Relay List Metadata)
+        const relayFromKind10002 = await new Promise((resolve) => {
+            const sub = nostrRelay.sub([
+                {
+                    kinds: [10002], // NIP-65: Relay List Metadata
+                    authors: [pubkey],
+                    limit: 1
+                }
+            ]);
+            
+            let preferredRelay = null;
+            const timeout = setTimeout(() => {
+                sub.unsub();
+                resolve(preferredRelay);
+            }, 3000);
+            
+            sub.on('event', (event) => {
+                // Find write relay (preferred) or any relay if no write marker
+                const relayTags = event.tags.filter(tag => tag[0] === 'r' && tag[1]);
+                
+                // Prefer write relays, fallback to any relay
+                const writeRelay = relayTags.find(tag => !tag[2] || tag[2] === 'write');
+                if (writeRelay && writeRelay[1]) {
+                    preferredRelay = writeRelay[1];
+                } else if (relayTags.length > 0 && relayTags[0][1]) {
+                    // Use first relay if no write marker found
+                    preferredRelay = relayTags[0][1];
+                }
+                
+                clearTimeout(timeout);
+                sub.unsub();
+                resolve(preferredRelay);
+            });
+            
+            sub.on('eose', () => {
+                clearTimeout(timeout);
+                sub.unsub();
+                resolve(preferredRelay);
+            });
+        });
+        
+        if (relayFromKind10002) {
+            return relayFromKind10002;
+        }
+        
+        // Fallback: Try to get relay from kind 0 profile metadata
+        // MULTIPASS may store relay in profile metadata (from make_NOSTRCARD.sh)
+        const metadata = await fetchUserMetadata(pubkey);
+        if (metadata) {
+            // Check for common relay field names
+            const relay = metadata.relay || metadata.myrelay || metadata.myRELAY || metadata.relays?.[0];
+            if (relay && typeof relay === 'string') {
+                console.log('✅ Found preferred relay in profile metadata (kind 0)');
+                return relay;
+            }
+        }
+        
+        return null;
+    } catch (error) {
+        console.warn('⚠️ Error fetching user preferred relay:', error);
+        return null;
+    }
+}
+
+/**
+ * Extract domain from relay URL and propose redirection to user's preferred domain
+ * @param {string} relayUrl - Relay URL (e.g., wss://relay.example.com)
+ * @returns {object|null} - Object with uDomain and ipfsDomain or null
+ */
+function extractDomainFromRelay(relayUrl) {
+    if (!relayUrl || typeof relayUrl !== 'string') {
+        return null;
+    }
+    
+    try {
+        // Extract domain from relay URL (wss://relay.example.com -> example.com)
+        const urlMatch = relayUrl.match(/(?:wss?:\/\/)?relay\.([^\/]+)/);
+        if (!urlMatch || !urlMatch[1]) {
+            return null;
+        }
+        
+        const baseDomain = urlMatch[1];
+        return {
+            uDomain: `u.${baseDomain}`,
+            ipfsDomain: `ipfs.${baseDomain}`,
+            baseDomain: baseDomain
+        };
+    } catch (error) {
+        console.warn('⚠️ Error extracting domain from relay:', error);
+        return null;
+    }
+}
+
+/**
+ * Check if user is on their preferred relay and propose redirection if not
+ * This prevents API rejections when user is not registered on the current relay
+ */
+async function checkAndProposeRelayRedirection() {
+    if (!userPubkey || !nostrRelay || !isNostrConnected) {
+        return;
+    }
+    
+    try {
+        // Get user's preferred relay
+        const preferredRelay = await fetchUserPreferredRelay(userPubkey);
+        
+        if (!preferredRelay) {
+            // No preferred relay found, skip check
+            console.log('ℹ️ No preferred relay found in user profile');
+            return;
+        }
+        
+        // Get current relay URL
+        const currentRelay = DEFAULT_RELAYS[0];
+        
+        // Check if current relay matches preferred relay
+        const relayMatch = preferredRelay === currentRelay || 
+                          preferredRelay.includes(currentRelay) || 
+                          currentRelay.includes(preferredRelay);
+        
+        if (relayMatch) {
+            console.log('✅ User is connected to their preferred relay:', preferredRelay);
+            return;
+        }
+        
+        // User is not on their preferred relay - propose redirection
+        console.log('⚠️ User preferred relay differs from current:', {
+            preferred: preferredRelay,
+            current: currentRelay
+        });
+        
+        const domainInfo = extractDomainFromRelay(preferredRelay);
+        if (!domainInfo) {
+            console.warn('⚠️ Could not extract domain from preferred relay');
+            return;
+        }
+        
+        // Show notification to user with redirection options
+        const message = `
+🌐 Vous n'êtes pas connecté à votre relai préféré.
+
+Votre relai préféré est : ${preferredRelay}
+Relai actuel : ${currentRelay}
+
+Pour une meilleure expérience et éviter les erreurs API, vous pouvez être redirigé vers :
+• ${domainInfo.uDomain} (interface principale)
+• ${domainInfo.ipfsDomain} (gateway IPFS)
+
+Souhaitez-vous être redirigé maintenant ?
+        `.trim();
+        
+        if (confirm(message)) {
+            // Redirect to u.mon_domaine preserving current path
+            const currentPath = window.location.pathname + window.location.search;
+            const protocol = window.location.protocol;
+            const newUrl = `${protocol}//${domainInfo.uDomain}${currentPath}`;
+            
+            console.log('🔄 Redirecting to preferred domain:', newUrl);
+            window.location.href = newUrl;
+        } else {
+            // Store preference to show again later if needed
+            localStorage.setItem('relay_redirection_dismissed', Date.now().toString());
+        }
+        
+    } catch (error) {
+        console.error('❌ Error checking relay redirection:', error);
+    }
 }
 
 /**

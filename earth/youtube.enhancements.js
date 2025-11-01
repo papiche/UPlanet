@@ -14,8 +14,9 @@
  * for use in theater-modal.html and other standalone pages
  */
 let IPFS_GATEWAY_FALLBACK = '';
+// Don't redeclare IPFS_GATEWAY if it already exists
 if (typeof IPFS_GATEWAY === 'undefined') {
-    var IPFS_GATEWAY = '';
+    window.IPFS_GATEWAY = '';
 }
 
 function detectIPFSGatewayGlobal() {
@@ -40,13 +41,17 @@ function detectIPFSGatewayGlobal() {
         IPFS_GATEWAY_FALLBACK = `https://ipfs.copylaradio.com`;
     }
     
-    // Use global IPFS_GATEWAY if available, otherwise use fallback
-    if (!IPFS_GATEWAY || IPFS_GATEWAY === '') {
-        IPFS_GATEWAY = IPFS_GATEWAY_FALLBACK;
+    // Use window.IPFS_GATEWAY if available, otherwise use fallback
+    if (typeof window !== 'undefined') {
+        if (!window.IPFS_GATEWAY || window.IPFS_GATEWAY === '') {
+            window.IPFS_GATEWAY = IPFS_GATEWAY_FALLBACK;
+        }
     }
     
-    console.log(`IPFS Gateway detected (global): ${IPFS_GATEWAY} (from ${hostname}${port ? ':' + port : ''})`);
-    return IPFS_GATEWAY;
+    const finalGateway = (typeof window !== 'undefined' && window.IPFS_GATEWAY) ? window.IPFS_GATEWAY : IPFS_GATEWAY_FALLBACK;
+    
+    console.log(`IPFS Gateway detected (global): ${finalGateway} (from ${hostname}${port ? ':' + port : ''})`);
+    return finalGateway;
 }
 
 /**
@@ -57,9 +62,11 @@ function detectIPFSGatewayGlobal() {
 function convertIPFSUrlGlobal(url) {
     if (!url) return '';
     
-    // Ensure gateway is detected
-    if (!IPFS_GATEWAY || IPFS_GATEWAY === '') {
+    // Ensure gateway is detected (use window.IPFS_GATEWAY if available)
+    let currentGateway = (typeof window !== 'undefined' && window.IPFS_GATEWAY) ? window.IPFS_GATEWAY : '';
+    if (!currentGateway || currentGateway === '') {
         detectIPFSGatewayGlobal();
+        currentGateway = (typeof window !== 'undefined' && window.IPFS_GATEWAY) ? window.IPFS_GATEWAY : '';
     }
     
     // If URL is already a full URL with wrong domain, extract the /ipfs/ path
@@ -74,11 +81,14 @@ function convertIPFSUrlGlobal(url) {
         }
     }
     
+    // Use currentGateway variable
+    const gateway = currentGateway;
+    
     let fullUrl = ipfsPath;
     if (ipfsPath.startsWith('/ipfs/')) {
-        fullUrl = `${IPFS_GATEWAY}${ipfsPath}`;
+        fullUrl = `${gateway}${ipfsPath}`;
     } else if (ipfsPath.startsWith('ipfs://')) {
-        fullUrl = ipfsPath.replace('ipfs://', `${IPFS_GATEWAY}/ipfs/`);
+        fullUrl = ipfsPath.replace('ipfs://', `${gateway}/ipfs/`);
     } else {
         // Not an IPFS URL, return as is
         return url;
@@ -1846,4 +1856,5 @@ window.loadRelatedVideosInTheater = loadRelatedVideosInTheater;
 window.openTheaterModeFromEvent = openTheaterModeFromEvent;
 window.theaterShareVideoWithPreview = theaterShareVideoWithPreview;
 window.theaterBookmarkVideo = theaterBookmarkVideo;
+window.escapeHtml = escapeHtml; // Make escapeHtml globally available
 

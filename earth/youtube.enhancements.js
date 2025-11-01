@@ -162,12 +162,14 @@ async function theaterBookmarkVideo() {
             await createBookmark(ipfsUrl, 'Video bookmark');
             alert('Video bookmarked successfully!');
         } else {
-            // Fallback: publish kind 30001 event
-            const event = {
-                kind: 30001,
+            // Fallback: publish kind 30001 bookmark event
+            const eventTemplate = {
+                kind: 30001, // Bookmarks list (NIP-51)
+                created_at: Math.floor(Date.now() / 1000),
                 tags: [
                     ['r', ipfsUrl],
-                    ['e', eventId, '', 'video']
+                    ['e', eventId, '', 'video'],
+                    ['d', `bookmark-${Date.now()}`]
                 ],
                 content: JSON.stringify({
                     title: document.getElementById('theaterTitle').textContent,
@@ -175,9 +177,13 @@ async function theaterBookmarkVideo() {
                 })
             };
 
-            if (typeof publishNote === 'function') {
-                await publishNote(event);
-                alert('Video bookmarked successfully!');
+            // Sign and publish directly (kind 30001, not kind 1)
+            if (window.nostr && typeof window.nostr.signEvent === 'function') {
+                const signedEvent = await window.nostr.signEvent(eventTemplate);
+                if (isNostrConnected && nostrRelay) {
+                    await nostrRelay.publish(signedEvent);
+                    alert('Video bookmarked successfully!');
+                }
             }
         }
     } catch (error) {
@@ -1320,7 +1326,7 @@ async function createPlaylist(name, description, videos = []) {
         await connectNostr();
     }
 
-    if (!nostrPublicKey) {
+    if (!userPubkey) {
         alert('Please connect your Nostr account first');
         return null;
     }
@@ -1336,14 +1342,36 @@ async function createPlaylist(name, description, videos = []) {
         const tags = videos.map(v => ['e', v.eventId || v.id, '', 'video']);
         tags.push(['d', name.toLowerCase().replace(/\s+/g, '-')]); // Identifier tag for replaceable events
 
-        const event = {
-            kind: 10001,
+        const eventTemplate = {
+            kind: 10001, // NIP-51: Lists (playlists)
             created_at: Math.floor(Date.now() / 1000),
             tags,
             content: JSON.stringify(playlistData)
         };
 
-        const publishedEvent = await publishNote(event);
+        // Sign and publish the event (kind 10001 needs special handling)
+        let signedEvent;
+        if (window.nostr && typeof window.nostr.signEvent === 'function') {
+            signedEvent = await window.nostr.signEvent(eventTemplate);
+        } else {
+            throw new Error("Nostr extension required to create playlists");
+        }
+
+        if (!isNostrConnected) {
+            await connectToRelay();
+        }
+
+        if (!nostrRelay || !isNostrConnected) {
+            throw new Error("Relay connection required");
+        }
+
+        const publishPromise = nostrRelay.publish(signedEvent);
+        const timeoutPromise = new Promise((_, reject) => {
+            setTimeout(() => reject(new Error('Publish timeout')), 10000);
+        });
+
+        await Promise.race([publishPromise, timeoutPromise]);
+        const publishedEvent = signedEvent;
 
         if (publishedEvent) {
             console.log('Playlist created:', publishedEvent.id);
@@ -1366,7 +1394,7 @@ async function addToPlaylist(playlistId, videoEventId) {
         await connectNostr();
     }
 
-    if (!nostrPublicKey) {
+    if (!userPubkey) {
         alert('Please connect your Nostr account first');
         return false;
     }
@@ -1389,15 +1417,37 @@ async function addToPlaylist(playlistId, videoEventId) {
         const tags = playlistData.videos.map(vid => ['e', vid, '', 'video']);
         tags.push(['d', playlistEvent.tags.find(t => t[0] === 'd')?.[1] || 'playlist']);
 
-        // Create updated event
-        const event = {
-            kind: 10001,
+        // Create updated event (kind 10001 - replaceable event)
+        const eventTemplate = {
+            kind: 10001, // NIP-51: Lists (playlists)
             created_at: Math.floor(Date.now() / 1000),
             tags,
             content: JSON.stringify(playlistData)
         };
 
-        const publishedEvent = await publishNote(event);
+        // Sign and publish the event
+        let signedEvent;
+        if (window.nostr && typeof window.nostr.signEvent === 'function') {
+            signedEvent = await window.nostr.signEvent(eventTemplate);
+        } else {
+            throw new Error("Nostr extension required to update playlists");
+        }
+
+        if (!isNostrConnected) {
+            await connectToRelay();
+        }
+
+        if (!nostrRelay || !isNostrConnected) {
+            throw new Error("Relay connection required");
+        }
+
+        const publishPromise = nostrRelay.publish(signedEvent);
+        const timeoutPromise = new Promise((_, reject) => {
+            setTimeout(() => reject(new Error('Publish timeout')), 10000);
+        });
+
+        await Promise.race([publishPromise, timeoutPromise]);
+        const publishedEvent = signedEvent;
 
         return !!publishedEvent;
     } catch (error) {
@@ -1615,7 +1665,7 @@ async function executeShare() {
     const shareContent = `${message ? message + '\n\n' : ''}🎥 ${videoData.title}\n${videoData.ipfsUrl || ''}`;
 
     try {
-        // Use shareCurrentPage or publishNote
+        // Use shareCurrentPage or publishNote with correct signature
         if (typeof shareCurrentPage === 'function') {
             await shareCurrentPage();
         } else if (typeof publishNote === 'function') {
@@ -1625,11 +1675,10 @@ async function executeShare() {
             ];
             tags.forEach(tag => eventTags.push(['t', tag]));
 
-            await publishNote({
-                kind: 1,
-                tags: eventTags,
-                content: shareContent
-            });
+            // publishNote expects (content, additionalTags)
+            await publishNote(shareContent, eventTags);
+        } else {
+            throw new Error('No sharing method available');
         }
 
         alert('Video shared successfully!');

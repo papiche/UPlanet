@@ -270,7 +270,40 @@ async function openTheaterMode(videoData) {
     if (titleEl) titleEl.textContent = escapeHtml(title);
     
     const uploaderEl = modal.querySelector('#theaterUploader');
-    if (uploaderEl) uploaderEl.textContent = escapeHtml(uploader || channel);
+    if (uploaderEl) {
+        // Create link to NOSTR profile if authorId is available
+        if (videoData.authorId) {
+            // Try to get IPFS gateway from various sources
+            let ipfsGateway = '';
+            if (typeof window !== 'undefined' && window.IPFS_GATEWAY) {
+                ipfsGateway = window.IPFS_GATEWAY;
+            } else if (typeof detectIPFSGatewayGlobal === 'function') {
+                detectIPFSGatewayGlobal();
+                ipfsGateway = window.IPFS_GATEWAY || 'https://ipfs.copylaradio.com';
+            } else {
+                // Fallback: try to construct from current location
+                const currentURL = new URL(window.location.href);
+                const hostname = currentURL.hostname;
+                if (hostname === '127.0.0.1' || hostname === 'localhost') {
+                    ipfsGateway = 'http://127.0.0.1:8080';
+                } else if (hostname.startsWith('u.')) {
+                    const baseDomain = hostname.substring('u.'.length);
+                    ipfsGateway = `${currentURL.protocol}//ipfs.${baseDomain}`;
+                } else {
+                    ipfsGateway = 'https://ipfs.copylaradio.com';
+                }
+            }
+            const profileUrl = `${ipfsGateway}/ipns/copylaradio.com/nostr_profile_viewer.html?hex=${videoData.authorId}`;
+            // Use modal instead of new tab for mobile-friendly experience
+            if (typeof openProfileModal === 'function') {
+                uploaderEl.innerHTML = `<a href="#" onclick="event.preventDefault(); openProfileModal('${videoData.authorId}', '${escapeHtml(uploader || channel)}'); return false;" class="theater-uploader-link" title="View NOSTR profile">${escapeHtml(uploader || channel)}</a>`;
+            } else {
+                uploaderEl.innerHTML = `<a href="${profileUrl}" target="_blank" class="theater-uploader-link" title="View NOSTR profile">${escapeHtml(uploader || channel)}</a>`;
+            }
+        } else {
+            uploaderEl.textContent = escapeHtml(uploader || channel);
+        }
+    }
     
     const durationEl = modal.querySelector('#theaterDuration');
     if (durationEl && duration) {

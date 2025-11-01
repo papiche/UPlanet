@@ -5,6 +5,113 @@
  */
 
 // ========================================
+// IPFS GATEWAY DETECTION (Global functions)
+// ========================================
+
+/**
+ * Detect IPFS gateway based on current domain
+ * This function is also defined in youtube.html, but we define it here too
+ * for use in theater-modal.html and other standalone pages
+ */
+let IPFS_GATEWAY_FALLBACK = '';
+if (typeof IPFS_GATEWAY === 'undefined') {
+    var IPFS_GATEWAY = '';
+}
+
+function detectIPFSGatewayGlobal() {
+    const currentURL = new URL(window.location.href);
+    const hostname = currentURL.hostname;
+    const port = currentURL.port;
+    const protocol = currentURL.protocol.split(":")[0];
+    
+    // Localhost detection (127.0.0.1 or localhost) - IPFS gateway is always on port 8080
+    if (hostname === "127.0.0.1" || hostname === "localhost") {
+        IPFS_GATEWAY_FALLBACK = `http://127.0.0.1:8080`;
+    } else if (hostname.startsWith("ipfs.")) {
+        // Already on IPFS gateway subdomain
+        const baseDomain = hostname.substring("ipfs.".length);
+        IPFS_GATEWAY_FALLBACK = `${protocol}://ipfs.${baseDomain}`;
+    } else if (hostname.startsWith("u.")) {
+        // On UPassport subdomain, use IPFS gateway subdomain
+        const baseDomain = hostname.substring("u.".length);
+        IPFS_GATEWAY_FALLBACK = `${protocol === 'http' ? 'http' : 'https'}://ipfs.${baseDomain}`;
+    } else {
+        // Fallback to default IPFS gateway
+        IPFS_GATEWAY_FALLBACK = `https://ipfs.copylaradio.com`;
+    }
+    
+    // Use global IPFS_GATEWAY if available, otherwise use fallback
+    if (!IPFS_GATEWAY || IPFS_GATEWAY === '') {
+        IPFS_GATEWAY = IPFS_GATEWAY_FALLBACK;
+    }
+    
+    console.log(`IPFS Gateway detected (global): ${IPFS_GATEWAY} (from ${hostname}${port ? ':' + port : ''})`);
+    return IPFS_GATEWAY;
+}
+
+/**
+ * Convert IPFS URL to use correct gateway
+ * This function is also defined in youtube.html, but we define it here too
+ * for use in theater-modal.html and other standalone pages
+ */
+function convertIPFSUrlGlobal(url) {
+    if (!url) return '';
+    
+    // Ensure gateway is detected
+    if (!IPFS_GATEWAY || IPFS_GATEWAY === '') {
+        detectIPFSGatewayGlobal();
+    }
+    
+    // If URL is already a full URL with wrong domain, extract the /ipfs/ path
+    let ipfsPath = url;
+    if (url.includes('/ipfs/')) {
+        const match = url.match(/\/ipfs\/[^?"#]+/);
+        if (match) {
+            ipfsPath = match[0];
+        } else if (url.startsWith('http')) {
+            // Full URL but no /ipfs/ match (shouldn't happen, but handle it)
+            return url;
+        }
+    }
+    
+    let fullUrl = ipfsPath;
+    if (ipfsPath.startsWith('/ipfs/')) {
+        fullUrl = `${IPFS_GATEWAY}${ipfsPath}`;
+    } else if (ipfsPath.startsWith('ipfs://')) {
+        fullUrl = ipfsPath.replace('ipfs://', `${IPFS_GATEWAY}/ipfs/`);
+    } else {
+        // Not an IPFS URL, return as is
+        return url;
+    }
+    
+    // Encode URL to handle spaces and special characters
+    const urlParts = fullUrl.split('/');
+    const encodedParts = urlParts.map((part, index) => {
+        if (index <= 2 || part === '' || part.includes(':')) {
+            return part;
+        }
+        return encodeURIComponent(part);
+    });
+    
+    return encodedParts.join('/');
+}
+
+// Make functions globally available (use existing ones if available)
+if (typeof detectIPFSGateway === 'undefined') {
+    window.detectIPFSGateway = detectIPFSGatewayGlobal;
+}
+if (typeof convertIPFSUrl === 'undefined') {
+    window.convertIPFSUrl = convertIPFSUrlGlobal;
+}
+
+// Auto-detect on load
+if (typeof document !== 'undefined') {
+    document.addEventListener('DOMContentLoaded', () => {
+        detectIPFSGatewayGlobal();
+    });
+}
+
+// ========================================
 // 1. THEATER MODE WITH INTEGRATED COMMENTS
 // ========================================
 
@@ -167,8 +274,8 @@ async function openTheaterMode(videoData) {
         videoPlayer.setAttribute('data-event-id', eventId || '');
         videoPlayer.setAttribute('data-ipfs-url', ipfsUrl || '');
         
-        // Use convertIPFSUrl from youtube.html or fallback
-        const fullUrl = (typeof convertIPFSUrl === 'function' ? convertIPFSUrl(ipfsUrl) : ipfsUrl);
+        // Use convertIPFSUrl (from youtube.html or from this file's global functions)
+        const fullUrl = (typeof convertIPFSUrl === 'function' ? convertIPFSUrl(ipfsUrl) : convertIPFSUrlGlobal(ipfsUrl));
         const source = document.createElement('source');
         source.src = fullUrl;
         source.type = 'video/mp4';

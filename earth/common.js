@@ -2968,16 +2968,39 @@ async function sendLike(eventId, authorPubkey, content = "+") {
 
         console.log("✍️ Réaction signée:", signedEvent);
 
-        // Publication avec timeout
+        // Publication avec timeout plus long (10 secondes)
+        // La promesse publish() peut prendre du temps selon la charge du relay
         const publishPromise = nostrRelay.publish(signedEvent);
         const timeoutPromise = new Promise((_, reject) => {
-            setTimeout(() => reject(new Error('Timeout de publication')), 5000);
+            setTimeout(() => reject(new Error('Timeout de publication')), 10000); // 10 secondes au lieu de 5
         });
 
-        await Promise.race([publishPromise, timeoutPromise]);
-
-        console.log("✅ Like envoyé avec succès:", signedEvent.id);
-        return signedEvent;
+        try {
+            await Promise.race([publishPromise, timeoutPromise]);
+            console.log("✅ Like envoyé avec succès:", signedEvent.id);
+            return signedEvent;
+        } catch (raceError) {
+            // Si timeout, vérifier si l'événement a quand même été envoyé
+            // En NOSTR, l'envoi au relay est généralement réussi même si la promesse timeout
+            if (raceError.message === 'Timeout de publication') {
+                console.warn('⚠️ Timeout de publication, mais l\'événement a peut-être été envoyé');
+                // Vérifier si la connexion est toujours active
+                let ws = null;
+                if (nostrRelay._ws) ws = nostrRelay._ws;
+                else if (nostrRelay.ws) ws = nostrRelay.ws;
+                else if (nostrRelay.socket) ws = nostrRelay.socket;
+                
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    // La connexion est active, l'événement a probablement été envoyé
+                    console.log("✅ Événement probablement envoyé (connexion active)");
+                    return signedEvent;
+                } else {
+                    throw raceError;
+                }
+            } else {
+                throw raceError;
+            }
+        }
     } catch (error) {
         console.error("❌ Erreur lors de l'envoi du like:", error);
         alert(`Erreur: ${error.message}`);

@@ -113,6 +113,9 @@ if (typeof detectIPFSGateway === 'undefined') {
 if (typeof convertIPFSUrl === 'undefined') {
     window.convertIPFSUrl = convertIPFSUrlGlobal;
 }
+// Also expose Global versions for theater-modal.html and other pages
+window.detectIPFSGatewayGlobal = detectIPFSGatewayGlobal;
+window.convertIPFSUrlGlobal = convertIPFSUrlGlobal;
 
 // Auto-detect on load
 if (typeof document !== 'undefined') {
@@ -330,6 +333,7 @@ async function openTheaterMode(videoData) {
 
     // Check if template is already loaded or fetch it
     let modalHTML = null;
+    let templateScripts = [];
     
     try {
         // Try to fetch the template
@@ -343,6 +347,14 @@ async function openTheaterMode(videoData) {
             if (modalElement) {
                 modalHTML = modalElement.innerHTML;
             }
+            
+            // Extract scripts from the template
+            const scripts = doc.querySelectorAll('script');
+            scripts.forEach(script => {
+                if (script.textContent) {
+                    templateScripts.push(script.textContent);
+                }
+            });
         }
     } catch (error) {
         console.warn('Could not fetch theater template, using inline HTML:', error);
@@ -353,6 +365,10 @@ async function openTheaterMode(videoData) {
         modalHTML = getTheaterModalHTML();
     }
 
+    // Pass videoData to modal BEFORE injecting HTML
+    // Store it globally so theater-modal.html scripts can access it
+    window.videoData = videoData;
+    
     // Create theater modal
     const modal = document.createElement('div');
     modal.className = 'theater-modal';
@@ -373,6 +389,27 @@ async function openTheaterMode(videoData) {
         // Wrap in theater-modal-content if not present
         modal.innerHTML = `<div class="theater-modal-content">${modalHTML}</div>`;
     }
+    
+    // Append modal to DOM first so scripts can access DOM elements
+    document.body.appendChild(modal);
+    
+    // Execute scripts from template (they contain initialization logic)
+    // These scripts will initialize the playlist if window.videoData.playlist exists
+    templateScripts.forEach(scriptContent => {
+        try {
+            // Create a function from the script content and execute it in global scope
+            const scriptFunction = new Function(scriptContent);
+            scriptFunction.call(window);
+        } catch (error) {
+            console.error('Error executing theater modal script:', error);
+            // Fallback: try eval (less safe but may work for some scripts)
+            try {
+                eval(scriptContent);
+            } catch (evalError) {
+                console.error('Error evaluating theater modal script:', evalError);
+            }
+        }
+    });
 
     // Update template with video data
     const titleEl = modal.querySelector('#theaterTitle');
@@ -410,7 +447,10 @@ async function openTheaterMode(videoData) {
         descriptionEl.textContent = escapeHtml(description);
     }
 
-    document.body.appendChild(modal);
+    // Also store in the modal element itself as backup
+    if (modal.dataset) {
+        modal.dataset.videoData = JSON.stringify(videoData);
+    }
 
     // Attach event listeners to buttons (replace onclick attributes)
     // This ensures functions are available in the parent context (youtube.html)
@@ -461,6 +501,9 @@ async function openTheaterMode(videoData) {
 
     // Load related videos
     await loadRelatedVideosInTheater(videoData);
+
+    // Note: Playlist initialization is handled by scripts in theater-modal.html
+    // They check window.videoData.playlist and call initializePlaylist automatically
 
     // Prevent body scroll - use both body and html to ensure it works
     document.body.style.overflow = 'hidden';
@@ -705,11 +748,40 @@ function closeTheaterMode() {
             liveChatInstance = null;
         }
         
+        // Clean up playlist state in theater modal if it exists
+        if (typeof window.currentPlaylistIndex !== 'undefined') {
+            window.currentPlaylistIndex = null;
+        }
+        if (typeof window.currentPlaylist !== 'undefined') {
+            window.currentPlaylist = null;
+        }
+        if (typeof window.isPlaylistMode !== 'undefined') {
+            window.isPlaylistMode = false;
+        }
+        
         modal.remove();
         
         // Restore body scroll - restore both body and html
         document.body.style.overflow = '';
         document.documentElement.style.overflow = '';
+        
+        // Restore playlist button state in youtube.html if stopPlaylistPlayback function exists
+        // This will reset the button to play state (▶)
+        if (typeof window.stopPlaylistPlayback === 'function') {
+            try {
+                window.stopPlaylistPlayback();
+            } catch (e) {
+                console.warn('Could not call stopPlaylistPlayback:', e);
+            }
+        }
+        
+        // Also try to reset the button directly if the function is not available
+        const playlistLogo = document.getElementById('playlistLogo');
+        if (playlistLogo) {
+            playlistLogo.textContent = '▶';
+            playlistLogo.title = 'Play all visible videos';
+            playlistLogo.classList.remove('playing');
+        }
     }
 }
 
@@ -3030,6 +3102,8 @@ async function openTheaterModeFromEvent(eventId) {
 // Export functions for use in youtube.html
 window.openTheaterMode = openTheaterMode;
 window.closeTheaterMode = closeTheaterMode;
+// Alias for theater-modal.html compatibility
+window.initializeTheaterMode = openTheaterMode;
 window.VideoStats = VideoStats;
 window.enterPictureInPicture = enterPictureInPicture;
 window.exitPictureInPicture = exitPictureInPicture;
@@ -3237,4 +3311,17 @@ window.formatRelativeTime = formatRelativeTime;
 window.validateInput = validateInput;
 window.validateEventId = validateEventId;
 window.validatePubkey = validatePubkey;
+
+// Expose theater mode helper functions for theater-modal.html
+window.setupCommentTimeline = setupCommentTimeline;
+window.updateTimestampButton = updateTimestampButton;
+window.renderTheaterComment = renderTheaterComment;
+window.loadTheaterStats = loadTheaterStats;
+window.loadTheaterComments = loadTheaterComments;
+window.loadTheaterVideoAuthor = loadTheaterVideoAuthor;
+window.jumpToTimestamp = jumpToTimestamp;
+window.seekToTimestamp = jumpToTimestamp; // Alias for compatibility
+
+// Expose extractVideoMetadata for playlist-manager.html (used by loadPlaylistVideos)
+window.extractVideoMetadata = extractVideoMetadata;
 

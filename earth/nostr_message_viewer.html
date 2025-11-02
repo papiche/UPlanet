@@ -385,6 +385,8 @@
             gap: 6px;
         }
     </style>
+    <script src="nostr.bundle.js"></script>
+    <script src="common.js"></script>
     <script src="nostr.js"></script>
 </head>
 <body>
@@ -443,6 +445,42 @@
             const regex = new RegExp('[\\?&]' + name + '=([^&#]*)');
             const results = regex.exec(location.search);
             return results === null ? '' : decodeURIComponent(results[1].replace(/\+/g, ' '));
+        }
+
+        // Convert hex pubkey to npub format
+        function hexToNpub(hex) {
+            if (!hex) return hex;
+            try {
+                // Use npubEncode from nostr.bundle.js via NostrTools.nip19
+                if (typeof NostrTools !== 'undefined' && NostrTools.nip19 && NostrTools.nip19.npubEncode) {
+                    return NostrTools.nip19.npubEncode(hex);
+                }
+            } catch (e) {
+                console.warn('Error converting hex to npub:', e);
+            }
+            return hex;
+        }
+
+        // Convert hex event id to nevent format
+        function hexToNevent(hex, relayUrl = null) {
+            if (!hex) return hex;
+            try {
+                // Use neventEncode from nostr.bundle.js via NostrTools.nip19
+                if (typeof NostrTools !== 'undefined' && NostrTools.nip19) {
+                    if (NostrTools.nip19.neventEncode) {
+                        return NostrTools.nip19.neventEncode({
+                            id: hex,
+                            relays: relayUrl ? [relayUrl] : []
+                        });
+                    } else if (NostrTools.nip19.noteEncode) {
+                        // Fallback to noteEncode (nevent is similar to note)
+                        return NostrTools.nip19.noteEncode(hex);
+                    }
+                }
+            } catch (e) {
+                console.warn('Error converting hex to nevent:', e);
+            }
+            return hex;
         }
 
         async function getRelayURL() {
@@ -623,7 +661,7 @@
             }
         }
 
-        function renderMessage(message, profile) {
+        async function renderMessage(message, profile) {
             const timeAgo = formatRelativeTime(message.created_at);
             const date = new Date(message.created_at * 1000);
             const fullDate = date.toLocaleString('fr-FR');
@@ -635,6 +673,11 @@
                     .replace(/>/g, '&gt;')
                     .replace(/\n/g, '<br>')
             );
+
+            // Convert to npub and nevent formats for njump.me links
+            const npub = hexToNpub(message.pubkey);
+            const relayUrl = await getRelayURL();
+            const nevent = hexToNevent(message.id, relayUrl);
 
             return `
                 <div class="message-container">
@@ -657,8 +700,8 @@
                         <button class="action-button" onclick="replyToMessage('${message.id}')">💬 Répondre</button>
                         <button class="action-button" onclick="copyEventId('${message.id}')">📋 Copier ID</button>
                         <a href="nostr_profile_viewer.html?hex=${message.pubkey}" target="_blank" class="action-button" style="text-decoration: none;">👤 Profil UPlanet</a>
-                        <a href="https://njump.me/${message.pubkey}" target="_blank" class="action-button" style="text-decoration: none;">🌐 Profil externe</a>
-                        <a href="https://njump.me/${message.id}" target="_blank" class="action-button" style="text-decoration: none;">🔗 Message externe</a>
+                        <a href="https://njump.me/${npub}" target="_blank" class="action-button" style="text-decoration: none;">🌐 Profil externe</a>
+                        <a href="https://njump.me/${nevent}" target="_blank" class="action-button" style="text-decoration: none;">🔗 Message externe</a>
                     </div>
                 </div>
             `;
@@ -676,6 +719,10 @@
                     .replace(/\n/g, '<br>')
             );
 
+            // Convert to npub and nevent formats for njump.me links
+            const npub = hexToNpub(reply.pubkey);
+            const nevent = hexToNevent(reply.id, relayUrl);
+
             return `
                 <div class="reply-item">
                     <div class="reply-header">
@@ -690,10 +737,10 @@
                         <a href="nostr_profile_viewer.html?hex=${reply.pubkey}" target="_blank" style="color: var(--terminal-cyan); text-decoration: none;">
                             👤 Profil UPlanet
                         </a>
-                        <a href="https://njump.me/${reply.pubkey}" target="_blank" style="color: var(--terminal-purple); text-decoration: none;">
+                        <a href="https://njump.me/${npub}" target="_blank" style="color: var(--terminal-purple); text-decoration: none;">
                             🌐 Profil externe
                         </a>
-                        <a href="https://njump.me/${reply.id}" target="_blank" style="color: var(--terminal-orange); text-decoration: none;">
+                        <a href="https://njump.me/${nevent}" target="_blank" style="color: var(--terminal-orange); text-decoration: none;">
                             🔗 Message externe
                         </a>
                     </div>
@@ -778,7 +825,7 @@
                 const replies = await fetchReplies(eventId, relayUrl);
 
                 // Render
-                let html = renderMessage(message, profile);
+                let html = await renderMessage(message, profile);
 
                 if (replies.length > 0) {
                     html += `

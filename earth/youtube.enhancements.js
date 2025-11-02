@@ -198,7 +198,7 @@ async function theaterShareVideoWithPreview() {
             <div class="share-form">
                 <textarea 
                     id="shareMessage" 
-                    placeholder="Ajoutez un message (optionnel)..."
+                    placeholder="Ajoutez un message (optionnel)... Le lien vidéo sera ajouté automatiquement."
                     rows="3"
                     style="width: 100%; padding: 12px; background: #212121; border: 1px solid #3f3f3f; border-radius: 8px; color: #ffffff; font-family: inherit; font-size: 0.95em; resize: vertical; margin-bottom: 16px; box-sizing: border-box;"></textarea>
                 <div class="share-tags" style="margin-bottom: 20px;">
@@ -2629,7 +2629,7 @@ async function shareVideoWithPreview(videoData) {
             <div class="share-form">
                 <textarea 
                     id="shareMessage" 
-                    placeholder="Ajoutez un message (optionnel)..."
+                    placeholder="Ajoutez un message (optionnel)... Le lien vidéo sera ajouté automatiquement."
                     rows="3"></textarea>
                 <div class="share-tags">
                     <label>Tags (séparés par des virgules):</label>
@@ -2715,7 +2715,64 @@ async function executeShare() {
     const tags = tagsInput.split(',').map(t => t.trim()).filter(t => t);
 
     const videoData = targetWindow.currentShareVideoData;
-    const shareContent = `${message ? message + '\n\n' : ''}🎥 ${videoData.title}\n${videoData.ipfsUrl || ''}`;
+    
+    // Build video link - use eventId if available, otherwise use ipfsUrl
+    let videoLink = '';
+    if (videoData.eventId) {
+        const baseUrl = targetWindow.location.origin;
+        videoLink = `${baseUrl}/youtube?video=${videoData.eventId}`;
+    } else if (videoData.ipfsUrl) {
+        videoLink = videoData.ipfsUrl;
+    }
+    
+    // Build share content with automatic video link
+    let shareContent = '';
+    if (message && message.trim()) {
+        shareContent = message.trim();
+        // Add video link if not already in message
+        if (!shareContent.includes(videoLink) && !shareContent.includes('/youtube?video=')) {
+            shareContent += `\n\n🔗 ${videoData.title}\n${videoLink}`;
+        } else {
+            shareContent += `\n\n🔗 ${videoData.title}`;
+        }
+    } else {
+        // No message provided, create default share content with link
+        shareContent = `🔗 🎬 ${videoData.title}\n${videoLink}`;
+    }
+
+    // Auto-connect if not connected
+    if (!userPubkey || (typeof userPubkey === 'undefined')) {
+        // Try to connect automatically
+        if (typeof connectNostr === 'function') {
+            try {
+                const pubkey = await connectNostr();
+                if (!pubkey) {
+                    alert('❌ Connexion requise pour partager. Veuillez vous connecter avec NOSTR.');
+                    return;
+                }
+            } catch (error) {
+                console.error('Error auto-connecting:', error);
+                alert('❌ Erreur lors de la connexion automatique. Veuillez vous connecter manuellement.');
+                return;
+            }
+        } else {
+            alert('❌ Connexion requise pour partager. Veuillez vous connecter avec NOSTR.');
+            return;
+        }
+    }
+    
+    // Ensure relay connection
+    if (!isNostrConnected || !nostrRelay) {
+        if (typeof connectToRelay === 'function') {
+            try {
+                await connectToRelay();
+            } catch (error) {
+                console.error('Error connecting to relay:', error);
+                alert('❌ Erreur lors de la connexion au relay.');
+                return;
+            }
+        }
+    }
 
     try {
         // Use shareCurrentPage or publishNote with correct signature
@@ -2723,19 +2780,42 @@ async function executeShare() {
             await shareCurrentPage();
         } else if (typeof publishNote === 'function') {
             const eventTags = [
-                ['e', videoData.eventId, '', 'video'],
-                ['r', videoData.ipfsUrl || '']
+                ['r', videoLink || videoData.ipfsUrl || '', 'web'],
+                ['title', videoData.title]
             ];
-            tags.forEach(tag => eventTags.push(['t', tag]));
+            
+            // Add IPFS URL as separate tag if different from video link
+            if (videoData.ipfsUrl && videoData.ipfsUrl !== videoLink) {
+                eventTags.push(['r', videoData.ipfsUrl]);
+            }
+            
+            // Add video event reference if available
+            if (videoData.eventId) {
+                eventTags.push(['e', videoData.eventId, '', 'video']);
+            }
+            
+            // Add default and custom tags
+            eventTags.push(['t', 'NostrTube'], ['t', 'Video']);
+            tags.forEach(tag => {
+                if (tag) {
+                    eventTags.push(['t', tag]);
+                }
+            });
 
             // publishNote expects (content, additionalTags)
-            await publishNote(shareContent, eventTags);
+            const result = await publishNote(shareContent, eventTags);
+            
+            if (result) {
+                alert('✅ Vidéo partagée avec succès !');
+                closeShareModal();
+            } else {
+                throw new Error('Failed to publish share event');
+            }
         } else {
             throw new Error('No sharing method available');
         }
 
-        alert('Video shared successfully!');
-        closeShareModal();
+        // Success message already shown above
     } catch (error) {
         console.error('Error sharing video:', error);
         alert('Failed to share video: ' + error.message);

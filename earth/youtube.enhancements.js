@@ -2900,6 +2900,8 @@ window.exitPictureInPicture = exitPictureInPicture;
 window.getNetworkVideos = getNetworkVideos;
 window.getRelatedVideos = getRelatedVideos;
 window.LiveVideoChat = LiveVideoChat;
+// Expose playlist functions globally for use in playlist-manager.html and other pages
+window.generatePlaylistId = generatePlaylistId;
 window.createPlaylist = createPlaylist;
 window.addToPlaylist = addToPlaylist;
 window.removeVideoFromPlaylist = removeVideoFromPlaylist;

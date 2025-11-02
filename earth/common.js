@@ -940,9 +940,16 @@ async function createBookmark(url = null, title = null, description = '') {
 async function fetchComments(url = null, limit = 100) {
     const targetUrl = url || window.location.href;
     
-    if (!isNostrConnected) {
-        console.log('🔌 Connexion au relay pour récupérer les commentaires...');
-        await connectToRelay();
+    // Ensure relay connection (but don't require NIP-42 auth for reading)
+    // Use shared connection promise to avoid multiple simultaneous connections
+    if (!isNostrConnected || !nostrRelay) {
+        // Only log once if multiple calls happen simultaneously
+        if (!window._connectingToRelay) {
+            console.log('🔌 Connexion au relay pour récupérer les commentaires...');
+            window._connectingToRelay = connectToRelay();
+        }
+        await window._connectingToRelay;
+        delete window._connectingToRelay;
     }
 
     if (!nostrRelay || !isNostrConnected) {
@@ -3006,9 +3013,16 @@ async function sendCustomReaction(eventId, authorPubkey, emoji) {
  * @returns {Promise<Array>} Array of reaction events
  */
 async function fetchReactions(eventId, limit = 50) {
-    if (!isNostrConnected) {
-        console.log('🔌 Connexion au relay pour récupérer les réactions...');
-        await connectToRelay();
+    // Ensure relay connection (but don't require NIP-42 auth for reading)
+    // Use shared connection promise to avoid multiple simultaneous connections
+    if (!isNostrConnected || !nostrRelay) {
+        // Only log once if multiple calls happen simultaneously
+        if (!window._connectingToRelay) {
+            console.log('🔌 Connexion au relay pour récupérer les réactions...');
+            window._connectingToRelay = connectToRelay();
+        }
+        await window._connectingToRelay;
+        delete window._connectingToRelay;
     }
 
     if (!nostrRelay || !isNostrConnected) {

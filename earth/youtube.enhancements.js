@@ -304,7 +304,8 @@ async function openTheaterMode(videoData) {
         channel,
         uploader,
         duration,
-        description
+        description,
+        content  // Comment/description from NOSTR event (NIP-71)
     } = videoData;
 
     // Stop all playing videos on the parent page
@@ -446,8 +447,8 @@ async function openTheaterMode(videoData) {
         await loadTheaterVideoAuthor(modal, authorId, uploader || channel || 'Auteur inconnu');
     }
 
-    // Load comments
-    await loadTheaterComments(eventId, ipfsUrl);
+    // Load comments (pass content as original comment)
+    await loadTheaterComments(eventId, ipfsUrl, content || description);
 
     // Start live chat if relay is available
     if (nostrRelay && isNostrConnected && eventId) {
@@ -858,13 +859,49 @@ async function loadTheaterStats(eventId, ipfsUrl) {
 /**
  * Load comments for theater mode
  */
-async function loadTheaterComments(eventId, ipfsUrl) {
+async function loadTheaterComments(eventId, ipfsUrl, originalContent = null) {
     const commentsList = document.getElementById('theaterCommentsList');
     commentsList.innerHTML = '<div class="loading-comments">Chargement des commentaires...</div>';
 
     try {
         // Fetch NIP-22 comments (kind 1111) for the video
         const comments = await fetchVideoComments(eventId);
+        
+        // Add original comment if provided (from event content field)
+        if (originalContent && originalContent.trim()) {
+            // Get author info from modal if available
+            let authorName = 'Auteur de la vidéo';
+            let authorId = null;
+            
+            try {
+                const videoPlayer = document.getElementById('theaterVideoPlayer');
+                if (videoPlayer) {
+                    authorId = videoPlayer.getAttribute('data-author-id');
+                }
+                
+                // Try to get author name from uploader element
+                const uploaderEl = document.getElementById('theaterUploader');
+                if (uploaderEl) {
+                    const uploaderText = uploaderEl.textContent || uploaderEl.innerText;
+                    if (uploaderText && uploaderText !== 'Loading...') {
+                        authorName = uploaderText.trim();
+                    }
+                }
+            } catch (e) {
+                console.warn('Could not get author info for original comment:', e);
+            }
+            
+            // Prepend original comment to the list
+            comments.unshift({
+                id: eventId,
+                authorId: authorId,
+                authorName: authorName,
+                content: originalContent,
+                timestamp: null,
+                isOriginal: true,
+                created_at: null
+            });
+        }
         
         if (comments.length === 0) {
             commentsList.innerHTML = '<div class="no-comments">Aucun commentaire pour le moment.</div>';
@@ -885,21 +922,40 @@ async function loadTheaterComments(eventId, ipfsUrl) {
  * Render comment in theater mode
  */
 function renderTheaterComment(comment) {
-    const author = comment.pubkey.substring(0, 8);
-    const timeAgo = formatRelativeTime(comment.created_at);
+    // Handle original comment (from event content field) differently
+    const isOriginal = comment.isOriginal === true;
+    const authorId = comment.authorId || comment.pubkey;
+    const authorName = comment.authorName || (comment.pubkey ? comment.pubkey.substring(0, 8) + '...' : 'Auteur inconnu');
+    const timeAgo = comment.created_at ? formatRelativeTime(comment.created_at) : '';
     const content = escapeHtml(comment.content);
     
     // Extract timestamp if present
     const timestampMatch = comment.content.match(/⏱️\s*(\d+):(\d+)/);
     const timestamp = timestampMatch ? 
         `${timestampMatch[1]}:${timestampMatch[2]}` : null;
+    
+    // For original comments, use authorName; for others, use pubkey substring
+    const displayAuthor = isOriginal ? authorName : (comment.pubkey ? comment.pubkey.substring(0, 8) + '...' : authorName);
+    
+    // Create author link for original comment if authorId is available
+    let authorDisplay = displayAuthor;
+    if (isOriginal && authorId) {
+        const openProfileFn = typeof openProfileModalInTheater !== 'undefined' ? 'openProfileModalInTheater' :
+                             (typeof openProfileModal !== 'undefined' ? 'openProfileModal' : null);
+        if (openProfileFn) {
+            authorDisplay = `<a href="#" onclick="event.preventDefault(); ${openProfileFn}('${authorId}', '${escapeHtml(authorName)}'); return false;" class="theater-uploader-link">${escapeHtml(authorName)}</a>`;
+        } else {
+            authorDisplay = escapeHtml(authorName);
+        }
+    }
 
     return `
-        <div class="theater-comment-item" data-comment-id="${comment.id}">
-            <div class="theater-comment-author">${author}...</div>
+        <div class="theater-comment-item ${isOriginal ? 'original-comment' : ''}" data-comment-id="${comment.id || ''}">
+            <div class="theater-comment-author">${authorDisplay}</div>
             <div class="theater-comment-content">${content}</div>
+            ${comment.timestamp ? `<button class="theater-comment-timestamp-link" onclick="seekToTimestamp(${comment.timestamp})">⏱️ ${formatTime ? formatTime(comment.timestamp) : comment.timestamp + 's'}</button>` : ''}
             ${timestamp ? `<button class="theater-comment-timestamp-link" onclick="jumpToTimestamp('${timestamp}')">⏱️ ${timestamp}</button>` : ''}
-            <div class="theater-comment-time">${timeAgo}</div>
+            ${timeAgo ? `<div class="theater-comment-time">${timeAgo}</div>` : ''}
         </div>
     `;
 }

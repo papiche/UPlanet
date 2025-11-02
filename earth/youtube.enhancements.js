@@ -1394,19 +1394,73 @@ function formatDuration(seconds) {
 }
 
 /**
- * Format time in seconds to MM:SS
+ * Format time in seconds to MM:SS or HH:MM:SS for longer durations
  */
 function formatTime(seconds) {
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = Math.floor(seconds % 60);
+    
+    if (h > 0) {
+        return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+    }
     return formatDuration(seconds);
+}
+
+/**
+ * Format timestamp (alias for formatTime for video timestamps)
+ * Supports both MM:SS and HH:MM:SS formats
+ */
+function formatTimestamp(seconds) {
+    return formatTime(seconds);
 }
 
 /**
  * Escape HTML to prevent XSS
  */
 function escapeHtml(text) {
+    if (typeof text !== 'string') return '';
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+}
+
+/**
+ * Validate and sanitize user input (basic validation)
+ */
+function validateInput(input, maxLength = 10000, allowHtml = false) {
+    if (!input || typeof input !== 'string') return '';
+    
+    // Trim whitespace
+    let sanitized = input.trim();
+    
+    // Check length
+    if (sanitized.length > maxLength) {
+        sanitized = sanitized.substring(0, maxLength);
+    }
+    
+    // Escape HTML unless explicitly allowed (use with caution)
+    if (!allowHtml) {
+        sanitized = escapeHtml(sanitized);
+    }
+    
+    return sanitized;
+}
+
+/**
+ * Validate event ID format (hex string, 64 chars)
+ */
+function validateEventId(eventId) {
+    if (!eventId || typeof eventId !== 'string') return false;
+    return /^[0-9a-f]{64}$/i.test(eventId);
+}
+
+/**
+ * Validate pubkey format (hex string, 64 chars)
+ */
+function validatePubkey(pubkey) {
+    if (!pubkey || typeof pubkey !== 'string') return false;
+    return /^[0-9a-f]{64}$/i.test(pubkey);
 }
 
 /**
@@ -2038,5 +2092,13 @@ window.theaterShareVideoWithPreview = theaterShareVideoWithPreview;
 window.theaterBookmarkVideo = theaterBookmarkVideo;
 window.submitTheaterComment = submitTheaterComment;
 window.addTimestampToComment = addTimestampToComment;
-window.escapeHtml = escapeHtml; // Make escapeHtml globally available
+// Make utility functions globally available
+window.escapeHtml = escapeHtml;
+window.formatTime = formatTime;
+window.formatTimestamp = formatTimestamp;
+window.formatDuration = formatDuration;
+window.formatRelativeTime = formatRelativeTime;
+window.validateInput = validateInput;
+window.validateEventId = validateEventId;
+window.validatePubkey = validatePubkey;
 

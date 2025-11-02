@@ -1794,7 +1794,18 @@ let liveChatInstance = null;
 // ========================================
 
 /**
- * Create a playlist (NOSTR kind 10001)
+ * Generate a unique identifier for a playlist
+ */
+function generatePlaylistId() {
+    // Generate a UUID-like identifier (32 hex characters)
+    return Array.from(crypto.getRandomValues(new Uint8Array(16)))
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join('');
+}
+
+/**
+ * Create a playlist (NOSTR kind 30005 - Curation sets for videos per NIP-51)
+ * Uses parameterized replaceable events with unique 'd' tag to allow multiple playlists
  */
 async function createPlaylist(name, description, videos = []) {
     if (!isNostrConnected) {
@@ -1807,6 +1818,9 @@ async function createPlaylist(name, description, videos = []) {
     }
 
     try {
+        // Generate unique ID for this playlist (prevents replacement)
+        const playlistId = generatePlaylistId();
+        
         const playlistData = {
             name,
             description,
@@ -1814,14 +1828,24 @@ async function createPlaylist(name, description, videos = []) {
             createdAt: Math.floor(Date.now() / 1000)
         };
 
+        // Build tags: 'e' tags for videos (kind 21/22), 'd' for unique identifier
+        // According to NIP-51, kind 30005 uses 'e' tags for kind:21 videos
         const tags = videos.map(v => ['e', v.eventId || v.id, '', 'video']);
-        tags.push(['d', name.toLowerCase().replace(/\s+/g, '-')]); // Identifier tag for replaceable events
+        
+        // Unique identifier tag (required for parameterized replaceable events)
+        tags.push(['d', playlistId]);
+        
+        // Optional UI enhancement tags (NIP-51)
+        tags.push(['title', name]);
+        if (description) {
+            tags.push(['description', description]);
+        }
 
         const eventTemplate = {
-            kind: 10001, // NIP-51: Lists (playlists)
+            kind: 30005, // NIP-51: Curation sets for videos (parameterized replaceable)
             created_at: Math.floor(Date.now() / 1000),
             tags,
-            content: JSON.stringify(playlistData)
+            content: JSON.stringify(playlistData) // Store full data in content for compatibility
         };
 
         // Sign and publish the event (kind 10001 needs special handling)
@@ -1849,7 +1873,7 @@ async function createPlaylist(name, description, videos = []) {
         const publishedEvent = signedEvent;
 
         if (publishedEvent) {
-            console.log('Playlist created:', publishedEvent.id);
+            console.log('✅ Playlist created:', publishedEvent.id, 'with d-tag:', playlistId);
             return publishedEvent;
         }
 
@@ -1882,19 +1906,31 @@ async function addToPlaylist(playlistId, videoEventId) {
             return false;
         }
 
+        // Get the 'd' tag identifier (unique playlist ID)
+        const dTag = playlistEvent.tags.find(t => t[0] === 'd')?.[1];
+        if (!dTag) {
+            throw new Error('Invalid playlist: missing d-tag identifier');
+        }
+
         // Parse existing data
         const playlistData = JSON.parse(playlistEvent.content);
         if (!playlistData.videos.includes(videoEventId)) {
             playlistData.videos.push(videoEventId);
         }
 
-        // Update tags
+        // Update tags with all videos
         const tags = playlistData.videos.map(vid => ['e', vid, '', 'video']);
-        tags.push(['d', playlistEvent.tags.find(t => t[0] === 'd')?.[1] || 'playlist']);
+        tags.push(['d', dTag]);
+        
+        // Preserve title and description tags
+        const titleTag = playlistEvent.tags.find(t => t[0] === 'title');
+        const descTag = playlistEvent.tags.find(t => t[0] === 'description');
+        if (titleTag) tags.push(titleTag);
+        if (descTag) tags.push(descTag);
 
-        // Create updated event (kind 10001 - replaceable event)
+        // Create updated event (kind 30005 - parameterized replaceable event)
         const eventTemplate = {
-            kind: 10001, // NIP-51: Lists (playlists)
+            kind: 30005, // NIP-51: Curation sets for videos
             created_at: Math.floor(Date.now() / 1000),
             tags,
             content: JSON.stringify(playlistData)
@@ -1932,9 +1968,9 @@ async function addToPlaylist(playlistId, videoEventId) {
 }
 
 /**
- * Fetch playlist event
+ * Fetch playlist event by event ID or by 'd' tag identifier
  */
-async function fetchPlaylistEvent(playlistId) {
+async function fetchPlaylistEvent(playlistIdOrDtag) {
     if (!nostrRelay || !isNostrConnected) {
         await connectToRelay();
     }
@@ -1944,31 +1980,368 @@ async function fetchPlaylistEvent(playlistId) {
     }
 
     try {
-        return new Promise((resolve) => {
-            const sub = nostrRelay.sub([{
-                kinds: [10001],
-                ids: [playlistId],
-                limit: 1
-            }]);
+        // Check if it's a full event ID (64 hex chars) or a 'd' tag identifier
+        const isEventId = /^[0-9a-f]{64}$/i.test(playlistIdOrDtag);
+        
+        if (isEventId) {
+            // Fetch by event ID (try both kinds for backward compatibility)
+            return new Promise((resolve) => {
+                const sub = nostrRelay.sub([{
+                    kinds: [30005, 10001], // Support both new and old format
+                    ids: [playlistIdOrDtag],
+                    limit: 1
+                }]);
 
-            let playlist = null;
-            sub.on('event', (event) => {
-                playlist = event;
+                let playlist = null;
+                sub.on('event', (event) => {
+                    playlist = event;
+                });
+
+                sub.on('eose', () => {
+                    sub.unsub();
+                    resolve(playlist);
+                });
+
+                setTimeout(() => {
+                    sub.unsub();
+                    resolve(playlist);
+                }, 3000);
             });
+        } else {
+            // Fetch by 'd' tag identifier (parameterized replaceable event)
+            return new Promise((resolve) => {
+                const sub = nostrRelay.sub([{
+                    kinds: [30005, 10001], // Support both formats
+                    authors: [userPubkey],
+                    '#d': [playlistIdOrDtag],
+                    limit: 1
+                }]);
 
-            sub.on('eose', () => {
-                sub.unsub();
-                resolve(playlist);
+                let playlist = null;
+                sub.on('event', (event) => {
+                    playlist = event;
+                });
+
+                sub.on('eose', () => {
+                    sub.unsub();
+                    resolve(playlist);
+                });
+
+                setTimeout(() => {
+                    sub.unsub();
+                    resolve(playlist);
+                }, 3000);
             });
-
-            setTimeout(() => {
-                sub.unsub();
-                resolve(playlist);
-            }, 3000);
-        });
+        }
     } catch (error) {
         console.error('Error fetching playlist:', error);
         return null;
+    }
+}
+
+/**
+ * Remove video from playlist
+ */
+async function removeVideoFromPlaylist(playlistId, videoEventId) {
+    if (!isNostrConnected) {
+        await connectNostr();
+    }
+
+    if (!userPubkey) {
+        alert('Please connect your Nostr account first');
+        return false;
+    }
+
+    try {
+        // Fetch existing playlist
+        const playlistEvent = await fetchPlaylistEvent(playlistId);
+        if (!playlistEvent) {
+            alert('Playlist not found');
+            return false;
+        }
+
+        // Get the 'd' tag identifier
+        const dTag = playlistEvent.tags.find(t => t[0] === 'd')?.[1];
+        if (!dTag) {
+            throw new Error('Invalid playlist: missing d-tag identifier');
+        }
+
+        // Parse existing data and remove video
+        const playlistData = JSON.parse(playlistEvent.content);
+        playlistData.videos = playlistData.videos.filter(vid => vid !== videoEventId);
+
+        // Update tags
+        const tags = playlistData.videos.map(vid => ['e', vid, '', 'video']);
+        tags.push(['d', dTag]);
+        
+        // Preserve title and description tags
+        const titleTag = playlistEvent.tags.find(t => t[0] === 'title');
+        const descTag = playlistEvent.tags.find(t => t[0] === 'description');
+        if (titleTag) tags.push(titleTag);
+        if (descTag) tags.push(descTag);
+
+        // Create updated event
+        const eventTemplate = {
+            kind: playlistEvent.kind === 10001 ? 10001 : 30005, // Preserve kind
+            created_at: Math.floor(Date.now() / 1000),
+            tags,
+            content: JSON.stringify(playlistData)
+        };
+
+        // Sign and publish
+        let signedEvent;
+        if (window.nostr && typeof window.nostr.signEvent === 'function') {
+            signedEvent = await window.nostr.signEvent(eventTemplate);
+        } else {
+            throw new Error("Nostr extension required");
+        }
+
+        if (!isNostrConnected) {
+            await connectToRelay();
+        }
+
+        if (!nostrRelay || !isNostrConnected) {
+            throw new Error("Relay connection required");
+        }
+
+        const publishPromise = nostrRelay.publish(signedEvent);
+        const timeoutPromise = new Promise((_, reject) => {
+            setTimeout(() => reject(new Error('Publish timeout')), 10000);
+        });
+
+        await Promise.race([publishPromise, timeoutPromise]);
+
+        return true;
+    } catch (error) {
+        console.error('Error removing video from playlist:', error);
+        return false;
+    }
+}
+
+/**
+ * Reorder videos in playlist (move video from oldIndex to newIndex)
+ */
+async function reorderPlaylistVideos(playlistId, oldIndex, newIndex) {
+    if (!isNostrConnected) {
+        await connectNostr();
+    }
+
+    if (!userPubkey) {
+        alert('Please connect your Nostr account first');
+        return false;
+    }
+
+    try {
+        // Fetch existing playlist
+        const playlistEvent = await fetchPlaylistEvent(playlistId);
+        if (!playlistEvent) {
+            alert('Playlist not found');
+            return false;
+        }
+
+        // Get the 'd' tag identifier
+        const dTag = playlistEvent.tags.find(t => t[0] === 'd')?.[1];
+        if (!dTag) {
+            throw new Error('Invalid playlist: missing d-tag identifier');
+        }
+
+        // Parse existing data and reorder videos
+        const playlistData = JSON.parse(playlistEvent.content);
+        const videos = [...playlistData.videos];
+        
+        // Move video from oldIndex to newIndex
+        if (oldIndex < 0 || oldIndex >= videos.length || newIndex < 0 || newIndex >= videos.length) {
+            throw new Error('Invalid index');
+        }
+        
+        const [movedVideo] = videos.splice(oldIndex, 1);
+        videos.splice(newIndex, 0, movedVideo);
+        playlistData.videos = videos;
+
+        // Update tags in the same order
+        const tags = videos.map(vid => ['e', vid, '', 'video']);
+        tags.push(['d', dTag]);
+        
+        // Preserve title and description tags
+        const titleTag = playlistEvent.tags.find(t => t[0] === 'title');
+        const descTag = playlistEvent.tags.find(t => t[0] === 'description');
+        if (titleTag) tags.push(titleTag);
+        if (descTag) tags.push(descTag);
+
+        // Create updated event
+        const eventTemplate = {
+            kind: playlistEvent.kind === 10001 ? 10001 : 30005,
+            created_at: Math.floor(Date.now() / 1000),
+            tags,
+            content: JSON.stringify(playlistData)
+        };
+
+        // Sign and publish
+        let signedEvent;
+        if (window.nostr && typeof window.nostr.signEvent === 'function') {
+            signedEvent = await window.nostr.signEvent(eventTemplate);
+        } else {
+            throw new Error("Nostr extension required");
+        }
+
+        if (!isNostrConnected) {
+            await connectToRelay();
+        }
+
+        if (!nostrRelay || !isNostrConnected) {
+            throw new Error("Relay connection required");
+        }
+
+        const publishPromise = nostrRelay.publish(signedEvent);
+        const timeoutPromise = new Promise((_, reject) => {
+            setTimeout(() => reject(new Error('Publish timeout')), 10000);
+        });
+
+        await Promise.race([publishPromise, timeoutPromise]);
+
+        return true;
+    } catch (error) {
+        console.error('Error reordering playlist videos:', error);
+        return false;
+    }
+}
+
+/**
+ * Export playlist as JSON (NOSTR event format)
+ */
+async function exportPlaylist(playlistId) {
+    try {
+        const playlistEvent = await fetchPlaylistEvent(playlistId);
+        if (!playlistEvent) {
+            alert('Playlist not found');
+            return;
+        }
+
+        const playlistData = JSON.parse(playlistEvent.content);
+        
+        // Create exportable format
+        const exportData = {
+            event: {
+                id: playlistEvent.id,
+                kind: playlistEvent.kind,
+                pubkey: playlistEvent.pubkey,
+                created_at: playlistEvent.created_at,
+                content: playlistEvent.content,
+                tags: playlistEvent.tags,
+                sig: playlistEvent.sig
+            },
+            metadata: {
+                name: playlistData.name,
+                description: playlistData.description,
+                videoCount: playlistData.videos.length,
+                createdAt: new Date(playlistData.createdAt * 1000).toISOString(),
+                videos: playlistData.videos
+            },
+            exportDate: new Date().toISOString(),
+            format: 'NOSTR-Playlist-v1'
+        };
+
+        // Create downloadable JSON file
+        const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `playlist-${playlistData.name.replace(/[^a-z0-9]/gi, '-').toLowerCase()}-${playlistEvent.id.substring(0, 8)}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        console.log('✅ Playlist exported successfully');
+        return true;
+    } catch (error) {
+        console.error('Error exporting playlist:', error);
+        alert('Error exporting playlist: ' + error.message);
+        return false;
+    }
+}
+
+/**
+ * Update playlist metadata (name, description)
+ */
+async function updatePlaylistMetadata(playlistId, name, description) {
+    if (!isNostrConnected) {
+        await connectNostr();
+    }
+
+    if (!userPubkey) {
+        alert('Please connect your Nostr account first');
+        return false;
+    }
+
+    try {
+        // Fetch existing playlist
+        const playlistEvent = await fetchPlaylistEvent(playlistId);
+        if (!playlistEvent) {
+            alert('Playlist not found');
+            return false;
+        }
+
+        // Get the 'd' tag identifier
+        const dTag = playlistEvent.tags.find(t => t[0] === 'd')?.[1];
+        if (!dTag) {
+            throw new Error('Invalid playlist: missing d-tag identifier');
+        }
+
+        // Parse existing data and update metadata
+        const playlistData = JSON.parse(playlistEvent.content);
+        playlistData.name = name;
+        playlistData.description = description || '';
+
+        // Update tags
+        const tags = playlistData.videos.map(vid => ['e', vid, '', 'video']);
+        tags.push(['d', dTag]);
+        tags.push(['title', name]);
+        if (description) {
+            tags.push(['description', description]);
+        } else {
+            // Remove description tag if empty
+            const existingDescTag = playlistEvent.tags.find(t => t[0] === 'description');
+            if (!existingDescTag) {
+                // No existing description, don't add one
+            }
+        }
+
+        // Create updated event
+        const eventTemplate = {
+            kind: playlistEvent.kind === 10001 ? 10001 : 30005,
+            created_at: Math.floor(Date.now() / 1000),
+            tags,
+            content: JSON.stringify(playlistData)
+        };
+
+        // Sign and publish
+        let signedEvent;
+        if (window.nostr && typeof window.nostr.signEvent === 'function') {
+            signedEvent = await window.nostr.signEvent(eventTemplate);
+        } else {
+            throw new Error("Nostr extension required");
+        }
+
+        if (!isNostrConnected) {
+            await connectToRelay();
+        }
+
+        if (!nostrRelay || !isNostrConnected) {
+            throw new Error("Relay connection required");
+        }
+
+        const publishPromise = nostrRelay.publish(signedEvent);
+        const timeoutPromise = new Promise((_, reject) => {
+            setTimeout(() => reject(new Error('Publish timeout')), 10000);
+        });
+
+        await Promise.race([publishPromise, timeoutPromise]);
+
+        return true;
+    } catch (error) {
+        console.error('Error updating playlist metadata:', error);
+        return false;
     }
 }
 
@@ -2006,17 +2379,95 @@ function renderPlaylist(playlistEvent, container) {
 /**
  * Load videos in playlist
  */
+/**
+ * Extract video metadata from NOSTR event (kind 21/22)
+ * Supports both NIP-71 format (title tag + imeta) and legacy metadata tag
+ */
+function extractVideoMetadata(event) {
+    let title = 'Untitled';
+    let ipfsUrl = '';
+    let thumbnailUrl = '';
+    let duration = 0;
+    let authorId = event.pubkey;
+    
+    // Extract title from title tag (NIP-71)
+    const titleTag = event.tags.find(t => t[0] === 'title');
+    if (titleTag && titleTag[1]) {
+        title = titleTag[1];
+    }
+    
+    // Try legacy metadata tag (fallback)
+    if (!title || title === 'Untitled') {
+        const metadataTag = event.tags.find(t => t[0] === 'metadata');
+        if (metadataTag && metadataTag[1]) {
+            try {
+                const metadata = JSON.parse(metadataTag[1]);
+                if (metadata.title) title = metadata.title;
+                if (metadata.thumbnail) thumbnailUrl = metadata.thumbnail;
+                if (metadata.ipfs_url) ipfsUrl = metadata.ipfs_url;
+            } catch (e) {
+                console.warn('Error parsing metadata tag:', e);
+            }
+        }
+    }
+    
+    // Extract video URL and thumbnail from imeta tag (NIP-71/NIP-92)
+    const imetaTag = event.tags.find(t => t[0] === 'imeta');
+    if (imetaTag) {
+        // Parse imeta tag: ["imeta", "url https://...", "image https://...", "duration 123", ...]
+        imetaTag.forEach((item, index) => {
+            if (index === 0) return; // Skip tag name
+            
+            if (typeof item === 'string') {
+                // Extract URL
+                if (item.startsWith('url ')) {
+                    ipfsUrl = item.substring(4).trim();
+                }
+                // Extract image/thumbnail
+                else if (item.startsWith('image ')) {
+                    thumbnailUrl = item.substring(6).trim();
+                }
+                // Extract duration
+                else if (item.startsWith('duration ')) {
+                    const durationStr = item.substring(9).trim();
+                    duration = parseFloat(durationStr) || 0;
+                }
+            }
+        });
+    }
+    
+    // Fallback: try to find URL in r tags
+    if (!ipfsUrl) {
+        const rTag = event.tags.find(t => t[0] === 'r' && t[1]);
+        if (rTag && rTag[1]) {
+            ipfsUrl = rTag[1];
+        }
+    }
+    
+    return {
+        title,
+        ipfsUrl,
+        thumbnailUrl,
+        duration,
+        authorId,
+        eventId: event.id,
+        content: event.content || ''
+    };
+}
+
 async function loadPlaylistVideos(videoIds, container) {
     if (!nostrRelay || !isNostrConnected) {
         await connectToRelay();
     }
 
     if (!nostrRelay || !isNostrConnected || !videoIds.length) {
-        container.innerHTML = '<div class="empty">No videos in playlist</div>';
+        container.innerHTML = '<div class="empty" style="text-align: center; padding: 40px; color: #aaaaaa;">Aucune vidéo dans cette playlist</div>';
         return;
     }
 
     try {
+        container.innerHTML = '<div class="loading" style="text-align: center; padding: 40px; color: #aaaaaa;">Chargement des vidéos...</div>';
+        
         const videos = await Promise.all(
             videoIds.map(async (vid) => {
                 return new Promise((resolve) => {
@@ -2047,24 +2498,97 @@ async function loadPlaylistVideos(videoIds, container) {
         const validVideos = videos.filter(v => v !== null);
         
         if (validVideos.length === 0) {
-            container.innerHTML = '<div class="empty">No videos found</div>';
+            container.innerHTML = '<div class="empty" style="text-align: center; padding: 40px; color: #aaaaaa;">Aucune vidéo trouvée</div>';
             return;
         }
 
-        // Render video thumbnails (simplified)
-        container.innerHTML = validVideos.map(v => {
-            const metadata = v.tags.find(t => t[0] === 'metadata');
-            const title = metadata ? JSON.parse(metadata[1])?.title || 'Untitled' : 'Untitled';
+        // Get IPFS gateway for thumbnails
+        let ipfsGateway = window.IPFS_GATEWAY || 'https://ipfs.copylaradio.com';
+        if (typeof detectIPFSGatewayGlobal === 'function') {
+            detectIPFSGatewayGlobal();
+            ipfsGateway = window.IPFS_GATEWAY || ipfsGateway;
+        }
+        const convertFn = typeof convertIPFSUrlGlobal !== 'undefined' ? convertIPFSUrlGlobal : function(url) {
+            if (!url) return '';
+            if (url.includes('/ipfs/')) {
+                const match = url.match(/\/ipfs\/[^?"#]+/);
+                if (match) return `${ipfsGateway}${match[0]}`;
+            }
+            return url.startsWith('/ipfs/') ? `${ipfsGateway}${url}` : url;
+        };
+
+        // Get playlist ID from container's data attribute or URL
+        let currentPlaylistId = container.dataset.playlistId;
+        if (!currentPlaylistId) {
+            const urlParams = new URLSearchParams(window.location.search);
+            currentPlaylistId = urlParams.get('id');
+        }
+        
+        // Check if we're in edit mode (playlist owner viewing their own playlist)
+        const isEditMode = container.dataset.isEditMode === 'true' || 
+                          (window.location.pathname === '/playlist' && currentPlaylistId);
+        
+        // Render video cards with management options if in edit mode
+        container.innerHTML = validVideos.map((v, index) => {
+            const videoData = extractVideoMetadata(v);
+            const thumbnail = videoData.thumbnailUrl ? convertFn(videoData.thumbnailUrl) : '';
+            const durationStr = videoData.duration > 0 ? formatTime(videoData.duration) : '';
+            
             return `
-                <div class="playlist-video-item" onclick="openTheaterModeFromEvent('${v.id}')">
-                    <div class="playlist-video-title">${escapeHtml(title)}</div>
+                <div class="video playlist-video-item" 
+                     data-video-id="${v.id}" 
+                     data-video-index="${index}"
+                     style="background: transparent; border: none; border-radius: 12px; overflow: visible; cursor: pointer; transition: all 0.2s ease; position: relative;"
+                     onclick="if(!event.target.closest('.playlist-video-actions')) { if(typeof openTheaterModeFromEvent === 'function') { openTheaterModeFromEvent('${v.id}'); } else { window.location.href='/youtube?video=${v.id}'; } }">
+                    <div class="video-thumbnail" style="width: 100%; height: 158px; background: #181818; display: flex; align-items: center; justify-content: center; color: #666666; position: relative; overflow: hidden; cursor: pointer; border-radius: 12px;">
+                        ${thumbnail ? 
+                            `<img src="${escapeHtml(thumbnail)}" alt="Thumbnail" class="thumbnail-img" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />` : 
+                            ''
+                        }
+                        <div class="thumbnail-placeholder" style="${thumbnail ? 'display: none;' : 'display: flex;'} align-items: center; justify-content: center; height: 100%; color: #606060; font-size: 2.5em;">🎬</div>
+                        <div class="play-overlay" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: rgba(0, 0, 0, 0.4); opacity: 0; transition: opacity 0.2s ease; pointer-events: none;">
+                            <div class="play-button" style="width: 48px; height: 48px; background: rgba(255, 255, 255, 0.9); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #000000; font-size: 18px; padding-left: 3px;">▶</div>
+                        </div>
+                        ${durationStr ? `<div style="position: absolute; bottom: 8px; right: 8px; background: rgba(0, 0, 0, 0.8); color: white; padding: 2px 6px; border-radius: 4px; font-size: 11px;">${durationStr}</div>` : ''}
+                        ${isEditMode ? `
+                            <div class="playlist-video-drag-handle" style="position: absolute; top: 8px; left: 8px; background: rgba(0, 0, 0, 0.7); color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px; cursor: move; z-index: 10;" title="Drag to reorder">☰</div>
+                        ` : ''}
+                    </div>
+                    <div class="video-info" style="padding: 12px 0;">
+                        <div class="video-title" style="font-weight: 500; margin-bottom: 4px; color: #f1f1f1; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-size: 0.875em;">${escapeHtml(videoData.title)}</div>
+                        <div class="video-meta" style="color: #aaaaaa; font-size: 0.75em; line-height: 1.5; margin-bottom: 8px;">
+                            ${videoData.authorId ? `<span>${videoData.authorId.substring(0, 8)}...</span>` : '<span>Auteur inconnu</span>'}
+                        </div>
+                        ${isEditMode ? `
+                            <div class="playlist-video-actions" style="display: flex; gap: 4px; margin-top: 8px;">
+                                <button class="playlist-video-action-btn" onclick="event.stopPropagation(); removeVideoFromPlaylistUI('${currentPlaylistId}', '${v.id}', this);" title="Supprimer de la playlist" style="background: rgba(239, 68, 68, 0.2); border: 1px solid rgba(239, 68, 68, 0.5); color: #ef4444; padding: 4px 8px; border-radius: 6px; font-size: 0.8em; cursor: pointer; transition: all 0.2s;">🗑️</button>
+                                <button class="playlist-video-action-btn" onclick="event.stopPropagation(); moveVideoInPlaylistUI('${currentPlaylistId}', ${index}, ${index - 1});" title="Déplacer vers le haut" ${index === 0 ? 'disabled style="opacity: 0.3; cursor: not-allowed;"' : 'style="background: rgba(59, 130, 246, 0.2); border: 1px solid rgba(59, 130, 246, 0.5); color: #3b82f6; padding: 4px 8px; border-radius: 6px; font-size: 0.8em; cursor: pointer; transition: all 0.2s;"'}>↑</button>
+                                <button class="playlist-video-action-btn" onclick="event.stopPropagation(); moveVideoInPlaylistUI('${currentPlaylistId}', ${index}, ${index + 1});" title="Déplacer vers le bas" ${index === validVideos.length - 1 ? 'disabled style="opacity: 0.3; cursor: not-allowed;"' : 'style="background: rgba(59, 130, 246, 0.2); border: 1px solid rgba(59, 130, 246, 0.5); color: #3b82f6; padding: 4px 8px; border-radius: 6px; font-size: 0.8em; cursor: pointer; transition: all 0.2s;"'}>↓</button>
+                            </div>
+                        ` : ''}
+                    </div>
                 </div>
             `;
         }).join('');
+        
+        // Add hover effect for play overlay
+        const style = document.createElement('style');
+        style.textContent = `
+            .video:hover .play-overlay {
+                opacity: 1 !important;
+            }
+            .video:hover .video-title {
+                color: #ffffff !important;
+            }
+        `;
+        if (!document.head.querySelector('style[data-playlist-videos]')) {
+            style.setAttribute('data-playlist-videos', 'true');
+            document.head.appendChild(style);
+        }
 
     } catch (error) {
         console.error('Error loading playlist videos:', error);
-        container.innerHTML = '<div class="error">Error loading videos</div>';
+        container.innerHTML = '<div class="error" style="background: rgba(255, 59, 48, 0.1); border: 1px solid rgba(255, 59, 48, 0.3); border-radius: 8px; padding: 12px; color: #ff3b30;">Erreur lors du chargement des vidéos</div>';
     }
 }
 
@@ -2378,7 +2902,12 @@ window.getRelatedVideos = getRelatedVideos;
 window.LiveVideoChat = LiveVideoChat;
 window.createPlaylist = createPlaylist;
 window.addToPlaylist = addToPlaylist;
+window.removeVideoFromPlaylist = removeVideoFromPlaylist;
+window.reorderPlaylistVideos = reorderPlaylistVideos;
+window.exportPlaylist = exportPlaylist;
+window.updatePlaylistMetadata = updatePlaylistMetadata;
 window.renderPlaylist = renderPlaylist;
+window.fetchPlaylistEvent = fetchPlaylistEvent;
 window.shareVideoWithPreview = shareVideoWithPreview;
 window.closeShareModal = closeShareModal;
 window.executeShare = executeShare;
@@ -2387,6 +2916,7 @@ window.loadRelatedVideosInTheater = loadRelatedVideosInTheater;
 window.openTheaterModeFromEvent = openTheaterModeFromEvent;
 window.theaterShareVideoWithPreview = theaterShareVideoWithPreview;
 window.theaterBookmarkVideo = theaterBookmarkVideo;
+window.loadPlaylistVideos = loadPlaylistVideos;
 /**
  * Publish a NIP-22 comment (kind 1111) on a video event
  * @param {string} content - Comment content

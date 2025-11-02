@@ -129,13 +129,23 @@ if (typeof document !== 'undefined') {
  * Share video from theater mode with preview
  */
 async function theaterShareVideoWithPreview() {
-    const videoPlayer = document.getElementById('theaterVideoPlayer');
+    // Get the correct document context - theater modal should be in the main document (youtube.html)
+    // Try to find theater modal in current document first, then parent if in iframe
+    let targetDocument = document;
+    let theaterModal = document.getElementById('theaterModal');
+    
+    if (!theaterModal && window.parent && window.parent !== window) {
+        targetDocument = window.parent.document;
+        theaterModal = targetDocument.getElementById('theaterModal');
+    }
+    
+    const videoPlayer = targetDocument.getElementById('theaterVideoPlayer');
     if (!videoPlayer) return;
 
     const eventId = videoPlayer.getAttribute('data-event-id');
     const ipfsUrl = videoPlayer.getAttribute('data-ipfs-url');
-    const titleEl = document.getElementById('theaterTitle');
-    const uploaderEl = document.getElementById('theaterUploader') || document.getElementById('theaterUploaderContainer');
+    const titleEl = targetDocument.getElementById('theaterTitle');
+    const uploaderEl = targetDocument.getElementById('theaterUploader') || targetDocument.getElementById('theaterUploaderContainer');
     
     const title = titleEl ? titleEl.textContent : 'Unknown';
     const uploader = uploaderEl ? (uploaderEl.textContent || uploaderEl.innerText || 'Unknown') : 'Unknown';
@@ -156,14 +166,18 @@ async function theaterShareVideoWithPreview() {
         channel: uploader
     };
 
-    // Check if share modal already exists, remove it first
-    const existingModal = document.getElementById('shareModal');
+    // Check if share modal already exists, remove it first (check both documents)
+    let existingModal = document.getElementById('shareModal');
+    if (!existingModal && targetDocument !== document) {
+        existingModal = targetDocument.getElementById('shareModal');
+    }
     if (existingModal) {
         existingModal.remove();
     }
 
     // Create share modal with higher z-index than theater modal (theater has 10000)
-    const modal = document.createElement('div');
+    // Always append to the same document as the theater modal
+    const modal = targetDocument.createElement('div');
     modal.className = 'share-modal';
     modal.id = 'shareModal';
     modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 10001; display: flex; align-items: center; justify-content: center; background: rgba(0, 0, 0, 0.85); backdrop-filter: blur(5px);';
@@ -199,8 +213,12 @@ async function theaterShareVideoWithPreview() {
         </div>
     `;
 
-    document.body.appendChild(modal);
-    window.currentShareVideoData = videoData;
+    // Append to the target document body (same as theater modal)
+    targetDocument.body.appendChild(modal);
+    
+    // Store video data in the correct window context
+    const targetWindow = (targetDocument === document) ? window : (window.parent || window);
+    targetWindow.currentShareVideoData = videoData;
     
     // Close modal on overlay click
     modal.addEventListener('click', (e) => {
@@ -209,14 +227,14 @@ async function theaterShareVideoWithPreview() {
         }
     });
     
-    // Close modal on ESC key
+    // Close modal on ESC key - listen on target document
     const escHandler = (e) => {
         if (e.key === 'Escape') {
             closeShareModal();
-            document.removeEventListener('keydown', escHandler);
+            targetDocument.removeEventListener('keydown', escHandler);
         }
     };
-    document.addEventListener('keydown', escHandler);
+    targetDocument.addEventListener('keydown', escHandler);
 }
 
 /**
@@ -289,6 +307,26 @@ async function openTheaterMode(videoData) {
         description
     } = videoData;
 
+    // Stop all playing videos on the parent page
+    try {
+        document.querySelectorAll('.inline-video-player').forEach(player => {
+            if (!player.paused) {
+                player.pause();
+                player.currentTime = 0;
+            }
+        });
+        // Also remove playing class from thumbnails
+        document.querySelectorAll('.video-thumbnail.playing').forEach(thumb => {
+            thumb.classList.remove('playing');
+            const player = thumb.querySelector('.inline-video-player');
+            if (player) {
+                player.style.display = 'none';
+            }
+        });
+    } catch (error) {
+        console.warn('Could not stop playing videos:', error);
+    }
+
     // Check if template is already loaded or fetch it
     let modalHTML = null;
     
@@ -339,39 +377,25 @@ async function openTheaterMode(videoData) {
     const titleEl = modal.querySelector('#theaterTitle');
     if (titleEl) titleEl.textContent = escapeHtml(title);
     
+    // Set uploader name immediately in both locations
     const uploaderEl = modal.querySelector('#theaterUploader');
+    const uploaderContainer = modal.querySelector('#theaterUploaderContainer');
+    
+    // Determine display name - prioritize uploader, then channel, then fallback
+    const displayName = uploader || channel || 'Auteur inconnu';
+    
     if (uploaderEl) {
-        // Create link to NOSTR profile if authorId is available
+        uploaderEl.textContent = displayName;
+    }
+    
+    // Set up uploader container with link if authorId is available
+    // This will be enhanced by loadVideoAuthor later, but set initial value
+    if (uploaderContainer) {
         if (videoData.authorId) {
-            // Try to get IPFS gateway from various sources
-            let ipfsGateway = '';
-            if (typeof window !== 'undefined' && window.IPFS_GATEWAY) {
-                ipfsGateway = window.IPFS_GATEWAY;
-            } else if (typeof detectIPFSGatewayGlobal === 'function') {
-                detectIPFSGatewayGlobal();
-                ipfsGateway = window.IPFS_GATEWAY || 'https://ipfs.copylaradio.com';
-            } else {
-                // Fallback: try to construct from current location
-                const currentURL = new URL(window.location.href);
-                const hostname = currentURL.hostname;
-                if (hostname === '127.0.0.1' || hostname === 'localhost') {
-                    ipfsGateway = 'http://127.0.0.1:8080';
-                } else if (hostname.startsWith('u.')) {
-                    const baseDomain = hostname.substring('u.'.length);
-                    ipfsGateway = `${currentURL.protocol}//ipfs.${baseDomain}`;
-                } else {
-                    ipfsGateway = 'https://ipfs.copylaradio.com';
-                }
-            }
-            const profileUrl = `${ipfsGateway}/ipns/copylaradio.com/nostr_profile_viewer.html?hex=${videoData.authorId}`;
-            // Use modal instead of new tab for mobile-friendly experience
-            if (typeof openProfileModal === 'function') {
-                uploaderEl.innerHTML = `<a href="#" onclick="event.preventDefault(); openProfileModal('${videoData.authorId}', '${escapeHtml(uploader || channel)}'); return false;" class="theater-uploader-link" title="View NOSTR profile">${escapeHtml(uploader || channel)}</a>`;
-            } else {
-                uploaderEl.innerHTML = `<a href="${profileUrl}" target="_blank" class="theater-uploader-link" title="View NOSTR profile">${escapeHtml(uploader || channel)}</a>`;
-            }
+            // Will be replaced by loadVideoAuthor, but set initial text
+            uploaderContainer.innerHTML = `<strong>${escapeHtml(displayName)}</strong>`;
         } else {
-            uploaderEl.textContent = escapeHtml(uploader || channel);
+            uploaderContainer.innerHTML = `<strong>${escapeHtml(displayName)}</strong>`;
         }
     }
     
@@ -417,6 +441,11 @@ async function openTheaterMode(videoData) {
         await loadTheaterStats(eventId, ipfsUrl);
     }
 
+    // Load author info (this will fetch profile and update display name if available)
+    if (authorId || uploader) {
+        await loadTheaterVideoAuthor(modal, authorId, uploader || channel || 'Auteur inconnu');
+    }
+
     // Load comments
     await loadTheaterComments(eventId, ipfsUrl);
 
@@ -432,8 +461,9 @@ async function openTheaterMode(videoData) {
     // Load related videos
     await loadRelatedVideosInTheater(videoData);
 
-    // Prevent body scroll
+    // Prevent body scroll - use both body and html to ensure it works
     document.body.style.overflow = 'hidden';
+    document.documentElement.style.overflow = 'hidden';
     
     // Add ESC key listener
     const escListener = (e) => {
@@ -493,9 +523,9 @@ function attachTheaterEventListeners(modal) {
         // Bookmark button
         else if (btnText.includes('Bookmark') || (existingOnclick && existingOnclick.includes('Bookmark'))) {
             btn.addEventListener('click', async () => {
-                if (typeof theaterBookmarkVideo === 'function') {
-                    await theaterBookmarkVideo();
-                } else if (typeof window.theaterBookmarkVideo === 'function') {
+                // Always use window.theaterBookmarkVideo to avoid recursion
+                // Don't check for local theaterBookmarkVideo to prevent circular calls
+                if (typeof window.theaterBookmarkVideo === 'function') {
                     await window.theaterBookmarkVideo();
                 } else {
                     console.error('theaterBookmarkVideo not available');
@@ -598,9 +628,9 @@ function getTheaterModalHTML() {
                 <button class="theater-close-btn" onclick="closeTheaterMode()">✕</button>
                 <div class="theater-title" id="theaterTitle">Loading...</div>
                 <div class="theater-actions">
-                    <button class="theater-action-btn" onclick="theaterShareVideoWithPreview()">📡 Partager</button>
-                    <button class="theater-action-btn" onclick="theaterBookmarkVideo()">🔖 Bookmark</button>
-                    <button class="theater-action-btn" onclick="enterPictureInPicture()">🖼️ PiP</button>
+                    <button class="theater-action-btn" onclick="theaterShareVideoWithPreview()" title="Partager">📡</button>
+                    <button class="theater-action-btn" onclick="theaterBookmarkVideo()" title="Bookmark">🔖</button>
+                    <button class="theater-action-btn" onclick="enterPictureInPicture()" title="Picture-in-Picture">🖼️</button>
                 </div>
             </div>
             <div class="theater-body">
@@ -675,7 +705,130 @@ function closeTheaterMode() {
         }
         
         modal.remove();
+        
+        // Restore body scroll - restore both body and html
         document.body.style.overflow = '';
+        document.documentElement.style.overflow = '';
+    }
+}
+
+/**
+ * Load and display video author information in theater modal
+ */
+async function loadTheaterVideoAuthor(modal, authorId, authorName) {
+    const uploaderContainer = modal.querySelector('#theaterUploaderContainer');
+    if (!uploaderContainer) return;
+    
+    const uploaderEl = modal.querySelector('#theaterUploader');
+    let displayName = authorName || 'Auteur inconnu';
+    
+    // Extract name from existing DOM element if available
+    if (uploaderEl) {
+        const existingName = uploaderEl.textContent || uploaderEl.innerText;
+        if (existingName && existingName !== 'Loading...' && existingName.trim()) {
+            displayName = existingName.trim();
+        }
+    }
+    
+    // If we have authorId, try to fetch profile and create link
+    if (authorId) {
+        try {
+            // Try to get profile from NOSTR if available
+            if (typeof fetchProfile !== 'undefined') {
+                const profile = await fetchProfile(authorId);
+                if (profile) {
+                    if (profile.display_name) {
+                        displayName = profile.display_name;
+                    } else if (profile.name) {
+                        displayName = profile.name;
+                    }
+                }
+            }
+            
+            // Get IPFS gateway for profile link
+            let ipfsGateway = '';
+            if (typeof window !== 'undefined' && window.IPFS_GATEWAY) {
+                ipfsGateway = window.IPFS_GATEWAY;
+            } else if (typeof detectIPFSGatewayGlobal === 'function') {
+                detectIPFSGatewayGlobal();
+                ipfsGateway = window.IPFS_GATEWAY || 'https://ipfs.copylaradio.com';
+            } else {
+                const currentURL = new URL(window.location.href);
+                const hostname = currentURL.hostname;
+                if (hostname === '127.0.0.1' || hostname === 'localhost') {
+                    ipfsGateway = 'http://127.0.0.1:8080';
+                } else if (hostname.startsWith('u.')) {
+                    const baseDomain = hostname.substring('u.'.length);
+                    ipfsGateway = `${currentURL.protocol}//ipfs.${baseDomain}`;
+                } else {
+                    ipfsGateway = 'https://ipfs.copylaradio.com';
+                }
+            }
+            
+            // Create link to profile
+            const link = document.createElement('a');
+            link.href = '#';
+            link.className = 'theater-uploader-link';
+            link.textContent = displayName;
+            link.onclick = function(e) {
+                e.preventDefault();
+                if (typeof openProfileModal === 'function') {
+                    openProfileModal(authorId, displayName);
+                } else {
+                    const profileUrl = `${ipfsGateway}/ipns/copylaradio.com/nostr_profile_viewer.html?hex=${authorId}`;
+                    window.open(profileUrl, '_blank');
+                }
+                return false;
+            };
+            uploaderContainer.innerHTML = '';
+            uploaderContainer.appendChild(link);
+            
+            // Also update theaterUploader if it exists separately
+            if (uploaderEl && uploaderEl !== uploaderContainer) {
+                uploaderEl.textContent = displayName;
+            }
+        } catch (error) {
+            console.error('Error loading author profile:', error);
+            // Still show the name even if profile fetch fails
+            // Get IPFS gateway for profile link (in case it wasn't set above)
+            if (!ipfsGateway) {
+                if (typeof window !== 'undefined' && window.IPFS_GATEWAY) {
+                    ipfsGateway = window.IPFS_GATEWAY;
+                } else if (typeof detectIPFSGatewayGlobal === 'function') {
+                    detectIPFSGatewayGlobal();
+                    ipfsGateway = window.IPFS_GATEWAY || 'https://ipfs.copylaradio.com';
+                } else {
+                    ipfsGateway = 'https://ipfs.copylaradio.com';
+                }
+            }
+            // Create link anyway with the name we have
+            const link = document.createElement('a');
+            link.href = '#';
+            link.className = 'theater-uploader-link';
+            link.textContent = displayName;
+            link.onclick = function(e) {
+                e.preventDefault();
+                if (typeof openProfileModal === 'function') {
+                    openProfileModal(authorId, displayName);
+                } else {
+                    const profileUrl = `${ipfsGateway}/ipns/copylaradio.com/nostr_profile_viewer.html?hex=${authorId}`;
+                    window.open(profileUrl, '_blank');
+                }
+                return false;
+            };
+            uploaderContainer.innerHTML = '';
+            uploaderContainer.appendChild(link);
+            
+            if (uploaderEl && uploaderEl !== uploaderContainer) {
+                uploaderEl.textContent = displayName;
+            }
+        }
+    } else {
+        // No authorId, just show name
+        uploaderContainer.innerHTML = `<strong>${escapeHtml(displayName)}</strong>`;
+        if (uploaderEl && uploaderEl !== uploaderContainer) {
+            uploaderEl.textContent = displayName;
+        }
     }
 }
 
@@ -1982,10 +2135,25 @@ async function shareVideoWithPreview(videoData) {
  * Close share modal
  */
 function closeShareModal() {
-    const modal = document.getElementById('shareModal');
+    // Check both current document and parent document if in iframe
+    let modal = document.getElementById('shareModal');
+    let targetWindow = window;
+    
+    if (!modal && window.parent && window.parent !== window) {
+        modal = window.parent.document.getElementById('shareModal');
+        targetWindow = window.parent;
+    }
+    
     if (modal) {
-        modal.remove();
-        window.currentShareVideoData = null;
+        // Remove from parent
+        if (modal.parentNode) {
+            modal.parentNode.removeChild(modal);
+        } else {
+            modal.remove();
+        }
+        if (targetWindow.currentShareVideoData !== undefined) {
+            targetWindow.currentShareVideoData = null;
+        }
     }
 }
 
@@ -1993,13 +2161,28 @@ function closeShareModal() {
  * Execute share action
  */
 async function executeShare() {
-    if (!window.currentShareVideoData) return;
+    // Get currentShareVideoData from correct window context
+    // Also find the correct document where the modal is located
+    let targetWindow = window;
+    let targetDocument = document;
+    
+    // Check if modal exists in current document or parent
+    let shareModal = document.getElementById('shareModal');
+    if (!shareModal && window.parent && window.parent !== window) {
+        shareModal = window.parent.document.getElementById('shareModal');
+        if (shareModal) {
+            targetWindow = window.parent;
+            targetDocument = window.parent.document;
+        }
+    }
+    
+    if (!targetWindow.currentShareVideoData) return;
 
-    const message = document.getElementById('shareMessage').value;
-    const tagsInput = document.getElementById('shareTags').value;
+    const message = targetDocument.getElementById('shareMessage').value;
+    const tagsInput = targetDocument.getElementById('shareTags').value;
     const tags = tagsInput.split(',').map(t => t.trim()).filter(t => t);
 
-    const videoData = window.currentShareVideoData;
+    const videoData = targetWindow.currentShareVideoData;
     const shareContent = `${message ? message + '\n\n' : ''}🎥 ${videoData.title}\n${videoData.ipfsUrl || ''}`;
 
     try {
@@ -2031,10 +2214,22 @@ async function executeShare() {
  * Copy shareable link
  */
 function copyShareLink() {
-    if (!window.currentShareVideoData) return;
+    // Get currentShareVideoData from correct window context
+    let targetWindow = window;
+    
+    // Check if modal exists in current document or parent
+    let shareModal = document.getElementById('shareModal');
+    if (!shareModal && window.parent && window.parent !== window) {
+        shareModal = window.parent.document.getElementById('shareModal');
+        if (shareModal) {
+            targetWindow = window.parent;
+        }
+    }
+    
+    if (!targetWindow.currentShareVideoData) return;
 
-    const videoData = window.currentShareVideoData;
-    const shareUrl = `${window.location.origin}${window.location.pathname}?video=${videoData.eventId}`;
+    const videoData = targetWindow.currentShareVideoData;
+    const shareUrl = `${targetWindow.location.origin}${targetWindow.location.pathname}?video=${videoData.eventId}`;
 
     navigator.clipboard.writeText(shareUrl).then(() => {
         alert('Link copied to clipboard!');

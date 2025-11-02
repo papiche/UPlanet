@@ -134,19 +134,89 @@ async function theaterShareVideoWithPreview() {
 
     const eventId = videoPlayer.getAttribute('data-event-id');
     const ipfsUrl = videoPlayer.getAttribute('data-ipfs-url');
-    const title = document.getElementById('theaterTitle').textContent;
-    const uploader = document.getElementById('theaterUploader').textContent;
+    const titleEl = document.getElementById('theaterTitle');
+    const uploaderEl = document.getElementById('theaterUploader') || document.getElementById('theaterUploaderContainer');
+    
+    const title = titleEl ? titleEl.textContent : 'Unknown';
+    const uploader = uploaderEl ? (uploaderEl.textContent || uploaderEl.innerText || 'Unknown') : 'Unknown';
+
+    // Try to get thumbnail from video or metadata
+    let thumbnailUrl = '';
+    if (videoPlayer) {
+        const poster = videoPlayer.getAttribute('poster');
+        if (poster) thumbnailUrl = poster;
+    }
 
     const videoData = {
         eventId,
         ipfsUrl,
         title,
         uploader,
-        thumbnailUrl: '', // Could be extracted from video metadata
+        thumbnailUrl,
         channel: uploader
     };
 
-    await shareVideoWithPreview(videoData);
+    // Check if share modal already exists, remove it first
+    const existingModal = document.getElementById('shareModal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+
+    // Create share modal with higher z-index than theater modal (theater has 10000)
+    const modal = document.createElement('div');
+    modal.className = 'share-modal';
+    modal.id = 'shareModal';
+    modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 10001; display: flex; align-items: center; justify-content: center; background: rgba(0, 0, 0, 0.85); backdrop-filter: blur(5px);';
+    
+    modal.innerHTML = `
+        <div class="share-modal-content" style="background: #181818; border-radius: 12px; padding: 24px; max-width: 500px; width: 90%; max-height: 90vh; overflow-y: auto; border: 1px solid #3f3f3f; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.8);">
+            <div class="share-modal-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid #3f3f3f;">
+                <h3 style="margin: 0; color: #ffffff; font-size: 1.3em; font-weight: 500;">Partager la vidéo</h3>
+                <button class="share-modal-close" onclick="closeShareModal()" style="background: transparent; border: none; color: #ffffff; font-size: 24px; cursor: pointer; padding: 8px; border-radius: 50%; transition: background 0.2s; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center;">✕</button>
+            </div>
+            <div class="share-preview" style="margin-bottom: 20px; padding: 16px; background: #212121; border-radius: 8px; border: 1px solid #3f3f3f;">
+                ${thumbnailUrl ? `<div class="share-preview-thumbnail" style="margin-bottom: 12px;"><img src="${thumbnailUrl}" alt="${escapeHtml(title)}" style="width: 100%; border-radius: 8px; aspect-ratio: 16/9; object-fit: cover;" /></div>` : ''}
+                <div class="share-preview-info">
+                    <h4 style="margin: 0 0 8px 0; color: #ffffff; font-size: 1.1em; font-weight: 500;">${escapeHtml(title)}</h4>
+                    <p style="margin: 0; color: #aaaaaa; font-size: 0.9em;">${escapeHtml(uploader)}</p>
+                </div>
+            </div>
+            <div class="share-form">
+                <textarea 
+                    id="shareMessage" 
+                    placeholder="Ajoutez un message (optionnel)..."
+                    rows="3"
+                    style="width: 100%; padding: 12px; background: #212121; border: 1px solid #3f3f3f; border-radius: 8px; color: #ffffff; font-family: inherit; font-size: 0.95em; resize: vertical; margin-bottom: 16px; box-sizing: border-box;"></textarea>
+                <div class="share-tags" style="margin-bottom: 20px;">
+                    <label style="display: block; margin-bottom: 8px; color: #aaaaaa; font-size: 0.9em; font-weight: 500;">Tags (séparés par des virgules):</label>
+                    <input type="text" id="shareTags" placeholder="ex: video, nature, ipfs" style="width: 100%; padding: 12px; background: #212121; border: 1px solid #3f3f3f; border-radius: 8px; color: #ffffff; font-family: inherit; font-size: 0.95em; box-sizing: border-box;" />
+                </div>
+                <div class="share-actions" style="display: flex; gap: 12px;">
+                    <button class="share-btn-primary" onclick="executeShare()" style="flex: 1; padding: 12px 20px; background: #3ea6ff; border: none; border-radius: 20px; color: #ffffff; font-size: 0.95em; font-weight: 500; cursor: pointer; transition: background 0.2s;">📡 Partager sur NOSTR</button>
+                    <button class="share-btn-secondary" onclick="copyShareLink()" style="flex: 1; padding: 12px 20px; background: transparent; border: 1px solid #3f3f3f; border-radius: 20px; color: #f1f1f1; font-size: 0.95em; font-weight: 500; cursor: pointer; transition: all 0.2s;">🔗 Copier le lien</button>
+                </div>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+    window.currentShareVideoData = videoData;
+    
+    // Close modal on overlay click
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            closeShareModal();
+        }
+    });
+    
+    // Close modal on ESC key
+    const escHandler = (e) => {
+        if (e.key === 'Escape') {
+            closeShareModal();
+            document.removeEventListener('keydown', escHandler);
+        }
+    };
+    document.addEventListener('keydown', escHandler);
 }
 
 /**
@@ -1845,6 +1915,12 @@ async function loadPlaylistVideos(videoIds, container) {
  * Share video with preview modal
  */
 async function shareVideoWithPreview(videoData) {
+    // Check if share modal already exists, remove it first
+    const existingModal = document.getElementById('shareModal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+
     const modal = document.createElement('div');
     modal.className = 'share-modal';
     modal.id = 'shareModal';
@@ -1855,9 +1931,11 @@ async function shareVideoWithPreview(videoData) {
                 <button class="share-modal-close" onclick="closeShareModal()">✕</button>
             </div>
             <div class="share-preview">
+                ${videoData.thumbnailUrl ? `
                 <div class="share-preview-thumbnail">
-                    <img src="${videoData.thumbnailUrl || ''}" alt="${escapeHtml(videoData.title)}" />
+                    <img src="${videoData.thumbnailUrl}" alt="${escapeHtml(videoData.title)}" />
                 </div>
+                ` : ''}
                 <div class="share-preview-info">
                     <h4>${escapeHtml(videoData.title)}</h4>
                     <p>${escapeHtml(videoData.uploader || videoData.channel || 'Unknown')}</p>
@@ -1882,6 +1960,22 @@ async function shareVideoWithPreview(videoData) {
 
     document.body.appendChild(modal);
     window.currentShareVideoData = videoData;
+    
+    // Close modal on overlay click
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            closeShareModal();
+        }
+    });
+    
+    // Close modal on ESC key
+    const escHandler = (e) => {
+        if (e.key === 'Escape') {
+            closeShareModal();
+            document.removeEventListener('keydown', escHandler);
+        }
+    };
+    document.addEventListener('keydown', escHandler);
 }
 
 /**

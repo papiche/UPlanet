@@ -863,7 +863,8 @@ async function loadTheaterComments(eventId, ipfsUrl) {
     commentsList.innerHTML = '<div class="loading-comments">Chargement des commentaires...</div>';
 
     try {
-        const comments = await fetchComments(ipfsUrl);
+        // Fetch NIP-22 comments (kind 1111) for the video
+        const comments = await fetchVideoComments(eventId);
         
         if (comments.length === 0) {
             commentsList.innerHTML = '<div class="no-comments">Aucun commentaire pour le moment.</div>';
@@ -924,14 +925,21 @@ async function submitTheaterComment() {
     }
 
     const videoPlayer = document.getElementById('theaterVideoPlayer');
+    const eventId = videoPlayer.getAttribute('data-event-id');
     const ipfsUrl = videoPlayer.getAttribute('data-ipfs-url');
+    
+    if (!eventId) {
+        alert('Erreur: ID de vidéo introuvable');
+        return;
+    }
 
     try {
-        const result = await postComment(content, ipfsUrl);
+        // Use NIP-22 (kind 1111) for video comments
+        const result = await postVideoComment(content, eventId, ipfsUrl);
         if (result) {
             input.value = '';
             // Reload comments
-            await loadTheaterComments(null, ipfsUrl);
+            await loadTheaterComments(eventId, ipfsUrl);
             // Update stats
             await loadTheaterStats(null, ipfsUrl);
         }
@@ -2379,8 +2387,179 @@ window.loadRelatedVideosInTheater = loadRelatedVideosInTheater;
 window.openTheaterModeFromEvent = openTheaterModeFromEvent;
 window.theaterShareVideoWithPreview = theaterShareVideoWithPreview;
 window.theaterBookmarkVideo = theaterBookmarkVideo;
+/**
+ * Publish a NIP-22 comment (kind 1111) on a video event
+ * @param {string} content - Comment content
+ * @param {string} videoEventId - Video event ID (kind 21 or 22)
+ * @param {string} ipfsUrl - Video IPFS URL (optional, for compatibility)
+ * @returns {Promise<Object|null>} Published event or null
+ */
+async function postVideoComment(content, videoEventId, ipfsUrl = null) {
+    if (!userPubkey) {
+        alert("❌ Vous devez être connecté pour commenter.");
+        return null;
+    }
+
+    if (!isNostrConnected) {
+        await connectToRelay();
+        if (!isNostrConnected) {
+            alert("❌ Impossible de se connecter au relay.");
+            return null;
+        }
+    }
+
+    try {
+        // First, fetch the video event to get its kind and author
+        let videoKind = 21; // Default to normal video
+        let videoAuthor = null;
+        
+        if (nostrRelay && videoEventId) {
+            const videoEvent = await new Promise((resolve) => {
+                const sub = nostrRelay.sub([{
+                    kinds: [21, 22],
+                    ids: [videoEventId],
+                    limit: 1
+                }]);
+                
+                let event = null;
+                sub.on('event', (e) => {
+                    event = e;
+                });
+                
+                sub.on('eose', () => {
+                    sub.unsub();
+                    resolve(event);
+                });
+                
+                setTimeout(() => {
+                    sub.unsub();
+                    resolve(event);
+                }, 2000);
+            });
+            
+            if (videoEvent) {
+                videoKind = videoEvent.kind;
+                videoAuthor = videoEvent.pubkey;
+            }
+        }
+
+        // Get relay URL hint (use default relay if available)
+        const relayHint = nostrRelay?.url || DEFAULT_RELAYS[0] || '';
+
+        // Create NIP-22 comment event (kind 1111)
+        // For top-level comments on videos:
+        // - Root scope: video event (E tag, K tag with video kind, P tag with video author)
+        // - Parent: same as root for top-level comments
+        const tags = [
+            ['E', videoEventId, relayHint, videoAuthor || ''], // Root: video event
+            ['K', String(videoKind)], // Root kind (21 or 22)
+            ['P', videoAuthor || '', relayHint], // Root author (video creator)
+            
+            // Parent (same as root for top-level comments)
+            ['e', videoEventId, relayHint, videoAuthor || ''], // Parent event
+            ['k', String(videoKind)], // Parent kind
+            ['p', videoAuthor || '', relayHint] // Parent author
+        ];
+
+        const eventTemplate = {
+            kind: 1111, // NIP-22: Comment
+            created_at: Math.floor(Date.now() / 1000),
+            tags: tags,
+            content: content
+        };
+
+        console.log("💬 Publication d'un commentaire NIP-22 sur la vidéo:", eventTemplate);
+
+        let signedEvent;
+        if (window.nostr && typeof window.nostr.signEvent === 'function') {
+            signedEvent = await window.nostr.signEvent(eventTemplate);
+        } else if (userPrivateKey) {
+            signedEvent = NostrTools.finishEvent(eventTemplate, userPrivateKey);
+        } else {
+            throw new Error("No signing method available");
+        }
+
+        console.log("📝 Commentaire signé:", signedEvent);
+
+        // Publish to relay
+        if (nostrRelay) {
+            await nostrRelay.publish(signedEvent);
+            console.log("✅ Commentaire publié (NIP-22):", signedEvent.id);
+            return signedEvent;
+        } else {
+            throw new Error("Relay not connected");
+        }
+    } catch (error) {
+        console.error("❌ Erreur lors de la publication du commentaire:", error);
+        throw error;
+    }
+}
+
+/**
+ * Fetch NIP-22 comments (kind 1111) for a video event
+ * @param {string} videoEventId - Video event ID
+ * @returns {Promise<Array>} Array of comment events
+ */
+async function fetchVideoComments(videoEventId) {
+    if (!isNostrConnected) {
+        console.log('🔌 Connexion au relay pour récupérer les commentaires...');
+        await connectToRelay();
+    }
+
+    if (!nostrRelay || !isNostrConnected) {
+        console.error('❌ Impossible de se connecter au relay');
+        return [];
+    }
+
+    if (!videoEventId) {
+        console.error('❌ ID de vidéo requis');
+        return [];
+    }
+
+    try {
+        console.log(`📥 Récupération des commentaires NIP-22 pour la vidéo: ${videoEventId}`);
+        
+        // Fetch NIP-22 comments (kind 1111) that reference this video event
+        // Comments use E tag (uppercase) for root scope
+        const filter = {
+            kinds: [1111], // NIP-22: Comment
+            '#E': [videoEventId], // Root scope: video event
+            limit: 100
+        };
+
+        const comments = [];
+        
+        return new Promise((resolve) => {
+            const sub = nostrRelay.sub([filter]);
+            
+            // Timeout de 5 secondes pour la récupération
+            const timeout = setTimeout(() => {
+                sub.unsub();
+                console.log(`✅ ${comments.length} commentaire(s) NIP-22 récupéré(s)`);
+                resolve(comments.sort((a, b) => a.created_at - b.created_at)); // Plus ancien en premier (chronologique)
+            }, 5000);
+
+            sub.on('event', (event) => {
+                comments.push(event);
+            });
+
+            sub.on('eose', () => {
+                clearTimeout(timeout);
+                sub.unsub();
+                console.log(`✅ ${comments.length} commentaire(s) NIP-22 récupéré(s)`);
+                resolve(comments.sort((a, b) => a.created_at - b.created_at));
+            });
+        });
+    } catch (error) {
+        console.error('❌ Erreur lors de la récupération des commentaires:', error);
+        return [];
+    }
+}
+
 window.submitTheaterComment = submitTheaterComment;
 window.addTimestampToComment = addTimestampToComment;
+window.postVideoComment = postVideoComment;
+window.fetchVideoComments = fetchVideoComments;
 // Make utility functions globally available
 window.escapeHtml = escapeHtml;
 window.formatTime = formatTime;

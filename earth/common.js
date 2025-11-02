@@ -937,7 +937,7 @@ async function createBookmark(url = null, title = null, description = '') {
  * @param {number} limit - Nombre maximum de commentaires à récupérer
  * @returns {Promise<Array>} Liste des commentaires
  */
-async function fetchComments(url = null, limit = 50) {
+async function fetchComments(url = null, limit = 100) {
     const targetUrl = url || window.location.href;
     
     if (!isNostrConnected) {
@@ -951,11 +951,13 @@ async function fetchComments(url = null, limit = 50) {
     }
 
     try {
-        console.log(`📥 Récupération des commentaires pour: ${targetUrl}`);
+        console.log(`📥 Récupération des commentaires NIP-22 pour: ${targetUrl}`);
         
+        // Fetch NIP-22 comments (kind 1111) that reference this web page URL
+        // Comments use I tag (uppercase) for root scope
         const filter = {
-            kinds: [1], // Notes texte
-            '#r': [targetUrl], // Tag référençant l'URL
+            kinds: [1111], // NIP-22: Comment
+            '#I': [targetUrl], // Root scope: page URL
             limit: limit
         };
 
@@ -964,12 +966,12 @@ async function fetchComments(url = null, limit = 50) {
         return new Promise((resolve) => {
             const sub = nostrRelay.sub([filter]);
             
-            // Timeout de 3 secondes pour la récupération
+            // Timeout de 5 secondes pour la récupération
             const timeout = setTimeout(() => {
                 sub.unsub();
-                console.log(`✅ ${comments.length} commentaire(s) récupéré(s)`);
-                resolve(comments.sort((a, b) => b.created_at - a.created_at)); // Plus récent en premier
-            }, 3000);
+                console.log(`✅ ${comments.length} commentaire(s) NIP-22 récupéré(s)`);
+                resolve(comments.sort((a, b) => a.created_at - b.created_at)); // Plus ancien en premier (chronologique)
+            }, 5000);
 
             sub.on('event', (event) => {
                 comments.push(event);
@@ -978,8 +980,8 @@ async function fetchComments(url = null, limit = 50) {
             sub.on('eose', () => {
                 clearTimeout(timeout);
                 sub.unsub();
-                console.log(`✅ ${comments.length} commentaire(s) récupéré(s)`);
-                resolve(comments.sort((a, b) => b.created_at - a.created_at));
+                console.log(`✅ ${comments.length} commentaire(s) NIP-22 récupéré(s)`);
+                resolve(comments.sort((a, b) => a.created_at - b.created_at));
             });
         });
     } catch (error) {
@@ -1000,23 +1002,60 @@ async function postComment(content, url = null) {
         return null;
     }
 
-    const targetUrl = url || window.location.href;
-    const pageTitle = document.title;
-
-    const tags = [
-        ['r', targetUrl],
-        ['title', pageTitle],
-        ['t', 'uplanet-comment'] // Tag pour identifier les commentaires UPlanet
-    ];
-
-    console.log('💬 Publication du commentaire...');
-    const result = await publishNote(content, tags);
-    
-    if (result) {
-        console.log('✅ Commentaire publié:', result.id);
+    if (!isNostrConnected) {
+        await connectToRelay();
+        if (!isNostrConnected) {
+            alert("❌ Impossible de se connecter au relay.");
+            return null;
+        }
     }
-    
-    return result;
+
+    const targetUrl = url || window.location.href;
+
+    try {
+        // Use NIP-22 (kind 1111) for comments on web pages
+        // For web URLs, we use I tag (uppercase) for root scope with K="web"
+        const tags = [
+            ['I', targetUrl], // Root scope: page URL
+            ['K', 'web'], // Root kind: web page
+            
+            // Parent (same as root for top-level comments on web pages)
+            ['i', targetUrl], // Parent URL
+            ['k', 'web'] // Parent kind: web page
+        ];
+
+        const eventTemplate = {
+            kind: 1111, // NIP-22: Comment
+            created_at: Math.floor(Date.now() / 1000),
+            tags: tags,
+            content: content
+        };
+
+        console.log("💬 Publication d'un commentaire NIP-22 sur la page web:", eventTemplate);
+
+        let signedEvent;
+        if (window.nostr && typeof window.nostr.signEvent === 'function') {
+            signedEvent = await window.nostr.signEvent(eventTemplate);
+        } else if (userPrivateKey) {
+            signedEvent = NostrTools.finishEvent(eventTemplate, userPrivateKey);
+        } else {
+            throw new Error("No signing method available");
+        }
+
+        console.log("📝 Commentaire signé:", signedEvent);
+
+        // Publish to relay
+        if (nostrRelay) {
+            await nostrRelay.publish(signedEvent);
+            console.log("✅ Commentaire publié (NIP-22):", signedEvent.id);
+            return signedEvent;
+        } else {
+            throw new Error("Relay not connected");
+        }
+    } catch (error) {
+        console.error("❌ Erreur lors de la publication du commentaire:", error);
+        throw error;
+    }
 }
 
 /**

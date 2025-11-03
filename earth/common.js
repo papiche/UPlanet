@@ -14,6 +14,94 @@
  */
 
 // ========================================
+// NOSTR EXTENSION WRAPPER FOR CHROME COMPATIBILITY
+// ========================================
+// Wrapper to handle Chrome extension message channel closure issues
+(function() {
+    /**
+     * Safe wrapper for window.nostr methods that handles Chrome extension issues
+     * Chrome extensions can close message channels before async responses are received
+     */
+    function safeNostrCall(method, params = [], retries = 3) {
+        if (typeof window.nostr === 'undefined' || !window.nostr) {
+            return Promise.reject(new Error('NOSTR extension not available'));
+        }
+        
+        const nostrMethod = window.nostr[method];
+        if (typeof nostrMethod !== 'function') {
+            return Promise.reject(new Error(`NOSTR method ${method} not available`));
+        }
+        
+        return new Promise(async (resolve, reject) => {
+            let attempt = 0;
+            const maxAttempts = retries;
+            
+            async function tryCall() {
+                attempt++;
+                try {
+                    // Add timeout wrapper for Chrome compatibility
+                    const timeoutPromise = new Promise((_, timeoutReject) => {
+                        setTimeout(() => {
+                            timeoutReject(new Error(`NOSTR ${method} timeout after 30 seconds`));
+                        }, 30000);
+                    });
+                    
+                    // Call the method with race condition handling
+                    const methodPromise = nostrMethod.apply(window.nostr, params);
+                    
+                    // Race between method and timeout
+                    const result = await Promise.race([methodPromise, timeoutPromise]);
+                    
+                    resolve(result);
+                } catch (error) {
+                    // Check if it's a Chrome message channel error
+                    // Chrome error: "A listener indicated an asynchronous response by returning true, 
+                    // but the message channel closed before a response was received"
+                    const errorMsg = error.message || error.toString() || '';
+                    const isChannelError = (
+                        errorMsg.includes('message channel closed') ||
+                        errorMsg.includes('asynchronous response') ||
+                        errorMsg.includes('Extension context invalidated') ||
+                        errorMsg.includes('message channel') ||
+                        errorMsg.includes('channel closed') ||
+                        // Check error object properties for Chrome-specific errors
+                        (error.name && error.name.includes('Extension')) ||
+                        (error.code && (error.code === 'Extension' || error.code === 'CHROME_EXTENSION'))
+                    );
+                    
+                    if (isChannelError && attempt < maxAttempts) {
+                        // Retry after a short delay with exponential backoff
+                        const delay = 500 * Math.pow(2, attempt - 1); // 500ms, 1s, 2s
+                        console.warn(`⚠️ Chrome extension message channel error (attempt ${attempt}/${maxAttempts}), retrying in ${delay}ms...`, errorMsg);
+                        await new Promise(resolve => setTimeout(resolve, delay));
+                        tryCall();
+                    } else {
+                        // If max attempts reached or not a channel error, reject
+                        if (attempt >= maxAttempts) {
+                            console.error(`❌ NOSTR ${method} failed after ${maxAttempts} attempts due to Chrome extension error`);
+                        }
+                        reject(error);
+                    }
+                }
+            }
+            
+            tryCall();
+        });
+    }
+    
+    // Create safe wrapper functions
+    if (typeof window !== 'undefined') {
+        window.safeNostrGetPublicKey = function() {
+            return safeNostrCall('getPublicKey', []);
+        };
+        
+        window.safeNostrSignEvent = function(event) {
+            return safeNostrCall('signEvent', [event]);
+        };
+    }
+})();
+
+// ========================================
 // NOSTR EXTENSION PROXY FOR IFRAMES
 // ========================================
 // This allows pages loaded in iframes to access window.nostr from the parent
@@ -488,7 +576,14 @@ async function connectNostr(forceAuth = false) {
     
     try {
         console.log("🔑 Tentative de connexion à l'extension Nostr...");
-        const pubkey = await window.nostr.getPublicKey();
+        
+        // Use safe wrapper if available (for Chrome compatibility), otherwise direct call
+        let pubkey;
+        if (typeof window.safeNostrGetPublicKey === 'function') {
+            pubkey = await window.safeNostrGetPublicKey();
+        } else {
+            pubkey = await window.nostr.getPublicKey();
+        }
         
         if (pubkey) {
             userPubkey = pubkey;
@@ -643,8 +738,13 @@ async function sendNIP42Auth(relayUrl, forceSend = false) {
             pubkey: userPubkey
         };
         
-        // Sign the event with the user's extension
-        const signedEvent = await window.nostr.signEvent(authEvent);
+        // Sign the event with the user's extension (use safe wrapper for Chrome compatibility)
+        let signedEvent;
+        if (typeof window.safeNostrSignEvent === 'function') {
+            signedEvent = await window.safeNostrSignEvent(authEvent);
+        } else {
+            signedEvent = await window.nostr.signEvent(authEvent);
+        }
         
         if (!signedEvent || !signedEvent.id) {
             console.error('❌ Failed to sign NIP-42 event');
@@ -852,7 +952,12 @@ async function connectToRelay(forceAuth = false) {
 
                 let signedAuthEvent;
                 if (window.nostr && typeof window.nostr.signEvent === 'function') {
-                    signedAuthEvent = await window.nostr.signEvent(authEvent);
+                    // Use safe wrapper for Chrome compatibility
+                    if (typeof window.safeNostrSignEvent === 'function') {
+                        signedAuthEvent = await window.safeNostrSignEvent(authEvent);
+                    } else {
+                        signedAuthEvent = await window.nostr.signEvent(authEvent);
+                    }
                     console.log('✍️ Événement d\'authentification signé');
                     await nostrRelay.publish(signedAuthEvent);
                 } else {
@@ -916,7 +1021,12 @@ async function publishNote(content, additionalTags = []) {
 
         let signedEvent;
         if (window.nostr && typeof window.nostr.signEvent === 'function') {
-            signedEvent = await window.nostr.signEvent(eventTemplate);
+            // Use safe wrapper for Chrome compatibility
+            if (typeof window.safeNostrSignEvent === 'function') {
+                signedEvent = await window.safeNostrSignEvent(eventTemplate);
+            } else {
+                signedEvent = await window.nostr.signEvent(eventTemplate);
+            }
         } else if (userPrivateKey) {
             signedEvent = NostrTools.finishEvent(eventTemplate, userPrivateKey);
         } else {
@@ -999,7 +1109,12 @@ async function createBookmark(url = null, title = null, description = '') {
 
         let signedEvent;
         if (window.nostr && typeof window.nostr.signEvent === 'function') {
-            signedEvent = await window.nostr.signEvent(eventTemplate);
+            // Use safe wrapper for Chrome compatibility
+            if (typeof window.safeNostrSignEvent === 'function') {
+                signedEvent = await window.safeNostrSignEvent(eventTemplate);
+            } else {
+                signedEvent = await window.nostr.signEvent(eventTemplate);
+            }
         } else {
             throw new Error("Extension Nostr requise pour signer");
         }
@@ -1135,7 +1250,12 @@ async function postComment(content, url = null) {
 
         let signedEvent;
         if (window.nostr && typeof window.nostr.signEvent === 'function') {
-            signedEvent = await window.nostr.signEvent(eventTemplate);
+            // Use safe wrapper for Chrome compatibility
+            if (typeof window.safeNostrSignEvent === 'function') {
+                signedEvent = await window.safeNostrSignEvent(eventTemplate);
+            } else {
+                signedEvent = await window.nostr.signEvent(eventTemplate);
+            }
         } else if (userPrivateKey) {
             signedEvent = NostrTools.finishEvent(eventTemplate, userPrivateKey);
         } else {
@@ -1671,7 +1791,12 @@ async function createBasicDIDDocument(pubkey, email) {
         // Sign and publish the DID document
         let signedEvent;
         if (window.nostr && typeof window.nostr.signEvent === 'function') {
-            signedEvent = await window.nostr.signEvent(didEvent);
+            // Use safe wrapper for Chrome compatibility
+            if (typeof window.safeNostrSignEvent === 'function') {
+                signedEvent = await window.safeNostrSignEvent(didEvent);
+            } else {
+                signedEvent = await window.nostr.signEvent(didEvent);
+            }
         } else {
             throw new Error("NOSTR extension required to sign DID document");
         }
@@ -2078,7 +2203,12 @@ async function deleteMessage(eventId) {
         // Sign the deletion event
         let signedDeletionEvent;
         if (window.nostr && typeof window.nostr.signEvent === 'function') {
-            signedDeletionEvent = await window.nostr.signEvent(deletionEvent);
+            // Use safe wrapper for Chrome compatibility
+            if (typeof window.safeNostrSignEvent === 'function') {
+                signedDeletionEvent = await window.safeNostrSignEvent(deletionEvent);
+            } else {
+                signedDeletionEvent = await window.nostr.signEvent(deletionEvent);
+            }
         } else {
             throw new Error("Nostr extension required to sign deletion event.");
         }
@@ -2812,8 +2942,13 @@ async function connectToNostrForPayment(userEmail, config) {
     try {
         console.log('🔐 Connecting to NOSTR for payment authentication');
         
-        // Get NOSTR public key
-        const pubkey = await window.nostr.getPublicKey();
+        // Get NOSTR public key (use safe wrapper for Chrome compatibility)
+        let pubkey;
+        if (typeof window.safeNostrGetPublicKey === 'function') {
+            pubkey = await window.safeNostrGetPublicKey();
+        } else {
+            pubkey = await window.nostr.getPublicKey();
+        }
         
         // Connect to relay
         await connectToRelay();
@@ -3105,7 +3240,12 @@ async function sendLike(eventId, authorPubkey, content = "+") {
 
         let signedEvent;
         if (window.nostr && typeof window.nostr.signEvent === 'function') {
-            signedEvent = await window.nostr.signEvent(reactionEvent);
+            // Use safe wrapper for Chrome compatibility
+            if (typeof window.safeNostrSignEvent === 'function') {
+                signedEvent = await window.safeNostrSignEvent(reactionEvent);
+            } else {
+                signedEvent = await window.nostr.signEvent(reactionEvent);
+            }
         } else if (userPrivateKey) {
             signedEvent = NostrTools.finishEvent(reactionEvent, userPrivateKey);
         } else {

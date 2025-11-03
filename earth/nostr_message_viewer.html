@@ -384,6 +384,110 @@
             align-items: center;
             gap: 6px;
         }
+
+        /* Styles for media links and images */
+        .media-container {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            margin-top: 10px;
+            margin-bottom: 10px;
+        }
+        .media-link {
+            color: var(--terminal-cyan);
+            text-decoration: underline;
+            font-size: 0.9em;
+        }
+        .message-image {
+            max-width: 300px;
+            max-height: 300px;
+            height: auto;
+            border: 1px solid var(--terminal-border);
+            border-radius: 4px;
+            cursor: pointer;
+            transition: transform 0.2s ease;
+        }
+        .message-image:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 10px rgba(0, 255, 255, 0.5);
+        }
+        .message-video, .message-audio {
+            max-width: 300px;
+            height: auto;
+            border: 1px solid var(--terminal-border);
+            border-radius: 4px;
+        }
+
+        /* Modal styles for images */
+        .image-modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.9);
+            padding: 20px;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .image-modal-content {
+            position: relative;
+            max-width: 90%;
+            max-height: 90%;
+            border-radius: 8px;
+            border: 3px solid var(--terminal-cyan);
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            animation-name: zoom;
+            animation-duration: 0.6s;
+        }
+
+        .image-modal-content img,
+        .image-modal-content video,
+        .image-modal-content audio {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+            border-radius: 5px;
+        }
+
+        @keyframes zoom {
+            from {transform:scale(0)}
+            to {transform:scale(1)}
+        }
+
+        .image-modal-close {
+            position: absolute;
+            top: -40px;
+            right: -40px;
+            color: #f1f1f1;
+            font-size: 40px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: 0.3s;
+            background: rgba(0,0,0,0.7);
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1001;
+        }
+
+        .image-modal-close:hover,
+        .image-modal-close:focus {
+            color: #bbb;
+            text-decoration: none;
+            cursor: pointer;
+            background: rgba(0,0,0,0.9);
+        }
     </style>
     <script src="nostr.bundle.js"></script>
     <script src="common.js"></script>
@@ -511,9 +615,174 @@
             });
         }
 
+        // Function to process media links and return appropriate HTML
+        function processMediaLink(url) {
+            const urlLower = url.toLowerCase();
+            
+            // Image formats
+            if (urlLower.match(/\.(jpg|jpeg|png|gif|webp|svg|bmp|ico)$/)) {
+                return `<div class="media-container">
+                    <img src="${url}" alt="Image" class="message-image" onclick="openImageModal('${url}')" title="Click to enlarge">
+                    <a href="${url}" target="_blank" rel="noopener noreferrer" class="media-link">${url}</a>
+                </div>`;
+            }
+            
+            // Video formats
+            else if (urlLower.match(/\.(mp4|webm|ogg|mov|avi|mkv)$/)) {
+                return `<div class="media-container">
+                    <video controls class="message-video" preload="metadata">
+                        <source src="${url}" type="video/${urlLower.split('.').pop()}">
+                        Your browser does not support the video tag.
+                    </video>
+                    <a href="${url}" target="_blank" rel="noopener noreferrer" class="media-link">${url}</a>
+                </div>`;
+            }
+            
+            // Audio formats
+            else if (urlLower.match(/\.(mp3|wav|ogg|flac|aac|m4a)$/)) {
+                return `<div class="media-container">
+                    <audio controls class="message-audio" preload="metadata">
+                        <source src="${url}" type="audio/${urlLower.split('.').pop()}">
+                        Your browser does not support the audio tag.
+                    </audio>
+                    <a href="${url}" target="_blank" rel="noopener noreferrer" class="media-link">${url}</a>
+                </div>`;
+            }
+            
+            // Regular links
+            else {
+                return `<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`;
+            }
+        }
+
+        // Extract image/media URLs from imeta tags (NIP-94)
+        function extractImagesFromImetaTags(message) {
+            if (!message.tags || !Array.isArray(message.tags)) {
+                return [];
+            }
+            
+            const images = [];
+            
+            message.tags.forEach(tag => {
+                if (tag[0] === 'imeta') {
+                    let imageUrl = null;
+                    let mimeType = null;
+                    let dimensions = null;
+                    let alt = null;
+                    
+                    // Parse imeta tag - can be in different formats:
+                    // ["imeta", "url https://...", "m image/jpeg", "dim 1920x1080"]
+                    // or ["imeta", "url", "https://...", "m", "image/jpeg"]
+                    for (let i = 1; i < tag.length; i++) {
+                        const item = tag[i];
+                        
+                        if (typeof item === 'string') {
+                            // Check if it's a key-value pair: "url https://..."
+                            if (item.includes(' ') && item.length > 4) {
+                                const [key, ...valueParts] = item.split(' ');
+                                const value = valueParts.join(' ');
+                                
+                                if (key === 'url' && !imageUrl && value.startsWith('http')) {
+                                    imageUrl = value;
+                                } else if (key === 'm') {
+                                    mimeType = value;
+                                } else if (key === 'dim') {
+                                    dimensions = value;
+                                } else if (key === 'alt') {
+                                    alt = value;
+                                }
+                            }
+                            // Or check if current item is a key and next is value
+                            else if (i + 1 < tag.length && typeof tag[i + 1] === 'string') {
+                                const nextItem = tag[i + 1];
+                                if (item === 'url' && !imageUrl && nextItem.startsWith('http')) {
+                                    imageUrl = nextItem;
+                                    i++; // Skip next item
+                                } else if (item === 'm') {
+                                    mimeType = nextItem;
+                                    i++; // Skip next item
+                                } else if (item === 'dim') {
+                                    dimensions = nextItem;
+                                    i++; // Skip next item
+                                } else if (item === 'alt') {
+                                    alt = nextItem;
+                                    i++; // Skip next item
+                                }
+                            }
+                            // Or check if it looks like a URL directly
+                            else if (!imageUrl && item.startsWith('http')) {
+                                imageUrl = item;
+                            }
+                        }
+                    }
+                    
+                    if (imageUrl) {
+                        images.push({
+                            url: imageUrl,
+                            mimeType: mimeType,
+                            dimensions: dimensions,
+                            alt: alt || 'Image from imeta tag'
+                        });
+                    }
+                }
+            });
+            
+            return images;
+        }
+
         function makeLinksClickable(text) {
             const urlRegex = /(https?:\/\/[^\s<>"{}|\\^`[\]]+)/gi;
-            return text.replace(urlRegex, '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>');
+            return text.replace(urlRegex, function(match) {
+                return processMediaLink(match);
+            });
+        }
+
+        // Function to open image in modal
+        function openImageModal(imageUrl) {
+            // Create modal if it doesn't exist
+            let modal = document.getElementById('imageModal');
+            if (!modal) {
+                modal = document.createElement('div');
+                modal.id = 'imageModal';
+                modal.className = 'image-modal';
+                modal.innerHTML = `
+                    <div class="image-modal-content">
+                        <span class="image-modal-close">&times;</span>
+                        <img id="modalImage" src="" alt="Full size image" onerror="this.style.display='none'; this.parentElement.innerHTML='<p style=\'color: white; text-align: center; padding: 20px;\'>Failed to load image</p>'">
+                    </div>
+                `;
+                document.body.appendChild(modal);
+                
+                // Close modal on click
+                modal.addEventListener('click', function(e) {
+                    if (e.target === modal || e.target.className === 'image-modal-close') {
+                        modal.style.display = 'none';
+                    }
+                });
+                
+                // Close modal on escape key
+                document.addEventListener('keydown', function(e) {
+                    if (e.key === 'Escape' && modal.style.display === 'flex') {
+                        modal.style.display = 'none';
+                    }
+                });
+            }
+            
+            // Show image in modal
+            const modalImage = document.getElementById('modalImage');
+            modalImage.style.display = 'block';
+            modalImage.src = imageUrl;
+            modal.style.display = 'flex';
+            
+            // Add loading state
+            modalImage.onload = function() {
+                this.style.opacity = '1';
+            };
+            modalImage.onerror = function() {
+                this.style.display = 'none';
+                this.parentElement.innerHTML = '<p style="color: white; text-align: center; padding: 20px;">Failed to load image</p>';
+            };
+            modalImage.style.opacity = '0.7';
         }
 
         function goToProfile(pubkey) {
@@ -674,6 +943,24 @@
                     .replace(/\n/g, '<br>')
             );
 
+            // Extract images from imeta tags (NIP-94)
+            const imetaImages = extractImagesFromImetaTags(message);
+            let imetaImagesHtml = '';
+            if (imetaImages.length > 0) {
+                imetaImagesHtml = '<div style="margin: 16px 0; padding-top: 16px; border-top: 1px solid var(--terminal-border);">';
+                imetaImagesHtml += '<div style="color: var(--terminal-cyan); font-size: 0.9em; margin-bottom: 12px;">📎 Images attachées (imeta):</div>';
+                imetaImages.forEach(img => {
+                    imetaImagesHtml += processMediaLink(img.url);
+                    if (img.dimensions) {
+                        imetaImagesHtml += `<div style="font-size: 0.85em; color: var(--terminal-purple); margin-top: 4px;">📐 ${img.dimensions}</div>`;
+                    }
+                    if (img.mimeType) {
+                        imetaImagesHtml += `<div style="font-size: 0.85em; color: var(--terminal-purple);">📄 ${img.mimeType}</div>`;
+                    }
+                });
+                imetaImagesHtml += '</div>';
+            }
+
             // Convert to npub and nevent formats for njump.me links
             const npub = hexToNpub(message.pubkey);
             const relayUrl = await getRelayURL();
@@ -695,6 +982,7 @@
                         </div>
                     </div>
                     <div class="message-content">${content}</div>
+                    ${imetaImagesHtml}
                     <div class="message-actions">
                         <button class="action-button" onclick="likeMessage('${message.id}', '${message.pubkey}')">❤️ J'aime</button>
                         <button class="action-button" onclick="replyToMessage('${message.id}')">💬 Répondre</button>
@@ -719,6 +1007,21 @@
                     .replace(/\n/g, '<br>')
             );
 
+            // Extract images from imeta tags (NIP-94) for replies too
+            const imetaImages = extractImagesFromImetaTags(reply);
+            let imetaImagesHtml = '';
+            if (imetaImages.length > 0) {
+                imetaImagesHtml = '<div style="margin: 12px 0 0 42px; padding-top: 12px; border-top: 1px solid var(--terminal-border);">';
+                imetaImagesHtml += '<div style="color: var(--terminal-cyan); font-size: 0.85em; margin-bottom: 8px;">📎 Images (imeta):</div>';
+                imetaImages.forEach(img => {
+                    imetaImagesHtml += processMediaLink(img.url);
+                    if (img.dimensions) {
+                        imetaImagesHtml += `<div style="font-size: 0.8em; color: var(--terminal-purple); margin-top: 4px;">📐 ${img.dimensions}</div>`;
+                    }
+                });
+                imetaImagesHtml += '</div>';
+            }
+
             // Convert to npub and nevent formats for njump.me links
             const npub = hexToNpub(reply.pubkey);
             const nevent = hexToNevent(reply.id, relayUrl);
@@ -733,6 +1036,7 @@
                         <span class="reply-time">${timeAgo}</span>
                     </div>
                     <div class="reply-content">${content}</div>
+                    ${imetaImagesHtml}
                     <div style="margin-top: 8px; display: flex; gap: 12px; font-size: 12px; opacity: 0.8; flex-wrap: wrap;">
                         <a href="nostr_profile_viewer.html?hex=${reply.pubkey}" target="_blank" style="color: var(--terminal-cyan); text-decoration: none;">
                             👤 Profil UPlanet

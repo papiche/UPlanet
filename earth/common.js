@@ -450,16 +450,28 @@ async function connectNostr(forceAuth = false) {
             }
             console.log(`✅ Connecté avec la clé publique: ${pubkey.substring(0, 8)}...`);
             
-            // Connexion automatique au relay
-            await connectToRelay(forceAuth);
+            // Connexion automatique au relay (forceAuth will force NIP42 auth)
+            const connected = await connectToRelay(forceAuth);
+            
+            if (!connected) {
+                console.error("❌ Échec de la connexion au relay");
+                return null;
+            }
+            
+            // If forceAuth is true, explicitly send NIP42 auth event
+            if (forceAuth && nostrRelay && isNostrConnected) {
+                const relayUrl = DEFAULT_RELAYS[0] || getNostrRelay();
+                console.log('🔐 Force sending NIP42 authentication event...');
+                await sendNIP42Auth(relayUrl, true);
+            }
             
             return pubkey;
         } else {
-            alert("Impossible de récupérer la clé publique. Autorisez l'accès dans votre extension Nostr.");
+            showAlert("Impossible de récupérer la clé publique. Veuillez autoriser l'accès à votre extension Nostr.", 'error');
             return null;
         }
     } catch (error) {
-        alert("La connexion a échoué. Veuillez autoriser l'accès dans votre extension Nostr.");
+        showAlert("La connexion a échoué. Veuillez vérifier que votre extension Nostr est installée et active, puis autorisez l'accès.", 'error');
         console.error("❌ Erreur de connexion Nostr:", error);
         return null;
     }
@@ -627,6 +639,11 @@ async function sendNIP42Auth(relayUrl, forceSend = false) {
     }
 }
 
+// Make sendNIP42Auth globally accessible
+if (typeof window !== 'undefined') {
+    window.sendNIP42Auth = sendNIP42Auth;
+}
+
 /**
  * Connexion au relay Nostr
  * @param {boolean} forceAuth - Force sending NIP-42 auth event even if connection is reused
@@ -706,7 +723,14 @@ async function connectToRelay(forceAuth = false) {
             // Send NIP-42 authentication event once
             if (userPubkey && !authSent) {
                 authSent = true;
-                setTimeout(() => sendNIP42Auth(NOSTRws), 500);
+                // Send NIP42 auth immediately if forceAuth is true, otherwise wait a bit
+                if (forceAuth) {
+                    sendNIP42Auth(NOSTRws, true).catch(err => {
+                        console.warn('⚠️ Failed to send NIP42 auth:', err);
+                    });
+                } else {
+                    setTimeout(() => sendNIP42Auth(NOSTRws, false), 500);
+                }
                 
                 // Check if user should be redirected to their preferred relay domain
                 // Wait a bit for auth to complete, then check relay preference
@@ -2047,14 +2071,29 @@ async function uploadPhotoToIPFS(file) {
         
         // Build IPFS URL
         let imageUrl = null;
+        let fileName = null;
+        
+        // Get fileName from API response
+        // Prefer fileName from response, fallback to file_path
+        if (uploadResult.fileName) {
+            fileName = uploadResult.fileName;
+        } else if (uploadResult.file_path) {
+            fileName = uploadResult.file_path.split('/').pop();
+        }
+        
+        // Store description for images (AI-generated) or other files
+        const description = uploadResult.description || null;
+        
+        // Store info CID for loading metadata from info.json
+        const infoCid = uploadResult.info || null;
         
         if (uploadResult.success && uploadResult.new_cid && uploadResult.file_path) {
             const gateway = window.location.origin.includes('127.0.0.1') 
                 ? 'http://127.0.0.1:8080' 
                 : window.location.origin;
             
-            const fileName = uploadResult.file_path.split('/').pop();
-            imageUrl = `${gateway}/ipfs/${uploadResult.new_cid}/${fileName}`;
+            const fileNameFromPath = uploadResult.file_path.split('/').pop();
+            imageUrl = `${gateway}/ipfs/${uploadResult.new_cid}/${fileNameFromPath}`;
             console.log('✅ Image URL from upload2ipfs.sh:', imageUrl);
         } else if (uploadResult.nip94_event && uploadResult.nip94_event.tags) {
             const urlTag = uploadResult.nip94_event.tags.find(tag => tag[0] === 'url');
@@ -2067,11 +2106,49 @@ async function uploadPhotoToIPFS(file) {
             throw new Error('Unable to build IPFS URL');
         }
         
+        // Load metadata from info.json if available
+        let metadata = null;
+        if (infoCid) {
+            try {
+                const gateway = window.location.origin.includes('127.0.0.1') 
+                    ? 'http://127.0.0.1:8080' 
+                    : window.location.origin;
+                const infoUrl = `${gateway}/ipfs/${infoCid}/info.json`;
+                console.log('📋 Loading metadata from info.json:', infoUrl);
+                
+                const metadataResponse = await fetch(infoUrl);
+                if (metadataResponse.ok) {
+                    metadata = await metadataResponse.json();
+                    console.log('✅ Metadata loaded from info.json:', metadata);
+                    
+                    // Use description from metadata if not provided directly
+                    if (!description && metadata.metadata && metadata.metadata.description) {
+                        return {
+                            success: true,
+                            url: imageUrl,
+                            cid: uploadResult.new_cid,
+                            fileName: fileName,
+                            description: metadata.metadata.description,
+                            info: infoCid,
+                            metadata: metadata // Full metadata object
+                        };
+                    }
+                } else {
+                    console.warn('⚠️ Could not load info.json:', metadataResponse.status);
+                }
+            } catch (error) {
+                console.warn('⚠️ Error loading metadata from info.json:', error);
+            }
+        }
+        
         return {
             success: true,
             url: imageUrl,
             cid: uploadResult.new_cid,
-            fileName: uploadResult.file_path ? uploadResult.file_path.split('/').pop() : null
+            fileName: fileName, // Original or generated filename from API
+            description: description, // Description for images (AI-generated) or other files
+            info: infoCid, // CID of info.json
+            metadata: metadata // Full metadata object if loaded
         };
         
     } catch (error) {

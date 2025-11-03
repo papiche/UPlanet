@@ -442,6 +442,9 @@ async function openTheaterMode(videoData) {
         await loadTheaterStats(eventId, ipfsUrl);
     }
 
+    // Load provenance information (file hash, info.json, upload chain)
+    await loadTheaterProvenance(modal, videoData);
+
     // Load author info (this will fetch profile and update display name if available)
     if (authorId || uploader) {
         await loadTheaterVideoAuthor(modal, authorId, uploader || channel || 'Auteur inconnu');
@@ -861,6 +864,96 @@ async function loadTheaterStats(eventId, ipfsUrl) {
     } catch (error) {
         console.error('Error loading theater stats:', error);
     }
+}
+
+/**
+ * Load and display video provenance information in theater mode
+ * Shows file hash, info.json link, upload chain, and original uploader
+ */
+async function loadTheaterProvenance(modal, videoData) {
+    // Try to find provenance container
+    let provenanceContainer = modal.querySelector('.theater-provenance');
+    
+    // If not found, try to find the comments section and insert before it
+    if (!provenanceContainer) {
+        const commentsSection = modal.querySelector('#theaterCommentsContainer');
+        if (commentsSection) {
+            provenanceContainer = document.createElement('div');
+            provenanceContainer.className = 'theater-provenance';
+            commentsSection.parentNode.insertBefore(provenanceContainer, commentsSection);
+        } else {
+            // Can't find insertion point, skip
+            return;
+        }
+    }
+    
+    // Check if we have provenance data
+    if (!videoData.fileHash && !videoData.infoCid && !videoData.uploadChain && !videoData.originalEventId) {
+        provenanceContainer.style.display = 'none';
+        return;
+    }
+    
+    provenanceContainer.style.display = 'block';
+    
+    let provenanceHTML = '<div style="padding: 16px; background: #181818; border-radius: 8px; margin-bottom: 16px;">';
+    provenanceHTML += '<h4 style="margin: 0 0 12px 0; font-size: 14px; color: #3ea6ff; display: flex; align-items: center; gap: 6px;"><span>🔐</span> Provenance & Metadata</h4>';
+    
+    // File Hash
+    if (videoData.fileHash) {
+        provenanceHTML += '<div style="margin-bottom: 10px; font-size: 13px;">';
+        provenanceHTML += '<span style="color: #aaaaaa;">File Hash (SHA-256):</span><br>';
+        provenanceHTML += `<code style="background: #0f0f0f; padding: 4px 8px; border-radius: 4px; font-size: 11px; color: #4ade80; word-break: break-all; display: block; margin-top: 4px;">${videoData.fileHash}</code>`;
+        provenanceHTML += '</div>';
+    }
+    
+    // Info.json CID
+    if (videoData.infoCid) {
+        const ipfsGateway = window.IPFS_GATEWAY || 'https://ipfs.copylaradio.com';
+        const infoUrl = `${ipfsGateway}/ipfs/${videoData.infoCid}`;
+        provenanceHTML += '<div style="margin-bottom: 10px; font-size: 13px;">';
+        provenanceHTML += '<span style="color: #aaaaaa;">Metadata (info.json):</span><br>';
+        provenanceHTML += `<a href="${infoUrl}" target="_blank" style="color: #3ea6ff; text-decoration: none; font-size: 11px; word-break: break-all; display: inline-flex; align-items: center; gap: 4px; margin-top: 4px;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">`;
+        provenanceHTML += `<span>📄</span> ${videoData.infoCid} <span style="font-size: 10px;">🔗</span>`;
+        provenanceHTML += '</a>';
+        provenanceHTML += '</div>';
+    }
+    
+    // Upload Chain
+    if (videoData.uploadChain) {
+        const uploaders = videoData.uploadChain.split(',');
+        provenanceHTML += '<div style="margin-bottom: 10px; font-size: 13px;">';
+        provenanceHTML += '<span style="color: #aaaaaa;">Distribution Chain:</span><br>';
+        provenanceHTML += '<div style="margin-top: 6px; display: flex; flex-wrap: wrap; gap: 4px;">';
+        uploaders.forEach((pubkey, index) => {
+            const shortKey = pubkey.substring(0, 8) + '...' + pubkey.substring(pubkey.length - 4);
+            provenanceHTML += `<span style="background: #0f0f0f; padding: 3px 8px; border-radius: 12px; font-size: 11px; color: #f59e0b; display: inline-flex; align-items: center; gap: 4px;">`;
+            if (index === 0) {
+                provenanceHTML += `<span>👤</span>`;
+            } else {
+                provenanceHTML += `<span>↪️</span>`;
+            }
+            provenanceHTML += `${shortKey}</span>`;
+        });
+        provenanceHTML += '</div>';
+        provenanceHTML += '</div>';
+    }
+    
+    // Original Event (if re-upload)
+    if (videoData.originalEventId && videoData.originalAuthorId) {
+        provenanceHTML += '<div style="margin-bottom: 10px; font-size: 13px; padding-top: 10px; border-top: 1px solid #3f3f3f;">';
+        provenanceHTML += '<span style="color: #aaaaaa;">Original Upload:</span><br>';
+        const shortEventId = videoData.originalEventId.substring(0, 12) + '...';
+        const shortAuthor = videoData.originalAuthorId.substring(0, 8) + '...' + videoData.originalAuthorId.substring(videoData.originalAuthorId.length - 4);
+        provenanceHTML += '<div style="margin-top: 6px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">';
+        provenanceHTML += `<span style="background: #0f0f0f; padding: 4px 10px; border-radius: 12px; font-size: 11px; color: #8b5cf6;">📌 ${shortEventId}</span>`;
+        provenanceHTML += `<span style="background: #0f0f0f; padding: 4px 10px; border-radius: 12px; font-size: 11px; color: #3ea6ff;">👤 ${shortAuthor}</span>`;
+        provenanceHTML += '</div>';
+        provenanceHTML += '</div>';
+    }
+    
+    provenanceHTML += '</div>';
+    
+    provenanceContainer.innerHTML = provenanceHTML;
 }
 
 /**
@@ -2539,6 +2632,15 @@ function extractVideoMetadata(event) {
         }
     }
     
+    // Extract provenance tags (NIP-71 extension)
+    const fileHashTag = event.tags.find(t => t[0] === 'x');
+    const infoCidTag = event.tags.find(t => t[0] === 'info');
+    const uploadChainTag = event.tags.find(t => t[0] === 'upload_chain');
+    
+    // Extract original event tags (provenance chain)
+    const originalEventTag = event.tags.find(t => t[0] === 'e');
+    const originalAuthorTag = event.tags.find(t => t[0] === 'p');
+    
     return {
         title,
         ipfsUrl,
@@ -2546,7 +2648,13 @@ function extractVideoMetadata(event) {
         duration,
         authorId,
         eventId: event.id,
-        content: event.content || ''
+        content: event.content || '',
+        // Provenance metadata
+        fileHash: fileHashTag ? fileHashTag[1] : null,
+        infoCid: infoCidTag ? infoCidTag[1] : null,
+        uploadChain: uploadChainTag ? uploadChainTag[1] : null,
+        originalEventId: originalEventTag ? originalEventTag[1] : null,
+        originalAuthorId: originalAuthorTag ? originalAuthorTag[1] : null
     };
 }
 

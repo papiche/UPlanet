@@ -1,6 +1,16 @@
 /**
  * UPlanet Common JavaScript
- * Code partagé entre entrance.html, nostr_com.html et uplanet_com.html
+ * Code partagé entre entrance.html, nostr_com.html, uplanet_com.html, youtube.html, plantnet.html, etc.
+ * 
+ * GLOBAL EXPORTS (accessible via window):
+ * - Variables: window.nostrRelay, window.isNostrConnected, window.userPubkey, window.DEFAULT_RELAYS, window.upassportUrl
+ * - Getter/Setter functions: window.getNostrRelay(), window.getIsNostrConnected(), window.getUserPubkey(),
+ *   window.setNostrRelay(), window.setIsNostrConnected(), window.setUserPubkey()
+ * - Main functions: connectNostr(), connectToRelay(), publishNote(), uploadPhotoToIPFS(), sendNIP42Auth(),
+ *   fetchUserMetadata(), shareCurrentPage(), createBookmark(), postComment(), fetchComments(), etc.
+ * 
+ * All functions declared with 'function' or 'async function' are automatically available globally.
+ * Variables are explicitly exposed on window for compatibility with youtube.html, plantnet.html, etc.
  */
 
 // ========================================
@@ -244,6 +254,38 @@ let userPubkey = null;
 let userPrivateKey = null;
 let authSent = false; // Track if AUTH has been sent to avoid duplicates
 
+// Expose variables on window for global access (used by youtube.html, plantnet.html, etc.)
+if (typeof window !== 'undefined') {
+    // Initialize window properties with initial values
+    window.nostrRelay = nostrRelay;
+    window.isNostrConnected = isNostrConnected;
+    window.userPubkey = userPubkey;
+    window.userPrivateKey = userPrivateKey;
+    
+    // Create getter/setter functions for consistent access
+    window.getNostrRelay = function() {
+        return nostrRelay || window.nostrRelay;
+    };
+    window.getIsNostrConnected = function() {
+        return isNostrConnected || window.isNostrConnected;
+    };
+    window.getUserPubkey = function() {
+        return userPubkey || window.userPubkey;
+    };
+    window.setNostrRelay = function(relay) {
+        nostrRelay = relay;
+        window.nostrRelay = relay;
+    };
+    window.setIsNostrConnected = function(connected) {
+        isNostrConnected = connected;
+        window.isNostrConnected = connected;
+    };
+    window.setUserPubkey = function(pubkey) {
+        userPubkey = pubkey;
+        window.userPubkey = pubkey;
+    };
+}
+
 /**
  * Détecte l'API uSPOT et les relais par défaut selon l'environnement
  * @returns {string} L'URL de l'API uSPOT détectée
@@ -289,6 +331,12 @@ function detectUSPOTAPI() {
     // Set global IPFS gateway if not already set
     if (typeof window !== 'undefined' && (!window.IPFS_GATEWAY || window.IPFS_GATEWAY === '')) {
         window.IPFS_GATEWAY = determinedIpfsGateway;
+    }
+    
+    // Expose DEFAULT_RELAYS and upassportUrl on window for global access
+    if (typeof window !== 'undefined') {
+        window.DEFAULT_RELAYS = DEFAULT_RELAYS;
+        window.upassportUrl = upassportUrl;
     }
 
     console.log(`API uSPOT détectée: ${upassportUrl}`);
@@ -447,6 +495,9 @@ async function connectNostr(forceAuth = false) {
             // Attach to window for iframe access
             if (typeof window !== 'undefined') {
                 window.userPubkey = pubkey;
+                if (window.setUserPubkey) {
+                    window.setUserPubkey(pubkey);
+                }
             }
             console.log(`✅ Connecté avec la clé publique: ${pubkey.substring(0, 8)}...`);
             
@@ -689,6 +740,9 @@ async function connectToRelay(forceAuth = false) {
             isNostrConnected = false;
             if (typeof window !== 'undefined') {
                 window.isNostrConnected = false;
+                if (window.setIsNostrConnected) {
+                    window.setIsNostrConnected(false);
+                }
             }
         }
     }
@@ -710,6 +764,9 @@ async function connectToRelay(forceAuth = false) {
         // Attach to window for iframe access
         if (typeof window !== 'undefined') {
             window.nostrRelay = nostrRelay;
+            if (window.setNostrRelay) {
+                window.setNostrRelay(nostrRelay);
+            }
         }
 
         nostrRelay.on('connect', async () => {
@@ -718,6 +775,9 @@ async function connectToRelay(forceAuth = false) {
             // Attach to window for iframe access
             if (typeof window !== 'undefined') {
                 window.isNostrConnected = true;
+                if (window.setIsNostrConnected) {
+                    window.setIsNostrConnected(true);
+                }
             }
             
             // Send NIP-42 authentication event once
@@ -757,6 +817,9 @@ async function connectToRelay(forceAuth = false) {
             // Update window for iframe access
             if (typeof window !== 'undefined') {
                 window.isNostrConnected = false;
+                if (window.setIsNostrConnected) {
+                    window.setIsNostrConnected(false);
+                }
             }
         });
 
@@ -766,6 +829,9 @@ async function connectToRelay(forceAuth = false) {
             // Update window for iframe access
             if (typeof window !== 'undefined') {
                 window.isNostrConnected = false;
+                if (window.setIsNostrConnected) {
+                    window.setIsNostrConnected(false);
+                }
             }
             authSent = false;
         });
@@ -805,6 +871,9 @@ async function connectToRelay(forceAuth = false) {
         // Update window for iframe access
         if (typeof window !== 'undefined') {
             window.isNostrConnected = false;
+            if (window.setIsNostrConnected) {
+                window.setIsNostrConnected(false);
+            }
         }
         return false;
     }

@@ -3465,42 +3465,89 @@ async function sendLike(eventId, authorPubkey, content = "+") {
 
         console.log("✍️ Réaction signée:", signedEvent);
 
-        // Publication avec timeout plus long (10 secondes)
-        // La promesse publish() peut prendre du temps selon la charge du relay
+        // Publication de l'événement
+        // Note: nostrRelay.publish() peut ne pas résoudre rapidement même si l'événement est accepté
+        // Le relay peut traiter l'événement de façon asynchrone via le script 7.sh
+        // On envoie l'événement et on considère comme succès si la connexion reste active
         const publishPromise = nostrRelay.publish(signedEvent);
+        
+        // Vérifier l'état de la connexion WebSocket AVANT l'envoi
+        let ws = null;
+        if (nostrRelay._ws) ws = nostrRelay._ws;
+        else if (nostrRelay.ws) ws = nostrRelay.ws;
+        else if (nostrRelay.socket) ws = nostrRelay.socket;
+        
+        const wasWebSocketOpen = ws && ws.readyState === WebSocket.OPEN;
+        
+        // Timeout plus long (15 secondes) pour les relays lents qui traitent via scripts
         const timeoutPromise = new Promise((_, reject) => {
-            setTimeout(() => reject(new Error('Timeout de publication')), 10000); // 10 secondes au lieu de 5
+            setTimeout(() => reject(new Error('Timeout de publication')), 15000);
         });
 
         try {
+            // Attendre la confirmation ou le timeout
             await Promise.race([publishPromise, timeoutPromise]);
             console.log("✅ Like envoyé avec succès:", signedEvent.id);
             return signedEvent;
         } catch (raceError) {
             // Si timeout, vérifier si l'événement a quand même été envoyé
-            // En NOSTR, l'envoi au relay est généralement réussi même si la promesse timeout
+            // En NOSTR, l'envoi au relay peut être réussi même si la promesse timeout
             if (raceError.message === 'Timeout de publication') {
-                console.warn('⚠️ Timeout de publication, mais l\'événement a peut-être été envoyé');
-                // Vérifier si la connexion est toujours active
-                let ws = null;
-                if (nostrRelay._ws) ws = nostrRelay._ws;
-                else if (nostrRelay.ws) ws = nostrRelay.ws;
-                else if (nostrRelay.socket) ws = nostrRelay.socket;
+                // Attendre un peu pour laisser le relay traiter
+                await new Promise(resolve => setTimeout(resolve, 500));
                 
-                if (ws && ws.readyState === WebSocket.OPEN) {
-                    // La connexion est active, l'événement a probablement été envoyé
-                    console.log("✅ Événement probablement envoyé (connexion active)");
-                    return signedEvent;
+                // Re-vérifier l'état de la connexion
+                let currentWs = null;
+                if (nostrRelay._ws) currentWs = nostrRelay._ws;
+                else if (nostrRelay.ws) currentWs = nostrRelay.ws;
+                else if (nostrRelay.socket) currentWs = nostrRelay.socket;
+                
+                const isStillOpen = currentWs && currentWs.readyState === WebSocket.OPEN;
+                
+                if (isStillOpen && wasWebSocketOpen) {
+                    // La connexion est toujours active, l'événement a probablement été accepté
+                    // Le relay traite l'événement via 7.sh de façon asynchrone
+                    // Ne pas afficher d'erreur, l'utilisateur verra le like dans les stats
+                    console.log("✅ Like envoyé (connexion active, relay en train de traiter via 7.sh)");
+                    return signedEvent; // Retourner l'événement pour mettre à jour l'UI
                 } else {
+                    // Connexion fermée, probable échec
+                    console.warn('⚠️ Timeout de publication et connexion fermée');
                     throw raceError;
                 }
             } else {
+                // Autre erreur que le timeout
                 throw raceError;
             }
         }
     } catch (error) {
+        // Si c'est un timeout mais que la connexion est active, considérer comme succès silencieux
+        if (error.message === 'Timeout de publication' && signedEvent) {
+            // Vérifier une dernière fois l'état de la connexion
+            let ws = null;
+            if (nostrRelay && nostrRelay._ws) ws = nostrRelay._ws;
+            else if (nostrRelay && nostrRelay.ws) ws = nostrRelay.ws;
+            else if (nostrRelay && nostrRelay.socket) ws = nostrRelay.socket;
+            
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                // Connexion active = événement probablement accepté et en cours de traitement
+                console.log("✅ Like envoyé (relay en train de traiter via 7.sh, pas d'alerte utilisateur)");
+                // Retourner l'événement pour que l'UI se mette à jour
+                // Le like apparaîtra dans les stats quand le relay aura fini de traiter
+                return signedEvent;
+            }
+        }
+        
+        // Erreur réelle, afficher le message
         console.error("❌ Erreur lors de l'envoi du like:", error);
-        alert(`Erreur: ${error.message}`);
+        // Ne pas afficher d'alerte pour les timeouts si la connexion est active
+        // L'utilisateur verra le like apparaître dans les stats si c'est un succès
+        if (error.message !== 'Timeout de publication') {
+            alert(`Erreur: ${error.message}`);
+        } else {
+            // Timeout mais connexion active = succès silencieux (pas d'alerte)
+            console.log("ℹ️ Timeout mais connexion active, like probablement envoyé");
+        }
         return null;
     }
 }

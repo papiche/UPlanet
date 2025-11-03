@@ -416,14 +416,22 @@ async function openTheaterMode(videoData) {
     // This ensures functions are available in the parent context (youtube.html)
     attachTheaterEventListeners(modal);
 
-    // Load video
-    const videoPlayer = document.getElementById('theaterVideoPlayer');
+    // Load video - IMPORTANT: Get video player AFTER modal is added to DOM
+    const videoPlayer = modal.querySelector('#theaterVideoPlayer');
     if (videoPlayer) {
         videoPlayer.setAttribute('data-event-id', eventId || '');
         videoPlayer.setAttribute('data-ipfs-url', ipfsUrl || '');
+        videoPlayer.setAttribute('data-author-id', authorId || '');
         
         // Use convertIPFSUrl (from youtube.html or from this file's global functions)
         const fullUrl = (typeof convertIPFSUrl === 'function' ? convertIPFSUrl(ipfsUrl) : convertIPFSUrlGlobal(ipfsUrl));
+        
+        console.log(`🎬 Loading theater video: ${fullUrl}`);
+        
+        // Clear existing sources first
+        videoPlayer.innerHTML = '';
+        
+        // Create and add new source
         const source = document.createElement('source');
         source.src = fullUrl;
         source.type = 'video/mp4';
@@ -435,6 +443,8 @@ async function openTheaterMode(videoData) {
 
         // Setup comment timeline
         setupCommentTimeline(videoPlayer);
+    } else {
+        console.error('❌ theaterVideoPlayer not found in modal!');
     }
 
     // Load engagement stats

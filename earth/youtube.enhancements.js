@@ -1229,12 +1229,21 @@ class VideoStats {
                 
                 // Fetch video comments using event ID (NIP-22 with #E tag)
                 if (typeof fetchVideoComments === 'function') {
-                    const comments = await fetchVideoComments(this.eventId);
-                    this.comments = comments.length;
+                    try {
+                        const comments = await fetchVideoComments(this.eventId);
+                        // Ensure comments is an array
+                        this.comments = Array.isArray(comments) ? comments.length : 0;
+                        console.log(`📊 VideoStats: Found ${this.comments} comments for event ${this.eventId}`);
+                    } catch (error) {
+                        console.warn('⚠️ Error fetching video comments, using fallback:', error);
+                        // Fallback to URL-based comments
+                        const comments = await fetchComments(this.ipfsUrl);
+                        this.comments = Array.isArray(comments) ? comments.length : 0;
+                    }
                 } else {
                     // Fallback to URL-based comments if fetchVideoComments not available
                     const comments = await fetchComments(this.ipfsUrl);
-                    this.comments = comments.length;
+                    this.comments = Array.isArray(comments) ? comments.length : 0;
                 }
                 
                 // Shares are notes that reference this video
@@ -1242,22 +1251,36 @@ class VideoStats {
                 this.shares = shares.length;
             } else {
                 // Fallback: if no eventId, use URL-based fetching
-                const comments = await fetchComments(this.ipfsUrl);
-                this.comments = comments.length;
+                try {
+                    const comments = await fetchComments(this.ipfsUrl);
+                    // Ensure comments is an array
+                    this.comments = Array.isArray(comments) ? comments.length : 0;
+                } catch (error) {
+                    console.warn('⚠️ Error fetching URL-based comments:', error);
+                    this.comments = 0;
+                }
             }
 
             // Views would need backend tracking, estimate from relay queries
             // For now, we'll skip views
             
+            // Always return an object with all stats, even if some are 0
+            // This ensures the UI can always display the stats
             return {
-                likes: this.likes,
-                shares: this.shares,
-                comments: this.comments,
-                views: this.views
+                likes: this.likes || 0,
+                shares: this.shares || 0,
+                comments: this.comments || 0,
+                views: this.views || 0
             };
         } catch (error) {
             console.error('Error refreshing video stats:', error);
-            return null;
+            // Return stats with zeros instead of null to ensure UI consistency
+            return {
+                likes: 0,
+                shares: 0,
+                comments: 0,
+                views: 0
+            };
         }
     }
 

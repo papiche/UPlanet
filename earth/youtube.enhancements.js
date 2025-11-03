@@ -1226,15 +1226,24 @@ class VideoStats {
             if (this.eventId) {
                 const reactions = await fetchReactions(this.eventId);
                 this.likes = reactions.filter(r => r.content === '+').length;
-            }
-
-            const comments = await fetchComments(this.ipfsUrl);
-            this.comments = comments.length;
-
-            // Shares are notes that reference this video
-            if (this.eventId) {
+                
+                // Fetch video comments using event ID (NIP-22 with #E tag)
+                if (typeof fetchVideoComments === 'function') {
+                    const comments = await fetchVideoComments(this.eventId);
+                    this.comments = comments.length;
+                } else {
+                    // Fallback to URL-based comments if fetchVideoComments not available
+                    const comments = await fetchComments(this.ipfsUrl);
+                    this.comments = comments.length;
+                }
+                
+                // Shares are notes that reference this video
                 const shares = await fetchVideoShares(this.eventId, this.ipfsUrl);
                 this.shares = shares.length;
+            } else {
+                // Fallback: if no eventId, use URL-based fetching
+                const comments = await fetchComments(this.ipfsUrl);
+                this.comments = comments.length;
             }
 
             // Views would need backend tracking, estimate from relay queries

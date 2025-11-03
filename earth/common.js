@@ -675,6 +675,7 @@ async function connectNostr(forceAuth = false) {
 
 /**
  * Check if a recent NIP-42 authentication event (kind 22242) exists on the relay
+ * Uses localStorage cache to avoid network requests if we recently checked
  * @param {string} relayUrl - URL of the relay
  * @param {number} maxAgeHours - Maximum age in hours for valid auth (default: 24)
  * @returns {Promise<boolean>} - True if a recent auth event exists
@@ -682,6 +683,21 @@ async function connectNostr(forceAuth = false) {
 async function checkRecentNIP42Auth(relayUrl, maxAgeHours = 24) {
     if (!nostrRelay || !isNostrConnected || !userPubkey) {
         return false;
+    }
+    
+    // Check localStorage cache first (avoid unnecessary network requests)
+    const cacheKey = `nip42_auth_cache_${userPubkey}_${relayUrl}`;
+    const cacheTimeKey = `${cacheKey}_time`;
+    const cached = localStorage.getItem(cacheKey);
+    const cacheTime = localStorage.getItem(cacheTimeKey);
+    
+    // If we have a recent cache (within last 5 minutes), use it
+    if (cached !== null && cacheTime !== null) {
+        const cacheAge = Date.now() - parseInt(cacheTime);
+        if (cacheAge < 300000) { // 5 minutes cache
+            console.log(`✅ Using cached NIP-42 auth check result: ${cached === 'true'}`);
+            return cached === 'true';
+        }
     }
     
     try {
@@ -702,8 +718,11 @@ async function checkRecentNIP42Auth(relayUrl, maxAgeHours = 24) {
             let foundRecentAuth = false;
             const timeout = setTimeout(() => {
                 sub.unsub();
+                // Cache the result (even if false, to avoid repeated checks)
+                localStorage.setItem(cacheKey, foundRecentAuth ? 'true' : 'false');
+                localStorage.setItem(cacheTimeKey, Date.now().toString());
                 resolve(foundRecentAuth);
-            }, 3000); // 3 second timeout
+            }, 2000); // Reduced timeout from 3s to 2s for faster response
             
             sub.on('event', (event) => {
                 // Verify this is a valid auth event for this relay
@@ -720,12 +739,18 @@ async function checkRecentNIP42Auth(relayUrl, maxAgeHours = 24) {
                 }
                 clearTimeout(timeout);
                 sub.unsub();
+                // Cache the result
+                localStorage.setItem(cacheKey, 'true');
+                localStorage.setItem(cacheTimeKey, Date.now().toString());
                 resolve(true);
             });
             
             sub.on('eose', () => {
                 clearTimeout(timeout);
                 sub.unsub();
+                // Cache the result
+                localStorage.setItem(cacheKey, foundRecentAuth ? 'true' : 'false');
+                localStorage.setItem(cacheTimeKey, Date.now().toString());
                 resolve(foundRecentAuth);
             });
         });
@@ -768,23 +793,28 @@ async function sendNIP42Auth(relayUrl, forceSend = false) {
     try {
         pendingNIP42Auth = true;
         
-        // If forceSend is true, skip the check and always send a new auth event
+        // If forceSend is false, check if we should skip sending (simplified logic)
         if (!forceSend) {
-            // Check if a recent auth event already exists (within last 24 hours)
-            console.log('🔍 Checking for recent NIP-42 authentication...');
+            // Only check recent auth if we haven't sent one recently (avoid slow network check)
+            const now = Date.now();
+            const timeSinceLastAuth = now - lastNIP42AuthTime;
+            
+            // If we sent an auth very recently (within last 5 minutes), skip the network check
+            if (timeSinceLastAuth < 300000) { // 5 minutes
+                console.log(`⏳ NIP-42 auth sent ${Math.floor(timeSinceLastAuth/1000)}s ago, skipping to avoid duplicate`);
+                pendingNIP42Auth = false;
+                return;
+            }
+            
+            // Otherwise, do a quick cached check (uses localStorage cache for speed)
+            console.log('🔍 Checking for recent NIP-42 authentication (cached)...');
             const hasRecentAuth = await checkRecentNIP42Auth(relayUrl, 24);
             
             if (hasRecentAuth) {
                 console.log('✅ Recent NIP-42 authentication found on relay, skipping new auth event');
                 pendingNIP42Auth = false;
-                // Still send AUTH message for immediate authentication without publishing event
-                try {
-                    // Try to reuse existing signed event from relay if possible
-                    // For now, we'll skip publishing but still send AUTH if relay requests it
-                    return;
-                } catch (authError) {
-                    console.warn('⚠️ Could not reuse existing auth:', authError);
-                }
+                // Update last auth time to avoid repeated checks
+                lastNIP42AuthTime = now;
                 return;
             }
             
@@ -834,6 +864,12 @@ async function sendNIP42Auth(relayUrl, forceSend = false) {
         
         // Update last auth time
         lastNIP42AuthTime = Date.now();
+        
+        // Update cache to reflect we just sent an auth event
+        const cacheKey = `nip42_auth_cache_${userPubkey}_${relayUrl}`;
+        const cacheTimeKey = `${cacheKey}_time`;
+        localStorage.setItem(cacheKey, 'true');
+        localStorage.setItem(cacheTimeKey, Date.now().toString());
         
         // Also send AUTH message for immediate authentication
         try {
@@ -924,32 +960,62 @@ async function connectToRelay(forceAuth = false) {
             ws = nostrRelay.socket;
         }
         
-        if (ws && ws.readyState === WebSocket.OPEN) {
-            console.log('✅ Reusing existing relay connection (WebSocket is open)');
-            
-            // If forceAuth is true, send NIP-42 auth event even if connection is reused
-            // But only if not already pending and not in cooldown
-            if (forceAuth && userPubkey && !pendingNIP42Auth) {
-                const now = Date.now();
-                const timeSinceLastAuth = now - lastNIP42AuthTime;
-                if (timeSinceLastAuth > NIP42_AUTH_COOLDOWN) {
-                    console.log('📤 Force sending NIP-42 auth event on reused connection...');
-                    setTimeout(() => sendNIP42Auth(NOSTRws, true), 100);
-                } else {
-                    console.log(`⏳ NIP-42 auth sent recently (${Math.floor(timeSinceLastAuth/1000)}s ago), skipping`);
+        // Check WebSocket state - wait a bit if it's still connecting
+        if (ws) {
+            if (ws.readyState === WebSocket.OPEN) {
+                console.log('✅ Reusing existing relay connection (WebSocket is open)');
+                
+                // If forceAuth is true, send NIP-42 auth event even if connection is reused
+                // But only if not already pending and not in cooldown
+                if (forceAuth && userPubkey && !pendingNIP42Auth) {
+                    const now = Date.now();
+                    const timeSinceLastAuth = now - lastNIP42AuthTime;
+                    if (timeSinceLastAuth > NIP42_AUTH_COOLDOWN) {
+                        console.log('📤 Force sending NIP-42 auth event on reused connection...');
+                        setTimeout(() => sendNIP42Auth(NOSTRws, true), 100);
+                    } else {
+                        console.log(`⏳ NIP-42 auth sent recently (${Math.floor(timeSinceLastAuth/1000)}s ago), skipping`);
+                    }
                 }
+                
+                return true;
+            } else if (ws.readyState === WebSocket.CONNECTING) {
+                // WebSocket is still connecting, wait a bit (max 2 seconds)
+                console.log('⏳ WebSocket is connecting, waiting...');
+                for (let i = 0; i < 20; i++) { // 20 * 100ms = 2 seconds max
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                    if (ws.readyState === WebSocket.OPEN) {
+                        console.log('✅ WebSocket connection completed');
+                        // Retry the check with OPEN state
+                        if (forceAuth && userPubkey && !pendingNIP42Auth) {
+                            const now = Date.now();
+                            const timeSinceLastAuth = now - lastNIP42AuthTime;
+                            if (timeSinceLastAuth > NIP42_AUTH_COOLDOWN) {
+                                setTimeout(() => sendNIP42Auth(NOSTRws, true), 100);
+                            }
+                        }
+                        return true;
+                    } else if (ws.readyState === WebSocket.CLOSED || ws.readyState === WebSocket.CLOSING) {
+                        break; // Connection failed, proceed to reconnect
+                    }
+                }
+                // Still not open after waiting, proceed to reconnect
+                console.warn('⚠️ WebSocket still not open after waiting, reconnecting...');
+            } else {
+                // CLOSED or CLOSING state
+                console.warn('⚠️ Relay connection exists but WebSocket is closed, reconnecting...');
             }
-            
-            return true;
         } else {
-            console.warn('⚠️ Relay connection exists but WebSocket is not open, reconnecting...');
-            // Connection exists but WebSocket is closed, need to reconnect
-            isNostrConnected = false;
-            if (typeof window !== 'undefined') {
-                window.isNostrConnected = false;
-                if (window.setIsNostrConnected) {
-                    window.setIsNostrConnected(false);
-                }
+            // No WebSocket found, connection might be stale
+            console.warn('⚠️ Relay connection exists but no WebSocket found, reconnecting...');
+        }
+        
+        // Connection exists but WebSocket is not functional, need to reconnect
+        isNostrConnected = false;
+        if (typeof window !== 'undefined') {
+            window.isNostrConnected = false;
+            if (window.setIsNostrConnected) {
+                window.setIsNostrConnected(false);
             }
         }
     }

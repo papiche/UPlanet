@@ -2533,15 +2533,17 @@ async function uploadPhotoToIPFS(file) {
                     
                     // Use description from metadata if not provided directly
                     if (!description && metadata.metadata && metadata.metadata.description) {
-                        return {
-                            success: true,
-                            url: imageUrl,
-                            cid: uploadResult.new_cid,
-                            fileName: fileName,
-                            description: metadata.metadata.description,
-                            info: infoCid,
-                            metadata: metadata // Full metadata object
-                        };
+                    return {
+                        success: true,
+                        url: imageUrl,
+                        cid: uploadResult.new_cid,
+                        fileName: fileName,
+                        description: metadata.metadata.description,
+                        info: infoCid,
+                        thumbnail_ipfs: uploadResult.thumbnail_ipfs || null, // CID of thumbnail (from upload2ipfs.sh)
+                        gifanim_ipfs: uploadResult.gifanim_ipfs || null, // CID of animated GIF (from upload2ipfs.sh)
+                        metadata: metadata // Full metadata object
+                    };
                     }
                 } else {
                     console.warn('⚠️ Could not load info.json:', metadataResponse.status);
@@ -2558,6 +2560,8 @@ async function uploadPhotoToIPFS(file) {
             fileName: fileName, // Original or generated filename from API
             description: description, // Description for images (AI-generated) or other files
             info: infoCid, // CID of info.json
+            thumbnail_ipfs: uploadResult.thumbnail_ipfs || null, // CID of thumbnail (from upload2ipfs.sh, for videos)
+            gifanim_ipfs: uploadResult.gifanim_ipfs || null, // CID of animated GIF (from upload2ipfs.sh, for videos)
             metadata: metadata // Full metadata object if loaded
         };
         

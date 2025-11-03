@@ -40,10 +40,11 @@
                 attempt++;
                 try {
                     // Add timeout wrapper for Chrome compatibility
+                    // Reduced from 30s to 15s for better UX, Chrome usually responds in 2-5s
                     const timeoutPromise = new Promise((_, timeoutReject) => {
                         setTimeout(() => {
-                            timeoutReject(new Error(`NOSTR ${method} timeout after 30 seconds`));
-                        }, 30000);
+                            timeoutReject(new Error(`NOSTR ${method} timeout after 15 seconds`));
+                        }, 15000);
                     });
                     
                     // Call the method with race condition handling
@@ -341,6 +342,13 @@ let isNostrConnected = false;
 let userPubkey = null;
 let userPrivateKey = null;
 let authSent = false; // Track if AUTH has been sent to avoid duplicates
+// Connection state management to prevent multiple simultaneous connections
+let connectingNostr = false;
+let connectingRelay = false;
+let lastNIP42AuthTime = 0;
+let pendingNIP42Auth = false;
+const NIP42_AUTH_COOLDOWN = 60000; // 1 minute cooldown between NIP-42 auth events
+const CONNECTION_DEBOUNCE = 1000; // 1 second debounce for connection attempts
 
 // Expose variables on window for global access (used by youtube.html, plantnet.html, etc.)
 if (typeof window !== 'undefined') {
@@ -574,6 +582,37 @@ async function connectNostr(forceAuth = false) {
         return null;
     }
     
+    // Debounce: if already connecting, wait for it to finish (max 30 seconds)
+    if (connectingNostr) {
+        console.log('⏳ Connection already in progress, waiting...');
+        let waitCount = 0;
+        while (connectingNostr && waitCount < 30) {
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            waitCount++;
+        }
+        if (connectingNostr) {
+            console.warn('⚠️ Connection timeout, proceeding anyway...');
+            connectingNostr = false;
+        }
+        // Check if connection succeeded while we were waiting
+        if (userPubkey && isNostrConnected) {
+            console.log('✅ Connection completed while waiting');
+            if (forceAuth && !pendingNIP42Auth) {
+                const now = Date.now();
+                const timeSinceLastAuth = now - lastNIP42AuthTime;
+                if (timeSinceLastAuth > NIP42_AUTH_COOLDOWN) {
+                    const relayUrl = DEFAULT_RELAYS[0] || getNostrRelay();
+                    await sendNIP42Auth(relayUrl, true);
+                } else {
+                    console.log(`⏳ NIP-42 auth sent recently (${Math.floor(timeSinceLastAuth/1000)}s ago), skipping`);
+                }
+            }
+            return userPubkey;
+        }
+    }
+    
+    connectingNostr = true;
+    
     try {
         console.log("🔑 Tentative de connexion à l'extension Nostr...");
         
@@ -601,24 +640,35 @@ async function connectNostr(forceAuth = false) {
             
             if (!connected) {
                 console.error("❌ Échec de la connexion au relay");
+                connectingNostr = false;
                 return null;
             }
             
-            // If forceAuth is true, explicitly send NIP42 auth event
-            if (forceAuth && nostrRelay && isNostrConnected) {
-                const relayUrl = DEFAULT_RELAYS[0] || getNostrRelay();
-                console.log('🔐 Force sending NIP42 authentication event...');
-                await sendNIP42Auth(relayUrl, true);
+            // If forceAuth is true and we haven't sent NIP42 auth recently, send it
+            // But only if not already pending and not in cooldown
+            if (forceAuth && nostrRelay && isNostrConnected && !pendingNIP42Auth) {
+                const now = Date.now();
+                const timeSinceLastAuth = now - lastNIP42AuthTime;
+                if (timeSinceLastAuth > NIP42_AUTH_COOLDOWN) {
+                    const relayUrl = DEFAULT_RELAYS[0] || getNostrRelay();
+                    console.log('🔐 Force sending NIP42 authentication event...');
+                    await sendNIP42Auth(relayUrl, true);
+                } else {
+                    console.log(`⏳ NIP-42 auth sent recently (${Math.floor(timeSinceLastAuth/1000)}s ago), skipping to avoid spam`);
+                }
             }
             
+            connectingNostr = false;
             return pubkey;
         } else {
             showAlert("Impossible de récupérer la clé publique. Veuillez autoriser l'accès à votre extension Nostr.", 'error');
+            connectingNostr = false;
             return null;
         }
     } catch (error) {
         showAlert("La connexion a échoué. Veuillez vérifier que votre extension Nostr est installée et active, puis autorisez l'accès.", 'error');
         console.error("❌ Erreur de connexion Nostr:", error);
+        connectingNostr = false;
         return null;
     }
 }
@@ -701,7 +751,23 @@ async function sendNIP42Auth(relayUrl, forceSend = false) {
         return;
     }
     
+    // Check if we're already sending an auth event (prevent duplicates)
+    if (pendingNIP42Auth) {
+        console.log('⏳ NIP-42 auth event already pending, skipping duplicate');
+        return;
+    }
+    
+    // Check cooldown period (even if forceSend, respect cooldown to avoid spam)
+    const now = Date.now();
+    const timeSinceLastAuth = now - lastNIP42AuthTime;
+    if (!forceSend && timeSinceLastAuth < NIP42_AUTH_COOLDOWN) {
+        console.log(`⏳ NIP-42 auth sent recently (${Math.floor(timeSinceLastAuth/1000)}s ago), skipping to avoid spam`);
+        return;
+    }
+    
     try {
+        pendingNIP42Auth = true;
+        
         // If forceSend is true, skip the check and always send a new auth event
         if (!forceSend) {
             // Check if a recent auth event already exists (within last 24 hours)
@@ -710,6 +776,7 @@ async function sendNIP42Auth(relayUrl, forceSend = false) {
             
             if (hasRecentAuth) {
                 console.log('✅ Recent NIP-42 authentication found on relay, skipping new auth event');
+                pendingNIP42Auth = false;
                 // Still send AUTH message for immediate authentication without publishing event
                 try {
                     // Try to reuse existing signed event from relay if possible
@@ -765,6 +832,9 @@ async function sendNIP42Auth(relayUrl, forceSend = false) {
         await Promise.race([publishPromise, timeoutPromise]);
         console.log('✅ NIP-42 event published to relay:', signedEvent.id);
         
+        // Update last auth time
+        lastNIP42AuthTime = Date.now();
+        
         // Also send AUTH message for immediate authentication
         try {
             let ws = null;
@@ -787,6 +857,8 @@ async function sendNIP42Auth(relayUrl, forceSend = false) {
         
     } catch (error) {
         console.error('❌ Failed to send NIP-42 auth:', error);
+    } finally {
+        pendingNIP42Auth = false;
     }
 }
 
@@ -812,6 +884,34 @@ async function connectToRelay(forceAuth = false) {
         return false;
     }
 
+    // Debounce: if already connecting, wait for it to finish (max 30 seconds)
+    if (connectingRelay) {
+        console.log('⏳ Relay connection already in progress, waiting...');
+        let waitCount = 0;
+        while (connectingRelay && waitCount < 30) {
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            waitCount++;
+        }
+        if (connectingRelay) {
+            console.warn('⚠️ Relay connection timeout, proceeding anyway...');
+            connectingRelay = false;
+        }
+        // Check if connection succeeded while we were waiting
+        if (isNostrConnected && nostrRelay) {
+            console.log('✅ Relay connection completed while waiting');
+            if (forceAuth && !pendingNIP42Auth && userPubkey) {
+                const now = Date.now();
+                const timeSinceLastAuth = now - lastNIP42AuthTime;
+                if (timeSinceLastAuth > NIP42_AUTH_COOLDOWN) {
+                    setTimeout(() => sendNIP42Auth(NOSTRws, true), 100);
+                } else {
+                    console.log(`⏳ NIP-42 auth sent recently (${Math.floor(timeSinceLastAuth/1000)}s ago), skipping`);
+                }
+            }
+            return true;
+        }
+    }
+
     // Check if we already have a connected relay with valid WebSocket
     if (nostrRelay && isNostrConnected) {
         // Verify the WebSocket is still open and functional
@@ -828,9 +928,16 @@ async function connectToRelay(forceAuth = false) {
             console.log('✅ Reusing existing relay connection (WebSocket is open)');
             
             // If forceAuth is true, send NIP-42 auth event even if connection is reused
-            if (forceAuth && userPubkey) {
-                console.log('📤 Force sending NIP-42 auth event on reused connection...');
-                setTimeout(() => sendNIP42Auth(NOSTRws, true), 100);
+            // But only if not already pending and not in cooldown
+            if (forceAuth && userPubkey && !pendingNIP42Auth) {
+                const now = Date.now();
+                const timeSinceLastAuth = now - lastNIP42AuthTime;
+                if (timeSinceLastAuth > NIP42_AUTH_COOLDOWN) {
+                    console.log('📤 Force sending NIP-42 auth event on reused connection...');
+                    setTimeout(() => sendNIP42Auth(NOSTRws, true), 100);
+                } else {
+                    console.log(`⏳ NIP-42 auth sent recently (${Math.floor(timeSinceLastAuth/1000)}s ago), skipping`);
+                }
             }
             
             return true;
@@ -846,6 +953,8 @@ async function connectToRelay(forceAuth = false) {
             }
         }
     }
+    
+    connectingRelay = true;
 
     console.log(`🔌 Connexion au relay: ${NOSTRws}`);
     authSent = false; // Reset on new connection
@@ -881,15 +990,30 @@ async function connectToRelay(forceAuth = false) {
             }
             
             // Send NIP-42 authentication event once
-            if (userPubkey && !authSent) {
-                authSent = true;
-                // Send NIP42 auth immediately if forceAuth is true, otherwise wait a bit
-                if (forceAuth) {
-                    sendNIP42Auth(NOSTRws, true).catch(err => {
-                        console.warn('⚠️ Failed to send NIP42 auth:', err);
-                    });
+            // Only send if not already pending and not in cooldown
+            if (userPubkey && !authSent && !pendingNIP42Auth) {
+                const now = Date.now();
+                const timeSinceLastAuth = now - lastNIP42AuthTime;
+                const shouldSendAuth = forceAuth || timeSinceLastAuth > NIP42_AUTH_COOLDOWN;
+                
+                if (shouldSendAuth) {
+                    authSent = true;
+                    // Send NIP42 auth immediately if forceAuth is true, otherwise wait a bit
+                    if (forceAuth) {
+                        sendNIP42Auth(NOSTRws, true).catch(err => {
+                            console.warn('⚠️ Failed to send NIP42 auth:', err);
+                            authSent = false;
+                        });
+                    } else {
+                        setTimeout(() => {
+                            sendNIP42Auth(NOSTRws, false).catch(err => {
+                                console.warn('⚠️ Failed to send NIP42 auth:', err);
+                                authSent = false;
+                            });
+                        }, 500);
+                    }
                 } else {
-                    setTimeout(() => sendNIP42Auth(NOSTRws, false), 500);
+                    console.log(`⏳ Skipping NIP-42 auth (sent ${Math.floor(timeSinceLastAuth/1000)}s ago, cooldown active)`);
                 }
                 
                 // Check if user should be redirected to their preferred relay domain
@@ -937,8 +1061,24 @@ async function connectToRelay(forceAuth = false) {
         });
 
         nostrRelay.on('auth', async (challenge) => {
-            console.log('🔐 Authentification NIP-42 requise');
+            console.log('🔐 Authentification NIP-42 requise par le relay');
+            
+            // Prevent duplicate auth events
+            if (pendingNIP42Auth) {
+                console.log('⏳ NIP-42 auth already pending, ignoring relay auth request');
+                return;
+            }
+            
+            // Check cooldown
+            const now = Date.now();
+            const timeSinceLastAuth = now - lastNIP42AuthTime;
+            if (timeSinceLastAuth < NIP42_AUTH_COOLDOWN) {
+                console.log(`⏳ NIP-42 auth sent recently (${Math.floor(timeSinceLastAuth/1000)}s ago), ignoring relay auth request to avoid spam`);
+                return;
+            }
+            
             try {
+                pendingNIP42Auth = true;
                 const authEvent = {
                     kind: 22242,
                     created_at: Math.floor(Date.now() / 1000),
@@ -960,19 +1100,24 @@ async function connectToRelay(forceAuth = false) {
                     }
                     console.log('✍️ Événement d\'authentification signé');
                     await nostrRelay.publish(signedAuthEvent);
+                    lastNIP42AuthTime = Date.now();
                 } else {
                     console.error('❌ Impossible de signer l\'événement d\'authentification');
                 }
             } catch (authError) {
                 console.error('❌ Erreur d\'authentification NIP-42:', authError);
+            } finally {
+                pendingNIP42Auth = false;
             }
         });
 
         await nostrRelay.connect();
+        connectingRelay = false;
         return true;
     } catch (error) {
         console.error('❌ Échec de connexion au relay:', error);
         isNostrConnected = false;
+        connectingRelay = false;
         // Update window for iframe access
         if (typeof window !== 'undefined') {
             window.isNostrConnected = false;

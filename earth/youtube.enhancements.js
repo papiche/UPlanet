@@ -300,6 +300,11 @@ async function theaterBookmarkVideo() {
     }
 }
 
+// Global flag to prevent multiple theater modals
+let isTheaterModeOpen = false;
+let currentTheaterModal = null;
+let theaterEventListeners = [];
+
 /**
  * Open theater mode for immersive video viewing
  * Uses theater-modal.html template for better maintainability
@@ -317,6 +322,14 @@ async function openTheaterMode(videoData) {
         description,
         content  // Comment/description from NOSTR event (NIP-71)
     } = videoData;
+
+    // Prevent multiple theater modals
+    if (isTheaterModeOpen) {
+        console.warn('⚠️ Theater mode already open, closing previous one...');
+        closeTheaterMode();
+        // Wait for cleanup
+        await new Promise(resolve => setTimeout(resolve, 200));
+    }
 
     // Stop all playing videos on the parent page
     try {
@@ -421,6 +434,10 @@ async function openTheaterMode(videoData) {
     }
 
     document.body.appendChild(modal);
+    
+    // Mark as open and store reference
+    isTheaterModeOpen = true;
+    currentTheaterModal = modal;
 
     // Attach event listeners to buttons (replace onclick attributes)
     // This ensures functions are available in the parent context (youtube.html)
@@ -448,8 +465,10 @@ async function openTheaterMode(videoData) {
         videoPlayer.appendChild(source);
         videoPlayer.load();
         
-        // Update timestamp button when video time updates
-        videoPlayer.addEventListener('timeupdate', updateTimestampButton);
+        // Update timestamp button when video time updates - store listener for cleanup
+        const timeupdateHandler = updateTimestampButton;
+        videoPlayer.addEventListener('timeupdate', timeupdateHandler);
+        theaterEventListeners.push({ type: 'timeupdate', listener: timeupdateHandler, target: videoPlayer });
 
         // Setup comment timeline
         setupCommentTimeline(videoPlayer);
@@ -493,14 +512,16 @@ async function openTheaterMode(videoData) {
     // Add class to body to allow CSS to handle it
     document.body.classList.add('theater-modal-open');
     
-    // Add ESC key listener
+    // Add ESC key listener and store it for cleanup
     const escListener = (e) => {
         if (e.key === 'Escape') {
             closeTheaterMode();
-            document.removeEventListener('keydown', escListener);
         }
     };
     document.addEventListener('keydown', escListener);
+    
+    // Store listener for cleanup
+    theaterEventListeners.push({ type: 'keydown', listener: escListener, target: document });
 }
 
 /**
@@ -511,20 +532,12 @@ function attachTheaterEventListeners(modal) {
     // Close button - handle both handleCloseTheater and direct closeTheaterMode calls
     const closeBtn = modal.querySelector('.theater-close-btn');
     if (closeBtn) {
-        const existingOnclick = closeBtn.getAttribute('onclick');
         closeBtn.removeAttribute('onclick');
-        closeBtn.addEventListener('click', () => {
-            if (typeof closeTheaterMode === 'function') {
-                closeTheaterMode();
-            } else if (typeof window.closeTheaterMode === 'function') {
-                window.closeTheaterMode();
-            } else {
-                console.error('closeTheaterMode not available');
-                // Fallback: remove modal directly
-                modal.remove();
-                document.body.style.overflow = '';
-            }
-        });
+        const closeHandler = () => {
+            closeTheaterMode();
+        };
+        closeBtn.addEventListener('click', closeHandler);
+        theaterEventListeners.push({ type: 'click', listener: closeHandler, target: closeBtn });
     }
 
     // Find all action buttons and attach listeners based on their text content or onclick attribute
@@ -537,7 +550,7 @@ function attachTheaterEventListeners(modal) {
 
         // Share button
         if (btnText.includes('Partager') || (existingOnclick && existingOnclick.includes('Share'))) {
-            btn.addEventListener('click', async () => {
+            const shareHandler = async () => {
                 if (typeof theaterShareVideoWithPreview === 'function') {
                     await theaterShareVideoWithPreview();
                 } else if (typeof window.theaterShareVideoWithPreview === 'function') {
@@ -546,11 +559,13 @@ function attachTheaterEventListeners(modal) {
                     console.error('theaterShareVideoWithPreview not available');
                     alert('Fonction de partage non disponible. Assurez-vous que youtube.enhancements.js est chargé.');
                 }
-            });
+            };
+            btn.addEventListener('click', shareHandler);
+            theaterEventListeners.push({ type: 'click', listener: shareHandler, target: btn });
         }
         // Bookmark button
         else if (btnText.includes('Bookmark') || (existingOnclick && existingOnclick.includes('Bookmark'))) {
-            btn.addEventListener('click', async () => {
+            const bookmarkHandler = async () => {
                 // Always use window.theaterBookmarkVideo to avoid recursion
                 // Don't check for local theaterBookmarkVideo to prevent circular calls
                 if (typeof window.theaterBookmarkVideo === 'function') {
@@ -559,11 +574,13 @@ function attachTheaterEventListeners(modal) {
                     console.error('theaterBookmarkVideo not available');
                     alert('Fonction de bookmark non disponible. Assurez-vous que youtube.enhancements.js est chargé.');
                 }
-            });
+            };
+            btn.addEventListener('click', bookmarkHandler);
+            theaterEventListeners.push({ type: 'click', listener: bookmarkHandler, target: btn });
         }
         // Playlist button
         else if (btnText.includes('Playlist') || (existingOnclick && existingOnclick.includes('Playlist'))) {
-            btn.addEventListener('click', async () => {
+            const playlistHandler = async () => {
                 try {
                     const videoPlayer = document.getElementById('theaterVideoPlayer');
                     if (!videoPlayer) {
@@ -588,11 +605,13 @@ function attachTheaterEventListeners(modal) {
                     console.error('Error adding to playlist:', error);
                     alert('Erreur lors de l\'ajout à la playlist: ' + error.message);
                 }
-            });
+            };
+            btn.addEventListener('click', playlistHandler);
+            theaterEventListeners.push({ type: 'click', listener: playlistHandler, target: btn });
         }
         // Picture in Picture button
         else if (btnText.includes('PiP') || (existingOnclick && existingOnclick.includes('Picture'))) {
-            btn.addEventListener('click', async () => {
+            const pipHandler = async () => {
                 try {
                     if (typeof enterPictureInPicture === 'function') {
                         await enterPictureInPicture();
@@ -611,7 +630,9 @@ function attachTheaterEventListeners(modal) {
                     console.error('Error entering picture in picture:', error);
                     alert('Erreur lors de l\'activation du mode PiP: ' + error.message);
                 }
-            });
+            };
+            btn.addEventListener('click', pipHandler);
+            theaterEventListeners.push({ type: 'click', listener: pipHandler, target: btn });
         }
     });
 
@@ -619,7 +640,7 @@ function attachTheaterEventListeners(modal) {
     const commentSubmitBtn = modal.querySelector('.theater-comment-submit-btn');
     if (commentSubmitBtn) {
         commentSubmitBtn.removeAttribute('onclick');
-        commentSubmitBtn.addEventListener('click', () => {
+        const commentHandler = () => {
             if (typeof submitTheaterComment === 'function') {
                 submitTheaterComment();
             } else if (typeof window.submitTheaterComment === 'function') {
@@ -627,14 +648,16 @@ function attachTheaterEventListeners(modal) {
             } else {
                 console.error('submitTheaterComment not available');
             }
-        });
+        };
+        commentSubmitBtn.addEventListener('click', commentHandler);
+        theaterEventListeners.push({ type: 'click', listener: commentHandler, target: commentSubmitBtn });
     }
 
     // Comment timestamp button
     const timestampBtn = modal.querySelector('.theater-comment-timestamp-btn');
     if (timestampBtn) {
         timestampBtn.removeAttribute('onclick');
-        timestampBtn.addEventListener('click', () => {
+        const timestampHandler = () => {
             if (typeof addTimestampToComment === 'function') {
                 addTimestampToComment();
             } else if (typeof window.addTimestampToComment === 'function') {
@@ -642,7 +665,9 @@ function attachTheaterEventListeners(modal) {
             } else {
                 console.error('addTimestampToComment not available');
             }
-        });
+        };
+        timestampBtn.addEventListener('click', timestampHandler);
+        theaterEventListeners.push({ type: 'click', listener: timestampHandler, target: timestampBtn });
     }
 }
 
@@ -718,12 +743,18 @@ function getTheaterModalHTML() {
  * Close theater mode
  */
 function closeTheaterMode() {
-    const modal = document.getElementById('theaterModal');
+    console.log('🚪 Closing theater mode...');
+    
+    const modal = document.getElementById('theaterModal') || currentTheaterModal;
+    
     if (modal) {
-        const videoPlayer = document.getElementById('theaterVideoPlayer');
+        // Stop video
+        const videoPlayer = document.getElementById('theaterVideoPlayer') || modal.querySelector('#theaterVideoPlayer');
         if (videoPlayer) {
             videoPlayer.pause();
+            videoPlayer.currentTime = 0;
             videoPlayer.src = '';
+            videoPlayer.load();
         }
         
         // Clean up live chat
@@ -732,6 +763,22 @@ function closeTheaterMode() {
             liveChatInstance = null;
         }
         
+        // Remove all stored event listeners
+        console.log(`🧹 Removing ${theaterEventListeners.length} event listeners`);
+        theaterEventListeners.forEach(({ type, listener, target }) => {
+            try {
+                if (target && listener) {
+                    target.removeEventListener(type, listener);
+                }
+            } catch (error) {
+                console.warn('Error removing event listener:', error);
+            }
+        });
+        
+        // Clear listeners array
+        theaterEventListeners = [];
+        
+        // Remove modal from DOM
         modal.remove();
         
         // Restore body scroll - restore both body and html
@@ -741,6 +788,12 @@ function closeTheaterMode() {
         // Remove class from body
         document.body.classList.remove('theater-modal-open');
     }
+    
+    // Reset flags
+    isTheaterModeOpen = false;
+    currentTheaterModal = null;
+    
+    console.log('✅ Theater mode closed');
 }
 
 /**

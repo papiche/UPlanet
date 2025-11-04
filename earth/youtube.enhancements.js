@@ -300,14 +300,15 @@ async function theaterBookmarkVideo() {
     }
 }
 
-// Global flag to prevent multiple theater modals
+/**
+ * Flag to track if theater mode is currently open
+ */
 let isTheaterModeOpen = false;
 let currentTheaterModal = null;
-let theaterEventListeners = [];
 
 /**
  * Open theater mode for immersive video viewing
- * Uses theater-modal.html template for better maintainability
+ * Uses Bootstrap Modal instead of custom modal system
  */
 async function openTheaterMode(videoData) {
     const {
@@ -323,12 +324,12 @@ async function openTheaterMode(videoData) {
         content  // Comment/description from NOSTR event (NIP-71)
     } = videoData;
 
-    // Prevent multiple theater modals
+    // Prevent multiple instances
     if (isTheaterModeOpen) {
-        console.warn('⚠️ Theater mode already open, closing previous one...');
+        console.warn('⚠️ Theater mode already open, closing previous instance...');
         closeTheaterMode();
-        // Wait for cleanup
-        await new Promise(resolve => setTimeout(resolve, 200));
+        // Wait for modal to close properly
+        await new Promise(resolve => setTimeout(resolve, 400));
     }
 
     // Stop all playing videos on the parent page
@@ -351,20 +352,34 @@ async function openTheaterMode(videoData) {
         console.warn('Could not stop playing videos:', error);
     }
 
+    // Get the persistent Bootstrap modal element
+    const modalElement = document.getElementById('theaterModal');
+    if (!modalElement) {
+        console.error('❌ Theater modal element not found in DOM. Make sure youtube.html includes the #theaterModal element.');
+        return;
+    }
+
+    // Get modal content container
+    const modalContent = modalElement.querySelector('.modal-content');
+    if (!modalContent) {
+        console.error('❌ Theater modal content container not found');
+        return;
+    }
+
     // Check if template is already loaded or fetch it
-    let modalHTML = null;
+    let templateHTML = null;
     
     try {
         // Try to fetch the template
         const response = await fetch('/theater');
         if (response.ok) {
-            const templateHTML = await response.text();
+            const html = await response.text();
             // Extract just the modal content (between <div class="theater-modal"> tags)
             const parser = new DOMParser();
-            const doc = parser.parseFromString(templateHTML, 'text/html');
+            const doc = parser.parseFromString(html, 'text/html');
             const modalElement = doc.querySelector('.theater-modal');
             if (modalElement) {
-                modalHTML = modalElement.innerHTML;
+                templateHTML = modalElement.innerHTML;
             }
         }
     } catch (error) {
@@ -372,38 +387,36 @@ async function openTheaterMode(videoData) {
     }
 
     // If template fetch failed, use inline HTML as fallback
-    if (!modalHTML) {
-        modalHTML = getTheaterModalHTML();
+    if (!templateHTML) {
+        templateHTML = getTheaterModalHTML();
+        // Extract content from template (it's already the HTML, just need to wrap it)
     }
 
-    // Create theater modal
-    const modal = document.createElement('div');
-    modal.className = 'theater-modal';
-    modal.id = 'theaterModal';
+    // Create a temporary container to parse the template
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = templateHTML;
     
-    // Inject template HTML (should be the content of .theater-modal-content)
-    // If modalHTML includes .theater-modal-content, extract it
-    if (modalHTML.includes('theater-modal-content')) {
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(modalHTML, 'text/html');
-        const content = doc.querySelector('.theater-modal-content');
-        if (content) {
-            modal.innerHTML = content.outerHTML;
-        } else {
-            modal.innerHTML = modalHTML;
-        }
-    } else {
-        // Wrap in theater-modal-content if not present
-        modal.innerHTML = `<div class="theater-modal-content">${modalHTML}</div>`;
+    // Get the content (should have theater-modal-content class)
+    let contentToInject = tempDiv.querySelector('.theater-modal-content');
+    if (!contentToInject) {
+        // If no theater-modal-content found, wrap everything
+        const wrapper = document.createElement('div');
+        wrapper.className = 'theater-modal-content';
+        wrapper.innerHTML = templateHTML;
+        contentToInject = wrapper;
     }
+
+    // Clear and inject new content into modal
+    modalContent.innerHTML = '';
+    modalContent.appendChild(contentToInject.cloneNode(true));
 
     // Update template with video data
-    const titleEl = modal.querySelector('#theaterTitle');
+    const titleEl = modalContent.querySelector('#theaterTitle');
     if (titleEl) titleEl.textContent = escapeHtml(title);
     
     // Set uploader name immediately in both locations
-    const uploaderEl = modal.querySelector('#theaterUploader');
-    const uploaderContainer = modal.querySelector('#theaterUploaderContainer');
+    const uploaderEl = modalContent.querySelector('#theaterUploader');
+    const uploaderContainer = modalContent.querySelector('#theaterUploaderContainer');
     
     // Determine display name - prioritize uploader, then channel, then fallback
     const displayName = uploader || channel || 'Auteur inconnu';
@@ -413,7 +426,6 @@ async function openTheaterMode(videoData) {
     }
     
     // Set up uploader container with link if authorId is available
-    // This will be enhanced by loadVideoAuthor later, but set initial value
     if (uploaderContainer) {
         if (videoData.authorId) {
             // Will be replaced by loadVideoAuthor, but set initial text
@@ -423,34 +435,27 @@ async function openTheaterMode(videoData) {
         }
     }
     
-    const durationEl = modal.querySelector('#theaterDuration');
+    const durationEl = modalContent.querySelector('#theaterDuration');
     if (durationEl && duration) {
         durationEl.textContent = ` • ${formatDuration(duration)}`;
     }
     
-    const descriptionEl = modal.querySelector('#theaterDescription');
+    const descriptionEl = modalContent.querySelector('#theaterDescription');
     if (descriptionEl && description) {
         descriptionEl.textContent = escapeHtml(description);
     }
 
-    document.body.appendChild(modal);
-    
-    // Mark as open and store reference
-    isTheaterModeOpen = true;
-    currentTheaterModal = modal;
+    // Attach event listeners to buttons
+    attachTheaterEventListeners(modalContent);
 
-    // Attach event listeners to buttons (replace onclick attributes)
-    // This ensures functions are available in the parent context (youtube.html)
-    attachTheaterEventListeners(modal);
-
-    // Load video - IMPORTANT: Get video player AFTER modal is added to DOM
-    const videoPlayer = modal.querySelector('#theaterVideoPlayer');
+    // Load video
+    const videoPlayer = modalContent.querySelector('#theaterVideoPlayer');
     if (videoPlayer) {
         videoPlayer.setAttribute('data-event-id', eventId || '');
         videoPlayer.setAttribute('data-ipfs-url', ipfsUrl || '');
         videoPlayer.setAttribute('data-author-id', authorId || '');
         
-        // Use convertIPFSUrl (from youtube.html or from this file's global functions)
+        // Use convertIPFSUrl
         const fullUrl = (typeof convertIPFSUrl === 'function' ? convertIPFSUrl(ipfsUrl) : convertIPFSUrlGlobal(ipfsUrl));
         
         console.log(`🎬 Loading theater video: ${fullUrl}`);
@@ -465,10 +470,8 @@ async function openTheaterMode(videoData) {
         videoPlayer.appendChild(source);
         videoPlayer.load();
         
-        // Update timestamp button when video time updates - store listener for cleanup
-        const timeupdateHandler = updateTimestampButton;
-        videoPlayer.addEventListener('timeupdate', timeupdateHandler);
-        theaterEventListeners.push({ type: 'timeupdate', listener: timeupdateHandler, target: videoPlayer });
+        // Update timestamp button when video time updates
+        videoPlayer.addEventListener('timeupdate', updateTimestampButton);
 
         // Setup comment timeline
         setupCommentTimeline(videoPlayer);
@@ -476,52 +479,91 @@ async function openTheaterMode(videoData) {
         console.error('❌ theaterVideoPlayer not found in modal!');
     }
 
-    // Load engagement stats
-    if (eventId) {
-        await loadTheaterStats(eventId, ipfsUrl);
-    }
+    // Mark as open
+    isTheaterModeOpen = true;
 
-    // Load provenance information (file hash, info.json, upload chain)
-    await loadTheaterProvenance(modal, videoData);
+    // Initialize and show Bootstrap Modal
+    currentTheaterModal = new bootstrap.Modal(modalElement, {
+        backdrop: 'static',
+        keyboard: true
+    });
+    
+    currentTheaterModal.show();
 
-    // Load author info (this will fetch profile and update display name if available)
-    if (authorId || uploader) {
-        await loadTheaterVideoAuthor(modal, authorId, uploader || channel || 'Auteur inconnu');
-    }
+    // Load data after modal is shown
+    modalElement.addEventListener('shown.bs.modal', async function onShown() {
+        // Remove listener after first trigger
+        modalElement.removeEventListener('shown.bs.modal', onShown);
+        
+        console.log('✅ Theater modal shown, loading data...');
+        
+        // Load engagement stats
+        if (eventId) {
+            await loadTheaterStats(eventId, ipfsUrl);
+        }
 
-    // Load comments (pass content as original comment)
-    await loadTheaterComments(eventId, ipfsUrl, content || description);
+        // Load provenance information
+        await loadTheaterProvenance(modalContent, videoData);
 
-    // Start live chat if relay is available
-    if (nostrRelay && isNostrConnected && eventId) {
+        // Load author info
+        if (authorId || uploader) {
+            await loadTheaterVideoAuthor(modalContent, authorId, uploader || channel || 'Auteur inconnu');
+        }
+
+        // Load comments
+        await loadTheaterComments(eventId, ipfsUrl, content || description);
+
+        // Start live chat if relay is available
+        if (nostrRelay && isNostrConnected && eventId) {
+            if (liveChatInstance) {
+                liveChatInstance.destroy();
+            }
+            liveChatInstance = new LiveVideoChat(eventId, nostrRelay);
+            liveChatInstance.commentsContainer = modalContent.querySelector('#theaterCommentsList');
+        }
+
+        // Load related videos
+        await loadRelatedVideosInTheater(videoData);
+        
+        // Auto-play when ready
+        if (videoPlayer) {
+            videoPlayer.addEventListener('loadeddata', function() {
+                videoPlayer.play().catch(err => {
+                    console.log('Auto-play prevented:', err);
+                });
+            }, { once: true });
+        }
+    }, { once: true });
+
+    // Handle modal close
+    modalElement.addEventListener('hidden.bs.modal', function onHidden() {
+        // Remove listener after first trigger
+        modalElement.removeEventListener('hidden.bs.modal', onHidden);
+        
+        console.log('🧹 Cleaning up theater mode...');
+        
+        // Stop video playback
+        if (videoPlayer) {
+            videoPlayer.pause();
+            videoPlayer.currentTime = 0;
+            videoPlayer.innerHTML = ''; // Clear sources to free memory
+        }
+        
+        // Destroy live chat if active
         if (liveChatInstance) {
             liveChatInstance.destroy();
+            liveChatInstance = null;
         }
-        liveChatInstance = new LiveVideoChat(eventId, nostrRelay);
-        liveChatInstance.commentsContainer = document.getElementById('theaterCommentsList');
-    }
-
-    // Load related videos
-    await loadRelatedVideosInTheater(videoData);
-
-    // Prevent body scroll on parent page when modal is open
-    // Use both body and html to ensure it works across browsers
-    document.body.style.overflow = 'hidden';
-    document.documentElement.style.overflow = 'hidden';
-    
-    // Add class to body to allow CSS to handle it
-    document.body.classList.add('theater-modal-open');
-    
-    // Add ESC key listener and store it for cleanup
-    const escListener = (e) => {
-        if (e.key === 'Escape') {
-            closeTheaterMode();
-        }
-    };
-    document.addEventListener('keydown', escListener);
-    
-    // Store listener for cleanup
-    theaterEventListeners.push({ type: 'keydown', listener: escListener, target: document });
+        
+        // Clear content
+        modalContent.innerHTML = '';
+        
+        // Reset state
+        isTheaterModeOpen = false;
+        currentTheaterModal = null;
+        
+        console.log('✅ Theater mode closed and cleaned up');
+    }, { once: true });
 }
 
 /**
@@ -532,12 +574,20 @@ function attachTheaterEventListeners(modal) {
     // Close button - handle both handleCloseTheater and direct closeTheaterMode calls
     const closeBtn = modal.querySelector('.theater-close-btn');
     if (closeBtn) {
+        const existingOnclick = closeBtn.getAttribute('onclick');
         closeBtn.removeAttribute('onclick');
-        const closeHandler = () => {
-            closeTheaterMode();
-        };
-        closeBtn.addEventListener('click', closeHandler);
-        theaterEventListeners.push({ type: 'click', listener: closeHandler, target: closeBtn });
+        closeBtn.addEventListener('click', () => {
+            if (typeof closeTheaterMode === 'function') {
+                closeTheaterMode();
+            } else if (typeof window.closeTheaterMode === 'function') {
+                window.closeTheaterMode();
+            } else {
+                console.error('closeTheaterMode not available');
+                // Fallback: remove modal directly
+                modal.remove();
+                document.body.style.overflow = '';
+            }
+        });
     }
 
     // Find all action buttons and attach listeners based on their text content or onclick attribute
@@ -550,7 +600,7 @@ function attachTheaterEventListeners(modal) {
 
         // Share button
         if (btnText.includes('Partager') || (existingOnclick && existingOnclick.includes('Share'))) {
-            const shareHandler = async () => {
+            btn.addEventListener('click', async () => {
                 if (typeof theaterShareVideoWithPreview === 'function') {
                     await theaterShareVideoWithPreview();
                 } else if (typeof window.theaterShareVideoWithPreview === 'function') {
@@ -559,13 +609,11 @@ function attachTheaterEventListeners(modal) {
                     console.error('theaterShareVideoWithPreview not available');
                     alert('Fonction de partage non disponible. Assurez-vous que youtube.enhancements.js est chargé.');
                 }
-            };
-            btn.addEventListener('click', shareHandler);
-            theaterEventListeners.push({ type: 'click', listener: shareHandler, target: btn });
+            });
         }
         // Bookmark button
         else if (btnText.includes('Bookmark') || (existingOnclick && existingOnclick.includes('Bookmark'))) {
-            const bookmarkHandler = async () => {
+            btn.addEventListener('click', async () => {
                 // Always use window.theaterBookmarkVideo to avoid recursion
                 // Don't check for local theaterBookmarkVideo to prevent circular calls
                 if (typeof window.theaterBookmarkVideo === 'function') {
@@ -574,13 +622,11 @@ function attachTheaterEventListeners(modal) {
                     console.error('theaterBookmarkVideo not available');
                     alert('Fonction de bookmark non disponible. Assurez-vous que youtube.enhancements.js est chargé.');
                 }
-            };
-            btn.addEventListener('click', bookmarkHandler);
-            theaterEventListeners.push({ type: 'click', listener: bookmarkHandler, target: btn });
+            });
         }
         // Playlist button
         else if (btnText.includes('Playlist') || (existingOnclick && existingOnclick.includes('Playlist'))) {
-            const playlistHandler = async () => {
+            btn.addEventListener('click', async () => {
                 try {
                     const videoPlayer = document.getElementById('theaterVideoPlayer');
                     if (!videoPlayer) {
@@ -605,13 +651,11 @@ function attachTheaterEventListeners(modal) {
                     console.error('Error adding to playlist:', error);
                     alert('Erreur lors de l\'ajout à la playlist: ' + error.message);
                 }
-            };
-            btn.addEventListener('click', playlistHandler);
-            theaterEventListeners.push({ type: 'click', listener: playlistHandler, target: btn });
+            });
         }
         // Picture in Picture button
         else if (btnText.includes('PiP') || (existingOnclick && existingOnclick.includes('Picture'))) {
-            const pipHandler = async () => {
+            btn.addEventListener('click', async () => {
                 try {
                     if (typeof enterPictureInPicture === 'function') {
                         await enterPictureInPicture();
@@ -630,9 +674,7 @@ function attachTheaterEventListeners(modal) {
                     console.error('Error entering picture in picture:', error);
                     alert('Erreur lors de l\'activation du mode PiP: ' + error.message);
                 }
-            };
-            btn.addEventListener('click', pipHandler);
-            theaterEventListeners.push({ type: 'click', listener: pipHandler, target: btn });
+            });
         }
     });
 
@@ -640,7 +682,7 @@ function attachTheaterEventListeners(modal) {
     const commentSubmitBtn = modal.querySelector('.theater-comment-submit-btn');
     if (commentSubmitBtn) {
         commentSubmitBtn.removeAttribute('onclick');
-        const commentHandler = () => {
+        commentSubmitBtn.addEventListener('click', () => {
             if (typeof submitTheaterComment === 'function') {
                 submitTheaterComment();
             } else if (typeof window.submitTheaterComment === 'function') {
@@ -648,16 +690,14 @@ function attachTheaterEventListeners(modal) {
             } else {
                 console.error('submitTheaterComment not available');
             }
-        };
-        commentSubmitBtn.addEventListener('click', commentHandler);
-        theaterEventListeners.push({ type: 'click', listener: commentHandler, target: commentSubmitBtn });
+        });
     }
 
     // Comment timestamp button
     const timestampBtn = modal.querySelector('.theater-comment-timestamp-btn');
     if (timestampBtn) {
         timestampBtn.removeAttribute('onclick');
-        const timestampHandler = () => {
+        timestampBtn.addEventListener('click', () => {
             if (typeof addTimestampToComment === 'function') {
                 addTimestampToComment();
             } else if (typeof window.addTimestampToComment === 'function') {
@@ -665,9 +705,7 @@ function attachTheaterEventListeners(modal) {
             } else {
                 console.error('addTimestampToComment not available');
             }
-        };
-        timestampBtn.addEventListener('click', timestampHandler);
-        theaterEventListeners.push({ type: 'click', listener: timestampHandler, target: timestampBtn });
+        });
     }
 }
 
@@ -743,57 +781,56 @@ function getTheaterModalHTML() {
  * Close theater mode
  */
 function closeTheaterMode() {
-    console.log('🚪 Closing theater mode...');
+    console.log('🔴 closeTheaterMode() called');
     
-    const modal = document.getElementById('theaterModal') || currentTheaterModal;
-    
-    if (modal) {
-        // Stop video
-        const videoPlayer = document.getElementById('theaterVideoPlayer') || modal.querySelector('#theaterVideoPlayer');
-        if (videoPlayer) {
-            videoPlayer.pause();
-            videoPlayer.currentTime = 0;
-            videoPlayer.src = '';
-            videoPlayer.load();
-        }
-        
-        // Clean up live chat
-        if (liveChatInstance) {
-            liveChatInstance.destroy();
-            liveChatInstance = null;
-        }
-        
-        // Remove all stored event listeners
-        console.log(`🧹 Removing ${theaterEventListeners.length} event listeners`);
-        theaterEventListeners.forEach(({ type, listener, target }) => {
-            try {
-                if (target && listener) {
-                    target.removeEventListener(type, listener);
-                }
-            } catch (error) {
-                console.warn('Error removing event listener:', error);
-            }
-        });
-        
-        // Clear listeners array
-        theaterEventListeners = [];
-        
-        // Remove modal from DOM
-        modal.remove();
-        
-        // Restore body scroll - restore both body and html
-        document.body.style.overflow = '';
-        document.documentElement.style.overflow = '';
-        
-        // Remove class from body
-        document.body.classList.remove('theater-modal-open');
+    // Check if modal is actually open
+    if (!isTheaterModeOpen) {
+        console.log('⚠️ Theater mode not open, skipping close');
+        return;
     }
     
-    // Reset flags
-    isTheaterModeOpen = false;
-    currentTheaterModal = null;
+    // Get modal element
+    const modalElement = document.getElementById('theaterModal');
+    if (!modalElement) {
+        console.warn('⚠️ Theater modal element not found');
+        isTheaterModeOpen = false;
+        currentTheaterModal = null;
+        return;
+    }
     
-    console.log('✅ Theater mode closed');
+    // Use Bootstrap Modal API to close
+    if (currentTheaterModal) {
+        try {
+            currentTheaterModal.hide();
+            console.log('✅ Bootstrap Modal.hide() called');
+        } catch (error) {
+            console.error('❌ Error calling Bootstrap Modal.hide():', error);
+            // Fallback: try to get instance and hide
+            try {
+                const bsModal = bootstrap.Modal.getInstance(modalElement);
+                if (bsModal) {
+                    bsModal.hide();
+                }
+            } catch (e) {
+                console.error('❌ Fallback hide also failed:', e);
+            }
+        }
+    } else {
+        // Try to get Bootstrap Modal instance and hide
+        try {
+            const bsModal = bootstrap.Modal.getInstance(modalElement);
+            if (bsModal) {
+                bsModal.hide();
+                console.log('✅ Bootstrap Modal instance found and hidden');
+            } else {
+                console.warn('⚠️ No Bootstrap Modal instance found');
+            }
+        } catch (error) {
+            console.error('❌ Error getting Bootstrap Modal instance:', error);
+        }
+    }
+    
+    // Note: Cleanup is handled by the 'hidden.bs.modal' event listener in openTheaterMode()
 }
 
 /**

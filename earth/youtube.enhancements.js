@@ -150,11 +150,20 @@ async function theaterShareVideoWithPreview() {
     const title = titleEl ? titleEl.textContent : 'Unknown';
     const uploader = uploaderEl ? (uploaderEl.textContent || uploaderEl.innerText || 'Unknown') : 'Unknown';
 
-    // Try to get thumbnail from video or metadata
+    // Try to get thumbnail and gifanim from video or metadata
     let thumbnailUrl = '';
+    let gifanimUrl = '';
+    
     if (videoPlayer) {
         const poster = videoPlayer.getAttribute('poster');
         if (poster) thumbnailUrl = poster;
+        
+        // Get gifanim from data attribute if available
+        const gifanimCid = videoPlayer.getAttribute('data-gifanim-cid');
+        if (gifanimCid) {
+            const gateway = window.IPFS_GATEWAY || 'https://ipfs.copylaradio.com';
+            gifanimUrl = gifanimCid.startsWith('/ipfs/') ? `${gateway}${gifanimCid}` : `${gateway}/ipfs/${gifanimCid}`;
+        }
     }
 
     const videoData = {
@@ -163,6 +172,7 @@ async function theaterShareVideoWithPreview() {
         title,
         uploader,
         thumbnailUrl,
+        gifanimUrl,  // NEW: Include animated GIF
         channel: uploader
     };
 
@@ -2994,12 +3004,20 @@ async function executeShare() {
         } else if (typeof publishNote === 'function') {
             const eventTags = [
                 ['r', videoLink || videoData.ipfsUrl || '', 'web'],
-                ['title', videoData.title]
+                ['title', `🎬 ${videoData.title}`]
             ];
             
             // Add IPFS URL as separate tag if different from video link
             if (videoData.ipfsUrl && videoData.ipfsUrl !== videoLink) {
                 eventTags.push(['r', videoData.ipfsUrl]);
+            }
+            
+            // Add animated GIF for preview (if available)
+            if (videoData.gifanimUrl) {
+                eventTags.push(['image', videoData.gifanimUrl]);
+                console.log('✅ Including animated GIF in share:', videoData.gifanimUrl);
+            } else if (videoData.thumbnailUrl) {
+                eventTags.push(['image', videoData.thumbnailUrl]);
             }
             
             // Add video event reference if available
@@ -3394,4 +3412,9 @@ window.formatRelativeTime = formatRelativeTime;
 window.validateInput = validateInput;
 window.validateEventId = validateEventId;
 window.validatePubkey = validatePubkey;
+// Theater mode functions
+window.openTheaterMode = openTheaterMode;
+window.closeTheaterMode = closeTheaterMode;
+window.theaterShareVideoWithPreview = theaterShareVideoWithPreview;
+window.theaterBookmarkVideo = theaterBookmarkVideo;
 

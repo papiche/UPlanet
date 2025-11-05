@@ -764,7 +764,7 @@ function attachTheaterEventListeners(modal) {
     }
 
     // Comment timestamp button
-    const timestampBtn = modal.querySelector('.theater-comment-timestamp-btn');
+    let timestampBtn = modal.querySelector('.theater-comment-timestamp-btn');
     if (!timestampBtn) {
         timestampBtn = modal.querySelector('#theaterTimestampBtn');
     }

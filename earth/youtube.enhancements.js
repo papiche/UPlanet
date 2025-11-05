@@ -3288,12 +3288,15 @@ async function loadRelatedVideosInTheater(videoData) {
         console.log(`✅ Found ${relatedVideos.length} related videos`);
 
         if (relatedVideos.length === 0) {
-            relatedVideosContainer.innerHTML = '<div class="empty">Aucune vidéo similaire trouvée</div>';
+            relatedVideosContainer.innerHTML = '<div class="empty text-center text-secondary py-3">Aucune vidéo similaire trouvée</div>';
             return;
         }
 
+        // Limit to 3 videos for better UX
+        const limitedVideos = relatedVideos.slice(0, 3);
+
         // Process videos to extract metadata and author names
-        const processedVideos = await Promise.all(relatedVideos.map(async (video) => {
+        const processedVideos = await Promise.all(limitedVideos.map(async (video) => {
             // Extract basic metadata from tags
             const titleTag = video.tags?.find(t => t[0] === 'title');
             const urlTag = video.tags?.find(t => t[0] === 'url' || (t[0] === 'r' && t[1]?.includes('/ipfs/')));
@@ -3332,29 +3335,28 @@ async function loadRelatedVideosInTheater(videoData) {
             };
         }));
 
-        // Render related videos with proper styling
+        // Render related videos with compact styling
         relatedVideosContainer.innerHTML = `
-            <h6 class="px-3 pt-3 mb-2"><i class="bi bi-film"></i> Vidéos similaires</h6>
-            <div class="related-videos-list">
+            <h6 class="mb-3 text-white"><i class="bi bi-film"></i> Vidéos similaires</h6>
+            <div class="related-videos-compact">
                 ${processedVideos.map(video => {
                     const thumbnailDisplay = video.thumbnailUrl 
                         ? `<img src="${escapeHtml(convertIPFSUrlGlobal(video.thumbnailUrl))}" alt="${escapeHtml(video.title)}" loading="lazy" />`
-                        : `<div class="placeholder-thumbnail"><i class="bi bi-film" style="font-size: 32px; color: #666;"></i></div>`;
+                        : `<div class="placeholder-thumbnail"><i class="bi bi-film" style="font-size: 20px; color: #666;"></i></div>`;
                     
                     const durationBadge = video.duration ? `<span class="duration-badge">${formatDuration(video.duration)}</span>` : '';
-                    const durationText = video.duration ? `<span class="duration-text"><i class="bi bi-clock"></i> ${formatDuration(video.duration)}</span>` : '';
                     
                     return `
-                        <div class="theater-related-video-item" onclick="openTheaterModeFromEvent('${video.id}')">
-                            <div class="theater-related-video-thumbnail">
+                        <div class="theater-related-video-item-compact" onclick="openTheaterModeFromEvent('${video.id}')">
+                            <div class="theater-related-video-thumbnail-compact">
                                 ${thumbnailDisplay}
                                 ${durationBadge}
                             </div>
-                            <div class="theater-related-video-info">
-                                <div class="theater-related-video-title">${escapeHtml(video.title)}</div>
-                                <div class="theater-related-video-meta">
+                            <div class="theater-related-video-info-compact">
+                                <div class="theater-related-video-title-compact">${escapeHtml(video.title)}</div>
+                                <div class="theater-related-video-meta-compact">
                                     <span class="author-name"><i class="bi bi-person"></i> ${escapeHtml(video.authorName)}</span>
-                                    ${durationText}
+                                    ${video.duration ? `<span class="duration-text"><i class="bi bi-clock"></i> ${formatDuration(video.duration)}</span>` : ''}
                                 </div>
                             </div>
                         </div>

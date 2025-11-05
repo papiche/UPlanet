@@ -105,13 +105,23 @@ function convertIPFSUrlGlobal(url) {
         return url;
     }
     
-    // Encode URL to handle spaces and special characters
+    // Decode URL first if already encoded (to avoid double-encoding)
+    // Then re-encode to handle spaces and special characters properly
+    // The browser will handle the encoding when making the request
     const urlParts = fullUrl.split('/');
     const encodedParts = urlParts.map((part, index) => {
+        // Don't encode protocol, domain, or empty parts
         if (index <= 2 || part === '' || part.includes(':')) {
             return part;
         }
-        return encodeURIComponent(part);
+        // Decode first (if already encoded), then re-encode
+        try {
+            const decoded = decodeURIComponent(part);
+            return encodeURIComponent(decoded);
+        } catch (e) {
+            // If decoding fails (part wasn't encoded), just encode it
+            return encodeURIComponent(part);
+        }
     });
     
     return encodedParts.join('/');
@@ -2919,7 +2929,16 @@ async function loadPlaylistVideos(videoIds, container) {
             if (!url) return '';
             if (url.includes('/ipfs/')) {
                 const match = url.match(/\/ipfs\/[^?"#]+/);
-                if (match) return `${ipfsGateway}${match[0]}`;
+                if (match) {
+                    // Decode first if already encoded, to avoid double-encoding
+                    let path = match[0];
+                    try {
+                        path = decodeURIComponent(path);
+                    } catch (e) {
+                        // Path wasn't encoded, use as is
+                    }
+                    return `${ipfsGateway}${path}`;
+                }
             }
             return url.startsWith('/ipfs/') ? `${ipfsGateway}${url}` : url;
         };

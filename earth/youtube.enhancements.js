@@ -326,6 +326,7 @@ async function theaterBookmarkVideo() {
  */
 let isTheaterModeOpen = false;
 let currentTheaterModal = null;
+let originalPageTitle = null; // Store original page title to restore later
 
 /**
  * Open theater mode for immersive video viewing
@@ -351,6 +352,11 @@ async function openTheaterMode(videoData) {
         closeTheaterMode();
         // Wait for modal to close properly
         await new Promise(resolve => setTimeout(resolve, 400));
+    }
+    
+    // Store original page title before changing it
+    if (!originalPageTitle) {
+        originalPageTitle = document.title;
     }
 
     // Stop all playing videos on the parent page
@@ -433,7 +439,11 @@ async function openTheaterMode(videoData) {
 
     // Update template with video data
     const titleEl = modalContent.querySelector('#theaterTitle');
-    if (titleEl) titleEl.textContent = escapeHtml(title);
+    if (titleEl) {
+        titleEl.textContent = escapeHtml(title);
+        // Also update the main page title while theater mode is open
+        document.title = `${title} - Theater Mode`;
+    }
     
     // Set uploader name immediately in both locations
     const uploaderEl = modalContent.querySelector('#theaterUploader');
@@ -592,6 +602,11 @@ async function openTheaterMode(videoData) {
         // Reset state
         isTheaterModeOpen = false;
         currentTheaterModal = null;
+        
+        // Restore original page title (saved before opening theater mode)
+        if (originalPageTitle) {
+            document.title = originalPageTitle;
+        }
         
         console.log('✅ Theater mode closed and cleaned up');
     }, { once: true });
@@ -3366,13 +3381,15 @@ async function loadRelatedVideosInTheater(videoData) {
                     const durationBadge = video.duration ? `<span class="duration-badge">${formatDuration(video.duration)}</span>` : '';
                     
                     return `
-                        <div class="theater-related-video-card" onclick="openTheaterModeFromEvent('${video.id}')">
+                        <div class="theater-related-video-card" onclick="openRelatedVideoInTheater('${video.id}')">
                             <div class="theater-related-video-card-thumbnail">
                                 ${thumbnailDisplay}
                                 ${durationBadge}
                             </div>
                             <div class="theater-related-video-card-info">
-                                <div class="theater-related-video-card-title">${escapeHtml(video.title)}</div>
+                                <div class="theater-related-video-card-title">
+                                    ${escapeHtml(video.title)}
+                                </div>
                                 <div class="theater-related-video-card-meta">
                                     <span class="author-name"><i class="bi bi-person-fill"></i> ${escapeHtml(video.authorName)}</span>
                                     ${video.duration ? `<span class="duration-text"><i class="bi bi-clock-fill"></i> ${formatDuration(video.duration)}</span>` : ''}
@@ -3389,6 +3406,33 @@ async function loadRelatedVideosInTheater(videoData) {
     } catch (error) {
         console.error('❌ Error loading related videos:', error);
         relatedVideosContainer.innerHTML = '<div class="error">Erreur lors du chargement des vidéos similaires</div>';
+    }
+}
+
+/**
+ * Open a related video in theater mode
+ * Detects context: if in standalone /theater page, navigate to new page
+ * If in modal (from /youtube), load in the same modal
+ */
+function openRelatedVideoInTheater(eventId) {
+    console.log('🎬 Opening related video:', eventId);
+    
+    // Detect if we're in standalone mode (direct /theater page) or modal mode
+    const isStandalone = (window.parent === window) || (window.location === window.parent.location);
+    const isTheaterPage = window.location.pathname.includes('/theater');
+    
+    if (isStandalone && isTheaterPage) {
+        // Standalone mode: navigate to new theater page with the video
+        console.log('📄 Standalone mode: navigating to /theater?video=' + eventId);
+        window.location.href = `/theater?video=${eventId}`;
+    } else {
+        // Modal mode: use openTheaterModeFromEvent to load in the same modal
+        console.log('🎭 Modal mode: loading video in modal');
+        if (typeof openTheaterModeFromEvent === 'function') {
+            openTheaterModeFromEvent(eventId);
+        } else {
+            console.error('❌ openTheaterModeFromEvent not available');
+        }
     }
 }
 
@@ -3488,6 +3532,7 @@ window.closeShareModal = closeShareModal;
 window.executeShare = executeShare;
 window.copyShareLink = copyShareLink;
 window.loadRelatedVideosInTheater = loadRelatedVideosInTheater;
+window.openRelatedVideoInTheater = openRelatedVideoInTheater;
 window.openTheaterModeFromEvent = openTheaterModeFromEvent;
 window.theaterShareVideoWithPreview = theaterShareVideoWithPreview;
 window.theaterBookmarkVideo = theaterBookmarkVideo;

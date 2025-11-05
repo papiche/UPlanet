@@ -3335,28 +3335,28 @@ async function loadRelatedVideosInTheater(videoData) {
             };
         }));
 
-        // Render related videos with compact styling
+        // Render related videos in horizontal row (3 cards)
         relatedVideosContainer.innerHTML = `
             <h6 class="mb-3 text-white"><i class="bi bi-film"></i> Vidéos similaires</h6>
-            <div class="related-videos-compact">
+            <div class="related-videos-row">
                 ${processedVideos.map(video => {
                     const thumbnailDisplay = video.thumbnailUrl 
                         ? `<img src="${escapeHtml(convertIPFSUrlGlobal(video.thumbnailUrl))}" alt="${escapeHtml(video.title)}" loading="lazy" />`
-                        : `<div class="placeholder-thumbnail"><i class="bi bi-film" style="font-size: 20px; color: #666;"></i></div>`;
+                        : `<div class="placeholder-thumbnail"><i class="bi bi-film" style="font-size: 24px; color: #666;"></i></div>`;
                     
                     const durationBadge = video.duration ? `<span class="duration-badge">${formatDuration(video.duration)}</span>` : '';
                     
                     return `
-                        <div class="theater-related-video-item-compact" onclick="openTheaterModeFromEvent('${video.id}')">
-                            <div class="theater-related-video-thumbnail-compact">
+                        <div class="theater-related-video-card" onclick="openTheaterModeFromEvent('${video.id}')">
+                            <div class="theater-related-video-card-thumbnail">
                                 ${thumbnailDisplay}
                                 ${durationBadge}
                             </div>
-                            <div class="theater-related-video-info-compact">
-                                <div class="theater-related-video-title-compact">${escapeHtml(video.title)}</div>
-                                <div class="theater-related-video-meta-compact">
-                                    <span class="author-name"><i class="bi bi-person"></i> ${escapeHtml(video.authorName)}</span>
-                                    ${video.duration ? `<span class="duration-text"><i class="bi bi-clock"></i> ${formatDuration(video.duration)}</span>` : ''}
+                            <div class="theater-related-video-card-info">
+                                <div class="theater-related-video-card-title">${escapeHtml(video.title)}</div>
+                                <div class="theater-related-video-card-meta">
+                                    <span class="author-name"><i class="bi bi-person-fill"></i> ${escapeHtml(video.authorName)}</span>
+                                    ${video.duration ? `<span class="duration-text"><i class="bi bi-clock-fill"></i> ${formatDuration(video.duration)}</span>` : ''}
                                 </div>
                             </div>
                         </div>

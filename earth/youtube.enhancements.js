@@ -466,6 +466,9 @@ async function openTheaterMode(videoData) {
         videoPlayer.setAttribute('data-ipfs-url', ipfsUrl || '');
         videoPlayer.setAttribute('data-author-id', authorId || '');
         
+        // Remove any poster attribute that might block video display
+        videoPlayer.removeAttribute('poster');
+        
         // Use convertIPFSUrl
         const fullUrl = (typeof convertIPFSUrl === 'function' ? convertIPFSUrl(ipfsUrl) : convertIPFSUrlGlobal(ipfsUrl));
         
@@ -480,6 +483,13 @@ async function openTheaterMode(videoData) {
         source.type = 'video/mp4';
         videoPlayer.appendChild(source);
         videoPlayer.load();
+        
+        // Force play after a short delay to ensure video is ready
+        setTimeout(() => {
+            videoPlayer.play().catch(err => {
+                console.warn('⚠️ Autoplay prevented by browser:', err);
+            });
+        }, 100);
         
         // Update timestamp button when video time updates
         videoPlayer.addEventListener('timeupdate', updateTimestampButton);
@@ -919,10 +929,15 @@ function closeTheaterMode() {
  */
 async function loadTheaterVideoAuthor(modal, authorId, authorName) {
     const uploaderContainer = modal.querySelector('#theaterUploaderContainer');
-    if (!uploaderContainer) return;
+    if (!uploaderContainer) {
+        console.warn('⚠️ theaterUploaderContainer not found');
+        return;
+    }
     
     const uploaderEl = modal.querySelector('#theaterUploader');
     let displayName = authorName || 'Auteur inconnu';
+    
+    console.log(`👤 Loading author: ${displayName} (ID: ${authorId || 'none'})`);
     
     // Extract name from existing DOM element if available
     if (uploaderEl) {
@@ -932,39 +947,46 @@ async function loadTheaterVideoAuthor(modal, authorId, authorName) {
         }
     }
     
+    // Get IPFS gateway first (will be used in both success and error cases)
+    let ipfsGateway = '';
+    if (typeof window !== 'undefined' && window.IPFS_GATEWAY) {
+        ipfsGateway = window.IPFS_GATEWAY;
+    } else if (typeof detectIPFSGatewayGlobal === 'function') {
+        detectIPFSGatewayGlobal();
+        ipfsGateway = window.IPFS_GATEWAY || 'https://ipfs.copylaradio.com';
+    } else {
+        const currentURL = new URL(window.location.href);
+        const hostname = currentURL.hostname;
+        if (hostname === '127.0.0.1' || hostname === 'localhost') {
+            ipfsGateway = 'http://127.0.0.1:8080';
+        } else if (hostname.startsWith('u.')) {
+            const baseDomain = hostname.substring('u.'.length);
+            ipfsGateway = `${currentURL.protocol}//ipfs.${baseDomain}`;
+        } else {
+            ipfsGateway = 'https://ipfs.copylaradio.com';
+        }
+    }
+    
     // If we have authorId, try to fetch profile and create link
     if (authorId) {
         try {
             // Try to get profile from NOSTR if available
-            if (typeof fetchProfile !== 'undefined') {
-                const profile = await fetchProfile(authorId);
+            // Use fetchUserMetadata from common.js (not fetchProfile)
+            if (typeof fetchUserMetadata !== 'undefined') {
+                console.log(`🔍 Fetching user metadata for ${authorId.substring(0, 8)}...`);
+                const profile = await fetchUserMetadata(authorId);
                 if (profile) {
+                    console.log(`✅ Got profile:`, profile);
                     if (profile.display_name) {
                         displayName = profile.display_name;
                     } else if (profile.name) {
                         displayName = profile.name;
                     }
-                }
-            }
-            
-            // Get IPFS gateway for profile link
-            let ipfsGateway = '';
-            if (typeof window !== 'undefined' && window.IPFS_GATEWAY) {
-                ipfsGateway = window.IPFS_GATEWAY;
-            } else if (typeof detectIPFSGatewayGlobal === 'function') {
-                detectIPFSGatewayGlobal();
-                ipfsGateway = window.IPFS_GATEWAY || 'https://ipfs.copylaradio.com';
-            } else {
-                const currentURL = new URL(window.location.href);
-                const hostname = currentURL.hostname;
-                if (hostname === '127.0.0.1' || hostname === 'localhost') {
-                    ipfsGateway = 'http://127.0.0.1:8080';
-                } else if (hostname.startsWith('u.')) {
-                    const baseDomain = hostname.substring('u.'.length);
-                    ipfsGateway = `${currentURL.protocol}//ipfs.${baseDomain}`;
                 } else {
-                    ipfsGateway = 'https://ipfs.copylaradio.com';
+                    console.warn('⚠️ No profile found for author');
                 }
+            } else {
+                console.warn('⚠️ fetchUserMetadata function not available');
             }
             
             // Create link to profile
@@ -985,24 +1007,15 @@ async function loadTheaterVideoAuthor(modal, authorId, authorName) {
             uploaderContainer.innerHTML = '';
             uploaderContainer.appendChild(link);
             
+            console.log(`✅ Author link created: ${displayName}`);
+            
             // Also update theaterUploader if it exists separately
             if (uploaderEl && uploaderEl !== uploaderContainer) {
                 uploaderEl.textContent = displayName;
             }
         } catch (error) {
-            console.error('Error loading author profile:', error);
+            console.error('❌ Error loading author profile:', error);
             // Still show the name even if profile fetch fails
-            // Get IPFS gateway for profile link (in case it wasn't set above)
-            if (!ipfsGateway) {
-                if (typeof window !== 'undefined' && window.IPFS_GATEWAY) {
-                    ipfsGateway = window.IPFS_GATEWAY;
-                } else if (typeof detectIPFSGatewayGlobal === 'function') {
-                    detectIPFSGatewayGlobal();
-                    ipfsGateway = window.IPFS_GATEWAY || 'https://ipfs.copylaradio.com';
-                } else {
-                    ipfsGateway = 'https://ipfs.copylaradio.com';
-                }
-            }
             // Create link anyway with the name we have
             const link = document.createElement('a');
             link.href = '#';
@@ -3262,32 +3275,87 @@ function copyShareLink() {
  */
 async function loadRelatedVideosInTheater(videoData) {
     const relatedVideosContainer = document.getElementById('theaterRelatedVideos');
-    if (!relatedVideosContainer) return;
+    if (!relatedVideosContainer) {
+        console.warn('⚠️ theaterRelatedVideos container not found');
+        return;
+    }
 
-    relatedVideosContainer.innerHTML = '<div class="loading">Loading related videos...</div>';
+    relatedVideosContainer.innerHTML = '<div class="loading">Chargement des vidéos similaires...</div>';
 
     try {
+        console.log('🔍 Loading related videos...');
         const relatedVideos = await getRelatedVideos(videoData);
+        console.log(`✅ Found ${relatedVideos.length} related videos`);
 
         if (relatedVideos.length === 0) {
-            relatedVideosContainer.innerHTML = '<div class="empty">No related videos found</div>';
+            relatedVideosContainer.innerHTML = '<div class="empty">Aucune vidéo similaire trouvée</div>';
             return;
         }
 
+        // Process videos to extract metadata and author names
+        const processedVideos = await Promise.all(relatedVideos.map(async (video) => {
+            // Extract basic metadata from tags
+            const titleTag = video.tags?.find(t => t[0] === 'title');
+            const urlTag = video.tags?.find(t => t[0] === 'url' || (t[0] === 'r' && t[1]?.includes('/ipfs/')));
+            const thumbTag = video.tags?.find(t => t[0] === 'image' || t[0] === 'thumb' || t[0] === 'thumbnail');
+            const durationTag = video.tags?.find(t => t[0] === 'duration');
+            
+            const title = titleTag ? titleTag[1] : (video.content ? video.content.split('\n')[0].substring(0, 50) : 'Sans titre');
+            const ipfsUrl = urlTag ? urlTag[1] : null;
+            const thumbnailUrl = thumbTag ? thumbTag[1] : null;
+            const duration = durationTag ? parseInt(durationTag[1]) : null;
+            
+            // Get author name (try to fetch from NOSTR)
+            let authorName = video.pubkey.substring(0, 8) + '...';
+            if (typeof fetchUserMetadata !== 'undefined') {
+                try {
+                    const profile = await Promise.race([
+                        fetchUserMetadata(video.pubkey),
+                        new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 1000))
+                    ]);
+                    if (profile) {
+                        authorName = profile.display_name || profile.name || authorName;
+                    }
+                } catch (e) {
+                    // Use default short pubkey
+                }
+            }
+            
+            return {
+                id: video.id,
+                title,
+                ipfsUrl,
+                thumbnailUrl,
+                duration,
+                authorName,
+                authorId: video.pubkey
+            };
+        }));
+
+        // Render related videos with proper styling
         relatedVideosContainer.innerHTML = `
-            <h4>📹 Vidéos similaires</h4>
+            <h6 class="px-3 pt-3 mb-2"><i class="bi bi-film"></i> Vidéos similaires</h6>
             <div class="related-videos-list">
-                ${relatedVideos.map(video => {
-                    const metadata = video.tags?.find(t => t[0] === 'metadata');
-                    const videoInfo = metadata ? JSON.parse(metadata[1]) : {};
+                ${processedVideos.map(video => {
+                    const thumbnailDisplay = video.thumbnailUrl 
+                        ? `<img src="${escapeHtml(convertIPFSUrlGlobal(video.thumbnailUrl))}" alt="${escapeHtml(video.title)}" loading="lazy" />`
+                        : `<div class="placeholder-thumbnail"><i class="bi bi-film" style="font-size: 32px; color: #666;"></i></div>`;
+                    
+                    const durationBadge = video.duration ? `<span class="duration-badge">${formatDuration(video.duration)}</span>` : '';
+                    const durationText = video.duration ? `<span class="duration-text"><i class="bi bi-clock"></i> ${formatDuration(video.duration)}</span>` : '';
+                    
                     return `
-                        <div class="related-video-item" onclick="openTheaterModeFromEvent('${video.id}')">
-                            <div class="related-video-thumbnail">
-                                ${videoInfo.thumbnail ? `<img src="${escapeHtml(videoInfo.thumbnail)}" />` : '🎥'}
+                        <div class="theater-related-video-item" onclick="openTheaterModeFromEvent('${video.id}')">
+                            <div class="theater-related-video-thumbnail">
+                                ${thumbnailDisplay}
+                                ${durationBadge}
                             </div>
-                            <div class="related-video-info">
-                                <div class="related-video-title">${escapeHtml(videoInfo.title || 'Untitled')}</div>
-                                <div class="related-video-author">${video.pubkey.substring(0, 8)}...</div>
+                            <div class="theater-related-video-info">
+                                <div class="theater-related-video-title">${escapeHtml(video.title)}</div>
+                                <div class="theater-related-video-meta">
+                                    <span class="author-name"><i class="bi bi-person"></i> ${escapeHtml(video.authorName)}</span>
+                                    ${durationText}
+                                </div>
                             </div>
                         </div>
                     `;
@@ -3295,9 +3363,11 @@ async function loadRelatedVideosInTheater(videoData) {
             </div>
         `;
 
+        console.log('✅ Related videos displayed');
+
     } catch (error) {
-        console.error('Error loading related videos:', error);
-        relatedVideosContainer.innerHTML = '<div class="error">Error loading related videos</div>';
+        console.error('❌ Error loading related videos:', error);
+        relatedVideosContainer.innerHTML = '<div class="error">Erreur lors du chargement des vidéos similaires</div>';
     }
 }
 

@@ -1351,17 +1351,17 @@ async function publishNote(content, additionalTags = [], kind = 1, options = {})
 
             result.relaysTotal = 1;
 
-            // Publication avec timeout
-            const publishPromise = nostrRelay.publish(signedEvent);
-            const timeoutPromise = new Promise((_, reject) => {
+        // Publication avec timeout
+        const publishPromise = nostrRelay.publish(signedEvent);
+        const timeoutPromise = new Promise((_, reject) => {
                 setTimeout(() => reject(new Error('Timeout de publication')), timeout);
-            });
+        });
 
-            await Promise.race([publishPromise, timeoutPromise]);
+        await Promise.race([publishPromise, timeoutPromise]);
 
             result.relaysSuccess = 1;
             result.success = true;
-            console.log("✅ Note publiée avec succès:", signedEvent.id);
+        console.log("✅ Note publiée avec succès:", signedEvent.id);
         }
 
         return result;

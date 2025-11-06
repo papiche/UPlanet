@@ -914,23 +914,17 @@
      * Gère la connexion pour le formulaire de contact
      */
     async function handleLogin() {
-        const pubkey = await connectNostr(); // Utilise la fonction de common.js
-            if (pubkey) {
-                updateUIForLogin(pubkey);
+        const pubkey = await ensureNostrConnection();
+        if (pubkey) {
+            const displayName = await getUserDisplayName(pubkey);
+            loginBtn.textContent = `Connecté : ${displayName}`;
+            loginBtn.classList.remove('btn-ghost');
+            loginBtn.onclick = null;
+
+            loggedOutView.style.display = 'none';
+            loggedInView.style.display = 'block';
+            userProfileId.textContent = displayName;
         }
-    }
-
-    /**
-     * Met à jour l'interface utilisateur après connexion
-     */
-    function updateUIForLogin(pubkey) {
-        loginBtn.textContent = `Connecté : ${pubkey.substring(0, 6)}...${pubkey.substring(pubkey.length - 4)}`;
-        loginBtn.classList.remove('btn-ghost');
-        loginBtn.onclick = null;
-
-        loggedOutView.style.display = 'none';
-        loggedInView.style.display = 'block';
-        userProfileId.textContent = `${pubkey.substring(0, 8)}...`;
     }
 
     /**
@@ -939,14 +933,12 @@
     async function handleSendMessage(event) {
         event.preventDefault();
         
-        if (!userPubkey) {
-            alert("Erreur : vous n'êtes pas connecté.");
-            return;
-        }
+        const pubkey = await ensureNostrConnection();
+        if (!pubkey) return;
 
         const messageContent = messageTextarea.value.trim();
         if (!messageContent) {
-            alert("Veuillez écrire un message.");
+            showNotification({ message: 'Veuillez écrire un message.', type: 'warning' });
             return;
         }
 
@@ -954,16 +946,16 @@
         sendMessageBtn.textContent = "Envoi...";
 
         try {
-            // Utilise la fonction publishNote de common.js avec tag du Captain
             const tags = [["p", CAPTAIN_PUBKEY_HEX]];
             const result = await publishNote(messageContent, tags);
 
             if (result) {
-                alert("✅ Message envoyé avec succès !");
-            messageTextarea.value = '';
+                showNotification({ message: 'Message envoyé avec succès !', type: 'success' });
+                messageTextarea.value = '';
             }
         } catch (error) {
             console.error("Erreur d'envoi:", error);
+            showNotification({ message: 'Erreur lors de l\'envoi du message', type: 'error' });
         } finally {
             sendMessageBtn.disabled = false;
             sendMessageBtn.textContent = "Envoyer le message";

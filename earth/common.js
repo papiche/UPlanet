@@ -463,6 +463,460 @@ function openCreateAccountPage() {
 }
 
 /**
+ * Get user display name with fallback to truncated pubkey
+ * @param {string} pubkey - User public key
+ * @param {boolean} cached - Use cached profile if available (default: true)
+ * @returns {Promise<string>} Display name or truncated pubkey
+ */
+async function getUserDisplayName(pubkey, cached = true) {
+    if (!pubkey) return 'Unknown';
+    
+    // Default fallback
+    const truncated = pubkey.substring(0, 8) + '...';
+    
+    try {
+        if (typeof fetchUserMetadata === 'function') {
+            const profile = await fetchUserMetadata(pubkey, cached);
+            if (profile) {
+                return profile.display_name || profile.name || truncated;
+            }
+        }
+    } catch (e) {
+        console.warn('Could not fetch user profile:', e);
+    }
+    
+    return truncated;
+}
+
+/**
+ * Ensure user is connected to NOSTR, prompt connection if not
+ * @param {object} options - Configuration options
+ * @param {boolean} options.silent - Don't show alerts (default: false)
+ * @param {boolean} options.forceAuth - Force NIP-42 authentication (default: false)
+ * @returns {Promise<string|null>} User pubkey if connected, null otherwise
+ */
+async function ensureNostrConnection(options = {}) {
+    const { silent = false, forceAuth = false } = options;
+    
+    // Already connected
+    if (userPubkey) return userPubkey;
+    
+    try {
+        if (typeof connectNostr === 'function') {
+            const pubkey = await connectNostr(forceAuth);
+            if (pubkey) {
+                return pubkey;
+            }
+        }
+        
+        if (!silent) {
+            alert('❌ Connexion requise. Veuillez vous connecter avec NOSTR.');
+        }
+        return null;
+    } catch (error) {
+        console.error('Error connecting to NOSTR:', error);
+        if (!silent) {
+            alert('❌ Erreur lors de la connexion: ' + error.message);
+        }
+        return null;
+    }
+}
+
+/**
+ * Show a notification toast with modern UI
+ * @param {object} options - Notification options
+ * @param {string} options.message - Message to display
+ * @param {string} options.type - Type: 'success', 'error', 'warning', 'info' (default: 'info')
+ * @param {number} options.duration - Duration in ms (default: 3000, 0 = permanent)
+ * @param {string} options.position - Position: 'top-right', 'top-center', 'bottom-right', 'bottom-center' (default: 'top-right')
+ * @param {boolean} options.dismissible - Can be closed manually (default: true)
+ * @returns {HTMLElement} Toast element
+ */
+function showNotification(options = {}) {
+    const {
+        message = '',
+        type = 'info',
+        duration = 3000,
+        position = 'top-right',
+        dismissible = true
+    } = options;
+    
+    const icon = {
+        success: '✅',
+        error: '❌',
+        warning: '⚠️',
+        info: 'ℹ️'
+    }[type] || 'ℹ️';
+    
+    // Create toast container if it doesn't exist
+    let container = document.getElementById('nostr-notification-container');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'nostr-notification-container';
+        container.className = `notification-container notification-${position}`;
+        
+        // Add styles for the container
+        const style = document.createElement('style');
+        style.textContent = `
+            .notification-container {
+                position: fixed;
+                z-index: 10000;
+                pointer-events: none;
+                display: flex;
+                flex-direction: column;
+                gap: 12px;
+                max-width: 400px;
+                padding: 16px;
+            }
+            
+            .notification-container.notification-top-right {
+                top: 0;
+                right: 0;
+            }
+            
+            .notification-container.notification-top-center {
+                top: 0;
+                left: 50%;
+                transform: translateX(-50%);
+            }
+            
+            .notification-container.notification-bottom-right {
+                bottom: 0;
+                right: 0;
+            }
+            
+            .notification-container.notification-bottom-center {
+                bottom: 0;
+                left: 50%;
+                transform: translateX(-50%);
+            }
+            
+            .notification {
+                pointer-events: auto;
+                display: flex;
+                align-items: center;
+                gap: 12px;
+                padding: 14px 18px;
+                border-radius: 12px;
+                box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+                backdrop-filter: blur(10px);
+                -webkit-backdrop-filter: blur(10px);
+                font-size: 15px;
+                line-height: 1.5;
+                opacity: 0;
+                transform: translateX(100%);
+                transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+                max-width: 100%;
+                word-wrap: break-word;
+            }
+            
+            .notification.show {
+                opacity: 1;
+                transform: translateX(0);
+            }
+            
+            .notification-success {
+                background: linear-gradient(135deg, rgba(5, 150, 105, 0.95), rgba(16, 185, 129, 0.95));
+                color: white;
+                border-left: 4px solid #10b981;
+            }
+            
+            .notification-error {
+                background: linear-gradient(135deg, rgba(220, 38, 38, 0.95), rgba(239, 68, 68, 0.95));
+                color: white;
+                border-left: 4px solid #ef4444;
+            }
+            
+            .notification-warning {
+                background: linear-gradient(135deg, rgba(245, 158, 11, 0.95), rgba(251, 191, 36, 0.95));
+                color: white;
+                border-left: 4px solid #fbbf24;
+            }
+            
+            .notification-info {
+                background: linear-gradient(135deg, rgba(59, 130, 246, 0.95), rgba(96, 165, 250, 0.95));
+                color: white;
+                border-left: 4px solid #60a5fa;
+            }
+            
+            .notification-icon {
+                font-size: 20px;
+                flex-shrink: 0;
+            }
+            
+            .notification-message {
+                flex: 1;
+                font-weight: 500;
+            }
+            
+            .notification-close {
+                background: none;
+                border: none;
+                color: inherit;
+                font-size: 24px;
+                line-height: 1;
+                cursor: pointer;
+                padding: 0;
+                margin-left: 8px;
+                opacity: 0.8;
+                transition: opacity 0.2s;
+                flex-shrink: 0;
+            }
+            
+            .notification-close:hover {
+                opacity: 1;
+            }
+            
+            @media (max-width: 640px) {
+                .notification-container {
+                    max-width: calc(100vw - 32px);
+                    padding: 8px;
+                }
+                
+                .notification {
+                    font-size: 14px;
+                    padding: 12px 14px;
+                }
+            }
+        `;
+        
+        if (!document.getElementById('nostr-notification-styles')) {
+            style.id = 'nostr-notification-styles';
+            document.head.appendChild(style);
+        }
+        
+        document.body.appendChild(container);
+    }
+    
+    // Create toast element
+    const toast = document.createElement('div');
+    toast.className = `notification notification-${type}`;
+    
+    // Escape HTML to prevent XSS
+    const escapeHtml = (text) => {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    };
+    
+    toast.innerHTML = `
+        <span class="notification-icon">${icon}</span>
+        <span class="notification-message">${escapeHtml(message)}</span>
+        ${dismissible ? '<button class="notification-close" aria-label="Close">×</button>' : ''}
+    `;
+    
+    container.appendChild(toast);
+    
+    // Trigger animation
+    requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+            toast.classList.add('show');
+        });
+    });
+    
+    // Close handler
+    const closeToast = () => {
+        toast.classList.remove('show');
+        setTimeout(() => {
+            if (toast.parentNode) {
+                toast.remove();
+            }
+            // Remove container if empty
+            if (container.children.length === 0) {
+                container.remove();
+            }
+        }, 300);
+    };
+    
+    if (dismissible) {
+        const closeBtn = toast.querySelector('.notification-close');
+        if (closeBtn) {
+            closeBtn.onclick = closeToast;
+        }
+    }
+    
+    // Auto-dismiss
+    if (duration > 0) {
+        setTimeout(closeToast, duration);
+    }
+    
+    return toast;
+}
+
+/**
+ * Ensure connection to NOSTR relay
+ * @param {object} options - Configuration options
+ * @param {boolean} options.silent - Don't show alerts (default: false)
+ * @param {boolean} options.forceAuth - Force NIP-42 authentication (default: false)
+ * @returns {Promise<boolean>} True if connected, false otherwise
+ */
+async function ensureRelayConnection(options = {}) {
+    const { silent = false, forceAuth = false } = options;
+    
+    // Already connected
+    if (isNostrConnected && nostrRelay) return true;
+    
+    try {
+        if (typeof connectToRelay === 'function') {
+            await connectToRelay(forceAuth);
+            return isNostrConnected;
+        }
+        return false;
+    } catch (error) {
+        console.error('Error connecting to relay:', error);
+        if (!silent) {
+            alert('❌ Erreur lors de la connexion au relay: ' + error.message);
+        }
+        return false;
+    }
+}
+
+/**
+ * Update button state temporarily
+ * @param {HTMLElement|string} button - Button element or ID
+ * @param {object} options - Update options
+ * @param {string} options.text - New text
+ * @param {string} options.icon - Icon to prepend (optional)
+ * @param {number} options.duration - Duration in ms (default: 2000)
+ * @param {boolean} options.disable - Disable during update (default: true)
+ */
+function updateButtonState(button, options = {}) {
+    const {
+        text = '✅',
+        icon = null,
+        duration = 2000,
+        disable = true
+    } = options;
+    
+    const btn = typeof button === 'string' ? document.getElementById(button) : button;
+    if (!btn) return;
+    
+    const originalText = btn.textContent;
+    const originalDisabled = btn.disabled;
+    
+    btn.textContent = icon ? `${icon} ${text}` : text;
+    if (disable) btn.disabled = true;
+    
+    setTimeout(() => {
+        btn.textContent = originalText;
+        btn.disabled = originalDisabled;
+    }, duration);
+}
+
+/**
+ * Fetch user's follow list (kind 3 contact list)
+ * @param {string} pubkey - User public key
+ * @param {number} timeout - Timeout in ms (default: 3000)
+ * @returns {Promise<Array<string>>} Array of followed pubkeys
+ */
+async function fetchUserFollowList(pubkey, timeout = 3000) {
+    if (!nostrRelay) return [];
+    
+    return new Promise((resolve) => {
+        const sub = nostrRelay.sub([{
+            kinds: [3],
+            authors: [pubkey],
+            limit: 1
+        }]);
+        
+        let followEvent = null;
+        
+        sub.on('event', (event) => {
+            followEvent = event;
+        });
+        
+        sub.on('eose', () => {
+            sub.unsub();
+            if (followEvent && followEvent.tags) {
+                const followList = followEvent.tags
+                    .filter(tag => tag[0] === 'p' && tag[1])
+                    .map(tag => tag[1]);
+                resolve(followList);
+            } else {
+                resolve([]);
+            }
+        });
+        
+        setTimeout(() => {
+            sub.unsub();
+            if (followEvent && followEvent.tags) {
+                const followList = followEvent.tags
+                    .filter(tag => tag[0] === 'p' && tag[1])
+                    .map(tag => tag[1]);
+                resolve(followList);
+            } else {
+                resolve([]);
+            }
+        }, timeout);
+    });
+}
+
+/**
+ * Check if current user follows target user
+ * @param {string} targetPubkey - User to check
+ * @returns {Promise<boolean>} True if following
+ */
+async function isUserFollowing(targetPubkey) {
+    if (!userPubkey) return false;
+    const followList = await fetchUserFollowList(userPubkey);
+    return followList.includes(targetPubkey);
+}
+
+/**
+ * Toggle follow/unfollow a user
+ * @param {string} targetPubkey - User to follow/unfollow
+ * @param {object} options - Configuration
+ * @param {boolean} options.silent - Don't show alerts (default: false)
+ * @param {function} options.onSuccess - Success callback(action, newFollowList)
+ * @param {function} options.onError - Error callback(error)
+ * @returns {Promise<object>} { success, action: 'follow'|'unfollow', followList }
+ */
+async function toggleUserFollow(targetPubkey, options = {}) {
+    const { silent = false, onSuccess = null, onError = null } = options;
+    
+    try {
+        // Ensure connection
+        const pubkey = await ensureNostrConnection({ silent });
+        if (!pubkey) return { success: false, action: null };
+        
+        // Can't follow yourself
+        if (pubkey === targetPubkey) {
+            if (!silent) alert('❌ Vous ne pouvez pas vous suivre vous-même.');
+            return { success: false, action: null };
+        }
+        
+        // Ensure relay
+        await ensureRelayConnection({ silent });
+        
+        // Fetch current follow list
+        const currentFollowList = await fetchUserFollowList(pubkey);
+        const isFollowing = currentFollowList.includes(targetPubkey);
+        
+        // Toggle
+        const newFollowList = isFollowing
+            ? currentFollowList.filter(pk => pk !== targetPubkey)
+            : [...currentFollowList, targetPubkey];
+        
+        // Publish new contact list (kind 3)
+        const tags = newFollowList.map(pk => ['p', pk]);
+        const result = await publishNote('', tags, 3, { silent: true });
+        
+        if (result) {
+            const action = isFollowing ? 'unfollow' : 'follow';
+            if (onSuccess) onSuccess(action, newFollowList);
+            return { success: true, action, followList: newFollowList };
+        } else {
+            throw new Error('Failed to publish follow list');
+        }
+    } catch (error) {
+        console.error('Error toggling follow:', error);
+        if (!silent) alert('❌ Erreur: ' + error.message);
+        if (onError) onError(error);
+        return { success: false, action: null };
+    }
+}
+
+/**
  * Applique le thème dynamique basé sur l'heure de la journée
  */
 function applyDynamicTheme() {

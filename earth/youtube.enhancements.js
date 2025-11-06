@@ -19,6 +19,61 @@ if (typeof IPFS_GATEWAY === 'undefined') {
     window.IPFS_GATEWAY = '';
 }
 
+/**
+ * Create a clickable profile link element
+ * @param {object} options - Configuration
+ * @param {string} options.pubkey - User public key
+ * @param {string} options.displayName - Display name (optional, will be fetched if not provided)
+ * @param {string} options.className - CSS class (default: 'profile-link')
+ * @param {HTMLElement} options.container - Container to append to (optional)
+ * @param {function} options.onClick - Custom click handler (optional)
+ * @returns {Promise<HTMLElement>} Profile link element
+ */
+async function createProfileLink(options = {}) {
+    const {
+        pubkey,
+        displayName = null,
+        className = 'profile-link',
+        container = null,
+        onClick = null
+    } = options;
+    
+    // Get display name if not provided
+    const finalDisplayName = displayName || (typeof getUserDisplayName === 'function' 
+        ? await getUserDisplayName(pubkey) 
+        : pubkey?.substring(0, 8) + '...');
+    
+    const link = document.createElement('a');
+    link.href = '#';
+    link.className = className;
+    link.textContent = finalDisplayName;
+    link.setAttribute('data-pubkey', pubkey);
+    
+    link.onclick = function(e) {
+        e.preventDefault();
+        if (onClick) {
+            onClick(pubkey, finalDisplayName, e);
+        } else {
+            // Default: open profile modal
+            if (typeof openProfileModalInTheater === 'function') {
+                openProfileModalInTheater(pubkey, finalDisplayName);
+            } else if (typeof openProfileModal === 'function') {
+                openProfileModal(pubkey, finalDisplayName);
+            } else {
+                window.open(`/profile?npub=${pubkey}`, '_blank');
+            }
+        }
+        return false;
+    };
+    
+    if (container) {
+        container.innerHTML = '';
+        container.appendChild(link);
+    }
+    
+    return link;
+}
+
 function detectIPFSGatewayGlobal() {
     const currentURL = new URL(window.location.href);
     const hostname = currentURL.hostname;

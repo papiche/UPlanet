@@ -1200,36 +1200,74 @@ async function connectToRelay(forceAuth = false) {
 // ========================================
 
 /**
- * Publie un message texte sur Nostr (kind 1)
+ * Publie un message texte sur Nostr (kind 1 par défaut, configurable)
+ * Compatible avec les options de nostr_send_note.py
+ * 
  * @param {string} content - Le contenu du message
  * @param {Array} additionalTags - Tags supplémentaires (optionnel)
- * @returns {Promise<object|null>} L'événement publié ou null en cas d'erreur
+ * @param {number} kind - Kind de l'événement NOSTR (défaut: 1)
+ * @param {object} options - Options supplémentaires:
+ *   - relays: Array<string> - Liste de relays (défaut: relay global ou DEFAULT_RELAYS)
+ *   - ephemeralDuration: number - Durée en secondes pour message éphémère (défaut: null)
+ *   - silent: boolean - Si true, pas d'alertes (défaut: false)
+ *   - timeout: number - Timeout en ms pour la publication (défaut: 5000)
+ * @returns {Promise<object>} Résultat avec:
+ *   - success: boolean - Succès de la publication
+ *   - event: object|null - Événement signé
+ *   - eventId: string|null - ID de l'événement
+ *   - relaysSuccess: number - Nombre de relays ayant accepté
+ *   - relaysTotal: number - Nombre total de relays contactés
+ *   - errors: Array<string> - Liste des erreurs rencontrées
  */
-async function publishNote(content, additionalTags = []) {
-    if (!userPubkey) {
-        alert("❌ Vous devez être connecté pour publier.");
-        return null;
-    }
+async function publishNote(content, additionalTags = [], kind = 1, options = {}) {
+    // Options par défaut
+    const {
+        relays = null,
+        ephemeralDuration = null,
+        silent = false,
+        timeout = 5000
+    } = options;
 
-    if (!isNostrConnected) {
-        alert("❌ Connexion au relay en cours...");
-        await connectToRelay();
-        if (!isNostrConnected) {
-            alert("❌ Impossible de se connecter au relay.");
-            return null;
-        }
+    // Résultat de la publication
+    const result = {
+        success: false,
+        event: null,
+        eventId: null,
+        relaysSuccess: 0,
+        relaysTotal: 0,
+        errors: []
+    };
+
+    // Vérification de la connexion
+    if (!userPubkey) {
+        const errorMsg = "❌ Vous devez être connecté pour publier.";
+        if (!silent) alert(errorMsg);
+        result.errors.push(errorMsg);
+        return result;
     }
 
     try {
+        // Préparer les tags
+        const tags = [...additionalTags];
+        
+        // Ajouter tag d'expiration si message éphémère
+        if (ephemeralDuration !== null && ephemeralDuration > 0) {
+            const expirationTimestamp = Math.floor(Date.now() / 1000) + ephemeralDuration;
+            tags.push(['expiration', expirationTimestamp.toString()]);
+            console.log(`⏰ Message éphémère: expire dans ${ephemeralDuration}s (${new Date(expirationTimestamp * 1000).toLocaleString()})`);
+        }
+
+        // Créer l'événement
         const eventTemplate = {
-            kind: 1,
+            kind: kind,
             created_at: Math.floor(Date.now() / 1000),
-            tags: [...additionalTags],
+            tags: tags,
             content: content
         };
 
         console.log("📝 Création de la note:", eventTemplate);
 
+        // Signer l'événement
         let signedEvent;
         if (window.nostr && typeof window.nostr.signEvent === 'function') {
             // Use safe wrapper for Chrome compatibility
@@ -1245,21 +1283,94 @@ async function publishNote(content, additionalTags = []) {
         }
 
         console.log("✍️ Événement signé:", signedEvent);
+        result.event = signedEvent;
+        result.eventId = signedEvent.id;
 
-        // Publication avec timeout
-        const publishPromise = nostrRelay.publish(signedEvent);
-        const timeoutPromise = new Promise((_, reject) => {
-            setTimeout(() => reject(new Error('Timeout de publication')), 5000);
-        });
+        // Publication sur un ou plusieurs relays
+        if (relays && Array.isArray(relays) && relays.length > 0) {
+            // Mode multi-relays: publier sur plusieurs relays en parallèle
+            console.log(`📤 Publication sur ${relays.length} relay(s):`, relays);
+            result.relaysTotal = relays.length;
 
-        await Promise.race([publishPromise, timeoutPromise]);
+            const publishPromises = relays.map(async (relayUrl) => {
+                try {
+                    // Connexion au relay
+                    const relay = NostrTools.relayInit(relayUrl);
+                    await relay.connect();
+                    
+                    console.log(`✅ Connecté à ${relayUrl}`);
+                    
+                    // Publication avec timeout
+                    const publishPromise = relay.publish(signedEvent);
+                    const timeoutPromise = new Promise((_, reject) => {
+                        setTimeout(() => reject(new Error(`Timeout sur ${relayUrl}`)), timeout);
+                    });
+                    
+                    await Promise.race([publishPromise, timeoutPromise]);
+                    
+                    console.log(`✅ Publié sur ${relayUrl}`);
+                    relay.close();
+                    return { success: true, relay: relayUrl };
+                } catch (error) {
+                    const errorMsg = `❌ Erreur sur ${relayUrl}: ${error.message}`;
+                    console.error(errorMsg);
+                    result.errors.push(errorMsg);
+                    return { success: false, relay: relayUrl, error: error.message };
+                }
+            });
 
-        console.log("✅ Note publiée avec succès:", signedEvent.id);
-        return signedEvent;
+            // Attendre toutes les publications
+            const results = await Promise.all(publishPromises);
+            result.relaysSuccess = results.filter(r => r.success).length;
+            result.success = result.relaysSuccess > 0;
+
+            console.log(`📊 Publication: ${result.relaysSuccess}/${result.relaysTotal} relays réussis`);
+            
+            if (result.success) {
+                console.log("✅ Note publiée avec succès:", signedEvent.id);
+                if (!silent && result.relaysSuccess < result.relaysTotal) {
+                    console.warn(`⚠️ Publié sur ${result.relaysSuccess}/${result.relaysTotal} relays seulement`);
+                }
+            } else {
+                const errorMsg = "❌ Échec de publication sur tous les relays";
+                console.error(errorMsg);
+                if (!silent) alert(errorMsg);
+            }
+        } else {
+            // Mode relay unique: utiliser le relay global
+            if (!isNostrConnected) {
+                console.log("🔌 Connexion au relay en cours...");
+                await connectToRelay();
+                if (!isNostrConnected) {
+                    const errorMsg = "❌ Impossible de se connecter au relay.";
+                    if (!silent) alert(errorMsg);
+                    result.errors.push(errorMsg);
+                    return result;
+                }
+            }
+
+            result.relaysTotal = 1;
+
+            // Publication avec timeout
+            const publishPromise = nostrRelay.publish(signedEvent);
+            const timeoutPromise = new Promise((_, reject) => {
+                setTimeout(() => reject(new Error('Timeout de publication')), timeout);
+            });
+
+            await Promise.race([publishPromise, timeoutPromise]);
+
+            result.relaysSuccess = 1;
+            result.success = true;
+            console.log("✅ Note publiée avec succès:", signedEvent.id);
+        }
+
+        return result;
     } catch (error) {
-        console.error("❌ Erreur lors de la publication:", error);
-        alert(`Erreur: ${error.message}`);
-        return null;
+        const errorMsg = `❌ Erreur lors de la publication: ${error.message}`;
+        console.error(errorMsg, error);
+        result.errors.push(errorMsg);
+        if (!silent) alert(`Erreur: ${error.message}`);
+        return result;
     }
 }
 

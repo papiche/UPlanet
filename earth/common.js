@@ -3348,15 +3348,56 @@ async function uploadPhotoToIPFS(file) {
             throw new Error('Please connect with MULTIPASS before uploading');
         }
         
-        // Check authentication before upload
+        // Check authentication before upload with auto-retry
         console.log('🔐 Verifying authentication before upload...');
-        const isAuthenticated = await ensureAuthentication({ forceCheck: true, showUI: true });
+        let isAuthenticated = await verifyAuthenticationWithAPI(userPubkey);
         
         if (!isAuthenticated) {
-            throw new Error('Authentication verification failed. Please reconnect with MULTIPASS and try again.');
+            console.log('⚠️ No recent NIP-42 event found, auto-retrying authentication...');
+            
+            // Show notification to user
+            if (typeof showNotification !== 'undefined') {
+                showNotification({
+                    message: '🔄 Sending authentication event automatically...',
+                    type: 'info',
+                    duration: 3000
+                });
+            }
+            
+            try {
+                // Force re-authentication
+                console.log('🔄 Forcing NIP-42 authentication...');
+                await connectNostr(true); // Force NIP-42 auth
+                
+                // Wait for relay to process
+                console.log('⏳ Waiting for relay to process authentication...');
+                await new Promise(resolve => setTimeout(resolve, 2500));
+                
+                // Verify again
+                console.log('🔍 Verifying authentication after retry...');
+                isAuthenticated = await verifyAuthenticationWithAPI(userPubkey);
+                
+                if (!isAuthenticated) {
+                    throw new Error('Authentication failed after automatic retry. Please ensure you have a MULTIPASS account and try clicking Connect manually.');
+                }
+                
+                console.log('✅ Auto-authentication successful!');
+                
+                // Show success notification
+                if (typeof showNotification !== 'undefined') {
+                    showNotification({
+                        message: '✅ Authentication successful!',
+                        type: 'success',
+                        duration: 2000
+                    });
+                }
+            } catch (authError) {
+                console.error('❌ Auto-authentication failed:', authError);
+                throw new Error(`Authentication failed: ${authError.message}. Please click Connect with MULTIPASS and try again.`);
+            }
+        } else {
+            console.log('✅ Authentication verified, proceeding with upload');
         }
-        
-        console.log('✅ Authentication verified, proceeding with upload');
         
         const formData = new FormData();
         formData.append('file', file);

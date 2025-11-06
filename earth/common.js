@@ -1215,6 +1215,147 @@ async function checkRecentNIP42Auth(relayUrl, maxAgeHours = 24) {
 }
 
 /**
+ * Verify authentication using the server-side API /api/test-nostr
+ * This provides more reliable verification than client-side checks
+ * @param {string} pubkey - User's public key (hex or npub format)
+ * @returns {Promise<Object>} - Authentication status object with detailed info
+ */
+async function verifyAuthenticationWithAPI(pubkey = null) {
+    const keyToCheck = pubkey || userPubkey;
+    
+    if (!keyToCheck) {
+        console.warn('⚠️ No pubkey provided for authentication verification');
+        return {
+            success: false,
+            auth_verified: false,
+            message: 'No public key available'
+        };
+    }
+    
+    try {
+        console.log(`🔐 Verifying authentication for: ${keyToCheck.substring(0, 8)}...`);
+        
+        const response = await fetch('/api/test-nostr', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: new URLSearchParams({
+                'npub': keyToCheck
+            })
+        });
+        
+        if (!response.ok) {
+            throw new Error(`API returned ${response.status}: ${response.statusText}`);
+        }
+        
+        const result = await response.json();
+        console.log('🔍 Authentication verification result:', result);
+        
+        // Update cache based on result
+        if (result.auth_verified) {
+            const relayUrl = result.relay_url || getNostrRelay();
+            const cacheKey = `nip42_auth_cache_${keyToCheck}_${relayUrl}`;
+            const cacheTimeKey = `${cacheKey}_time`;
+            localStorage.setItem(cacheKey, 'true');
+            localStorage.setItem(cacheTimeKey, Date.now().toString());
+            console.log('✅ Authentication verified via API');
+        } else {
+            console.warn('⚠️ Authentication not verified:', result.message);
+        }
+        
+        return {
+            success: true,
+            ...result
+        };
+        
+    } catch (error) {
+        console.error('❌ Error verifying authentication with API:', error);
+        return {
+            success: false,
+            auth_verified: false,
+            message: error.message,
+            error: true
+        };
+    }
+}
+
+/**
+ * Ensure user is authenticated before performing an action
+ * Checks authentication and prompts to reconnect if necessary
+ * @param {Object} options - Configuration options
+ * @param {boolean} options.forceCheck - Force API check even if cached
+ * @param {boolean} options.showUI - Show user-facing messages
+ * @returns {Promise<boolean>} - True if authenticated
+ */
+async function ensureAuthentication(options = {}) {
+    const {
+        forceCheck = false,
+        showUI = true
+    } = options;
+    
+    // Check if user is connected
+    if (!userPubkey) {
+        if (showUI) {
+            showNotification({
+                message: 'Please connect with MULTIPASS first',
+                type: 'warning',
+                duration: 5000
+            });
+        }
+        return false;
+    }
+    
+    // Quick cache check if not forcing
+    if (!forceCheck) {
+        const relayUrl = getNostrRelay();
+        const cacheKey = `nip42_auth_cache_${userPubkey}_${relayUrl}`;
+        const cacheTime = localStorage.getItem(`${cacheKey}_time`);
+        
+        if (cacheTime) {
+            const cacheAge = Date.now() - parseInt(cacheTime);
+            if (cacheAge < 300000) { // 5 minutes
+                const cached = localStorage.getItem(cacheKey);
+                if (cached === 'true') {
+                    console.log('✅ Using cached authentication status (valid)');
+                    return true;
+                }
+            }
+        }
+    }
+    
+    // Verify with API
+    const authResult = await verifyAuthenticationWithAPI(userPubkey);
+    
+    if (!authResult.success || !authResult.auth_verified) {
+        console.warn('⚠️ Authentication check failed or not verified');
+        
+        if (showUI) {
+            const message = authResult.status === 'partial' 
+                ? 'Your authentication has expired. Please reconnect with MULTIPASS.'
+                : 'Authentication verification failed. Please reconnect.';
+            
+            showNotification({
+                message: message,
+                type: 'error',
+                duration: 7000,
+                actions: [{
+                    label: 'Reconnect',
+                    onClick: async () => {
+                        await connectNostr(true); // Force auth
+                    }
+                }]
+            });
+        }
+        
+        return false;
+    }
+    
+    console.log('✅ User is properly authenticated');
+    return true;
+}
+
+/**
  * Send NIP-42 authentication event using nostr-tools publish method
  * Checks for existing recent auth events before sending to avoid duplicates
  * @param {string} relayUrl - URL of the relay
@@ -3196,11 +3337,27 @@ async function deleteMessage(eventId) {
 
 /**
  * Upload photo to IPFS via uSPOT API
+ * Ensures authentication before upload to prevent 403 errors
  * @param {File} file - Photo file to upload
  * @returns {Promise<object>} Upload result with IPFS URL
  */
 async function uploadPhotoToIPFS(file) {
     try {
+        // Ensure user is connected
+        if (!userPubkey) {
+            throw new Error('Please connect with MULTIPASS before uploading');
+        }
+        
+        // Check authentication before upload
+        console.log('🔐 Verifying authentication before upload...');
+        const isAuthenticated = await ensureAuthentication({ forceCheck: true, showUI: true });
+        
+        if (!isAuthenticated) {
+            throw new Error('Authentication verification failed. Please reconnect with MULTIPASS and try again.');
+        }
+        
+        console.log('✅ Authentication verified, proceeding with upload');
+        
         const formData = new FormData();
         formData.append('file', file);
         

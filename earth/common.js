@@ -2697,6 +2697,9 @@ async function displayComments(containerId = 'nostr-comments') {
     // Récupérer les commentaires
     const comments = await fetchComments();
     
+    // Build comment tree for threading
+    const commentTree = buildCommentTree(comments);
+    
     // Créer l'interface
     container.innerHTML = `
         <div style="background: var(--card-bg); border-radius: var(--radius); padding: 32px; box-shadow: var(--shadow); border: 1px solid var(--border-color);">
@@ -2722,7 +2725,7 @@ async function displayComments(containerId = 'nostr-comments') {
                 </div>
             </div>
             
-            <!-- Liste des commentaires -->
+            <!-- Liste des commentaires avec threading -->
             <div id="comments-list">
                 ${comments.length === 0 ? `
                     <div style="text-align: center; padding: 40px; color: var(--muted);">
@@ -2730,16 +2733,61 @@ async function displayComments(containerId = 'nostr-comments') {
                         <p>Aucun commentaire pour le moment.</p>
                         <p style="font-size: 14px;">Soyez le premier à partager votre avis !</p>
                     </div>
-                ` : comments.map(comment => renderComment(comment)).join('')}
+                ` : commentTree.topLevel.map(comment => renderComment(comment, commentTree.replies, 0)).join('')}
             </div>
         </div>
     `;
 }
 
 /**
- * Rendre un commentaire en HTML
+ * Build comment tree structure based on NIP-22 tags (for web page comments)
  */
-function renderComment(comment) {
+function buildCommentTree(comments) {
+    const topLevel = [];
+    const replies = new Map(); // parentId -> [comment, comment, ...]
+    
+    comments.forEach(comment => {
+        // Check if this is a reply to another comment
+        // In NIP-22: lowercase 'i' tag points to parent comment for web page comments
+        // (uppercase 'I' is for root page URL)
+        const tags = comment.tags || [];
+        
+        // Find parent comment ID (look for 'e' tag which is used for comment threading)
+        const parentTag = tags.find(t => t[0] === 'e' && t[1] && t[1] !== comment.id);
+        const parentId = parentTag ? parentTag[1] : null;
+        
+        // Also check if this comment references another comment via 'i' tag
+        // (some implementations use 'i' for parent comment)
+        const rootUrl = window.location.href;
+        const iTag = tags.find(t => t[0] === 'i' && t[1] && t[1] !== rootUrl);
+        
+        if (parentId) {
+            // This is a reply to another comment
+            if (!replies.has(parentId)) {
+                replies.set(parentId, []);
+            }
+            replies.get(parentId).push(comment);
+        } else {
+            // Top-level comment (direct reply to page)
+            topLevel.push(comment);
+        }
+    });
+    
+    // Sort top-level comments by date (newest first)
+    topLevel.sort((a, b) => (b.created_at || 0) - (a.created_at || 0));
+    
+    // Sort replies by date (oldest first for chronological reading)
+    replies.forEach(replyList => {
+        replyList.sort((a, b) => (a.created_at || 0) - (b.created_at || 0));
+    });
+    
+    return { topLevel, replies };
+}
+
+/**
+ * Rendre un commentaire en HTML avec support threading
+ */
+function renderComment(comment, repliesMap = null, depth = 0) {
     const displayName = comment.pubkey.substring(0, 8);
     const timeAgo = formatRelativeTime(comment.created_at);
     const content = comment.content
@@ -2750,6 +2798,10 @@ function renderComment(comment) {
     
     // Create a unique ID for this comment to update it later
     const commentId = `comment-${comment.id}`;
+    
+    // Get replies if available
+    const replies = repliesMap ? (repliesMap.get(comment.id) || []) : [];
+    const replyCount = replies.length;
     
     // Fetch user metadata asynchronously
     fetchUserMetadata(comment.pubkey).then(metadata => {
@@ -2776,8 +2828,12 @@ function renderComment(comment) {
         console.warn('Could not fetch metadata for', comment.pubkey.substring(0, 8), err);
     });
     
-    return `
-        <div class="comment-item" id="${commentId}" style="padding: 20px; margin-bottom: 16px; background: var(--card-bg); border-radius: 12px; border: 1px solid var(--border-color);">
+    // Apply depth-based styling
+    const marginLeft = depth > 0 ? `margin-left: ${Math.min(depth * 24, 48)}px; border-left: 2px solid var(--border-color); padding-left: 12px;` : '';
+    const bgColor = depth > 0 ? 'rgba(5,150,105,0.02)' : 'var(--card-bg)';
+    
+    let html = `
+        <div class="comment-item ${depth > 0 ? 'comment-reply' : ''}" id="${commentId}" style="padding: 20px; margin-bottom: 16px; background: ${bgColor}; border-radius: 12px; border: 1px solid var(--border-color); ${marginLeft}">
             <div style="display: flex; align-items: flex-start; gap: 12px;">
                 <div class="comment-avatar" style="width: 40px; height: 40px; border-radius: 50%; background: var(--gradient-accent); display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; flex-shrink: 0; cursor: pointer; overflow: hidden;" 
                      onclick="window.open('nostr_profile_viewer.html?hex=${comment.pubkey}', '_blank')"
@@ -2790,11 +2846,15 @@ function renderComment(comment) {
                             ${displayName}...
                         </a>
                         <span class="muted" style="font-size: 14px;">${timeAgo}</span>
+                        ${replyCount > 0 ? `<span class="muted" style="font-size: 12px;">💬 ${replyCount} réponse${replyCount > 1 ? 's' : ''}</span>` : ''}
                     </div>
                     <div style="color: var(--text); line-height: 1.6;">
                         ${content}
                     </div>
                     <div style="margin-top: 12px; display: flex; gap: 16px; font-size: 14px; flex-wrap: wrap;">
+                        <button onclick="toggleReplyFormWeb('${comment.id}')" style="background: none; border: none; color: var(--accent); cursor: pointer; padding: 0; display: inline-flex; align-items: center; gap: 4px; font-size: 14px;">
+                            ↩️ Répondre
+                        </button>
                         <a href="nostr_message_viewer.html?event=${comment.id}" target="_blank" style="color: var(--accent); text-decoration: none; display: inline-flex; align-items: center; gap: 4px;">
                             💬 Voir le message
                         </a>
@@ -2802,10 +2862,37 @@ function renderComment(comment) {
                             👤 Profil UPlanet
                         </a>
                     </div>
+                    
+                    <!-- Reply form (hidden by default) -->
+                    <div id="reply-form-${comment.id}" style="display: none; margin-top: 16px; padding: 16px; background: rgba(5,150,105,0.05); border-radius: 8px; border: 1px solid var(--border-color);">
+                        <textarea id="reply-input-${comment.id}" 
+                                  placeholder="Répondre à ce commentaire..." 
+                                  style="width: 100%; min-height: 80px; padding: 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text); font-family: inherit; resize: vertical;"
+                        ></textarea>
+                        <div style="margin-top: 8px; display: flex; gap: 8px; justify-content: flex-end;">
+                            <button onclick="toggleReplyFormWeb('${comment.id}')" style="padding: 8px 16px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text); cursor: pointer;">
+                                Annuler
+                            </button>
+                            <button onclick="submitReplyWeb('${comment.id}', '${comment.pubkey}')" class="btn btn-primary" style="padding: 8px 16px; font-size: 14px;">
+                                Publier la réponse
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
     `;
+    
+    // Render replies recursively
+    if (replyCount > 0 && repliesMap) {
+        html += '<div class="comment-replies" style="margin-top: 8px;">';
+        replies.forEach(reply => {
+            html += renderComment(reply, repliesMap, depth + 1);
+        });
+        html += '</div>';
+    }
+    
+    return html;
 }
 
 /**
@@ -2857,6 +2944,101 @@ async function connectAndComment() {
     if (pubkey) {
         // Recharger l'interface des commentaires
         displayComments();
+    }
+}
+
+/**
+ * Toggle reply form visibility for web page comments
+ */
+function toggleReplyFormWeb(commentId) {
+    const form = document.getElementById(`reply-form-${commentId}`);
+    if (!form) return;
+    
+    // Close all other reply forms
+    document.querySelectorAll('[id^="reply-form-"]').forEach(otherForm => {
+        if (otherForm.id !== `reply-form-${commentId}`) {
+            otherForm.style.display = 'none';
+        }
+    });
+    
+    // Toggle current form
+    if (form.style.display === 'none' || !form.style.display) {
+        form.style.display = 'block';
+        
+        // Focus input
+        const input = document.getElementById(`reply-input-${commentId}`);
+        if (input) {
+            input.focus();
+        }
+    } else {
+        form.style.display = 'none';
+    }
+}
+
+/**
+ * Submit a reply to a web page comment (NIP-22)
+ */
+async function submitReplyWeb(parentCommentId, parentAuthorPubkey) {
+    const input = document.getElementById(`reply-input-${parentCommentId}`);
+    if (!input) {
+        console.error('Reply input not found');
+        return;
+    }
+    
+    const content = input.value.trim();
+    if (!content) {
+        showNotification({ message: 'La réponse ne peut pas être vide', type: 'warning' });
+        return;
+    }
+    
+    if (!userPubkey) {
+        const connected = await ensureNostrConnection();
+        if (!connected) {
+            showNotification({ message: 'Vous devez être connecté pour répondre', type: 'error' });
+            return;
+        }
+    }
+    
+    try {
+        const targetUrl = window.location.href;
+        const relayHint = nostrRelay?.url || (DEFAULT_RELAYS && DEFAULT_RELAYS[0]) || '';
+        
+        // Create reply event (kind 1111 - NIP-22)
+        // For web page comment replies:
+        // Root = page URL (I tag), Parent = comment being replied to (e tag)
+        const tags = [
+            // Root scope (web page)
+            ['I', targetUrl], // Root URL
+            ['K', 'web'], // Root kind: web page
+            
+            // Parent (comment being replied to)
+            ['e', parentCommentId, relayHint, parentAuthorPubkey || ''], // Parent comment
+            ['k', '1111'], // Parent kind (comment)
+            ['p', parentAuthorPubkey || '', relayHint], // Parent comment author
+            
+            // Also keep the page reference
+            ['i', targetUrl], // Parent URL (same as root for web pages)
+        ];
+        
+        // Publish reply with kind 1111
+        const result = await publishNote(content, tags, 1111, { silent: false });
+        
+        if (result && (result.success === true || result.id || result.event?.id)) {
+            input.value = '';
+            toggleReplyFormWeb(parentCommentId);
+            
+            showNotification({ message: 'Réponse publiée avec succès !', type: 'success' });
+            
+            // Reload comments after 1 second
+            setTimeout(() => {
+                displayComments();
+            }, 1000);
+        } else {
+            showNotification({ message: 'Erreur lors de la publication de la réponse', type: 'error' });
+        }
+    } catch (error) {
+        console.error('Error submitting reply:', error);
+        showNotification({ message: 'Erreur lors de la publication de la réponse: ' + error.message, type: 'error' });
     }
 }
 

@@ -1624,7 +1624,17 @@ async function connectToRelay(forceAuth = false) {
         // Close existing connection if any
         if (nostrRelay) {
             try {
-                nostrRelay.close();
+                // Check if close method exists (NostrTools relay may not have it)
+                if (typeof nostrRelay.close === 'function') {
+                    nostrRelay.close();
+                } else if (nostrRelay._ws) {
+                    // Close WebSocket directly if available
+                    nostrRelay._ws.close();
+                } else if (nostrRelay.ws) {
+                    nostrRelay.ws.close();
+                } else if (nostrRelay.socket) {
+                    nostrRelay.socket.close();
+                }
             } catch (e) {
                 console.warn('Error closing existing relay:', e);
             }
@@ -4376,13 +4386,16 @@ async function sendLike(eventId, authorPubkey, content = "+") {
 
     if (!isNostrConnected) {
         alert("❌ Connexion au relay en cours...");
-        await connectToRelay();
+        // For likes, we don't need NIP-42 auth, just connect to relay
+        await connectToRelay(false); // false = no force auth (no NIP-42 needed for likes)
         if (!isNostrConnected) {
             alert("❌ Impossible de se connecter au relay.");
             return null;
         }
     }
 
+    let signedEvent = null; // Declare outside try block to access in catch
+    
     try {
         console.log(`👍 Sending like reaction to event: ${eventId}`);
         
@@ -4398,7 +4411,6 @@ async function sendLike(eventId, authorPubkey, content = "+") {
 
         console.log("👍 Création de la réaction:", reactionEvent);
 
-        let signedEvent;
         if (window.nostr && typeof window.nostr.signEvent === 'function') {
             // Use safe wrapper for Chrome compatibility
             if (typeof window.safeNostrSignEvent === 'function') {

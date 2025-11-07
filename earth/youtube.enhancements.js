@@ -593,6 +593,9 @@ async function openTheaterMode(videoData) {
         
         console.log('✅ Theater modal shown, loading data...');
         
+        // Update connection badge
+        updateTheaterConnectionBadge(modalContent);
+        
         // Load engagement stats
         if (eventId) {
             await loadTheaterStats(eventId, ipfsUrl);
@@ -665,6 +668,38 @@ async function openTheaterMode(videoData) {
         
         console.log('✅ Theater mode closed and cleaned up');
     }, { once: true });
+}
+
+/**
+ * Update connection badge in theater mode
+ * Shows NOSTR connection status (relay websocket)
+ * Note: NIP-42 auth is only needed for uDRIVE uploads, not for theater interactions
+ */
+function updateTheaterConnectionBadge(modalContent) {
+    const badge = modalContent.querySelector('#theaterConnectionBadge');
+    if (!badge) {
+        console.warn('⚠️ Theater connection badge not found');
+        return;
+    }
+    
+    // Check if user is connected to NOSTR relay
+    const isConnected = typeof userPubkey !== 'undefined' && userPubkey;
+    const hasRelay = typeof nostrRelay !== 'undefined' && nostrRelay;
+    
+    if (!isConnected || !hasRelay) {
+        badge.textContent = '⚫ Not connected';
+        badge.title = 'Not connected to NOSTR. Connect to comment and interact.';
+        badge.className = 'theater-connection-badge not-connected';
+        return;
+    }
+    
+    // Connected! User can now comment, like, share, bookmark
+    badge.textContent = '✅ Connected';
+    badge.title = 'Connected to NOSTR relay. You can comment, like, share and bookmark videos.';
+    badge.className = 'theater-connection-badge connected';
+    
+    // Note: We don't check NIP-42 here because it's only needed for uDRIVE uploads
+    // Theater mode interactions (comments, likes, bookmarks) only need NOSTR + relay connection
 }
 
 /**
@@ -890,7 +925,8 @@ function getTheaterModalHTML() {
                 <button class="theater-close-btn" onclick="closeTheaterMode()">✕</button>
                 <div class="theater-title" id="theaterTitle">Loading...</div>
                 <div class="theater-actions">
-                    <button class="theater-action-btn" onclick="theaterShareVideoWithPreview()" title="Partager">📡</button>
+                    <span class="theater-connection-badge" id="theaterConnectionBadge" title="Connection status">⚫ Not connected</span>
+                    <button class="theater-action-btn" onclick="theaterShareVideoWithPreview()" title="Share">📡</button>
                     <button class="theater-action-btn" onclick="theaterBookmarkVideo()" title="Bookmark">🔖</button>
                     <button class="theater-action-btn" onclick="enterPictureInPicture()" title="Picture-in-Picture">🖼️</button>
                 </div>
@@ -902,7 +938,7 @@ function getTheaterModalHTML() {
                         class="theater-video-player"
                         controls 
                         autoplay>
-                        Votre navigateur ne supporte pas la lecture vidéo.
+                        Your browser does not support video playback.
                     </video>
                     <div class="theater-video-info">
                         <div class="theater-video-stats" id="theaterVideoStats">
@@ -922,25 +958,25 @@ function getTheaterModalHTML() {
                 </div>
                 <div class="theater-comments-panel">
                     <div class="theater-comments-header">
-                        <h3>💬 Commentaires</h3>
-                        <div class="theater-comment-stats" id="theaterCommentStats">0 commentaire(s)</div>
+                        <h3>💬 Comments</h3>
+                        <div class="theater-comment-stats" id="theaterCommentStats">0 comment(s)</div>
                     </div>
                     <div class="theater-comment-form" id="theaterCommentForm">
                         <textarea 
                             id="theaterCommentInput" 
-                            placeholder="Ajouter un commentaire..."
+                            placeholder="Add a comment..."
                             rows="3"></textarea>
                         <div class="theater-comment-form-actions">
                             <button class="theater-comment-submit-btn" onclick="submitTheaterComment()">
-                                Publier
+                                Publish
                             </button>
                             <button class="theater-comment-timestamp-btn" id="theaterTimestampBtn" onclick="addTimestampToComment()">
-                                ⏱️ Ajouter timestamp
+                                ⏱️ Add timestamp
                             </button>
                         </div>
                     </div>
                     <div class="theater-comments-list" id="theaterCommentsList">
-                        <div class="loading-comments">Chargement des commentaires...</div>
+                        <div class="loading-comments">Loading comments...</div>
                     </div>
                 </div>
             </div>

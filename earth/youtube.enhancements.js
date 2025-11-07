@@ -387,6 +387,9 @@ let originalPageTitle = null; // Store original page title to restore later
  * Open theater mode for immersive video viewing
  * Uses Bootstrap Modal instead of custom modal system
  */
+// Global variable to store current theater video data
+let currentTheaterVideoData = null;
+
 async function openTheaterMode(videoData) {
     const {
         title,
@@ -400,6 +403,14 @@ async function openTheaterMode(videoData) {
         description,
         content  // Comment/description from NOSTR event (NIP-71)
     } = videoData;
+
+    // Store video data globally for use in like handler
+    currentTheaterVideoData = {
+        ...videoData,
+        authorId,
+        uploader,
+        ipfsUrl
+    };
 
     // Prevent multiple instances
     if (isTheaterModeOpen) {
@@ -660,6 +671,7 @@ async function openTheaterMode(videoData) {
         // Reset state
         isTheaterModeOpen = false;
         currentTheaterModal = null;
+        currentTheaterVideoData = null;
         
         // Restore original page title (saved before opening theater mode)
         if (originalPageTitle) {
@@ -1171,7 +1183,21 @@ async function loadTheaterStats(eventId, ipfsUrl) {
         // Get likes (reactions)
         const reactions = await fetchReactions(eventId);
         const likes = reactions.filter(r => r.content === '+').length;
-        document.getElementById('likeCount').textContent = likes;
+        const likeCountEl = document.getElementById('likeCount');
+        if (likeCountEl) {
+            likeCountEl.textContent = likes;
+            
+            // Make like count clickable to send like
+            const likeContainer = likeCountEl.closest('.stat-item');
+            if (likeContainer && !likeContainer.dataset.likeHandlerAdded) {
+                likeContainer.style.cursor = 'pointer';
+                likeContainer.title = 'Click to like this video';
+                likeContainer.onclick = async () => {
+                    await handleTheaterLike(eventId);
+                };
+                likeContainer.dataset.likeHandlerAdded = 'true';
+            }
+        }
 
         // Get shares (notes referencing this video)
         const shares = await fetchVideoShares(eventId, ipfsUrl);
@@ -1183,6 +1209,100 @@ async function loadTheaterStats(eventId, ipfsUrl) {
         document.getElementById('theaterCommentStats').textContent = `${comments.length} commentaire(s)`;
     } catch (error) {
         console.error('Error loading theater stats:', error);
+    }
+}
+
+/**
+ * Handle like action in theater mode
+ * Publishes a reaction (kind 7) to the video event
+ */
+async function handleTheaterLike(eventId) {
+    if (!eventId) {
+        console.error('❌ No event ID provided for like');
+        return;
+    }
+    
+    // Check if user is connected
+    if (!userPubkey) {
+        console.log('🔑 Attempting to connect to NOSTR extension...');
+        if (typeof connectNostr === 'function') {
+            try {
+                await connectNostr(false);
+            } catch (error) {
+                console.error('❌ Failed to connect:', error);
+                alert('❌ Please connect with NOSTR to like videos');
+                return;
+            }
+        } else {
+            alert('❌ NOSTR extension not available');
+            return;
+        }
+    }
+    
+    // Ensure relay is connected
+    if (!nostrRelay || !isNostrConnected) {
+        console.log('🔌 Connecting to relay...');
+        if (typeof connectToRelay === 'function') {
+            try {
+                await connectToRelay();
+            } catch (error) {
+                console.error('❌ Failed to connect to relay:', error);
+                alert('❌ Failed to connect to relay');
+                return;
+            }
+        } else {
+            alert('❌ Relay connection not available');
+            return;
+        }
+    }
+    
+    try {
+        console.log('👍 Sending like reaction to event:', eventId);
+        
+        // Get video author from current video data
+        const videoAuthor = currentTheaterVideoData?.authorId || currentTheaterVideoData?.uploader;
+        const relayHint = DEFAULT_RELAY || 'wss://relay.copylaradio.com';
+        
+        // Create reaction event (kind 7)
+        const reactionTags = [
+            ['e', eventId, relayHint, videoAuthor || ''], // Parent event
+            ['p', videoAuthor || '', relayHint] // Parent author
+        ];
+        
+        const reactionEvent = {
+            kind: 7, // Reaction
+            created_at: Math.floor(Date.now() / 1000),
+            tags: reactionTags,
+            content: '+' // Like
+        };
+        
+        console.log('👍 Creating reaction:', reactionEvent);
+        
+        // Sign the event
+        let signedReaction;
+        if (window.nostr && typeof window.nostr.signEvent === 'function') {
+            signedReaction = await window.nostr.signEvent(reactionEvent);
+        } else {
+            throw new Error('NOSTR extension not available');
+        }
+        
+        console.log('✍️ Reaction signed:', signedReaction);
+        
+        // Publish to relay
+        if (nostrRelay) {
+            await nostrRelay.publish(signedReaction);
+            console.log('✅ Reaction published:', signedReaction.id);
+            
+            // Update like count after a short delay
+            setTimeout(async () => {
+                await loadTheaterStats(eventId, currentTheaterVideoData?.ipfsUrl);
+            }, 1000);
+        } else {
+            throw new Error('Relay not connected');
+        }
+    } catch (error) {
+        console.error('❌ Error sending like:', error);
+        alert('❌ Error sending like: ' + error.message);
     }
 }
 
@@ -3815,4 +3935,6 @@ window.openTheaterMode = openTheaterMode;
 window.closeTheaterMode = closeTheaterMode;
 window.theaterShareVideoWithPreview = theaterShareVideoWithPreview;
 window.theaterBookmarkVideo = theaterBookmarkVideo;
+window.handleTheaterLike = handleTheaterLike;
+window.loadTheaterStats = loadTheaterStats;
 

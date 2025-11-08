@@ -3081,6 +3081,10 @@ function extractVideoMetadata(event) {
     const originalEventTag = event.tags.find(t => t[0] === 'e');
     const originalAuthorTag = event.tags.find(t => t[0] === 'p');
     
+    // Extract YouTube URL if present
+    const youtubeUrlTag = event.tags.find(t => t[0] === 'url' && (t[1]?.includes('youtube.com') || t[1]?.includes('youtu.be')));
+    const youtubeUrl = youtubeUrlTag ? youtubeUrlTag[1] : null;
+    
     return {
         title,
         ipfsUrl,
@@ -3089,6 +3093,7 @@ function extractVideoMetadata(event) {
         authorId,
         eventId: event.id,
         content: event.content || '',
+        youtubeUrl: youtubeUrl,  // NEW: YouTube URL if available
         // Provenance metadata
         fileHash: fileHashTag ? fileHashTag[1] : null,
         infoCid: infoCidTag ? infoCidTag[1] : null,
@@ -3096,6 +3101,62 @@ function extractVideoMetadata(event) {
         originalEventId: originalEventTag ? originalEventTag[1] : null,
         originalAuthorId: originalAuthorTag ? originalAuthorTag[1] : null
     };
+}
+
+/**
+ * Load info.json metadata from IPFS CID
+ * @param {string} infoCid - IPFS CID of info.json
+ * @returns {Promise<Object|null>} - Parsed info.json or null if failed
+ */
+async function loadInfoJsonMetadata(infoCid) {
+    if (!infoCid) return null;
+    
+    const ipfsGateways = [
+        'https://ipfs.io/ipfs/',
+        'https://gateway.pinata.cloud/ipfs/',
+        'https://cloudflare-ipfs.com/ipfs/',
+        'http://127.0.0.1:8080/ipfs/'  // Local gateway
+    ];
+    
+    // Use global IPFS gateway detection if available
+    const gateway = window.IPFS_GATEWAY || detectIPFSGatewayGlobal();
+    
+    for (const baseGateway of ipfsGateways) {
+        try {
+            const infoUrl = `${baseGateway}${infoCid}/info.json`;
+            const response = await fetch(infoUrl, { 
+                method: 'GET',
+                headers: { 'Accept': 'application/json' },
+                signal: AbortSignal.timeout(5000) // 5 second timeout
+            });
+            
+            if (response.ok) {
+                const metadata = await response.json();
+                return metadata;
+            }
+        } catch (error) {
+            // Try next gateway
+            continue;
+        }
+    }
+    
+    return null;
+}
+
+/**
+ * Determine video source type from metadata
+ * @param {Object} infoMetadata - info.json metadata
+ * @param {string} youtubeUrl - YouTube URL if available
+ * @returns {string} - 'youtube', 'tmdb', or 'video'
+ */
+function getVideoSourceType(infoMetadata, youtubeUrl) {
+    if (youtubeUrl || (infoMetadata && infoMetadata.youtube)) {
+        return 'youtube';
+    }
+    if (infoMetadata && infoMetadata.tmdb) {
+        return 'tmdb';
+    }
+    return 'video';
 }
 
 async function loadPlaylistVideos(videoIds, container) {

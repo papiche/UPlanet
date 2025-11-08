@@ -3501,7 +3501,13 @@ async function executeShare() {
     try {
         // Use shareCurrentPage or publishNote with correct signature
         if (typeof shareCurrentPage === 'function') {
-            await shareCurrentPage();
+            const result = await shareCurrentPage();
+            if (result) {
+                alert('✅ Vidéo partagée avec succès !');
+                closeShareModal();
+            } else {
+                throw new Error('Failed to publish share event');
+            }
         } else if (typeof publishNote === 'function') {
             const eventTags = [
                 ['r', videoLink || videoData.ipfsUrl || '', 'web'],
@@ -3534,7 +3540,27 @@ async function executeShare() {
                 }
             });
 
-            // publishNote expects (content, additionalTags)
+            // publishNote expects (content, additionalTags, kind, options)
+            // Ensure we have a valid relay connection before publishing
+            const currentRelay = window.nostrRelay || nostrRelay;
+            if (!currentRelay) {
+                // Try to reconnect
+                if (typeof connectToRelay === 'function') {
+                    await connectToRelay();
+                    const newRelay = window.nostrRelay || nostrRelay;
+                    if (!newRelay) {
+                        throw new Error('NOSTR relay not connected');
+                    }
+                } else {
+                    throw new Error('NOSTR relay not connected');
+                }
+            }
+
+            // Verify publishNote is available and callable
+            if (typeof publishNote !== 'function') {
+                throw new Error('publishNote function not available');
+            }
+
             const result = await publishNote(shareContent, eventTags);
             
             if (result) {
@@ -3546,11 +3572,10 @@ async function executeShare() {
         } else {
             throw new Error('No sharing method available');
         }
-
-        // Success message already shown above
     } catch (error) {
         console.error('Error sharing video:', error);
-        alert('Failed to share video: ' + error.message);
+        alert('Erreur lors du partage: ' + error.message);
+        // Don't close modal on error so user can retry
     }
 }
 
@@ -3573,13 +3598,31 @@ function copyShareLink() {
     if (!targetWindow.currentShareVideoData) return;
 
     const videoData = targetWindow.currentShareVideoData;
-    const shareUrl = `${targetWindow.location.origin}${targetWindow.location.pathname}?video=${videoData.eventId}`;
+    // Build proper share URL - use /theater?video= for standalone or /youtube?video= for embedded
+    const baseUrl = targetWindow.location.origin;
+    const shareUrl = videoData.eventId 
+        ? `${baseUrl}/theater?video=${videoData.eventId}`
+        : (videoData.ipfsUrl || '');
 
     navigator.clipboard.writeText(shareUrl).then(() => {
-        alert('Link copied to clipboard!');
+        alert('✅ Lien copié dans le presse-papiers !');
+        closeShareModal();
     }).catch(err => {
         console.error('Failed to copy link:', err);
-        alert('Failed to copy link');
+        // Fallback: try to select text in a temporary input
+        try {
+            const input = document.createElement('input');
+            input.value = shareUrl;
+            document.body.appendChild(input);
+            input.select();
+            document.execCommand('copy');
+            document.body.removeChild(input);
+            alert('✅ Lien copié dans le presse-papiers !');
+            closeShareModal();
+        } catch (fallbackErr) {
+            console.error('Fallback copy failed:', fallbackErr);
+            alert('❌ Échec de la copie du lien');
+        }
     });
 }
 

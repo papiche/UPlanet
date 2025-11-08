@@ -5924,3 +5924,398 @@ function calculateORERewards(stats) {
     return Math.round(reward);
 }
 
+// ========================================
+// UMAP JOURNAL FUNCTIONS (KIND 30023)
+// ========================================
+
+/**
+ * Calculate geographic coordinates for a specific distance level
+ * @param {number} lat - Base latitude
+ * @param {number} lon - Base longitude
+ * @param {string} level - Distance level: 'umap' (0.01°), 'sector' (0.1°), or 'region' (1.0°)
+ * @returns {object} Object with key (geo key string) and coordinates
+ */
+function calculateCoordinatesForLevel(lat, lon, level = 'umap') {
+    let precision = 0.01; // UMAP default
+    let keyFormat = '';
+    
+    if (level === 'sector') {
+        precision = 0.1;
+        // Round to 0.1° precision
+        const sectorLat = Math.floor(lat * 10) / 10;
+        const sectorLon = Math.floor(lon * 10) / 10;
+        keyFormat = `${sectorLat.toFixed(1)},${sectorLon.toFixed(1)}`;
+    } else if (level === 'region') {
+        precision = 1.0;
+        // Round to 1° precision
+        const regionLat = Math.floor(lat);
+        const regionLon = Math.floor(lon);
+        keyFormat = `${regionLat},${regionLon}`;
+    } else {
+        // UMAP: 0.01° precision
+        const umapLat = Math.floor(lat * 100) / 100;
+        const umapLon = Math.floor(lon * 100) / 100;
+        keyFormat = `${umapLat.toFixed(2)},${umapLon.toFixed(2)}`;
+    }
+    
+    return {
+        key: keyFormat,
+        lat: parseFloat(keyFormat.split(',')[0]),
+        lon: parseFloat(keyFormat.split(',')[1]),
+        precision: precision,
+        level: level
+    };
+}
+
+/**
+ * Fetch UMAP/SECTOR/REGION journals (kind 30023) from NOSTR
+ * @param {number} lat - Latitude
+ * @param {number} lon - Longitude
+ * @param {string} level - Distance level: 'umap', 'sector', or 'region'
+ * @param {object} options - Options:
+ *   - limit: number of journals to fetch (default: 20)
+ *   - relays: array of relay URLs (optional)
+ *   - since: timestamp for filtering (optional)
+ * @returns {Promise<Array>} Array of journal events
+ */
+async function fetchUMAPJournals(lat, lon, level = 'umap', options = {}) {
+    const {
+        limit = 20,
+        relays = null,
+        since = null,
+        authorHex = null  // Hex pubkey of the MAP (UMAP/SECTOR/REGION) - primary filter method
+    } = options;
+    
+    // Ensure relay connection
+    if (!isNostrConnected || !nostrRelay) {
+        if (!window._connectingToRelay) {
+            console.log('🔌 Connecting to relay to fetch journals...');
+            window._connectingToRelay = connectToRelay();
+        }
+        await window._connectingToRelay;
+        delete window._connectingToRelay;
+    }
+    
+    if (!nostrRelay || !isNostrConnected) {
+        console.error('❌ Cannot connect to relay');
+        return [];
+    }
+    
+    try {
+        // Determine journal type tag based on distance level
+        let journalTypeTag = 'UMAP';
+        if (level === 'sector') {
+            journalTypeTag = 'SECTOR';
+        } else if (level === 'region') {
+            journalTypeTag = 'REGION';
+        }
+        
+        // PRIMARY METHOD: Filter by author (hex pubkey of the MAP)
+        // This is the most reliable method as journals are published by the MAP's own identity
+        // According to NOSTR.UMAP.refresh.sh, journals are published by:
+        // - UMAP: keygen -t nostr "${UPLANETNAME}${LAT}" "${UPLANETNAME}${LON}"
+        // - SECTOR: keygen -t nostr "${UPLANETNAME}${SECTOR}" "${UPLANETNAME}${SECTOR}"
+        // - REGION: keygen -t nostr "${UPLANETNAME}${REGION}" "${UPLANETNAME}${REGION}"
+        const filter = {
+            kinds: [30023],  // NIP-23: Article (Long-form Content)
+            limit: limit
+        };
+        
+        if (authorHex && authorHex.length === 64) {
+            // Filter by author (hex pubkey) - PRIMARY METHOD
+            filter.authors = [authorHex];
+            console.log(`📚 Fetching ${journalTypeTag} journals by author (hex): ${authorHex.substring(0, 8)}...`);
+        } else {
+            // FALLBACK: Filter by tags if authorHex not provided (backward compatibility)
+            console.warn(`⚠️ No authorHex provided, falling back to tag-based filtering`);
+            const coords = calculateCoordinatesForLevel(lat, lon, level);
+            const geoKey = coords.key;
+            
+            filter["#t"] = ["UPlanet", journalTypeTag];
+            filter["#g"] = [geoKey];
+            
+            // For UMAP level, also filter by coordinate tag format
+            if (level === 'umap') {
+                const umapCoordTag = `${coords.lat.toFixed(2)}_${coords.lon.toFixed(2)}`;
+                filter["#t"].push(umapCoordTag);
+            }
+        }
+        
+        if (since) {
+            filter.since = since;
+        }
+        
+        if (authorHex && authorHex.length === 64) {
+            console.log(`📚 Fetching ${journalTypeTag} journals by author (hex): ${authorHex.substring(0, 8)}...`);
+        } else {
+            console.log(`📚 Fetching ${journalTypeTag} journals by tags (fallback mode)...`);
+        }
+        
+        const journals = [];
+        const sub = nostrRelay.sub([filter]);
+        
+        const timeout = setTimeout(() => {
+            sub.unsub();
+            console.log(`✅ Found ${journals.length} journals (timeout)`);
+        }, 5000);
+        
+        sub.on('event', event => {
+            // Extract title from tags (NIP-23 standard)
+            const titleTag = event.tags.find(tag => tag[0] === 'title');
+            const title = titleTag ? titleTag[1] : 'Untitled Journal';
+            
+            // Extract published_at from tags (NIP-23 standard)
+            const publishedTag = event.tags.find(tag => tag[0] === 'published_at');
+            const publishedAt = publishedTag ? parseInt(publishedTag[1]) : event.created_at;
+            
+            // Extract geographic coordinates (NIP-101 standard)
+            const latitudeTag = event.tags.find(tag => tag[0] === 'latitude');
+            const longitudeTag = event.tags.find(tag => tag[0] === 'longitude');
+            const gTag = event.tags.find(tag => tag[0] === 'g');
+            
+            // Extract coordinates: prefer latitude/longitude tags, fallback to g tag
+            let lat = null, lon = null;
+            if (latitudeTag && longitudeTag) {
+                lat = parseFloat(latitudeTag[1]);
+                lon = parseFloat(longitudeTag[1]);
+            } else if (gTag && gTag[1]) {
+                const coords = gTag[1].split(',');
+                if (coords.length === 2) {
+                    lat = parseFloat(coords[0]);
+                    lon = parseFloat(coords[1]);
+                }
+            }
+            
+            // Check if journal already exists
+            if (!journals.find(j => j.id === event.id)) {
+                journals.push({
+                    id: event.id,
+                    title: title,
+                    content: event.content,
+                    author: event.pubkey,
+                    created_at: event.created_at,
+                    published_at: publishedAt,
+                    type: journalTypeTag.toLowerCase(),
+                    latitude: lat,
+                    longitude: lon,
+                    geoKey: gTag ? gTag[1] : null,
+                    tags: event.tags,
+                    event: event // Keep full event for reference
+                });
+            }
+        });
+        
+        sub.on('eose', () => {
+            clearTimeout(timeout);
+            sub.unsub();
+            console.log(`✅ Found ${journals.length} ${journalTypeTag} journals`);
+        });
+        
+        // Wait for timeout or eose
+        await new Promise(resolve => {
+            const checkInterval = setInterval(() => {
+                if (timeout._destroyed || sub._closed) {
+                    clearInterval(checkInterval);
+                    resolve();
+                }
+            }, 100);
+            setTimeout(() => {
+                clearInterval(checkInterval);
+                resolve();
+            }, 6000);
+        });
+        
+        // Sort by published_at (newest first)
+        journals.sort((a, b) => (b.published_at || b.created_at) - (a.published_at || a.created_at));
+        
+        return journals;
+        
+    } catch (error) {
+        console.error('❌ Error fetching journals:', error);
+        return [];
+    }
+}
+
+/**
+ * Convert markdown to HTML (basic conversion)
+ * @param {string} markdown - Markdown text
+ * @returns {string} HTML string
+ */
+function markdownToHTML(markdown) {
+    if (!markdown) return '';
+    
+    // Escape HTML first
+    let html = markdown
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+    
+    // Convert markdown to HTML
+    html = html
+        // Headers
+        .replace(/^### (.*$)/gim, '<h3>$1</h3>')
+        .replace(/^## (.*$)/gim, '<h2>$1</h2>')
+        .replace(/^# (.*$)/gim, '<h1>$1</h1>')
+        // Bold and italic
+        .replace(/\*\*(.*?)\*\*/gim, '<strong>$1</strong>')
+        .replace(/\*(.*?)\*/gim, '<em>$1</em>')
+        // Links
+        .replace(/\[([^\]]+)\]\(([^\)]+)\)/gim, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>')
+        // Line breaks
+        .replace(/\n/g, '<br>');
+    
+    return html;
+}
+
+/**
+ * Format journal event for display
+ * @param {object} journal - Journal event object from fetchUMAPJournals
+ * @param {object} options - Options:
+ *   - includeAuthor: include author info (default: true)
+ *   - includeDate: include date (default: true)
+ *   - includeActions: include action buttons (default: true)
+ *   - formatRelativeTime: function to format relative time (optional)
+ *   - getUserDisplayName: function to get user display name (optional)
+ * @returns {string} HTML string for journal card
+ */
+function formatJournalCard(journal, options = {}) {
+    const {
+        includeAuthor = true,
+        includeDate = true,
+        includeActions = true,
+        formatRelativeTime = null,
+        getUserDisplayName = null
+    } = options;
+    
+    // Format date
+    let dateStr = '';
+    if (includeDate) {
+        const timestamp = journal.published_at || journal.created_at;
+        if (formatRelativeTime && typeof formatRelativeTime === 'function') {
+            dateStr = formatRelativeTime(timestamp);
+        } else {
+            dateStr = new Date(timestamp * 1000).toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        }
+    }
+    
+    // Get author display name
+    let authorName = journal.author.substring(0, 12) + '...';
+    if (getUserDisplayName && typeof getUserDisplayName === 'function') {
+        // Try to get display name (may be async, so use cached if available)
+        const cachedName = getUserDisplayName(journal.author, true); // Use cache
+        if (cachedName && cachedName !== authorName) {
+            authorName = cachedName;
+        }
+    }
+    
+    const ipfsGateway = window.IPFS_GATEWAY || 'https://ipfs.copylaradio.com';
+    const profileUrl = `${ipfsGateway}/ipns/copylaradio.com/nostr_profile_viewer.html?hex=${journal.author}`;
+    
+    // Convert markdown to HTML
+    const contentHtml = markdownToHTML(journal.content);
+    
+    // Escape HTML for title
+    const escapeHtml = (text) => {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    };
+    
+    return `
+        <div class="journal-card">
+            <div class="journal-header">
+                <h3 class="journal-title">
+                    <i class="bi bi-journal-text"></i> ${escapeHtml(journal.title)}
+                </h3>
+                <div class="journal-meta">
+                    <span class="journal-type-badge ${journal.type}">${journal.type.toUpperCase()}</span>
+                    ${includeDate ? `<span class="journal-date">${dateStr}</span>` : ''}
+                </div>
+            </div>
+            <div class="journal-content">${contentHtml}</div>
+            ${includeAuthor || includeActions ? `
+            <div class="journal-footer">
+                ${includeAuthor ? `
+                <div class="journal-author">
+                    <i class="bi bi-person-circle"></i> 
+                    <a href="${profileUrl}" target="_blank" rel="noopener noreferrer">${escapeHtml(authorName)}</a>
+                </div>
+                ` : ''}
+                ${includeActions ? `
+                <div class="journal-actions">
+                    <button class="journal-action-btn" onclick="window.open('${ipfsGateway}/ipns/copylaradio.com/nostr_event_viewer.html?event=${journal.id}', '_blank')" title="View full journal">
+                        <i class="bi bi-box-arrow-up-right"></i> View
+                    </button>
+                </div>
+                ` : ''}
+            </div>
+            ` : ''}
+        </div>
+    `;
+}
+
+/**
+ * Display journals in a container element
+ * @param {Array} journals - Array of journal objects from fetchUMAPJournals
+ * @param {HTMLElement|string} container - Container element or ID
+ * @param {string} journalTypeTag - Type tag for display (UMAP/SECTOR/REGION)
+ * @param {object} options - Options for formatJournalCard
+ */
+function displayJournals(journals, container, journalTypeTag, options = {}) {
+    const containerEl = typeof container === 'string' 
+        ? document.getElementById(container) 
+        : container;
+    
+    if (!containerEl) {
+        console.error('❌ Journal container not found');
+        return;
+    }
+    
+    if (journals.length === 0) {
+        containerEl.innerHTML = `
+            <div class="empty-messages">
+                <div class="empty-messages-icon">📚</div>
+                <h3>No journals yet</h3>
+                <p>No ${journalTypeTag} journals found for this location.</p>
+            </div>
+        `;
+        return;
+    }
+    
+    // Sort by published_at (newest first)
+    journals.sort((a, b) => (b.published_at || b.created_at) - (a.published_at || a.created_at));
+    
+    // Format each journal
+    containerEl.innerHTML = journals.map(journal => 
+        formatJournalCard(journal, {
+            ...options,
+            formatRelativeTime: options.formatRelativeTime || formatRelativeTime,
+            getUserDisplayName: options.getUserDisplayName || getUserDisplayName
+        })
+    ).join('');
+    
+    // Fetch profiles for journal authors in background
+    journals.forEach(journal => {
+        if (typeof fetchUserMetadata === 'function') {
+            fetchUserMetadata(journal.author, true).catch(err => {
+                console.warn('Could not fetch profile for journal author:', err);
+            });
+        }
+    });
+}
+
+// Expose functions globally
+if (typeof window !== 'undefined') {
+    window.calculateCoordinatesForLevel = calculateCoordinatesForLevel;
+    window.fetchUMAPJournals = fetchUMAPJournals;
+    window.markdownToHTML = markdownToHTML;
+    window.formatJournalCard = formatJournalCard;
+    window.displayJournals = displayJournals;
+}
+

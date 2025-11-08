@@ -1956,17 +1956,44 @@ async function publishNote(content, additionalTags = [], kind = 1, options = {})
 
             result.relaysTotal = 1;
 
-        // Publication avec timeout
-        const publishPromise = nostrRelay.publish(signedEvent);
-        const timeoutPromise = new Promise((_, reject) => {
-                setTimeout(() => reject(new Error('Timeout de publication')), timeout);
-        });
+            // Verify nostrRelay is valid and has publish method
+            if (!nostrRelay || typeof nostrRelay.publish !== 'function') {
+                const errorMsg = "❌ Relay non valide ou non connecté.";
+                console.error(errorMsg, { nostrRelay, hasPublish: typeof nostrRelay?.publish });
+                if (!silent) alert(errorMsg);
+                result.errors.push(errorMsg);
+                return result;
+            }
 
-        await Promise.race([publishPromise, timeoutPromise]);
+            // Verify WebSocket is open
+            let ws = null;
+            if (nostrRelay._ws) {
+                ws = nostrRelay._ws;
+            } else if (nostrRelay.ws) {
+                ws = nostrRelay.ws;
+            } else if (nostrRelay.socket) {
+                ws = nostrRelay.socket;
+            }
+            
+            if (ws && ws.readyState !== WebSocket.OPEN) {
+                const errorMsg = "❌ Relay WebSocket n'est pas ouvert.";
+                console.error(errorMsg, { readyState: ws.readyState });
+                if (!silent) alert(errorMsg);
+                result.errors.push(errorMsg);
+                return result;
+            }
+
+            // Publication avec timeout
+            const publishPromise = nostrRelay.publish(signedEvent);
+            const timeoutPromise = new Promise((_, reject) => {
+                setTimeout(() => reject(new Error('Timeout de publication')), timeout);
+            });
+
+            await Promise.race([publishPromise, timeoutPromise]);
 
             result.relaysSuccess = 1;
             result.success = true;
-        console.log("✅ Note publiée avec succès:", signedEvent.id);
+            console.log("✅ Note publiée avec succès:", signedEvent.id);
         }
 
         return result;

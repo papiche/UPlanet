@@ -3134,7 +3134,7 @@ async function loadInfoJsonMetadata(infoCid) {
     
     for (const baseGateway of ipfsGateways) {
         try {
-            const infoUrl = `${baseGateway}${infoCid}/info.json`;
+            const infoUrl = `${baseGateway}${infoCid}`;
             const response = await fetch(infoUrl, { 
                 method: 'GET',
                 headers: { 'Accept': 'application/json' },

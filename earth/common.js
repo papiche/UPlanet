@@ -3505,7 +3505,7 @@ async function uploadPhotoToIPFS(file) {
                 const gateway = window.location.origin.includes('127.0.0.1') 
                     ? 'http://127.0.0.1:8080' 
                     : window.location.origin;
-                const infoUrl = `${gateway}/ipfs/${infoCid}/info.json`;
+                const infoUrl = `${gateway}/ipfs/${infoCid}`;
                 console.log('📋 Loading metadata from info.json:', infoUrl);
                 
                 const metadataResponse = await fetch(infoUrl);

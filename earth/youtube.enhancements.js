@@ -452,11 +452,22 @@ async function openTheaterMode(videoData) {
         return;
     }
 
-    // Get modal content container
-    const modalContent = modalElement.querySelector('.modal-content');
+    // Get modal content container - try multiple selectors
+    let modalContent = modalElement.querySelector('.modal-content');
     if (!modalContent) {
-        console.error('❌ Theater modal content container not found');
-        return;
+        // Try alternative selector (theater-modal might be the content itself)
+        modalContent = modalElement.querySelector('.theater-modal');
+        if (!modalContent) {
+            // Try to use modalElement itself if it has the right structure
+            if (modalElement.classList.contains('theater-modal') || modalElement.querySelector('.theater-video-container')) {
+                modalContent = modalElement;
+            } else {
+                console.error('❌ Theater modal content container not found');
+                console.error('Modal element:', modalElement);
+                console.error('Modal HTML:', modalElement.innerHTML.substring(0, 200));
+                return;
+            }
+        }
     }
 
     // Check if template is already loaded or fetch it
@@ -3700,6 +3711,21 @@ function openRelatedVideoInTheater(eventId) {
     } else {
         // Modal mode: use openTheaterModeFromEvent to load in the same modal
         console.log('🎭 Modal mode: loading video in modal');
+        
+        // Check if modal is still open and accessible
+        const modalElement = document.getElementById('theaterModal');
+        if (!modalElement) {
+            console.warn('⚠️ Theater modal not found, opening new modal...');
+            // Modal was closed, open a new one
+            if (typeof openTheaterModeFromEvent === 'function') {
+                openTheaterModeFromEvent(eventId);
+            } else {
+                console.error('❌ openTheaterModeFromEvent not available');
+            }
+            return;
+        }
+        
+        // Modal exists, load video in it
         if (typeof openTheaterModeFromEvent === 'function') {
             openTheaterModeFromEvent(eventId);
         } else {
@@ -3719,6 +3745,18 @@ async function openTheaterModeFromEvent(eventId) {
     if (!nostrRelay || !isNostrConnected) {
         alert('Nostr connection required');
         return;
+    }
+    
+    // Verify nostrRelay has .sub() method
+    if (typeof nostrRelay.sub !== 'function') {
+        console.error('❌ nostrRelay.sub is not a function. Reconnecting...');
+        await connectToRelay();
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        // Check again
+        if (!nostrRelay || typeof nostrRelay.sub !== 'function') {
+            alert('NOSTR relay connection invalid');
+            return;
+        }
     }
 
     try {

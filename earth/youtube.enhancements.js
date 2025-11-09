@@ -3096,6 +3096,21 @@ function extractVideoMetadata(event) {
     const youtubeUrlTag = event.tags.find(t => t[0] === 'url' && (t[1]?.includes('youtube.com') || t[1]?.includes('youtu.be')));
     const youtubeUrl = youtubeUrlTag ? youtubeUrlTag[1] : null;
     
+    // Extract source_type from tags (source:film, source:serie, source:youtube, source:webcam)
+    // Default is 'webcam' as per create_video_channel.py
+    let sourceType = 'webcam';
+    const sourceTag = event.tags.find(t => t[0] === 'i' && t[1]?.startsWith('source:'));
+    if (sourceTag && sourceTag[1]) {
+        sourceType = sourceTag[1].replace('source:', '');
+    } else {
+        // Check topic tags for provenance indicators (same logic as create_video_channel.py)
+        const topicTags = event.tags.filter(t => t[0] === 't').map(t => t[1]);
+        if (topicTags.includes('YouTubeDownload')) {
+            sourceType = 'youtube';
+        }
+        // Keep 'webcam' as default - don't override based on youtube_url presence
+    }
+    
     return {
         title,
         ipfsUrl,
@@ -3105,6 +3120,7 @@ function extractVideoMetadata(event) {
         eventId: event.id,
         content: event.content || '',
         youtubeUrl: youtubeUrl,  // NEW: YouTube URL if available
+        sourceType: sourceType,  // NEW: Source type (film, serie, youtube, webcam) - default: webcam
         // Provenance metadata
         fileHash: fileHashTag ? fileHashTag[1] : null,
         infoCid: infoCidTag ? infoCidTag[1] : null,
@@ -3168,6 +3184,75 @@ function getVideoSourceType(infoMetadata, youtubeUrl) {
         return 'tmdb';
     }
     return 'video';
+}
+
+/**
+ * Generate HTML for source badge (film, serie, youtube, webcam)
+ * @param {string} sourceType - Source type from video metadata
+ * @param {string} youtubeUrl - YouTube URL if available (for fallback detection)
+ * @returns {string} - HTML for source badge
+ */
+function generateSourceBadgeHTML(sourceType, youtubeUrl = null) {
+    // Ensure CSS styles are injected (only once)
+    if (!document.getElementById('source-badge-styles')) {
+        const style = document.createElement('style');
+        style.id = 'source-badge-styles';
+        style.textContent = `
+            .video-source-badge {
+                position: absolute;
+                top: 8px;
+                left: 8px;
+                z-index: 5;
+            }
+            .source-badge {
+                display: inline-flex;
+                align-items: center;
+                gap: 4px;
+                padding: 4px 8px;
+                border-radius: 4px;
+                font-size: 0.7em;
+                font-weight: 500;
+                backdrop-filter: blur(4px);
+                color: #ffffff;
+            }
+            .source-badge.source-film {
+                background: rgba(139, 69, 19, 0.8);
+                border: 1px solid rgba(139, 69, 19, 0.9);
+            }
+            .source-badge.source-serie {
+                background: rgba(75, 0, 130, 0.8);
+                border: 1px solid rgba(75, 0, 130, 0.9);
+            }
+            .source-badge.source-youtube {
+                background: rgba(255, 0, 0, 0.8);
+                border: 1px solid rgba(255, 0, 0, 0.9);
+            }
+            .source-badge.source-webcam {
+                background: rgba(0, 128, 0, 0.8);
+                border: 1px solid rgba(0, 128, 0, 0.9);
+            }
+            .source-badge i {
+                font-size: 0.9em;
+            }
+        `;
+        document.head.appendChild(style);
+    }
+    
+    // Default to webcam if not specified
+    const source = sourceType || (youtubeUrl ? 'youtube' : 'webcam');
+    
+    let badgeHTML = '';
+    if (source === 'film') {
+        badgeHTML = '<span class="source-badge source-film" title="Film (TMDB)"><i class="bi bi-film"></i> Film</span>';
+    } else if (source === 'serie') {
+        badgeHTML = '<span class="source-badge source-serie" title="Série (TMDB)"><i class="bi bi-tv"></i> Série</span>';
+    } else if (source === 'youtube' || youtubeUrl) {
+        badgeHTML = '<span class="source-badge source-youtube" title="Vidéo YouTube"><i class="bi bi-youtube"></i> YouTube</span>';
+    } else {
+        badgeHTML = '<span class="source-badge source-webcam" title="Vidéo personnelle (Webcam)"><i class="bi bi-camera-video"></i> Webcam</span>';
+    }
+    
+    return `<div class="video-source-badge">${badgeHTML}</div>`;
 }
 
 async function loadPlaylistVideos(videoIds, container) {
@@ -3273,9 +3358,10 @@ async function loadPlaylistVideos(videoIds, container) {
                         <div class="play-overlay" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: rgba(0, 0, 0, 0.4); opacity: 0; transition: opacity 0.2s ease; pointer-events: none;">
                             <div class="play-button" style="width: 48px; height: 48px; background: rgba(255, 255, 255, 0.9); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #000000; font-size: 18px; padding-left: 3px;">▶</div>
                         </div>
+                        ${generateSourceBadgeHTML(videoData.sourceType, videoData.youtubeUrl)}
                         ${durationStr ? `<div style="position: absolute; bottom: 8px; right: 8px; background: rgba(0, 0, 0, 0.8); color: white; padding: 2px 6px; border-radius: 4px; font-size: 11px;">${durationStr}</div>` : ''}
                         ${isEditMode ? `
-                            <div class="playlist-video-drag-handle" style="position: absolute; top: 8px; left: 8px; background: rgba(0, 0, 0, 0.7); color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px; cursor: move; z-index: 10;" title="Drag to reorder">☰</div>
+                            <div class="playlist-video-drag-handle" style="position: absolute; top: 8px; ${videoData.sourceType ? 'left: 100px;' : 'left: 8px;'} background: rgba(0, 0, 0, 0.7); color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px; cursor: move; z-index: 10;" title="Drag to reorder">☰</div>
                         ` : ''}
                     </div>
                     <div class="video-info" style="padding: 12px 0;">

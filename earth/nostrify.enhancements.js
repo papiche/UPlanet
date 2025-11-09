@@ -309,8 +309,13 @@ function parseMP3Event(event) {
         
         // Get thumbnail
         let thumbnail = thumbTag ? thumbTag[1] : (imageTag ? imageTag[1] : null);
-        if (thumbnail && (thumbnail.startsWith('ipfs://') || thumbnail.startsWith('/ipfs/') || (!thumbnail.startsWith('http') && thumbnail.match(/^(Qm|bafy)/))) {
-            thumbnail = convertIPFSUrlGlobal(thumbnail);
+        if (thumbnail) {
+            const isIPFS = thumbnail.startsWith('ipfs://') || 
+                          thumbnail.startsWith('/ipfs/') || 
+                          (!thumbnail.startsWith('http') && thumbnail.match(/^(Qm|bafy)/));
+            if (isIPFS) {
+                thumbnail = convertIPFSUrlGlobal(thumbnail);
+            }
         }
         
         // Get description/summary

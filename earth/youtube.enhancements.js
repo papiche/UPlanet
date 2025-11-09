@@ -635,6 +635,11 @@ async function openTheaterMode(videoData) {
         // Load provenance information
         await loadTheaterProvenance(modalContent, videoData);
 
+        // Load TMDB metadata (genres, season, episode) from info.json
+        if (videoData.infoCid) {
+            await loadTheaterTMDBMetadata(modalContent, videoData.infoCid);
+        }
+
         // Load author info
         if (authorId || uploader) {
             await loadTheaterVideoAuthor(modalContent, authorId, uploader || channel || 'Auteur inconnu');
@@ -1327,9 +1332,151 @@ async function handleTheaterLike(eventId) {
 }
 
 /**
- * Load and display video provenance information in theater mode
- * Shows file hash, info.json link, upload chain, and original uploader
+ * Load and display TMDB metadata (genres, season, episode) from info.json
+ * @param {HTMLElement} modalContent - Modal content container
+ * @param {string} infoCid - IPFS CID of info.json
  */
+async function loadTheaterTMDBMetadata(modalContent, infoCid) {
+    if (!infoCid) return;
+    
+    try {
+        // Load info.json metadata
+        const infoMetadata = await loadInfoJsonMetadata(infoCid);
+        if (!infoMetadata) {
+            console.log('⚠️ No info.json metadata found');
+            return;
+        }
+        
+        // Extract TMDB metadata
+        const tmdbData = infoMetadata.tmdb;
+        if (!tmdbData) {
+            console.log('⚠️ No TMDB metadata in info.json');
+            return;
+        }
+        
+        // Find or create metadata container (after description, before uploader)
+        let metadataContainer = modalContent.querySelector('#theaterTMDBMetadata');
+        if (!metadataContainer) {
+            // Try to find description element to insert after it
+            const descriptionEl = modalContent.querySelector('#theaterDescription');
+            if (descriptionEl) {
+                metadataContainer = document.createElement('div');
+                metadataContainer.id = 'theaterTMDBMetadata';
+                metadataContainer.className = 'theater-tmdb-metadata';
+                descriptionEl.parentNode.insertBefore(metadataContainer, descriptionEl.nextSibling);
+            } else {
+                // Fallback: insert before uploader container
+                const uploaderContainer = modalContent.querySelector('#theaterUploaderContainer');
+                if (uploaderContainer) {
+                    metadataContainer = document.createElement('div');
+                    metadataContainer.id = 'theaterTMDBMetadata';
+                    metadataContainer.className = 'theater-tmdb-metadata';
+                    uploaderContainer.parentNode.insertBefore(metadataContainer, uploaderContainer);
+                } else {
+                    console.warn('⚠️ Could not find insertion point for TMDB metadata');
+                    return;
+                }
+            }
+        }
+        
+        // Build metadata HTML
+        let metadataHTML = '<div class="tmdb-metadata-container">';
+        
+        // Display genres if available
+        if (tmdbData.genres && Array.isArray(tmdbData.genres) && tmdbData.genres.length > 0) {
+            const genresHTML = tmdbData.genres.map(genre => 
+                `<span class="tmdb-genre-badge">${escapeHtml(genre)}</span>`
+            ).join('');
+            metadataHTML += `<div class="tmdb-genres"><strong>Genres:</strong> ${genresHTML}</div>`;
+        }
+        
+        // Display season and episode for series
+        if (tmdbData.media_type === 'tv' || tmdbData.media_type === 'serie') {
+            const seasonEpisode = [];
+            if (tmdbData.season_number !== undefined && tmdbData.season_number !== null) {
+                seasonEpisode.push(`Saison ${tmdbData.season_number}`);
+            }
+            if (tmdbData.episode_number !== undefined && tmdbData.episode_number !== null) {
+                seasonEpisode.push(`Épisode ${tmdbData.episode_number}`);
+            }
+            if (seasonEpisode.length > 0) {
+                metadataHTML += `<div class="tmdb-season-episode"><strong>${seasonEpisode.join(' • ')}</strong></div>`;
+            }
+        }
+        
+        // Display year if available
+        if (tmdbData.year) {
+            metadataHTML += `<div class="tmdb-year"><strong>Année:</strong> ${escapeHtml(tmdbData.year)}</div>`;
+        }
+        
+        // Display TMDB link if available
+        if (tmdbData.tmdb_url) {
+            metadataHTML += `<div class="tmdb-link"><a href="${escapeHtml(tmdbData.tmdb_url)}" target="_blank" rel="noopener noreferrer">📽️ Voir sur TMDB</a></div>`;
+        }
+        
+        metadataHTML += '</div>';
+        
+        // Add CSS styles if not already added
+        if (!document.getElementById('tmdb-metadata-styles')) {
+            const style = document.createElement('style');
+            style.id = 'tmdb-metadata-styles';
+            style.textContent = `
+                .theater-tmdb-metadata {
+                    margin: 12px 0;
+                    padding: 12px;
+                    background: rgba(0, 0, 0, 0.3);
+                    border-radius: 8px;
+                    font-size: 0.9em;
+                }
+                .tmdb-metadata-container {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 8px;
+                }
+                .tmdb-genres {
+                    display: flex;
+                    flex-wrap: wrap;
+                    align-items: center;
+                    gap: 6px;
+                }
+                .tmdb-genre-badge {
+                    display: inline-block;
+                    padding: 4px 10px;
+                    background: rgba(255, 255, 255, 0.15);
+                    border: 1px solid rgba(255, 255, 255, 0.3);
+                    border-radius: 12px;
+                    font-size: 0.85em;
+                    color: #ffffff;
+                }
+                .tmdb-season-episode {
+                    color: #ffffff;
+                    font-weight: 500;
+                }
+                .tmdb-year {
+                    color: rgba(255, 255, 255, 0.8);
+                }
+                .tmdb-link {
+                    margin-top: 4px;
+                }
+                .tmdb-link a {
+                    color: #4a9eff;
+                    text-decoration: none;
+                }
+                .tmdb-link a:hover {
+                    text-decoration: underline;
+                }
+            `;
+            document.head.appendChild(style);
+        }
+        
+        metadataContainer.innerHTML = metadataHTML;
+        console.log('✅ TMDB metadata loaded and displayed');
+        
+    } catch (error) {
+        console.error('❌ Error loading TMDB metadata:', error);
+    }
+}
+
 async function loadTheaterProvenance(modal, videoData) {
     // Try to find provenance container
     let provenanceContainer = modal.querySelector('.theater-provenance');

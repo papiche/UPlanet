@@ -2,7 +2,16 @@
  * Nostrify MP3 Enhancements
  * This file contains all the enhanced UX features for Nostrify MP3 Player
  * Include this after common.js in mp3.html
+ * 
+ * @version 1.0.0
+ * @date 2025-01-09
  */
+
+// Version information for client detection
+if (typeof window.NOSTRIFY_ENHANCEMENTS_VERSION === 'undefined') {
+    window.NOSTRIFY_ENHANCEMENTS_VERSION = '1.0.0';
+    window.NOSTRIFY_ENHANCEMENTS_DATE = '2025-01-09';
+}
 
 // ========================================
 // IPFS GATEWAY DETECTION

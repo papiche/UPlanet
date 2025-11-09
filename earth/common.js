@@ -2,6 +2,9 @@
  * UPlanet Common JavaScript
  * Code partagé entre entrance.html, nostr_com.html, uplanet_com.html, youtube.html, plantnet.html, etc.
  * 
+ * @version 1.0.0
+ * @date 2025-01-09
+ * 
  * GLOBAL EXPORTS (accessible via window):
  * - Variables: window.nostrRelay, window.isNostrConnected, window.userPubkey, window.DEFAULT_RELAYS, window.upassportUrl
  * - Getter/Setter functions: window.getNostrRelay(), window.getIsNostrConnected(), window.getUserPubkey(),
@@ -12,6 +15,12 @@
  * All functions declared with 'function' or 'async function' are automatically available globally.
  * Variables are explicitly exposed on window for compatibility with youtube.html, plantnet.html, etc.
  */
+
+// Version information for client detection
+if (typeof window.UPLANET_COMMON_VERSION === 'undefined') {
+    window.UPLANET_COMMON_VERSION = '1.0.0';
+    window.UPLANET_COMMON_DATE = '2025-01-09';
+}
 
 // ========================================
 // NOSTR EXTENSION WRAPPER FOR CHROME COMPATIBILITY

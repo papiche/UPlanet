@@ -2,7 +2,16 @@
  * Nostr Tube UX Enhancements
  * This file contains all the enhanced UX features for Nostr Tube
  * Include this after common.js in youtube.html
+ * 
+ * @version 1.0.0
+ * @date 2025-01-09
  */
+
+// Version information for client detection
+if (typeof window.YOUTUBE_ENHANCEMENTS_VERSION === 'undefined') {
+    window.YOUTUBE_ENHANCEMENTS_VERSION = '1.0.0';
+    window.YOUTUBE_ENHANCEMENTS_DATE = '2025-01-09';
+}
 
 // ========================================
 // IPFS GATEWAY DETECTION (Global functions)

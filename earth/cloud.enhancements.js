@@ -111,9 +111,28 @@ let isLoading = false;
 // ========================================
 // NOSTR RELAY CONNECTION
 // ========================================
+// Use common.js functions instead of declaring own variables
+// common.js provides: window.getNostrRelay(), window.getIsNostrConnected()
 
-let nostrRelay = null;
-let isNostrConnected = false;
+/**
+ * Get NOSTR relay (use common.js getter)
+ */
+function getNostrRelayCloud() {
+    if (typeof window !== 'undefined' && typeof window.getNostrRelay === 'function') {
+        return window.getNostrRelay();
+    }
+    return window.nostrRelay || null;
+}
+
+/**
+ * Check if NOSTR is connected (use common.js getter)
+ */
+function getIsNostrConnectedCloud() {
+    if (typeof window !== 'undefined' && typeof window.getIsNostrConnected === 'function') {
+        return window.getIsNostrConnected();
+    }
+    return window.isNostrConnected || false;
+}
 
 /**
  * Initialize NOSTR connection
@@ -122,32 +141,29 @@ let isNostrConnected = false;
 async function initNostrCloud() {
     try {
         // Try to use relay from common.js first
-        if (typeof window !== 'undefined' && window.nostrRelay && typeof window.getNostrRelay === 'function') {
-            const relay = window.getNostrRelay();
-            if (relay) {
-                nostrRelay = relay;
-                isNostrConnected = typeof window.getIsNostrConnected === 'function' ? window.getIsNostrConnected() : true;
-                console.log('[CLOUD] Using NOSTR relay from common.js');
-                return true;
-            }
+        let relay = getNostrRelayCloud();
+        if (relay && getIsNostrConnectedCloud()) {
+            console.log('[CLOUD] Using NOSTR relay from common.js');
+            return true;
         }
         
         // Try to connect using common.js connectToRelay function
         if (typeof connectToRelay === 'function') {
             try {
-                await connectToRelay();
-                if (typeof window.getNostrRelay === 'function') {
-                    nostrRelay = window.getNostrRelay();
-                    isNostrConnected = window.getIsNostrConnected();
-                    console.log('[CLOUD] Connected to NOSTR via common.js');
-                    return true;
+                const connected = await connectToRelay();
+                if (connected) {
+                    relay = getNostrRelayCloud();
+                    if (relay) {
+                        console.log('[CLOUD] Connected to NOSTR via common.js');
+                        return true;
+                    }
                 }
             } catch (error) {
                 console.warn('[CLOUD] connectToRelay failed, trying direct connection:', error);
             }
         }
         
-        // Fallback: create own connection
+        // Fallback: create own connection using SimplePool
         // Check if NOSTR tools are available
         if (typeof window.NostrTools === 'undefined' && typeof SimplePool === 'undefined') {
             console.warn('[CLOUD] NOSTR tools not available');
@@ -155,17 +171,25 @@ async function initNostrCloud() {
         }
         
         // Try to use SimplePool (from nostr.bundle.js)
+        let pool = null;
         if (typeof SimplePool !== 'undefined') {
-            const pool = new SimplePool();
-            nostrRelay = pool;
-            isNostrConnected = true;
-            console.log('[CLOUD] NOSTR connected via SimplePool');
-            return true;
+            pool = new SimplePool();
         } else if (typeof window.NostrTools !== 'undefined' && window.NostrTools.SimplePool) {
-            const pool = new window.NostrTools.SimplePool();
-            nostrRelay = pool;
-            isNostrConnected = true;
-            console.log('[CLOUD] NOSTR connected via NostrTools.SimplePool');
+            pool = new window.NostrTools.SimplePool();
+        }
+        
+        if (pool) {
+            // Set relay using common.js setter if available
+            if (typeof window !== 'undefined' && typeof window.setNostrRelay === 'function') {
+                window.setNostrRelay(pool);
+                if (typeof window.setIsNostrConnected === 'function') {
+                    window.setIsNostrConnected(true);
+                }
+            } else {
+                window.nostrRelay = pool;
+                window.isNostrConnected = true;
+            }
+            console.log('[CLOUD] NOSTR connected via SimplePool');
             return true;
         } else {
             console.warn('[CLOUD] SimplePool not available');
@@ -353,8 +377,14 @@ async function fetchCloudFiles(filters = {}) {
         const relays = getDefaultRelaysCloud();
         const allFiles = [];
         
+        // Get relay from common.js
+        let nostrRelay = getNostrRelayCloud();
+        let isNostrConnected = getIsNostrConnectedCloud();
+        
         if (!nostrRelay || !isNostrConnected) {
             await initNostrCloud();
+            nostrRelay = getNostrRelayCloud();
+            isNostrConnected = getIsNostrConnectedCloud();
         }
         
         if (!nostrRelay) {

@@ -190,27 +190,37 @@ async function fetchNostrMP3Tracks(limit = 100, relays = null) {
                         }
                     });
                     
-                    sub.on('eose', () => {
+                    sub.on('eose', async () => {
                         completedRelays++;
                         sub.unsub();
                         
                         if (completedRelays >= totalRelays) {
+                            // Enrich tracks with .info.json metadata if available
+                            const enrichedTracks = await Promise.all(
+                                allTracks.map(track => enrichTrackWithInfoJson(track))
+                            );
+                            
                             // Sort by created_at (newest first)
-                            allTracks.sort((a, b) => b.createdAt - a.createdAt);
-                            console.log(`[NOSTRIFY] Fetched ${allTracks.length} MP3 tracks`);
-                            resolve(allTracks);
+                            enrichedTracks.sort((a, b) => b.createdAt - a.createdAt);
+                            console.log(`[NOSTRIFY] Fetched ${enrichedTracks.length} MP3 tracks (enriched with .info.json)`);
+                            resolve(enrichedTracks);
                         }
                     });
                     
                     // Timeout after 10 seconds
-                    setTimeout(() => {
+                    setTimeout(async () => {
                         completedRelays++;
                         sub.unsub();
                         
                         if (completedRelays >= totalRelays) {
-                            allTracks.sort((a, b) => b.createdAt - a.createdAt);
-                            console.log(`[NOSTRIFY] Fetched ${allTracks.length} MP3 tracks (timeout)`);
-                            resolve(allTracks);
+                            // Enrich tracks with .info.json metadata if available
+                            const enrichedTracks = await Promise.all(
+                                allTracks.map(track => enrichTrackWithInfoJson(track))
+                            );
+                            
+                            enrichedTracks.sort((a, b) => b.createdAt - a.createdAt);
+                            console.log(`[NOSTRIFY] Fetched ${enrichedTracks.length} MP3 tracks (timeout, enriched with .info.json)`);
+                            resolve(enrichedTracks);
                         }
                     }, 10000);
                     
@@ -219,8 +229,17 @@ async function fetchNostrMP3Tracks(limit = 100, relays = null) {
                     completedRelays++;
                     
                     if (completedRelays >= totalRelays) {
-                        allTracks.sort((a, b) => b.createdAt - a.createdAt);
-                        resolve(allTracks);
+                        // Enrich tracks with .info.json metadata if available
+                        Promise.all(
+                            allTracks.map(track => enrichTrackWithInfoJson(track))
+                        ).then(enrichedTracks => {
+                            enrichedTracks.sort((a, b) => b.createdAt - a.createdAt);
+                            resolve(enrichedTracks);
+                        }).catch(err => {
+                            console.warn('[NOSTRIFY] Error enriching tracks:', err);
+                            allTracks.sort((a, b) => b.createdAt - a.createdAt);
+                            resolve(allTracks);
+                        });
                     }
                 }
             });
@@ -252,7 +271,7 @@ function parseMP3Event(event) {
             return null;
         }
         
-        // Extract tags
+        // Extract all tags for comprehensive metadata
         const urlTag = event.tags.find(tag => tag[0] === 'url');
         const titleTag = event.tags.find(tag => tag[0] === 'title');
         const artistTag = event.tags.find(tag => tag[0] === 'artist' || tag[0] === 'p');
@@ -263,6 +282,27 @@ function parseMP3Event(event) {
         const sizeTag = event.tags.find(tag => tag[0] === 'size');
         const durationTag = event.tags.find(tag => tag[0] === 'duration');
         const hashTag = event.tags.find(tag => tag[0] === 'x');
+        const infoTag = event.tags.find(tag => tag[0] === 'info'); // INFO_CID for .info.json
+        
+        // Extract comprehensive metadata tags
+        const channelTag = event.tags.find(tag => tag[0] === 'channel');
+        const channelIdTag = event.tags.find(tag => tag[0] === 'channel_id');
+        const channelUrlTag = event.tags.find(tag => tag[0] === 'channel_url');
+        const youtubeUrlTag = event.tags.find(tag => tag[0] === 'youtube_url');
+        const viewCountTag = event.tags.find(tag => tag[0] === 'view_count');
+        const likeCountTag = event.tags.find(tag => tag[0] === 'like_count');
+        const commentCountTag = event.tags.find(tag => tag[0] === 'comment_count');
+        const uploadDateTag = event.tags.find(tag => tag[0] === 'upload_date');
+        const releaseDateTag = event.tags.find(tag => tag[0] === 'release_date');
+        const languageTag = event.tags.find(tag => tag[0] === 'language');
+        const licenseTag = event.tags.find(tag => tag[0] === 'license');
+        const tagsTag = event.tags.find(tag => tag[0] === 'tags');
+        const categoriesTag = event.tags.find(tag => tag[0] === 'categories');
+        const trackNumberTag = event.tags.find(tag => tag[0] === 'track');
+        const creatorTag = event.tags.find(tag => tag[0] === 'creator');
+        const abrTag = event.tags.find(tag => tag[0] === 'abr');
+        const acodecTag = event.tags.find(tag => tag[0] === 'acodec');
+        const formatNoteTag = event.tags.find(tag => tag[0] === 'format_note');
         
         // Extract source type from 'i' tag
         const sourceTag = event.tags.find(tag => tag[0] === 'i' && tag[1] && tag[1].startsWith('source:'));
@@ -330,7 +370,7 @@ function parseMP3Event(event) {
         // Get hash
         const hash = hashTag ? hashTag[1] : null;
         
-        // Create track object
+        // Create track object with comprehensive metadata from tags
         const track = {
             eventId: event.id,
             authorId: event.pubkey,
@@ -347,7 +387,29 @@ function parseMP3Event(event) {
             sourceType: sourceType,
             createdAt: event.created_at,
             date: new Date(event.created_at * 1000),
-            liked: false // Will be checked separately
+            liked: false, // Will be checked separately
+            // Additional metadata from tags
+            infoCid: infoTag ? infoTag[1] : null, // INFO_CID for .info.json
+            channel: channelTag ? channelTag[1] : null,
+            channelId: channelIdTag ? channelIdTag[1] : null,
+            channelUrl: channelUrlTag ? channelUrlTag[1] : null,
+            youtubeUrl: youtubeUrlTag ? youtubeUrlTag[1] : null,
+            viewCount: viewCountTag ? parseInt(viewCountTag[1]) || 0 : 0,
+            likeCount: likeCountTag ? parseInt(likeCountTag[1]) || 0 : 0,
+            commentCount: commentCountTag ? parseInt(commentCountTag[1]) || 0 : 0,
+            uploadDate: uploadDateTag ? uploadDateTag[1] : null,
+            releaseDate: releaseDateTag ? releaseDateTag[1] : null,
+            language: languageTag ? languageTag[1] : null,
+            license: licenseTag ? licenseTag[1] : null,
+            tags: tagsTag ? tagsTag[1].split(',').map(t => t.trim()) : [],
+            categories: categoriesTag ? categoriesTag[1].split(',').map(c => c.trim()) : [],
+            track: trackNumberTag ? trackNumberTag[1] : null,
+            creator: creatorTag ? creatorTag[1] : null,
+            abr: abrTag ? parseInt(abrTag[1]) || 0 : 0,
+            acodec: acodecTag ? acodecTag[1] : null,
+            formatNote: formatNoteTag ? formatNoteTag[1] : null,
+            // Store raw event for later enrichment
+            rawEvent: event
         };
         
         return track;
@@ -428,24 +490,32 @@ async function fetchUserLibraryTracks(userPubkey = null) {
                         }
                     });
                     
-                    sub.on('eose', () => {
+                    sub.on('eose', async () => {
                         completedRelays++;
                         sub.unsub();
                         
                         if (completedRelays >= totalRelays) {
-                            tracks.sort((a, b) => b.createdAt - a.createdAt);
-                            console.log(`[NOSTRIFY] Fetched ${tracks.length} user library tracks`);
-                            resolve(tracks);
+                            // Enrich tracks with .info.json metadata if available
+                            const enrichedTracks = await Promise.all(
+                                tracks.map(track => enrichTrackWithInfoJson(track))
+                            );
+                            enrichedTracks.sort((a, b) => b.createdAt - a.createdAt);
+                            console.log(`[NOSTRIFY] Fetched ${enrichedTracks.length} user library tracks (enriched with .info.json)`);
+                            resolve(enrichedTracks);
                         }
                     });
                     
-                    setTimeout(() => {
+                    setTimeout(async () => {
                         completedRelays++;
                         sub.unsub();
                         
                         if (completedRelays >= totalRelays) {
-                            tracks.sort((a, b) => b.createdAt - a.createdAt);
-                            resolve(tracks);
+                            // Enrich tracks with .info.json metadata if available
+                            const enrichedTracks = await Promise.all(
+                                tracks.map(track => enrichTrackWithInfoJson(track))
+                            );
+                            enrichedTracks.sort((a, b) => b.createdAt - a.createdAt);
+                            resolve(enrichedTracks);
                         }
                     }, 10000);
                     
@@ -454,8 +524,17 @@ async function fetchUserLibraryTracks(userPubkey = null) {
                     completedRelays++;
                     
                     if (completedRelays >= totalRelays) {
-                        tracks.sort((a, b) => b.createdAt - a.createdAt);
-                        resolve(tracks);
+                        // Enrich tracks with .info.json metadata if available
+                        Promise.all(
+                            tracks.map(track => enrichTrackWithInfoJson(track))
+                        ).then(enrichedTracks => {
+                            enrichedTracks.sort((a, b) => b.createdAt - a.createdAt);
+                            resolve(enrichedTracks);
+                        }).catch(err => {
+                            console.warn('[NOSTRIFY] Error enriching tracks:', err);
+                            tracks.sort((a, b) => b.createdAt - a.createdAt);
+                            resolve(tracks);
+                        });
                     }
                 }
             });
@@ -735,7 +814,39 @@ async function openMP3Modal(trackData) {
         album,
         duration,
         description,
-        content
+        content,
+        // Comprehensive metadata from .info.json (optional)
+        channel,
+        channelId,
+        channelUrl,
+        youtubeUrl,
+        viewCount,
+        likeCount,
+        commentCount,
+        uploadDate,
+        releaseDate,
+        language,
+        license,
+        tags,
+        categories,
+        track,
+        creator,
+        abr,
+        acodec,
+        formatNote,
+        youtubeMetadata,
+        channelInfo,
+        contentInfo,
+        technicalInfo,
+        statistics,
+        dates,
+        mediaInfo,
+        playlistInfo,
+        thumbnails,
+        subtitlesInfo,
+        chapters,
+        liveInfo,
+        infoJson
     } = trackData;
 
     // Prevent multiple instances
@@ -985,6 +1096,208 @@ function closeMP3Modal() {
 }
 
 /**
+ * Enrich track with comprehensive metadata from .info.json (via INFO_CID)
+ * @param {Object} track - Track object
+ * @returns {Promise<Object>} Enriched track object
+ */
+async function enrichTrackWithInfoJson(track) {
+    // Check if track has info tag (INFO_CID)
+    if (!track.infoCid && track.rawEvent) {
+        const infoTag = track.rawEvent.tags?.find(tag => tag[0] === 'info');
+        if (infoTag && infoTag[1]) {
+            track.infoCid = infoTag[1];
+        }
+    }
+    
+    if (!track.infoCid) {
+        return track; // No .info.json available
+    }
+    
+    try {
+        console.log('[NOSTRIFY] 📋 Loading .info.json metadata for track:', track.title, track.infoCid);
+        
+        // Determine IPFS gateway
+        let ipfsGateway = (typeof window !== 'undefined' && window.IPFS_GATEWAY) ? window.IPFS_GATEWAY : '';
+        if (!ipfsGateway) {
+            detectIPFSGatewayGlobal();
+            ipfsGateway = (typeof window !== 'undefined' && window.IPFS_GATEWAY) ? window.IPFS_GATEWAY : IPFS_GATEWAY_FALLBACK;
+        }
+        
+        // Fetch .info.json
+        const infoJsonUrl = `${ipfsGateway}/ipfs/${track.infoCid}`;
+        const infoResponse = await fetch(infoJsonUrl);
+        
+        if (infoResponse.ok) {
+            const infoJson = await infoResponse.json();
+            console.log('[NOSTRIFY] ✅ Loaded .info.json for track:', track.title);
+            
+            // Merge metadata from .info.json
+            return {
+                ...track,
+                // Override with .info.json data if available
+                title: infoJson.title || track.title,
+                rawTitle: infoJson.title || track.title,
+                artist: infoJson.media_info?.artist || infoJson.uploader || track.artist,
+                album: infoJson.media_info?.album || track.album,
+                description: infoJson.content_info?.description || infoJson.description || track.description,
+                duration: infoJson.duration || track.duration,
+                // Channel info
+                channel: infoJson.channel_info?.display_name || infoJson.channel_info?.name || infoJson.uploader || track.channel,
+                channelId: infoJson.channel_info?.channel_id || track.channelId,
+                channelUrl: infoJson.channel_info?.channel_url || track.channelUrl,
+                youtubeUrl: infoJson.youtube_url || infoJson.original_url || track.youtubeUrl,
+                // Statistics
+                viewCount: infoJson.statistics?.view_count || track.viewCount || 0,
+                likeCount: infoJson.statistics?.like_count || track.likeCount || 0,
+                commentCount: infoJson.statistics?.comment_count || track.commentCount || 0,
+                // Dates
+                uploadDate: infoJson.dates?.upload_date || infoJson.upload_date || track.uploadDate,
+                releaseDate: infoJson.dates?.release_date || infoJson.release_date || track.releaseDate,
+                // Content info
+                language: infoJson.content_info?.language || infoJson.language || track.language,
+                license: infoJson.content_info?.license || infoJson.license || track.license,
+                tags: infoJson.content_info?.tags || infoJson.tags || track.tags || [],
+                categories: infoJson.content_info?.categories || infoJson.categories || track.categories || [],
+                // Media info
+                track: infoJson.media_info?.track || track.track,
+                creator: infoJson.media_info?.creator || infoJson.creator || track.creator,
+                // Technical info
+                abr: infoJson.technical_info?.abr || infoJson.abr || track.abr || 0,
+                acodec: infoJson.technical_info?.acodec || infoJson.acodec || track.acodec,
+                formatNote: infoJson.technical_info?.format_note || infoJson.format_note || track.formatNote,
+                // Thumbnails
+                thumbnail: (infoJson.thumbnails?.thumbnail && typeof convertIPFSUrlGlobal === 'function' 
+                    ? convertIPFSUrlGlobal(infoJson.thumbnails.thumbnail) 
+                    : (infoJson.thumbnails?.thumbnail || track.thumbnail)),
+                // Full metadata objects
+                youtubeMetadata: infoJson.youtube_metadata || track.youtubeMetadata || {},
+                channelInfo: infoJson.channel_info || track.channelInfo || {},
+                contentInfo: infoJson.content_info || track.contentInfo || {},
+                technicalInfo: infoJson.technical_info || track.technicalInfo || {},
+                statistics: infoJson.statistics || track.statistics || {},
+                dates: infoJson.dates || track.dates || {},
+                mediaInfo: infoJson.media_info || track.mediaInfo || {},
+                playlistInfo: infoJson.playlist_info || track.playlistInfo || {},
+                thumbnails: infoJson.thumbnails || track.thumbnails || {},
+                subtitlesInfo: infoJson.subtitles_info || track.subtitlesInfo || {},
+                chapters: infoJson.chapters || track.chapters || [],
+                liveInfo: infoJson.live_info || track.liveInfo || {},
+                // Raw .info.json
+                infoJson: infoJson
+            };
+        } else {
+            console.warn('[NOSTRIFY] ⚠️ Could not load .info.json from IPFS:', infoResponse.status);
+        }
+    } catch (error) {
+        console.warn('[NOSTRIFY] ⚠️ Error loading .info.json metadata:', error);
+    }
+    
+    return track; // Return original track if .info.json loading failed
+}
+
+/**
+ * Load track from NOSTR event ID with comprehensive metadata from .info.json
+ * @param {string} eventId - NOSTR event ID
+ * @returns {Promise<Object>} Track object with all metadata
+ */
+async function loadTrackFromEventId(eventId) {
+    try {
+        // Wait for relay connection with retries
+        let currentRelay = (typeof window !== 'undefined' && window.nostrRelay) ? window.nostrRelay : (typeof nostrRelay !== 'undefined' ? nostrRelay : null);
+        let retries = 0;
+        const maxRetries = 3;
+        
+        // Check if relay is already connected and functional
+        if (currentRelay && typeof currentRelay.sub === 'function') {
+            // Check if connection is actually working by verifying isNostrConnected flag
+            const isConnected = (typeof window !== 'undefined' && window.isNostrConnected === true) || 
+                              (typeof isNostrConnected !== 'undefined' && isNostrConnected === true);
+            if (isConnected) {
+                // Connection appears to be valid, proceed
+                console.log('[NOSTRIFY] ✅ Using existing relay connection');
+            } else {
+                // Connection flag says not connected, need to reconnect
+                currentRelay = null;
+            }
+        }
+        
+        // Connect if needed
+        if (!currentRelay || typeof currentRelay.sub !== 'function') {
+            if (typeof connectToRelay === 'function') {
+                console.log('[NOSTRIFY] 🔌 Connecting to relay...');
+                const connected = await connectToRelay(false);
+                if (connected) {
+                    // Wait a bit for connection to stabilize
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                    // Get the relay object from window
+                    currentRelay = (typeof window !== 'undefined' && window.nostrRelay) ? window.nostrRelay : (typeof nostrRelay !== 'undefined' ? nostrRelay : null);
+                } else {
+                    throw new Error('Failed to connect to relay');
+                }
+            } else {
+                throw new Error('connectToRelay function not available');
+            }
+        }
+        
+        // Final verification
+        if (!currentRelay || typeof currentRelay.sub !== 'function') {
+            throw new Error('NOSTR relay not connected - sub method not available');
+        }
+        
+        // Verify connection flag
+        const isConnected = (typeof window !== 'undefined' && window.isNostrConnected === true) || 
+                          (typeof isNostrConnected !== 'undefined' && isNostrConnected === true);
+        if (!isConnected) {
+            throw new Error('NOSTR relay connection flag indicates not connected');
+        }
+        
+        // Fetch track event (kind 1063)
+        const event = await new Promise((resolve, reject) => {
+            const sub = currentRelay.sub([{
+                kinds: [1063],
+                ids: [eventId],
+                limit: 1
+            }]);
+            
+            let trackEvent = null;
+            
+            sub.on('event', (evt) => {
+                trackEvent = evt;
+            });
+            
+            sub.on('eose', () => {
+                sub.unsub();
+                resolve(trackEvent);
+            });
+            
+            setTimeout(() => {
+                sub.unsub();
+                resolve(trackEvent);
+            }, 5000);
+        });
+        
+        if (!event) {
+            throw new Error('Track not found');
+        }
+        
+        // Parse track data using parseMP3Event
+        const baseTrack = parseMP3Event(event);
+        if (!baseTrack) {
+            throw new Error('Failed to parse track event');
+        }
+        
+        // Enrich with .info.json metadata
+        const enrichedTrack = await enrichTrackWithInfoJson(baseTrack);
+        
+        return enrichedTrack;
+        
+    } catch (error) {
+        console.error('[NOSTRIFY] Error loading track:', error);
+        throw error;
+    }
+}
+
+/**
  * Open MP3 modal from NOSTR event ID
  */
 async function openMP3ModalFromEvent(eventId) {
@@ -1035,49 +1348,58 @@ async function openMP3ModalFromEvent(eventId) {
             }, 3000);
         });
 
-        if (!event) {
+        // Use loadTrackFromEventId to get comprehensive metadata
+        const track = await loadTrackFromEventId(eventId);
+        
+        if (!track) {
             alert('Track not found');
             return;
         }
 
-        // Parse track data from event (using parseMP3Event logic)
-        const urlTag = event.tags.find(t => t[0] === 'url');
-        const titleTag = event.tags.find(t => t[0] === 'title');
-        const artistTag = event.tags.find(t => t[0] === 'artist');
-        const albumTag = event.tags.find(t => t[0] === 'album');
-        const thumbTag = event.tags.find(t => t[0] === 'thumb');
-        const summaryTag = event.tags.find(t => t[0] === 'summary');
-        const durationTag = event.tags.find(t => t[0] === 'duration');
-
-        let url = urlTag ? urlTag[1] : null;
-        if (!url) {
-            alert('Track URL not found');
-            return;
-        }
-
-        // Convert IPFS URL
-        if (typeof convertIPFSUrlGlobal === 'function') {
-            url = convertIPFSUrlGlobal(url);
-        }
-
-        const title = titleTag ? titleTag[1] : (event.content || 'Unknown Title');
-        const artist = artistTag ? artistTag[1] : 'Unknown Artist';
-        const album = albumTag ? albumTag[1] : '—';
-        const thumbnail = thumbTag ? thumbTag[1] : null;
-        const description = summaryTag ? summaryTag[1] : event.content;
-        const duration = durationTag ? parseFloat(durationTag[1]) : null;
-
         await openMP3Modal({
-            title: title,
-            url: url,
-            thumbnail: thumbnail,
-            eventId: event.id,
-            authorId: event.pubkey,
-            artist: artist,
-            album: album,
-            duration: duration,
-            description: description,
-            content: event.content
+            title: track.title,
+            url: track.url,
+            thumbnail: track.thumbnail,
+            eventId: track.eventId,
+            authorId: track.authorId,
+            artist: track.artist,
+            album: track.album,
+            duration: track.duration,
+            description: track.description,
+            content: track.content || track.description,
+            // Comprehensive metadata from .info.json
+            channel: track.channel,
+            channelId: track.channelId,
+            channelUrl: track.channelUrl,
+            youtubeUrl: track.youtubeUrl,
+            viewCount: track.viewCount,
+            likeCount: track.likeCount,
+            commentCount: track.commentCount,
+            uploadDate: track.uploadDate,
+            releaseDate: track.releaseDate,
+            language: track.language,
+            license: track.license,
+            tags: track.tags,
+            categories: track.categories,
+            track: track.track,
+            creator: track.creator,
+            abr: track.abr,
+            acodec: track.acodec,
+            formatNote: track.formatNote,
+            // Full metadata objects
+            youtubeMetadata: track.youtubeMetadata,
+            channelInfo: track.channelInfo,
+            contentInfo: track.contentInfo,
+            technicalInfo: track.technicalInfo,
+            statistics: track.statistics,
+            dates: track.dates,
+            mediaInfo: track.mediaInfo,
+            playlistInfo: track.playlistInfo,
+            thumbnails: track.thumbnails,
+            subtitlesInfo: track.subtitlesInfo,
+            chapters: track.chapters,
+            liveInfo: track.liveInfo,
+            infoJson: track.infoJson
         });
 
     } catch (error) {
@@ -1098,4 +1420,7 @@ window.convertIPFSUrlGlobal = convertIPFSUrlGlobal;
 window.openMP3Modal = openMP3Modal;
 window.closeMP3Modal = closeMP3Modal;
 window.openMP3ModalFromEvent = openMP3ModalFromEvent;
+window.enrichTrackWithInfoJson = enrichTrackWithInfoJson;
+window.loadTrackFromEventId = loadTrackFromEventId;
+window.parseMP3Event = parseMP3Event;
 

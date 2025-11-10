@@ -16,39 +16,39 @@ if (typeof window.CLOUD_ENHANCEMENTS_VERSION === 'undefined') {
 // ========================================
 // IPFS GATEWAY DETECTION
 // ========================================
+// Use functions from common.js or youtube.enhancements.js if available
+// Otherwise, use window.IPFS_GATEWAY which is set by common.js
 
-let IPFS_GATEWAY_FALLBACK = '';
-if (typeof IPFS_GATEWAY === 'undefined') {
-    window.IPFS_GATEWAY = '';
-}
-
-function detectIPFSGatewayCloud() {
+/**
+ * Get IPFS gateway (use from common.js or detect)
+ */
+function getIPFSGatewayCloud() {
+    // Use window.IPFS_GATEWAY if available (set by common.js)
+    if (typeof window !== 'undefined' && window.IPFS_GATEWAY && window.IPFS_GATEWAY !== '') {
+        return window.IPFS_GATEWAY;
+    }
+    
+    // Try to use detectIPFSGatewayGlobal from youtube.enhancements.js if available
+    if (typeof detectIPFSGatewayGlobal === 'function') {
+        return detectIPFSGatewayGlobal();
+    }
+    
+    // Fallback: detect manually
     const currentURL = new URL(window.location.href);
     const hostname = currentURL.hostname;
-    const port = currentURL.port;
     const protocol = currentURL.protocol.split(":")[0];
     
     if (hostname === "127.0.0.1" || hostname === "localhost") {
-        IPFS_GATEWAY_FALLBACK = `http://127.0.0.1:8080`;
+        return `http://127.0.0.1:8080`;
     } else if (hostname.startsWith("ipfs.")) {
         const baseDomain = hostname.substring("ipfs.".length);
-        IPFS_GATEWAY_FALLBACK = `${protocol}://ipfs.${baseDomain}`;
+        return `${protocol}://ipfs.${baseDomain}`;
     } else if (hostname.startsWith("u.")) {
         const baseDomain = hostname.substring("u.".length);
-        IPFS_GATEWAY_FALLBACK = `${protocol === 'http' ? 'http' : 'https'}://ipfs.${baseDomain}`;
+        return `${protocol === 'http' ? 'http' : 'https'}://ipfs.${baseDomain}`;
     } else {
-        IPFS_GATEWAY_FALLBACK = `https://ipfs.copylaradio.com`;
+        return `https://ipfs.copylaradio.com`;
     }
-    
-    if (typeof window !== 'undefined') {
-        if (!window.IPFS_GATEWAY || window.IPFS_GATEWAY === '') {
-            window.IPFS_GATEWAY = IPFS_GATEWAY_FALLBACK;
-        }
-    }
-    
-    const finalGateway = (typeof window !== 'undefined' && window.IPFS_GATEWAY) ? window.IPFS_GATEWAY : IPFS_GATEWAY_FALLBACK;
-    console.log(`[CLOUD] IPFS Gateway detected: ${finalGateway}`);
-    return finalGateway;
 }
 
 /**
@@ -57,11 +57,13 @@ function detectIPFSGatewayCloud() {
 function convertIPFSUrlCloud(url) {
     if (!url) return '';
     
-    let currentGateway = (typeof window !== 'undefined' && window.IPFS_GATEWAY) ? window.IPFS_GATEWAY : '';
-    if (!currentGateway || currentGateway === '') {
-        detectIPFSGatewayCloud();
-        currentGateway = (typeof window !== 'undefined' && window.IPFS_GATEWAY) ? window.IPFS_GATEWAY : '';
+    // Use convertIPFSUrlGlobal from youtube.enhancements.js if available
+    if (typeof convertIPFSUrlGlobal === 'function') {
+        return convertIPFSUrlGlobal(url);
     }
+    
+    // Fallback: manual conversion
+    const gateway = getIPFSGatewayCloud();
     
     let ipfsPath = url;
     if (!url.startsWith('/ipfs/') && !url.startsWith('ipfs://') && !url.startsWith('http')) {
@@ -80,8 +82,6 @@ function convertIPFSUrlCloud(url) {
             return url;
         }
     }
-    
-    const gateway = currentGateway;
     
     let fullUrl = ipfsPath;
     if (ipfsPath.startsWith('/ipfs/')) {
@@ -117,9 +117,37 @@ let isNostrConnected = false;
 
 /**
  * Initialize NOSTR connection
+ * Uses common.js functions if available, otherwise creates own connection
  */
 async function initNostrCloud() {
     try {
+        // Try to use relay from common.js first
+        if (typeof window !== 'undefined' && window.nostrRelay && typeof window.getNostrRelay === 'function') {
+            const relay = window.getNostrRelay();
+            if (relay) {
+                nostrRelay = relay;
+                isNostrConnected = typeof window.getIsNostrConnected === 'function' ? window.getIsNostrConnected() : true;
+                console.log('[CLOUD] Using NOSTR relay from common.js');
+                return true;
+            }
+        }
+        
+        // Try to connect using common.js connectToRelay function
+        if (typeof connectToRelay === 'function') {
+            try {
+                await connectToRelay();
+                if (typeof window.getNostrRelay === 'function') {
+                    nostrRelay = window.getNostrRelay();
+                    isNostrConnected = window.getIsNostrConnected();
+                    console.log('[CLOUD] Connected to NOSTR via common.js');
+                    return true;
+                }
+            } catch (error) {
+                console.warn('[CLOUD] connectToRelay failed, trying direct connection:', error);
+            }
+        }
+        
+        // Fallback: create own connection
         // Check if NOSTR tools are available
         if (typeof window.NostrTools === 'undefined' && typeof SimplePool === 'undefined') {
             console.warn('[CLOUD] NOSTR tools not available');
@@ -151,12 +179,15 @@ async function initNostrCloud() {
 
 /**
  * Get default relays
+ * Uses DEFAULT_RELAYS from common.js if available
  */
 function getDefaultRelaysCloud() {
-    if (typeof window !== 'undefined' && window.DEFAULT_RELAYS) {
+    // Use DEFAULT_RELAYS from common.js if available
+    if (typeof window !== 'undefined' && window.DEFAULT_RELAYS && Array.isArray(window.DEFAULT_RELAYS)) {
         return window.DEFAULT_RELAYS;
     }
     
+    // Fallback: default relays
     return [
         'ws://127.0.0.1:7777',
         'wss://relay.copylaradio.com',
@@ -401,8 +432,11 @@ async function fetchCloudFiles(filters = {}) {
 async function loadInfoJsonMetadataCloud(infoCid) {
     if (!infoCid) return null;
     
+    // Get primary gateway (from common.js or detect)
+    const primaryGateway = getIPFSGatewayCloud();
+    
     const ipfsGateways = [
-        window.IPFS_GATEWAY || 'https://ipfs.copylaradio.com',
+        primaryGateway,
         'https://ipfs.io',
         'https://gateway.pinata.cloud',
         'https://cloudflare-ipfs.com',
@@ -1071,10 +1105,13 @@ function formatDuration(seconds) {
 async function initCloud() {
     console.log('[CLOUD] Initializing...');
     
-    // Detect IPFS gateway
-    detectIPFSGatewayCloud();
+    // Ensure IPFS gateway is set (common.js should have done this, but ensure it)
+    if (typeof window !== 'undefined' && (!window.IPFS_GATEWAY || window.IPFS_GATEWAY === '')) {
+        window.IPFS_GATEWAY = getIPFSGatewayCloud();
+        console.log(`[CLOUD] IPFS Gateway: ${window.IPFS_GATEWAY}`);
+    }
     
-    // Initialize NOSTR
+    // Initialize NOSTR (use common.js functions if available)
     await initNostrCloud();
     
     // Fetch files

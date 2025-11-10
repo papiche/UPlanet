@@ -649,11 +649,7 @@ async function openTheaterMode(videoData) {
         // Load comments
         await loadTheaterComments(eventId, ipfsUrl, content || description);
 
-        // Load tags and tag cloud
-        if (eventId) {
-            await displayTheaterVideoTags(eventId);
-            await displayTheaterTagCloud(10);
-        }
+        // Tags will be loaded when modal is opened (on demand)
 
         // Start live chat if relay is available
         if (nostrRelay && isNostrConnected && eventId) {
@@ -4764,7 +4760,7 @@ async function fetchTagCloud(limit = 10, minCount = 1) {
 }
 
 /**
- * Display video tags in theater mode
+ * Display video tags in theater modal
  * @param {string} videoEventId - Video event ID
  */
 async function displayTheaterVideoTags(videoEventId) {
@@ -4785,76 +4781,61 @@ async function displayTheaterVideoTags(videoEventId) {
         const userPubkey = window.userPubkey;
         const userTags = userPubkey ? await fetchUserTagsForVideo(videoEventId, userPubkey) : [];
         
-        // Sort tags by count (most popular first)
+        // Sort tags by count (most popular first) and limit to 30 for cloud
         const sortedTags = Object.entries(tags)
-            .sort((a, b) => b[1].count - a[1].count);
+            .sort((a, b) => b[1].count - a[1].count)
+            .slice(0, 30); // Limit to 30 tags for space
         
-        // Build tags HTML
-        let tagsHtml = '';
+        // Build tag cloud HTML (limited to 30)
+        let cloudHtml = '';
         
         if (sortedTags.length > 0) {
-            tagsHtml = '<div class="d-flex flex-wrap gap-2 mb-3" id="theaterTagsList">';
+            // Calculate font sizes based on counts
+            const maxCount = Math.max(...sortedTags.map(([_, data]) => data.count));
+            const minCount = Math.min(...sortedTags.map(([_, data]) => data.count));
+            const sizeRange = 18 - 11; // max 18px, min 11px
+            
+            cloudHtml = '<div class="theater-tags-cloud">';
             
             sortedTags.forEach(([tag, data]) => {
+                const size = minCount === maxCount ? 14 : 11 + ((data.count - minCount) / (maxCount - minCount)) * sizeRange;
                 const isUserTag = userPubkey && data.taggers.includes(userPubkey);
-                const tagEventId = isUserTag ? data.events.find(eid => {
-                    // Find the event ID for this user's tag
-                    return true; // We'll find it when removing
-                }) : null;
                 
-                tagsHtml += `
-                    <span class="badge ${isUserTag ? 'bg-primary' : 'bg-secondary'} tag-badge position-relative" 
+                cloudHtml += `
+                    <span class="tag-cloud-item" 
                           data-tag="${tag}" 
-                          style="cursor: ${isUserTag ? 'pointer' : 'pointer'}; font-size: 0.85em; padding: 0.4em 0.6em;"
-                          onclick="${isUserTag ? '' : `addExistingTag('${tag}')`}"
-                          title="${isUserTag ? 'Your tag - Click to remove' : `Click to add this tag (${data.count} users)`}">
-                        ${escapeHtml(tag)} <small>(${data.count})</small>
-                        ${isUserTag ? '<button class="btn-close btn-close-white btn-close-sm ms-1" onclick="event.stopPropagation(); removeUserTagFromVideo(\'' + videoEventId + '\', \'' + tag + '\')" style="font-size: 0.6em;"></button>' : ''}
+                          style="font-size: ${size}px; ${isUserTag ? 'background: rgba(62, 166, 255, 0.4); border-color: #3ea6ff;' : ''}"
+                          onclick="addExistingTag('${tag}')"
+                          title="${isUserTag ? 'Your tag - Click to add/remove' : `Click to add this tag (${data.count} users)`}">
+                        ${escapeHtml(tag)} (${data.count})
                     </span>
                 `;
             });
             
-            tagsHtml += '</div>';
+            cloudHtml += '</div>';
         } else {
-            tagsHtml = '<div class="text-secondary small mb-3">No tags yet. Be the first to add one!</div>';
+            cloudHtml = '<div class="text-secondary small text-center py-3">No tags yet. Be the first to add one!</div>';
         }
         
-        // Tag input section
-        const inputHtml = `
-            <div class="input-group input-group-sm mb-2">
-                <input type="text" 
-                       id="theaterTagInput" 
-                       class="form-control bg-dark text-white border-secondary" 
-                       placeholder="Add tag (lowercase, alphanumeric, max 10)"
-                       pattern="[a-z0-9_-]+"
-                       maxlength="30"
-                       autocomplete="off">
-                <button class="btn btn-primary btn-sm" id="addTheaterTagBtn" type="button">
-                    <i class="bi bi-plus-circle"></i> Add
-                </button>
-            </div>
-            <div class="small text-secondary mb-2">
-                <span id="theaterUserTagsCount">${userTags.length}</span>/10 tags added
-            </div>
-        `;
-        
-        container.innerHTML = tagsHtml + inputHtml;
-        
-        // Attach event listeners
-        const addBtn = document.getElementById('addTheaterTagBtn');
-        const tagInput = document.getElementById('theaterTagInput');
-        
-        if (addBtn) {
-            addBtn.onclick = () => addNewTagToVideo(videoEventId);
-        }
-        
-        if (tagInput) {
-            tagInput.addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') {
-                    addNewTagToVideo(videoEventId);
-                }
+        // User's tags section
+        let userTagsHtml = '';
+        if (userTags.length > 0) {
+            userTagsHtml = '<div class="mb-3"><div class="small text-secondary mb-2">Your tags:</div><div class="d-flex flex-wrap gap-2">';
+            userTags.forEach(tag => {
+                userTagsHtml += `
+                    <span class="badge bg-primary tag-badge position-relative" 
+                          data-tag="${tag}" 
+                          style="cursor: pointer; font-size: 0.85em; padding: 0.4em 0.6em;"
+                          title="Click to remove">
+                        ${escapeHtml(tag)}
+                        <button class="btn-close btn-close-white btn-close-sm ms-1" onclick="event.stopPropagation(); removeUserTagFromVideo('${videoEventId}', '${tag}')" style="font-size: 0.6em;"></button>
+                    </span>
+                `;
             });
+            userTagsHtml += '</div></div>';
         }
+        
+        container.innerHTML = userTagsHtml + cloudHtml;
         
     } catch (error) {
         console.error('Error displaying tags:', error);
@@ -4880,25 +4861,59 @@ async function addExistingTag(tagValue) {
 }
 
 /**
- * Add new tag to video
+ * Show add tag dialog
  * @param {string} videoEventId - Video event ID
- * @param {string} tagValue - Optional tag value (if not provided, uses input)
  */
-async function addNewTagToVideo(videoEventId, tagValue = null) {
-    const tagInput = document.getElementById('theaterTagInput');
-    const tag = tagValue || (tagInput ? tagInput.value.trim().toLowerCase() : '');
+function showAddTagDialog(videoEventId) {
+    const tag = prompt('Enter a tag (lowercase, alphanumeric, max 30 chars):\n\nFormat: lowercase letters, numbers, hyphens, underscores', '');
     
     if (!tag) {
+        return; // User cancelled
+    }
+    
+    const trimmedTag = tag.trim().toLowerCase();
+    
+    if (!trimmedTag) {
         showNotification({ message: 'Please enter a tag', type: 'warning' });
         return;
     }
     
-    if (!/^[a-z0-9_-]+$/.test(tag)) {
+    if (!/^[a-z0-9_-]+$/.test(trimmedTag)) {
         showNotification({ 
             message: 'Invalid tag format. Use lowercase alphanumeric with hyphens/underscores.', 
             type: 'error' 
         });
-        if (tagInput) tagInput.value = '';
+        return;
+    }
+    
+    if (trimmedTag.length > 30) {
+        showNotification({ 
+            message: 'Tag is too long. Maximum 30 characters.', 
+            type: 'error' 
+        });
+        return;
+    }
+    
+    // Add the tag
+    addNewTagToVideo(videoEventId, trimmedTag);
+}
+
+/**
+ * Add new tag to video
+ * @param {string} videoEventId - Video event ID
+ * @param {string} tagValue - Tag value to add
+ */
+async function addNewTagToVideo(videoEventId, tagValue) {
+    if (!tagValue) {
+        showNotification({ message: 'Please enter a tag', type: 'warning' });
+        return;
+    }
+    
+    if (!/^[a-z0-9_-]+$/.test(tagValue)) {
+        showNotification({ 
+            message: 'Invalid tag format. Use lowercase alphanumeric with hyphens/underscores.', 
+            type: 'error' 
+        });
         return;
     }
     
@@ -4906,15 +4921,13 @@ async function addNewTagToVideo(videoEventId, tagValue = null) {
         const videoPlayer = document.getElementById('theaterVideoPlayer');
         const videoAuthorId = videoPlayer ? videoPlayer.getAttribute('data-author-id') : null;
         
-        const result = await addVideoTag(videoEventId, tag, videoAuthorId);
+        const result = await addVideoTag(videoEventId, tagValue, videoAuthorId);
         
         if (result.success) {
             showNotification({ 
-                message: `Tag "${tag}" added successfully!`, 
+                message: `Tag "${tagValue}" added successfully!`, 
                 type: 'success' 
             });
-            
-            if (tagInput) tagInput.value = '';
             
             // Refresh tags display
             await displayTheaterVideoTags(videoEventId);
@@ -4990,57 +5003,13 @@ async function removeUserTagFromVideo(videoEventId, tagValue) {
 }
 
 /**
- * Display tag cloud in theater mode
- * @param {number} limit - Number of top tags to display (default: 10)
+ * Display tag cloud in theater modal (integrated in displayTheaterVideoTags)
+ * This function is kept for compatibility but tag cloud is now shown in the tags modal
  */
-async function displayTheaterTagCloud(limit = 10) {
-    const container = document.getElementById('theaterTagCloudContainer');
-    if (!container) {
-        console.warn('⚠️ theaterTagCloudContainer not found');
-        return;
-    }
-    
-    try {
-        container.innerHTML = '<div class="text-center text-secondary py-2"><small>Loading tag cloud...</small></div>';
-        
-        const tagCloud = await fetchTagCloud(limit, 1);
-        
-        if (Object.keys(tagCloud.tags).length === 0) {
-            container.innerHTML = '<div class="text-secondary small">No tags yet in the system.</div>';
-            return;
-        }
-        
-        // Calculate font sizes based on counts
-        const maxCount = Math.max(...Object.values(tagCloud.tags));
-        const minCount = Math.min(...Object.values(tagCloud.tags));
-        const sizeRange = 20 - 12; // max 20px, min 12px
-        
-        const tagsHtml = Object.entries(tagCloud.tags)
-            .map(([tag, count]) => {
-                const size = 12 + (count - minCount) / (maxCount - minCount) * sizeRange;
-                return `
-                    <a href="/youtube?tag=${encodeURIComponent(tag)}" 
-                       class="tag-cloud-item text-decoration-none" 
-                       style="font-size: ${size}px; color: #3ea6ff; margin: 0.25rem; display: inline-block;"
-                       title="${count} videos"
-                       onclick="event.preventDefault(); window.parent.location.href = '/youtube?tag=${encodeURIComponent(tag)}'; return false;">
-                        ${escapeHtml(tag)} (${count})
-                    </a>
-                `;
-            }).join(' ');
-        
-        container.innerHTML = `
-            <div class="tag-cloud mb-3" style="text-align: center; line-height: 2;">
-                ${tagsHtml}
-            </div>
-            <div class="text-secondary small text-center">
-                ${tagCloud.totalTags} tags across ${tagCloud.uniqueVideos} videos
-            </div>
-        `;
-    } catch (error) {
-        console.error('Error displaying tag cloud:', error);
-        container.innerHTML = '<div class="text-danger small">Error loading tag cloud</div>';
-    }
+async function displayTheaterTagCloud(limit = 30) {
+    // Tag cloud is now integrated in displayTheaterVideoTags
+    // This function is kept for compatibility
+    return;
 }
 
 // Export functions
@@ -5054,6 +5023,7 @@ window.addExistingTag = addExistingTag;
 window.addNewTagToVideo = addNewTagToVideo;
 window.removeUserTagFromVideo = removeUserTagFromVideo;
 window.displayTheaterTagCloud = displayTheaterTagCloud;
+window.showAddTagDialog = showAddTagDialog;
 // Make utility functions globally available
 window.escapeHtml = escapeHtml;
 window.fixUTF8Encoding = fixUTF8Encoding;

@@ -559,7 +559,8 @@ async function openTheaterMode(videoData) {
     
     const descriptionEl = modalContent.querySelector('#theaterDescription');
     if (descriptionEl && description) {
-        descriptionEl.textContent = escapeHtml(description);
+        // Format description with UTF-8 fix and linkify URLs
+        descriptionEl.innerHTML = formatDescription(description);
     }
 
     // Attach event listeners to buttons
@@ -1634,7 +1635,8 @@ function renderTheaterComment(comment) {
     const authorId = comment.authorId || comment.pubkey;
     const authorName = comment.authorName || (comment.pubkey ? comment.pubkey.substring(0, 8) + '...' : 'Auteur inconnu');
     const timeAgo = comment.created_at ? formatRelativeTime(comment.created_at) : '';
-    const content = escapeHtml(comment.content);
+    // Format content with UTF-8 fix and linkify URLs
+    const content = formatDescription(comment.content || '');
     
     // Extract timestamp if present
     const timestampMatch = comment.content.match(/⏱️\s*(\d+):(\d+)/);
@@ -2452,6 +2454,137 @@ function escapeHtml(text) {
 }
 
 /**
+ * Fix UTF-8 encoding issues (decode double-encoded UTF-8)
+ * Handles cases where UTF-8 was encoded as ISO-8859-1 or similar
+ */
+function fixUTF8Encoding(text) {
+    if (typeof text !== 'string') return text;
+    
+    // First, try to detect and fix double-encoding
+    // Common pattern: UTF-8 bytes interpreted as ISO-8859-1, then re-encoded
+    try {
+        // Method 1: Try decodeURIComponent(escape()) - fixes ISO-8859-1 interpreted as UTF-8
+        let decoded = decodeURIComponent(escape(text));
+        if (decoded !== text) {
+            // Check if result is better (has fewer encoding artifacts)
+            const originalArtifacts = (text.match(/Ã|â€|â€™/g) || []).length;
+            const decodedArtifacts = (decoded.match(/Ã|â€|â€™/g) || []).length;
+            if (decodedArtifacts < originalArtifacts) {
+                text = decoded;
+            }
+        }
+    } catch (e) {
+        // If decoding fails, continue with original text
+    }
+    
+    // Method 2: Try TextDecoder to fix encoding issues
+    try {
+        // If text contains encoding artifacts, try to fix with TextDecoder
+        if (text.includes('Ã') || text.includes('â€')) {
+            // Convert string to bytes (assuming it's mis-encoded UTF-8)
+            const bytes = new Uint8Array(text.split('').map(c => c.charCodeAt(0)));
+            const decoder = new TextDecoder('utf-8', { fatal: false });
+            const fixed = decoder.decode(bytes);
+            if (fixed !== text && !fixed.includes('')) {
+                text = fixed;
+            }
+        }
+    } catch (e) {
+        // TextDecoder not available or failed, continue
+    }
+    
+    // Method 3: Manual replacement of common double-encoded patterns
+    const fixes = {
+        // French accents (lowercase)
+        'Ã©': 'é', 'Ã¨': 'è', 'Ãª': 'ê', 'Ã«': 'ë',
+        'Ã ': 'à', 'Ã¢': 'â', 'Ã§': 'ç', 'Ã´': 'ô',
+        'Ã¹': 'ù', 'Ã»': 'û', 'Ã¯': 'ï', 'Ã®': 'î',
+        // French accents (uppercase)
+        'Ã‰': 'É', 'Ãˆ': 'È', 'ÃŠ': 'Ê', 'Ã‹': 'Ë',
+        'Ã€': 'À', 'Ã‚': 'Â', 'Ã‡': 'Ç', 'Ã"': 'Ô',
+        'Ã™': 'Ù', 'Ã›': 'Û', 'Ã': 'Ï', 'ÃŽ': 'Î',
+        // Punctuation and special characters
+        'â€™': "'", 'â€œ': '"', 'â€': '"',
+        'â€"': '—', 'â€"': '–', 'â€¦': '…',
+        // Other common issues
+        'Ã§': 'ç', 'Ã±': 'ñ', 'Ãº': 'ú', 'Ã³': 'ó',
+        'Ã­': 'í', 'Ã¡': 'á', 'Ã©': 'é', 'Ã¼': 'ü',
+        'Ã¶': 'ö', 'Ã¤': 'ä', 'Ã¥': 'å', 'Ã¸': 'ø'
+    };
+    
+    let fixed = text;
+    for (const [wrong, correct] of Object.entries(fixes)) {
+        fixed = fixed.replace(new RegExp(wrong.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), correct);
+    }
+    
+    return fixed;
+}
+
+/**
+ * Convert URLs in text to clickable links that open in new tab
+ * @param {string} text - Text that may contain URLs
+ * @returns {string} - HTML with URLs converted to links
+ */
+function linkifyText(text) {
+    if (typeof text !== 'string') return '';
+    
+    // Escape HTML first to prevent XSS
+    const escaped = escapeHtml(text);
+    
+    // URL pattern: http://, https://, www., or common domains
+    const urlPattern = /(https?:\/\/[^\s]+|www\.[^\s]+|[a-zA-Z0-9-]+\.[a-zA-Z]{2,}[^\s]*)/gi;
+    
+    return escaped.replace(urlPattern, (url) => {
+        // Ensure URL has protocol
+        let href = url;
+        if (!href.startsWith('http://') && !href.startsWith('https://')) {
+            href = 'https://' + href;
+        }
+        
+        // Remove trailing punctuation that shouldn't be part of URL
+        href = href.replace(/[.,;:!?]+$/, '');
+        
+        return `<a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer" class="text-primary text-decoration-underline">${escapeHtml(url)}</a>`;
+    });
+}
+
+/**
+ * Format description text with UTF-8 fix and linkify URLs
+ * @param {string} text - Description text
+ * @returns {string} - Formatted HTML
+ */
+function formatDescription(text) {
+    if (typeof text !== 'string' || !text) return '';
+    
+    // Fix UTF-8 encoding issues
+    const fixed = fixUTF8Encoding(text);
+    
+    // Convert URLs to links first (before processing line breaks)
+    const withLinks = linkifyText(fixed);
+    
+    // Handle line breaks:
+    // - Double line breaks (\n\n) become paragraphs with spacing
+    // - Single line breaks (\n) become <br> tags
+    // Split by double line breaks first
+    const paragraphs = withLinks.split(/\n\n+/);
+    
+    // Process each paragraph: convert single \n to <br> and wrap in <p> if needed
+    const formattedParagraphs = paragraphs.map(paragraph => {
+        const trimmed = paragraph.trim();
+        if (!trimmed) return '';
+        
+        // Convert single line breaks within paragraph to <br>
+        const withBreaks = trimmed.replace(/\n/g, '<br>');
+        
+        // Wrap in paragraph tag for better spacing
+        return `<p class="mb-2">${withBreaks}</p>`;
+    }).filter(p => p !== ''); // Remove empty paragraphs
+    
+    // Join paragraphs
+    return formattedParagraphs.join('');
+}
+
+/**
  * Validate and sanitize user input (basic validation)
  */
 function validateInput(input, maxLength = 10000, allowHtml = false) {
@@ -2554,7 +2687,7 @@ class LiveVideoChat {
                 <strong>${event.pubkey.substring(0, 8)}...</strong>
                 <span class="theater-comment-time">à l'instant</span>
             </div>
-            <div class="theater-comment-content">${escapeHtml(event.content)}</div>
+            <div class="theater-comment-content">${formatDescription(event.content || '')}</div>
         `;
 
         // Remove "loading" message if present
@@ -4307,6 +4440,9 @@ window.postVideoComment = postVideoComment;
 window.fetchVideoComments = fetchVideoComments;
 // Make utility functions globally available
 window.escapeHtml = escapeHtml;
+window.fixUTF8Encoding = fixUTF8Encoding;
+window.linkifyText = linkifyText;
+window.formatDescription = formatDescription;
 window.formatTime = formatTime;
 window.formatTimestamp = formatTimestamp;
 window.formatDuration = formatDuration;

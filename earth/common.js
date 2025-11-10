@@ -2009,6 +2009,38 @@ async function publishNote(content, additionalTags = [], kind = 1, options = {})
     } catch (error) {
         const errorMsg = `❌ Erreur lors de la publication: ${error.message}`;
         console.error(errorMsg, error);
+        
+        // Check if it's a _call error and try to fix it
+        if (error.message && (error.message.includes('_call') || error.message.includes('is not a function'))) {
+            console.warn('⚠️ _call error in publishNote, attempting to fix...');
+            // Try to reconnect and retry once
+            try {
+                if (typeof connectNostr === 'function') {
+                    await connectNostr(true);
+                    await new Promise(resolve => setTimeout(resolve, 200));
+                    
+                    // Retry signing
+                    if (window.safeNostrSignEvent && typeof window.safeNostrSignEvent === 'function') {
+                        signedEvent = await window.safeNostrSignEvent(eventTemplate);
+                        result.event = signedEvent;
+                        result.eventId = signedEvent.id;
+                        
+                        // Retry publishing
+                        if (window.nostrRelay) {
+                            await window.nostrRelay.publish(signedEvent);
+                            result.success = true;
+                            result.relaysSuccess = 1;
+                            result.relaysTotal = 1;
+                            console.log('✅ Publication réussie après correction de l\'erreur _call');
+                            return result;
+                        }
+                    }
+                }
+            } catch (retryError) {
+                console.error('❌ Échec de la correction:', retryError);
+            }
+        }
+        
         result.errors.push(errorMsg);
         if (!silent) alert(`Erreur: ${error.message}`);
         return result;

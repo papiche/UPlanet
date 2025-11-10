@@ -4523,15 +4523,111 @@ async function addVideoTag(videoEventId, tagValue, videoAuthorPubkey = null, rel
     }
     
     // Publish tag event (kind 1985)
-    const result = await publishNote('', tags, 1985, {
-        silent: false
-    });
-    
-    return {
-        success: result.success,
-        tagEventId: result.eventId,
-        tagValue: tagValue.toLowerCase()
-    };
+    // Use safeNostrSignEvent wrapper if available to avoid _call errors
+    try {
+        // Ensure we're connected before publishing
+        if (!window.userPubkey) {
+            const connected = await connectNostr();
+            if (!connected || !window.userPubkey) {
+                throw new Error('NOSTR connection required');
+            }
+        }
+        
+        const result = await publishNote('', tags, 1985, {
+            silent: false
+        });
+        
+        if (result.success) {
+            return {
+                success: true,
+                tagEventId: result.eventId,
+                tagValue: tagValue.toLowerCase()
+            };
+        } else {
+            throw new Error(result.errors.join('; ') || 'Failed to publish tag');
+        }
+    } catch (error) {
+        // If publishNote fails due to _call error, try direct signing
+        if (error.message && (error.message.includes('_call') || error.message.includes('is not a function'))) {
+            console.warn('⚠️ publishNote failed with _call error, trying direct signing...');
+            
+            // Ensure relay connection
+            if (!window.nostrRelay || !isNostrConnected) {
+                await connectToRelay();
+            }
+            
+            // Create event template
+            const eventTemplate = {
+                kind: 1985,
+                created_at: Math.floor(Date.now() / 1000),
+                tags: tags,
+                content: ''
+            };
+            
+            // Sign event using safe wrapper - handle _call errors
+            let signedEvent;
+            try {
+                if (window.safeNostrSignEvent && typeof window.safeNostrSignEvent === 'function') {
+                    signedEvent = await window.safeNostrSignEvent(eventTemplate);
+                } else if (window.nostr && typeof window.nostr.signEvent === 'function') {
+                    // Try direct call but catch _call errors
+                    try {
+                        signedEvent = await window.nostr.signEvent(eventTemplate);
+                    } catch (signError) {
+                        if (signError.message && signError.message.includes('_call')) {
+                            // Recreate proxy and retry
+                            console.warn('⚠️ _call error detected, trying to fix NOSTR extension...');
+                            
+                            // Force reconnect to NOSTR extension
+                            try {
+                                // Try to reconnect
+                                if (typeof connectNostr === 'function') {
+                                    await connectNostr(true); // Force reconnection
+                                }
+                                
+                                // Wait a bit for extension to reinitialize
+                                await new Promise(resolve => setTimeout(resolve, 200));
+                                
+                                // Retry with safe wrapper
+                                if (window.safeNostrSignEvent && typeof window.safeNostrSignEvent === 'function') {
+                                    signedEvent = await window.safeNostrSignEvent(eventTemplate);
+                                } else if (window.nostr && typeof window.nostr.signEvent === 'function') {
+                                    // Try direct call one more time
+                                    signedEvent = await window.nostr.signEvent(eventTemplate);
+                                } else {
+                                    throw new Error('NOSTR extension not available after reconnection');
+                                }
+                            } catch (retryError) {
+                                console.error('❌ Failed to fix NOSTR extension:', retryError);
+                                throw new Error('NOSTR extension error: ' + retryError.message);
+                            }
+                        } else {
+                            throw signError;
+                        }
+                    }
+                } else {
+                    throw new Error('No signing method available');
+                }
+            } catch (signError) {
+                console.error('❌ Error signing tag event:', signError);
+                throw new Error('Failed to sign tag event: ' + signError.message);
+            }
+            
+            // Publish directly to relay
+            if (window.nostrRelay) {
+                await window.nostrRelay.publish(signedEvent);
+                return {
+                    success: true,
+                    tagEventId: signedEvent.id,
+                    tagValue: tagValue.toLowerCase()
+                };
+            } else {
+                throw new Error('Relay not connected');
+            }
+        } else {
+            throw error;
+        }
+    }
 }
 
 /**
@@ -4782,60 +4878,85 @@ async function displayTheaterVideoTags(videoEventId) {
         const userTags = userPubkey ? await fetchUserTagsForVideo(videoEventId, userPubkey) : [];
         
         // Sort tags by count (most popular first) and limit to 30 for cloud
+        // Use a more efficient sort and limit
         const sortedTags = Object.entries(tags)
+            .map(([tag, data]) => [tag, data])
             .sort((a, b) => b[1].count - a[1].count)
             .slice(0, 30); // Limit to 30 tags for space
         
-        // Build tag cloud HTML (limited to 30)
+        // Build tag cloud HTML (limited to 30) - optimized for performance
         let cloudHtml = '';
         
         if (sortedTags.length > 0) {
-            // Calculate font sizes based on counts
-            const maxCount = Math.max(...sortedTags.map(([_, data]) => data.count));
-            const minCount = Math.min(...sortedTags.map(([_, data]) => data.count));
+            // Calculate font sizes based on counts (more efficient)
+            const counts = sortedTags.map(([_, data]) => data.count);
+            const maxCount = Math.max(...counts);
+            const minCount = Math.min(...counts);
             const sizeRange = 18 - 11; // max 18px, min 11px
+            const countDiff = maxCount - minCount;
             
-            cloudHtml = '<div class="theater-tags-cloud">';
-            
-            sortedTags.forEach(([tag, data]) => {
-                const size = minCount === maxCount ? 14 : 11 + ((data.count - minCount) / (maxCount - minCount)) * sizeRange;
+            // Build HTML string more efficiently
+            const tagItems = sortedTags.map(([tag, data]) => {
+                const size = countDiff === 0 ? 14 : 11 + ((data.count - minCount) / countDiff) * sizeRange;
                 const isUserTag = userPubkey && data.taggers.includes(userPubkey);
+                const escapedTag = escapeHtml(tag);
+                const title = isUserTag ? 'Your tag - Click to add/remove' : `Click to add this tag (${data.count} users)`;
+                const style = `font-size: ${size}px; ${isUserTag ? 'background: rgba(62, 166, 255, 0.4); border-color: #3ea6ff;' : ''}`;
                 
-                cloudHtml += `
-                    <span class="tag-cloud-item" 
-                          data-tag="${tag}" 
-                          style="font-size: ${size}px; ${isUserTag ? 'background: rgba(62, 166, 255, 0.4); border-color: #3ea6ff;' : ''}"
-                          onclick="addExistingTag('${tag}')"
-                          title="${isUserTag ? 'Your tag - Click to add/remove' : `Click to add this tag (${data.count} users)`}">
-                        ${escapeHtml(tag)} (${data.count})
-                    </span>
-                `;
+                return `<span class="tag-cloud-item" data-tag="${escapedTag}" style="${style}" onclick="addExistingTag('${escapedTag}')" title="${title}">${escapedTag} (${data.count})</span>`;
             });
             
-            cloudHtml += '</div>';
+            cloudHtml = `<div class="theater-tags-cloud">${tagItems.join('')}</div>`;
         } else {
             cloudHtml = '<div class="text-secondary small text-center py-3">No tags yet. Be the first to add one!</div>';
         }
         
-        // User's tags section
+        // User's tags section - optimized
         let userTagsHtml = '';
         if (userTags.length > 0) {
-            userTagsHtml = '<div class="mb-3"><div class="small text-secondary mb-2">Your tags:</div><div class="d-flex flex-wrap gap-2">';
-            userTags.forEach(tag => {
-                userTagsHtml += `
-                    <span class="badge bg-primary tag-badge position-relative" 
-                          data-tag="${tag}" 
-                          style="cursor: pointer; font-size: 0.85em; padding: 0.4em 0.6em;"
-                          title="Click to remove">
-                        ${escapeHtml(tag)}
-                        <button class="btn-close btn-close-white btn-close-sm ms-1" onclick="event.stopPropagation(); removeUserTagFromVideo('${videoEventId}', '${tag}')" style="font-size: 0.6em;"></button>
-                    </span>
-                `;
+            const userTagItems = userTags.map(tag => {
+                const escapedTag = escapeHtml(tag);
+                return `<span class="badge bg-primary tag-badge position-relative" data-tag="${escapedTag}" style="cursor: pointer; font-size: 0.85em; padding: 0.4em 0.6em;" title="Click to remove">${escapedTag}<button class="btn-close btn-close-white btn-close-sm ms-1" onclick="event.stopPropagation(); removeUserTagFromVideo('${videoEventId}', '${escapedTag}')" style="font-size: 0.6em;"></button></span>`;
             });
-            userTagsHtml += '</div></div>';
+            userTagsHtml = `<div class="mb-3"><div class="small text-secondary mb-2">Your tags:</div><div class="d-flex flex-wrap gap-2">${userTagItems.join('')}</div></div>`;
         }
         
-        container.innerHTML = userTagsHtml + cloudHtml;
+        // Use requestAnimationFrame for smoother rendering
+        requestAnimationFrame(() => {
+            // Use DocumentFragment for better performance
+            const fragment = document.createDocumentFragment();
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = userTagsHtml + cloudHtml;
+            
+            while (tempDiv.firstChild) {
+                fragment.appendChild(tempDiv.firstChild);
+            }
+            
+            container.innerHTML = '';
+            container.appendChild(fragment);
+            
+            // Re-attach event listener for "Add Tag" button after innerHTML update
+            // Use a small delay to ensure DOM is ready
+            setTimeout(() => {
+                const addTagBtn = document.getElementById('addTagBtn');
+                if (addTagBtn) {
+                    // Remove old listener if exists
+                    const newBtn = addTagBtn.cloneNode(true);
+                    addTagBtn.parentNode.replaceChild(newBtn, addTagBtn);
+                    
+                    // Attach new listener
+                    newBtn.onclick = (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        const videoPlayer = document.getElementById('theaterVideoPlayer');
+                        const eventId = videoPlayer ? videoPlayer.getAttribute('data-event-id') : videoEventId;
+                        if (eventId && typeof showAddTagDialog === 'function') {
+                            showAddTagDialog(eventId);
+                        }
+                    };
+                }
+            }, 10);
+        });
         
     } catch (error) {
         console.error('Error displaying tags:', error);

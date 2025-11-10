@@ -649,6 +649,12 @@ async function openTheaterMode(videoData) {
         // Load comments
         await loadTheaterComments(eventId, ipfsUrl, content || description);
 
+        // Load tags and tag cloud
+        if (eventId) {
+            await displayTheaterVideoTags(eventId);
+            await displayTheaterTagCloud(10);
+        }
+
         // Start live chat if relay is available
         if (nostrRelay && isNostrConnected && eventId) {
             if (liveChatInstance) {
@@ -4438,6 +4444,616 @@ window.submitTheaterComment = submitTheaterComment;
 window.addTimestampToComment = addTimestampToComment;
 window.postVideoComment = postVideoComment;
 window.fetchVideoComments = fetchVideoComments;
+
+// ========================================
+// 10. USER TAGS SYSTEM (NIP-32)
+// ========================================
+
+/**
+ * Add a user tag to a video (NIP-32 Labeling)
+ * @param {string} videoEventId - Video event ID (kind 21 or 22)
+ * @param {string} tagValue - Tag value (lowercase, alphanumeric)
+ * @param {string} videoAuthorPubkey - Video author's pubkey (optional)
+ * @param {string} relayUrl - Relay URL where video is stored
+ * @returns {Promise<object>} Result object
+ */
+async function addVideoTag(videoEventId, tagValue, videoAuthorPubkey = null, relayUrl = null) {
+    // Validate tag format
+    if (!/^[a-z0-9_-]+$/.test(tagValue)) {
+        throw new Error('Invalid tag format. Use lowercase alphanumeric with hyphens/underscores.');
+    }
+    
+    // Ensure NOSTR connection
+    if (!window.userPubkey) {
+        const connected = await connectNostr();
+        if (!connected || !window.userPubkey) {
+            throw new Error('NOSTR connection required');
+        }
+    }
+    const pubkey = window.userPubkey;
+    
+    // Check user's tag limit (10 tags per video)
+    const userTags = await fetchUserTagsForVideo(videoEventId, pubkey);
+    if (userTags.length >= 10) {
+        throw new Error('Maximum 10 tags per video. Please remove a tag before adding a new one.');
+    }
+    
+    // Check if user already has this tag
+    if (userTags.includes(tagValue.toLowerCase())) {
+        throw new Error('You have already added this tag to this video.');
+    }
+    
+    // Get video kind if not provided
+    let videoKind = 21; // Default
+    if (videoEventId && window.nostrRelay) {
+        try {
+            const videoEvent = await new Promise((resolve) => {
+                const sub = window.nostrRelay.sub([{
+                    kinds: [21, 22],
+                    ids: [videoEventId],
+                    limit: 1
+                }]);
+                
+                let event = null;
+                sub.on('event', (e) => { event = e; });
+                sub.on('eose', () => { sub.unsub(); resolve(event); });
+                setTimeout(() => { sub.unsub(); resolve(event); }, 2000);
+            });
+            
+            if (videoEvent) {
+                videoKind = videoEvent.kind;
+                if (!videoAuthorPubkey) {
+                    videoAuthorPubkey = videoEvent.pubkey;
+                }
+            }
+        } catch (e) {
+            console.warn('Could not fetch video event for kind:', e);
+        }
+    }
+    
+    // Build tags
+    const tags = [
+        ['L', 'ugc'],
+        ['l', tagValue.toLowerCase(), 'ugc'],
+        ['e', videoEventId, relayUrl || window.relayUrl || '']
+    ];
+    
+    // Add kind tag
+    tags.push(['k', String(videoKind)]);
+    
+    // Add author pubkey if provided
+    if (videoAuthorPubkey) {
+        tags.push(['p', videoAuthorPubkey, relayUrl || window.relayUrl || '']);
+    }
+    
+    // Publish tag event (kind 1985)
+    const result = await publishNote('', tags, 1985, {
+        silent: false
+    });
+    
+    return {
+        success: result.success,
+        tagEventId: result.eventId,
+        tagValue: tagValue.toLowerCase()
+    };
+}
+
+/**
+ * Remove a user tag from a video
+ * @param {string} tagEventId - The kind 1985 event ID to delete
+ * @returns {Promise<object>} Result object
+ */
+async function removeVideoTag(tagEventId) {
+    if (!window.userPubkey) {
+        const connected = await connectNostr();
+        if (!connected || !window.userPubkey) {
+            throw new Error('NOSTR connection required');
+        }
+    }
+    const pubkey = window.userPubkey;
+    
+    // Verify the tag event belongs to the user
+    if (window.nostrRelay && tagEventId) {
+        const tagEvent = await new Promise((resolve) => {
+            const sub = window.nostrRelay.sub([{
+                kinds: [1985],
+                ids: [tagEventId],
+                limit: 1
+            }]);
+            
+            let event = null;
+            sub.on('event', (e) => { event = e; });
+            sub.on('eose', () => { sub.unsub(); resolve(event); });
+            setTimeout(() => { sub.unsub(); resolve(event); }, 2000);
+        });
+        
+        if (tagEvent && tagEvent.pubkey !== pubkey) {
+            throw new Error('You can only remove your own tags.');
+        }
+    }
+    
+    // Publish deletion event (NIP-09)
+    const result = await publishNote('deleted tag', [['e', tagEventId]], 5, {
+        silent: false
+    });
+    
+    return {
+        success: result.success,
+        deletedEventId: tagEventId
+    };
+}
+
+/**
+ * Fetch all tags for a video
+ * @param {string} videoEventId - Video event ID
+ * @param {number} timeout - Timeout in ms (default: 5000)
+ * @returns {Promise<object>} Tags object with counts and taggers
+ */
+async function fetchVideoTags(videoEventId, timeout = 5000) {
+    await connectToRelay();
+    
+    if (!window.nostrRelay || !isNostrConnected) {
+        throw new Error('Relay not connected');
+    }
+    
+    const filter = {
+        kinds: [1985],
+        '#e': [videoEventId],
+        '#L': ['ugc']
+    };
+    
+    const tagEvents = await new Promise((resolve) => {
+        const sub = window.nostrRelay.sub([filter]);
+        const events = [];
+        
+        const timeoutId = setTimeout(() => {
+            sub.unsub();
+            resolve(events);
+        }, timeout);
+        
+        sub.on('event', (event) => {
+            events.push(event);
+        });
+        
+        sub.on('eose', () => {
+            clearTimeout(timeoutId);
+            sub.unsub();
+            resolve(events);
+        });
+    });
+    
+    // Aggregate tags
+    const tags = {};
+    tagEvents.forEach(event => {
+        const tagValue = event.tags.find(t => t[0] === 'l')?.[1];
+        if (tagValue) {
+            if (!tags[tagValue]) {
+                tags[tagValue] = {
+                    count: 0,
+                    taggers: [],
+                    events: []
+                };
+            }
+            tags[tagValue].count++;
+            tags[tagValue].taggers.push(event.pubkey);
+            tags[tagValue].events.push(event.id);
+        }
+    });
+    
+    return tags;
+}
+
+/**
+ * Fetch user's tags for a specific video
+ * @param {string} videoEventId - Video event ID
+ * @param {string} userPubkey - User's pubkey
+ * @returns {Promise<Array<string>>} Array of tag values
+ */
+async function fetchUserTagsForVideo(videoEventId, userPubkey) {
+    await connectToRelay();
+    
+    if (!window.nostrRelay || !isNostrConnected) {
+        return [];
+    }
+    
+    const filter = {
+        kinds: [1985],
+        '#e': [videoEventId],
+        '#L': ['ugc'],
+        authors: [userPubkey]
+    };
+    
+    const tagEvents = await new Promise((resolve) => {
+        const sub = window.nostrRelay.sub([filter]);
+        const events = [];
+        
+        const timeoutId = setTimeout(() => {
+            sub.unsub();
+            resolve(events);
+        }, 3000);
+        
+        sub.on('event', (event) => {
+            events.push(event);
+        });
+        
+        sub.on('eose', () => {
+            clearTimeout(timeoutId);
+            sub.unsub();
+            resolve(events);
+        });
+    });
+    
+    // Extract tag values
+    const userTags = tagEvents
+        .map(event => event.tags.find(t => t[0] === 'l')?.[1])
+        .filter(Boolean);
+    
+    return userTags;
+}
+
+/**
+ * Fetch tag cloud statistics
+ * @param {number} limit - Number of top tags to return (default: 10)
+ * @param {number} minCount - Minimum tag count (default: 1)
+ * @returns {Promise<object>} Tag cloud object
+ */
+async function fetchTagCloud(limit = 10, minCount = 1) {
+    await connectToRelay();
+    
+    if (!window.nostrRelay || !isNostrConnected) {
+        throw new Error('Relay not connected');
+    }
+    
+    // Fetch all tag events and filter for video events
+    const filter = {
+        kinds: [1985],
+        '#L': ['ugc']
+    };
+    
+    const tagEvents = await new Promise((resolve) => {
+        const sub = window.nostrRelay.sub([filter]);
+        const events = [];
+        
+        const timeoutId = setTimeout(() => {
+            sub.unsub();
+            resolve(events);
+        }, 10000);
+        
+        sub.on('event', (event) => {
+            events.push(event);
+        });
+        
+        sub.on('eose', () => {
+            clearTimeout(timeoutId);
+            sub.unsub();
+            resolve(events);
+        });
+    });
+    
+    // Aggregate tag counts (only for video events - kind 21 or 22)
+    const tagCounts = {};
+    const videoIds = new Set();
+    
+    tagEvents.forEach(event => {
+        const tagValue = event.tags.find(t => t[0] === 'l')?.[1];
+        const videoId = event.tags.find(t => t[0] === 'e')?.[1];
+        const kindTag = event.tags.find(t => t[0] === 'k')?.[1];
+        
+        // Only count tags for video events (kind 21 or 22)
+        if (tagValue && videoId && (kindTag === '21' || kindTag === '22')) {
+            tagCounts[tagValue] = (tagCounts[tagValue] || 0) + 1;
+            videoIds.add(videoId);
+        }
+    });
+    
+    // Filter by minCount and sort
+    const filtered = Object.entries(tagCounts)
+        .filter(([tag, count]) => count >= minCount)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, limit)
+        .reduce((obj, [tag, count]) => {
+            obj[tag] = count;
+            return obj;
+        }, {});
+    
+    return {
+        tags: filtered,
+        totalTags: tagEvents.length,
+        uniqueVideos: videoIds.size
+    };
+}
+
+/**
+ * Display video tags in theater mode
+ * @param {string} videoEventId - Video event ID
+ */
+async function displayTheaterVideoTags(videoEventId) {
+    const container = document.getElementById('theaterTagsContainer');
+    if (!container) {
+        console.warn('⚠️ theaterTagsContainer not found');
+        return;
+    }
+    
+    try {
+        // Show loading state
+        container.innerHTML = '<div class="text-center text-secondary py-2"><small>Loading tags...</small></div>';
+        
+        // Fetch existing tags
+        const tags = await fetchVideoTags(videoEventId);
+        
+        // Get user's tags for this video
+        const userPubkey = window.userPubkey;
+        const userTags = userPubkey ? await fetchUserTagsForVideo(videoEventId, userPubkey) : [];
+        
+        // Sort tags by count (most popular first)
+        const sortedTags = Object.entries(tags)
+            .sort((a, b) => b[1].count - a[1].count);
+        
+        // Build tags HTML
+        let tagsHtml = '';
+        
+        if (sortedTags.length > 0) {
+            tagsHtml = '<div class="d-flex flex-wrap gap-2 mb-3" id="theaterTagsList">';
+            
+            sortedTags.forEach(([tag, data]) => {
+                const isUserTag = userPubkey && data.taggers.includes(userPubkey);
+                const tagEventId = isUserTag ? data.events.find(eid => {
+                    // Find the event ID for this user's tag
+                    return true; // We'll find it when removing
+                }) : null;
+                
+                tagsHtml += `
+                    <span class="badge ${isUserTag ? 'bg-primary' : 'bg-secondary'} tag-badge position-relative" 
+                          data-tag="${tag}" 
+                          style="cursor: ${isUserTag ? 'pointer' : 'pointer'}; font-size: 0.85em; padding: 0.4em 0.6em;"
+                          onclick="${isUserTag ? '' : `addExistingTag('${tag}')`}"
+                          title="${isUserTag ? 'Your tag - Click to remove' : `Click to add this tag (${data.count} users)`}">
+                        ${escapeHtml(tag)} <small>(${data.count})</small>
+                        ${isUserTag ? '<button class="btn-close btn-close-white btn-close-sm ms-1" onclick="event.stopPropagation(); removeUserTagFromVideo(\'' + videoEventId + '\', \'' + tag + '\')" style="font-size: 0.6em;"></button>' : ''}
+                    </span>
+                `;
+            });
+            
+            tagsHtml += '</div>';
+        } else {
+            tagsHtml = '<div class="text-secondary small mb-3">No tags yet. Be the first to add one!</div>';
+        }
+        
+        // Tag input section
+        const inputHtml = `
+            <div class="input-group input-group-sm mb-2">
+                <input type="text" 
+                       id="theaterTagInput" 
+                       class="form-control bg-dark text-white border-secondary" 
+                       placeholder="Add tag (lowercase, alphanumeric, max 10)"
+                       pattern="[a-z0-9_-]+"
+                       maxlength="30"
+                       autocomplete="off">
+                <button class="btn btn-primary btn-sm" id="addTheaterTagBtn" type="button">
+                    <i class="bi bi-plus-circle"></i> Add
+                </button>
+            </div>
+            <div class="small text-secondary mb-2">
+                <span id="theaterUserTagsCount">${userTags.length}</span>/10 tags added
+            </div>
+        `;
+        
+        container.innerHTML = tagsHtml + inputHtml;
+        
+        // Attach event listeners
+        const addBtn = document.getElementById('addTheaterTagBtn');
+        const tagInput = document.getElementById('theaterTagInput');
+        
+        if (addBtn) {
+            addBtn.onclick = () => addNewTagToVideo(videoEventId);
+        }
+        
+        if (tagInput) {
+            tagInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    addNewTagToVideo(videoEventId);
+                }
+            });
+        }
+        
+    } catch (error) {
+        console.error('Error displaying tags:', error);
+        container.innerHTML = '<div class="text-danger small">Error loading tags</div>';
+    }
+}
+
+/**
+ * Add existing tag (clicked from list)
+ * @param {string} tagValue - Tag value to add
+ */
+async function addExistingTag(tagValue) {
+    const videoPlayer = document.getElementById('theaterVideoPlayer');
+    if (!videoPlayer) return;
+    
+    const videoEventId = videoPlayer.getAttribute('data-event-id');
+    if (!videoEventId) {
+        showNotification({ message: 'Video event ID not found', type: 'error' });
+        return;
+    }
+    
+    await addNewTagToVideo(videoEventId, tagValue);
+}
+
+/**
+ * Add new tag to video
+ * @param {string} videoEventId - Video event ID
+ * @param {string} tagValue - Optional tag value (if not provided, uses input)
+ */
+async function addNewTagToVideo(videoEventId, tagValue = null) {
+    const tagInput = document.getElementById('theaterTagInput');
+    const tag = tagValue || (tagInput ? tagInput.value.trim().toLowerCase() : '');
+    
+    if (!tag) {
+        showNotification({ message: 'Please enter a tag', type: 'warning' });
+        return;
+    }
+    
+    if (!/^[a-z0-9_-]+$/.test(tag)) {
+        showNotification({ 
+            message: 'Invalid tag format. Use lowercase alphanumeric with hyphens/underscores.', 
+            type: 'error' 
+        });
+        if (tagInput) tagInput.value = '';
+        return;
+    }
+    
+    try {
+        const videoPlayer = document.getElementById('theaterVideoPlayer');
+        const videoAuthorId = videoPlayer ? videoPlayer.getAttribute('data-author-id') : null;
+        
+        const result = await addVideoTag(videoEventId, tag, videoAuthorId);
+        
+        if (result.success) {
+            showNotification({ 
+                message: `Tag "${tag}" added successfully!`, 
+                type: 'success' 
+            });
+            
+            if (tagInput) tagInput.value = '';
+            
+            // Refresh tags display
+            await displayTheaterVideoTags(videoEventId);
+        }
+    } catch (error) {
+        console.error('Error adding tag:', error);
+        showNotification({ 
+            message: 'Error: ' + error.message, 
+            type: 'error' 
+        });
+    }
+}
+
+/**
+ * Remove user's tag from video
+ * @param {string} videoEventId - Video event ID
+ * @param {string} tagValue - Tag value to remove
+ */
+async function removeUserTagFromVideo(videoEventId, tagValue) {
+    try {
+        // Find the tag event ID for this user's tag
+        const userPubkey = window.userPubkey;
+        if (!userPubkey) {
+            showNotification({ message: 'Please connect first', type: 'error' });
+            return;
+        }
+        
+        const userTags = await fetchUserTagsForVideo(videoEventId, userPubkey);
+        if (!userTags.includes(tagValue)) {
+            showNotification({ message: 'Tag not found', type: 'error' });
+            return;
+        }
+        
+        // Find the event ID for this tag
+        const tags = await fetchVideoTags(videoEventId);
+        const tagData = tags[tagValue];
+        if (!tagData) {
+            showNotification({ message: 'Tag data not found', type: 'error' });
+            return;
+        }
+        
+        // Find user's event ID for this tag by querying user's events directly
+        const userTagEvents = await new Promise((resolve) => {
+            const sub = window.nostrRelay.sub([{
+                kinds: [1985],
+                '#e': [videoEventId],
+                '#l': [tagValue],
+                authors: [userPubkey],
+                limit: 1
+            }]);
+            
+            const events = [];
+            sub.on('event', (e) => { events.push(e); });
+            sub.on('eose', () => { sub.unsub(); resolve(events); });
+            setTimeout(() => { sub.unsub(); resolve(events); }, 2000);
+        });
+        
+        if (userTagEvents.length > 0) {
+            const result = await removeVideoTag(userTagEvents[0].id);
+            if (result.success) {
+                showNotification({ message: 'Tag removed successfully!', type: 'success' });
+                await displayTheaterVideoTags(videoEventId);
+            } else {
+                showNotification({ message: 'Failed to remove tag', type: 'error' });
+            }
+        } else {
+            showNotification({ message: 'Tag event not found', type: 'error' });
+        }
+    } catch (error) {
+        console.error('Error removing tag:', error);
+        showNotification({ message: 'Error: ' + error.message, type: 'error' });
+    }
+}
+
+/**
+ * Display tag cloud in theater mode
+ * @param {number} limit - Number of top tags to display (default: 10)
+ */
+async function displayTheaterTagCloud(limit = 10) {
+    const container = document.getElementById('theaterTagCloudContainer');
+    if (!container) {
+        console.warn('⚠️ theaterTagCloudContainer not found');
+        return;
+    }
+    
+    try {
+        container.innerHTML = '<div class="text-center text-secondary py-2"><small>Loading tag cloud...</small></div>';
+        
+        const tagCloud = await fetchTagCloud(limit, 1);
+        
+        if (Object.keys(tagCloud.tags).length === 0) {
+            container.innerHTML = '<div class="text-secondary small">No tags yet in the system.</div>';
+            return;
+        }
+        
+        // Calculate font sizes based on counts
+        const maxCount = Math.max(...Object.values(tagCloud.tags));
+        const minCount = Math.min(...Object.values(tagCloud.tags));
+        const sizeRange = 20 - 12; // max 20px, min 12px
+        
+        const tagsHtml = Object.entries(tagCloud.tags)
+            .map(([tag, count]) => {
+                const size = 12 + (count - minCount) / (maxCount - minCount) * sizeRange;
+                return `
+                    <a href="/youtube?tag=${encodeURIComponent(tag)}" 
+                       class="tag-cloud-item text-decoration-none" 
+                       style="font-size: ${size}px; color: #3ea6ff; margin: 0.25rem; display: inline-block;"
+                       title="${count} videos"
+                       onclick="event.preventDefault(); window.parent.location.href = '/youtube?tag=${encodeURIComponent(tag)}'; return false;">
+                        ${escapeHtml(tag)} (${count})
+                    </a>
+                `;
+            }).join(' ');
+        
+        container.innerHTML = `
+            <div class="tag-cloud mb-3" style="text-align: center; line-height: 2;">
+                ${tagsHtml}
+            </div>
+            <div class="text-secondary small text-center">
+                ${tagCloud.totalTags} tags across ${tagCloud.uniqueVideos} videos
+            </div>
+        `;
+    } catch (error) {
+        console.error('Error displaying tag cloud:', error);
+        container.innerHTML = '<div class="text-danger small">Error loading tag cloud</div>';
+    }
+}
+
+// Export functions
+window.addVideoTag = addVideoTag;
+window.removeVideoTag = removeVideoTag;
+window.fetchVideoTags = fetchVideoTags;
+window.fetchUserTagsForVideo = fetchUserTagsForVideo;
+window.fetchTagCloud = fetchTagCloud;
+window.displayTheaterVideoTags = displayTheaterVideoTags;
+window.addExistingTag = addExistingTag;
+window.addNewTagToVideo = addNewTagToVideo;
+window.removeUserTagFromVideo = removeUserTagFromVideo;
+window.displayTheaterTagCloud = displayTheaterTagCloud;
 // Make utility functions globally available
 window.escapeHtml = escapeHtml;
 window.fixUTF8Encoding = fixUTF8Encoding;

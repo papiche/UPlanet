@@ -883,16 +883,19 @@ async function openMP3Modal(trackData) {
         return;
     }
 
-    // Get modal content container
-    let modalContent = modalElement.querySelector('.modal-content');
+    // Get modal content container - should be .modal-body in mp3.html
+    let modalContent = modalElement.querySelector('.modal-body');
     if (!modalContent) {
-        modalContent = modalElement.querySelector('.mp3-modal');
+        modalContent = modalElement.querySelector('.modal-content');
         if (!modalContent) {
-            if (modalElement.classList.contains('mp3-modal') || modalElement.querySelector('.mp3-audio-container')) {
-                modalContent = modalElement;
-            } else {
-                console.error('[NOSTRIFY] ❌ MP3 modal content container not found');
-                return;
+            modalContent = modalElement.querySelector('.mp3-modal');
+            if (!modalContent) {
+                if (modalElement.classList.contains('mp3-modal') || modalElement.querySelector('.mp3-audio-container')) {
+                    modalContent = modalElement;
+                } else {
+                    console.error('[NOSTRIFY] ❌ MP3 modal content container not found');
+                    return;
+                }
             }
         }
     }
@@ -909,6 +912,12 @@ async function openMP3Modal(trackData) {
             const modalElementFromTemplate = doc.querySelector('.mp3-modal');
             if (modalElementFromTemplate) {
                 templateHTML = modalElementFromTemplate.innerHTML;
+            } else {
+                // Fallback: try to get body content
+                const body = doc.querySelector('body');
+                if (body) {
+                    templateHTML = body.innerHTML;
+                }
             }
         }
     } catch (error) {
@@ -917,19 +926,27 @@ async function openMP3Modal(trackData) {
 
     // If template fetch succeeded, inject it
     if (templateHTML) {
-        const tempDiv = document.createElement('div');
-        tempDiv.innerHTML = templateHTML;
+        modalContent.innerHTML = templateHTML;
         
-        let contentToInject = tempDiv.querySelector('.mp3-modal-content');
-        if (!contentToInject) {
-            const wrapper = document.createElement('div');
-            wrapper.className = 'mp3-modal-content';
-            wrapper.innerHTML = templateHTML;
-            contentToInject = wrapper;
-        }
-
-        modalContent.innerHTML = '';
-        modalContent.appendChild(contentToInject.cloneNode(true));
+        // Execute any scripts in the injected content
+        // Scripts need to be recreated to execute
+        const scripts = Array.from(modalContent.querySelectorAll('script'));
+        scripts.forEach((oldScript, index) => {
+            const newScript = document.createElement('script');
+            // Copy all attributes
+            Array.from(oldScript.attributes).forEach(attr => {
+                newScript.setAttribute(attr.name, attr.value);
+            });
+            // Copy script content
+            newScript.textContent = oldScript.textContent;
+            // Insert new script and remove old one
+            oldScript.parentNode.insertBefore(newScript, oldScript);
+            oldScript.remove();
+        });
+        
+        // Wait a bit for scripts to execute, then re-query elements
+        await new Promise(resolve => setTimeout(resolve, 100));
+        modalContent = modalElement.querySelector('.modal-body') || modalContent;
     }
 
     // Update template with track data

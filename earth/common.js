@@ -291,6 +291,11 @@ if (typeof window.UPLANET_COMMON_VERSION === 'undefined') {
             });
             
             console.log('✅ NOSTR proxy initialized for iframe (via common.js) - replaced non-functional window.nostr');
+            
+            // Export createNostrProxy to window for global access
+            if (typeof window !== 'undefined') {
+                window.createNostrProxy = createNostrProxy;
+            }
         } else {
             // window.nostr exists and has getPublicKey, but it might not be functional in iframe
             // Try to test it quickly - if it throws _call error, replace it
@@ -329,6 +334,11 @@ if (typeof window.UPLANET_COMMON_VERSION === 'undefined') {
                     console.log('✅ NOSTR extension already present, skipping proxy creation');
                 }
             }
+        }
+        
+        // Always export createNostrProxy to window for global access
+        if (typeof window !== 'undefined') {
+            window.createNostrProxy = createNostrProxy;
         }
     }
 })();
@@ -1081,10 +1091,53 @@ async function connectNostr(forceAuth = false) {
         
         // Use safe wrapper if available (for Chrome compatibility), otherwise direct call
         let pubkey;
-        if (typeof window.safeNostrGetPublicKey === 'function') {
-            pubkey = await window.safeNostrGetPublicKey();
-        } else {
-            pubkey = await window.nostr.getPublicKey();
+        try {
+            if (typeof window.safeNostrGetPublicKey === 'function') {
+                pubkey = await window.safeNostrGetPublicKey();
+            } else if (window.nostr && typeof window.nostr.getPublicKey === 'function') {
+                pubkey = await window.nostr.getPublicKey();
+            } else {
+                // Try to create proxy if nostr exists but methods are not available
+                if (window.nostr && typeof createNostrProxy === 'function') {
+                    console.warn('⚠️ NOSTR extension methods not available, attempting to create proxy...');
+                    createNostrProxy();
+                    // Retry after proxy creation
+                    if (typeof window.safeNostrGetPublicKey === 'function') {
+                        pubkey = await window.safeNostrGetPublicKey();
+                    } else if (window.nostr && typeof window.nostr.getPublicKey === 'function') {
+                        pubkey = await window.nostr.getPublicKey();
+                    }
+                }
+                if (!pubkey) {
+                    throw new Error('NOSTR extension not available or not properly initialized');
+                }
+            }
+        } catch (callError) {
+            // Handle _call errors specifically
+            if (callError.message && (callError.message.includes('_call') || callError.message.includes('is not a function'))) {
+                console.warn('⚠️ _call error detected in connectNostr, attempting to fix...');
+                // Try to recreate proxy
+                if (typeof createNostrProxy === 'function') {
+                    try {
+                        createNostrProxy();
+                        // Wait a bit for proxy to initialize
+                        await new Promise(resolve => setTimeout(resolve, 300));
+                        // Retry with safe wrapper
+                        if (typeof window.safeNostrGetPublicKey === 'function') {
+                            pubkey = await window.safeNostrGetPublicKey();
+                        } else if (window.nostr && typeof window.nostr.getPublicKey === 'function') {
+                            pubkey = await window.nostr.getPublicKey();
+                        }
+                    } catch (retryError) {
+                        console.error('❌ Failed to fix _call error:', retryError);
+                        throw new Error('NOSTR extension error: ' + retryError.message);
+                    }
+                } else {
+                    throw new Error('NOSTR extension error: ' + callError.message);
+                }
+            } else {
+                throw callError;
+            }
         }
         
         if (pubkey) {
@@ -1124,12 +1177,14 @@ async function connectNostr(forceAuth = false) {
             connectingNostr = false;
             return pubkey;
         } else {
-            showAlert("Impossible de récupérer la clé publique. Veuillez autoriser l'accès à votre extension Nostr.", 'error');
+            const alertFn = typeof showAlert === 'function' ? showAlert : (typeof showNotification === 'function' ? (msg, type) => showNotification({ message: msg, type: type || 'error' }) : alert);
+            alertFn("Impossible de récupérer la clé publique. Veuillez autoriser l'accès à votre extension Nostr.", 'error');
             connectingNostr = false;
             return null;
         }
     } catch (error) {
-        showAlert("La connexion a échoué. Veuillez vérifier que votre extension Nostr est installée et active, puis autorisez l'accès.", 'error');
+        const alertFn = typeof showAlert === 'function' ? showAlert : (typeof showNotification === 'function' ? (msg, type) => showNotification({ message: msg, type: type || 'error' }) : alert);
+        alertFn("La connexion a échoué. Veuillez vérifier que votre extension Nostr est installée et active, puis autorisez l'accès.", 'error');
         console.error("❌ Erreur de connexion Nostr:", error);
         connectingNostr = false;
         return null;

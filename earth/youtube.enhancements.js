@@ -4459,11 +4459,23 @@ async function addVideoTag(videoEventId, tagValue, videoAuthorPubkey = null, rel
         throw new Error('Invalid tag format. Use lowercase alphanumeric with hyphens/underscores.');
     }
     
-    // Ensure NOSTR connection
+    // Ensure NOSTR connection with better error handling
     if (!window.userPubkey) {
-        const connected = await connectNostr();
-        if (!connected || !window.userPubkey) {
-            throw new Error('NOSTR connection required');
+        try {
+            const connected = await connectNostr();
+            if (!connected || !window.userPubkey) {
+                // Check if it's a timeout or _call error
+                throw new Error('NOSTR connection required. Please ensure your NOSTR extension is installed and enabled.');
+            }
+        } catch (connectError) {
+            // If it's a _call error, provide more helpful message
+            if (connectError.message && connectError.message.includes('_call')) {
+                throw new Error('NOSTR extension error. Please refresh the page and try again.');
+            } else if (connectError.message && connectError.message.includes('timeout')) {
+                throw new Error('NOSTR extension timeout. Please check your extension and try again.');
+            } else {
+                throw new Error('NOSTR connection required: ' + connectError.message);
+            }
         }
     }
     const pubkey = window.userPubkey;
@@ -4974,7 +4986,8 @@ async function addExistingTag(tagValue) {
     
     const videoEventId = videoPlayer.getAttribute('data-event-id');
     if (!videoEventId) {
-        showNotification({ message: 'Video event ID not found', type: 'error' });
+        const notify = typeof showNotification === 'function' ? showNotification : alert;
+        notify({ message: 'Video event ID not found', type: 'error' });
         return;
     }
     
@@ -4986,6 +4999,26 @@ async function addExistingTag(tagValue) {
  * @param {string} videoEventId - Video event ID
  */
 function showAddTagDialog(videoEventId) {
+    // Check if user is connected first
+    if (!window.userPubkey) {
+        const connectMsg = 'You need to connect with NOSTR to add tags. Would you like to connect now?';
+        if (confirm(connectMsg)) {
+            // Try to connect
+            connectNostr().then(connected => {
+                if (connected && window.userPubkey) {
+                    // Retry showing dialog after connection
+                    showAddTagDialog(videoEventId);
+                } else {
+                    alert('Failed to connect. Please ensure your NOSTR extension is installed and enabled.');
+                }
+            }).catch(err => {
+                console.error('Connection error:', err);
+                alert('Failed to connect: ' + err.message);
+            });
+        }
+        return;
+    }
+    
     const tag = prompt('Enter a tag (lowercase, alphanumeric, max 30 chars):\n\nFormat: lowercase letters, numbers, hyphens, underscores', '');
     
     if (!tag) {
@@ -4995,12 +5028,14 @@ function showAddTagDialog(videoEventId) {
     const trimmedTag = tag.trim().toLowerCase();
     
     if (!trimmedTag) {
-        showNotification({ message: 'Please enter a tag', type: 'warning' });
+        const notify = typeof showNotification === 'function' ? showNotification : alert;
+        notify({ message: 'Please enter a tag', type: 'warning' });
         return;
     }
     
     if (!/^[a-z0-9_-]+$/.test(trimmedTag)) {
-        showNotification({ 
+        const notify = typeof showNotification === 'function' ? showNotification : alert;
+        notify({ 
             message: 'Invalid tag format. Use lowercase alphanumeric with hyphens/underscores.', 
             type: 'error' 
         });
@@ -5008,7 +5043,8 @@ function showAddTagDialog(videoEventId) {
     }
     
     if (trimmedTag.length > 30) {
-        showNotification({ 
+        const notify = typeof showNotification === 'function' ? showNotification : alert;
+        notify({ 
             message: 'Tag is too long. Maximum 30 characters.', 
             type: 'error' 
         });
@@ -5026,12 +5062,14 @@ function showAddTagDialog(videoEventId) {
  */
 async function addNewTagToVideo(videoEventId, tagValue) {
     if (!tagValue) {
-        showNotification({ message: 'Please enter a tag', type: 'warning' });
+        const notify = typeof showNotification === 'function' ? showNotification : alert;
+        notify({ message: 'Please enter a tag', type: 'warning' });
         return;
     }
     
     if (!/^[a-z0-9_-]+$/.test(tagValue)) {
-        showNotification({ 
+        const notify = typeof showNotification === 'function' ? showNotification : alert;
+        notify({ 
             message: 'Invalid tag format. Use lowercase alphanumeric with hyphens/underscores.', 
             type: 'error' 
         });
@@ -5045,20 +5083,38 @@ async function addNewTagToVideo(videoEventId, tagValue) {
         const result = await addVideoTag(videoEventId, tagValue, videoAuthorId);
         
         if (result.success) {
-            showNotification({ 
+            const notify = typeof showNotification === 'function' ? showNotification : alert;
+            notify({ 
                 message: `Tag "${tagValue}" added successfully!`, 
                 type: 'success' 
             });
             
             // Refresh tags display
             await displayTheaterVideoTags(videoEventId);
+        } else {
+            throw new Error('Failed to add tag');
         }
     } catch (error) {
         console.error('Error adding tag:', error);
-        showNotification({ 
-            message: 'Error: ' + error.message, 
+        const notify = typeof showNotification === 'function' ? showNotification : alert;
+        const errorMsg = error.message || 'Unknown error';
+        notify({ 
+            message: 'Error: ' + errorMsg, 
             type: 'error' 
         });
+        
+        // If it's a connection error, offer to retry
+        if (errorMsg.includes('connection') || errorMsg.includes('NOSTR')) {
+            if (confirm('Connection error. Would you like to try connecting again?')) {
+                try {
+                    await connectNostr(true);
+                    // Retry adding tag
+                    await addNewTagToVideo(videoEventId, tagValue);
+                } catch (retryError) {
+                    console.error('Retry failed:', retryError);
+                }
+            }
+        }
     }
 }
 
@@ -5072,13 +5128,15 @@ async function removeUserTagFromVideo(videoEventId, tagValue) {
         // Find the tag event ID for this user's tag
         const userPubkey = window.userPubkey;
         if (!userPubkey) {
-            showNotification({ message: 'Please connect first', type: 'error' });
+            const notify = typeof showNotification === 'function' ? showNotification : alert;
+            notify({ message: 'Please connect first', type: 'error' });
             return;
         }
         
         const userTags = await fetchUserTagsForVideo(videoEventId, userPubkey);
         if (!userTags.includes(tagValue)) {
-            showNotification({ message: 'Tag not found', type: 'error' });
+            const notify = typeof showNotification === 'function' ? showNotification : alert;
+            notify({ message: 'Tag not found', type: 'error' });
             return;
         }
         
@@ -5086,7 +5144,8 @@ async function removeUserTagFromVideo(videoEventId, tagValue) {
         const tags = await fetchVideoTags(videoEventId);
         const tagData = tags[tagValue];
         if (!tagData) {
-            showNotification({ message: 'Tag data not found', type: 'error' });
+            const notify = typeof showNotification === 'function' ? showNotification : alert;
+            notify({ message: 'Tag data not found', type: 'error' });
             return;
         }
         
@@ -5109,17 +5168,21 @@ async function removeUserTagFromVideo(videoEventId, tagValue) {
         if (userTagEvents.length > 0) {
             const result = await removeVideoTag(userTagEvents[0].id);
             if (result.success) {
-                showNotification({ message: 'Tag removed successfully!', type: 'success' });
+                const notify = typeof showNotification === 'function' ? showNotification : alert;
+                notify({ message: 'Tag removed successfully!', type: 'success' });
                 await displayTheaterVideoTags(videoEventId);
             } else {
-                showNotification({ message: 'Failed to remove tag', type: 'error' });
+                const notify = typeof showNotification === 'function' ? showNotification : alert;
+                notify({ message: 'Failed to remove tag', type: 'error' });
             }
         } else {
-            showNotification({ message: 'Tag event not found', type: 'error' });
+            const notify = typeof showNotification === 'function' ? showNotification : alert;
+            notify({ message: 'Tag event not found', type: 'error' });
         }
     } catch (error) {
         console.error('Error removing tag:', error);
-        showNotification({ message: 'Error: ' + error.message, type: 'error' });
+        const notify = typeof showNotification === 'function' ? showNotification : alert;
+        notify({ message: 'Error: ' + (error.message || 'Unknown error'), type: 'error' });
     }
 }
 

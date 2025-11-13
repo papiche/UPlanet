@@ -1496,14 +1496,34 @@ async function sendNIP42Auth(relayUrl, forceSend = false) {
         
         // Sign the event with the user's extension (use safe wrapper for Chrome compatibility)
         let signedEvent;
-        if (typeof window.safeNostrSignEvent === 'function') {
-            signedEvent = await window.safeNostrSignEvent(authEvent);
-        } else {
-            signedEvent = await window.nostr.signEvent(authEvent);
+        try {
+            // Prefer safe wrapper if available
+            if (typeof window.safeNostrSignEvent === 'function') {
+                signedEvent = await window.safeNostrSignEvent(authEvent);
+            } else if (window.nostr && typeof window.nostr.signEvent === 'function') {
+                // Check if window.nostr is functional (not a broken proxy)
+                try {
+                    // Test if signEvent is callable
+                    signedEvent = await window.nostr.signEvent(authEvent);
+                } catch (signError) {
+                    // If signEvent fails with _call error, try to use safe wrapper or fail gracefully
+                    if (signError.message && signError.message.includes('_call')) {
+                        console.warn('⚠️ window.nostr.signEvent failed with _call error, NIP-42 auth cannot proceed');
+                        throw new Error('NOSTR extension not functional in this context (iframe). Please use the extension directly or authenticate from the parent window.');
+                    }
+                    throw signError;
+                }
+            } else {
+                throw new Error('NOSTR extension not available or signEvent method not found');
+            }
+        } catch (signError) {
+            console.error('❌ Failed to sign NIP-42 event:', signError);
+            // Don't throw - just return silently to avoid breaking the flow
+            return;
         }
         
         if (!signedEvent || !signedEvent.id) {
-            console.error('❌ Failed to sign NIP-42 event');
+            console.error('❌ Failed to sign NIP-42 event: signed event is invalid');
             return;
         }
         

@@ -3468,10 +3468,21 @@ async function loadInfoJsonMetadata(infoCid) {
  * @returns {string} - 'youtube', 'tmdb', or 'video'
  */
 function getVideoSourceType(infoMetadata, youtubeUrl) {
-    if (youtubeUrl || (infoMetadata && infoMetadata.youtube)) {
+    if (!infoMetadata) {
+        return youtubeUrl ? 'youtube' : 'video';
+    }
+    
+    // Check for structured YouTube metadata at root level
+    // This format is compatible with both mp3.html and youtube.html
+    const hasStructuredYouTube = infoMetadata.channel_info || 
+                                  infoMetadata.content_info || 
+                                  infoMetadata.youtube_id ||
+                                  infoMetadata.youtube_url;
+    
+    if (youtubeUrl || hasStructuredYouTube) {
         return 'youtube';
     }
-    if (infoMetadata && infoMetadata.tmdb) {
+    if (infoMetadata.tmdb) {
         return 'tmdb';
     }
     return 'video';

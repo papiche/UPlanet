@@ -1108,6 +1108,142 @@ function closeMP3Modal() {
 }
 
 /**
+ * Extract thumbnail from MP3 file using ID3 tags (if jsmediatags is available)
+ * @param {string} mp3Url - URL of the MP3 file
+ * @returns {Promise<string|null>} Base64 data URL of thumbnail or null if not found
+ */
+async function extractThumbnailFromMP3(mp3Url) {
+    if (!mp3Url || typeof jsmediatags === 'undefined') {
+        return null;
+    }
+    
+    return new Promise((resolve) => {
+        try {
+            jsmediatags.read(mp3Url, {
+                onSuccess: function(tag) {
+                    try {
+                        // Helper function to convert Uint8Array to base64
+                        function uint8ArrayToBase64(uint8Array) {
+                            let binary = '';
+                            const chunkSize = 8192;
+                            for (let i = 0; i < uint8Array.length; i += chunkSize) {
+                                const chunk = uint8Array.slice(i, i + chunkSize);
+                                binary += String.fromCharCode.apply(null, chunk);
+                            }
+                            return btoa(binary);
+                        }
+                        
+                        // Look for picture/cover art in ID3 tags
+                        const picture = tag.tags?.picture || tag.tags?.APIC;
+                        
+                        if (picture) {
+                            let imageData, mimeType;
+                            
+                            if (picture.data) {
+                                imageData = picture.data;
+                                mimeType = picture.format || picture.imageFormat || 'image/jpeg';
+                            } else if (picture.imageFormat) {
+                                imageData = picture;
+                                mimeType = picture.imageFormat || 'image/jpeg';
+                            } else {
+                                resolve(null);
+                                return;
+                            }
+                            
+                            // Convert to base64
+                            const base64String = uint8ArrayToBase64(imageData);
+                            const dataUrl = `data:${mimeType};base64,${base64String}`;
+                            resolve(dataUrl);
+                        } else {
+                            resolve(null);
+                        }
+                    } catch (e) {
+                        console.warn('[NOSTRIFY] Error processing ID3 picture data:', e);
+                        resolve(null);
+                    }
+                },
+                onError: function(error) {
+                    // CORS errors are expected, silently fail
+                    if (error.message && !error.message.includes('CORS')) {
+                        console.warn('[NOSTRIFY] Error reading ID3 tags:', error);
+                    }
+                    resolve(null);
+                }
+            });
+        } catch (e) {
+            console.warn('[NOSTRIFY] Error extracting thumbnail from MP3:', e);
+            resolve(null);
+        }
+    });
+}
+
+/**
+ * Get thumbnail for track with unified priority: ID3 tags → info.json → null
+ * @param {Object} track - Track object (may be enriched with infoJson)
+ * @returns {Promise<string|null>} Thumbnail URL or base64 data URL, or null
+ */
+async function getTrackThumbnail(track) {
+    if (!track || !track.url) {
+        return null;
+    }
+    
+    // Priority 1: Try to extract from MP3 ID3 tags (if jsmediatags is available)
+    if (typeof jsmediatags !== 'undefined') {
+        try {
+            const id3Thumbnail = await extractThumbnailFromMP3(track.url);
+            if (id3Thumbnail) {
+                console.log('[NOSTRIFY] ✅ Thumbnail extracted from MP3 ID3 tags');
+                return id3Thumbnail;
+            }
+        } catch (e) {
+            // Silently fall through to next priority
+            console.warn('[NOSTRIFY] Could not extract thumbnail from ID3 tags:', e);
+        }
+    }
+    
+    // Priority 2: Use thumbnail from track (from info.json or NOSTR tags)
+    if (track.thumbnail) {
+        // Convert IPFS URL if needed
+        if (typeof convertIPFSUrlGlobal === 'function') {
+            return convertIPFSUrlGlobal(track.thumbnail);
+        } else if (window.IPFS_GATEWAY && track.thumbnail.includes('/ipfs/')) {
+            const match = track.thumbnail.match(/\/ipfs\/[^?"#]+/);
+            if (match) {
+                return window.IPFS_GATEWAY + match[0];
+            }
+        }
+        return track.thumbnail;
+    }
+    
+    // Priority 3: Try to get from infoJson if available
+    if (track.infoJson) {
+        const thumbnails = track.infoJson.thumbnails || {};
+        if (thumbnails.thumbnail) {
+            if (typeof convertIPFSUrlGlobal === 'function') {
+                return convertIPFSUrlGlobal(thumbnails.thumbnail);
+            } else if (window.IPFS_GATEWAY && thumbnails.thumbnail.includes('/ipfs/')) {
+                const match = thumbnails.thumbnail.match(/\/ipfs\/[^?"#]+/);
+                if (match) {
+                    return window.IPFS_GATEWAY + match[0];
+                }
+            }
+            return thumbnails.thumbnail;
+        }
+        
+        // Fallback to infoJson.thumbnail (legacy)
+        if (track.infoJson.thumbnail) {
+            if (typeof convertIPFSUrlGlobal === 'function') {
+                return convertIPFSUrlGlobal(track.infoJson.thumbnail);
+            }
+            return track.infoJson.thumbnail;
+        }
+    }
+    
+    // No thumbnail found
+    return null;
+}
+
+/**
  * Enrich track with comprehensive metadata from .info.json (via INFO_CID)
  * @param {Object} track - Track object
  * @returns {Promise<Object>} Enriched track object
@@ -1143,54 +1279,62 @@ async function enrichTrackWithInfoJson(track) {
             const infoJson = await infoResponse.json();
             console.log('[NOSTRIFY] ✅ Loaded .info.json for track:', track.title);
             
-            // Merge metadata from .info.json
+            // Merge metadata from .info.json (structured format only)
+            const channelInfo = infoJson.channel_info || {};
+            const contentInfo = infoJson.content_info || {};
+            const technicalInfo = infoJson.technical_info || {};
+            const statistics = infoJson.statistics || {};
+            const dates = infoJson.dates || {};
+            const mediaInfo = infoJson.media_info || {};
+            const thumbnails = infoJson.thumbnails || {};
+            
             return {
                 ...track,
                 // Override with .info.json data if available
                 title: infoJson.title || track.title,
                 rawTitle: infoJson.title || track.title,
-                artist: infoJson.media_info?.artist || infoJson.uploader || track.artist,
-                album: infoJson.media_info?.album || track.album,
-                description: infoJson.content_info?.description || infoJson.description || track.description,
+                artist: mediaInfo.artist || infoJson.uploader || track.artist,
+                album: mediaInfo.album || track.album,
+                description: contentInfo.description || infoJson.description || track.description,
                 duration: infoJson.duration || track.duration,
                 // Channel info
-                channel: infoJson.channel_info?.display_name || infoJson.channel_info?.name || infoJson.uploader || track.channel,
-                channelId: infoJson.channel_info?.channel_id || track.channelId,
-                channelUrl: infoJson.channel_info?.channel_url || track.channelUrl,
+                channel: channelInfo.display_name || channelInfo.name || infoJson.uploader || track.channel,
+                channelId: channelInfo.channel_id || track.channelId,
+                channelUrl: channelInfo.channel_url || track.channelUrl,
                 youtubeUrl: infoJson.youtube_url || infoJson.original_url || track.youtubeUrl,
                 // Statistics
-                viewCount: infoJson.statistics?.view_count || track.viewCount || 0,
-                likeCount: infoJson.statistics?.like_count || track.likeCount || 0,
-                commentCount: infoJson.statistics?.comment_count || track.commentCount || 0,
+                viewCount: statistics.view_count || track.viewCount || 0,
+                likeCount: statistics.like_count || track.likeCount || 0,
+                commentCount: statistics.comment_count || track.commentCount || 0,
                 // Dates
-                uploadDate: infoJson.dates?.upload_date || infoJson.upload_date || track.uploadDate,
-                releaseDate: infoJson.dates?.release_date || infoJson.release_date || track.releaseDate,
+                uploadDate: dates.upload_date || infoJson.upload_date || track.uploadDate,
+                releaseDate: dates.release_date || infoJson.release_date || track.releaseDate,
                 // Content info
-                language: infoJson.content_info?.language || infoJson.language || track.language,
-                license: infoJson.content_info?.license || infoJson.license || track.license,
-                tags: infoJson.content_info?.tags || infoJson.tags || track.tags || [],
-                categories: infoJson.content_info?.categories || infoJson.categories || track.categories || [],
+                language: contentInfo.language || infoJson.language || track.language,
+                license: contentInfo.license || infoJson.license || track.license,
+                tags: contentInfo.tags || infoJson.tags || track.tags || [],
+                categories: contentInfo.categories || infoJson.categories || track.categories || [],
                 // Media info
-                track: infoJson.media_info?.track || track.track,
-                creator: infoJson.media_info?.creator || infoJson.creator || track.creator,
+                track: mediaInfo.track || track.track,
+                creator: mediaInfo.creator || infoJson.creator || track.creator,
                 // Technical info
-                abr: infoJson.technical_info?.abr || infoJson.abr || track.abr || 0,
-                acodec: infoJson.technical_info?.acodec || infoJson.acodec || track.acodec,
-                formatNote: infoJson.technical_info?.format_note || infoJson.format_note || track.formatNote,
+                abr: technicalInfo.abr || infoJson.abr || track.abr || 0,
+                acodec: technicalInfo.acodec || infoJson.acodec || track.acodec,
+                formatNote: technicalInfo.format_note || infoJson.format_note || track.formatNote,
                 // Thumbnails
-                thumbnail: (infoJson.thumbnails?.thumbnail && typeof convertIPFSUrlGlobal === 'function' 
-                    ? convertIPFSUrlGlobal(infoJson.thumbnails.thumbnail) 
-                    : (infoJson.thumbnails?.thumbnail || track.thumbnail)),
+                thumbnail: (thumbnails.thumbnail && typeof convertIPFSUrlGlobal === 'function' 
+                    ? convertIPFSUrlGlobal(thumbnails.thumbnail) 
+                    : (thumbnails.thumbnail || track.thumbnail)),
                 // Full metadata objects
                 youtubeMetadata: infoJson.youtube_metadata || track.youtubeMetadata || {},
-                channelInfo: infoJson.channel_info || track.channelInfo || {},
-                contentInfo: infoJson.content_info || track.contentInfo || {},
-                technicalInfo: infoJson.technical_info || track.technicalInfo || {},
-                statistics: infoJson.statistics || track.statistics || {},
-                dates: infoJson.dates || track.dates || {},
-                mediaInfo: infoJson.media_info || track.mediaInfo || {},
+                channelInfo: channelInfo || track.channelInfo || {},
+                contentInfo: contentInfo || track.contentInfo || {},
+                technicalInfo: technicalInfo || track.technicalInfo || {},
+                statistics: statistics || track.statistics || {},
+                dates: dates || track.dates || {},
+                mediaInfo: mediaInfo || track.mediaInfo || {},
                 playlistInfo: infoJson.playlist_info || track.playlistInfo || {},
-                thumbnails: infoJson.thumbnails || track.thumbnails || {},
+                thumbnails: thumbnails || track.thumbnails || {},
                 subtitlesInfo: infoJson.subtitles_info || track.subtitlesInfo || {},
                 chapters: infoJson.chapters || track.chapters || [],
                 liveInfo: infoJson.live_info || track.liveInfo || {},
@@ -1435,4 +1579,6 @@ window.openMP3ModalFromEvent = openMP3ModalFromEvent;
 window.enrichTrackWithInfoJson = enrichTrackWithInfoJson;
 window.loadTrackFromEventId = loadTrackFromEventId;
 window.parseMP3Event = parseMP3Event;
+window.extractThumbnailFromMP3 = extractThumbnailFromMP3;
+window.getTrackThumbnail = getTrackThumbnail;
 

@@ -1350,8 +1350,11 @@ async function loadTheaterTMDBMetadata(modalContent, infoCid) {
             return;
         }
         
-        // Extract TMDB metadata
-        const tmdbData = infoMetadata.tmdb;
+        // Extract standardized metadata (supports v1.0 and v2.0)
+        const standardized = extractStandardizedMetadata(infoMetadata);
+        
+        // Extract TMDB metadata from standardized format
+        const tmdbData = standardized.source?.tmdb;
         if (!tmdbData) {
             console.log('⚠️ No TMDB metadata in info.json');
             return;
@@ -1393,14 +1396,18 @@ async function loadTheaterTMDBMetadata(modalContent, infoCid) {
             metadataHTML += `<div class="tmdb-genres"><strong>Genres:</strong> ${genresHTML}</div>`;
         }
         
-        // Display season and episode for series
-        if (tmdbData.media_type === 'tv' || tmdbData.media_type === 'serie') {
+        // Display season and episode for series (v2.0: mediaType, v1.0: media_type)
+        const mediaType = tmdbData.mediaType || tmdbData.media_type;
+        if (mediaType === 'tv' || mediaType === 'serie') {
             const seasonEpisode = [];
-            if (tmdbData.season_number !== undefined && tmdbData.season_number !== null) {
-                seasonEpisode.push(`Saison ${tmdbData.season_number}`);
+            const seasonNum = tmdbData.seasonNumber || tmdbData.season_number;
+            const episodeNum = tmdbData.episodeNumber || tmdbData.episode_number;
+            
+            if (seasonNum !== undefined && seasonNum !== null) {
+                seasonEpisode.push(`Season ${seasonNum}`);
             }
-            if (tmdbData.episode_number !== undefined && tmdbData.episode_number !== null) {
-                seasonEpisode.push(`Épisode ${tmdbData.episode_number}`);
+            if (episodeNum !== undefined && episodeNum !== null) {
+                seasonEpisode.push(`Episode ${episodeNum}`);
             }
             if (seasonEpisode.length > 0) {
                 metadataHTML += `<div class="tmdb-season-episode"><strong>${seasonEpisode.join(' • ')}</strong></div>`;
@@ -1409,12 +1416,13 @@ async function loadTheaterTMDBMetadata(modalContent, infoCid) {
         
         // Display year if available
         if (tmdbData.year) {
-            metadataHTML += `<div class="tmdb-year"><strong>Année:</strong> ${escapeHtml(tmdbData.year)}</div>`;
+            metadataHTML += `<div class="tmdb-year"><strong>Year:</strong> ${escapeHtml(tmdbData.year)}</div>`;
         }
         
-        // Display TMDB link if available
-        if (tmdbData.tmdb_url) {
-            metadataHTML += `<div class="tmdb-link"><a href="${escapeHtml(tmdbData.tmdb_url)}" target="_blank" rel="noopener noreferrer">📽️ Voir sur TMDB</a></div>`;
+        // Display TMDB link if available (v2.0: url, v1.0: tmdb_url)
+        const tmdbUrl = tmdbData.url || tmdbData.tmdb_url;
+        if (tmdbUrl) {
+            metadataHTML += `<div class="tmdb-link"><a href="${escapeHtml(tmdbUrl)}" target="_blank" rel="noopener noreferrer">📽️ View on TMDB</a></div>`;
         }
         
         metadataHTML += '</div>';
@@ -3462,18 +3470,116 @@ async function loadInfoJsonMetadata(infoCid) {
 }
 
 /**
- * Determine video source type from metadata
+ * Extract standardized media metadata from info.json (supports v1.0 and v2.0)
+ * @param {Object} infoJson - Raw info.json object
+ * @returns {Object} - Standardized metadata
+ */
+function extractStandardizedMetadata(infoJson) {
+    if (!infoJson) return {};
+    
+    const version = infoJson.protocol?.version || '1.0.0';
+    const isV2 = version.startsWith('2.');
+    
+    // Extract media metadata
+    const media = infoJson.media || infoJson.image || {};
+    const result = {
+        version,
+        duration: media.duration || 0,
+        dimensions: null,
+        codecs: {},
+        thumbnails: {},
+        source: {}
+    };
+    
+    // Extract dimensions
+    if (isV2 && media.dimensions && typeof media.dimensions === 'object') {
+        result.dimensions = {
+            width: media.dimensions.width || 0,
+            height: media.dimensions.height || 0,
+            aspectRatio: media.dimensions.aspectRatio || '16:9'
+        };
+    } else if (media.dimensions && typeof media.dimensions === 'string') {
+        // v1.0 format: "1920x1080"
+        const [width, height] = media.dimensions.split('x').map(Number);
+        result.dimensions = { width, height, aspectRatio: '16:9' };
+    }
+    
+    // Extract codecs
+    if (isV2 && media.codecs) {
+        result.codecs = media.codecs;
+    } else {
+        // v1.0 format: video_codecs, audio_codecs
+        result.codecs = {
+            video: media.video_codecs || null,
+            audio: media.audio_codecs || media.codecs?.audio || null
+        };
+    }
+    
+    // Extract thumbnails
+    if (isV2 && media.thumbnails) {
+        result.thumbnails = {
+            static: media.thumbnails.static || null,
+            animated: media.thumbnails.animated || null
+        };
+    } else {
+        // v1.0 format: thumbnail_ipfs, gifanim_ipfs
+        result.thumbnails = {
+            static: media.thumbnail_ipfs || null,
+            animated: media.gifanim_ipfs || null
+        };
+    }
+    
+    // Extract source metadata
+    if (isV2 && infoJson.source) {
+        result.source = infoJson.source;
+    } else {
+        // v1.0 fallback: Check for youtube metadata at root or tmdb section
+        if (infoJson.youtube_id || infoJson.youtube_url) {
+            result.source = {
+                type: 'youtube',
+                youtube: infoJson  // Entire root is youtube metadata in v1.0
+            };
+        } else if (infoJson.tmdb) {
+            result.source = {
+                type: 'tmdb',
+                tmdb: infoJson.tmdb
+            };
+        }
+    }
+    
+    // Extract provenance
+    if (infoJson.provenance) {
+        result.provenance = infoJson.provenance;
+    }
+    
+    return result;
+}
+
+/**
+ * Determine video source type from metadata (supports v1.0 and v2.0)
  * @param {Object} infoMetadata - info.json metadata
  * @param {string} youtubeUrl - YouTube URL if available
- * @returns {string} - 'youtube', 'tmdb', or 'video'
+ * @returns {string} - 'youtube', 'tmdb', 'film', 'serie', or 'video'
  */
 function getVideoSourceType(infoMetadata, youtubeUrl) {
     if (!infoMetadata) {
         return youtubeUrl ? 'youtube' : 'video';
     }
     
-    // Check for structured YouTube metadata at root level
-    // This format is compatible with both mp3.html and youtube.html
+    // v2.0 format: Check source.type
+    if (infoMetadata.source && infoMetadata.source.type) {
+        const sourceType = infoMetadata.source.type;
+        if (sourceType === 'youtube') return 'youtube';
+        if (sourceType === 'tmdb') {
+            // Distinguish between film and serie
+            if (infoMetadata.source.tmdb && infoMetadata.source.tmdb.mediaType === 'tv') {
+                return 'serie';
+            }
+            return 'film';
+        }
+    }
+    
+    // v1.0 fallback: Check for YouTube metadata at root level
     const hasStructuredYouTube = infoMetadata.channel_info || 
                                   infoMetadata.content_info || 
                                   infoMetadata.youtube_id ||
@@ -3482,9 +3588,16 @@ function getVideoSourceType(infoMetadata, youtubeUrl) {
     if (youtubeUrl || hasStructuredYouTube) {
         return 'youtube';
     }
+    
+    // v1.0 fallback: Check for TMDB at root
     if (infoMetadata.tmdb) {
-        return 'tmdb';
+        // Distinguish between film and serie
+        if (infoMetadata.tmdb.media_type === 'tv') {
+            return 'serie';
+        }
+        return 'film';
     }
+    
     return 'video';
 }
 

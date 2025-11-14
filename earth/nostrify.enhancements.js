@@ -1279,68 +1279,135 @@ async function enrichTrackWithInfoJson(track) {
             const infoJson = await infoResponse.json();
             console.log('[NOSTRIFY] ✅ Loaded .info.json for track:', track.title);
             
-            // Merge metadata from .info.json (structured format only)
-            const channelInfo = infoJson.channel_info || {};
-            const contentInfo = infoJson.content_info || {};
-            const technicalInfo = infoJson.technical_info || {};
-            const statistics = infoJson.statistics || {};
-            const dates = infoJson.dates || {};
-            const mediaInfo = infoJson.media_info || {};
-            const thumbnails = infoJson.thumbnails || {};
+            // Detect format version
+            const version = infoJson.protocol?.version || '1.0.0';
+            const isV2 = version.startsWith('2.');
+            console.log(`[NOSTRIFY] ℹ️ info.json format: v${version}`);
             
-            return {
-                ...track,
-                // Override with .info.json data if available
-                title: infoJson.title || track.title,
-                rawTitle: infoJson.title || track.title,
-                artist: mediaInfo.artist || infoJson.uploader || track.artist,
-                album: mediaInfo.album || track.album,
-                description: contentInfo.description || infoJson.description || track.description,
-                duration: infoJson.duration || track.duration,
-                // Channel info
-                channel: channelInfo.display_name || channelInfo.name || infoJson.uploader || track.channel,
-                channelId: channelInfo.channel_id || track.channelId,
-                channelUrl: channelInfo.channel_url || track.channelUrl,
-                youtubeUrl: infoJson.youtube_url || infoJson.original_url || track.youtubeUrl,
-                // Statistics
-                viewCount: statistics.view_count || track.viewCount || 0,
-                likeCount: statistics.like_count || track.likeCount || 0,
-                commentCount: statistics.comment_count || track.commentCount || 0,
-                // Dates
-                uploadDate: dates.upload_date || infoJson.upload_date || track.uploadDate,
-                releaseDate: dates.release_date || infoJson.release_date || track.releaseDate,
-                // Content info
-                language: contentInfo.language || infoJson.language || track.language,
-                license: contentInfo.license || infoJson.license || track.license,
-                tags: contentInfo.tags || infoJson.tags || track.tags || [],
-                categories: contentInfo.categories || infoJson.categories || track.categories || [],
-                // Media info
-                track: mediaInfo.track || track.track,
-                creator: mediaInfo.creator || infoJson.creator || track.creator,
-                // Technical info
-                abr: technicalInfo.abr || infoJson.abr || track.abr || 0,
-                acodec: technicalInfo.acodec || infoJson.acodec || track.acodec,
-                formatNote: technicalInfo.format_note || infoJson.format_note || track.formatNote,
-                // Thumbnails
-                thumbnail: (thumbnails.thumbnail && typeof convertIPFSUrlGlobal === 'function' 
-                    ? convertIPFSUrlGlobal(thumbnails.thumbnail) 
-                    : (thumbnails.thumbnail || track.thumbnail)),
-                // Full metadata objects
-                youtubeMetadata: infoJson.youtube_metadata || track.youtubeMetadata || {},
-                channelInfo: channelInfo || track.channelInfo || {},
-                contentInfo: contentInfo || track.contentInfo || {},
-                technicalInfo: technicalInfo || track.technicalInfo || {},
-                statistics: statistics || track.statistics || {},
-                dates: dates || track.dates || {},
-                mediaInfo: mediaInfo || track.mediaInfo || {},
-                playlistInfo: infoJson.playlist_info || track.playlistInfo || {},
-                thumbnails: thumbnails || track.thumbnails || {},
-                subtitlesInfo: infoJson.subtitles_info || track.subtitlesInfo || {},
-                chapters: infoJson.chapters || track.chapters || [],
-                liveInfo: infoJson.live_info || track.liveInfo || {},
-                // Raw .info.json
-                infoJson: infoJson
-            };
+            // Extract metadata based on version
+            let youtubeMetadata = {};
+            let mediaMetadata = {};
+            
+            if (isV2) {
+                // v2.0 format: YouTube metadata in source.youtube
+                youtubeMetadata = infoJson.source?.youtube || {};
+                mediaMetadata = infoJson.media || {};
+                
+                // Extract nested fields from v2.0 format
+                return {
+                    ...track,
+                    // Basic metadata
+                    title: infoJson.metadata?.title || youtubeMetadata.title || track.title,
+                    rawTitle: infoJson.metadata?.title || youtubeMetadata.title || track.title,
+                    artist: youtubeMetadata.artist || youtubeMetadata.uploader || track.artist,
+                    album: youtubeMetadata.album || track.album,
+                    description: infoJson.metadata?.description || youtubeMetadata.description || track.description,
+                    duration: mediaMetadata.duration || track.duration,
+                    
+                    // Channel info (from source.youtube.channel)
+                    channel: youtubeMetadata.channel?.name || youtubeMetadata.uploader || track.channel,
+                    channelId: youtubeMetadata.channel?.id || youtubeMetadata.uploaderId || track.channelId,
+                    channelUrl: youtubeMetadata.channel?.url || youtubeMetadata.uploaderUrl || track.channelUrl,
+                    youtubeUrl: youtubeMetadata.url || youtubeMetadata.shortUrl || track.youtubeUrl,
+                    
+                    // Statistics (from source.youtube.stats)
+                    viewCount: youtubeMetadata.stats?.viewCount || track.viewCount || 0,
+                    likeCount: youtubeMetadata.stats?.likeCount || track.likeCount || 0,
+                    commentCount: youtubeMetadata.stats?.commentCount || track.commentCount || 0,
+                    
+                    // Dates
+                    uploadDate: youtubeMetadata.uploadDate || track.uploadDate,
+                    releaseDate: youtubeMetadata.releaseDate || track.releaseDate,
+                    
+                    // Content info
+                    language: youtubeMetadata.language || track.language,
+                    license: youtubeMetadata.license || track.license,
+                    tags: youtubeMetadata.tags || track.tags || [],
+                    categories: youtubeMetadata.categories || track.categories || [],
+                    
+                    // Media info
+                    track: youtubeMetadata.track || track.track,
+                    creator: youtubeMetadata.creator || track.creator,
+                    
+                    // Technical info (from media.codecs, media.bitrate)
+                    abr: mediaMetadata.bitrate?.audio || track.abr || 0,
+                    acodec: mediaMetadata.codecs?.audio || track.acodec,
+                    formatNote: youtubeMetadata.format?.note || track.formatNote,
+                    
+                    // Thumbnail (IPFS CID to URL conversion)
+                    thumbnail: (mediaMetadata.thumbnails?.static && typeof convertIPFSUrlGlobal === 'function' 
+                        ? convertIPFSUrlGlobal(`/ipfs/${mediaMetadata.thumbnails.static}`) 
+                        : track.thumbnail),
+                    
+                    // Full metadata objects (v2.0 structure)
+                    youtubeMetadata: youtubeMetadata || {},
+                    mediaInfo: mediaMetadata || {},
+                    infoJson: infoJson
+                };
+            } else {
+                // v1.0 format: YouTube metadata at root level (legacy)
+                const channelInfo = infoJson.channel_info || {};
+                const contentInfo = infoJson.content_info || {};
+                const technicalInfo = infoJson.technical_info || {};
+                const statistics = infoJson.statistics || {};
+                const dates = infoJson.dates || {};
+                const mediaInfo = infoJson.media_info || {};
+                const thumbnails = infoJson.thumbnails || {};
+                
+                return {
+                    ...track,
+                    // Override with .info.json data if available
+                    title: infoJson.title || track.title,
+                    rawTitle: infoJson.title || track.title,
+                    artist: mediaInfo.artist || infoJson.uploader || track.artist,
+                    album: mediaInfo.album || track.album,
+                    description: contentInfo.description || infoJson.description || track.description,
+                    duration: infoJson.duration || track.duration,
+                    // Channel info
+                    channel: channelInfo.display_name || channelInfo.name || infoJson.uploader || track.channel,
+                    channelId: channelInfo.channel_id || track.channelId,
+                    channelUrl: channelInfo.channel_url || track.channelUrl,
+                    youtubeUrl: infoJson.youtube_url || infoJson.original_url || track.youtubeUrl,
+                    // Statistics
+                    viewCount: statistics.view_count || track.viewCount || 0,
+                    likeCount: statistics.like_count || track.likeCount || 0,
+                    commentCount: statistics.comment_count || track.commentCount || 0,
+                    // Dates
+                    uploadDate: dates.upload_date || infoJson.upload_date || track.uploadDate,
+                    releaseDate: dates.release_date || infoJson.release_date || track.releaseDate,
+                    // Content info
+                    language: contentInfo.language || infoJson.language || track.language,
+                    license: contentInfo.license || infoJson.license || track.license,
+                    tags: contentInfo.tags || infoJson.tags || track.tags || [],
+                    categories: contentInfo.categories || infoJson.categories || track.categories || [],
+                    // Media info
+                    track: mediaInfo.track || track.track,
+                    creator: mediaInfo.creator || infoJson.creator || track.creator,
+                    // Technical info
+                    abr: technicalInfo.abr || infoJson.abr || track.abr || 0,
+                    acodec: technicalInfo.acodec || infoJson.acodec || track.acodec,
+                    formatNote: technicalInfo.format_note || infoJson.format_note || track.formatNote,
+                    // Thumbnails
+                    thumbnail: (thumbnails.thumbnail && typeof convertIPFSUrlGlobal === 'function' 
+                        ? convertIPFSUrlGlobal(thumbnails.thumbnail) 
+                        : (thumbnails.thumbnail || track.thumbnail)),
+                    // Full metadata objects
+                    youtubeMetadata: infoJson.youtube_metadata || track.youtubeMetadata || {},
+                    channelInfo: channelInfo || track.channelInfo || {},
+                    contentInfo: contentInfo || track.contentInfo || {},
+                    technicalInfo: technicalInfo || track.technicalInfo || {},
+                    statistics: statistics || track.statistics || {},
+                    dates: dates || track.dates || {},
+                    mediaInfo: mediaInfo || track.mediaInfo || {},
+                    playlistInfo: infoJson.playlist_info || track.playlistInfo || {},
+                    thumbnails: thumbnails || track.thumbnails || {},
+                    subtitlesInfo: infoJson.subtitles_info || track.subtitlesInfo || {},
+                    chapters: infoJson.chapters || track.chapters || [],
+                    liveInfo: infoJson.live_info || track.liveInfo || {},
+                    // Raw .info.json
+                    infoJson: infoJson
+                };
+            }
         } else {
             console.warn('[NOSTRIFY] ⚠️ Could not load .info.json from IPFS:', infoResponse.status);
         }

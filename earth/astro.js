@@ -76,7 +76,7 @@
  *    <script src="path/to/common.js"></script>  <!-- Load common.js for NOSTR -->
  *    <script src="path/to/astro.js"></script>
  *    <script>
- *        // Send encrypted analytics (kind 10001) - only user can decrypt
+ *        // Send encrypted analytics (kind 10000 with encrypted content) - only user can decrypt
  *        // Requires: nostr.bundle.js loaded, user private key available
  *        uPlanetAnalytics.sendEncryptedAsNostrEvent({
  *            type: 'page_view',
@@ -99,8 +99,9 @@
  * ENCRYPTED ANALYTICS:
  * --------------------
  * If nostr.bundle.js is loaded and user private key is available, analytics can
- * be encrypted using NIP-44 (kind 10001). Only the user can decrypt their own
- * analytics, providing a private navigation history.
+ * be encrypted using NIP-44 (kind 10000 with encrypted content). Only the user can decrypt their own
+ * analytics, providing a private navigation history. The encryption status is indicated by tags
+ * (["t", "encrypted"]) and the encrypted content field.
  * 
  * Benefits of NOSTR analytics:
  * - Decentralized: stored on NOSTR relays, not centralized server
@@ -110,17 +111,21 @@
  * 
  * Event Structure (kind 10000):
  * {
- *     kind: 10000,
- *     content: JSON.stringify(analytics_data),
+ *     kind: 10000,  // Used for both encrypted and unencrypted analytics
+ *     content: JSON.stringify(analytics_data) or encrypted_content (NIP-44),
  *     tags: [
  *         ['t', 'analytics'],
  *         ['t', 'event_type'],
+ *         ['t', 'encrypted'],  // Only for encrypted analytics
+ *         ['encryption', 'nip44'],  // Only for encrypted analytics
  *         ['source', 'email|web|api'],
  *         ['email', 'user@example.com'],  // optional
  *         ['url', 'current_page_url'],    // optional
  *         // ... other tags
  *     ]
  * }
+ * 
+ * Note: Kind 10001 is now reserved for NIP-51 playlists (pin list).
  * 
  * URL TRANSFORMATIONS:
  * -------------------
@@ -411,7 +416,7 @@ window.uPlanetAnalytics = {
     },
 
     /**
-     * Send encrypted analytics as NOSTR event (kind 10001)
+     * Send encrypted analytics as NOSTR event (kind 10000 with encrypted content)
      * Encrypts analytics data using NIP-44 so only the user can decrypt it
      * 
      * Uses APPROACH A (Direct Encryption) by default - recommended for analytics (~3-5 KB)
@@ -566,7 +571,7 @@ window.uPlanetAnalytics = {
                 const result = await publishNote(
                     encryptedContent,
                     tags,
-                    10001,  // Kind 10001: Encrypted UPlanet Analytics Event
+                    10000,  // Kind 10000: UPlanet Analytics Event (encrypted content)
                     {
                         silent: true,  // Don't show alerts
                         timeout: 5000
@@ -781,7 +786,7 @@ window.uPlanetAnalytics = {
                 const result = await publishNote(
                     encryptedContent,  // Contains encrypted CID + gateway
                     tags,
-                    10001,
+                    10000,  // Kind 10000: UPlanet Analytics Event (encrypted content via IPFS)
                     {
                         silent: true,
                         timeout: 5000

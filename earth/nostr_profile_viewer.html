@@ -262,6 +262,37 @@
             border-bottom: 1px solid var(--terminal-green);
             padding-bottom: 5px;
         }
+        
+        /* Analytics section specific styles */
+        #analytics-container {
+            margin-top: 20px;
+        }
+        
+        #analytics-container h2 {
+            color: var(--terminal-green);
+            border-bottom: 1px solid var(--terminal-green);
+        }
+        
+        details summary {
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        
+        details summary:hover {
+            color: var(--terminal-green);
+            text-shadow: 0 0 5px var(--terminal-glow);
+        }
+        
+        details[open] summary {
+            color: var(--terminal-green);
+        }
+        
+        details pre {
+            max-height: 400px;
+            overflow-y: auto;
+            word-wrap: break-word;
+            white-space: pre-wrap;
+        }
         .messages-scrollable {
             max-height: 350px;
             overflow-y: auto;
@@ -668,6 +699,11 @@
             <div id="messages-container" class="messages loading">
                 <h2>Messages & Articles</h2>
                 <div id="messages-content" class="messages-scrollable">loading messages...</div>
+            </div>
+
+            <div id="analytics-container" class="messages loading">
+                <h2>Analytics Events</h2>
+                <div id="analytics-content" class="messages-scrollable">loading analytics...</div>
             </div>
             <!-- End of original content -->
         </div>
@@ -1929,15 +1965,19 @@
 
         const profileContentDiv = document.getElementById('profile-content');
         const messagesContentDiv = document.getElementById('messages-content');
+        const analyticsContentDiv = document.getElementById('analytics-content');
         const profileContainerDiv = document.getElementById('profile-container');
         const messagesContainerDiv = document.getElementById('messages-container');
+        const analyticsContainerDiv = document.getElementById('analytics-container');
 
 
         if (!hexKey) {
             profileContentDiv.innerText = "HEX key not provided in URL.";
             messagesContentDiv.innerText = "HEX key not provided in URL.";
+            analyticsContentDiv.innerText = "HEX key not provided in URL.";
             profileContainerDiv.classList.remove('loading');
             messagesContainerDiv.classList.remove('loading');
+            analyticsContainerDiv.classList.remove('loading');
         } else {
             initialHex = hexKey; // Set initialHex when page loads
             
@@ -1951,6 +1991,7 @@
             
             profileContentDiv.innerText = `Fetching profile for pubkey: ${hexKey.substring(0,10)}...`;
             messagesContentDiv.innerText = `Fetching recent messages...`;
+            analyticsContentDiv.innerText = `Fetching analytics events...`;
 
             async function fetchNostrProfile(hex, nostrRelayUrl) { // Renamed relayUrl param
                 try {
@@ -2057,6 +2098,44 @@
                     });
                 } catch (error) {
                     console.error("Nostr Messages Fetch Error:", error);
+                    throw error;
+                }
+            }
+
+            async function fetchNostrAnalytics(hex, nostrRelayUrl) {
+                try {
+                    const relay = nostrTools.relayInit(nostrRelayUrl);
+                    await relay.connect();
+                    const now = Math.floor(Date.now() / 1000);
+                    const oneMonthAgo = now - (30 * 24 * 3600); // Last 30 days
+                    // Fetch kind 10000 (Analytics events)
+                    const sub = relay.sub([{ kinds: [10000], authors: [hex], since: oneMonthAgo, limit: 100 }]);
+                    const analytics = [];
+                    return new Promise((resolve, reject) => {
+                        let timeout = setTimeout(() => {
+                            sub.unsub();
+                            relay.close();
+                            console.warn(`Timeout fetching analytics for ${hex}`);
+                            resolve(analytics.sort((a,b) => b.created_at - a.created_at)); // Sort what we have
+                        }, 10000);
+
+                        sub.on('event', event => { analytics.push(event); });
+                        sub.on('eose', () => {
+                            clearTimeout(timeout);
+                            sub.unsub();
+                            relay.close();
+                            resolve(analytics.sort((a,b) => b.created_at - a.created_at));
+                        });
+                        relay.on('error', (err) => {
+                            clearTimeout(timeout);
+                            sub.unsub();
+                            try { relay.close(); } catch(e) {}
+                            console.error(`Relay error fetching analytics on ${nostrRelayUrl}:`, err);
+                            reject(`Relay error fetching analytics`);
+                        });
+                    });
+                } catch (error) {
+                    console.error("Nostr Analytics Fetch Error:", error);
                     throw error;
                 }
             }
@@ -2285,6 +2364,85 @@
                     console.error("Messages display error:", messagesError);
                     messagesContainerDiv.classList.remove('loading');
                     messagesContentDiv.innerHTML = `<p style="color:var(--terminal-red)">Error loading messages from ${relayUrl}: ${messagesError.message || messagesError}</p>`;
+                }
+
+                try {
+                    const analyticsData = await fetchNostrAnalytics(hexKey, relayUrl);
+                    analyticsContainerDiv.classList.remove('loading');
+                    let analyticsHTML = '';
+                    if (analyticsData && analyticsData.length > 0) {
+                        analyticsData.forEach(analyticsEvent => {
+                            const date = new Date(analyticsEvent.created_at * 1000);
+                            
+                            // Parse analytics content (JSON string)
+                            let analyticsContent = {};
+                            try {
+                                analyticsContent = JSON.parse(analyticsEvent.content);
+                            } catch (e) {
+                                console.warn('Failed to parse analytics content as JSON:', e);
+                                analyticsContent = { raw: analyticsEvent.content };
+                            }
+                            
+                            // Extract tags
+                            const eventType = analyticsEvent.tags?.find(tag => tag[0] === 't' && tag[1] !== 'analytics')?.[1] || 'unknown';
+                            const source = analyticsEvent.tags?.find(tag => tag[0] === 'source')?.[1] || analyticsContent.source || 'unknown';
+                            const url = analyticsEvent.tags?.find(tag => tag[0] === 'url')?.[1] || analyticsContent.current_url || '';
+                            
+                            // Build analytics display
+                            let analyticsDetails = '';
+                            analyticsDetails += `<div style="font-size: 0.85em; color: var(--terminal-cyan); margin: 3px 0;">`;
+                            analyticsDetails += `<strong>Type:</strong> ${eventType} • `;
+                            analyticsDetails += `<strong>Source:</strong> ${source}`;
+                            if (url) {
+                                analyticsDetails += ` • <a href="${url}" target="_blank" rel="noopener noreferrer" style="color: var(--terminal-green);">URL</a>`;
+                            }
+                            analyticsDetails += `</div>`;
+                            
+                            // Display key analytics data
+                            let dataPreview = '';
+                            if (analyticsContent.type) {
+                                dataPreview += `<div style="margin: 5px 0;"><strong style="color: var(--terminal-purple);">Type:</strong> ${analyticsContent.type}</div>`;
+                            }
+                            if (analyticsContent.video_event_id) {
+                                dataPreview += `<div style="margin: 5px 0;"><strong style="color: var(--terminal-purple);">Video Event ID:</strong> <code style="color: var(--terminal-cyan);">${analyticsContent.video_event_id.substring(0, 16)}...</code></div>`;
+                            }
+                            if (analyticsContent.video_title) {
+                                dataPreview += `<div style="margin: 5px 0;"><strong style="color: var(--terminal-purple);">Video Title:</strong> ${analyticsContent.video_title}</div>`;
+                            }
+                            if (analyticsContent.email) {
+                                dataPreview += `<div style="margin: 5px 0;"><strong style="color: var(--terminal-purple);">Email:</strong> ${analyticsContent.email}</div>`;
+                            }
+                            if (analyticsContent.viewport) {
+                                dataPreview += `<div style="margin: 5px 0;"><strong style="color: var(--terminal-purple);">Viewport:</strong> ${analyticsContent.viewport.width}x${analyticsContent.viewport.height}</div>`;
+                            }
+                            
+                            // Full data (collapsible)
+                            const fullDataJson = JSON.stringify(analyticsContent, null, 2);
+                            const dataId = `analytics-${analyticsEvent.id.substring(0, 8)}`;
+                            
+                            analyticsHTML += `<div class="message-item" style="border-left: 3px solid var(--terminal-green); padding-left: 10px;">
+                                                <div style="flex: 1;">
+                                                    <strong style="color: var(--terminal-green);">📊 ${eventType}</strong>
+                                                    <div style="font-size: 0.85em; color: var(--terminal-cyan); margin: 3px 0;">
+                                                        ${date.toLocaleDateString()} ${date.toLocaleTimeString()}
+                                                    </div>
+                                                    ${analyticsDetails}
+                                                    ${dataPreview}
+                                                    <details style="margin-top: 10px;">
+                                                        <summary style="color: var(--terminal-cyan); cursor: pointer; font-size: 0.9em;">Show full data ▼</summary>
+                                                        <pre style="background: rgba(0, 255, 0, 0.1); padding: 10px; border-radius: 4px; margin-top: 5px; overflow-x: auto; font-size: 0.85em; color: var(--text-color);">${fullDataJson.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</pre>
+                                                    </details>
+                                                </div>
+                                            </div>`;
+                        });
+                    } else {
+                        analyticsHTML = "<p>No analytics events found for this pubkey on this relay.</p>";
+                    }
+                    analyticsContentDiv.innerHTML = analyticsHTML;
+                } catch (analyticsError) {
+                    console.error("Analytics display error:", analyticsError);
+                    analyticsContainerDiv.classList.remove('loading');
+                    analyticsContentDiv.innerHTML = `<p style="color:var(--terminal-red)">Error loading analytics from ${relayUrl}: ${analyticsError.message || analyticsError}</p>`;
                 }
             }
             displayNostrData();

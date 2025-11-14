@@ -702,7 +702,7 @@
             </div>
 
             <div id="analytics-container" class="messages loading">
-                <h2>Analytics Events</h2>
+                <h2>Analytics Events (All Sources)</h2>
                 <div id="analytics-content" class="messages-scrollable">loading analytics...</div>
             </div>
             <!-- End of original content -->
@@ -1991,7 +1991,7 @@
             
             profileContentDiv.innerText = `Fetching profile for pubkey: ${hexKey.substring(0,10)}...`;
             messagesContentDiv.innerText = `Fetching recent messages...`;
-            analyticsContentDiv.innerText = `Fetching analytics events...`;
+            analyticsContentDiv.innerText = `Fetching analytics events from all sources...`;
 
             async function fetchNostrProfile(hex, nostrRelayUrl) { // Renamed relayUrl param
                 try {
@@ -2102,22 +2102,22 @@
                 }
             }
 
-            async function fetchNostrAnalytics(hex, nostrRelayUrl) {
+            async function fetchNostrAnalytics(nostrRelayUrl) {
                 try {
                     const relay = nostrTools.relayInit(nostrRelayUrl);
                     await relay.connect();
                     const now = Math.floor(Date.now() / 1000);
                     const oneMonthAgo = now - (30 * 24 * 3600); // Last 30 days
-                    // Fetch kind 10000 (Analytics events)
-                    const sub = relay.sub([{ kinds: [10000], authors: [hex], since: oneMonthAgo, limit: 100 }]);
+                    // Fetch kind 10000 (Analytics events) from all sources
+                    const sub = relay.sub([{ kinds: [10000], since: oneMonthAgo, limit: 200 }]);
                     const analytics = [];
                     return new Promise((resolve, reject) => {
                         let timeout = setTimeout(() => {
                             sub.unsub();
                             relay.close();
-                            console.warn(`Timeout fetching analytics for ${hex}`);
+                            console.warn(`Timeout fetching analytics from all sources`);
                             resolve(analytics.sort((a,b) => b.created_at - a.created_at)); // Sort what we have
-                        }, 10000);
+                        }, 15000);
 
                         sub.on('event', event => { analytics.push(event); });
                         sub.on('eose', () => {
@@ -2367,12 +2367,18 @@
                 }
 
                 try {
-                    const analyticsData = await fetchNostrAnalytics(hexKey, relayUrl);
+                    const analyticsData = await fetchNostrAnalytics(relayUrl);
                     analyticsContainerDiv.classList.remove('loading');
                     let analyticsHTML = '';
                     if (analyticsData && analyticsData.length > 0) {
+                        analyticsHTML += `<div style="margin-bottom: 15px; padding: 10px; background: rgba(0, 255, 0, 0.1); border: 1px solid var(--terminal-green); border-radius: 4px;">
+                            <strong style="color: var(--terminal-green);">📊 Showing ${analyticsData.length} analytics events from all sources</strong>
+                        </div>`;
+                        
                         analyticsData.forEach(analyticsEvent => {
                             const date = new Date(analyticsEvent.created_at * 1000);
+                            const authorPubkey = analyticsEvent.pubkey;
+                            const isCurrentProfile = authorPubkey === hexKey;
                             
                             // Parse analytics content (JSON string)
                             let analyticsContent = {};
@@ -2397,6 +2403,18 @@
                                 analyticsDetails += ` • <a href="${url}" target="_blank" rel="noopener noreferrer" style="color: var(--terminal-green);">URL</a>`;
                             }
                             analyticsDetails += `</div>`;
+                            
+                            // Author information
+                            let authorInfo = '';
+                            if (isCurrentProfile) {
+                                authorInfo = `<div style="font-size: 0.85em; color: var(--terminal-green); margin: 3px 0;">
+                                    <strong>Author:</strong> <span style="color: var(--terminal-green);">Current profile</span> (${authorPubkey.substring(0, 10)}...)
+                                </div>`;
+                            } else {
+                                authorInfo = `<div style="font-size: 0.85em; color: var(--terminal-cyan); margin: 3px 0;">
+                                    <strong>Author:</strong> <a href="#" onclick="loadProfile('${authorPubkey}'); return false;" style="color: var(--terminal-purple); text-decoration: underline;" title="View profile for ${authorPubkey.substring(0, 10)}...">${authorPubkey.substring(0, 10)}...</a>
+                                </div>`;
+                            }
                             
                             // Display key analytics data
                             let dataPreview = '';
@@ -2426,6 +2444,7 @@
                                                     <div style="font-size: 0.85em; color: var(--terminal-cyan); margin: 3px 0;">
                                                         ${date.toLocaleDateString()} ${date.toLocaleTimeString()}
                                                     </div>
+                                                    ${authorInfo}
                                                     ${analyticsDetails}
                                                     ${dataPreview}
                                                     <details style="margin-top: 10px;">
@@ -2436,7 +2455,7 @@
                                             </div>`;
                         });
                     } else {
-                        analyticsHTML = "<p>No analytics events found for this pubkey on this relay.</p>";
+                        analyticsHTML = "<p>No analytics events found on this relay.</p>";
                     }
                     analyticsContentDiv.innerHTML = analyticsHTML;
                 } catch (analyticsError) {

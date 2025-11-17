@@ -1543,6 +1543,9 @@
             // Get first 8 characters of UPLANET public key
             const planetPub = data.UPLANETG1PUB ? data.UPLANETG1PUB.substring(0, 8) : (isPartialData ? '⏳' : 'N/A');
 
+            // Get NODE G1PUB for balance display
+            const nodeG1Pub = data.NODEG1PUB || null;
+
             dashboard.innerHTML = `
                 <!-- UPlanet Status -->
 
@@ -1802,6 +1805,12 @@
                                 </span>
                                 <span style="display: flex; align-items: center; gap: 4px;">
                                     💳 ZEN Card: <strong style="color: #2ecc71;">${zcard} Ẑ/sem</strong>
+                                </span>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 8px; margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.1);">
+                                <span style="font-size: 0.9em; color: #b8c6e0;">🖥️ NODE:</span>
+                                <span id="node-balance" style="font-size: 1.1em; font-weight: bold; color: #3498db;">
+                                    <span style="color: #7f8c8d; font-size: 0.8em;">⏳ Chargement...</span>
                                 </span>
                             </div>
                         </div>
@@ -2497,6 +2506,27 @@
             // Initial simulation
             updateSimulation();
 
+            // Load NODE balance if NODEG1PUB is available
+            if (nodeG1Pub && nodeG1Pub !== 'N/A' && data._originalApiUrl) {
+                fetchWalletBalance(nodeG1Pub, data._originalApiUrl).then(balanceData => {
+                    const nodeBalanceElement = document.getElementById('node-balance');
+                    if (nodeBalanceElement) {
+                        nodeBalanceElement.innerHTML = `<span style="color: #3498db;">${balanceData.zen} Ẑ</span>`;
+                    }
+                }).catch(error => {
+                    console.error('Error loading NODE balance:', error);
+                    const nodeBalanceElement = document.getElementById('node-balance');
+                    if (nodeBalanceElement) {
+                        nodeBalanceElement.innerHTML = `<span style="color: #e74c3c; font-size: 0.9em;">❌ Erreur</span>`;
+                    }
+                });
+            } else {
+                const nodeBalanceElement = document.getElementById('node-balance');
+                if (nodeBalanceElement) {
+                    nodeBalanceElement.innerHTML = `<span style="color: #7f8c8d; font-size: 0.9em;">N/A</span>`;
+                }
+            }
+
             // Add number controls
             function addNumberControls(input, syncWithInput = null) {
                 const container = input.parentElement;
@@ -2632,6 +2662,23 @@
 
             // Update legal wallets section with complete data
             createLegalWalletsSection(data, data._originalApiUrl);
+
+            // Load NODE balance if NODEG1PUB is available
+            const nodeG1Pub = data.NODEG1PUB;
+            if (nodeG1Pub && nodeG1Pub !== 'N/A' && data._originalApiUrl) {
+                fetchWalletBalance(nodeG1Pub, data._originalApiUrl).then(balanceData => {
+                    const nodeBalanceElement = document.getElementById('node-balance');
+                    if (nodeBalanceElement) {
+                        nodeBalanceElement.innerHTML = `<span style="color: #3498db;">${balanceData.zen} Ẑ</span>`;
+                    }
+                }).catch(error => {
+                    console.error('Error loading NODE balance:', error);
+                    const nodeBalanceElement = document.getElementById('node-balance');
+                    if (nodeBalanceElement) {
+                        nodeBalanceElement.innerHTML = `<span style="color: #e74c3c; font-size: 0.9em;">❌ Erreur</span>`;
+                    }
+                });
+            }
 
             console.log('Dashboard updated with complete IPNS data');
         }

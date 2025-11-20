@@ -2561,6 +2561,111 @@ async function fetchUserPreferredRelay(pubkey) {
 }
 
 /**
+ * Convert hex pubkey to npub format (bech32)
+ * @param {string} hex - Hex pubkey (64 characters)
+ * @returns {string|null} - npub string or null if conversion fails
+ */
+function hexToNpub(hex) {
+    if (!hex || typeof hex !== 'string') {
+        return null;
+    }
+    
+    // Validate hex format (64 hex characters)
+    if (hex.length !== 64 || !/^[0-9a-fA-F]{64}$/.test(hex)) {
+        console.warn('⚠️ Invalid hex format for hexToNpub:', hex);
+        return null;
+    }
+    
+    try {
+        // Use NostrTools if available
+        if (typeof NostrTools !== 'undefined' && NostrTools.nip19 && NostrTools.nip19.npubEncode) {
+            return NostrTools.nip19.npubEncode(hex);
+        }
+        
+        // Fallback: try window.NostrTools
+        if (typeof window !== 'undefined' && window.NostrTools && window.NostrTools.nip19 && window.NostrTools.nip19.npubEncode) {
+            return window.NostrTools.nip19.npubEncode(hex);
+        }
+        
+        console.warn('⚠️ NostrTools.nip19.npubEncode not available');
+        return null;
+    } catch (error) {
+        console.error('❌ Error converting hex to npub:', error);
+        return null;
+    }
+}
+
+// Expose hexToNpub globally for use in other scripts
+if (typeof window !== 'undefined') {
+    window.hexToNpub = hexToNpub;
+}
+
+/**
+ * Convert npub to hex pubkey format
+ * @param {string} npub - npub string (bech32)
+ * @returns {string|null} - Hex pubkey (64 characters) or null if conversion fails
+ */
+function npubToHex(npub) {
+    if (!npub || typeof npub !== 'string') {
+        return null;
+    }
+    
+    // If already hex format (64 hex characters), return as-is
+    if (npub.length === 64 && /^[0-9a-fA-F]{64}$/.test(npub)) {
+        return npub.toLowerCase();
+    }
+    
+    // Must start with npub1
+    if (!npub.startsWith('npub1')) {
+        console.warn('⚠️ Invalid npub format for npubToHex:', npub);
+        return null;
+    }
+    
+    try {
+        // Use NostrTools if available
+        if (typeof NostrTools !== 'undefined' && NostrTools.nip19 && NostrTools.nip19.decode) {
+            const decoded = NostrTools.nip19.decode(npub);
+            if (decoded.type === 'npub') {
+                const data = decoded.data;
+                if (data instanceof Uint8Array) {
+                    return Array.from(data)
+                        .map(b => b.toString(16).padStart(2, '0'))
+                        .join('');
+                } else if (typeof data === 'string') {
+                    return data;
+                }
+            }
+        }
+        
+        // Fallback: try window.NostrTools
+        if (typeof window !== 'undefined' && window.NostrTools && window.NostrTools.nip19 && window.NostrTools.nip19.decode) {
+            const decoded = window.NostrTools.nip19.decode(npub);
+            if (decoded.type === 'npub') {
+                const data = decoded.data;
+                if (data instanceof Uint8Array) {
+                    return Array.from(data)
+                        .map(b => b.toString(16).padStart(2, '0'))
+                        .join('');
+                } else if (typeof data === 'string') {
+                    return data;
+                }
+            }
+        }
+        
+        console.warn('⚠️ NostrTools.nip19.decode not available');
+        return null;
+    } catch (error) {
+        console.error('❌ Error converting npub to hex:', error);
+        return null;
+    }
+}
+
+// Expose npubToHex globally for use in other scripts
+if (typeof window !== 'undefined') {
+    window.npubToHex = npubToHex;
+}
+
+/**
  * Extract domain from relay URL and propose redirection to user's preferred domain
  * @param {string} relayUrl - Relay URL (e.g., wss://relay.example.com)
  * @returns {object|null} - Object with uDomain and ipfsDomain or null

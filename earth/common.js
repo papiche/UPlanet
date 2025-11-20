@@ -882,6 +882,142 @@ async function isUserFollowing(targetPubkey) {
 }
 
 /**
+ * Fetch user's follow list (kind 3) with enriched metadata (profiles, npub, etc.)
+ * @param {string} pubkey - User's public key (hex or npub, optional - defaults to current user)
+ * @param {object} options - Options
+ * @param {number} options.timeout - Timeout in ms (default: 5000)
+ * @param {boolean} options.includeProfiles - Fetch profile metadata for each follow (default: true)
+ * @returns {Promise<Array>} Array of enriched follow objects with metadata
+ */
+async function fetchUserFollowsWithMetadata(pubkey = null, options = {}) {
+    const {
+        timeout = 5000,
+        includeProfiles = true
+    } = options;
+    
+    // Use current user if no pubkey provided
+    const targetPubkey = pubkey || userPubkey;
+    if (!targetPubkey) {
+        console.warn('No pubkey provided and no user connected');
+        return [];
+    }
+    
+    // Normalize pubkey to hex
+    let normalizedPubkey = targetPubkey;
+    if (targetPubkey.startsWith('npub')) {
+        try {
+            if (typeof NostrTools !== 'undefined' && NostrTools.nip19) {
+                const decoded = NostrTools.nip19.decode(targetPubkey);
+                if (decoded.type === 'npub') {
+                    const data = decoded.data;
+                    if (data instanceof Uint8Array) {
+                        normalizedPubkey = Array.from(data)
+                            .map(b => b.toString(16).padStart(2, '0'))
+                            .join('');
+                    } else if (typeof data === 'string') {
+                        normalizedPubkey = data;
+                    }
+                }
+            } else {
+                console.warn('NostrTools not available for npub decoding');
+                return [];
+            }
+        } catch (e) {
+            console.error('Error decoding npub:', e);
+            return [];
+        }
+    }
+    
+    // Fetch follow list (kind 3)
+    const followPubkeys = await fetchUserFollowList(normalizedPubkey, timeout);
+    
+    if (followPubkeys.length === 0) {
+        return [];
+    }
+    
+    // If profiles not needed, return basic list with npub
+    if (!includeProfiles) {
+        return followPubkeys.map(pk => {
+            let npub = pk;
+            try {
+                if (typeof NostrTools !== 'undefined' && NostrTools.nip19) {
+                    npub = NostrTools.nip19.npubEncode(pk);
+                }
+            } catch (e) {
+                // Keep hex if conversion fails
+            }
+            return {
+                pubkey: pk,
+                npub: npub
+            };
+        });
+    }
+    
+    // Fetch profiles for all follows in parallel
+    const enrichedFollows = await Promise.all(
+        followPubkeys.map(async (followPubkey) => {
+            try {
+                // Convert to npub
+                let npub = followPubkey;
+                try {
+                    if (typeof NostrTools !== 'undefined' && NostrTools.nip19) {
+                        npub = NostrTools.nip19.npubEncode(followPubkey);
+                    }
+                } catch (e) {
+                    // Keep hex if conversion fails
+                }
+                
+                // Fetch profile metadata
+                const profile = await fetchUserMetadata(followPubkey);
+                
+                return {
+                    pubkey: followPubkey,
+                    npub: npub,
+                    name: profile.name || profile.display_name || null,
+                    display_name: profile.display_name || profile.name || null,
+                    email: profile.email || null,
+                    picture: profile.picture || null,
+                    about: profile.about || null,
+                    website: profile.website || null,
+                    nip05: profile.nip05 || null
+                };
+            } catch (error) {
+                console.warn(`Error fetching profile for ${followPubkey.substring(0, 8)}...:`, error);
+                // Return basic info even if profile fetch fails
+                let npub = followPubkey;
+                try {
+                    if (typeof NostrTools !== 'undefined' && NostrTools.nip19) {
+                        npub = NostrTools.nip19.npubEncode(followPubkey);
+                    }
+                } catch (e) {
+                    // Keep hex if conversion fails
+                }
+                return {
+                    pubkey: followPubkey,
+                    npub: npub,
+                    name: null,
+                    display_name: null,
+                    email: null,
+                    picture: null,
+                    about: null,
+                    website: null,
+                    nip05: null
+                };
+            }
+        })
+    );
+    
+    // Sort by name (if available) or pubkey
+    enrichedFollows.sort((a, b) => {
+        const nameA = (a.name || a.display_name || a.npub || a.pubkey).toLowerCase();
+        const nameB = (b.name || b.display_name || b.npub || b.pubkey).toLowerCase();
+        return nameA.localeCompare(nameB);
+    });
+    
+    return enrichedFollows;
+}
+
+/**
  * Toggle follow/unfollow a user
  * @param {string} targetPubkey - User to follow/unfollow
  * @param {object} options - Configuration
@@ -2777,6 +2913,9 @@ async function fetchUserEmailWithFallback(pubkey) {
 // Expose fetchUserEmailWithFallback globally for use in webcam.html and other pages
 if (typeof window !== 'undefined') {
     window.fetchUserEmailWithFallback = fetchUserEmailWithFallback;
+    window.fetchUserFollowsWithMetadata = fetchUserFollowsWithMetadata;
+    window.fetchUserFollowList = fetchUserFollowList;
+    window.fetchUserMetadata = fetchUserMetadata;
 }
 
 /**

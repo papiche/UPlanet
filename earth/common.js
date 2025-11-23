@@ -6697,6 +6697,578 @@ function displayJournals(journals, container, journalTypeTag, options = {}) {
     });
 }
 
+// ============================================================================
+// NIP-58 Badge Functions (Oracle System Integration)
+// ============================================================================
+
+/**
+ * Fetch badge awards (kind 8) for a specific user
+ * @param {string} pubkey - User's public key (hex or npub)
+ * @param {Array<string>} relays - Optional relay URLs (defaults to DEFAULT_RELAYS)
+ * @param {number} timeout - Timeout in milliseconds (default: 10000)
+ * @returns {Promise<Array>} Array of badge award events
+ */
+async function fetchBadgeAwards(pubkey, relays = null, timeout = 10000) {
+    if (!pubkey) {
+        console.error('❌ Public key required to fetch badge awards');
+        return [];
+    }
+
+    // Convert npub to hex if needed
+    const hexPubkey = pubkey.startsWith('npub') ? npubToHex(pubkey) : pubkey;
+    if (!hexPubkey) {
+        console.error('❌ Invalid pubkey format');
+        return [];
+    }
+
+    const relaysToUse = relays || DEFAULT_RELAYS;
+    console.log(`🏅 Fetching badge awards for ${hexPubkey.substring(0, 10)}...`);
+
+    try {
+        const relay = NostrTools.relayInit(relaysToUse[0]);
+        await relay.connect();
+
+        const filter = {
+            kinds: [8], // Badge Award
+            '#p': [hexPubkey], // Awards to this user
+            limit: 100
+        };
+
+        const awards = await new Promise((resolve, reject) => {
+            const sub = relay.sub([filter]);
+            const badgeAwards = [];
+
+            const timeoutId = setTimeout(() => {
+                sub.unsub();
+                relay.close();
+                resolve(badgeAwards);
+            }, timeout);
+
+            sub.on('event', (event) => {
+                badgeAwards.push(event);
+            });
+
+            sub.on('eose', () => {
+                clearTimeout(timeoutId);
+                sub.unsub();
+                relay.close();
+                resolve(badgeAwards);
+            });
+
+            sub.on('error', (error) => {
+                clearTimeout(timeoutId);
+                sub.unsub();
+                relay.close();
+                reject(error);
+            });
+        });
+
+        console.log(`✅ Found ${awards.length} badge awards`);
+        return awards;
+
+    } catch (error) {
+        console.error('❌ Error fetching badge awards:', error);
+        return [];
+    }
+}
+
+/**
+ * Fetch badge definition (kind 30009) by badge ID
+ * @param {string} badgeId - Badge identifier (e.g., "ore_verifier", "permit_maitre_nageur_x5")
+ * @param {string} issuerPubkey - Optional issuer pubkey (hex or npub)
+ * @param {Array<string>} relays - Optional relay URLs
+ * @param {number} timeout - Timeout in milliseconds (default: 10000)
+ * @returns {Promise<Object|null>} Badge definition event or null
+ */
+async function fetchBadgeDefinition(badgeId, issuerPubkey = null, relays = null, timeout = 10000) {
+    if (!badgeId) {
+        console.error('❌ Badge ID required');
+        return null;
+    }
+
+    const relaysToUse = relays || DEFAULT_RELAYS;
+    console.log(`📜 Fetching badge definition: ${badgeId}`);
+
+    try {
+        const relay = NostrTools.relayInit(relaysToUse[0]);
+        await relay.connect();
+
+        const filter = {
+            kinds: [30009], // Badge Definition
+            '#d': [badgeId] // Badge identifier
+        };
+
+        // Add issuer filter if provided
+        if (issuerPubkey) {
+            const hexIssuer = issuerPubkey.startsWith('npub') ? npubToHex(issuerPubkey) : issuerPubkey;
+            if (hexIssuer) {
+                filter.authors = [hexIssuer];
+            }
+        }
+
+        const definitions = await new Promise((resolve, reject) => {
+            const sub = relay.sub([filter]);
+            const badgeDefs = [];
+
+            const timeoutId = setTimeout(() => {
+                sub.unsub();
+                relay.close();
+                resolve(badgeDefs);
+            }, timeout);
+
+            sub.on('event', (event) => {
+                badgeDefs.push(event);
+            });
+
+            sub.on('eose', () => {
+                clearTimeout(timeoutId);
+                sub.unsub();
+                relay.close();
+                resolve(badgeDefs);
+            });
+
+            sub.on('error', (error) => {
+                clearTimeout(timeoutId);
+                sub.unsub();
+                relay.close();
+                reject(error);
+            });
+        });
+
+        // Return most recent definition (addressable events can be updated)
+        if (definitions.length > 0) {
+            const latest = definitions.sort((a, b) => b.created_at - a.created_at)[0];
+            console.log(`✅ Found badge definition: ${badgeId}`);
+            return latest;
+        }
+
+        console.log(`⚠️ Badge definition not found: ${badgeId}`);
+        return null;
+
+    } catch (error) {
+        console.error('❌ Error fetching badge definition:', error);
+        return null;
+    }
+}
+
+/**
+ * Fetch multiple badge definitions by badge IDs
+ * @param {Array<string>} badgeIds - Array of badge identifiers
+ * @param {string} issuerPubkey - Optional issuer pubkey
+ * @param {Array<string>} relays - Optional relay URLs
+ * @returns {Promise<Object>} Map of badgeId -> badge definition event
+ */
+async function fetchBadgeDefinitions(badgeIds, issuerPubkey = null, relays = null) {
+    if (!badgeIds || badgeIds.length === 0) {
+        return {};
+    }
+
+    const relaysToUse = relays || DEFAULT_RELAYS;
+    console.log(`📜 Fetching ${badgeIds.length} badge definitions...`);
+
+    try {
+        const relay = NostrTools.relayInit(relaysToUse[0]);
+        await relay.connect();
+
+        const filter = {
+            kinds: [30009], // Badge Definition
+            '#d': badgeIds // Multiple badge identifiers
+        };
+
+        if (issuerPubkey) {
+            const hexIssuer = issuerPubkey.startsWith('npub') ? npubToHex(issuerPubkey) : issuerPubkey;
+            if (hexIssuer) {
+                filter.authors = [hexIssuer];
+            }
+        }
+
+        const definitions = await new Promise((resolve, reject) => {
+            const sub = relay.sub([filter]);
+            const badgeDefs = [];
+
+            const timeoutId = setTimeout(() => {
+                sub.unsub();
+                relay.close();
+                resolve(badgeDefs);
+            }, 10000);
+
+            sub.on('event', (event) => {
+                badgeDefs.push(event);
+            });
+
+            sub.on('eose', () => {
+                clearTimeout(timeoutId);
+                sub.unsub();
+                relay.close();
+                resolve(badgeDefs);
+            });
+
+            sub.on('error', (error) => {
+                clearTimeout(timeoutId);
+                sub.unsub();
+                relay.close();
+                reject(error);
+            });
+        });
+
+        // Group by badge ID and keep most recent
+        const defMap = {};
+        badgeIds.forEach(badgeId => {
+            const defsForId = definitions.filter(d => {
+                const dTag = d.tags.find(t => t[0] === 'd');
+                return dTag && dTag[1] === badgeId;
+            });
+            if (defsForId.length > 0) {
+                defMap[badgeId] = defsForId.sort((a, b) => b.created_at - a.created_at)[0];
+            }
+        });
+
+        console.log(`✅ Found ${Object.keys(defMap).length} badge definitions`);
+        return defMap;
+
+    } catch (error) {
+        console.error('❌ Error fetching badge definitions:', error);
+        return {};
+    }
+}
+
+/**
+ * Fetch profile badges (kind 30008) for a user
+ * @param {string} pubkey - User's public key (hex or npub)
+ * @param {Array<string>} relays - Optional relay URLs
+ * @param {number} timeout - Timeout in milliseconds (default: 10000)
+ * @returns {Promise<Object|null>} Profile badges event or null
+ */
+async function fetchProfileBadges(pubkey, relays = null, timeout = 10000) {
+    if (!pubkey) {
+        console.error('❌ Public key required to fetch profile badges');
+        return null;
+    }
+
+    const hexPubkey = pubkey.startsWith('npub') ? npubToHex(pubkey) : pubkey;
+    if (!hexPubkey) {
+        console.error('❌ Invalid pubkey format');
+        return null;
+    }
+
+    const relaysToUse = relays || DEFAULT_RELAYS;
+    console.log(`👤 Fetching profile badges for ${hexPubkey.substring(0, 10)}...`);
+
+    try {
+        const relay = NostrTools.relayInit(relaysToUse[0]);
+        await relay.connect();
+
+        const filter = {
+            kinds: [30008], // Profile Badges
+            authors: [hexPubkey],
+            '#d': ['profile_badges']
+        };
+
+        const profileBadges = await new Promise((resolve, reject) => {
+            const sub = relay.sub([filter]);
+            const badges = [];
+
+            const timeoutId = setTimeout(() => {
+                sub.unsub();
+                relay.close();
+                resolve(badges);
+            }, timeout);
+
+            sub.on('event', (event) => {
+                badges.push(event);
+            });
+
+            sub.on('eose', () => {
+                clearTimeout(timeoutId);
+                sub.unsub();
+                relay.close();
+                resolve(badges);
+            });
+
+            sub.on('error', (error) => {
+                clearTimeout(timeoutId);
+                sub.unsub();
+                relay.close();
+                reject(error);
+            });
+        });
+
+        // Return most recent profile badges event
+        if (profileBadges.length > 0) {
+            const latest = profileBadges.sort((a, b) => b.created_at - a.created_at)[0];
+            console.log(`✅ Found profile badges`);
+            return latest;
+        }
+
+        return null;
+
+    } catch (error) {
+        console.error('❌ Error fetching profile badges:', error);
+        return null;
+    }
+}
+
+/**
+ * Parse badge award event to extract badge identifier
+ * @param {Object} awardEvent - Badge award event (kind 8)
+ * @returns {string|null} Badge identifier (e.g., "ore_verifier") or null
+ */
+function parseBadgeIdFromAward(awardEvent) {
+    if (!awardEvent || awardEvent.kind !== 8) {
+        return null;
+    }
+
+    const aTag = awardEvent.tags.find(t => t[0] === 'a');
+    if (!aTag || !aTag[1]) {
+        return null;
+    }
+
+    // Format: "30009:<issuer_pubkey>:<badge_id>"
+    const parts = aTag[1].split(':');
+    if (parts.length >= 3 && parts[0] === '30009') {
+        return parts[2];
+    }
+
+    return null;
+}
+
+/**
+ * Parse badge definition event to extract metadata
+ * @param {Object} defEvent - Badge definition event (kind 30009)
+ * @returns {Object} Badge metadata
+ */
+function parseBadgeDefinition(defEvent) {
+    if (!defEvent || defEvent.kind !== 30009) {
+        return null;
+    }
+
+    const metadata = {
+        badgeId: null,
+        name: null,
+        description: null,
+        image: null,
+        thumbnails: [],
+        permitId: null,
+        level: null,
+        label: null
+    };
+
+    // Extract d tag (badge ID)
+    const dTag = defEvent.tags.find(t => t[0] === 'd');
+    if (dTag && dTag[1]) {
+        metadata.badgeId = dTag[1];
+    }
+
+    // Extract name
+    const nameTag = defEvent.tags.find(t => t[0] === 'name');
+    if (nameTag && nameTag[1]) {
+        metadata.name = nameTag[1];
+    }
+
+    // Extract description
+    const descTag = defEvent.tags.find(t => t[0] === 'description');
+    if (descTag && descTag[1]) {
+        metadata.description = descTag[1];
+    }
+
+    // Extract image
+    const imageTag = defEvent.tags.find(t => t[0] === 'image');
+    if (imageTag && imageTag[1]) {
+        metadata.image = imageTag[1];
+    }
+
+    // Extract thumbnails
+    const thumbTags = defEvent.tags.filter(t => t[0] === 'thumb');
+    metadata.thumbnails = thumbTags.map(t => ({
+        url: t[1],
+        dimensions: t[2] || null
+    }));
+
+    // Extract permit_id (UPlanet extension)
+    const permitTag = defEvent.tags.find(t => t[0] === 'permit_id');
+    if (permitTag && permitTag[1]) {
+        metadata.permitId = permitTag[1];
+    }
+
+    // Extract level (WoTx2)
+    const levelTag = defEvent.tags.find(t => t[0] === 'level');
+    if (levelTag && levelTag[1]) {
+        metadata.level = levelTag[1];
+    }
+
+    // Extract label (WoTx2)
+    const labelTag = defEvent.tags.find(t => t[0] === 'label');
+    if (labelTag && labelTag[1]) {
+        metadata.label = labelTag[1];
+    }
+
+    return metadata;
+}
+
+/**
+ * Fetch all badges for a user (awards + definitions)
+ * @param {string} pubkey - User's public key (hex or npub)
+ * @param {Array<string>} relays - Optional relay URLs
+ * @returns {Promise<Array>} Array of badge objects with metadata
+ */
+async function fetchUserBadges(pubkey, relays = null) {
+    if (!pubkey) {
+        console.error('❌ Public key required');
+        return [];
+    }
+
+    console.log(`🏅 Fetching all badges for user...`);
+
+    // 1. Fetch badge awards
+    const awards = await fetchBadgeAwards(pubkey, relays);
+    if (awards.length === 0) {
+        console.log('⚠️ No badge awards found');
+        return [];
+    }
+
+    // 2. Extract badge IDs from awards
+    const badgeIds = awards
+        .map(award => parseBadgeIdFromAward(award))
+        .filter(id => id !== null);
+
+    if (badgeIds.length === 0) {
+        console.log('⚠️ No valid badge IDs found in awards');
+        return [];
+    }
+
+    // 3. Fetch badge definitions
+    const definitions = await fetchBadgeDefinitions(badgeIds, null, relays);
+
+    // 4. Combine awards with definitions
+    const badges = awards.map(award => {
+        const badgeId = parseBadgeIdFromAward(award);
+        const definition = badgeId ? definitions[badgeId] : null;
+        const metadata = definition ? parseBadgeDefinition(definition) : null;
+
+        return {
+            awardEvent: award,
+            definitionEvent: definition,
+            metadata: metadata,
+            badgeId: badgeId,
+            awardId: award.id,
+            createdAt: new Date(award.created_at * 1000)
+        };
+    }).filter(badge => badge.badgeId !== null);
+
+    console.log(`✅ Found ${badges.length} badges with metadata`);
+    return badges;
+}
+
+/**
+ * Render badge HTML element
+ * @param {Object} badge - Badge object from fetchUserBadges
+ * @param {Object} options - Rendering options
+ * @returns {string} HTML string for badge
+ */
+function renderBadge(badge, options = {}) {
+    const {
+        size = 'medium', // 'small', 'medium', 'large'
+        showName = true,
+        showTooltip = true,
+        cssClass = ''
+    } = options;
+
+    if (!badge || !badge.metadata) {
+        return '';
+    }
+
+    const metadata = badge.metadata;
+    const imageUrl = metadata.thumbnails.length > 0 
+        ? metadata.thumbnails[0].url 
+        : metadata.image || '';
+
+    // Size classes
+    const sizeClasses = {
+        small: 'width: 32px; height: 32px;',
+        medium: 'width: 64px; height: 64px;',
+        large: 'width: 128px; height: 128px;'
+    };
+
+    const sizeStyle = sizeClasses[size] || sizeClasses.medium;
+
+    // Tooltip text
+    const tooltipText = showTooltip && metadata.description
+        ? `title="${metadata.description}"`
+        : '';
+
+    // Badge name
+    const nameHtml = showName && metadata.name
+        ? `<div class="badge-name" style="font-size: 0.75rem; margin-top: 4px; text-align: center; color: #cbd5e1;">${metadata.name}</div>`
+        : '';
+
+    return `
+        <div class="badge-container ${cssClass}" style="display: inline-block; margin: 4px; text-align: center;" ${tooltipText}>
+            <img 
+                src="${imageUrl}" 
+                alt="${metadata.name || 'Badge'}"
+                class="badge-image"
+                style="${sizeStyle} border-radius: 50%; border: 2px solid rgba(74, 222, 128, 0.5); object-fit: cover; cursor: pointer; transition: transform 0.2s;"
+                onerror="this.src='data:image/svg+xml,%3Csvg xmlns=\\'http://www.w3.org/2000/svg\\' width=\\'64\\' height=\\'64\\'%3E%3Crect fill=\\'%234ade80\\' width=\\'64\\' height=\\'64\\'/%3E%3Ctext x=\\'50%25\\' y=\\'50%25\\' text-anchor=\\'middle\\' dy=\\'.3em\\' fill=\\'white\\' font-size=\\'24\\'%3E🏅%3C/text%3E%3C/svg%3E';"
+                onclick="if(this.style.transform === 'scale(1.5)') { this.style.transform = 'scale(1)'; } else { this.style.transform = 'scale(1.5)'; }"
+            />
+            ${nameHtml}
+        </div>
+    `;
+}
+
+/**
+ * Display badges in a container element
+ * @param {string|HTMLElement} containerId - Container ID or element
+ * @param {string} pubkey - User's public key
+ * @param {Object} options - Display options
+ */
+async function displayUserBadges(containerId, pubkey, options = {}) {
+    const {
+        relays = null,
+        size = 'medium',
+        showName = true,
+        showTooltip = true,
+        emptyMessage = 'No badges yet'
+    } = options;
+
+    const container = typeof containerId === 'string' 
+        ? document.getElementById(containerId)
+        : containerId;
+
+    if (!container) {
+        console.error('❌ Container element not found');
+        return;
+    }
+
+    // Show loading state
+    container.innerHTML = '<div style="text-align: center; color: #94a3b8;"><i class="bi bi-hourglass-split"></i> Loading badges...</div>';
+
+    try {
+        // Fetch badges
+        const badges = await fetchUserBadges(pubkey, relays);
+
+        if (badges.length === 0) {
+            container.innerHTML = `<div style="text-align: center; color: #94a3b8;">${emptyMessage}</div>`;
+            return;
+        }
+
+        // Render badges
+        const badgesHtml = badges.map(badge => 
+            renderBadge(badge, { size, showName, showTooltip })
+        ).join('');
+
+        container.innerHTML = `
+            <div style="display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 8px;">
+                ${badgesHtml}
+            </div>
+        `;
+
+    } catch (error) {
+        console.error('❌ Error displaying badges:', error);
+        container.innerHTML = `<div style="text-align: center; color: #ef4444;">Error loading badges</div>`;
+    }
+}
+
 // Expose functions globally
 if (typeof window !== 'undefined') {
     window.calculateCoordinatesForLevel = calculateCoordinatesForLevel;
@@ -6704,5 +7276,16 @@ if (typeof window !== 'undefined') {
     window.markdownToHTML = markdownToHTML;
     window.formatJournalCard = formatJournalCard;
     window.displayJournals = displayJournals;
+    
+    // NIP-58 Badge functions
+    window.fetchBadgeAwards = fetchBadgeAwards;
+    window.fetchBadgeDefinition = fetchBadgeDefinition;
+    window.fetchBadgeDefinitions = fetchBadgeDefinitions;
+    window.fetchProfileBadges = fetchProfileBadges;
+    window.parseBadgeIdFromAward = parseBadgeIdFromAward;
+    window.parseBadgeDefinition = parseBadgeDefinition;
+    window.fetchUserBadges = fetchUserBadges;
+    window.renderBadge = renderBadge;
+    window.displayUserBadges = displayUserBadges;
 }
 

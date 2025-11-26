@@ -3015,12 +3015,181 @@ async function fetchUserEmailWithFallback(pubkey) {
     }
 }
 
-// Expose fetchUserEmailWithFallback globally for use in webcam.html and other pages
+/**
+ * Fetch user identities from kind 0 event tags (i tags)
+ * Extracts all identity information from profile tags
+ * @param {string} pubkey - Public key of the user
+ * @returns {Promise<object>} Object with identity keys (email, ipns_vault, ipfs_gw, etc.)
+ */
+async function fetchUserIdentities(pubkey) {
+    if (!isNostrConnected) {
+        await connectToRelay();
+    }
+
+    if (!nostrRelay || !isNostrConnected) {
+        return {};
+    }
+
+    try {
+        console.log(`🔍 Fetching user identities for: ${pubkey.substring(0, 8)}...`);
+        
+        const filter = {
+            kinds: [0],
+            authors: [pubkey],
+            limit: 1
+        };
+
+        return new Promise((resolve) => {
+            const sub = nostrRelay.sub([filter]);
+            let kind0Event = null;
+            const identities = {};
+
+            const extractIdentities = (event) => {
+                if (!event || !event.tags) return;
+                
+                event.tags.forEach(tag => {
+                    if (tag[0] === 'i' && tag[1]) {
+                        // Split only on the FIRST colon to handle URLs correctly
+                        const colonIndex = tag[1].indexOf(':');
+                        if (colonIndex > 0) {
+                            const key = tag[1].substring(0, colonIndex);
+                            const value = tag[1].substring(colonIndex + 1);
+                            identities[key] = value;
+                        }
+                    }
+                });
+                
+                console.log('✅ Identities found:', Object.keys(identities));
+            };
+
+            const timeout = setTimeout(() => {
+                sub.unsub();
+                if (kind0Event) {
+                    extractIdentities(kind0Event);
+                }
+                resolve(identities);
+            }, 3000);
+
+            sub.on('event', (event) => {
+                kind0Event = event;
+            });
+
+            sub.on('eose', () => {
+                clearTimeout(timeout);
+                sub.unsub();
+                if (kind0Event) {
+                    extractIdentities(kind0Event);
+                }
+                resolve(identities);
+            });
+        });
+    } catch (error) {
+        console.error('❌ Error fetching user identities:', error);
+        return {};
+    }
+}
+
+/**
+ * Fetch user uDRIVE information (IPNS vault and email)
+ * @param {string} pubkey - Public key of the user
+ * @returns {Promise<object>} Object with {ipnsVault, email} or null values if not found
+ */
+async function fetchUserUDriveInfo(pubkey) {
+    try {
+        console.log(`📁 Fetching uDRIVE info for: ${pubkey.substring(0, 8)}...`);
+        
+        // Fetch identities from kind 0 tags
+        const identities = await fetchUserIdentities(pubkey);
+        
+        let ipnsVault = identities.ipns_vault;
+        let email = identities.email;
+        
+        // Clean up ipnsVault - remove leading /ipns/ if present
+        if (ipnsVault && ipnsVault.startsWith('/ipns/')) {
+            ipnsVault = ipnsVault.substring(6);
+        }
+        
+        // Also check nip05 field in metadata as fallback for IPNS vault
+        if (!ipnsVault) {
+            const metadata = await fetchUserMetadata(pubkey);
+            if (metadata && metadata.nip05) {
+                const vaultMatch = metadata.nip05.match(/ipns\/([A-Za-z0-9]+)/);
+                if (vaultMatch) {
+                    ipnsVault = vaultMatch[1];
+                    console.log('✅ Found IPNS vault in nip05:', ipnsVault);
+                }
+            }
+        }
+        
+        // If email not found in identities, try fallback methods
+        if (!email || !email.includes('@')) {
+            email = await fetchUserEmailWithFallback(pubkey);
+            // Only use if it's a valid email (not pubkey fallback)
+            if (!email || !email.includes('@')) {
+                email = null;
+            }
+        }
+        
+        const result = {
+            ipnsVault: ipnsVault || null,
+            email: email || null
+        };
+        
+        if (result.ipnsVault) {
+            console.log('✅ uDRIVE info found:', { ipnsVault: result.ipnsVault.substring(0, 12) + '...', email: result.email ? result.email.substring(0, 10) + '...' : 'not found' });
+        } else {
+            console.log('⚠️ No uDRIVE IPNS vault found');
+        }
+        
+        return result;
+    } catch (error) {
+        console.error('❌ Error fetching uDRIVE info:', error);
+        return { ipnsVault: null, email: null };
+    }
+}
+
+/**
+ * Build uDRIVE URL from IPNS vault and email
+ * @param {string} ipnsVault - IPNS vault identifier (without /ipns/ prefix)
+ * @param {string} email - User email
+ * @param {string} gateway - IPFS gateway URL (optional, defaults to IPFS_GATEWAY or copylaradio.com)
+ * @returns {string} Complete uDRIVE URL
+ */
+function buildUDriveUrl(ipnsVault, email, gateway = null) {
+    if (!ipnsVault || !email) {
+        throw new Error('IPNS vault and email are required to build uDRIVE URL');
+    }
+    
+    // Clean up ipnsVault - remove leading /ipns/ if present
+    let vault = ipnsVault;
+    if (vault.startsWith('/ipns/')) {
+        vault = vault.substring(6);
+    }
+    
+    // Determine gateway
+    if (!gateway) {
+        gateway = typeof IPFS_GATEWAY !== 'undefined' ? IPFS_GATEWAY : 'https://ipfs.copylaradio.com';
+    }
+    
+    // Remove trailing slashes from gateway
+    gateway = gateway.replace(/\/+$/, '');
+    
+    // Build URL: {gateway}/ipns/{vault}/{email}/APP/uDRIVE
+    const url = `${gateway}/ipns/${vault}/${email}/APP/uDRIVE`;
+    
+    console.log('📁 Built uDRIVE URL:', url);
+    return url;
+}
+
+// Expose functions globally for use in webcam.html, cookie.html, youtube.html and other pages
 if (typeof window !== 'undefined') {
     window.fetchUserEmailWithFallback = fetchUserEmailWithFallback;
     window.fetchUserFollowsWithMetadata = fetchUserFollowsWithMetadata;
     window.fetchUserFollowList = fetchUserFollowList;
     window.fetchUserMetadata = fetchUserMetadata;
+    window.fetchUserIdentities = fetchUserIdentities;
+    window.fetchUserUDriveInfo = fetchUserUDriveInfo;
+    window.buildUDriveUrl = buildUDriveUrl;
 }
 
 /**

@@ -7586,6 +7586,30 @@ async function displayUserBadges(containerId, pubkey, options = {}) {
 
 // Expose functions globally
 if (typeof window !== 'undefined') {
+    // Core NOSTR functions
+    window.connectNostr = connectNostr;
+    window.connectToRelay = connectToRelay;
+    window.sendNIP42Auth = sendNIP42Auth;
+    window.publishNote = publishNote;
+    window.sendLike = sendLike;
+    window.sendDislike = sendDislike;
+    window.sendCustomReaction = sendCustomReaction;
+    
+    // Extension and Relay managers
+    window.ExtensionWrapper = ExtensionWrapper;
+    window.RelayManager = RelayManager;
+    window.NostrState = NostrState;
+    
+    // Utility functions
+    window.hexToNpub = hexToNpub;
+    window.npubToHex = npubToHex;
+    window.fetchUserMetadata = fetchUserMetadata;
+    window.fetchUserUDriveInfo = fetchUserUDriveInfo;
+    window.buildUDriveUrl = buildUDriveUrl;
+    window.showNotification = showNotification;
+    window.ensureAuthentication = ensureAuthentication;
+    
+    // UMAP and Flora functions
     window.calculateCoordinatesForLevel = calculateCoordinatesForLevel;
     window.fetchUMAPJournals = fetchUMAPJournals;
     window.markdownToHTML = markdownToHTML;

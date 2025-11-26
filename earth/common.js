@@ -344,61 +344,365 @@ if (typeof window.UPLANET_COMMON_VERSION === 'undefined') {
 })();
 
 // ========================================
-// VARIABLES GLOBALES
+// VARIABLES GLOBALES - REFACTORED STATE MANAGEMENT
 // ========================================
 
-let upassportUrl = '';
-let DEFAULT_RELAYS = [
-    'wss://relay.copylaradio.com',
-    'ws://127.0.0.1:7777',
-    'wss://relay.damus.io',
-    'wss://nos.lol'
-];
+// Centralized state object (single source of truth)
+const NostrState = {
+    // API Configuration
+    upassportUrl: '',
+    DEFAULT_RELAYS: [
+        'wss://relay.copylaradio.com',
+        'ws://127.0.0.1:7777',
+        'wss://relay.damus.io',
+        'wss://nos.lol'
+    ],
+    
+    // NOSTR Connection State
+    nostrRelay: null,
+    isNostrConnected: false,
+    userPubkey: null,
+    userPrivateKey: null,
+    
+    // Connection Management
+    connectingNostr: false,
+    connectingRelay: false,
+    
+    // NIP-42 Authentication
+    authSent: false,
+    lastNIP42AuthTime: 0,
+    pendingNIP42Auth: false,
+    
+    // Constants
+    NIP42_AUTH_COOLDOWN: 60000, // 1 minute cooldown
+    CONNECTION_DEBOUNCE: 1000,   // 1 second debounce
+    MAX_CONNECTION_WAIT: 30      // 30 seconds max wait
+};
 
-// Variables Nostr
+// Legacy variables for backward compatibility (deprecated, use NostrState)
+let upassportUrl = '';
+let DEFAULT_RELAYS = NostrState.DEFAULT_RELAYS;
 let nostrRelay = null;
 let isNostrConnected = false;
 let userPubkey = null;
 let userPrivateKey = null;
-let authSent = false; // Track if AUTH has been sent to avoid duplicates
-// Connection state management to prevent multiple simultaneous connections
+let authSent = false;
 let connectingNostr = false;
 let connectingRelay = false;
 let lastNIP42AuthTime = 0;
 let pendingNIP42Auth = false;
-const NIP42_AUTH_COOLDOWN = 60000; // 1 minute cooldown between NIP-42 auth events
-const CONNECTION_DEBOUNCE = 1000; // 1 second debounce for connection attempts
+const NIP42_AUTH_COOLDOWN = NostrState.NIP42_AUTH_COOLDOWN;
+const CONNECTION_DEBOUNCE = NostrState.CONNECTION_DEBOUNCE;
 
-// Expose variables on window for global access (used by youtube.html, plantnet.html, etc.)
+// Sync function to keep legacy variables in sync with NostrState
+function syncLegacyVariables() {
+    upassportUrl = NostrState.upassportUrl;
+    DEFAULT_RELAYS = NostrState.DEFAULT_RELAYS;
+    nostrRelay = NostrState.nostrRelay;
+    isNostrConnected = NostrState.isNostrConnected;
+    userPubkey = NostrState.userPubkey;
+    userPrivateKey = NostrState.userPrivateKey;
+    authSent = NostrState.authSent;
+    connectingNostr = NostrState.connectingNostr;
+    connectingRelay = NostrState.connectingRelay;
+    lastNIP42AuthTime = NostrState.lastNIP42AuthTime;
+    pendingNIP42Auth = NostrState.pendingNIP42Auth;
+}
+
+// Expose state on window for global access (used by youtube.html, plantnet.html, etc.)
 if (typeof window !== 'undefined') {
-    // Initialize window properties with initial values
-    window.nostrRelay = nostrRelay;
-    window.isNostrConnected = isNostrConnected;
-    window.userPubkey = userPubkey;
-    window.userPrivateKey = userPrivateKey;
+    // Expose NostrState for new code
+    window.NostrState = NostrState;
     
-    // Create getter/setter functions for consistent access
+    // Expose individual properties on window for backward compatibility
+    Object.defineProperty(window, 'nostrRelay', {
+        get: () => NostrState.nostrRelay,
+        set: (val) => {
+            NostrState.nostrRelay = val;
+            syncLegacyVariables();
+        },
+        configurable: true
+    });
+    
+    Object.defineProperty(window, 'isNostrConnected', {
+        get: () => NostrState.isNostrConnected,
+        set: (val) => {
+            NostrState.isNostrConnected = val;
+            syncLegacyVariables();
+        },
+        configurable: true
+    });
+    
+    Object.defineProperty(window, 'userPubkey', {
+        get: () => NostrState.userPubkey,
+        set: (val) => {
+            NostrState.userPubkey = val;
+            syncLegacyVariables();
+        },
+        configurable: true
+    });
+    
+    Object.defineProperty(window, 'userPrivateKey', {
+        get: () => NostrState.userPrivateKey,
+        set: (val) => {
+            NostrState.userPrivateKey = val;
+            syncLegacyVariables();
+        },
+        configurable: true
+    });
+    
+    Object.defineProperty(window, 'DEFAULT_RELAYS', {
+        get: () => NostrState.DEFAULT_RELAYS,
+        set: (val) => {
+            NostrState.DEFAULT_RELAYS = val;
+            syncLegacyVariables();
+        },
+        configurable: true
+    });
+    
+    // Create getter/setter functions for consistent access (backward compatibility)
     window.getNostrRelay = function() {
-        return nostrRelay || window.nostrRelay;
+        return NostrState.nostrRelay;
     };
     window.getIsNostrConnected = function() {
-        return isNostrConnected || window.isNostrConnected;
+        return NostrState.isNostrConnected;
     };
     window.getUserPubkey = function() {
-        return userPubkey || window.userPubkey;
+        return NostrState.userPubkey;
     };
     window.setNostrRelay = function(relay) {
-        nostrRelay = relay;
-        window.nostrRelay = relay;
+        NostrState.nostrRelay = relay;
+        syncLegacyVariables();
     };
     window.setIsNostrConnected = function(connected) {
-        isNostrConnected = connected;
-        window.isNostrConnected = connected;
+        NostrState.isNostrConnected = connected;
+        syncLegacyVariables();
     };
     window.setUserPubkey = function(pubkey) {
-        userPubkey = pubkey;
-        window.userPubkey = pubkey;
+        NostrState.userPubkey = pubkey;
+        syncLegacyVariables();
     };
+    
+    // Initialize window properties
+    syncLegacyVariables();
+}
+
+// ========================================
+// EXTENSION WRAPPER - Isolated Extension Logic
+// ========================================
+/**
+ * Wrapper module for NOSTR extension interactions
+ * Handles Chrome compatibility, iframe proxy, and error recovery
+ */
+const ExtensionWrapper = {
+    /**
+     * Get public key from NOSTR extension with error handling
+     * @returns {Promise<string|null>} Public key or null if failed
+     */
+    async getPublicKey() {
+        if (typeof window.nostr === 'undefined' || typeof window.nostr.getPublicKey !== 'function') {
+            throw new Error("L'extension Nostr avec la clef de votre MULTIPASS est requise pour la connexion.");
+        }
+        
+        try {
+            // Use safe wrapper if available (for Chrome compatibility)
+            if (typeof window.safeNostrGetPublicKey === 'function') {
+                return await window.safeNostrGetPublicKey();
+            } else if (window.nostr && typeof window.nostr.getPublicKey === 'function') {
+                return await window.nostr.getPublicKey();
+            } else {
+                // Try to create proxy if nostr exists but methods are not available
+                if (window.nostr && typeof createNostrProxy === 'function') {
+                    console.warn('⚠️ NOSTR extension methods not available, attempting to create proxy...');
+                    createNostrProxy();
+                    // Retry after proxy creation
+                    await new Promise(resolve => setTimeout(resolve, 300));
+                    if (typeof window.safeNostrGetPublicKey === 'function') {
+                        return await window.safeNostrGetPublicKey();
+                    } else if (window.nostr && typeof window.nostr.getPublicKey === 'function') {
+                        return await window.nostr.getPublicKey();
+                    }
+                }
+                throw new Error('NOSTR extension not available or not properly initialized');
+            }
+        } catch (callError) {
+            // Handle _call errors specifically
+            if (callError.message && (callError.message.includes('_call') || callError.message.includes('is not a function'))) {
+                console.warn('⚠️ _call error detected, attempting to fix...');
+                // Try to recreate proxy
+                if (typeof createNostrProxy === 'function') {
+                    try {
+                        createNostrProxy();
+                        await new Promise(resolve => setTimeout(resolve, 300));
+                        // Retry with safe wrapper
+                        if (typeof window.safeNostrGetPublicKey === 'function') {
+                            return await window.safeNostrGetPublicKey();
+                        } else if (window.nostr && typeof window.nostr.getPublicKey === 'function') {
+                            return await window.nostr.getPublicKey();
+                        }
+                    } catch (retryError) {
+                        console.error('❌ Failed to fix _call error:', retryError);
+                        throw new Error('NOSTR extension error: ' + retryError.message);
+                    }
+                } else {
+                    throw new Error('NOSTR extension error: ' + callError.message);
+                }
+            } else {
+                throw callError;
+            }
+        }
+    },
+    
+    /**
+     * Sign event with NOSTR extension
+     * @param {object} event - Event to sign
+     * @returns {Promise<object>} Signed event
+     */
+    async signEvent(event) {
+        if (typeof window.safeNostrSignEvent === 'function') {
+            return await window.safeNostrSignEvent(event);
+        } else if (window.nostr && typeof window.nostr.signEvent === 'function') {
+            return await window.nostr.signEvent(event);
+        } else {
+            throw new Error('NOSTR extension signEvent method not available');
+        }
+    }
+};
+
+// Expose ExtensionWrapper globally
+if (typeof window !== 'undefined') {
+    window.ExtensionWrapper = ExtensionWrapper;
+}
+
+// ========================================
+// RELAY MANAGER - Centralized Relay Logic
+// ========================================
+/**
+ * Manager module for NOSTR relay connections
+ * Centralizes all relay-related operations
+ */
+const RelayManager = {
+    /**
+     * Get the primary relay URL
+     * @returns {string} Relay URL
+     */
+    getPrimaryRelay() {
+        return NostrState.DEFAULT_RELAYS[0] || 'wss://relay.copylaradio.com';
+    },
+    
+    /**
+     * Check if relay is connected and functional
+     * @returns {boolean} True if connected
+     */
+    isConnected() {
+        if (!NostrState.nostrRelay || !NostrState.isNostrConnected) {
+            return false;
+        }
+        
+        // Verify WebSocket is still open
+        const ws = NostrState.nostrRelay._ws || NostrState.nostrRelay.ws || NostrState.nostrRelay.socket;
+        return ws && ws.readyState === WebSocket.OPEN;
+    },
+    
+    /**
+     * Wait for connection to complete (with timeout)
+     * @param {number} maxWaitSeconds - Maximum wait time in seconds
+     * @returns {Promise<boolean>} True if connected
+     */
+    async waitForConnection(maxWaitSeconds = 30) {
+        if (this.isConnected()) {
+            return true;
+        }
+        
+        let waitCount = 0;
+        while (NostrState.connectingRelay && waitCount < maxWaitSeconds) {
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            waitCount++;
+            if (this.isConnected()) {
+                return true;
+            }
+        }
+        
+        return this.isConnected();
+    },
+    
+    /**
+     * Close existing relay connection
+     */
+    close() {
+        if (NostrState.nostrRelay) {
+            try {
+                if (typeof NostrState.nostrRelay.close === 'function') {
+                    NostrState.nostrRelay.close();
+                } else {
+                    const ws = NostrState.nostrRelay._ws || NostrState.nostrRelay.ws || NostrState.nostrRelay.socket;
+                    if (ws) {
+                        ws.close();
+                    }
+                }
+            } catch (e) {
+                console.warn('Error closing relay:', e);
+            }
+        }
+        NostrState.nostrRelay = null;
+        NostrState.isNostrConnected = false;
+        syncLegacyVariables();
+    },
+    
+    /**
+     * Initialize new relay connection
+     * @param {string} relayUrl - Relay URL
+     * @returns {object} Relay instance
+     */
+    init(relayUrl) {
+        if (typeof NostrTools === 'undefined') {
+            throw new Error("NostrTools n'est pas chargé. Assurez-vous d'inclure nostr.bundle.js");
+        }
+        
+        this.close(); // Close existing connection first
+        
+        const relay = NostrTools.relayInit(relayUrl);
+        NostrState.nostrRelay = relay;
+        syncLegacyVariables();
+        
+        return relay;
+    },
+    
+    /**
+     * Setup relay event handlers
+     * @param {object} relay - Relay instance
+     * @param {string} relayUrl - Relay URL
+     * @param {function} onConnect - Callback on connect
+     * @param {function} onError - Callback on error
+     * @param {function} onDisconnect - Callback on disconnect
+     */
+    setupHandlers(relay, relayUrl, onConnect, onError, onDisconnect) {
+        relay.on('connect', () => {
+            console.log(`✅ Connecté au relay: ${relayUrl}`);
+            NostrState.isNostrConnected = true;
+            syncLegacyVariables();
+            if (onConnect) onConnect();
+        });
+        
+        relay.on('error', (error) => {
+            console.error('❌ Relay connection error:', error);
+            NostrState.isNostrConnected = false;
+            syncLegacyVariables();
+            if (onError) onError(error);
+        });
+        
+        relay.on('disconnect', () => {
+            console.log('🔌 Relay disconnected');
+            NostrState.isNostrConnected = false;
+            syncLegacyVariables();
+            if (onDisconnect) onDisconnect();
+        });
+    }
+};
+
+// Expose RelayManager globally
+if (typeof window !== 'undefined') {
+    window.RelayManager = RelayManager;
 }
 
 /**
@@ -440,25 +744,21 @@ function detectUSPOTAPI() {
         determinedIpfsGateway = `https://ipfs.copylaradio.com`;
     }
 
-    upassportUrl = determinedUpassportUrl;
-    DEFAULT_RELAYS = [determinedRelay, 'wss://relay.damus.io', 'wss://nos.lol'];
+    // Update centralized state
+    NostrState.upassportUrl = determinedUpassportUrl;
+    NostrState.DEFAULT_RELAYS = [determinedRelay, 'wss://relay.damus.io', 'wss://nos.lol'];
+    syncLegacyVariables();
 
     // Set global IPFS gateway if not already set
     if (typeof window !== 'undefined' && (!window.IPFS_GATEWAY || window.IPFS_GATEWAY === '')) {
         window.IPFS_GATEWAY = determinedIpfsGateway;
     }
-    
-    // Expose DEFAULT_RELAYS and upassportUrl on window for global access
-    if (typeof window !== 'undefined') {
-        window.DEFAULT_RELAYS = DEFAULT_RELAYS;
-        window.upassportUrl = upassportUrl;
-    }
 
-    console.log(`API uSPOT détectée: ${upassportUrl}`);
-    console.log(`Relay par défaut: ${DEFAULT_RELAYS[0]}`);
+    console.log(`API uSPOT détectée: ${NostrState.upassportUrl}`);
+    console.log(`Relay par défaut: ${NostrState.DEFAULT_RELAYS[0]}`);
     console.log(`Gateway IPFS: ${determinedIpfsGateway}`);
     
-    return upassportUrl;
+    return NostrState.upassportUrl;
 }
 
 /**
@@ -1185,145 +1485,109 @@ function scrollToId(id) {
 /**
  * Connexion à l'extension Nostr et récupération de la clé publique
  */
+/**
+ * Connect to NOSTR extension and relay (refactored version)
+ * @param {boolean} forceAuth - Force NIP-42 authentication (default: false)
+ * @returns {Promise<string|null>} User public key or null if failed
+ */
 async function connectNostr(forceAuth = false) {
+    // Check if extension is available
     if (typeof window.nostr === 'undefined' || typeof window.nostr.getPublicKey !== 'function') {
-        alert("L'extension Nostr avec la clef de votre MULTIPASS est requise pour la connexion.");
+        const alertFn = typeof showAlert === 'function' ? showAlert : (typeof showNotification === 'function' ? (msg, type) => showNotification({ message: msg, type: type || 'error' }) : alert);
+        alertFn("L'extension Nostr avec la clef de votre MULTIPASS est requise pour la connexion.", 'error');
         return null;
     }
     
-    // Debounce: if already connecting, wait for it to finish (max 30 seconds)
-    if (connectingNostr) {
+    // Debounce: if already connecting, wait for it to finish
+    if (NostrState.connectingNostr) {
         console.log('⏳ Connection already in progress, waiting...');
         let waitCount = 0;
-        while (connectingNostr && waitCount < 30) {
+        while (NostrState.connectingNostr && waitCount < NostrState.MAX_CONNECTION_WAIT) {
             await new Promise(resolve => setTimeout(resolve, 1000));
             waitCount++;
         }
-        if (connectingNostr) {
+        if (NostrState.connectingNostr) {
             console.warn('⚠️ Connection timeout, proceeding anyway...');
-            connectingNostr = false;
+            NostrState.connectingNostr = false;
+            syncLegacyVariables();
         }
         // Check if connection succeeded while we were waiting
-        if (userPubkey && isNostrConnected) {
+        if (NostrState.userPubkey && NostrState.isNostrConnected) {
             console.log('✅ Connection completed while waiting');
-            if (forceAuth && !pendingNIP42Auth) {
-                const now = Date.now();
-                const timeSinceLastAuth = now - lastNIP42AuthTime;
-                if (timeSinceLastAuth > NIP42_AUTH_COOLDOWN) {
-                    const relayUrl = DEFAULT_RELAYS[0] || getNostrRelay();
-                    await sendNIP42Auth(relayUrl, true);
-                } else {
-                    console.log(`⏳ NIP-42 auth sent recently (${Math.floor(timeSinceLastAuth/1000)}s ago), skipping`);
-                }
+            if (forceAuth && !NostrState.pendingNIP42Auth) {
+                await ensureNIP42AuthIfNeeded(true);
             }
-            return userPubkey;
+            return NostrState.userPubkey;
         }
     }
     
-    connectingNostr = true;
+    NostrState.connectingNostr = true;
+    syncLegacyVariables();
     
     try {
         console.log("🔑 Tentative de connexion à l'extension Nostr...");
         
-        // Use safe wrapper if available (for Chrome compatibility), otherwise direct call
-        let pubkey;
-        try {
-            if (typeof window.safeNostrGetPublicKey === 'function') {
-                pubkey = await window.safeNostrGetPublicKey();
-            } else if (window.nostr && typeof window.nostr.getPublicKey === 'function') {
-                pubkey = await window.nostr.getPublicKey();
-            } else {
-                // Try to create proxy if nostr exists but methods are not available
-                if (window.nostr && typeof createNostrProxy === 'function') {
-                    console.warn('⚠️ NOSTR extension methods not available, attempting to create proxy...');
-                    createNostrProxy();
-                    // Retry after proxy creation
-                    if (typeof window.safeNostrGetPublicKey === 'function') {
-                        pubkey = await window.safeNostrGetPublicKey();
-                    } else if (window.nostr && typeof window.nostr.getPublicKey === 'function') {
-                        pubkey = await window.nostr.getPublicKey();
-                    }
-                }
-                if (!pubkey) {
-                    throw new Error('NOSTR extension not available or not properly initialized');
-                }
-            }
-        } catch (callError) {
-            // Handle _call errors specifically
-            if (callError.message && (callError.message.includes('_call') || callError.message.includes('is not a function'))) {
-                console.warn('⚠️ _call error detected in connectNostr, attempting to fix...');
-                // Try to recreate proxy
-                if (typeof createNostrProxy === 'function') {
-                    try {
-                        createNostrProxy();
-                        // Wait a bit for proxy to initialize
-                        await new Promise(resolve => setTimeout(resolve, 300));
-                        // Retry with safe wrapper
-                        if (typeof window.safeNostrGetPublicKey === 'function') {
-                            pubkey = await window.safeNostrGetPublicKey();
-                        } else if (window.nostr && typeof window.nostr.getPublicKey === 'function') {
-                            pubkey = await window.nostr.getPublicKey();
-                        }
-                    } catch (retryError) {
-                        console.error('❌ Failed to fix _call error:', retryError);
-                        throw new Error('NOSTR extension error: ' + retryError.message);
-                    }
-                } else {
-                    throw new Error('NOSTR extension error: ' + callError.message);
-                }
-            } else {
-                throw callError;
-            }
+        // Get public key using ExtensionWrapper
+        const pubkey = await ExtensionWrapper.getPublicKey();
+        
+        if (!pubkey) {
+            throw new Error("Impossible de récupérer la clé publique");
         }
         
-        if (pubkey) {
-            userPubkey = pubkey;
-            // Attach to window for iframe access
-            if (typeof window !== 'undefined') {
-                window.userPubkey = pubkey;
-                if (window.setUserPubkey) {
-                    window.setUserPubkey(pubkey);
-                }
-            }
-            console.log(`✅ Connecté avec la clé publique: ${pubkey.substring(0, 8)}...`);
-            
-            // Connexion automatique au relay (forceAuth will force NIP42 auth)
-            const connected = await connectToRelay(forceAuth);
-            
-            if (!connected) {
-                console.error("❌ Échec de la connexion au relay");
-                connectingNostr = false;
-                return null;
-            }
-            
-            // If forceAuth is true and we haven't sent NIP42 auth recently, send it
-            // But only if not already pending and not in cooldown
-            if (forceAuth && nostrRelay && isNostrConnected && !pendingNIP42Auth) {
-                const now = Date.now();
-                const timeSinceLastAuth = now - lastNIP42AuthTime;
-                if (timeSinceLastAuth > NIP42_AUTH_COOLDOWN) {
-                    const relayUrl = DEFAULT_RELAYS[0] || getNostrRelay();
-                    console.log('🔐 Force sending NIP42 authentication event...');
-                    await sendNIP42Auth(relayUrl, true);
-                } else {
-                    console.log(`⏳ NIP-42 auth sent recently (${Math.floor(timeSinceLastAuth/1000)}s ago), skipping to avoid spam`);
-                }
-            }
-            
-            connectingNostr = false;
-            return pubkey;
-        } else {
-            const alertFn = typeof showAlert === 'function' ? showAlert : (typeof showNotification === 'function' ? (msg, type) => showNotification({ message: msg, type: type || 'error' }) : alert);
-            alertFn("Impossible de récupérer la clé publique. Veuillez autoriser l'accès à votre extension Nostr.", 'error');
-            connectingNostr = false;
+        // Update state
+        NostrState.userPubkey = pubkey;
+        syncLegacyVariables();
+        
+        console.log(`✅ Connecté avec la clé publique: ${pubkey.substring(0, 8)}...`);
+        
+        // Connect to relay (forceAuth will force NIP42 auth)
+        const connected = await connectToRelay(forceAuth);
+        
+        if (!connected) {
+            console.error("❌ Échec de la connexion au relay");
+            NostrState.connectingNostr = false;
+            syncLegacyVariables();
             return null;
         }
+        
+        // Ensure NIP-42 auth if requested
+        if (forceAuth) {
+            await ensureNIP42AuthIfNeeded(true);
+        }
+        
+        NostrState.connectingNostr = false;
+        syncLegacyVariables();
+        return pubkey;
+        
     } catch (error) {
         const alertFn = typeof showAlert === 'function' ? showAlert : (typeof showNotification === 'function' ? (msg, type) => showNotification({ message: msg, type: type || 'error' }) : alert);
         alertFn("La connexion a échoué. Veuillez vérifier que votre extension Nostr est installée et active, puis autorisez l'accès.", 'error');
         console.error("❌ Erreur de connexion Nostr:", error);
-        connectingNostr = false;
+        NostrState.connectingNostr = false;
+        syncLegacyVariables();
         return null;
+    }
+}
+
+/**
+ * Helper function to ensure NIP-42 auth if needed (extracted from connectNostr)
+ * @param {boolean} force - Force sending auth even if recently sent
+ * @returns {Promise<void>}
+ */
+async function ensureNIP42AuthIfNeeded(force = false) {
+    if (!NostrState.nostrRelay || !NostrState.isNostrConnected || NostrState.pendingNIP42Auth) {
+        return;
+    }
+    
+    const now = Date.now();
+    const timeSinceLastAuth = now - NostrState.lastNIP42AuthTime;
+    
+    if (force || timeSinceLastAuth > NostrState.NIP42_AUTH_COOLDOWN) {
+        const relayUrl = RelayManager.getPrimaryRelay();
+        console.log('🔐 Sending NIP42 authentication event...');
+        await sendNIP42Auth(relayUrl, force);
+    } else {
+        console.log(`⏳ NIP-42 auth sent recently (${Math.floor(timeSinceLastAuth/1000)}s ago), skipping to avoid spam`);
     }
 }
 
@@ -1560,33 +1824,40 @@ async function ensureAuthentication(options = {}) {
  * Checks for existing recent auth events before sending to avoid duplicates
  * @param {string} relayUrl - URL of the relay
  */
+/**
+ * Send NIP-42 authentication event (refactored to use NostrState and ExtensionWrapper)
+ * @param {string} relayUrl - URL of the relay
+ * @param {boolean} forceSend - Force sending even if recently sent (default: false)
+ * @returns {Promise<void>}
+ */
 async function sendNIP42Auth(relayUrl, forceSend = false) {
-    if (!window.nostr || !userPubkey) {
+    if (!window.nostr || !NostrState.userPubkey) {
         console.warn('Cannot send NIP-42 auth: missing nostr extension or pubkey');
         return;
     }
     
-    if (!nostrRelay || !isNostrConnected) {
+    if (!NostrState.nostrRelay || !NostrState.isNostrConnected) {
         console.warn('Cannot send NIP-42 auth: relay not connected');
         return;
     }
     
     // Check if we're already sending an auth event (prevent duplicates)
-    if (pendingNIP42Auth) {
+    if (NostrState.pendingNIP42Auth) {
         console.log('⏳ NIP-42 auth event already pending, skipping duplicate');
         return;
     }
     
     // Check cooldown period (even if forceSend, respect cooldown to avoid spam)
     const now = Date.now();
-    const timeSinceLastAuth = now - lastNIP42AuthTime;
-    if (!forceSend && timeSinceLastAuth < NIP42_AUTH_COOLDOWN) {
+    const timeSinceLastAuth = now - NostrState.lastNIP42AuthTime;
+    if (!forceSend && timeSinceLastAuth < NostrState.NIP42_AUTH_COOLDOWN) {
         console.log(`⏳ NIP-42 auth sent recently (${Math.floor(timeSinceLastAuth/1000)}s ago), skipping to avoid spam`);
         return;
     }
     
     try {
-        pendingNIP42Auth = true;
+        NostrState.pendingNIP42Auth = true;
+        syncLegacyVariables();
         
         // If forceSend is false, check if we should skip sending (simplified logic)
         if (!forceSend) {
@@ -1607,9 +1878,10 @@ async function sendNIP42Auth(relayUrl, forceSend = false) {
             
             if (hasRecentAuth) {
                 console.log('✅ Recent NIP-42 authentication found on relay, skipping new auth event');
-                pendingNIP42Auth = false;
+                NostrState.pendingNIP42Auth = false;
                 // Update last auth time to avoid repeated checks
-                lastNIP42AuthTime = now;
+                NostrState.lastNIP42AuthTime = now;
+                syncLegacyVariables();
                 return;
             }
             
@@ -1627,39 +1899,24 @@ async function sendNIP42Auth(relayUrl, forceSend = false) {
                 ['challenge', 'auth-' + Date.now()]
             ],
             content: '',
-            pubkey: userPubkey
+            pubkey: NostrState.userPubkey
         };
         
-        // Sign the event with the user's extension (use safe wrapper for Chrome compatibility)
+        // Sign the event using ExtensionWrapper
         let signedEvent;
         try {
-            // Prefer safe wrapper if available
-            if (typeof window.safeNostrSignEvent === 'function') {
-                signedEvent = await window.safeNostrSignEvent(authEvent);
-            } else if (window.nostr && typeof window.nostr.signEvent === 'function') {
-                // Check if window.nostr is functional (not a broken proxy)
-                try {
-                    // Test if signEvent is callable
-                    signedEvent = await window.nostr.signEvent(authEvent);
-                } catch (signError) {
-                    // If signEvent fails with _call error, try to use safe wrapper or fail gracefully
-                    if (signError.message && signError.message.includes('_call')) {
-                        console.warn('⚠️ window.nostr.signEvent failed with _call error, NIP-42 auth cannot proceed');
-                        throw new Error('NOSTR extension not functional in this context (iframe). Please use the extension directly or authenticate from the parent window.');
-                    }
-                    throw signError;
-                }
-            } else {
-                throw new Error('NOSTR extension not available or signEvent method not found');
-            }
+            signedEvent = await ExtensionWrapper.signEvent(authEvent);
         } catch (signError) {
             console.error('❌ Failed to sign NIP-42 event:', signError);
-            // Don't throw - just return silently to avoid breaking the flow
+            NostrState.pendingNIP42Auth = false;
+            syncLegacyVariables();
             return;
         }
         
         if (!signedEvent || !signedEvent.id) {
             console.error('❌ Failed to sign NIP-42 event: signed event is invalid');
+            NostrState.pendingNIP42Auth = false;
+            syncLegacyVariables();
             return;
         }
         
@@ -1667,7 +1924,7 @@ async function sendNIP42Auth(relayUrl, forceSend = false) {
         
         // Publish the event to the relay
         console.log('📤 Publishing NIP-42 event to relay...');
-        const publishPromise = nostrRelay.publish(signedEvent);
+        const publishPromise = NostrState.nostrRelay.publish(signedEvent);
         
         // Add timeout for publish
         const timeoutPromise = new Promise((_, reject) => {
@@ -1678,24 +1935,17 @@ async function sendNIP42Auth(relayUrl, forceSend = false) {
         console.log('✅ NIP-42 event published to relay:', signedEvent.id);
         
         // Update last auth time
-        lastNIP42AuthTime = Date.now();
+        NostrState.lastNIP42AuthTime = Date.now();
         
         // Update cache to reflect we just sent an auth event
-        const cacheKey = `nip42_auth_cache_${userPubkey}_${relayUrl}`;
+        const cacheKey = `nip42_auth_cache_${NostrState.userPubkey}_${relayUrl}`;
         const cacheTimeKey = `${cacheKey}_time`;
         localStorage.setItem(cacheKey, 'true');
         localStorage.setItem(cacheTimeKey, Date.now().toString());
         
         // Also send AUTH message for immediate authentication
         try {
-            let ws = null;
-            if (nostrRelay._ws) {
-                ws = nostrRelay._ws;
-            } else if (nostrRelay.ws) {
-                ws = nostrRelay.ws;
-            } else if (nostrRelay.socket) {
-                ws = nostrRelay.socket;
-            }
+            const ws = NostrState.nostrRelay._ws || NostrState.nostrRelay.ws || NostrState.nostrRelay.socket;
             
             if (ws && ws.readyState === WebSocket.OPEN) {
                 const authMessage = JSON.stringify(['AUTH', signedEvent]);
@@ -1709,7 +1959,8 @@ async function sendNIP42Auth(relayUrl, forceSend = false) {
     } catch (error) {
         console.error('❌ Failed to send NIP-42 auth:', error);
     } finally {
-        pendingNIP42Auth = false;
+        NostrState.pendingNIP42Auth = false;
+        syncLegacyVariables();
     }
 }
 
@@ -1722,195 +1973,111 @@ if (typeof window !== 'undefined') {
  * Connexion au relay Nostr
  * @param {boolean} forceAuth - Force sending NIP-42 auth event even if connection is reused
  */
+/**
+ * Connect to NOSTR relay (refactored to use RelayManager)
+ * @param {boolean} forceAuth - Force NIP-42 authentication (default: false)
+ * @returns {Promise<boolean>} True if connected successfully
+ */
 async function connectToRelay(forceAuth = false) {
     if (typeof NostrTools === 'undefined') {
         console.error("❌ NostrTools n'est pas chargé. Assurez-vous d'inclure nostr.bundle.js");
         return false;
     }
 
-    const NOSTRws = DEFAULT_RELAYS[0];
+    const relayUrl = RelayManager.getPrimaryRelay();
     
-    if (!NOSTRws) {
+    if (!relayUrl) {
         console.error("❌ Aucun relay défini.");
         return false;
     }
 
-    // Debounce: if already connecting, wait for it to finish (max 30 seconds)
-    if (connectingRelay) {
+    // Debounce: if already connecting, wait for it to finish
+    if (NostrState.connectingRelay) {
         console.log('⏳ Relay connection already in progress, waiting...');
-        let waitCount = 0;
-        while (connectingRelay && waitCount < 30) {
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            waitCount++;
-        }
-        if (connectingRelay) {
-            console.warn('⚠️ Relay connection timeout, proceeding anyway...');
-            connectingRelay = false;
-        }
-        // Check if connection succeeded while we were waiting
-        if (isNostrConnected && nostrRelay) {
+        const connected = await RelayManager.waitForConnection(NostrState.MAX_CONNECTION_WAIT);
+        if (connected) {
             console.log('✅ Relay connection completed while waiting');
-            if (forceAuth && !pendingNIP42Auth && userPubkey) {
-                const now = Date.now();
-                const timeSinceLastAuth = now - lastNIP42AuthTime;
-                if (timeSinceLastAuth > NIP42_AUTH_COOLDOWN) {
-                    setTimeout(() => sendNIP42Auth(NOSTRws, true), 100);
-                } else {
-                    console.log(`⏳ NIP-42 auth sent recently (${Math.floor(timeSinceLastAuth/1000)}s ago), skipping`);
-                }
+            if (forceAuth && !NostrState.pendingNIP42Auth && NostrState.userPubkey) {
+                await ensureNIP42AuthIfNeeded(true);
             }
             return true;
+        }
+        if (NostrState.connectingRelay) {
+            console.warn('⚠️ Relay connection timeout, proceeding anyway...');
+            NostrState.connectingRelay = false;
+            syncLegacyVariables();
         }
     }
 
     // Check if we already have a connected relay with valid WebSocket
-    if (nostrRelay && isNostrConnected) {
-        // Verify the WebSocket is still open and functional
-        let ws = null;
-        if (nostrRelay._ws) {
-            ws = nostrRelay._ws;
-        } else if (nostrRelay.ws) {
-            ws = nostrRelay.ws;
-        } else if (nostrRelay.socket) {
-            ws = nostrRelay.socket;
+    if (RelayManager.isConnected()) {
+        console.log('✅ Reusing existing relay connection (WebSocket is open)');
+        
+        // If forceAuth is true, send NIP-42 auth event even if connection is reused
+        if (forceAuth && NostrState.userPubkey && !NostrState.pendingNIP42Auth) {
+            await ensureNIP42AuthIfNeeded(true);
         }
         
-        // Check WebSocket state - wait a bit if it's still connecting
-        if (ws) {
-            if (ws.readyState === WebSocket.OPEN) {
-                console.log('✅ Reusing existing relay connection (WebSocket is open)');
-                
-                // If forceAuth is true, send NIP-42 auth event even if connection is reused
-                // But only if not already pending and not in cooldown
-                if (forceAuth && userPubkey && !pendingNIP42Auth) {
-                    const now = Date.now();
-                    const timeSinceLastAuth = now - lastNIP42AuthTime;
-                    if (timeSinceLastAuth > NIP42_AUTH_COOLDOWN) {
-                        console.log('📤 Force sending NIP-42 auth event on reused connection...');
-                        setTimeout(() => sendNIP42Auth(NOSTRws, true), 100);
-                    } else {
-                        console.log(`⏳ NIP-42 auth sent recently (${Math.floor(timeSinceLastAuth/1000)}s ago), skipping`);
-                    }
-                }
-                
-                return true;
-            } else if (ws.readyState === WebSocket.CONNECTING) {
-                // WebSocket is still connecting, wait a bit (max 2 seconds)
-                console.log('⏳ WebSocket is connecting, waiting...');
-                for (let i = 0; i < 20; i++) { // 20 * 100ms = 2 seconds max
-                    await new Promise(resolve => setTimeout(resolve, 100));
-                    if (ws.readyState === WebSocket.OPEN) {
-                        console.log('✅ WebSocket connection completed');
-                        // Retry the check with OPEN state
-                        if (forceAuth && userPubkey && !pendingNIP42Auth) {
-                            const now = Date.now();
-                            const timeSinceLastAuth = now - lastNIP42AuthTime;
-                            if (timeSinceLastAuth > NIP42_AUTH_COOLDOWN) {
-                                setTimeout(() => sendNIP42Auth(NOSTRws, true), 100);
-                            }
-                        }
-                        return true;
-                    } else if (ws.readyState === WebSocket.CLOSED || ws.readyState === WebSocket.CLOSING) {
-                        break; // Connection failed, proceed to reconnect
-                    }
-                }
-                // Still not open after waiting, proceed to reconnect
-                console.warn('⚠️ WebSocket still not open after waiting, reconnecting...');
-            } else {
-                // CLOSED or CLOSING state
-                console.warn('⚠️ Relay connection exists but WebSocket is closed, reconnecting...');
-            }
-        } else {
-            // No WebSocket found, connection might be stale
-            console.warn('⚠️ Relay connection exists but no WebSocket found, reconnecting...');
-        }
-        
-        // Connection exists but WebSocket is not functional, need to reconnect
-        isNostrConnected = false;
-        if (typeof window !== 'undefined') {
-            window.isNostrConnected = false;
-            if (window.setIsNostrConnected) {
-                window.setIsNostrConnected(false);
-            }
-        }
+        return true;
     }
     
-    connectingRelay = true;
+    // Connection exists but WebSocket is not functional, need to reconnect
+    if (NostrState.nostrRelay) {
+        console.warn('⚠️ Relay connection exists but WebSocket is not functional, reconnecting...');
+        NostrState.isNostrConnected = false;
+        syncLegacyVariables();
+    }
+    
+    NostrState.connectingRelay = true;
+    NostrState.authSent = false; // Reset on new connection
+    syncLegacyVariables();
 
-    console.log(`🔌 Connexion au relay: ${NOSTRws}`);
-    authSent = false; // Reset on new connection
+    console.log(`🔌 Connexion au relay: ${relayUrl}`);
 
     try {
-        // Close existing connection if any
-        if (nostrRelay) {
-            try {
-                // Check if close method exists (NostrTools relay may not have it)
-                if (typeof nostrRelay.close === 'function') {
-                    nostrRelay.close();
-                } else if (nostrRelay._ws) {
-                    // Close WebSocket directly if available
-                    nostrRelay._ws.close();
-                } else if (nostrRelay.ws) {
-                    nostrRelay.ws.close();
-                } else if (nostrRelay.socket) {
-                    nostrRelay.socket.close();
-                }
-            } catch (e) {
-                console.warn('Error closing existing relay:', e);
-            }
-        }
-
-        nostrRelay = NostrTools.relayInit(NOSTRws);
-        // Attach to window for iframe access
-        if (typeof window !== 'undefined') {
-            window.nostrRelay = nostrRelay;
-            if (window.setNostrRelay) {
-                window.setNostrRelay(nostrRelay);
-            }
-        }
-
-        nostrRelay.on('connect', async () => {
-            console.log(`✅ Connecté au relay: ${NOSTRws}`);
-            isNostrConnected = true;
-            // Attach to window for iframe access
-            if (typeof window !== 'undefined') {
-                window.isNostrConnected = true;
-                if (window.setIsNostrConnected) {
-                    window.setIsNostrConnected(true);
-                }
-            }
-            
-            // Send NIP-42 authentication event once
-            // Only send if not already pending and not in cooldown
-            if (userPubkey && !authSent && !pendingNIP42Auth) {
-                const now = Date.now();
-                const timeSinceLastAuth = now - lastNIP42AuthTime;
-                const shouldSendAuth = forceAuth || timeSinceLastAuth > NIP42_AUTH_COOLDOWN;
+        // Initialize relay using RelayManager
+        const relay = RelayManager.init(relayUrl);
+        
+        // Setup event handlers
+        RelayManager.setupHandlers(
+            relay,
+            relayUrl,
+            async () => {
+                // On connect: send NIP-42 auth if needed
+                NostrState.connectingRelay = false;
+                syncLegacyVariables();
                 
-                if (shouldSendAuth) {
-                    authSent = true;
-                    // Send NIP42 auth immediately if forceAuth is true, otherwise wait a bit
-                    if (forceAuth) {
-                        sendNIP42Auth(NOSTRws, true).catch(err => {
-                            console.warn('⚠️ Failed to send NIP42 auth:', err);
-                            authSent = false;
-                        });
-                    } else {
-                        setTimeout(() => {
-                            sendNIP42Auth(NOSTRws, false).catch(err => {
+                if (NostrState.userPubkey && !NostrState.authSent && !NostrState.pendingNIP42Auth) {
+                    const now = Date.now();
+                    const timeSinceLastAuth = now - NostrState.lastNIP42AuthTime;
+                    const shouldSendAuth = forceAuth || timeSinceLastAuth > NostrState.NIP42_AUTH_COOLDOWN;
+                    
+                    if (shouldSendAuth) {
+                        NostrState.authSent = true;
+                        syncLegacyVariables();
+                        
+                        if (forceAuth) {
+                            sendNIP42Auth(relayUrl, true).catch(err => {
                                 console.warn('⚠️ Failed to send NIP42 auth:', err);
-                                authSent = false;
+                                NostrState.authSent = false;
+                                syncLegacyVariables();
                             });
-                        }, 500);
+                        } else {
+                            setTimeout(() => {
+                                sendNIP42Auth(relayUrl, false).catch(err => {
+                                    console.warn('⚠️ Failed to send NIP42 auth:', err);
+                                    NostrState.authSent = false;
+                                    syncLegacyVariables();
+                                });
+                            }, 500);
+                        }
+                    } else {
+                        console.log(`⏳ Skipping NIP-42 auth (sent ${Math.floor(timeSinceLastAuth/1000)}s ago, cooldown active)`);
                     }
-                } else {
-                    console.log(`⏳ Skipping NIP-42 auth (sent ${Math.floor(timeSinceLastAuth/1000)}s ago, cooldown active)`);
                 }
                 
-                // Check if user should be redirected to their preferred relay domain
-                // Wait a bit for auth to complete, then check relay preference
+                // Check relay redirection after auth
                 setTimeout(async () => {
-                    // Check if user dismissed redirection recently (within last hour)
                     const dismissed = localStorage.getItem('relay_redirection_dismissed');
                     if (dismissed) {
                         const dismissedTime = parseInt(dismissed);
@@ -1920,102 +2087,81 @@ async function connectToRelay(forceAuth = false) {
                             return;
                         }
                     }
-                    
                     await checkAndProposeRelayRedirection();
-                }, 2000); // Wait 2 seconds after auth
+                }, 2000);
+            },
+            (error) => {
+                NostrState.connectingRelay = false;
+                syncLegacyVariables();
+            },
+            () => {
+                NostrState.connectingRelay = false;
+                syncLegacyVariables();
             }
-        });
+        );
 
-        nostrRelay.on('error', (error) => {
-            console.error('❌ Erreur de connexion au relay:', error);
-            isNostrConnected = false;
-            // Update window for iframe access
-            if (typeof window !== 'undefined') {
-                window.isNostrConnected = false;
-                if (window.setIsNostrConnected) {
-                    window.setIsNostrConnected(false);
-                }
-            }
-        });
-
-        nostrRelay.on('disconnect', () => {
-            console.log('🔌 Relay disconnected');
-            isNostrConnected = false;
-            // Update window for iframe access
-            if (typeof window !== 'undefined') {
-                window.isNostrConnected = false;
-                if (window.setIsNostrConnected) {
-                    window.setIsNostrConnected(false);
-                }
-            }
-            authSent = false;
-        });
-
-        nostrRelay.on('auth', async (challenge) => {
+        // Handle relay 'auth' event (when relay requests authentication)
+        relay.on('auth', async (challenge) => {
             console.log('🔐 Authentification NIP-42 requise par le relay');
             
             // Prevent duplicate auth events
-            if (pendingNIP42Auth) {
+            if (NostrState.pendingNIP42Auth) {
                 console.log('⏳ NIP-42 auth already pending, ignoring relay auth request');
                 return;
             }
             
             // Check cooldown
             const now = Date.now();
-            const timeSinceLastAuth = now - lastNIP42AuthTime;
-            if (timeSinceLastAuth < NIP42_AUTH_COOLDOWN) {
+            const timeSinceLastAuth = now - NostrState.lastNIP42AuthTime;
+            if (timeSinceLastAuth < NostrState.NIP42_AUTH_COOLDOWN) {
                 console.log(`⏳ NIP-42 auth sent recently (${Math.floor(timeSinceLastAuth/1000)}s ago), ignoring relay auth request to avoid spam`);
                 return;
             }
             
             try {
-                pendingNIP42Auth = true;
+                NostrState.pendingNIP42Auth = true;
+                syncLegacyVariables();
+                
                 const authEvent = {
                     kind: 22242,
                     created_at: Math.floor(Date.now() / 1000),
                     tags: [
-                        ['relay', NOSTRws],
+                        ['relay', relayUrl],
                         ['challenge', challenge]
                     ],
                     content: '',
-                    pubkey: userPubkey
+                    pubkey: NostrState.userPubkey
                 };
 
-                let signedAuthEvent;
-                if (window.nostr && typeof window.nostr.signEvent === 'function') {
-                    // Use safe wrapper for Chrome compatibility
-                    if (typeof window.safeNostrSignEvent === 'function') {
-                        signedAuthEvent = await window.safeNostrSignEvent(authEvent);
-                    } else {
-                        signedAuthEvent = await window.nostr.signEvent(authEvent);
-                    }
-                    console.log('✍️ Événement d\'authentification signé');
-                    await nostrRelay.publish(signedAuthEvent);
-                    lastNIP42AuthTime = Date.now();
-                } else {
-                    console.error('❌ Impossible de signer l\'événement d\'authentification');
-                }
+                const signedAuthEvent = await ExtensionWrapper.signEvent(authEvent);
+                console.log('✍️ Événement d\'authentification signé');
+                await NostrState.nostrRelay.publish(signedAuthEvent);
+                NostrState.lastNIP42AuthTime = Date.now();
+                syncLegacyVariables();
             } catch (authError) {
                 console.error('❌ Erreur d\'authentification NIP-42:', authError);
             } finally {
-                pendingNIP42Auth = false;
+                NostrState.pendingNIP42Auth = false;
+                syncLegacyVariables();
             }
         });
 
-        await nostrRelay.connect();
-        connectingRelay = false;
-        return true;
+        // Connect to relay
+        await relay.connect();
+        
+        // Wait a bit for connection to establish
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        NostrState.connectingRelay = false;
+        syncLegacyVariables();
+        
+        return RelayManager.isConnected();
+
     } catch (error) {
-        console.error('❌ Échec de connexion au relay:', error);
-        isNostrConnected = false;
-        connectingRelay = false;
-        // Update window for iframe access
-        if (typeof window !== 'undefined') {
-            window.isNostrConnected = false;
-            if (window.setIsNostrConnected) {
-                window.setIsNostrConnected(false);
-            }
-        }
+        console.error('❌ Failed to connect to relay:', error);
+        NostrState.isNostrConnected = false;
+        NostrState.connectingRelay = false;
+        syncLegacyVariables();
         return false;
     }
 }

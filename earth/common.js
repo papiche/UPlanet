@@ -1544,10 +1544,20 @@ async function connectNostr(forceAuth = false) {
         const connected = await connectToRelay(forceAuth);
         
         if (!connected) {
-            console.error("❌ Échec de la connexion au relay");
-            NostrState.connectingNostr = false;
-            syncLegacyVariables();
-            return null;
+            // Even if connectToRelay returns false, check if connection is actually established
+            // Sometimes the connection succeeds but the function returns false due to timing
+            await new Promise(resolve => setTimeout(resolve, 1000)); // Wait a bit more
+            const actuallyConnected = RelayManager.isConnected() || 
+                                     (NostrState.nostrRelay && NostrState.isNostrConnected);
+            
+            if (!actuallyConnected) {
+                console.error("❌ Échec de la connexion au relay");
+                NostrState.connectingNostr = false;
+                syncLegacyVariables();
+                return null;
+            } else {
+                console.log("✅ Relay connection established (verified after initial check)");
+            }
         }
         
         // Ensure NIP-42 auth if requested
@@ -2149,13 +2159,39 @@ async function connectToRelay(forceAuth = false) {
         // Connect to relay
         await relay.connect();
         
-        // Wait a bit for connection to establish
-        await new Promise(resolve => setTimeout(resolve, 500));
+        // Wait for connection to establish (check WebSocket state)
+        let connected = false;
+        let waitCount = 0;
+        const maxWait = 10; // 10 * 100ms = 1 second max
         
-        NostrState.connectingRelay = false;
-        syncLegacyVariables();
+        while (!connected && waitCount < maxWait) {
+            await new Promise(resolve => setTimeout(resolve, 100));
+            connected = RelayManager.isConnected();
+            waitCount++;
+        }
         
-        return RelayManager.isConnected();
+        if (connected) {
+            NostrState.isNostrConnected = true;
+            NostrState.connectingRelay = false;
+            syncLegacyVariables();
+            return true;
+        } else {
+            // Connection might still be establishing, but WebSocket is open
+            // Check WebSocket state directly
+            const ws = relay._ws || relay.ws || relay.socket;
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                NostrState.isNostrConnected = true;
+                NostrState.connectingRelay = false;
+                syncLegacyVariables();
+                return true;
+            }
+            
+            // Connection failed
+            NostrState.isNostrConnected = false;
+            NostrState.connectingRelay = false;
+            syncLegacyVariables();
+            return false;
+        }
 
     } catch (error) {
         console.error('❌ Failed to connect to relay:', error);

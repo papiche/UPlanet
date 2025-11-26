@@ -2,8 +2,8 @@
  * UPlanet Common JavaScript
  * Code partagé entre entrance.html, nostr_com.html, uplanet_com.html, youtube.html, plantnet.html, etc.
  * 
- * @version 1.0.0
- * @date 2025-01-09
+ * @version 1.0.1
+ * @date 2025-11-09
  * 
  * GLOBAL EXPORTS (accessible via window):
  * - Variables: window.nostrRelay, window.isNostrConnected, window.userPubkey, window.DEFAULT_RELAYS, window.upassportUrl

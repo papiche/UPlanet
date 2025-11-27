@@ -2,7 +2,7 @@
  * UPlanet Common JavaScript
  * Code partagé entre entrance.html, nostr_com.html, uplanet_com.html, youtube.html, plantnet.html, etc.
  * 
- * @version 1.0.7
+ * @version 1.0.8
  * @date 2025-11-09
  * 
  * GLOBAL EXPORTS (accessible via window):
@@ -18,7 +18,7 @@
 
 // Version information for client detection
 if (typeof window.UPLANET_COMMON_VERSION === 'undefined') {
-    window.UPLANET_COMMON_VERSION = '1.0.7';
+    window.UPLANET_COMMON_VERSION = '1.0.8';
     window.UPLANET_COMMON_DATE = '2025-01-09';
 }
 
@@ -1172,6 +1172,20 @@ function showNotification(options = {}) {
 async function ensureRelayConnection(options = {}) {
     const { silent = false, forceAuth = false, maxWaitSeconds = 10 } = options;
     
+    // Helper to wait for relay to be available in NostrState
+    const waitForRelayInState = async (maxWaitMs = 5000) => {
+        let attempts = 0;
+        const maxAttempts = Math.floor(maxWaitMs / 100);
+        while (attempts < maxAttempts) {
+            if (NostrState.nostrRelay && typeof NostrState.nostrRelay.sub === 'function') {
+                return true;
+            }
+            await new Promise(resolve => setTimeout(resolve, 100));
+            attempts++;
+        }
+        return false;
+    };
+    
     // Step 1: Check if already connected and ready
     if (RelayManager.isConnected() && NostrState.nostrRelay) {
         syncLegacyVariables(); // Ensure variables are synced
@@ -1181,9 +1195,13 @@ async function ensureRelayConnection(options = {}) {
     // Step 2: If connection is in progress, wait for it
     if (NostrState.connectingRelay) {
         const connected = await RelayManager.waitForConnection(maxWaitSeconds);
-        if (connected && RelayManager.isConnected() && NostrState.nostrRelay) {
-            syncLegacyVariables(); // Ensure variables are synced
-            return true;
+        if (connected && RelayManager.isConnected()) {
+            // Wait for relay to be available in NostrState
+            const relayAvailable = await waitForRelayInState(3000);
+            if (relayAvailable && NostrState.nostrRelay) {
+                syncLegacyVariables(); // Ensure variables are synced
+                return true;
+            }
         }
     }
     
@@ -1193,6 +1211,16 @@ async function ensureRelayConnection(options = {}) {
             const connected = await connectToRelay(forceAuth);
             if (!connected) {
                 return false;
+            }
+            
+            // Ensure relay is assigned to NostrState (connectToRelay should do this, but verify)
+            if (!NostrState.nostrRelay) {
+                // Wait a bit for relay to be assigned
+                const relayAssigned = await waitForRelayInState(1000);
+                if (!relayAssigned) {
+                    console.warn('⚠️ connectToRelay returned true but relay not in NostrState');
+                    return false;
+                }
             }
             
             // Wait for connection to be fully ready

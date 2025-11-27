@@ -4818,9 +4818,25 @@ async function removeVideoTag(tagEventId) {
  * @returns {Promise<object>} Tags object with counts and taggers
  */
 async function fetchVideoTags(videoEventId, timeout = 5000) {
-    await connectToRelay();
+    // Ensure connection is established
+    if (!window.RelayManager || !window.RelayManager.isConnected()) {
+        const connected = await connectToRelay();
+        if (!connected) {
+            // Wait a bit more for connection to establish
+            if (window.RelayManager && typeof window.RelayManager.waitForConnection === 'function') {
+                const waited = await window.RelayManager.waitForConnection(3);
+                if (!waited && !window.RelayManager.isConnected()) {
+                    throw new Error('Relay not connected');
+                }
+            } else if (!window.nostrRelay || !isNostrConnected) {
+                throw new Error('Relay not connected');
+            }
+        }
+    }
     
-    if (!window.nostrRelay || !isNostrConnected) {
+    // Get current relay
+    const currentRelay = (window.NostrState && window.NostrState.nostrRelay) || window.nostrRelay;
+    if (!currentRelay || !window.RelayManager || !window.RelayManager.isConnected()) {
         throw new Error('Relay not connected');
     }
     
@@ -4831,7 +4847,7 @@ async function fetchVideoTags(videoEventId, timeout = 5000) {
     };
     
     const tagEvents = await new Promise((resolve) => {
-        const sub = window.nostrRelay.sub([filter]);
+        const sub = currentRelay.sub([filter]);
         const events = [];
         
         const timeoutId = setTimeout(() => {

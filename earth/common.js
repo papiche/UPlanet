@@ -595,13 +595,30 @@ const RelayManager = {
      * @returns {boolean} True if connected
      */
     isConnected() {
-        if (!NostrState.nostrRelay || !NostrState.isNostrConnected) {
+        if (!NostrState.nostrRelay) {
             return false;
         }
         
         // Verify WebSocket is still open
         const ws = NostrState.nostrRelay._ws || NostrState.nostrRelay.ws || NostrState.nostrRelay.socket;
-        return ws && ws.readyState === WebSocket.OPEN;
+        const isWsOpen = ws && ws.readyState === WebSocket.OPEN;
+        
+        // If WebSocket is open, update state to match
+        if (isWsOpen && !NostrState.isNostrConnected) {
+            NostrState.isNostrConnected = true;
+            syncLegacyVariables();
+        }
+        
+        // If WebSocket is closed or closing, update state
+        if (ws && (ws.readyState === WebSocket.CLOSED || ws.readyState === WebSocket.CLOSING)) {
+            if (NostrState.isNostrConnected) {
+                NostrState.isNostrConnected = false;
+                syncLegacyVariables();
+            }
+            return false;
+        }
+        
+        return isWsOpen;
     },
     
     /**
@@ -2074,11 +2091,29 @@ async function connectToRelay(forceAuth = false) {
         return true;
     }
     
-    // Connection exists but WebSocket is not functional, need to reconnect
-    if (NostrState.nostrRelay) {
-        console.warn('⚠️ Relay connection exists but WebSocket is not functional, reconnecting...');
-        NostrState.isNostrConnected = false;
-        syncLegacyVariables();
+    // Connection exists but WebSocket might still be connecting - wait a bit before reconnecting
+    if (NostrState.nostrRelay && !RelayManager.isConnected()) {
+        // Wait a bit to see if connection is establishing
+        let waitCount = 0;
+        const maxWait = 5; // 5 * 100ms = 500ms
+        while (waitCount < maxWait && !RelayManager.isConnected()) {
+            await new Promise(resolve => setTimeout(resolve, 100));
+            waitCount++;
+        }
+        
+        // If still not connected after waiting, then reconnect
+        if (!RelayManager.isConnected()) {
+            console.warn('⚠️ Relay connection exists but WebSocket is not functional, reconnecting...');
+            NostrState.isNostrConnected = false;
+            syncLegacyVariables();
+        } else {
+            // Connection established while waiting
+            console.log('✅ Relay connection established while waiting');
+            if (forceAuth && NostrState.userPubkey && !NostrState.pendingNIP42Auth) {
+                await ensureNIP42AuthIfNeeded(true);
+            }
+            return true;
+        }
     }
     
     NostrState.connectingRelay = true;
@@ -2205,7 +2240,7 @@ async function connectToRelay(forceAuth = false) {
         // Wait for connection to establish (check WebSocket state)
         let connected = false;
         let waitCount = 0;
-        const maxWait = 10; // 10 * 100ms = 1 second max
+        const maxWait = 30; // 30 * 100ms = 3 seconds max (increased for reliability)
         
         while (!connected && waitCount < maxWait) {
             await new Promise(resolve => setTimeout(resolve, 100));
@@ -2223,10 +2258,26 @@ async function connectToRelay(forceAuth = false) {
             // Check WebSocket state directly
             const ws = relay._ws || relay.ws || relay.socket;
             if (ws && ws.readyState === WebSocket.OPEN) {
+                // WebSocket is open, mark as connected
                 NostrState.isNostrConnected = true;
                 NostrState.connectingRelay = false;
                 syncLegacyVariables();
+                console.log('✅ Relay WebSocket is open, connection established');
                 return true;
+            }
+            
+            // Connection failed or still connecting
+            // Don't mark as failed immediately - might still be connecting
+            if (ws && (ws.readyState === WebSocket.CONNECTING || ws.readyState === WebSocket.OPEN)) {
+                // Still connecting or open, wait a bit more
+                console.log('⏳ Relay still connecting, waiting a bit more...');
+                await new Promise(resolve => setTimeout(resolve, 500));
+                if (RelayManager.isConnected() || (ws && ws.readyState === WebSocket.OPEN)) {
+                    NostrState.isNostrConnected = true;
+                    NostrState.connectingRelay = false;
+                    syncLegacyVariables();
+                    return true;
+                }
             }
             
             // Connection failed
@@ -2402,14 +2453,18 @@ async function publishNote(content, additionalTags = [], kind = 1, options = {})
             }
         } else {
             // Mode relay unique: utiliser le relay global
-            if (!isNostrConnected) {
+            if (!isNostrConnected || !RelayManager.isConnected()) {
                 console.log("🔌 Connexion au relay en cours...");
-                await connectToRelay();
-                if (!isNostrConnected) {
-                    const errorMsg = "❌ Impossible de se connecter au relay.";
-                    if (!silent) alert(errorMsg);
-                    result.errors.push(errorMsg);
-                    return result;
+                const connected = await connectToRelay();
+                if (!connected) {
+                    // Wait a bit more for connection to establish
+                    const waited = await RelayManager.waitForConnection(3);
+                    if (!waited && !RelayManager.isConnected()) {
+                        const errorMsg = "❌ Impossible de se connecter au relay.";
+                        if (!silent) alert(errorMsg);
+                        result.errors.push(errorMsg);
+                        return result;
+                    }
                 }
             }
 
@@ -2662,11 +2717,15 @@ async function postComment(content, url = null) {
         return null;
     }
 
-    if (!isNostrConnected) {
-        await connectToRelay();
-        if (!isNostrConnected) {
-            alert("❌ Impossible de se connecter au relay.");
-            return null;
+    if (!isNostrConnected || !RelayManager.isConnected()) {
+        const connected = await connectToRelay();
+        if (!connected) {
+            // Wait a bit more for connection to establish
+            const waited = await RelayManager.waitForConnection(3);
+            if (!waited && !RelayManager.isConnected()) {
+                alert("❌ Impossible de se connecter au relay.");
+                return null;
+            }
         }
     }
 
@@ -2709,13 +2768,26 @@ async function postComment(content, url = null) {
 
         console.log("📝 Commentaire signé:", signedEvent);
 
-        // Publish to relay
-        if (nostrRelay) {
-            await nostrRelay.publish(signedEvent);
+        // Publish to relay - ensure connection is ready
+        if (!nostrRelay || !RelayManager.isConnected()) {
+            // Try to reconnect if needed
+            const connected = await connectToRelay();
+            if (!connected && !RelayManager.isConnected()) {
+                const waited = await RelayManager.waitForConnection(2);
+                if (!waited && !RelayManager.isConnected()) {
+                    throw new Error("Relay not connected");
+                }
+            }
+        }
+        
+        // Get the current relay (might have changed)
+        const currentRelay = NostrState.nostrRelay || nostrRelay;
+        if (currentRelay && typeof currentRelay.publish === 'function') {
+            await currentRelay.publish(signedEvent);
             console.log("✅ Commentaire publié (NIP-22):", signedEvent.id);
             return signedEvent;
         } else {
-            throw new Error("Relay not connected");
+            throw new Error("Relay not connected or invalid");
         }
     } catch (error) {
         console.error("❌ Erreur lors de la publication du commentaire:", error);
@@ -5105,11 +5177,23 @@ async function verifyMultipassPayment(transactionId) {
     try {
         console.log(`🔍 Verifying payment transaction: ${transactionId}`);
         
-        if (!isNostrConnected) {
-            await connectToRelay();
+        if (!isNostrConnected || !RelayManager.isConnected()) {
+            const connected = await connectToRelay();
+            if (!connected) {
+                // Wait a bit more for connection to establish
+                const waited = await RelayManager.waitForConnection(3);
+                if (!waited && !RelayManager.isConnected()) {
+                    return {
+                        found: false,
+                        error: 'Relay not connected'
+                    };
+                }
+            }
         }
 
-        if (!nostrRelay || !isNostrConnected) {
+        // Get current relay
+        const currentRelay = NostrState.nostrRelay || nostrRelay;
+        if (!currentRelay || !RelayManager.isConnected()) {
             return {
                 found: false,
                 error: 'Relay not connected'
@@ -5124,7 +5208,7 @@ async function verifyMultipassPayment(transactionId) {
         };
 
         const events = await new Promise((resolve) => {
-            const sub = nostrRelay.sub([filter]);
+            const sub = currentRelay.sub([filter]);
             const paymentEvents = [];
             
             const timeout = setTimeout(() => {

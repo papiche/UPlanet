@@ -2,7 +2,7 @@
  * UPlanet Common JavaScript
  * Code partagé entre entrance.html, nostr_com.html, uplanet_com.html, youtube.html, plantnet.html, etc.
  * 
- * @version 1.1.0
+ * @version 1.1.1
  * @date 2025-11-09
  * 
  * GLOBAL EXPORTS (accessible via window):
@@ -2093,12 +2093,42 @@ async function connectToRelay(forceAuth = false) {
     
     // Connection exists but WebSocket might still be connecting - wait a bit before reconnecting
     if (NostrState.nostrRelay && !RelayManager.isConnected()) {
-        // Wait a bit to see if connection is establishing
-        let waitCount = 0;
-        const maxWait = 5; // 5 * 100ms = 500ms
-        while (waitCount < maxWait && !RelayManager.isConnected()) {
-            await new Promise(resolve => setTimeout(resolve, 100));
-            waitCount++;
+        // Check if connection is in progress (connecting state)
+        const ws = NostrState.nostrRelay._ws || NostrState.nostrRelay.ws || NostrState.nostrRelay.socket;
+        const isConnecting = ws && ws.readyState === WebSocket.CONNECTING;
+        
+        // If connecting, wait longer for it to complete
+        if (isConnecting) {
+            console.log('⏳ WebSocket is connecting, waiting for connection to establish...');
+            let waitCount = 0;
+            const maxWait = 20; // 20 * 100ms = 2 seconds (increased for reliability)
+            while (waitCount < maxWait && !RelayManager.isConnected()) {
+                await new Promise(resolve => setTimeout(resolve, 100));
+                waitCount++;
+                // Check if connection completed
+                if (RelayManager.isConnected()) {
+                    console.log('✅ Relay connection established while waiting');
+                    if (forceAuth && NostrState.userPubkey && !NostrState.pendingNIP42Auth) {
+                        await ensureNIP42AuthIfNeeded(true);
+                    }
+                    return true;
+                }
+            }
+        } else {
+            // Not connecting, wait a shorter time to see if it's just slow
+            let waitCount = 0;
+            const maxWait = 10; // 10 * 100ms = 1 second
+            while (waitCount < maxWait && !RelayManager.isConnected()) {
+                await new Promise(resolve => setTimeout(resolve, 100));
+                waitCount++;
+                if (RelayManager.isConnected()) {
+                    console.log('✅ Relay connection established while waiting');
+                    if (forceAuth && NostrState.userPubkey && !NostrState.pendingNIP42Auth) {
+                        await ensureNIP42AuthIfNeeded(true);
+                    }
+                    return true;
+                }
+            }
         }
         
         // If still not connected after waiting, then reconnect
@@ -2106,13 +2136,6 @@ async function connectToRelay(forceAuth = false) {
             console.warn('⚠️ Relay connection exists but WebSocket is not functional, reconnecting...');
             NostrState.isNostrConnected = false;
             syncLegacyVariables();
-        } else {
-            // Connection established while waiting
-            console.log('✅ Relay connection established while waiting');
-            if (forceAuth && NostrState.userPubkey && !NostrState.pendingNIP42Auth) {
-                await ensureNIP42AuthIfNeeded(true);
-            }
-            return true;
         }
     }
     
@@ -3086,12 +3109,40 @@ Souhaitez-vous être redirigé maintenant ?
  * @param {string} pubkey - Clé publique de l'utilisateur
  * @returns {Promise<object|null>}
  */
-async function fetchUserMetadata(pubkey) {
-    if (!isNostrConnected) {
-        await connectToRelay();
+async function fetchUserMetadata(pubkey, cached = true) {
+    // Ensure relay is connected using RelayManager
+    if (!RelayManager.isConnected()) {
+        if (NostrState.connectingRelay) {
+            // Wait for connection in progress
+            const connected = await RelayManager.waitForConnection(5);
+            if (!connected) {
+                console.warn(`⚠️ Relay not connected for metadata fetch: ${pubkey.substring(0, 8)}...`);
+                return null;
+            }
+        } else {
+            // Try to connect
+            const connected = await connectToRelay();
+            if (!connected) {
+                const waited = await RelayManager.waitForConnection(3);
+                if (!waited && !RelayManager.isConnected()) {
+                    console.warn(`⚠️ Relay not connected for metadata fetch: ${pubkey.substring(0, 8)}...`);
+                    return null;
+                }
+            }
+        }
     }
 
-    if (!nostrRelay || !isNostrConnected) {
+    // Get current relay
+    const currentRelay = NostrState.nostrRelay || nostrRelay;
+    if (!currentRelay || typeof currentRelay.sub !== 'function') {
+        console.warn(`⚠️ Relay invalid for metadata fetch: ${pubkey.substring(0, 8)}...`);
+        return null;
+    }
+
+    // Verify WebSocket is open
+    const ws = currentRelay._ws || currentRelay.ws || currentRelay.socket;
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+        console.warn(`⚠️ Relay WebSocket not open for metadata fetch: ${pubkey.substring(0, 8)}...`);
         return null;
     }
 
@@ -3103,13 +3154,13 @@ async function fetchUserMetadata(pubkey) {
         };
 
         return new Promise((resolve) => {
-            const sub = nostrRelay.sub([filter]);
+            const sub = currentRelay.sub([filter]);
             let metadata = null;
 
             const timeout = setTimeout(() => {
                 sub.unsub();
                 resolve(metadata);
-            }, 2000);
+            }, 5000); // Increased timeout from 2s to 5s
 
             sub.on('event', (event) => {
                 try {

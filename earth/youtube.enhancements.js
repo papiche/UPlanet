@@ -3,7 +3,7 @@
  * This file contains all the enhanced UX features for Nostr Tube
  * Include this after common.js in youtube.html
  * 
- * @version 1.0.0
+ * @version 1.0.1
  * @date 2025-01-09
  */
 
@@ -4818,26 +4818,55 @@ async function removeVideoTag(tagEventId) {
  * @returns {Promise<object>} Tags object with counts and taggers
  */
 async function fetchVideoTags(videoEventId, timeout = 5000) {
-    // Ensure connection is established
-    if (!window.RelayManager || !window.RelayManager.isConnected()) {
-        const connected = await connectToRelay();
-        if (!connected) {
-            // Wait a bit more for connection to establish
-            if (window.RelayManager && typeof window.RelayManager.waitForConnection === 'function') {
-                const waited = await window.RelayManager.waitForConnection(3);
-                if (!waited && !window.RelayManager.isConnected()) {
+    // Ensure connection is established using RelayManager
+    if (window.RelayManager && typeof window.RelayManager.isConnected === 'function') {
+        if (!window.RelayManager.isConnected()) {
+            // Check if connection is in progress
+            if (window.NostrState && window.NostrState.connectingRelay) {
+                console.log('[fetchVideoTags] ⏳ Waiting for relay connection...');
+                const waited = await window.RelayManager.waitForConnection(5);
+                if (!waited) {
+                    throw new Error('Relay connection timeout');
+                }
+            } else {
+                // Try to connect
+                if (typeof connectToRelay === 'function') {
+                    await connectToRelay();
+                    const waited = await window.RelayManager.waitForConnection(5);
+                    if (!waited) {
+                        throw new Error('Relay connection failed');
+                    }
+                } else {
+                    throw new Error('connectToRelay function not available');
+                }
+            }
+        }
+    } else {
+        // Fallback: use legacy method
+        if (!window.nostrRelay || !isNostrConnected) {
+            if (typeof connectToRelay === 'function') {
+                await connectToRelay();
+                // Wait a bit for connection
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                if (!window.nostrRelay || !isNostrConnected) {
                     throw new Error('Relay not connected');
                 }
-            } else if (!window.nostrRelay || !isNostrConnected) {
-                throw new Error('Relay not connected');
+            } else {
+                throw new Error('Relay not connected and connectToRelay not available');
             }
         }
     }
     
     // Get current relay
     const currentRelay = (window.NostrState && window.NostrState.nostrRelay) || window.nostrRelay;
-    if (!currentRelay || !window.RelayManager || !window.RelayManager.isConnected()) {
-        throw new Error('Relay not connected');
+    if (!currentRelay || typeof currentRelay.sub !== 'function') {
+        throw new Error('Relay not connected or invalid');
+    }
+    
+    // Verify WebSocket is open
+    const ws = currentRelay._ws || currentRelay.ws || currentRelay.socket;
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+        throw new Error('Relay WebSocket not open');
     }
     
     const filter = {

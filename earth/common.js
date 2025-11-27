@@ -2,7 +2,7 @@
  * UPlanet Common JavaScript
  * Code partagé entre entrance.html, nostr_com.html, uplanet_com.html, youtube.html, plantnet.html, etc.
  * 
- * @version 1.0.2
+ * @version 1.0.3
  * @date 2025-11-09
  * 
  * GLOBAL EXPORTS (accessible via window):
@@ -18,7 +18,7 @@
 
 // Version information for client detection
 if (typeof window.UPLANET_COMMON_VERSION === 'undefined') {
-    window.UPLANET_COMMON_VERSION = '1.0.2';
+    window.UPLANET_COMMON_VERSION = '1.0.3';
     window.UPLANET_COMMON_DATE = '2025-01-09';
 }
 
@@ -599,9 +599,27 @@ const RelayManager = {
             return false;
         }
         
-        // Verify WebSocket is still open
+        // Verify WebSocket is still open (only OPEN state, not CONNECTING)
         const ws = NostrState.nostrRelay._ws || NostrState.nostrRelay.ws || NostrState.nostrRelay.socket;
         return ws && ws.readyState === WebSocket.OPEN;
+    },
+    
+    /**
+     * Check if WebSocket is in a valid state (OPEN or CONNECTING)
+     * @returns {boolean} True if WebSocket exists and is OPEN or CONNECTING
+     */
+    isWebSocketValid() {
+        if (!NostrState.nostrRelay) {
+            return false;
+        }
+        
+        const ws = NostrState.nostrRelay._ws || NostrState.nostrRelay.ws || NostrState.nostrRelay.socket;
+        if (!ws) {
+            return false;
+        }
+        
+        // Return true if WebSocket is CONNECTING or OPEN
+        return ws.readyState === WebSocket.CONNECTING || ws.readyState === WebSocket.OPEN;
     },
     
     /**
@@ -2062,25 +2080,65 @@ async function connectToRelay(forceAuth = false) {
         }
     }
 
-    // Check if we already have a connected relay with valid WebSocket
-    if (RelayManager.isConnected()) {
-        console.log('✅ Reusing existing relay connection (WebSocket is open)');
-        
-        // If forceAuth is true, send NIP-42 auth event even if connection is reused
-        if (forceAuth && NostrState.userPubkey && !NostrState.pendingNIP42Auth) {
-            await ensureNIP42AuthIfNeeded(true);
-        }
-        
-        return true;
-    }
-    
-    // Connection exists but WebSocket is not functional, need to reconnect
+    // Check if we already have a relay connection
     if (NostrState.nostrRelay) {
-        console.warn('⚠️ Relay connection exists but WebSocket is not functional, reconnecting...');
-        // Properly close the old connection before creating a new one
-        RelayManager.close();
-        // Small delay to ensure cleanup completes before reconnecting
-        await new Promise(resolve => setTimeout(resolve, 100));
+        const ws = NostrState.nostrRelay._ws || NostrState.nostrRelay.ws || NostrState.nostrRelay.socket;
+        
+        if (ws) {
+            // WebSocket exists, check its state
+            if (ws.readyState === WebSocket.OPEN) {
+                // WebSocket is open, reuse it
+                console.log('✅ Reusing existing relay connection (WebSocket is open)');
+                
+                // Ensure connection state is synced
+                if (!NostrState.isNostrConnected) {
+                    NostrState.isNostrConnected = true;
+                    syncLegacyVariables();
+                }
+                
+                // If forceAuth is true, send NIP-42 auth event even if connection is reused
+                if (forceAuth && NostrState.userPubkey && !NostrState.pendingNIP42Auth) {
+                    await ensureNIP42AuthIfNeeded(true);
+                }
+                
+                return true;
+            } else if (ws.readyState === WebSocket.CONNECTING) {
+                // WebSocket is connecting, wait for it to complete
+                console.log('⏳ WebSocket is connecting, waiting for connection...');
+                const connected = await RelayManager.waitForConnection(NostrState.MAX_CONNECTION_WAIT);
+                if (connected && ws.readyState === WebSocket.OPEN) {
+                    console.log('✅ WebSocket connection completed');
+                    
+                    // If forceAuth is true, send NIP-42 auth event
+                    if (forceAuth && NostrState.userPubkey && !NostrState.pendingNIP42Auth) {
+                        await ensureNIP42AuthIfNeeded(true);
+                    }
+                    
+                    return true;
+                } else {
+                    console.warn('⚠️ Connection timeout or failed while waiting for WebSocket to connect');
+                    // Fall through to reconnect
+                }
+            } else if (ws.readyState === WebSocket.CLOSING || ws.readyState === WebSocket.CLOSED) {
+                // WebSocket is closing or closed, need to reconnect
+                console.warn('⚠️ Relay connection exists but WebSocket is closing/closed, reconnecting...');
+                RelayManager.close();
+                await new Promise(resolve => setTimeout(resolve, 100));
+            } else {
+                // Unknown state, wait a bit and check again
+                console.log('⏳ WebSocket in unknown state, waiting...');
+                await new Promise(resolve => setTimeout(resolve, 200));
+                if (ws.readyState === WebSocket.OPEN) {
+                    console.log('✅ Connection is now open, reusing it');
+                    return true;
+                }
+            }
+        } else {
+            // Relay exists but no WebSocket, need to reconnect
+            console.warn('⚠️ Relay connection exists but no WebSocket found, reconnecting...');
+            RelayManager.close();
+            await new Promise(resolve => setTimeout(resolve, 100));
+        }
     }
     
     NostrState.connectingRelay = true;

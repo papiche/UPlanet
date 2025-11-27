@@ -582,6 +582,25 @@ if (typeof window !== 'undefined') {
  * Centralizes all relay-related operations
  */
 const RelayManager = {
+    // Internal flag set by on('connect') handler
+    _connectionEstablished: false,
+    
+    /**
+     * Mark connection as established (called by on('connect') handler)
+     */
+    markConnected() {
+        this._connectionEstablished = true;
+        console.log('[RelayManager] Connection marked as established');
+    },
+    
+    /**
+     * Mark connection as lost (called by on('disconnect') handler)
+     */
+    markDisconnected() {
+        this._connectionEstablished = false;
+        console.log('[RelayManager] Connection marked as disconnected');
+    },
+    
     /**
      * Get the primary relay URL
      * @returns {string} Relay URL
@@ -598,12 +617,19 @@ const RelayManager = {
         if (!NostrState.nostrRelay || !NostrState.isNostrConnected) {
             console.log('[RelayManager.isConnected] Check failed:', {
                 hasRelay: !!NostrState.nostrRelay,
-                isConnected: NostrState.isNostrConnected
+                isConnected: NostrState.isNostrConnected,
+                connectionFlag: this._connectionEstablished
             });
             return false;
         }
         
-        // Verify WebSocket is still open (only OPEN state, not CONNECTING)
+        // If on('connect') has fired, trust it even if WebSocket not visible yet
+        if (this._connectionEstablished) {
+            console.log('[RelayManager.isConnected] ✅ Connection established via event handler');
+            return true;
+        }
+        
+        // Fallback: Verify WebSocket is still open (only OPEN state, not CONNECTING)
         const ws = NostrState.nostrRelay._ws || NostrState.nostrRelay.ws || NostrState.nostrRelay.socket;
         const result = ws && ws.readyState === WebSocket.OPEN;
         
@@ -691,6 +717,9 @@ const RelayManager = {
      * Close existing relay connection
      */
     close() {
+        // Reset connection flag
+        this._connectionEstablished = false;
+        
         if (NostrState.nostrRelay) {
             try {
                 if (typeof NostrState.nostrRelay.close === 'function') {
@@ -741,6 +770,9 @@ const RelayManager = {
         relay.on('connect', () => {
             console.log(`✅ Connecté au relay: ${relayUrl}`);
             
+            // Mark connection as established in RelayManager
+            RelayManager.markConnected();
+            
             // Log WebSocket state for debugging
             const ws = relay._ws || relay.ws || relay.socket;
             console.log('[relay.on(connect)] WebSocket state:', {
@@ -764,6 +796,7 @@ const RelayManager = {
         relay.on('disconnect', () => {
             console.log('🔌 Relay disconnected');
             NostrState.isNostrConnected = false;
+            RelayManager.markDisconnected(); // Update internal flag
             syncLegacyVariables();
             if (onDisconnect) onDisconnect();
         });

@@ -18,7 +18,7 @@
 
 // Version information for client detection
 if (typeof window.UPLANET_COMMON_VERSION === 'undefined') {
-    window.UPLANET_COMMON_VERSION = '1.0.0';
+    window.UPLANET_COMMON_VERSION = '1.0.2';
     window.UPLANET_COMMON_DATE = '2025-01-09';
 }
 
@@ -2077,8 +2077,10 @@ async function connectToRelay(forceAuth = false) {
     // Connection exists but WebSocket is not functional, need to reconnect
     if (NostrState.nostrRelay) {
         console.warn('⚠️ Relay connection exists but WebSocket is not functional, reconnecting...');
-        NostrState.isNostrConnected = false;
-        syncLegacyVariables();
+        // Properly close the old connection before creating a new one
+        RelayManager.close();
+        // Small delay to ensure cleanup completes before reconnecting
+        await new Promise(resolve => setTimeout(resolve, 100));
     }
     
     NostrState.connectingRelay = true;
@@ -2581,7 +2583,7 @@ async function fetchComments(url = null, limit = 100) {
     
     // Ensure relay connection (but don't require NIP-42 auth for reading)
     // Use shared connection promise to avoid multiple simultaneous connections
-    if (!isNostrConnected || !nostrRelay) {
+    if (!RelayManager.isConnected()) {
         // Only log once if multiple calls happen simultaneously
         if (!window._connectingToRelay) {
             console.log('🔌 Connexion au relay pour récupérer les commentaires...');
@@ -2591,10 +2593,13 @@ async function fetchComments(url = null, limit = 100) {
         delete window._connectingToRelay;
     }
 
-    if (!nostrRelay || !isNostrConnected) {
+    // Use RelayManager to check connection state reliably
+    if (!RelayManager.isConnected() || !NostrState.nostrRelay) {
         console.error('❌ Impossible de se connecter au relay');
         return [];
     }
+    
+    const nostrRelay = NostrState.nostrRelay;
 
     try {
         console.log(`📥 Récupération des commentaires NIP-22 pour: ${targetUrl}`);
@@ -5344,7 +5349,7 @@ async function sendCustomReaction(eventId, authorPubkey, emoji) {
 async function fetchReactions(eventId, limit = 50) {
     // Ensure relay connection (but don't require NIP-42 auth for reading)
     // Use shared connection promise to avoid multiple simultaneous connections
-    if (!isNostrConnected || !nostrRelay) {
+    if (!RelayManager.isConnected()) {
         // Only log once if multiple calls happen simultaneously
         if (!window._connectingToRelay) {
             console.log('🔌 Connexion au relay pour récupérer les réactions...');
@@ -5354,10 +5359,13 @@ async function fetchReactions(eventId, limit = 50) {
         delete window._connectingToRelay;
     }
 
-    if (!nostrRelay || !isNostrConnected) {
+    // Use RelayManager to check connection state reliably
+    if (!RelayManager.isConnected() || !NostrState.nostrRelay) {
         console.error('❌ Impossible de se connecter au relay');
         return [];
     }
+    
+    const nostrRelay = NostrState.nostrRelay;
 
     try {
         console.log(`📥 Récupération des réactions pour: ${eventId}`);

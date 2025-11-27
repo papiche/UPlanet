@@ -2,7 +2,7 @@
  * UPlanet Common JavaScript
  * Code partagé entre entrance.html, nostr_com.html, uplanet_com.html, youtube.html, plantnet.html, etc.
  * 
- * @version 1.0.2
+ * @version 1.1.0
  * @date 2025-11-09
  * 
  * GLOBAL EXPORTS (accessible via window):
@@ -697,6 +697,49 @@ const RelayManager = {
             syncLegacyVariables();
             if (onDisconnect) onDisconnect();
         });
+    },
+    
+    /**
+     * Get or create a relay connection, ensuring only one connection to the primary relay
+     * @param {string} relayUrl - Relay URL to connect to
+     * @returns {Promise<{relay: object, isReused: boolean}>} Relay instance and whether it was reused
+     */
+    async getOrCreateRelay(relayUrl) {
+        const primaryRelayUrl = this.getPrimaryRelay();
+        
+        // Normalize URLs for comparison
+        const normalizeUrl = (url) => {
+            return url.replace(/\/$/, '').toLowerCase();
+        };
+        
+        const normalizedRelayUrl = normalizeUrl(relayUrl);
+        const normalizedPrimaryUrl = normalizeUrl(primaryRelayUrl);
+        
+        // If connecting to primary relay and we already have a connection, reuse it
+        if (normalizedRelayUrl === normalizedPrimaryUrl) {
+            if (this.isConnected()) {
+                console.log('♻️ Reusing existing primary relay connection');
+                return { relay: NostrState.nostrRelay, isReused: true };
+            }
+            
+            // For primary relay without existing connection, use RelayManager
+            if (typeof connectToRelay === 'function') {
+                await connectToRelay(false);
+                if (this.isConnected()) {
+                    return { relay: NostrState.nostrRelay, isReused: true };
+                }
+            }
+        }
+        
+        // For non-primary relays, create new temporary connection
+        if (typeof NostrTools === 'undefined') {
+            throw new Error("NostrTools n'est pas chargé. Assurez-vous d'inclure nostr.bundle.js");
+        }
+        
+        const relay = NostrTools.relayInit(relayUrl);
+        await relay.connect();
+        
+        return { relay, isReused: false };
     }
 };
 
@@ -2300,12 +2343,15 @@ async function publishNote(content, additionalTags = [], kind = 1, options = {})
             result.relaysTotal = relays.length;
 
             const publishPromises = relays.map(async (relayUrl) => {
+                let relay = null;
+                let isReused = false;
                 try {
-                    // Connexion au relay
-                    const relay = NostrTools.relayInit(relayUrl);
-                    await relay.connect();
+                    // Use RelayManager to reuse primary relay connection if available
+                    const relayResult = await RelayManager.getOrCreateRelay(relayUrl);
+                    relay = relayResult.relay;
+                    isReused = relayResult.isReused;
                     
-                    console.log(`✅ Connecté à ${relayUrl}`);
+                    console.log(`✅ Connecté à ${relayUrl}${isReused ? ' (reused)' : ''}`);
                     
                     // Publication avec timeout
                     const publishPromise = relay.publish(signedEvent);
@@ -2316,12 +2362,23 @@ async function publishNote(content, additionalTags = [], kind = 1, options = {})
                     await Promise.race([publishPromise, timeoutPromise]);
                     
                     console.log(`✅ Publié sur ${relayUrl}`);
-                    relay.close();
+                    // Only close if it's not the reused primary connection
+                    if (!isReused && relay && typeof relay.close === 'function') {
+                        relay.close();
+                    }
                     return { success: true, relay: relayUrl };
                 } catch (error) {
                     const errorMsg = `❌ Erreur sur ${relayUrl}: ${error.message}`;
                     console.error(errorMsg);
                     result.errors.push(errorMsg);
+                    // Close relay if it was a temporary connection
+                    if (!isReused && relay && typeof relay.close === 'function') {
+                        try {
+                            relay.close();
+                        } catch (closeError) {
+                            console.warn('Error closing relay:', closeError);
+                        }
+                    }
                     return { success: false, relay: relayUrl, error: error.message };
                 }
             });
@@ -3970,9 +4027,15 @@ function createCommentsSection(position = 'before-footer') {
 async function fetchMessages(pubkey, limit = 20) {
     console.log(`Fetching messages for ${pubkey.substring(0, 10)}...`);
     
+    let relay = null;
+    let isReused = false;
+    
     try {
-        const relay = NostrTools.relayInit(DEFAULT_RELAYS[0]);
-        await relay.connect();
+        // Use RelayManager to reuse primary relay connection if available
+        const relayUrl = DEFAULT_RELAYS[0];
+        const result = await RelayManager.getOrCreateRelay(relayUrl);
+        relay = result.relay;
+        isReused = result.isReused;
         
         const events = await new Promise((resolve, reject) => {
             const sub = relay.sub([{ kinds: [1], authors: [pubkey], limit }]);
@@ -3980,7 +4043,10 @@ async function fetchMessages(pubkey, limit = 20) {
             
             let timeout = setTimeout(() => {
                 sub.unsub();
-                relay.close();
+                // Only close if it's not the reused primary connection
+                if (!isReused && relay && typeof relay.close === 'function') {
+                    relay.close();
+                }
                 resolve(messages.sort((a,b) => b.created_at - a.created_at));
             }, 10000);
 
@@ -3991,7 +4057,10 @@ async function fetchMessages(pubkey, limit = 20) {
             sub.on('eose', () => {
                 clearTimeout(timeout);
                 sub.unsub();
-                relay.close();
+                // Only close if it's not the reused primary connection
+                if (!isReused && relay && typeof relay.close === 'function') {
+                    relay.close();
+                }
                 resolve(messages.sort((a,b) => b.created_at - a.created_at));
             });
         });
@@ -3999,6 +4068,14 @@ async function fetchMessages(pubkey, limit = 20) {
         return events;
     } catch (error) {
         console.error('Error fetching messages:', error);
+        // Close relay if it was a temporary connection (not reused)
+        if (!isReused && relay && typeof relay.close === 'function') {
+            try {
+                relay.close();
+            } catch (closeError) {
+                console.warn('Error closing relay:', closeError);
+            }
+        }
         return [];
     }
 }
@@ -4668,9 +4745,14 @@ function isWebcamVideoCompatible(event) {
 async function fetchWebcamVideos(channelName = null, limit = 20) {
     console.log(`Fetching webcam videos${channelName ? ` for channel: ${channelName}` : ''}...`);
     
+    let relay = null;
+    let isReused = false;
+    
     try {
-        const relay = NostrTools.relayInit(DEFAULT_RELAYS[0]);
-        await relay.connect();
+        const relayUrl = DEFAULT_RELAYS[0];
+        const relayResult = await RelayManager.getOrCreateRelay(relayUrl);
+        relay = relayResult.relay;
+        isReused = relayResult.isReused;
         
         const filter = {
             kinds: [21, 22], // NIP-71 video events
@@ -4688,7 +4770,10 @@ async function fetchWebcamVideos(channelName = null, limit = 20) {
             const videos = [];
             let timeout = setTimeout(() => {
                 sub.unsub();
-                relay.close();
+                // Only close if it's not the reused primary connection
+                if (!isReused && relay && typeof relay.close === 'function') {
+                    relay.close();
+                }
                 resolve(videos.sort((a,b) => b.created_at - a.created_at));
             }, 10000);
             
@@ -4701,7 +4786,10 @@ async function fetchWebcamVideos(channelName = null, limit = 20) {
             sub.on('eose', () => {
                 clearTimeout(timeout);
                 sub.unsub();
-                relay.close();
+                // Only close if it's not the reused primary connection
+                if (!isReused && relay && typeof relay.close === 'function') {
+                    relay.close();
+                }
                 resolve(videos.sort((a,b) => b.created_at - a.created_at));
             });
         });
@@ -4711,6 +4799,14 @@ async function fetchWebcamVideos(channelName = null, limit = 20) {
         
     } catch (error) {
         console.error('Error fetching webcam videos:', error);
+        // Close relay if it was a temporary connection
+        if (!isReused && relay && typeof relay.close === 'function') {
+            try {
+                relay.close();
+            } catch (closeError) {
+                console.warn('Error closing relay:', closeError);
+            }
+        }
         return [];
     }
 }
@@ -5540,10 +5636,15 @@ async function fetchUserFloraStats(pubkey, relays = null) {
     const relaysToUse = relays || DEFAULT_RELAYS;
     console.log(`🌿 Fetching confirmed flora identifications for ${pubkey.substring(0, 10)}... from NOSTR`);
 
+    let relay = null;
+    let isReused = false;
+
     try {
-        // Connect to first available relay
-        const relay = NostrTools.relayInit(relaysToUse[0]);
-        await relay.connect();
+        // Use RelayManager to reuse primary relay connection if available
+        const relayUrl = relaysToUse[0];
+        const relayResult = await RelayManager.getOrCreateRelay(relayUrl);
+        relay = relayResult.relay;
+        isReused = relayResult.isReused;
 
         // ONLY fetch bot responses (confirmed identifications)
         // Bot responses have #plantnet AND #UPlanet tags, and tag the user with #p
@@ -5563,7 +5664,10 @@ async function fetchUserFloraStats(pubkey, relays = null) {
             
             const timeout = setTimeout(() => {
                 sub.unsub();
-                relay.close();
+                // Only close if it's not the reused primary connection
+                if (!isReused && relay && typeof relay.close === 'function') {
+                    relay.close();
+                }
                 resolve(confirmedMessages);
             }, 10000);
 
@@ -5578,7 +5682,10 @@ async function fetchUserFloraStats(pubkey, relays = null) {
             sub.on('eose', () => {
                 clearTimeout(timeout);
                 sub.unsub();
-                relay.close();
+                // Only close if it's not the reused primary connection
+                if (!isReused && relay && typeof relay.close === 'function') {
+                    relay.close();
+                }
                 resolve(confirmedMessages);
             });
         });
@@ -5630,6 +5737,14 @@ async function fetchUserFloraStats(pubkey, relays = null) {
 
     } catch (error) {
         console.error('❌ Error fetching flora stats:', error);
+        // Close relay if it was a temporary connection
+        if (!isReused && relay && typeof relay.close === 'function') {
+            try {
+                relay.close();
+            } catch (closeError) {
+                console.warn('Error closing relay:', closeError);
+            }
+        }
         return {
             plantsCount: 0,
             umapsCount: 0,
@@ -5740,9 +5855,15 @@ async function fetchFloraLeaderboard(limit = 10, relays = null) {
     const relaysToUse = relays || DEFAULT_RELAYS;
     console.log(`🏆 Fetching flora leaderboard (top ${limit} contributors)`);
 
+    let relay = null;
+    let isReused = false;
+
     try {
-        const relay = NostrTools.relayInit(relaysToUse[0]);
-        await relay.connect();
+        // Use RelayManager to reuse primary relay connection if available
+        const relayUrl = relaysToUse[0];
+        const relayResult = await RelayManager.getOrCreateRelay(relayUrl);
+        relay = relayResult.relay;
+        isReused = relayResult.isReused;
 
         // Fetch recent flora messages to discover active contributors
         // Use same criteria as ore_system.py: plantnet AND UPlanet tags
@@ -5759,7 +5880,10 @@ async function fetchFloraLeaderboard(limit = 10, relays = null) {
             
             const timeout = setTimeout(() => {
                 sub.unsub();
-                relay.close();
+                // Only close if it's not the reused primary connection
+                if (!isReused && relay && typeof relay.close === 'function') {
+                    relay.close();
+                }
                 resolve(floraMessages);
             }, 15000);
 
@@ -5775,7 +5899,10 @@ async function fetchFloraLeaderboard(limit = 10, relays = null) {
             sub.on('eose', () => {
                 clearTimeout(timeout);
                 sub.unsub();
-                relay.close();
+                // Only close if it's not the reused primary connection
+                if (!isReused && relay && typeof relay.close === 'function') {
+                    relay.close();
+                }
                 resolve(floraMessages);
             });
         });
@@ -5821,6 +5948,14 @@ async function fetchFloraLeaderboard(limit = 10, relays = null) {
 
     } catch (error) {
         console.error('❌ Error fetching leaderboard:', error);
+        // Close relay if it was a temporary connection
+        if (!isReused && relay && typeof relay.close === 'function') {
+            try {
+                relay.close();
+            } catch (closeError) {
+                console.warn('Error closing relay:', closeError);
+            }
+        }
         return [];
     }
 }
@@ -5841,9 +5976,15 @@ async function fetchOREContractsForUMAP(lat, lon, relays = null) {
     const umapKey = `${lat.toFixed(2)},${lon.toFixed(2)}`;
     console.log(`🌱 Fetching ORE contracts for UMAP ${umapKey}`);
 
+    let relay = null;
+    let isReused = false;
+
     try {
-        const relay = NostrTools.relayInit(relaysToUse[0]);
-        await relay.connect();
+        // Use RelayManager to reuse primary relay connection if available
+        const relayUrl = relaysToUse[0];
+        const relayResult = await RelayManager.getOrCreateRelay(relayUrl);
+        relay = relayResult.relay;
+        isReused = relayResult.isReused;
 
         // Fetch ORE Meeting Space events (kind 30312)
         // These are persistent geographic spaces with environmental obligations
@@ -5859,7 +6000,10 @@ async function fetchOREContractsForUMAP(lat, lon, relays = null) {
             
             const timeout = setTimeout(() => {
                 sub.unsub();
-                relay.close();
+                // Only close if it's not the reused primary connection
+                if (!isReused && relay && typeof relay.close === 'function') {
+                    relay.close();
+                }
                 resolve(oreContracts);
             }, 10000);
 
@@ -5870,7 +6014,10 @@ async function fetchOREContractsForUMAP(lat, lon, relays = null) {
             sub.on('eose', () => {
                 clearTimeout(timeout);
                 sub.unsub();
-                relay.close();
+                // Only close if it's not the reused primary connection
+                if (!isReused && relay && typeof relay.close === 'function') {
+                    relay.close();
+                }
                 resolve(oreContracts);
             });
         });
@@ -5880,6 +6027,14 @@ async function fetchOREContractsForUMAP(lat, lon, relays = null) {
 
     } catch (error) {
         console.error('❌ Error fetching ORE contracts:', error);
+        // Close relay if it was a temporary connection
+        if (!isReused && relay && typeof relay.close === 'function') {
+            try {
+                relay.close();
+            } catch (closeError) {
+                console.warn('Error closing relay:', closeError);
+            }
+        }
         return [];
     }
 }
@@ -5951,9 +6106,15 @@ async function fetchFloraStatsForUMAP(lat, lon, relays = null) {
     const umapKey = `${lat.toFixed(2)},${lon.toFixed(2)}`;
     console.log(`🌿 Fetching flora stats for UMAP ${umapKey}`);
 
+    let relay = null;
+    let isReused = false;
+
     try {
-        const relay = NostrTools.relayInit(relaysToUse[0]);
-        await relay.connect();
+        // Use RelayManager to reuse primary relay connection if available
+        const relayUrl = relaysToUse[0];
+        const relayResult = await RelayManager.getOrCreateRelay(relayUrl);
+        relay = relayResult.relay;
+        isReused = relayResult.isReused;
 
         // Fetch flora observations with geographic tag for this UMAP
         // Use same criteria as ore_system.py: plantnet AND UPlanet tags
@@ -5970,7 +6131,10 @@ async function fetchFloraStatsForUMAP(lat, lon, relays = null) {
             
             const timeout = setTimeout(() => {
                 sub.unsub();
-                relay.close();
+                // Only close if it's not the reused primary connection
+                if (!isReused && relay && typeof relay.close === 'function') {
+                    relay.close();
+                }
                 resolve(floraMessages);
             }, 10000);
 
@@ -5986,7 +6150,10 @@ async function fetchFloraStatsForUMAP(lat, lon, relays = null) {
             sub.on('eose', () => {
                 clearTimeout(timeout);
                 sub.unsub();
-                relay.close();
+                // Only close if it's not the reused primary connection
+                if (!isReused && relay && typeof relay.close === 'function') {
+                    relay.close();
+                }
                 resolve(floraMessages);
             });
         });
@@ -6023,6 +6190,14 @@ async function fetchFloraStatsForUMAP(lat, lon, relays = null) {
 
     } catch (error) {
         console.error('❌ Error fetching flora stats for UMAP:', error);
+        // Close relay if it was a temporary connection
+        if (!isReused && relay && typeof relay.close === 'function') {
+            try {
+                relay.close();
+            } catch (closeError) {
+                console.warn('Error closing relay:', closeError);
+            }
+        }
         return {
             umapKey: umapKey,
             totalObservations: 0,
@@ -6074,9 +6249,15 @@ async function fetchAllOREUMAPs(relays = null) {
     const relaysToUse = relays || DEFAULT_RELAYS;
     console.log(`🌍 Fetching all UMAPs with ORE contracts`);
 
+    let relay = null;
+    let isReused = false;
+
     try {
-        const relay = NostrTools.relayInit(relaysToUse[0]);
-        await relay.connect();
+        // Use RelayManager to reuse primary relay connection if available
+        const relayUrl = relaysToUse[0];
+        const relayResult = await RelayManager.getOrCreateRelay(relayUrl);
+        relay = relayResult.relay;
+        isReused = relayResult.isReused;
 
         // Fetch all ORE Meeting Space events (kind 30312)
         const filter = {
@@ -6090,7 +6271,10 @@ async function fetchAllOREUMAPs(relays = null) {
             
             const timeout = setTimeout(() => {
                 sub.unsub();
-                relay.close();
+                // Only close if it's not the reused primary connection
+                if (!isReused && relay && typeof relay.close === 'function') {
+                    relay.close();
+                }
                 resolve(oreContracts);
             }, 15000);
 
@@ -6101,7 +6285,10 @@ async function fetchAllOREUMAPs(relays = null) {
             sub.on('eose', () => {
                 clearTimeout(timeout);
                 sub.unsub();
-                relay.close();
+                // Only close if it's not the reused primary connection
+                if (!isReused && relay && typeof relay.close === 'function') {
+                    relay.close();
+                }
                 resolve(oreContracts);
             });
         });
@@ -6131,6 +6318,14 @@ async function fetchAllOREUMAPs(relays = null) {
 
     } catch (error) {
         console.error('❌ Error fetching ORE UMAPs:', error);
+        // Close relay if it was a temporary connection
+        if (!isReused && relay && typeof relay.close === 'function') {
+            try {
+                relay.close();
+            } catch (closeError) {
+                console.warn('Error closing relay:', closeError);
+            }
+        }
         return [];
     }
 }
@@ -6211,9 +6406,13 @@ async function fetchOREMeetingSpaces(relays = null) {
     const allSpaces = [];
     
     for (const relayUrl of relayList) {
+        let relay = null;
+        let isReused = false;
         try {
-            const relay = NostrTools.relayInit(relayUrl);
-            await relay.connect();
+            // Use RelayManager to reuse primary relay connection if available
+            const relayResult = await RelayManager.getOrCreateRelay(relayUrl);
+            relay = relayResult.relay;
+            isReused = relayResult.isReused;
             
             const events = await new Promise((resolve) => {
                 const sub = relay.sub([{
@@ -6225,7 +6424,10 @@ async function fetchOREMeetingSpaces(relays = null) {
                 const spaces = [];
                 const timeout = setTimeout(() => {
                     sub.unsub();
-                    relay.close();
+                    // Only close if it's not the reused primary connection
+                    if (!isReused && relay && typeof relay.close === 'function') {
+                        relay.close();
+                    }
                     resolve(spaces);
                 }, 10000);
                 
@@ -6236,7 +6438,10 @@ async function fetchOREMeetingSpaces(relays = null) {
                 sub.on('eose', () => {
                     clearTimeout(timeout);
                     sub.unsub();
-                    relay.close();
+                    // Only close if it's not the reused primary connection
+                    if (!isReused && relay && typeof relay.close === 'function') {
+                        relay.close();
+                    }
                     resolve(spaces);
                 });
             });
@@ -6246,6 +6451,14 @@ async function fetchOREMeetingSpaces(relays = null) {
             
         } catch (error) {
             console.error(`Error fetching from ${relayUrl}:`, error);
+            // Close relay if it was a temporary connection
+            if (!isReused && relay && typeof relay.close === 'function') {
+                try {
+                    relay.close();
+                } catch (closeError) {
+                    console.warn('Error closing relay:', closeError);
+                }
+            }
         }
     }
     
@@ -6271,9 +6484,13 @@ async function fetchOREVerificationMeetings(lat, lon, relays = null) {
     const allMeetings = [];
     
     for (const relayUrl of relayList) {
+        let relay = null;
+        let isReused = false;
         try {
-            const relay = NostrTools.relayInit(relayUrl);
-            await relay.connect();
+            // Use RelayManager to reuse primary relay connection if available
+            const relayResult = await RelayManager.getOrCreateRelay(relayUrl);
+            relay = relayResult.relay;
+            isReused = relayResult.isReused;
             
             const events = await new Promise((resolve) => {
                 const sub = relay.sub([{
@@ -6285,7 +6502,10 @@ async function fetchOREVerificationMeetings(lat, lon, relays = null) {
                 const meetings = [];
                 const timeout = setTimeout(() => {
                     sub.unsub();
-                    relay.close();
+                    // Only close if it's not the reused primary connection
+                    if (!isReused && relay && typeof relay.close === 'function') {
+                        relay.close();
+                    }
                     resolve(meetings);
                 }, 10000);
                 
@@ -6296,7 +6516,10 @@ async function fetchOREVerificationMeetings(lat, lon, relays = null) {
                 sub.on('eose', () => {
                     clearTimeout(timeout);
                     sub.unsub();
-                    relay.close();
+                    // Only close if it's not the reused primary connection
+                    if (!isReused && relay && typeof relay.close === 'function') {
+                        relay.close();
+                    }
                     resolve(meetings);
                 });
             });
@@ -6306,6 +6529,14 @@ async function fetchOREVerificationMeetings(lat, lon, relays = null) {
             
         } catch (error) {
             console.error(`Error fetching from ${relayUrl}:`, error);
+            // Close relay if it was a temporary connection
+            if (!isReused && relay && typeof relay.close === 'function') {
+                try {
+                    relay.close();
+                } catch (closeError) {
+                    console.warn('Error closing relay:', closeError);
+                }
+            }
         }
     }
     
@@ -6492,9 +6723,13 @@ async function fetchAllPlantObservations(relays = null) {
     const allMessages = [];
     
     for (const relayUrl of relayList) {
+        let relay = null;
+        let isReused = false;
         try {
-            const relay = NostrTools.relayInit(relayUrl);
-            await relay.connect();
+            // Use RelayManager to reuse primary relay connection if available
+            const relayResult = await RelayManager.getOrCreateRelay(relayUrl);
+            relay = relayResult.relay;
+            isReused = relayResult.isReused;
             
             const events = await new Promise((resolve) => {
                 const sub = relay.sub([{
@@ -6506,7 +6741,10 @@ async function fetchAllPlantObservations(relays = null) {
                 const messages = [];
                 const timeout = setTimeout(() => {
                     sub.unsub();
-                    relay.close();
+                    // Only close if it's not the reused primary connection
+                    if (!isReused && relay && typeof relay.close === 'function') {
+                        relay.close();
+                    }
                     resolve(messages);
                 }, 15000);
                 
@@ -6530,7 +6768,10 @@ async function fetchAllPlantObservations(relays = null) {
                 sub.on('eose', () => {
                     clearTimeout(timeout);
                     sub.unsub();
-                    relay.close();
+                    // Only close if it's not the reused primary connection
+                    if (!isReused && relay && typeof relay.close === 'function') {
+                        relay.close();
+                    }
                     resolve(messages);
                 });
             });
@@ -6540,6 +6781,14 @@ async function fetchAllPlantObservations(relays = null) {
             
         } catch (error) {
             console.error(`Error fetching from ${relayUrl}:`, error);
+            // Close relay if it was a temporary connection
+            if (!isReused && relay && typeof relay.close === 'function') {
+                try {
+                    relay.close();
+                } catch (closeError) {
+                    console.warn('Error closing relay:', closeError);
+                }
+            }
         }
     }
     
@@ -7075,9 +7324,15 @@ async function fetchBadgeAwards(pubkey, relays = null, timeout = 10000) {
     const relaysToUse = relays || DEFAULT_RELAYS;
     console.log(`🏅 Fetching badge awards for ${hexPubkey.substring(0, 10)}...`);
 
+    let relay = null;
+    let isReused = false;
+
     try {
-        const relay = NostrTools.relayInit(relaysToUse[0]);
-        await relay.connect();
+        // Use RelayManager to reuse primary relay connection if available
+        const relayUrl = relaysToUse[0];
+        const relayResult = await RelayManager.getOrCreateRelay(relayUrl);
+        relay = relayResult.relay;
+        isReused = relayResult.isReused;
 
         const filter = {
             kinds: [8], // Badge Award
@@ -7091,7 +7346,10 @@ async function fetchBadgeAwards(pubkey, relays = null, timeout = 10000) {
 
             const timeoutId = setTimeout(() => {
                 sub.unsub();
-                relay.close();
+                // Only close if it's not the reused primary connection
+                if (!isReused && relay && typeof relay.close === 'function') {
+                    relay.close();
+                }
                 resolve(badgeAwards);
             }, timeout);
 
@@ -7102,14 +7360,20 @@ async function fetchBadgeAwards(pubkey, relays = null, timeout = 10000) {
             sub.on('eose', () => {
                 clearTimeout(timeoutId);
                 sub.unsub();
-                relay.close();
+                // Only close if it's not the reused primary connection
+                if (!isReused && relay && typeof relay.close === 'function') {
+                    relay.close();
+                }
                 resolve(badgeAwards);
             });
 
             sub.on('error', (error) => {
                 clearTimeout(timeoutId);
                 sub.unsub();
-                relay.close();
+                // Only close if it's not the reused primary connection
+                if (!isReused && relay && typeof relay.close === 'function') {
+                    relay.close();
+                }
                 reject(error);
             });
         });
@@ -7119,6 +7383,14 @@ async function fetchBadgeAwards(pubkey, relays = null, timeout = 10000) {
 
     } catch (error) {
         console.error('❌ Error fetching badge awards:', error);
+        // Close relay if it was a temporary connection
+        if (!isReused && relay && typeof relay.close === 'function') {
+            try {
+                relay.close();
+            } catch (closeError) {
+                console.warn('Error closing relay:', closeError);
+            }
+        }
         return [];
     }
 }
@@ -7140,9 +7412,15 @@ async function fetchBadgeDefinition(badgeId, issuerPubkey = null, relays = null,
     const relaysToUse = relays || DEFAULT_RELAYS;
     console.log(`📜 Fetching badge definition: ${badgeId}`);
 
+    let relay = null;
+    let isReused = false;
+
     try {
-        const relay = NostrTools.relayInit(relaysToUse[0]);
-        await relay.connect();
+        // Use RelayManager to reuse primary relay connection if available
+        const relayUrl = relaysToUse[0];
+        const relayResult = await RelayManager.getOrCreateRelay(relayUrl);
+        relay = relayResult.relay;
+        isReused = relayResult.isReused;
 
         const filter = {
             kinds: [30009], // Badge Definition
@@ -7163,7 +7441,10 @@ async function fetchBadgeDefinition(badgeId, issuerPubkey = null, relays = null,
 
             const timeoutId = setTimeout(() => {
                 sub.unsub();
-                relay.close();
+                // Only close if it's not the reused primary connection
+                if (!isReused && relay && typeof relay.close === 'function') {
+                    relay.close();
+                }
                 resolve(badgeDefs);
             }, timeout);
 
@@ -7174,14 +7455,20 @@ async function fetchBadgeDefinition(badgeId, issuerPubkey = null, relays = null,
             sub.on('eose', () => {
                 clearTimeout(timeoutId);
                 sub.unsub();
-                relay.close();
+                // Only close if it's not the reused primary connection
+                if (!isReused && relay && typeof relay.close === 'function') {
+                    relay.close();
+                }
                 resolve(badgeDefs);
             });
 
             sub.on('error', (error) => {
                 clearTimeout(timeoutId);
                 sub.unsub();
-                relay.close();
+                // Only close if it's not the reused primary connection
+                if (!isReused && relay && typeof relay.close === 'function') {
+                    relay.close();
+                }
                 reject(error);
             });
         });
@@ -7198,6 +7485,14 @@ async function fetchBadgeDefinition(badgeId, issuerPubkey = null, relays = null,
 
     } catch (error) {
         console.error('❌ Error fetching badge definition:', error);
+        // Close relay if it was a temporary connection
+        if (!isReused && relay && typeof relay.close === 'function') {
+            try {
+                relay.close();
+            } catch (closeError) {
+                console.warn('Error closing relay:', closeError);
+            }
+        }
         return null;
     }
 }
@@ -7217,9 +7512,15 @@ async function fetchBadgeDefinitions(badgeIds, issuerPubkey = null, relays = nul
     const relaysToUse = relays || DEFAULT_RELAYS;
     console.log(`📜 Fetching ${badgeIds.length} badge definitions...`);
 
+    let relay = null;
+    let isReused = false;
+
     try {
-        const relay = NostrTools.relayInit(relaysToUse[0]);
-        await relay.connect();
+        // Use RelayManager to reuse primary relay connection if available
+        const relayUrl = relaysToUse[0];
+        const relayResult = await RelayManager.getOrCreateRelay(relayUrl);
+        relay = relayResult.relay;
+        isReused = relayResult.isReused;
 
         const filter = {
             kinds: [30009], // Badge Definition
@@ -7239,7 +7540,10 @@ async function fetchBadgeDefinitions(badgeIds, issuerPubkey = null, relays = nul
 
             const timeoutId = setTimeout(() => {
                 sub.unsub();
-                relay.close();
+                // Only close if it's not the reused primary connection
+                if (!isReused && relay && typeof relay.close === 'function') {
+                    relay.close();
+                }
                 resolve(badgeDefs);
             }, 10000);
 
@@ -7250,14 +7554,20 @@ async function fetchBadgeDefinitions(badgeIds, issuerPubkey = null, relays = nul
             sub.on('eose', () => {
                 clearTimeout(timeoutId);
                 sub.unsub();
-                relay.close();
+                // Only close if it's not the reused primary connection
+                if (!isReused && relay && typeof relay.close === 'function') {
+                    relay.close();
+                }
                 resolve(badgeDefs);
             });
 
             sub.on('error', (error) => {
                 clearTimeout(timeoutId);
                 sub.unsub();
-                relay.close();
+                // Only close if it's not the reused primary connection
+                if (!isReused && relay && typeof relay.close === 'function') {
+                    relay.close();
+                }
                 reject(error);
             });
         });
@@ -7279,6 +7589,14 @@ async function fetchBadgeDefinitions(badgeIds, issuerPubkey = null, relays = nul
 
     } catch (error) {
         console.error('❌ Error fetching badge definitions:', error);
+        // Close relay if it was a temporary connection
+        if (!isReused && relay && typeof relay.close === 'function') {
+            try {
+                relay.close();
+            } catch (closeError) {
+                console.warn('Error closing relay:', closeError);
+            }
+        }
         return {};
     }
 }
@@ -7305,9 +7623,15 @@ async function fetchProfileBadges(pubkey, relays = null, timeout = 10000) {
     const relaysToUse = relays || DEFAULT_RELAYS;
     console.log(`👤 Fetching profile badges for ${hexPubkey.substring(0, 10)}...`);
 
+    let relay = null;
+    let isReused = false;
+
     try {
-        const relay = NostrTools.relayInit(relaysToUse[0]);
-        await relay.connect();
+        // Use RelayManager to reuse primary relay connection if available
+        const relayUrl = relaysToUse[0];
+        const relayResult = await RelayManager.getOrCreateRelay(relayUrl);
+        relay = relayResult.relay;
+        isReused = relayResult.isReused;
 
         const filter = {
             kinds: [30008], // Profile Badges
@@ -7321,7 +7645,10 @@ async function fetchProfileBadges(pubkey, relays = null, timeout = 10000) {
 
             const timeoutId = setTimeout(() => {
                 sub.unsub();
-                relay.close();
+                // Only close if it's not the reused primary connection
+                if (!isReused && relay && typeof relay.close === 'function') {
+                    relay.close();
+                }
                 resolve(badges);
             }, timeout);
 
@@ -7332,14 +7659,20 @@ async function fetchProfileBadges(pubkey, relays = null, timeout = 10000) {
             sub.on('eose', () => {
                 clearTimeout(timeoutId);
                 sub.unsub();
-                relay.close();
+                // Only close if it's not the reused primary connection
+                if (!isReused && relay && typeof relay.close === 'function') {
+                    relay.close();
+                }
                 resolve(badges);
             });
 
             sub.on('error', (error) => {
                 clearTimeout(timeoutId);
                 sub.unsub();
-                relay.close();
+                // Only close if it's not the reused primary connection
+                if (!isReused && relay && typeof relay.close === 'function') {
+                    relay.close();
+                }
                 reject(error);
             });
         });
@@ -7355,6 +7688,14 @@ async function fetchProfileBadges(pubkey, relays = null, timeout = 10000) {
 
     } catch (error) {
         console.error('❌ Error fetching profile badges:', error);
+        // Close relay if it was a temporary connection
+        if (!isReused && relay && typeof relay.close === 'function') {
+            try {
+                relay.close();
+            } catch (closeError) {
+                console.warn('Error closing relay:', closeError);
+            }
+        }
         return null;
     }
 }

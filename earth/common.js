@@ -596,12 +596,24 @@ const RelayManager = {
      */
     isConnected() {
         if (!NostrState.nostrRelay || !NostrState.isNostrConnected) {
+            console.log('[RelayManager.isConnected] Check failed:', {
+                hasRelay: !!NostrState.nostrRelay,
+                isConnected: NostrState.isNostrConnected
+            });
             return false;
         }
         
         // Verify WebSocket is still open (only OPEN state, not CONNECTING)
         const ws = NostrState.nostrRelay._ws || NostrState.nostrRelay.ws || NostrState.nostrRelay.socket;
-        return ws && ws.readyState === WebSocket.OPEN;
+        const result = ws && ws.readyState === WebSocket.OPEN;
+        
+        console.log('[RelayManager.isConnected] WebSocket check:', {
+            hasWs: !!ws,
+            readyState: ws ? ws.readyState : 'N/A',
+            result: result
+        });
+        
+        return result;
     },
     
     /**
@@ -728,6 +740,15 @@ const RelayManager = {
     setupHandlers(relay, relayUrl, onConnect, onError, onDisconnect) {
         relay.on('connect', () => {
             console.log(`✅ Connecté au relay: ${relayUrl}`);
+            
+            // Log WebSocket state for debugging
+            const ws = relay._ws || relay.ws || relay.socket;
+            console.log('[relay.on(connect)] WebSocket state:', {
+                hasWs: !!ws,
+                readyState: ws ? ws.readyState : 'N/A',
+                wsOpen: ws ? ws.readyState === WebSocket.OPEN : false
+            });
+            
             NostrState.isNostrConnected = true;
             syncLegacyVariables();
             if (onConnect) onConnect();
@@ -1172,30 +1193,43 @@ function showNotification(options = {}) {
 async function ensureRelayConnection(options = {}) {
     const { silent = false, forceAuth = false, maxWaitSeconds = 10 } = options;
     
+    console.log('[ensureRelayConnection] Called with options:', { silent, forceAuth, maxWaitSeconds });
+    
     // Helper to wait for relay to be available in NostrState
     const waitForRelayInState = async (maxWaitMs = 5000) => {
         let attempts = 0;
         const maxAttempts = Math.floor(maxWaitMs / 100);
+        console.log(`[ensureRelayConnection] Waiting for relay in NostrState (max ${maxWaitMs}ms)...`);
         while (attempts < maxAttempts) {
             if (NostrState.nostrRelay && typeof NostrState.nostrRelay.sub === 'function') {
+                console.log('[ensureRelayConnection] Relay found in NostrState');
                 return true;
             }
             await new Promise(resolve => setTimeout(resolve, 100));
             attempts++;
         }
+        console.warn('[ensureRelayConnection] Timeout waiting for relay in NostrState');
         return false;
     };
     
     // Step 1: Check if already connected and ready
+    console.log('[ensureRelayConnection] Step 1: Checking if already connected...', {
+        relayManagerConnected: RelayManager.isConnected(),
+        hasRelay: !!NostrState.nostrRelay
+    });
+    
     if (RelayManager.isConnected()) {
         // Even if RelayManager says connected, ensure relay is in NostrState
         if (NostrState.nostrRelay && typeof NostrState.nostrRelay.sub === 'function') {
+            console.log('[ensureRelayConnection] ✅ Already connected and ready');
             syncLegacyVariables(); // Ensure variables are synced
             return true;
         }
         // RelayManager says connected but relay not in NostrState yet - wait a bit
+        console.log('[ensureRelayConnection] RelayManager says connected but relay not in NostrState, waiting...');
         const relayAvailable = await waitForRelayInState(2000);
         if (relayAvailable && NostrState.nostrRelay) {
+            console.log('[ensureRelayConnection] ✅ Relay now available in NostrState');
             syncLegacyVariables(); // Ensure variables are synced
             return true;
         }
@@ -1203,11 +1237,13 @@ async function ensureRelayConnection(options = {}) {
     
     // Step 2: If connection is in progress, wait for it
     if (NostrState.connectingRelay) {
+        console.log('[ensureRelayConnection] Step 2: Connection in progress, waiting...');
         const connected = await RelayManager.waitForConnection(maxWaitSeconds);
         if (connected && RelayManager.isConnected()) {
             // Wait for relay to be available in NostrState
             const relayAvailable = await waitForRelayInState(3000);
             if (relayAvailable && NostrState.nostrRelay) {
+                console.log('[ensureRelayConnection] ✅ Connection completed, relay available');
                 syncLegacyVariables(); // Ensure variables are synced
                 return true;
             }
@@ -1215,61 +1251,71 @@ async function ensureRelayConnection(options = {}) {
     }
     
     // Step 3: Try to connect
+    console.log('[ensureRelayConnection] Step 3: Initiating new connection...');
     try {
         if (typeof connectToRelay === 'function') {
             const connected = await connectToRelay(forceAuth);
+            console.log('[ensureRelayConnection] connectToRelay returned:', connected);
             if (!connected) {
                 return false;
             }
             
             // Ensure relay is assigned to NostrState (connectToRelay should do this, but verify)
             if (!NostrState.nostrRelay) {
+                console.log('[ensureRelayConnection] Relay not in NostrState after connectToRelay, waiting...');
                 // Wait a bit for relay to be assigned
                 const relayAssigned = await waitForRelayInState(1000);
                 if (!relayAssigned) {
-                    console.warn('⚠️ connectToRelay returned true but relay not in NostrState');
+                    console.warn('[ensureRelayConnection] ⚠️ connectToRelay returned true but relay not in NostrState');
                     return false;
                 }
             }
             
             // Wait for connection to be fully ready
+            console.log('[ensureRelayConnection] Waiting for connection to be fully ready...');
             const ready = await RelayManager.waitForConnection(maxWaitSeconds);
+            console.log('[ensureRelayConnection] waitForConnection returned:', ready);
             if (ready && RelayManager.isConnected()) {
                 // Ensure relay is in NostrState
                 if (!NostrState.nostrRelay) {
                     const relayAssigned = await waitForRelayInState(2000);
                     if (!relayAssigned) {
-                        console.warn('⚠️ RelayManager.isConnected() but relay not in NostrState after waitForConnection');
+                        console.warn('[ensureRelayConnection] ⚠️ RelayManager.isConnected() but relay not in NostrState after waitForConnection');
                         return false;
                     }
                 }
                 if (NostrState.nostrRelay && typeof NostrState.nostrRelay.sub === 'function') {
+                    console.log('[ensureRelayConnection] ✅ Connection fully ready');
                     syncLegacyVariables(); // Ensure variables are synced
                     return true;
                 }
             }
             
             // Even if waitForConnection timed out, check if we're actually connected
+            console.log('[ensureRelayConnection] Final check - RelayManager.isConnected():', RelayManager.isConnected());
             if (RelayManager.isConnected()) {
                 // Ensure relay is in NostrState
                 if (!NostrState.nostrRelay) {
                     const relayAssigned = await waitForRelayInState(2000);
                     if (!relayAssigned) {
-                        console.warn('⚠️ RelayManager.isConnected() but relay not in NostrState');
+                        console.warn('[ensureRelayConnection] ⚠️ RelayManager.isConnected() but relay not in NostrState');
                         return false;
                     }
                 }
                 if (NostrState.nostrRelay && typeof NostrState.nostrRelay.sub === 'function') {
+                    console.log('[ensureRelayConnection] ✅ Connected despite timeout');
                     syncLegacyVariables(); // Ensure variables are synced
                     return true;
                 }
             }
             
+            console.warn('[ensureRelayConnection] ❌ Connection failed or not ready');
             return false;
         }
+        console.warn('[ensureRelayConnection] ❌ connectToRelay function not available');
         return false;
     } catch (error) {
-        console.error('Error connecting to relay:', error);
+        console.error('[ensureRelayConnection] Error connecting to relay:', error);
         if (!silent) {
             alert('❌ Erreur lors de la connexion au relay: ' + error.message);
         }

@@ -2,7 +2,7 @@
  * UPlanet Common JavaScript
  * Code partagé entre entrance.html, nostr_com.html, uplanet_com.html, youtube.html, plantnet.html, etc.
  * 
- * @version 1.0.3
+ * @version 1.0.4
  * @date 2025-11-09
  * 
  * GLOBAL EXPORTS (accessible via window):
@@ -18,7 +18,7 @@
 
 // Version information for client detection
 if (typeof window.UPLANET_COMMON_VERSION === 'undefined') {
-    window.UPLANET_COMMON_VERSION = '1.0.3';
+    window.UPLANET_COMMON_VERSION = '1.0.4';
     window.UPLANET_COMMON_DATE = '2025-01-09';
 }
 
@@ -632,15 +632,46 @@ const RelayManager = {
             return true;
         }
         
-        let waitCount = 0;
-        while (NostrState.connectingRelay && waitCount < maxWaitSeconds) {
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            waitCount++;
-            if (this.isConnected()) {
+        // If not connecting, check WebSocket state directly
+        if (!NostrState.connectingRelay && NostrState.nostrRelay) {
+            const ws = NostrState.nostrRelay._ws || NostrState.nostrRelay.ws || NostrState.nostrRelay.socket;
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                NostrState.isNostrConnected = true;
+                syncLegacyVariables();
                 return true;
             }
         }
         
+        let waitCount = 0;
+        const checkInterval = 200; // Check every 200ms for more responsive detection
+        const maxChecks = Math.floor((maxWaitSeconds * 1000) / checkInterval);
+        
+        while (waitCount < maxChecks) {
+            await new Promise(resolve => setTimeout(resolve, checkInterval));
+            waitCount++;
+            
+            if (this.isConnected()) {
+                return true;
+            }
+            
+            // Also check WebSocket state directly in case handler hasn't fired yet
+            if (NostrState.nostrRelay) {
+                const ws = NostrState.nostrRelay._ws || NostrState.nostrRelay.ws || NostrState.nostrRelay.socket;
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    NostrState.isNostrConnected = true;
+                    syncLegacyVariables();
+                    return true;
+                }
+            }
+            
+            // If connection flag is cleared but we're still waiting, connection might have failed
+            if (!NostrState.connectingRelay && waitCount > 5) {
+                // Give it a few more checks in case it's just finishing up
+                break;
+            }
+        }
+        
+        // Final check
         return this.isConnected();
     },
     
@@ -2151,67 +2182,7 @@ async function connectToRelay(forceAuth = false) {
         // Initialize relay using RelayManager
         const relay = RelayManager.init(relayUrl);
         
-        // Setup event handlers
-        RelayManager.setupHandlers(
-            relay,
-            relayUrl,
-            async () => {
-                // On connect: send NIP-42 auth if needed
-                NostrState.connectingRelay = false;
-                syncLegacyVariables();
-                
-                if (NostrState.userPubkey && !NostrState.authSent && !NostrState.pendingNIP42Auth) {
-                    const now = Date.now();
-                    const timeSinceLastAuth = now - NostrState.lastNIP42AuthTime;
-                    const shouldSendAuth = forceAuth || timeSinceLastAuth > NostrState.NIP42_AUTH_COOLDOWN;
-                    
-                    if (shouldSendAuth) {
-                        NostrState.authSent = true;
-                        syncLegacyVariables();
-                        
-                        if (forceAuth) {
-                            sendNIP42Auth(relayUrl, true).catch(err => {
-                                console.warn('⚠️ Failed to send NIP42 auth:', err);
-                                NostrState.authSent = false;
-                                syncLegacyVariables();
-                            });
-                        } else {
-                            setTimeout(() => {
-                                sendNIP42Auth(relayUrl, false).catch(err => {
-                                    console.warn('⚠️ Failed to send NIP42 auth:', err);
-                                    NostrState.authSent = false;
-                                    syncLegacyVariables();
-                                });
-                            }, 500);
-                        }
-                    } else {
-                        console.log(`⏳ Skipping NIP-42 auth (sent ${Math.floor(timeSinceLastAuth/1000)}s ago, cooldown active)`);
-                    }
-                }
-                
-                // Check relay redirection after auth
-                setTimeout(async () => {
-                    const dismissed = localStorage.getItem('relay_redirection_dismissed');
-                    if (dismissed) {
-                        const dismissedTime = parseInt(dismissed);
-                        const oneHourAgo = Date.now() - (60 * 60 * 1000);
-                        if (dismissedTime > oneHourAgo) {
-                            console.log('ℹ️ Relay redirection was recently dismissed, skipping check');
-                            return;
-                        }
-                    }
-                    await checkAndProposeRelayRedirection();
-                }, 2000);
-            },
-            (error) => {
-                NostrState.connectingRelay = false;
-                syncLegacyVariables();
-            },
-            () => {
-                NostrState.connectingRelay = false;
-                syncLegacyVariables();
-            }
-        );
+        // Event handlers will be set up in the connection promise logic below
 
         // Handle relay 'auth' event (when relay requests authentication)
         relay.on('auth', async (challenge) => {
@@ -2259,42 +2230,130 @@ async function connectToRelay(forceAuth = false) {
             }
         });
 
+        // Create a promise that resolves when connection is established
+        let connectionResolve, connectionReject;
+        const connectionPromise = new Promise((resolve, reject) => {
+            connectionResolve = resolve;
+            connectionReject = reject;
+        });
+        
+        // Override the onConnect handler to resolve the promise
+        const originalOnConnect = async () => {
+            connectHandlerCalled = true;
+            NostrState.connectingRelay = false;
+            syncLegacyVariables();
+            
+            if (NostrState.userPubkey && !NostrState.authSent && !NostrState.pendingNIP42Auth) {
+                const now = Date.now();
+                const timeSinceLastAuth = now - NostrState.lastNIP42AuthTime;
+                const shouldSendAuth = forceAuth || timeSinceLastAuth > NostrState.NIP42_AUTH_COOLDOWN;
+                
+                if (shouldSendAuth) {
+                    NostrState.authSent = true;
+                    syncLegacyVariables();
+                    
+                    if (forceAuth) {
+                        sendNIP42Auth(relayUrl, true).catch(err => {
+                            console.warn('⚠️ Failed to send NIP42 auth:', err);
+                            NostrState.authSent = false;
+                            syncLegacyVariables();
+                        });
+                    } else {
+                        setTimeout(() => {
+                            sendNIP42Auth(relayUrl, false).catch(err => {
+                                console.warn('⚠️ Failed to send NIP42 auth:', err);
+                                NostrState.authSent = false;
+                                syncLegacyVariables();
+                            });
+                        }, 500);
+                    }
+                } else {
+                    console.log(`⏳ Skipping NIP-42 auth (sent ${Math.floor(timeSinceLastAuth/1000)}s ago, cooldown active)`);
+                }
+            }
+            
+            // Check relay redirection after auth
+            setTimeout(async () => {
+                const dismissed = localStorage.getItem('relay_redirection_dismissed');
+                if (dismissed) {
+                    const dismissedTime = parseInt(dismissed);
+                    const oneHourAgo = Date.now() - (60 * 60 * 1000);
+                    if (dismissedTime > oneHourAgo) {
+                        console.log('ℹ️ Relay redirection was recently dismissed, skipping check');
+                        return;
+                    }
+                }
+                await checkAndProposeRelayRedirection();
+            }, 2000);
+            
+            // Resolve connection promise
+            connectionResolve(true);
+        };
+        
+        const originalOnError = (error) => {
+            errorHandlerCalled = true;
+            NostrState.connectingRelay = false;
+            syncLegacyVariables();
+            connectionReject(error);
+        };
+        
+        const originalOnDisconnect = () => {
+            NostrState.connectingRelay = false;
+            syncLegacyVariables();
+        };
+        
+        // Setup event handlers with our wrapped callbacks
+        RelayManager.setupHandlers(
+            relay,
+            relayUrl,
+            originalOnConnect,
+            originalOnError,
+            originalOnDisconnect
+        );
+        
         // Connect to relay
         await relay.connect();
         
-        // Wait for connection to establish (check WebSocket state)
-        let connected = false;
-        let waitCount = 0;
-        const maxWait = 10; // 10 * 100ms = 1 second max
-        
-        while (!connected && waitCount < maxWait) {
-            await new Promise(resolve => setTimeout(resolve, 100));
-            connected = RelayManager.isConnected();
-            waitCount++;
-        }
-        
-        if (connected) {
-            NostrState.isNostrConnected = true;
-            NostrState.connectingRelay = false;
-            syncLegacyVariables();
-            return true;
-        } else {
-            // Connection might still be establishing, but WebSocket is open
-            // Check WebSocket state directly
+        // Wait for connection to establish with timeout
+        try {
+            const connected = await Promise.race([
+                connectionPromise,
+                new Promise((_, reject) => 
+                    setTimeout(() => reject(new Error('Connection timeout')), 10000)
+                )
+            ]);
+            
+            if (connected) {
+                NostrState.isNostrConnected = true;
+                NostrState.connectingRelay = false;
+                syncLegacyVariables();
+                return true;
+            }
+        } catch (timeoutError) {
+            // Check if WebSocket is actually open despite timeout
             const ws = relay._ws || relay.ws || relay.socket;
             if (ws && ws.readyState === WebSocket.OPEN) {
+                // WebSocket is open, connection is valid even if handler didn't fire
+                console.log('⚠️ Connection established but handler timeout, using WebSocket state');
                 NostrState.isNostrConnected = true;
                 NostrState.connectingRelay = false;
                 syncLegacyVariables();
                 return true;
             }
             
-            // Connection failed
+            // Connection truly failed
+            console.error('❌ Connection timeout or failed:', timeoutError);
             NostrState.isNostrConnected = false;
             NostrState.connectingRelay = false;
             syncLegacyVariables();
             return false;
         }
+        
+        // Fallback: connection failed
+        NostrState.isNostrConnected = false;
+        NostrState.connectingRelay = false;
+        syncLegacyVariables();
+        return false;
 
     } catch (error) {
         console.error('❌ Failed to connect to relay:', error);
@@ -2645,15 +2704,32 @@ async function fetchComments(url = null, limit = 100) {
         // Only log once if multiple calls happen simultaneously
         if (!window._connectingToRelay) {
             console.log('🔌 Connexion au relay pour récupérer les commentaires...');
-            window._connectingToRelay = connectToRelay();
+            window._connectingToRelay = connectToRelay(false);
         }
-        await window._connectingToRelay;
-        delete window._connectingToRelay;
+        
+        try {
+            const connected = await window._connectingToRelay;
+            delete window._connectingToRelay;
+            
+            // Wait a bit more to ensure connection is fully established
+            if (!connected) {
+                // Try waiting for connection to complete
+                const waited = await RelayManager.waitForConnection(5);
+                if (!waited) {
+                    console.error('❌ Impossible de se connecter au relay après attente');
+                    return [];
+                }
+            }
+        } catch (error) {
+            delete window._connectingToRelay;
+            console.error('❌ Erreur lors de la connexion au relay:', error);
+            return [];
+        }
     }
 
-    // Use RelayManager to check connection state reliably
+    // Final check: ensure we have a valid relay connection
     if (!RelayManager.isConnected() || !NostrState.nostrRelay) {
-        console.error('❌ Impossible de se connecter au relay');
+        console.error('❌ Relay non connecté après tentative de connexion');
         return [];
     }
     

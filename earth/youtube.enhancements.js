@@ -3,13 +3,13 @@
  * This file contains all the enhanced UX features for Nostr Tube
  * Include this after common.js in youtube.html
  * 
- * @version 1.0.0
+ * @version 1.0.1
  * @date 2025-01-09
  */
 
 // Version information for client detection
 if (typeof window.YOUTUBE_ENHANCEMENTS_VERSION === 'undefined') {
-    window.YOUTUBE_ENHANCEMENTS_VERSION = '1.0.0';
+    window.YOUTUBE_ENHANCEMENTS_VERSION = '1.0.1';
     window.YOUTUBE_ENHANCEMENTS_DATE = '2025-01-09';
 }
 
@@ -1272,7 +1272,22 @@ async function handleTheaterLike(eventId) {
         console.log('🔌 Connecting to relay...');
         if (typeof connectToRelay === 'function') {
             try {
-                await connectToRelay();
+                const connected = await connectToRelay();
+                if (!connected) {
+                    // Wait for connection to complete
+                    if (typeof RelayManager !== 'undefined' && RelayManager.waitForConnection) {
+                        const waited = await RelayManager.waitForConnection(5);
+                        if (!waited || !nostrRelay || !isNostrConnected) {
+                            console.error('❌ Failed to connect to relay after waiting');
+                            alert('❌ Failed to connect to relay');
+                            return;
+                        }
+                    } else {
+                        console.error('❌ Failed to connect to relay');
+                        alert('❌ Failed to connect to relay');
+                        return;
+                    }
+                }
             } catch (error) {
                 console.error('❌ Failed to connect to relay:', error);
                 alert('❌ Failed to connect to relay');
@@ -3990,7 +4005,20 @@ async function executeShare() {
     if (!isNostrConnected || !nostrRelay) {
         if (typeof connectToRelay === 'function') {
             try {
-                await connectToRelay();
+                const connected = await connectToRelay();
+                if (!connected) {
+                    // Wait for connection to complete
+                    if (typeof RelayManager !== 'undefined' && RelayManager.waitForConnection) {
+                        const waited = await RelayManager.waitForConnection(5);
+                        if (!waited || !nostrRelay || !isNostrConnected) {
+                            alert('❌ Erreur lors de la connexion au relay.');
+                            return;
+                        }
+                    } else {
+                        alert('❌ Erreur lors de la connexion au relay.');
+                        return;
+                    }
+                }
             } catch (error) {
                 console.error('Error connecting to relay:', error);
                 alert('❌ Erreur lors de la connexion au relay.');
@@ -4283,12 +4311,26 @@ function openRelatedVideoInTheater(eventId) {
  */
 async function openTheaterModeFromEvent(eventId) {
     if (!nostrRelay || !isNostrConnected) {
-        await connectToRelay();
-    }
-
-    if (!nostrRelay || !isNostrConnected) {
-        alert('Nostr connection required');
-        return;
+        try {
+            const connected = await connectToRelay();
+            if (!connected) {
+                // Wait for connection to complete
+                if (typeof RelayManager !== 'undefined' && RelayManager.waitForConnection) {
+                    const waited = await RelayManager.waitForConnection(5);
+                    if (!waited || !nostrRelay || !isNostrConnected) {
+                        alert('Nostr connection required');
+                        return;
+                    }
+                } else {
+                    alert('Nostr connection required');
+                    return;
+                }
+            }
+        } catch (error) {
+            console.error('Error connecting to relay:', error);
+            alert('Nostr connection required');
+            return;
+        }
     }
     
     // Verify nostrRelay has .sub() method
@@ -4405,9 +4447,24 @@ async function postVideoComment(content, videoEventId, ipfsUrl = null) {
     }
 
     if (!isNostrConnected) {
-        await connectToRelay();
-        if (!isNostrConnected) {
-            alert("❌ Impossible de se connecter au relay.");
+        try {
+            const connected = await connectToRelay();
+            if (!connected) {
+                // Wait for connection to complete
+                if (typeof RelayManager !== 'undefined' && RelayManager.waitForConnection) {
+                    const waited = await RelayManager.waitForConnection(5);
+                    if (!waited || !isNostrConnected) {
+                        alert("❌ Impossible de se connecter au relay.");
+                        return null;
+                    }
+                } else {
+                    alert("❌ Impossible de se connecter au relay.");
+                    return null;
+                }
+            }
+        } catch (error) {
+            console.error('Error connecting to relay:', error);
+            alert("❌ Erreur lors de la connexion au relay.");
             return null;
         }
     }
@@ -4507,12 +4564,40 @@ async function postVideoComment(content, videoEventId, ipfsUrl = null) {
 async function fetchVideoComments(videoEventId) {
     if (!isNostrConnected) {
         console.log('🔌 Connexion au relay pour récupérer les commentaires...');
-        await connectToRelay();
+        try {
+            const connected = await connectToRelay();
+            if (!connected) {
+                // Try waiting for connection to complete
+                if (typeof RelayManager !== 'undefined' && RelayManager.waitForConnection) {
+                    const waited = await RelayManager.waitForConnection(5);
+                    if (!waited) {
+                        console.error('❌ Impossible de se connecter au relay après attente');
+                        return [];
+                    }
+                } else {
+                    console.error('❌ Impossible de se connecter au relay');
+                    return [];
+                }
+            }
+        } catch (error) {
+            console.error('❌ Erreur lors de la connexion au relay:', error);
+            return [];
+        }
     }
 
+    // Final check: ensure we have a valid relay connection
     if (!nostrRelay || !isNostrConnected) {
-        console.error('❌ Impossible de se connecter au relay');
-        return [];
+        // Try one more time with wait
+        if (typeof RelayManager !== 'undefined' && RelayManager.waitForConnection) {
+            const waited = await RelayManager.waitForConnection(3);
+            if (!waited || !nostrRelay || !isNostrConnected) {
+                console.error('❌ Relay non connecté après tentative de connexion');
+                return [];
+            }
+        } else {
+            console.error('❌ Relay non connecté');
+            return [];
+        }
     }
 
     if (!videoEventId) {
@@ -4689,7 +4774,23 @@ async function addVideoTag(videoEventId, tagValue, videoAuthorPubkey = null, rel
             
             // Ensure relay connection
             if (!window.nostrRelay || !isNostrConnected) {
-                await connectToRelay();
+                try {
+                    const connected = await connectToRelay();
+                    if (!connected) {
+                        // Wait for connection to complete
+                        if (typeof RelayManager !== 'undefined' && RelayManager.waitForConnection) {
+                            const waited = await RelayManager.waitForConnection(5);
+                            if (!waited || !window.nostrRelay || !isNostrConnected) {
+                                throw new Error('Relay not connected');
+                            }
+                        } else {
+                            throw new Error('Relay not connected');
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error connecting to relay:', error);
+                    throw new Error('Relay not connected');
+                }
             }
             
             // Create event template
@@ -4818,7 +4919,23 @@ async function removeVideoTag(tagEventId) {
  * @returns {Promise<object>} Tags object with counts and taggers
  */
 async function fetchVideoTags(videoEventId, timeout = 5000) {
-    await connectToRelay();
+    try {
+        const connected = await connectToRelay();
+        if (!connected) {
+            // Wait for connection to complete
+            if (typeof RelayManager !== 'undefined' && RelayManager.waitForConnection) {
+                const waited = await RelayManager.waitForConnection(5);
+                if (!waited || !window.nostrRelay || !isNostrConnected) {
+                    throw new Error('Relay not connected');
+                }
+            } else {
+                throw new Error('Relay not connected');
+            }
+        }
+    } catch (error) {
+        console.error('Error connecting to relay:', error);
+        throw new Error('Relay not connected');
+    }
     
     if (!window.nostrRelay || !isNostrConnected) {
         throw new Error('Relay not connected');
@@ -4878,7 +4995,23 @@ async function fetchVideoTags(videoEventId, timeout = 5000) {
  * @returns {Promise<Array<string>>} Array of tag values
  */
 async function fetchUserTagsForVideo(videoEventId, userPubkey) {
-    await connectToRelay();
+    try {
+        const connected = await connectToRelay();
+        if (!connected) {
+            // Wait for connection to complete
+            if (typeof RelayManager !== 'undefined' && RelayManager.waitForConnection) {
+                const waited = await RelayManager.waitForConnection(5);
+                if (!waited || !window.nostrRelay || !isNostrConnected) {
+                    return [];
+                }
+            } else {
+                return [];
+            }
+        }
+    } catch (error) {
+        console.error('Error connecting to relay:', error);
+        return [];
+    }
     
     if (!window.nostrRelay || !isNostrConnected) {
         return [];
@@ -4926,7 +5059,23 @@ async function fetchUserTagsForVideo(videoEventId, userPubkey) {
  * @returns {Promise<object>} Tag cloud object
  */
 async function fetchTagCloud(limit = 10, minCount = 1) {
-    await connectToRelay();
+    try {
+        const connected = await connectToRelay();
+        if (!connected) {
+            // Wait for connection to complete
+            if (typeof RelayManager !== 'undefined' && RelayManager.waitForConnection) {
+                const waited = await RelayManager.waitForConnection(5);
+                if (!waited || !window.nostrRelay || !isNostrConnected) {
+                    throw new Error('Relay not connected');
+                }
+            } else {
+                throw new Error('Relay not connected');
+            }
+        }
+    } catch (error) {
+        console.error('Error connecting to relay:', error);
+        throw new Error('Relay not connected');
+    }
     
     if (!window.nostrRelay || !isNostrConnected) {
         throw new Error('Relay not connected');

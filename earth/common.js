@@ -2,7 +2,7 @@
  * UPlanet Common JavaScript
  * Code partagé entre entrance.html, nostr_com.html, uplanet_com.html, youtube.html, plantnet.html, etc.
  * 
- * @version 1.0.5
+ * @version 1.0.6
  * @date 2025-11-09
  * 
  * GLOBAL EXPORTS (accessible via window):
@@ -18,7 +18,7 @@
 
 // Version information for client detection
 if (typeof window.UPLANET_COMMON_VERSION === 'undefined') {
-    window.UPLANET_COMMON_VERSION = '1.0.5';
+    window.UPLANET_COMMON_VERSION = '1.0.6';
     window.UPLANET_COMMON_DATE = '2025-01-09';
 }
 
@@ -1161,6 +1161,44 @@ function showNotification(options = {}) {
  * @param {boolean} options.forceAuth - Force NIP-42 authentication (default: false)
  * @returns {Promise<boolean>} True if connected, false otherwise
  */
+/**
+ * Ensure relay is connected and wait for confirmation
+ * This is a helper function that guarantees RelayManager.isConnected() will return true
+ * @param {object} options - Options for connection
+ * @returns {Promise<boolean>} True if connected, false otherwise
+ */
+async function ensureRelayConnectionConfirmed(options = {}) {
+    // Check if already connected
+    if (RelayManager.isConnected() && NostrState.nostrRelay) {
+        return true;
+    }
+    
+    // Check if connection is in progress
+    if (NostrState.connectingRelay) {
+        if (typeof RelayManager.waitForConnection === 'function') {
+            const waited = await RelayManager.waitForConnection(10);
+            if (waited && RelayManager.isConnected()) {
+                return true;
+            }
+        }
+    }
+    
+    // Connect if not connected
+    const connected = await connectToRelay(options.forceAuth || false);
+    if (!connected) {
+        return false;
+    }
+    
+    // Always wait for confirmation
+    if (typeof RelayManager.waitForConnection === 'function') {
+        const waited = await RelayManager.waitForConnection(5);
+        return waited && RelayManager.isConnected();
+    }
+    
+    // Fallback: check directly
+    return RelayManager.isConnected() && !!NostrState.nostrRelay;
+}
+
 async function ensureRelayConnection(options = {}) {
     const { silent = false, forceAuth = false } = options;
     
@@ -2490,10 +2528,10 @@ async function publishNote(content, additionalTags = [], kind = 1, options = {})
             }
         } else {
             // Mode relay unique: utiliser le relay global
-            if (!isNostrConnected) {
+            if (!RelayManager.isConnected()) {
                 console.log("🔌 Connexion au relay en cours...");
-                await connectToRelay();
-                if (!isNostrConnected) {
+                const connected = await ensureRelayConnectionConfirmed({ forceAuth: false });
+                if (!connected) {
                     const errorMsg = "❌ Impossible de se connecter au relay.";
                     if (!silent) alert(errorMsg);
                     result.errors.push(errorMsg);
@@ -2694,11 +2732,11 @@ async function fetchComments(url = null, limit = 100) {
             const connected = await window._connectingToRelay;
             delete window._connectingToRelay;
             
-            // Wait a bit more to ensure connection is fully established
-            if (!connected) {
-                // Try waiting for connection to complete
+            // Always wait for connection to be confirmed by RelayManager
+            // This ensures RelayManager.isConnected() will return true
+            if (typeof RelayManager.waitForConnection === 'function') {
                 const waited = await RelayManager.waitForConnection(5);
-                if (!waited) {
+                if (!waited && !connected) {
                     console.error('❌ Impossible de se connecter au relay après attente');
                     return [];
                 }
@@ -2770,9 +2808,10 @@ async function postComment(content, url = null) {
         return null;
     }
 
-    if (!isNostrConnected) {
-        await connectToRelay();
-        if (!isNostrConnected) {
+    // Ensure relay connection is confirmed
+    if (!RelayManager.isConnected()) {
+        const connected = await ensureRelayConnectionConfirmed({ forceAuth: false });
+        if (!connected) {
             alert("❌ Impossible de se connecter au relay.");
             return null;
         }
@@ -5307,11 +5346,10 @@ async function sendLike(eventId, authorPubkey, content = "+") {
         return null;
     }
 
-    if (!isNostrConnected) {
-        alert("❌ Connexion au relay en cours...");
-        // For likes, we don't need NIP-42 auth, just connect to relay
-        await connectToRelay(false); // false = no force auth (no NIP-42 needed for likes)
-        if (!isNostrConnected) {
+    // Ensure relay connection is confirmed
+    if (!RelayManager.isConnected()) {
+        const connected = await ensureRelayConnectionConfirmed({ forceAuth: false });
+        if (!connected) {
             alert("❌ Impossible de se connecter au relay.");
             return null;
         }
@@ -5474,6 +5512,11 @@ async function fetchReactions(eventId, limit = 50) {
         }
         await window._connectingToRelay;
         delete window._connectingToRelay;
+        
+        // Wait for connection to be confirmed by RelayManager
+        if (typeof RelayManager.waitForConnection === 'function') {
+            await RelayManager.waitForConnection(5);
+        }
     }
 
     // Use RelayManager to check connection state reliably

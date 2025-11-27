@@ -2,7 +2,7 @@
  * UPlanet Common JavaScript
  * Code partagé entre entrance.html, nostr_com.html, uplanet_com.html, youtube.html, plantnet.html, etc.
  * 
- * @version 1.0.8
+ * @version 1.0.9
  * @date 2025-11-09
  * 
  * GLOBAL EXPORTS (accessible via window):
@@ -18,7 +18,7 @@
 
 // Version information for client detection
 if (typeof window.UPLANET_COMMON_VERSION === 'undefined') {
-    window.UPLANET_COMMON_VERSION = '1.0.8';
+    window.UPLANET_COMMON_VERSION = '1.0.9';
     window.UPLANET_COMMON_DATE = '2025-01-09';
 }
 
@@ -1187,9 +1187,18 @@ async function ensureRelayConnection(options = {}) {
     };
     
     // Step 1: Check if already connected and ready
-    if (RelayManager.isConnected() && NostrState.nostrRelay) {
-        syncLegacyVariables(); // Ensure variables are synced
-        return true;
+    if (RelayManager.isConnected()) {
+        // Even if RelayManager says connected, ensure relay is in NostrState
+        if (NostrState.nostrRelay && typeof NostrState.nostrRelay.sub === 'function') {
+            syncLegacyVariables(); // Ensure variables are synced
+            return true;
+        }
+        // RelayManager says connected but relay not in NostrState yet - wait a bit
+        const relayAvailable = await waitForRelayInState(2000);
+        if (relayAvailable && NostrState.nostrRelay) {
+            syncLegacyVariables(); // Ensure variables are synced
+            return true;
+        }
     }
     
     // Step 2: If connection is in progress, wait for it
@@ -1225,15 +1234,35 @@ async function ensureRelayConnection(options = {}) {
             
             // Wait for connection to be fully ready
             const ready = await RelayManager.waitForConnection(maxWaitSeconds);
-            if (ready && RelayManager.isConnected() && NostrState.nostrRelay) {
-                syncLegacyVariables(); // Ensure variables are synced
-                return true;
+            if (ready && RelayManager.isConnected()) {
+                // Ensure relay is in NostrState
+                if (!NostrState.nostrRelay) {
+                    const relayAssigned = await waitForRelayInState(2000);
+                    if (!relayAssigned) {
+                        console.warn('⚠️ RelayManager.isConnected() but relay not in NostrState after waitForConnection');
+                        return false;
+                    }
+                }
+                if (NostrState.nostrRelay && typeof NostrState.nostrRelay.sub === 'function') {
+                    syncLegacyVariables(); // Ensure variables are synced
+                    return true;
+                }
             }
             
             // Even if waitForConnection timed out, check if we're actually connected
-            if (RelayManager.isConnected() && NostrState.nostrRelay) {
-                syncLegacyVariables(); // Ensure variables are synced
-                return true;
+            if (RelayManager.isConnected()) {
+                // Ensure relay is in NostrState
+                if (!NostrState.nostrRelay) {
+                    const relayAssigned = await waitForRelayInState(2000);
+                    if (!relayAssigned) {
+                        console.warn('⚠️ RelayManager.isConnected() but relay not in NostrState');
+                        return false;
+                    }
+                }
+                if (NostrState.nostrRelay && typeof NostrState.nostrRelay.sub === 'function') {
+                    syncLegacyVariables(); // Ensure variables are synced
+                    return true;
+                }
             }
             
             return false;
@@ -2200,6 +2229,18 @@ async function connectToRelay(forceAuth = false) {
 
     // Step 3: If relay exists but not connected, check WebSocket state
     if (NostrState.nostrRelay) {
+        // First check if RelayManager says we're connected (even if WebSocket not visible)
+        if (RelayManager.isConnected()) {
+            // RelayManager says connected, trust it even if WebSocket not immediately visible
+            console.log('✅ RelayManager confirms connection, using existing relay');
+            NostrState.isNostrConnected = true;
+            syncLegacyVariables();
+            if (forceAuth && NostrState.userPubkey && !NostrState.pendingNIP42Auth) {
+                await ensureNIP42AuthIfNeeded(true);
+            }
+            return true;
+        }
+        
         const ws = NostrState.nostrRelay._ws || NostrState.nostrRelay.ws || NostrState.nostrRelay.socket;
         
         if (ws) {
@@ -2226,8 +2267,36 @@ async function connectToRelay(forceAuth = false) {
                 await new Promise(resolve => setTimeout(resolve, 100));
             }
         } else {
-            // Relay exists but no WebSocket, close and reconnect
-            console.warn('⚠️ Relay exists but no WebSocket found, reconnecting...');
+            // Relay exists but no WebSocket - wait a bit for it to be attached
+            console.log('⏳ Relay exists but no WebSocket found, waiting for attachment...');
+            let waitAttempts = 0;
+            const maxWaitAttempts = 20; // 2 seconds
+            while (waitAttempts < maxWaitAttempts) {
+                const wsCheck = NostrState.nostrRelay._ws || NostrState.nostrRelay.ws || NostrState.nostrRelay.socket;
+                if (wsCheck && wsCheck.readyState === WebSocket.OPEN) {
+                    console.log('✅ WebSocket attached and open');
+                    NostrState.isNostrConnected = true;
+                    syncLegacyVariables();
+                    if (forceAuth && NostrState.userPubkey && !NostrState.pendingNIP42Auth) {
+                        await ensureNIP42AuthIfNeeded(true);
+                    }
+                    return true;
+                }
+                // Also check if RelayManager says connected
+                if (RelayManager.isConnected()) {
+                    console.log('✅ RelayManager confirms connection while waiting for WebSocket');
+                    NostrState.isNostrConnected = true;
+                    syncLegacyVariables();
+                    if (forceAuth && NostrState.userPubkey && !NostrState.pendingNIP42Auth) {
+                        await ensureNIP42AuthIfNeeded(true);
+                    }
+                    return true;
+                }
+                await new Promise(resolve => setTimeout(resolve, 100));
+                waitAttempts++;
+            }
+            // Still no WebSocket after waiting, reconnect
+            console.warn('⚠️ Relay exists but no WebSocket found after waiting, reconnecting...');
             RelayManager.close();
             await new Promise(resolve => setTimeout(resolve, 100));
         }

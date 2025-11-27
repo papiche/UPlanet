@@ -2,7 +2,7 @@
  * UPlanet Common JavaScript
  * Code partagé entre entrance.html, nostr_com.html, uplanet_com.html, youtube.html, plantnet.html, etc.
  * 
- * @version 1.0.1
+ * @version 1.0.2
  * @date 2025-11-09
  * 
  * GLOBAL EXPORTS (accessible via window):
@@ -1546,27 +1546,27 @@ async function connectNostr(forceAuth = false) {
         if (!connected) {
             // Even if connectToRelay returns false, check if connection is actually established
             // Sometimes the connection succeeds but the function returns false due to timing
-            await new Promise(resolve => setTimeout(resolve, 1000)); // Wait a bit more
+            await new Promise(resolve => setTimeout(resolve, 1500)); // Wait a bit more
             const actuallyConnected = RelayManager.isConnected() || 
                                      (NostrState.nostrRelay && NostrState.isNostrConnected);
             
             if (!actuallyConnected) {
-                console.error("❌ Échec de la connexion au relay");
-                NostrState.connectingNostr = false;
-                syncLegacyVariables();
-                return null;
+                console.warn("⚠️ Relay connection check failed, but pubkey was retrieved. Returning pubkey anyway - relay connection may still be establishing.");
+                // Don't return null - we have the pubkey, which is the main requirement
+                // The relay connection can be retried later if needed
             } else {
                 console.log("✅ Relay connection established (verified after initial check)");
             }
         }
         
-        // Ensure NIP-42 auth if requested
-        if (forceAuth) {
+        // Ensure NIP-42 auth if requested (only if relay is connected)
+        if (forceAuth && (RelayManager.isConnected() || NostrState.isNostrConnected)) {
             await ensureNIP42AuthIfNeeded(true);
         }
         
         NostrState.connectingNostr = false;
         syncLegacyVariables();
+        // Always return pubkey if we successfully retrieved it, even if relay connection is still establishing
         return pubkey;
         
     } catch (error) {

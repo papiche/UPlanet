@@ -2,7 +2,7 @@
  * UPlanet Common JavaScript
  * Code partagé entre entrance.html, nostr_com.html, uplanet_com.html, youtube.html, plantnet.html, etc.
  * 
- * @version 1.0.9
+ * @version 1.0.10
  * @date 2025-11-09
  * 
  * GLOBAL EXPORTS (accessible via window):
@@ -18,7 +18,7 @@
 
 // Version information for client detection
 if (typeof window.UPLANET_COMMON_VERSION === 'undefined') {
-    window.UPLANET_COMMON_VERSION = '1.0.9';
+    window.UPLANET_COMMON_VERSION = '1.0.10';
     window.UPLANET_COMMON_DATE = '2025-01-09';
 }
 
@@ -2109,6 +2109,21 @@ async function ensureAuthentication(options = {}) {
 async function sendNIP42Auth(relayUrl, forceSend = false) {
     if (!window.nostr || !NostrState.userPubkey) {
         console.warn('Cannot send NIP-42 auth: missing nostr extension or pubkey');
+        return;
+    }
+    
+    // Ensure relayUrl is a string (not a relay object)
+    if (typeof relayUrl === 'object' && relayUrl !== null) {
+        if (relayUrl.url) {
+            relayUrl = relayUrl.url;
+        } else {
+            console.warn('Cannot send NIP-42 auth: invalid relay object');
+            return;
+        }
+    }
+    
+    if (typeof relayUrl !== 'string') {
+        console.warn('Cannot send NIP-42 auth: relayUrl is not a string');
         return;
     }
     
@@ -7443,28 +7458,58 @@ async function fetchBadgeAwards(pubkey, relays = null, timeout = 10000) {
             const badgeAwards = [];
 
             const timeoutId = setTimeout(() => {
-                sub.unsub();
-                relay.close();
+                try {
+                    sub.unsub();
+                } catch (e) {
+                    console.warn('Error unsubscribing:', e);
+                }
+                try {
+                    relay.close();
+                } catch (e) {
+                    console.warn('Error closing relay:', e);
+                }
                 resolve(badgeAwards);
             }, timeout);
 
-            sub.on('event', (event) => {
-                badgeAwards.push(event);
-            });
+            try {
+                sub.on('event', (event) => {
+                    badgeAwards.push(event);
+                });
 
-            sub.on('eose', () => {
+                sub.on('eose', () => {
+                    clearTimeout(timeoutId);
+                    try {
+                        sub.unsub();
+                    } catch (e) {
+                        console.warn('Error unsubscribing:', e);
+                    }
+                    try {
+                        relay.close();
+                    } catch (e) {
+                        console.warn('Error closing relay:', e);
+                    }
+                    resolve(badgeAwards);
+                });
+
+                sub.on('error', (error) => {
+                    clearTimeout(timeoutId);
+                    try {
+                        sub.unsub();
+                    } catch (e) {
+                        console.warn('Error unsubscribing:', e);
+                    }
+                    try {
+                        relay.close();
+                    } catch (e) {
+                        console.warn('Error closing relay:', e);
+                    }
+                    reject(error);
+                });
+            } catch (error) {
                 clearTimeout(timeoutId);
-                sub.unsub();
-                relay.close();
+                console.error('Error setting up event listeners:', error);
                 resolve(badgeAwards);
-            });
-
-            sub.on('error', (error) => {
-                clearTimeout(timeoutId);
-                sub.unsub();
-                relay.close();
-                reject(error);
-            });
+            }
         });
 
         console.log(`✅ Found ${awards.length} badge awards`);

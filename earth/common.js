@@ -2,7 +2,7 @@
  * UPlanet Common JavaScript
  * Code partagé entre entrance.html, nostr_com.html, uplanet_com.html, youtube.html, plantnet.html, etc.
  * 
- * @version 1.1.1
+ * @version 1.1.2
  * @date 2025-11-09
  * 
  * GLOBAL EXPORTS (accessible via window):
@@ -601,16 +601,9 @@ const RelayManager = {
         
         // Verify WebSocket is still open
         const ws = NostrState.nostrRelay._ws || NostrState.nostrRelay.ws || NostrState.nostrRelay.socket;
-        const isWsOpen = ws && ws.readyState === WebSocket.OPEN;
         
-        // If WebSocket is open, update state to match
-        if (isWsOpen && !NostrState.isNostrConnected) {
-            NostrState.isNostrConnected = true;
-            syncLegacyVariables();
-        }
-        
-        // If WebSocket is closed or closing, update state
-        if (ws && (ws.readyState === WebSocket.CLOSED || ws.readyState === WebSocket.CLOSING)) {
+        // If no WebSocket, not connected
+        if (!ws) {
             if (NostrState.isNostrConnected) {
                 NostrState.isNostrConnected = false;
                 syncLegacyVariables();
@@ -618,7 +611,28 @@ const RelayManager = {
             return false;
         }
         
-        return isWsOpen;
+        const isWsOpen = ws.readyState === WebSocket.OPEN;
+        
+        // If WebSocket is open, update state to match
+        if (isWsOpen) {
+            if (!NostrState.isNostrConnected) {
+                NostrState.isNostrConnected = true;
+                syncLegacyVariables();
+            }
+            return true;
+        }
+        
+        // If WebSocket is closed or closing, update state
+        if (ws.readyState === WebSocket.CLOSED || ws.readyState === WebSocket.CLOSING) {
+            if (NostrState.isNostrConnected) {
+                NostrState.isNostrConnected = false;
+                syncLegacyVariables();
+            }
+            return false;
+        }
+        
+        // WebSocket is CONNECTING - not yet connected
+        return false;
     },
     
     /**
@@ -2091,20 +2105,19 @@ async function connectToRelay(forceAuth = false) {
         return true;
     }
     
-    // Connection exists but WebSocket might still be connecting - wait a bit before reconnecting
-    if (NostrState.nostrRelay && !RelayManager.isConnected()) {
-        // Check if connection is in progress (connecting state)
+    // Connection exists but might still be connecting - check WebSocket state directly
+    if (NostrState.nostrRelay) {
         const ws = NostrState.nostrRelay._ws || NostrState.nostrRelay.ws || NostrState.nostrRelay.socket;
-        const isConnecting = ws && ws.readyState === WebSocket.CONNECTING;
         
-        // If connecting, wait longer for it to complete
-        if (isConnecting) {
-            console.log('⏳ WebSocket is connecting, waiting for connection to establish...');
+        // If WebSocket is connecting or open, wait for it to complete
+        if (ws && (ws.readyState === WebSocket.CONNECTING || ws.readyState === WebSocket.OPEN)) {
+            console.log('⏳ WebSocket is connecting or open, waiting for connection to stabilize...');
             let waitCount = 0;
-            const maxWait = 20; // 20 * 100ms = 2 seconds (increased for reliability)
-            while (waitCount < maxWait && !RelayManager.isConnected()) {
+            const maxWait = 15; // 15 * 100ms = 1.5 seconds
+            while (waitCount < maxWait) {
                 await new Promise(resolve => setTimeout(resolve, 100));
                 waitCount++;
+                
                 // Check if connection completed
                 if (RelayManager.isConnected()) {
                     console.log('✅ Relay connection established while waiting');
@@ -2113,27 +2126,51 @@ async function connectToRelay(forceAuth = false) {
                     }
                     return true;
                 }
-            }
-        } else {
-            // Not connecting, wait a shorter time to see if it's just slow
-            let waitCount = 0;
-            const maxWait = 10; // 10 * 100ms = 1 second
-            while (waitCount < maxWait && !RelayManager.isConnected()) {
-                await new Promise(resolve => setTimeout(resolve, 100));
-                waitCount++;
-                if (RelayManager.isConnected()) {
-                    console.log('✅ Relay connection established while waiting');
-                    if (forceAuth && NostrState.userPubkey && !NostrState.pendingNIP42Auth) {
-                        await ensureNIP42AuthIfNeeded(true);
-                    }
-                    return true;
+                
+                // Check if WebSocket is still connecting or open
+                const currentWs = NostrState.nostrRelay._ws || NostrState.nostrRelay.ws || NostrState.nostrRelay.socket;
+                if (!currentWs || (currentWs.readyState !== WebSocket.CONNECTING && currentWs.readyState !== WebSocket.OPEN)) {
+                    // WebSocket is no longer connecting/open, break and reconnect
+                    break;
                 }
+            }
+            
+            // If we waited and still not connected, check one more time
+            if (RelayManager.isConnected()) {
+                console.log('✅ Relay connection established after waiting');
+                if (forceAuth && NostrState.userPubkey && !NostrState.pendingNIP42Auth) {
+                    await ensureNIP42AuthIfNeeded(true);
+                }
+                return true;
             }
         }
         
-        // If still not connected after waiting, then reconnect
-        if (!RelayManager.isConnected()) {
-            console.warn('⚠️ Relay connection exists but WebSocket is not functional, reconnecting...');
+        // Only reconnect if WebSocket is closed or closing
+        if (ws && (ws.readyState === WebSocket.CLOSED || ws.readyState === WebSocket.CLOSING)) {
+            console.warn('⚠️ Relay WebSocket is closed, reconnecting...');
+            NostrState.isNostrConnected = false;
+            syncLegacyVariables();
+        } else if (!ws) {
+            // No WebSocket object, need to reconnect
+            console.warn('⚠️ Relay exists but no WebSocket, reconnecting...');
+            NostrState.isNostrConnected = false;
+            syncLegacyVariables();
+        } else {
+            // WebSocket exists and is in a valid state, but isConnected() returned false
+            // This might be a timing issue, wait a bit more before reconnecting
+            console.log('⏳ Relay WebSocket exists but not fully connected, waiting a bit more...');
+            await new Promise(resolve => setTimeout(resolve, 300));
+            
+            if (RelayManager.isConnected()) {
+                console.log('✅ Relay connection established after additional wait');
+                if (forceAuth && NostrState.userPubkey && !NostrState.pendingNIP42Auth) {
+                    await ensureNIP42AuthIfNeeded(true);
+                }
+                return true;
+            }
+            
+            // Still not connected, reconnect
+            console.warn('⚠️ Relay connection not functional after waiting, reconnecting...');
             NostrState.isNostrConnected = false;
             syncLegacyVariables();
         }
@@ -3115,7 +3152,7 @@ async function fetchUserMetadata(pubkey, cached = true) {
         if (NostrState.connectingRelay) {
             // Wait for connection in progress
             const connected = await RelayManager.waitForConnection(5);
-            if (!connected) {
+            if (!connected || !RelayManager.isConnected()) {
                 console.warn(`⚠️ Relay not connected for metadata fetch: ${pubkey.substring(0, 8)}...`);
                 return null;
             }
@@ -3124,7 +3161,7 @@ async function fetchUserMetadata(pubkey, cached = true) {
             const connected = await connectToRelay();
             if (!connected) {
                 const waited = await RelayManager.waitForConnection(3);
-                if (!waited && !RelayManager.isConnected()) {
+                if (!waited || !RelayManager.isConnected()) {
                     console.warn(`⚠️ Relay not connected for metadata fetch: ${pubkey.substring(0, 8)}...`);
                     return null;
                 }
@@ -3139,11 +3176,25 @@ async function fetchUserMetadata(pubkey, cached = true) {
         return null;
     }
 
-    // Verify WebSocket is open
+    // Verify WebSocket is open (with retry if connecting)
     const ws = currentRelay._ws || currentRelay.ws || currentRelay.socket;
-    if (!ws || ws.readyState !== WebSocket.OPEN) {
-        console.warn(`⚠️ Relay WebSocket not open for metadata fetch: ${pubkey.substring(0, 8)}...`);
+    if (!ws) {
+        console.warn(`⚠️ Relay WebSocket not found for metadata fetch: ${pubkey.substring(0, 8)}...`);
         return null;
+    }
+    
+    if (ws.readyState !== WebSocket.OPEN) {
+        // Wait a bit if connecting
+        if (ws.readyState === WebSocket.CONNECTING) {
+            await new Promise(resolve => setTimeout(resolve, 500));
+            if (ws.readyState !== WebSocket.OPEN) {
+                console.warn(`⚠️ Relay WebSocket not open for metadata fetch: ${pubkey.substring(0, 8)}...`);
+                return null;
+            }
+        } else {
+            console.warn(`⚠️ Relay WebSocket not open for metadata fetch: ${pubkey.substring(0, 8)}...`);
+            return null;
+        }
     }
 
     try {

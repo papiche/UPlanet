@@ -3,7 +3,7 @@
  * This file contains all the enhanced UX features for Nostr Tube
  * Include this after common.js in youtube.html
  * 
- * @version 1.0.1
+ * @version 1.0.2
  * @date 2025-01-09
  */
 
@@ -4825,16 +4825,18 @@ async function fetchVideoTags(videoEventId, timeout = 5000) {
             if (window.NostrState && window.NostrState.connectingRelay) {
                 console.log('[fetchVideoTags] ⏳ Waiting for relay connection...');
                 const waited = await window.RelayManager.waitForConnection(5);
-                if (!waited) {
+                if (!waited || !window.RelayManager.isConnected()) {
                     throw new Error('Relay connection timeout');
                 }
             } else {
                 // Try to connect
                 if (typeof connectToRelay === 'function') {
-                    await connectToRelay();
-                    const waited = await window.RelayManager.waitForConnection(5);
-                    if (!waited) {
-                        throw new Error('Relay connection failed');
+                    const connected = await connectToRelay();
+                    if (!connected) {
+                        const waited = await window.RelayManager.waitForConnection(3);
+                        if (!waited || !window.RelayManager.isConnected()) {
+                            throw new Error('Relay connection failed');
+                        }
                     }
                 } else {
                     throw new Error('connectToRelay function not available');
@@ -4863,10 +4865,18 @@ async function fetchVideoTags(videoEventId, timeout = 5000) {
         throw new Error('Relay not connected or invalid');
     }
     
-    // Verify WebSocket is open
+    // Verify WebSocket is open (double-check)
     const ws = currentRelay._ws || currentRelay.ws || currentRelay.socket;
     if (!ws || ws.readyState !== WebSocket.OPEN) {
-        throw new Error('Relay WebSocket not open');
+        // Wait a bit more if connecting
+        if (ws && ws.readyState === WebSocket.CONNECTING) {
+            await new Promise(resolve => setTimeout(resolve, 500));
+            if (ws.readyState !== WebSocket.OPEN) {
+                throw new Error('Relay WebSocket not open');
+            }
+        } else {
+            throw new Error('Relay WebSocket not open');
+        }
     }
     
     const filter = {

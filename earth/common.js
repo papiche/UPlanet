@@ -7481,33 +7481,33 @@ async function fetchBadgeAwards(pubkey, relays = null, timeout = 10000) {
                     try {
                         sub.unsub();
                     } catch (e) {
-                        console.warn('Error unsubscribing:', e);
+                        // Silently handle unsubscribe errors
                     }
                     try {
                         relay.close();
                     } catch (e) {
-                        console.warn('Error closing relay:', e);
+                        // Silently handle close errors
                     }
                     resolve(badgeAwards);
                 });
 
-                sub.on('error', (error) => {
-                    clearTimeout(timeoutId);
-                    try {
-                        sub.unsub();
-                    } catch (e) {
-                        console.warn('Error unsubscribing:', e);
+                // Some nostr-tools versions don't support 'error' event on subscriptions
+                // Wrap in try-catch to handle gracefully
+                try {
+                    if (typeof sub.on === 'function') {
+                        sub.on('error', (error) => {
+                            clearTimeout(timeoutId);
+                            try { sub.unsub(); } catch (e) {}
+                            try { relay.close(); } catch (e) {}
+                            resolve(badgeAwards); // Resolve with what we have instead of rejecting
+                        });
                     }
-                    try {
-                        relay.close();
-                    } catch (e) {
-                        console.warn('Error closing relay:', e);
-                    }
-                    reject(error);
-                });
+                } catch (e) {
+                    // Error event not supported, ignore
+                }
             } catch (error) {
                 clearTimeout(timeoutId);
-                console.error('Error setting up event listeners:', error);
+                // Silently resolve with empty array on setup errors
                 resolve(badgeAwards);
             }
         });
@@ -7571,17 +7571,22 @@ async function fetchBadgeDefinition(badgeId, issuerPubkey = null, relays = null,
 
             sub.on('eose', () => {
                 clearTimeout(timeoutId);
-                sub.unsub();
-                relay.close();
+                try { sub.unsub(); } catch (e) {}
+                try { relay.close(); } catch (e) {}
                 resolve(badgeDefs);
             });
 
-            sub.on('error', (error) => {
-                clearTimeout(timeoutId);
-                sub.unsub();
-                relay.close();
-                reject(error);
-            });
+            // Wrap error handler in try-catch for compatibility
+            try {
+                sub.on('error', (error) => {
+                    clearTimeout(timeoutId);
+                    try { sub.unsub(); } catch (e) {}
+                    try { relay.close(); } catch (e) {}
+                    resolve(badgeDefs);
+                });
+            } catch (e) {
+                // Error event not supported, ignore
+            }
         });
 
         // Return most recent definition (addressable events can be updated)
@@ -7595,7 +7600,7 @@ async function fetchBadgeDefinition(badgeId, issuerPubkey = null, relays = null,
         return null;
 
     } catch (error) {
-        console.error('❌ Error fetching badge definition:', error);
+        // Silently handle errors, badge definitions are optional
         return null;
     }
 }
@@ -7647,17 +7652,22 @@ async function fetchBadgeDefinitions(badgeIds, issuerPubkey = null, relays = nul
 
             sub.on('eose', () => {
                 clearTimeout(timeoutId);
-                sub.unsub();
-                relay.close();
+                try { sub.unsub(); } catch (e) {}
+                try { relay.close(); } catch (e) {}
                 resolve(badgeDefs);
             });
 
-            sub.on('error', (error) => {
-                clearTimeout(timeoutId);
-                sub.unsub();
-                relay.close();
-                reject(error);
-            });
+            // Wrap error handler in try-catch for compatibility
+            try {
+                sub.on('error', (error) => {
+                    clearTimeout(timeoutId);
+                    try { sub.unsub(); } catch (e) {}
+                    try { relay.close(); } catch (e) {}
+                    resolve(badgeDefs);
+                });
+            } catch (e) {
+                // Error event not supported, ignore
+            }
         });
 
         // Group by badge ID and keep most recent
@@ -7729,17 +7739,22 @@ async function fetchProfileBadges(pubkey, relays = null, timeout = 10000) {
 
             sub.on('eose', () => {
                 clearTimeout(timeoutId);
-                sub.unsub();
-                relay.close();
+                try { sub.unsub(); } catch (e) {}
+                try { relay.close(); } catch (e) {}
                 resolve(badges);
             });
 
-            sub.on('error', (error) => {
-                clearTimeout(timeoutId);
-                sub.unsub();
-                relay.close();
-                reject(error);
-            });
+            // Wrap error handler in try-catch for compatibility
+            try {
+                sub.on('error', (error) => {
+                    clearTimeout(timeoutId);
+                    try { sub.unsub(); } catch (e) {}
+                    try { relay.close(); } catch (e) {}
+                    resolve(badges);
+                });
+            } catch (e) {
+                // Error event not supported, ignore
+            }
         });
 
         // Return most recent profile badges event

@@ -1706,11 +1706,33 @@
             document.getElementById('delete-type').value = type;
             document.getElementById('delete-id').value = id;
             
-            const typeLabel = type === 'calendar' ? 'ce calendrier' : 'cet événement';
-            document.getElementById('delete-message').innerHTML = `
-                Êtes-vous sûr de vouloir supprimer ${typeLabel} ?<br>
-                <strong class="text-warning">${name}</strong>
-            `;
+            let message = '';
+            if (type === 'calendar') {
+                // Find the calendar to get event count
+                const calendar = userCalendars.find(c => c.id === id);
+                const dTag = calendar ? getTagValue(calendar, 'd') : null;
+                const eventCount = dTag ? (calendarEvents[dTag] || []).length : 0;
+                
+                message = `
+                    <div class="alert alert-warning mb-3">
+                        <i class="bi bi-exclamation-triangle"></i> 
+                        <strong>Suppression en cascade</strong>
+                    </div>
+                    Êtes-vous sûr de vouloir supprimer ce calendrier ?<br>
+                    <strong class="text-warning">${escapeHtml(name)}</strong><br><br>
+                    <span class="text-danger">
+                        <i class="bi bi-calendar-x"></i> 
+                        <strong>${eventCount} événements</strong> seront également supprimés.
+                    </span>
+                `;
+            } else {
+                message = `
+                    Êtes-vous sûr de vouloir supprimer cet événement ?<br>
+                    <strong class="text-warning">${escapeHtml(name)}</strong>
+                `;
+            }
+            
+            document.getElementById('delete-message').innerHTML = message;
             
             const modal = new bootstrap.Modal(document.getElementById('deleteModal'));
             modal.show();
@@ -1721,29 +1743,70 @@
             const id = document.getElementById('delete-id').value;
             
             try {
-                // Create deletion event (Kind 5)
-                const deleteEvent = {
-                    kind: 5,
-                    created_at: Math.floor(Date.now() / 1000),
-                    tags: [
-                        ['e', id]
-                    ],
-                    content: 'Deleted by user from calendars.html'
-                };
-                
-                // Sign and publish
-                const signedEvent = await window.nostr.signEvent(deleteEvent);
-                
                 await ensureRelayConnection();
                 const relay = window.nostrRelay;
                 
-                if (relay && relay.publish) {
-                    await relay.publish(signedEvent);
-                } else if (relay._originalRelay && relay._originalRelay.publish) {
-                    await relay._originalRelay.publish(signedEvent);
+                // Helper to publish deletion event
+                async function publishDeleteEvent(eventTags, reason) {
+                    const deleteEvent = {
+                        kind: 5,
+                        created_at: Math.floor(Date.now() / 1000),
+                        tags: eventTags,
+                        content: reason
+                    };
+                    const signedEvent = await window.nostr.signEvent(deleteEvent);
+                    if (relay && relay.publish) {
+                        await relay.publish(signedEvent);
+                    } else if (relay._originalRelay && relay._originalRelay.publish) {
+                        await relay._originalRelay.publish(signedEvent);
+                    }
+                    return signedEvent.id;
                 }
                 
-                showNotification({ type: 'success', title: 'Succès', message: 'Élément supprimé !' });
+                if (type === 'calendar') {
+                    // For calendar deletion, we need to also delete all attached events (Kind 31922)
+                    const calendar = userCalendars.find(c => c.id === id);
+                    if (!calendar) {
+                        throw new Error('Calendar not found');
+                    }
+                    
+                    const dTag = getTagValue(calendar, 'd');
+                    const events = calendarEvents[dTag] || [];
+                    
+                    console.log(`[Calendars] 🗑️ Deleting calendar ${dTag} with ${events.length} events...`);
+                    
+                    // 1. Delete all attached events first
+                    const deleteTags = [];
+                    for (const event of events) {
+                        deleteTags.push(['e', event.id]);
+                    }
+                    
+                    if (deleteTags.length > 0) {
+                        // NIP-09 allows multiple 'e' tags in a single Kind 5 event
+                        await publishDeleteEvent(deleteTags, `Cascade delete: removing ${events.length} events from calendar ${dTag}`);
+                        console.log(`[Calendars] ✅ Deleted ${events.length} attached events`);
+                    }
+                    
+                    // 2. Delete the calendar itself
+                    // For replaceable events (Kind 31924), we can use 'a' tag or 'e' tag
+                    const calendarTags = [
+                        ['e', id],
+                        ['a', `31924:${localUserPubkey}:${dTag}`]
+                    ];
+                    await publishDeleteEvent(calendarTags, `Deleted calendar: ${dTag}`);
+                    console.log(`[Calendars] ✅ Deleted calendar ${dTag}`);
+                    
+                    showNotification({ 
+                        type: 'success', 
+                        title: 'Calendrier supprimé', 
+                        message: `Le calendrier et ses ${events.length} événements ont été supprimés.` 
+                    });
+                    
+                } else {
+                    // Simple event deletion
+                    await publishDeleteEvent([['e', id]], 'Deleted by user from calendars.html');
+                    showNotification({ type: 'success', title: 'Succès', message: 'Événement supprimé !' });
+                }
                 
                 // Close modal and refresh
                 bootstrap.Modal.getInstance(document.getElementById('deleteModal')).hide();

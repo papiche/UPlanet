@@ -1131,18 +1131,18 @@
                     <div class="card-body">
                         <div class="d-flex justify-content-between align-items-center mb-3">
                             <div>
-                                <h5 class="text-success mb-1"><i class="bi bi-flower2"></i> <span id="gallery-title">Plantes Identifiées</span></h5>
-                                <p class="text-muted mb-0"><span id="gallery-count">0</span> plante(s) répertoriée(s)</p>
+                                <h5 class="text-success mb-1"><i class="bi bi-grid-3x3-gap"></i> <span id="gallery-title">Éléments Inventoriés</span></h5>
+                                <p class="text-muted mb-0"><span id="gallery-count">0</span> élément(s) répertorié(s)</p>
                 </div>
                             <button class="btn btn-primary" onclick="scrollToSection('share')" id="gallery-add-btn">
-                                <i class="bi bi-plus-circle"></i> Ajouter une Plante
+                                <i class="bi bi-plus-circle"></i> Ajouter un élément
                             </button>
                 </div>
                         <div id="gallery-grid" class="gallery-grid">
                             <div id="gallery-empty" class="text-center py-5" style="grid-column: 1 / -1; display: none;">
-                                <div class="fs-1 mb-3"><i class="bi bi-flower1"></i></div>
-                                <p class="lead">Aucune plante répertoriée pour le moment.</p>
-                                <p class="text-muted">Commencez par ajouter votre première plante !</p>
+                                <div class="fs-1 mb-3"><i class="bi bi-grid-3x3-gap"></i></div>
+                                <p class="lead">Aucun élément répertorié pour le moment.</p>
+                                <p class="text-muted">Commencez par ajouter votre premier élément à l'inventaire !</p>
             </div>
                     </div>
                             </div>
@@ -2038,7 +2038,7 @@
         
         // Load public gallery (works without connection)
         async function loadPublicGallery() {
-            console.log('🌿 Loading public gallery (observations BRO + plantnet)...');
+            console.log('🌿 Loading public gallery (observations BRO + plantnet + inventory)...');
             
             try {
                 // Ensure relay connection (but don't require user to be logged in)
@@ -2055,13 +2055,25 @@
                     return;
                 }
                 
-                // Fetch ALL public observations (BRO + plantnet) from anyone
-                const publicObservations = await fetchPlantObservations(currentRelay);
+                // Fetch ALL public observations (plantnet + inventory) from anyone
+                const plantObservations = await fetchPlantObservations(currentRelay);
+                await new Promise(r => setTimeout(r, 100)); // Small delay between requests
+                const inventoryObservations = await fetchInventoryObservations(currentRelay);
                 
-                console.log(`✅ Found ${publicObservations.length} public plant observations`);
+                // Combine and deduplicate by event ID
+                const allObservations = [...plantObservations];
+                const seenIds = new Set(plantObservations.map(e => e.id));
+                inventoryObservations.forEach(obs => {
+                    if (!seenIds.has(obs.id)) {
+                        allObservations.push(obs);
+                        seenIds.add(obs.id);
+                    }
+                });
+                
+                console.log(`✅ Found ${allObservations.length} public observations (${plantObservations.length} plants, ${inventoryObservations.length} inventory)`);
                 
                 // Extract images with metadata
-                const observationImages = extractImagesWithMetadata(publicObservations);
+                const observationImages = extractImagesWithMetadata(allObservations);
                 
                 // Sort by date (most recent first)
                 observationImages.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
@@ -2082,7 +2094,63 @@
             }
         }
         
-        // Fetch user's observations (kind 1 with tags BRO and plantnet)
+        // Fetch inventory observations (kind 1 with tags BRO and inventory)
+        async function fetchInventoryObservations(relay) {
+            if (!relay) {
+                console.warn('⚠️ No relay provided to fetchInventoryObservations');
+                return [];
+            }
+            
+            const filter = {
+                kinds: [1],
+                '#t': ['BRO', 'inventory'],
+                limit: 500,
+                since: Math.floor(Date.now() / 1000) - (90 * 24 * 60 * 60) // Last 90 days
+            };
+            
+            // Use SubscriptionQueue if available
+            if (window.SubscriptionQueue) {
+                const allEvents = await window.SubscriptionQueue.createSubscription(relay, [filter], { timeout: 8000 });
+                // Filter events that have both BRO and inventory tags with geo or image
+                return allEvents.filter(event => {
+                    const tags = event.tags.map(t => t[1]).filter(Boolean);
+                    const hasGeo = event.tags.find(t => t[0] === 'g');
+                    const hasImage = event.tags.find(t => t[0] === 'imeta' || t[0] === 'image') || 
+                                    event.content.match(/https?:\/\/[^\s]+\.(jpg|jpeg|png|gif|webp)/i);
+                    return tags.includes('BRO') && tags.includes('inventory') && (hasGeo || hasImage);
+                });
+            }
+            
+            // Fallback to direct subscription
+            return new Promise((resolve) => {
+                const observations = [];
+                const sub = relay.sub([filter]);
+                const timeout = setTimeout(() => {
+                    try { sub.unsub(); } catch(e) {}
+                    resolve(observations);
+                }, 8000);
+                
+                sub.on('event', (event) => {
+                    const tags = event.tags.map(t => t[1]).filter(Boolean);
+                    if (tags.includes('BRO') && tags.includes('inventory')) {
+                        const hasGeo = event.tags.find(t => t[0] === 'g');
+                        const hasImage = event.tags.find(t => t[0] === 'imeta' || t[0] === 'image') || 
+                                        event.content.match(/https?:\/\/[^\s]+\.(jpg|jpeg|png|gif|webp)/i);
+                        if (hasGeo || hasImage) {
+                            observations.push(event);
+                        }
+                    }
+                });
+                
+                sub.on('eose', () => {
+                    clearTimeout(timeout);
+                    try { sub.unsub(); } catch(e) {}
+                    resolve(observations);
+                });
+            });
+        }
+        
+        // Fetch user's observations (kind 1 with tags BRO and plantnet OR inventory)
         async function fetchUserObservations(pubkey) {
             const currentRelay = getNostrRelay();
             if (!currentRelay) {
@@ -2090,36 +2158,80 @@
                 return [];
             }
             
-            return new Promise((resolve, reject) => {
-                const filter = {
-                    kinds: [1],
-                    authors: [pubkey],
-                    '#t': ['BRO', 'plantnet'],
-                    limit: 200,
-                    since: Math.floor(Date.now() / 1000) - (365 * 24 * 60 * 60) // Last year
-                };
+            // Fetch plantnet observations
+            const plantnetFilter = {
+                kinds: [1],
+                authors: [pubkey],
+                '#t': ['BRO', 'plantnet'],
+                limit: 200,
+                since: Math.floor(Date.now() / 1000) - (365 * 24 * 60 * 60) // Last year
+            };
+            
+            // Fetch inventory observations
+            const inventoryFilter = {
+                kinds: [1],
+                authors: [pubkey],
+                '#t': ['BRO', 'inventory'],
+                limit: 200,
+                since: Math.floor(Date.now() / 1000) - (365 * 24 * 60 * 60) // Last year
+            };
+            
+            const allObservations = [];
+            const seenIds = new Set();
+            
+            // Helper to add observations without duplicates
+            const addObservation = (event, requiredTags) => {
+                if (seenIds.has(event.id)) return;
+                const tags = event.tags.map(t => t[1]).filter(Boolean);
+                if (requiredTags.every(t => tags.includes(t))) {
+                    allObservations.push(event);
+                    seenIds.add(event.id);
+                }
+            };
+            
+            // Use SubscriptionQueue if available
+            if (window.SubscriptionQueue) {
+                const plantnetEvents = await window.SubscriptionQueue.createSubscription(currentRelay, [plantnetFilter], { timeout: 10000 });
+                plantnetEvents.forEach(e => addObservation(e, ['BRO', 'plantnet']));
                 
-                const observations = [];
-                const sub = currentRelay.sub([filter]);
-                const timeout = setTimeout(() => {
-                        sub.unsub();
-                    resolve(observations);
-                    }, 10000);
-
-                    sub.on('event', (event) => {
-                    // Verify event has both BRO and plantnet tags
-                    const tags = event.tags.map(t => t[1]).filter(Boolean);
-                    if (tags.includes('BRO') && tags.includes('plantnet')) {
-                        observations.push(event);
-                    }
-                    });
-
-                    sub.on('eose', () => {
-                        clearTimeout(timeout);
-                        sub.unsub();
-                    resolve(observations);
-                    });
+                await new Promise(r => setTimeout(r, 100)); // Small delay
+                
+                const inventoryEvents = await window.SubscriptionQueue.createSubscription(currentRelay, [inventoryFilter], { timeout: 10000 });
+                inventoryEvents.forEach(e => addObservation(e, ['BRO', 'inventory']));
+                
+                return allObservations;
+            }
+            
+            // Fallback: sequential subscriptions
+            return new Promise((resolve) => {
+                const sub1 = currentRelay.sub([plantnetFilter]);
+                const timeout1 = setTimeout(() => {
+                    try { sub1.unsub(); } catch(e) {}
+                    fetchInventoryObs();
+                }, 10000);
+                
+                sub1.on('event', (event) => addObservation(event, ['BRO', 'plantnet']));
+                sub1.on('eose', () => {
+                    clearTimeout(timeout1);
+                    try { sub1.unsub(); } catch(e) {}
+                    fetchInventoryObs();
                 });
+                
+                function fetchInventoryObs() {
+                    const sub2 = currentRelay.sub([inventoryFilter]);
+                    const timeout2 = setTimeout(() => {
+                        try { sub2.unsub(); } catch(e) {}
+                        resolve(allObservations);
+                    }, 10000);
+                    
+                    sub2.on('event', (event) => addObservation(event, ['BRO', 'inventory']));
+                    sub2.on('eose', () => {
+                        clearTimeout(timeout2);
+                        try { sub2.unsub(); } catch(e) {}
+                        resolve(allObservations);
+                    });
+                }
+            });
         }
         
         function updateStatsDisplay() {
@@ -2596,7 +2708,7 @@
                 
                 // Update gallery title
                 if (galleryTitle) {
-                    galleryTitle.textContent = 'Mes Contributions';
+                    galleryTitle.textContent = 'Mes Contributions à l\'Inventaire';
                 }
                 if (galleryAddBtn) {
                     galleryAddBtn.disabled = false;
@@ -2624,9 +2736,9 @@
                     sendMessageHint.style.display = 'block';
                 }
                 
-                // Update gallery title to "Plantes Identifiées" (public)
+                // Update gallery title to "Éléments Inventoriés" (public)
                 if (galleryTitle) {
-                    galleryTitle.textContent = 'Plantes Identifiées';
+                    galleryTitle.textContent = 'Éléments Inventoriés';
                 }
                 if (galleryAddBtn) {
                     galleryAddBtn.disabled = true;

@@ -1,0 +1,1814 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>📅 Mes Calendriers - UPlanet</title>
+    
+    <!-- Bootstrap 5 -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+    
+    <style>
+        :root {
+            --bg-primary: #0f172a;
+            --bg-secondary: #1e293b;
+            --bg-card: #1e293b;
+            --text-primary: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --accent-green: #4ade80;
+            --accent-blue: #3b82f6;
+            --accent-purple: #a78bfa;
+            --accent-orange: #fb923c;
+            --accent-red: #f87171;
+        }
+        
+        body {
+            background: linear-gradient(135deg, var(--bg-primary) 0%, #1a1a2e 50%, var(--bg-primary) 100%);
+            color: var(--text-primary);
+            min-height: 100vh;
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+        }
+        
+        .navbar {
+            background: rgba(15, 23, 42, 0.95) !important;
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid rgba(74, 222, 128, 0.2);
+        }
+        
+        .navbar-brand {
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--accent-green), var(--accent-blue));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .card {
+            background: var(--bg-card);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+        }
+        
+        .card-header {
+            background: linear-gradient(135deg, rgba(59, 130, 246, 0.2), rgba(99, 102, 241, 0.1));
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .calendar-item {
+            background: rgba(30, 41, 59, 0.8);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            transition: all 0.3s ease;
+        }
+        
+        .calendar-item:hover {
+            border-color: var(--accent-blue);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(59, 130, 246, 0.2);
+        }
+        
+        .event-item {
+            background: rgba(15, 23, 42, 0.6);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            transition: all 0.2s ease;
+        }
+        
+        .event-item:hover {
+            background: rgba(59, 130, 246, 0.1);
+            border-color: rgba(59, 130, 246, 0.3);
+        }
+        
+        .btn-action {
+            padding: 0.25rem 0.5rem;
+            font-size: 0.875rem;
+            border-radius: 6px;
+        }
+        
+        .style-badge {
+            font-size: 0.75rem;
+            padding: 0.25rem 0.5rem;
+            border-radius: 20px;
+        }
+        
+        .style-foret { background: linear-gradient(135deg, #22c55e, #16a34a); }
+        .style-umap { background: linear-gradient(135deg, #3b82f6, #2563eb); }
+        .style-variety { background: linear-gradient(135deg, #10b981, #059669); }
+        .style-autonomy { background: linear-gradient(135deg, #f59e0b, #d97706); }
+        .style-conservation { background: linear-gradient(135deg, #ef4444, #dc2626); }
+        .style-continuous { background: linear-gradient(135deg, #8b5cf6, #7c3aed); }
+        
+        .empty-state {
+            text-align: center;
+            padding: 4rem 2rem;
+            color: var(--text-secondary);
+        }
+        
+        .empty-state i {
+            font-size: 4rem;
+            margin-bottom: 1rem;
+            opacity: 0.5;
+        }
+        
+        .login-required {
+            background: linear-gradient(135deg, rgba(251, 146, 60, 0.1), rgba(249, 115, 22, 0.05));
+            border: 2px dashed rgba(251, 146, 60, 0.5);
+            border-radius: 16px;
+            padding: 3rem;
+            text-align: center;
+        }
+        
+        .stats-badge {
+            background: rgba(59, 130, 246, 0.2);
+            border: 1px solid rgba(59, 130, 246, 0.3);
+            border-radius: 8px;
+            padding: 0.5rem 1rem;
+            font-size: 0.875rem;
+        }
+        
+        .modal-content {
+            background: var(--bg-secondary);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .modal-header {
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .modal-footer {
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .form-control, .form-select {
+            background: rgba(15, 23, 42, 0.8);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: var(--text-primary);
+        }
+        
+        .form-control:focus, .form-select:focus {
+            background: rgba(15, 23, 42, 0.9);
+            border-color: var(--accent-blue);
+            color: var(--text-primary);
+            box-shadow: 0 0 0 0.25rem rgba(59, 130, 246, 0.25);
+        }
+        
+        .loading-spinner {
+            display: inline-block;
+            width: 1rem;
+            height: 1rem;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: var(--accent-blue);
+            animation: spin 1s ease-in-out infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .event-date {
+            font-family: 'Courier New', monospace;
+            background: rgba(59, 130, 246, 0.2);
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.8rem;
+        }
+        
+        .event-type-badge {
+            font-size: 0.7rem;
+            padding: 0.15rem 0.4rem;
+            border-radius: 4px;
+            text-transform: uppercase;
+        }
+        
+        .type-semis { background: rgba(74, 222, 128, 0.3); color: #4ade80; }
+        .type-recolte { background: rgba(251, 191, 36, 0.3); color: #fbbf24; }
+        .type-entretien { background: rgba(59, 130, 246, 0.3); color: #3b82f6; }
+        .type-lune { background: rgba(167, 139, 250, 0.3); color: #a78bfa; }
+        .type-meteo { background: rgba(96, 165, 250, 0.3); color: #60a5fa; }
+        
+        .accordion-button {
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+        }
+        
+        .accordion-button:not(.collapsed) {
+            background: rgba(59, 130, 246, 0.2);
+            color: var(--text-primary);
+        }
+        
+        .accordion-button:focus {
+            box-shadow: none;
+            border-color: var(--accent-blue);
+        }
+        
+        .accordion-body {
+            background: var(--bg-primary);
+        }
+        
+        /* Grid View */
+        .events-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 1rem;
+        }
+        
+        .event-card {
+            background: linear-gradient(135deg, rgba(30, 41, 59, 0.9), rgba(15, 23, 42, 0.8));
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 1rem;
+            transition: all 0.3s ease;
+        }
+        
+        .event-card:hover {
+            border-color: var(--accent-blue);
+            transform: translateY(-3px);
+            box-shadow: 0 10px 30px rgba(59, 130, 246, 0.2);
+        }
+        
+        .event-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 0.75rem;
+        }
+        
+        .event-card-title {
+            font-weight: 600;
+            font-size: 1rem;
+            color: var(--text-primary);
+            line-height: 1.3;
+        }
+        
+        .event-card-date {
+            background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+            padding: 0.5rem 0.75rem;
+            border-radius: 8px;
+            text-align: center;
+            min-width: 60px;
+        }
+        
+        .event-card-date .day {
+            font-size: 1.5rem;
+            font-weight: 700;
+            line-height: 1;
+        }
+        
+        .event-card-date .month {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            opacity: 0.9;
+        }
+        
+        .event-card-description {
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            line-height: 1.5;
+            max-height: 60px;
+            overflow: hidden;
+            margin-bottom: 0.75rem;
+        }
+        
+        .event-card-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-top: 0.75rem;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        /* List View Enhanced */
+        .event-list-item {
+            background: rgba(30, 41, 59, 0.6);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 10px;
+            margin-bottom: 0.5rem;
+            overflow: hidden;
+            transition: all 0.2s ease;
+        }
+        
+        .event-list-item:hover {
+            background: rgba(59, 130, 246, 0.1);
+            border-color: rgba(59, 130, 246, 0.3);
+        }
+        
+        .event-list-header {
+            display: flex;
+            align-items: center;
+            padding: 0.75rem 1rem;
+            cursor: pointer;
+            gap: 1rem;
+        }
+        
+        .event-list-date-badge {
+            background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+            padding: 0.4rem 0.6rem;
+            border-radius: 8px;
+            text-align: center;
+            min-width: 50px;
+            flex-shrink: 0;
+        }
+        
+        .event-list-date-badge .day {
+            font-size: 1.1rem;
+            font-weight: 700;
+            line-height: 1;
+        }
+        
+        .event-list-date-badge .weekday {
+            font-size: 0.65rem;
+            text-transform: uppercase;
+            opacity: 0.8;
+        }
+        
+        .event-list-content {
+            flex: 1;
+            min-width: 0;
+        }
+        
+        .event-list-title {
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 0.25rem;
+        }
+        
+        .event-list-meta {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+        }
+        
+        .event-list-actions {
+            display: flex;
+            gap: 0.5rem;
+            flex-shrink: 0;
+        }
+        
+        .event-list-details {
+            background: rgba(15, 23, 42, 0.5);
+            padding: 1rem;
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+            display: none;
+        }
+        
+        .event-list-details.show {
+            display: block;
+        }
+        
+        .event-list-description {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            line-height: 1.6;
+            white-space: pre-wrap;
+        }
+        
+        /* Month Separator */
+        .month-separator {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin: 1.5rem 0 1rem 0;
+        }
+        
+        .month-separator::before,
+        .month-separator::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: linear-gradient(to right, transparent, rgba(59, 130, 246, 0.3), transparent);
+        }
+        
+        .month-separator-label {
+            background: linear-gradient(135deg, rgba(59, 130, 246, 0.2), rgba(99, 102, 241, 0.1));
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--accent-blue);
+            text-transform: capitalize;
+        }
+        
+        /* Calendar Card Enhanced */
+        .calendar-card {
+            background: linear-gradient(135deg, rgba(30, 41, 59, 0.95), rgba(15, 23, 42, 0.9));
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+            overflow: hidden;
+            margin-bottom: 1.5rem;
+        }
+        
+        .calendar-card-header {
+            background: linear-gradient(135deg, rgba(59, 130, 246, 0.15), rgba(99, 102, 241, 0.1));
+            padding: 1.25rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .calendar-card-body {
+            padding: 1rem;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+        
+        .calendar-card-body::-webkit-scrollbar {
+            width: 6px;
+        }
+        
+        .calendar-card-body::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05);
+        }
+        
+        .calendar-card-body::-webkit-scrollbar-thumb {
+            background: rgba(59, 130, 246, 0.3);
+            border-radius: 3px;
+        }
+        
+        .no-events-msg {
+            text-align: center;
+            padding: 2rem;
+            color: var(--text-secondary);
+        }
+        
+        .toggle-icon {
+            transition: transform 0.2s ease;
+        }
+        
+        .toggle-icon.rotated {
+            transform: rotate(180deg);
+        }
+        
+        /* Calendar Selector Panel */
+        .calendar-selector-panel {
+            background: linear-gradient(135deg, rgba(30, 41, 59, 0.95), rgba(15, 23, 42, 0.9));
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 1rem;
+            margin-bottom: 1.5rem;
+        }
+        
+        .calendar-selector-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+            padding-bottom: 0.75rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .calendar-checkbox-item {
+            display: flex;
+            align-items: center;
+            padding: 0.5rem 0.75rem;
+            margin-bottom: 0.25rem;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        
+        .calendar-checkbox-item:hover {
+            background: rgba(59, 130, 246, 0.1);
+        }
+        
+        .calendar-checkbox-item input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            margin-right: 0.75rem;
+            accent-color: var(--accent-blue);
+            cursor: pointer;
+        }
+        
+        .calendar-color-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 0.5rem;
+            flex-shrink: 0;
+        }
+        
+        .calendar-checkbox-label {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .calendar-checkbox-name {
+            font-weight: 500;
+            color: var(--text-primary);
+        }
+        
+        .calendar-checkbox-count {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            background: rgba(255, 255, 255, 0.1);
+            padding: 0.1rem 0.4rem;
+            border-radius: 10px;
+        }
+        
+        /* Unified Events View */
+        .unified-events-container {
+            background: linear-gradient(135deg, rgba(30, 41, 59, 0.95), rgba(15, 23, 42, 0.9));
+            border: 2px solid rgba(59, 130, 246, 0.2);
+            border-radius: 16px;
+            padding: 1.5rem;
+        }
+        
+        .unified-events-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+            padding-bottom: 0.75rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .event-calendar-indicator {
+            width: 4px;
+            height: 100%;
+            min-height: 40px;
+            border-radius: 2px;
+            margin-right: 0.75rem;
+            flex-shrink: 0;
+        }
+        
+        .event-list-item-with-indicator {
+            display: flex;
+            align-items: stretch;
+        }
+        
+        /* Calendar Colors */
+        .cal-color-0 { background: #3b82f6; }
+        .cal-color-1 { background: #22c55e; }
+        .cal-color-2 { background: #f59e0b; }
+        .cal-color-3 { background: #ef4444; }
+        .cal-color-4 { background: #8b5cf6; }
+        .cal-color-5 { background: #ec4899; }
+        .cal-color-6 { background: #14b8a6; }
+        .cal-color-7 { background: #f97316; }
+        
+        .view-mode-tabs {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+        }
+        
+        .view-mode-tab {
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            background: transparent;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        
+        .view-mode-tab:hover {
+            background: rgba(59, 130, 246, 0.1);
+            border-color: var(--accent-blue);
+        }
+        
+        .view-mode-tab.active {
+            background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+            border-color: transparent;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-dark fixed-top">
+        <div class="container">
+            <a class="navbar-brand" href="plantnet.html">
+                <i class="bi bi-calendar3"></i> UPlanet Calendriers
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="plantnet.html"><i class="bi bi-leaf"></i> Inventaire</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link active" href="calendars.html"><i class="bi bi-calendar3"></i> Calendriers</a>
+                    </li>
+                </ul>
+                <div class="d-flex align-items-center gap-3">
+                    <div id="user-info" class="d-none">
+                        <span class="badge bg-success" id="user-badge">
+                            <i class="bi bi-person-check"></i> <span id="user-name">Connecté</span>
+                        </span>
+                    </div>
+                    <button class="btn btn-outline-success" id="btn-connect" onclick="connectNostrUser()">
+                        <i class="bi bi-wallet2"></i> Connexion
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="container" style="padding-top: 100px; padding-bottom: 50px;">
+        
+        <!-- Header -->
+        <div class="text-center mb-5">
+            <h1 class="display-4 fw-bold mb-3" style="background: linear-gradient(135deg, #3b82f6, #a78bfa); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">
+                📅 Gestion des Calendriers
+            </h1>
+            <p class="lead text-secondary">
+                Consultez, modifiez et supprimez vos calendriers de jardinage et leurs événements
+            </p>
+        </div>
+        
+        <!-- Login Required State -->
+        <div id="login-required" class="login-required mb-4">
+            <i class="bi bi-lock" style="font-size: 3rem; color: var(--accent-orange);"></i>
+            <h3 class="mt-3">Connexion requise</h3>
+            <p class="text-secondary mb-4">
+                Connectez-vous avec votre extension NOSTR pour accéder à vos calendriers.
+            </p>
+            <button class="btn btn-lg btn-warning" onclick="connectNostrUser()">
+                <i class="bi bi-wallet2"></i> Se connecter avec NOSTR
+            </button>
+        </div>
+        
+        <!-- Main Dashboard (hidden until login) -->
+        <div id="dashboard" class="d-none">
+            
+            <!-- Stats Bar -->
+            <div class="row g-3 mb-4">
+                <div class="col-md-4">
+                    <div class="stats-badge d-flex align-items-center gap-2">
+                        <i class="bi bi-calendar3" style="color: var(--accent-blue);"></i>
+                        <span><strong id="stat-calendars">0</strong> calendriers</span>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="stats-badge d-flex align-items-center gap-2">
+                        <i class="bi bi-calendar-event" style="color: var(--accent-green);"></i>
+                        <span><strong id="stat-events">0</strong> événements</span>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="stats-badge d-flex align-items-center gap-2">
+                        <i class="bi bi-calendar-check" style="color: var(--accent-purple);"></i>
+                        <span><strong id="stat-upcoming">0</strong> à venir (7j)</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Actions Bar -->
+            <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-2">
+                <div class="d-flex gap-2">
+                    <button class="btn btn-primary" onclick="refreshCalendars()">
+                        <i class="bi bi-arrow-clockwise"></i> <span class="d-none d-sm-inline">Actualiser</span>
+                    </button>
+                    <a href="plantnet.html#section-autonomy" class="btn btn-success">
+                        <i class="bi bi-plus-circle"></i> <span class="d-none d-sm-inline">Créer</span>
+                    </a>
+                </div>
+                <div class="d-flex gap-2 align-items-center">
+                    <!-- View Toggle -->
+                    <div class="btn-group" role="group" aria-label="Vue">
+                        <button type="button" class="btn btn-outline-secondary active" id="btn-view-list" onclick="setView('list')">
+                            <i class="bi bi-list-ul"></i>
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary" id="btn-view-grid" onclick="setView('grid')">
+                            <i class="bi bi-grid-3x3-gap"></i>
+                        </button>
+                    </div>
+                    <select class="form-select" id="filter-style" style="width: auto;" onchange="filterCalendars()">
+                        <option value="">Tous les styles</option>
+                        <option value="foret">🌳 Forêt Jardin</option>
+                        <option value="umap">🏙️ UMAP Optimisé</option>
+                        <option value="variety">🌿 Variété Nutritionnelle</option>
+                        <option value="autonomy">🏡 Autonomie Complète</option>
+                        <option value="conservation">🥫 Conservation</option>
+                        <option value="continuous">🔄 Production Continue</option>
+                    </select>
+                </div>
+            </div>
+            
+            <!-- View Mode Tabs -->
+            <div class="view-mode-tabs">
+                <button class="view-mode-tab active" id="tab-separate" onclick="setViewMode('separate')">
+                    <i class="bi bi-collection"></i> Calendriers séparés
+                </button>
+                <button class="view-mode-tab" id="tab-unified" onclick="setViewMode('unified')">
+                    <i class="bi bi-calendar3-week"></i> Vue unifiée
+                </button>
+            </div>
+            
+            <!-- Calendar Selector Panel (for unified view) -->
+            <div id="calendar-selector-panel" class="calendar-selector-panel d-none">
+                <div class="calendar-selector-header">
+                    <div>
+                        <h6 class="mb-0"><i class="bi bi-check2-square"></i> Calendriers à afficher</h6>
+                        <small class="text-secondary">Cochez les calendriers à superposer</small>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button class="btn btn-sm btn-outline-primary" onclick="selectAllCalendars()">
+                            <i class="bi bi-check-all"></i> Tous
+                        </button>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="deselectAllCalendars()">
+                            <i class="bi bi-x-lg"></i> Aucun
+                        </button>
+                    </div>
+                </div>
+                <div id="calendar-checkboxes">
+                    <!-- Populated by JS -->
+                </div>
+            </div>
+            
+            <!-- Calendars List -->
+            <div id="calendars-container">
+                <div class="text-center py-5">
+                    <div class="loading-spinner"></div>
+                    <p class="mt-3 text-secondary">Chargement des calendriers...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Edit Event Modal -->
+    <div class="modal fade" id="editEventModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="bi bi-pencil"></i> Modifier l'événement</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" id="edit-event-id">
+                    <input type="hidden" id="edit-event-calendar-id">
+                    <div class="mb-3">
+                        <label class="form-label">Titre</label>
+                        <input type="text" class="form-control" id="edit-event-title">
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Date de début</label>
+                            <input type="datetime-local" class="form-control" id="edit-event-start">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Date de fin</label>
+                            <input type="datetime-local" class="form-control" id="edit-event-end">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Description</label>
+                        <textarea class="form-control" id="edit-event-description" rows="4"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+                    <button type="button" class="btn btn-primary" onclick="saveEventChanges()">
+                        <i class="bi bi-check"></i> Enregistrer
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Delete Confirmation Modal -->
+    <div class="modal fade" id="deleteModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-danger">
+                    <h5 class="modal-title text-white"><i class="bi bi-exclamation-triangle"></i> Confirmer la suppression</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" id="delete-type">
+                    <input type="hidden" id="delete-id">
+                    <p id="delete-message">Êtes-vous sûr de vouloir supprimer cet élément ?</p>
+                    <p class="text-danger small">
+                        <i class="bi bi-info-circle"></i> Cette action est irréversible.
+                    </p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+                    <button type="button" class="btn btn-danger" onclick="confirmDelete()">
+                        <i class="bi bi-trash"></i> Supprimer
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="bootstrap.bundle.min.js"></script>
+    <script src="nostr.bundle.js"></script>
+    <script src="common.js"></script>
+    <script src="lunar-calendar.js"></script>
+    
+    <script>
+        // ========================================
+        // GLOBAL STATE
+        // ========================================
+        let localUserPubkey = null;
+        let userCalendars = [];
+        let calendarEvents = {};
+        let currentFilter = '';
+        let currentView = 'list'; // 'list' or 'grid'
+        let selectedCalendars = new Set(); // IDs of selected calendars
+        let calendarColors = {}; // Color for each calendar
+        
+        // ========================================
+        // INITIALIZATION
+        // ========================================
+        document.addEventListener('DOMContentLoaded', async () => {
+            console.log('[Calendars] 🚀 Page initialized');
+            
+            // Check if user is already connected
+            if (window.nostr) {
+                try {
+                    const pubkey = await window.nostr.getPublicKey();
+                    if (pubkey) {
+                        localUserPubkey = pubkey;
+                        await onUserConnected(pubkey);
+                    }
+                } catch (e) {
+                    console.log('[Calendars] User not yet connected');
+                }
+            }
+        });
+        
+        // ========================================
+        // NOSTR CONNECTION
+        // ========================================
+        async function connectNostrUser() {
+            console.log('[Calendars] 🔐 Connecting to NOSTR...');
+            
+            if (!window.nostr) {
+                showNotification({
+                    type: 'error',
+                    title: 'Extension NOSTR requise',
+                    message: 'Installez une extension comme Alby ou nos2x pour vous connecter.'
+                });
+                return;
+            }
+            
+            try {
+                const pubkey = await window.nostr.getPublicKey();
+                localUserPubkey = pubkey;
+                
+                // Connect to relay
+                await ensureRelayConnection();
+                
+                await onUserConnected(pubkey);
+                
+            } catch (error) {
+                console.error('[Calendars] Connection error:', error);
+                showNotification({
+                    type: 'error',
+                    title: 'Erreur de connexion',
+                    message: error.message || 'Impossible de se connecter à NOSTR'
+                });
+            }
+        }
+        
+        async function onUserConnected(pubkey) {
+            console.log('[Calendars] ✅ User connected:', pubkey.slice(0, 8) + '...');
+            
+            // Update UI
+            document.getElementById('login-required').classList.add('d-none');
+            document.getElementById('dashboard').classList.remove('d-none');
+            document.getElementById('btn-connect').classList.add('d-none');
+            document.getElementById('user-info').classList.remove('d-none');
+            
+            // Fetch user name
+            try {
+                const name = await getUserDisplayName(pubkey);
+                document.getElementById('user-name').textContent = name || pubkey.slice(0, 8) + '...';
+            } catch (e) {
+                document.getElementById('user-name').textContent = pubkey.slice(0, 8) + '...';
+            }
+            
+            // Load calendars
+            await loadUserCalendars();
+        }
+        
+        // ========================================
+        // CALENDAR LOADING
+        // ========================================
+        async function loadUserCalendars() {
+            console.log('[Calendars] 📅 Loading user calendars...');
+            
+            const container = document.getElementById('calendars-container');
+            container.innerHTML = `
+                <div class="text-center py-5">
+                    <div class="loading-spinner"></div>
+                    <p class="mt-3 text-secondary">Chargement des calendriers...</p>
+                </div>
+            `;
+            
+            try {
+                await ensureRelayConnection();
+                const relay = window.nostrRelay;
+                
+                if (!relay) {
+                    throw new Error('Relay non disponible');
+                }
+                
+                // Fetch calendars (Kind 31928)
+                const calendars = await fetchUserNostrCalendars(localUserPubkey);
+                userCalendars = calendars;
+                
+                console.log('[Calendars] 📊 Found', calendars.length, 'calendars');
+                
+                // For each calendar, fetch its events
+                let totalEvents = 0;
+                let upcomingEvents = 0;
+                const now = Math.floor(Date.now() / 1000);
+                const weekFromNow = now + (7 * 24 * 60 * 60);
+                
+                for (const calendar of calendars) {
+                    const calendarDTag = getTagValue(calendar, 'd');
+                    if (calendarDTag) {
+                        const events = await fetchCalendarEvents(localUserPubkey, calendarDTag);
+                        calendarEvents[calendarDTag] = events;
+                        totalEvents += events.length;
+                        
+                        // Count upcoming events
+                        for (const event of events) {
+                            const startTag = getTagValue(event, 'start');
+                            if (startTag) {
+                                const startTime = new Date(startTag).getTime() / 1000;
+                                if (startTime >= now && startTime <= weekFromNow) {
+                                    upcomingEvents++;
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                // Update stats
+                document.getElementById('stat-calendars').textContent = calendars.length;
+                document.getElementById('stat-events').textContent = totalEvents;
+                document.getElementById('stat-upcoming').textContent = upcomingEvents;
+                
+                // Initialize calendar colors and select all by default
+                assignCalendarColors();
+                calendars.forEach(cal => {
+                    const dTag = getTagValue(cal, 'd') || cal.id;
+                    selectedCalendars.add(dTag);
+                });
+                
+                // Render based on current view mode
+                if (viewMode === 'unified') {
+                    renderCalendarCheckboxes();
+                    renderUnifiedView();
+                } else {
+                    renderCalendars(calendars);
+                }
+                
+            } catch (error) {
+                console.error('[Calendars] Error loading calendars:', error);
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <i class="bi bi-exclamation-triangle text-danger"></i>
+                        <h4>Erreur de chargement</h4>
+                        <p>${error.message}</p>
+                        <button class="btn btn-primary mt-3" onclick="loadUserCalendars()">
+                            <i class="bi bi-arrow-clockwise"></i> Réessayer
+                        </button>
+                    </div>
+                `;
+            }
+        }
+        
+        async function fetchUserNostrCalendars(pubkey) {
+            const relay = window.nostrRelay;
+            if (!relay) return [];
+            
+            return new Promise((resolve) => {
+                const calendars = [];
+                const filter = {
+                    kinds: [31924], // NIP-52 Calendar
+                    authors: [pubkey],
+                    limit: 50
+                };
+                
+                const sub = relay.sub([filter]);
+                const timeout = setTimeout(() => {
+                    try { sub.unsub(); } catch(e) {}
+                    resolve(calendars);
+                }, 10000);
+                
+                sub.on('event', (event) => {
+                    calendars.push(event);
+                });
+                
+                sub.on('eose', () => {
+                    clearTimeout(timeout);
+                    try { sub.unsub(); } catch(e) {}
+                    resolve(calendars);
+                });
+            });
+        }
+        
+        async function fetchCalendarEvents(pubkey, calendarDTag) {
+            const relay = window.nostrRelay;
+            if (!relay) return [];
+            
+            return new Promise((resolve) => {
+                const events = [];
+                const filter = {
+                    kinds: [31922],
+                    authors: [pubkey],
+                    '#a': [`31924:${pubkey}:${calendarDTag}`],
+                    limit: 200
+                };
+                
+                const sub = relay.sub([filter]);
+                const timeout = setTimeout(() => {
+                    try { sub.unsub(); } catch(e) {}
+                    resolve(events);
+                }, 8000);
+                
+                sub.on('event', (event) => {
+                    events.push(event);
+                });
+                
+                sub.on('eose', () => {
+                    clearTimeout(timeout);
+                    try { sub.unsub(); } catch(e) {}
+                    resolve(events);
+                });
+            });
+        }
+        
+        // ========================================
+        // VIEW MODE & TOGGLE
+        // ========================================
+        let viewMode = 'separate'; // 'separate' or 'unified'
+        
+        function setViewMode(mode) {
+            viewMode = mode;
+            document.getElementById('tab-separate').classList.toggle('active', mode === 'separate');
+            document.getElementById('tab-unified').classList.toggle('active', mode === 'unified');
+            document.getElementById('calendar-selector-panel').classList.toggle('d-none', mode === 'separate');
+            
+            if (mode === 'unified') {
+                renderCalendarCheckboxes();
+                renderUnifiedView();
+            } else {
+                renderCalendars(userCalendars);
+            }
+        }
+        
+        function setView(view) {
+            currentView = view;
+            document.getElementById('btn-view-list').classList.toggle('active', view === 'list');
+            document.getElementById('btn-view-grid').classList.toggle('active', view === 'grid');
+            if (viewMode === 'unified') {
+                renderUnifiedView();
+            } else {
+                renderCalendars(userCalendars);
+            }
+        }
+        
+        // ========================================
+        // CALENDAR SELECTION
+        // ========================================
+        function assignCalendarColors() {
+            const colors = ['cal-color-0', 'cal-color-1', 'cal-color-2', 'cal-color-3', 
+                           'cal-color-4', 'cal-color-5', 'cal-color-6', 'cal-color-7'];
+            userCalendars.forEach((cal, idx) => {
+                const dTag = getTagValue(cal, 'd') || cal.id;
+                calendarColors[dTag] = colors[idx % colors.length];
+            });
+        }
+        
+        function renderCalendarCheckboxes() {
+            const container = document.getElementById('calendar-checkboxes');
+            if (!container) return;
+            
+            let html = '';
+            userCalendars.forEach((calendar, idx) => {
+                const dTag = getTagValue(calendar, 'd') || calendar.id;
+                const title = getTagValue(calendar, 'title') || getTagValue(calendar, 'name') || dTag;
+                const style = getTagValue(calendar, 'calendar_type') || getTagValue(calendar, 't') || 'foret';
+                const styleInfo = getStyleInfo(style);
+                const events = calendarEvents[dTag] || [];
+                const colorClass = calendarColors[dTag] || 'cal-color-0';
+                const isChecked = selectedCalendars.has(dTag);
+                
+                html += `
+                    <label class="calendar-checkbox-item">
+                        <input type="checkbox" 
+                               ${isChecked ? 'checked' : ''} 
+                               onchange="toggleCalendarSelection('${dTag}')">
+                        <div class="calendar-color-dot ${colorClass}"></div>
+                        <div class="calendar-checkbox-label">
+                            <span class="calendar-checkbox-name">${styleInfo.icon} ${escapeHtml(title)}</span>
+                            <span class="calendar-checkbox-count">${events.length} évts</span>
+                        </div>
+                    </label>
+                `;
+            });
+            
+            container.innerHTML = html;
+        }
+        
+        function toggleCalendarSelection(dTag) {
+            if (selectedCalendars.has(dTag)) {
+                selectedCalendars.delete(dTag);
+            } else {
+                selectedCalendars.add(dTag);
+            }
+            renderUnifiedView();
+        }
+        
+        function selectAllCalendars() {
+            userCalendars.forEach(cal => {
+                const dTag = getTagValue(cal, 'd') || cal.id;
+                selectedCalendars.add(dTag);
+            });
+            renderCalendarCheckboxes();
+            renderUnifiedView();
+        }
+        
+        function deselectAllCalendars() {
+            selectedCalendars.clear();
+            renderCalendarCheckboxes();
+            renderUnifiedView();
+        }
+        
+        // ========================================
+        // UNIFIED VIEW RENDERING
+        // ========================================
+        function renderUnifiedView() {
+            const container = document.getElementById('calendars-container');
+            
+            if (selectedCalendars.size === 0) {
+                container.innerHTML = `
+                    <div class="unified-events-container">
+                        <div class="text-center py-5 text-secondary">
+                            <i class="bi bi-calendar-x fs-1 d-block mb-3" style="opacity: 0.3;"></i>
+                            <p>Sélectionnez au moins un calendrier pour afficher les événements</p>
+                        </div>
+                    </div>
+                `;
+                return;
+            }
+            
+            // Collect all events from selected calendars
+            let allEvents = [];
+            selectedCalendars.forEach(dTag => {
+                const events = calendarEvents[dTag] || [];
+                events.forEach(event => {
+                    allEvents.push({
+                        ...event,
+                        calendarDTag: dTag,
+                        colorClass: calendarColors[dTag] || 'cal-color-0'
+                    });
+                });
+            });
+            
+            // Sort by date
+            allEvents.sort((a, b) => {
+                const startA = getTagValue(a, 'start') || '';
+                const startB = getTagValue(b, 'start') || '';
+                return startA.localeCompare(startB);
+            });
+            
+            // Filter future events (optional: show all)
+            const now = new Date();
+            const futureEvents = allEvents.filter(e => {
+                const startStr = getTagValue(e, 'start');
+                return startStr && new Date(startStr) >= now;
+            });
+            
+            // Use futureEvents if you want only upcoming, or allEvents for all
+            const eventsToShow = allEvents;
+            
+            let html = `
+                <div class="unified-events-container">
+                    <div class="unified-events-header">
+                        <div>
+                            <h5 class="mb-0"><i class="bi bi-calendar3-week"></i> Tous les événements</h5>
+                            <small class="text-secondary">${eventsToShow.length} événements de ${selectedCalendars.size} calendrier(s)</small>
+                        </div>
+                        <div class="btn-group" role="group">
+                            <button class="btn btn-sm ${currentView === 'list' ? 'btn-primary' : 'btn-outline-secondary'}" onclick="setView('list')">
+                                <i class="bi bi-list-ul"></i>
+                            </button>
+                            <button class="btn btn-sm ${currentView === 'grid' ? 'btn-primary' : 'btn-outline-secondary'}" onclick="setView('grid')">
+                                <i class="bi bi-grid-3x3-gap"></i>
+                            </button>
+                        </div>
+                    </div>
+            `;
+            
+            if (eventsToShow.length === 0) {
+                html += `
+                    <div class="text-center py-4 text-secondary">
+                        <i class="bi bi-calendar-x"></i> Aucun événement trouvé
+                    </div>
+                `;
+            } else if (currentView === 'grid') {
+                html += '<div class="events-grid">';
+                eventsToShow.forEach(event => {
+                    html += renderUnifiedEventCard(event);
+                });
+                html += '</div>';
+            } else {
+                // Group by month for list view
+                const grouped = groupEventsByMonth(eventsToShow);
+                Object.keys(grouped).sort().forEach(monthKey => {
+                    html += renderUnifiedMonthEvents(grouped[monthKey]);
+                });
+            }
+            
+            html += '</div>';
+            container.innerHTML = html;
+        }
+        
+        function groupEventsByMonth(events) {
+            const grouped = {};
+            events.forEach(event => {
+                const startStr = getTagValue(event, 'start');
+                if (startStr) {
+                    const date = new Date(startStr);
+                    const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+                    const monthName = date.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+                    
+                    if (!grouped[monthKey]) {
+                        grouped[monthKey] = { name: monthName, events: [] };
+                    }
+                    grouped[monthKey].events.push(event);
+                }
+            });
+            return grouped;
+        }
+        
+        function renderUnifiedEventCard(event) {
+            const title = getEventTitle(event);
+            const description = event.content || '';
+            const startStr = getTagValue(event, 'start');
+            const eventType = detectEventType(title);
+            const date = startStr ? new Date(startStr) : null;
+            const day = date ? date.getDate() : '?';
+            const month = date ? date.toLocaleDateString('fr-FR', { month: 'short' }) : '';
+            const time = date ? date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : '';
+            const colorClass = event.colorClass || 'cal-color-0';
+            
+            return `
+                <div class="event-card" style="border-left: 4px solid var(--${colorClass.replace('cal-color-', 'accent-')}, #3b82f6);">
+                    <div class="event-card-header">
+                        <div style="flex: 1;">
+                            <span class="event-type-badge type-${eventType} mb-2 d-inline-block">${eventType}</span>
+                            <div class="event-card-title">${escapeHtml(title)}</div>
+                        </div>
+                        <div class="event-card-date">
+                            <div class="day">${day}</div>
+                            <div class="month">${month}</div>
+                        </div>
+                    </div>
+                    ${description ? `<div class="event-card-description">${escapeHtml(description.slice(0, 100))}${description.length > 100 ? '...' : ''}</div>` : ''}
+                    <div class="event-card-footer">
+                        <div class="d-flex align-items-center gap-2">
+                            <div class="calendar-color-dot ${colorClass}"></div>
+                            <span class="text-secondary small"><i class="bi bi-clock"></i> ${time}</span>
+                        </div>
+                        <div class="d-flex gap-1">
+                            <button class="btn btn-sm btn-outline-primary" onclick="showEditEventModal('${event.id}', '${event.calendarDTag}')">
+                                <i class="bi bi-pencil"></i>
+                            </button>
+                            <button class="btn btn-sm btn-outline-danger" onclick="showDeleteModal('event', '${event.id}', '${escapeHtml(title.slice(0, 20))}')">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        function renderUnifiedMonthEvents(monthData) {
+            let html = `
+                <div class="month-separator">
+                    <span class="month-separator-label">
+                        <i class="bi bi-calendar3"></i> ${monthData.name}
+                        <span class="badge bg-primary ms-1">${monthData.events.length}</span>
+                    </span>
+                </div>
+            `;
+            
+            monthData.events.forEach((event, idx) => {
+                const title = getEventTitle(event);
+                const description = event.content || '';
+                const startStr = getTagValue(event, 'start');
+                const eventType = detectEventType(title);
+                const date = startStr ? new Date(startStr) : null;
+                const day = date ? date.getDate() : '?';
+                const weekday = date ? date.toLocaleDateString('fr-FR', { weekday: 'short' }) : '';
+                const time = date ? date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : '';
+                const colorClass = event.colorClass || 'cal-color-0';
+                const eventUid = `unified-evt-${idx}`;
+                
+                html += `
+                    <div class="event-list-item-with-indicator">
+                        <div class="event-calendar-indicator ${colorClass}"></div>
+                        <div class="event-list-item" style="flex: 1; border-radius: 0 10px 10px 0;">
+                            <div class="event-list-header" onclick="toggleEventDetails('${eventUid}')">
+                                <div class="event-list-date-badge">
+                                    <div class="day">${day}</div>
+                                    <div class="weekday">${weekday}</div>
+                                </div>
+                                <div class="event-list-content">
+                                    <div class="event-list-title">${escapeHtml(title)}</div>
+                                    <div class="event-list-meta">
+                                        <span class="event-type-badge type-${eventType}">${eventType}</span>
+                                        <span class="ms-2"><i class="bi bi-clock"></i> ${time}</span>
+                                        ${description ? '<span class="ms-2"><i class="bi bi-text-paragraph"></i></span>' : ''}
+                                    </div>
+                                </div>
+                                <div class="event-list-actions">
+                                    <button class="btn btn-sm btn-outline-primary" onclick="event.stopPropagation(); showEditEventModal('${event.id}', '${event.calendarDTag}')">
+                                        <i class="bi bi-pencil"></i>
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-danger" onclick="event.stopPropagation(); showDeleteModal('event', '${event.id}', '${escapeHtml(title.slice(0, 20))}')">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                    ${description ? '<i class="bi bi-chevron-down toggle-icon" id="icon-' + eventUid + '"></i>' : ''}
+                                </div>
+                            </div>
+                            ${description ? `
+                                <div class="event-list-details" id="${eventUid}">
+                                    <div class="event-list-description">${escapeHtml(description)}</div>
+                                </div>
+                            ` : ''}
+                        </div>
+                    </div>
+                `;
+            });
+            
+            return html;
+        }
+        
+        // ========================================
+        // RENDERING
+        // ========================================
+        function renderCalendars(calendars) {
+            const container = document.getElementById('calendars-container');
+            
+            // Apply filter
+            let filtered = calendars;
+            if (currentFilter) {
+                filtered = calendars.filter(cal => {
+                    const style = getTagValue(cal, 'calendar_type') || getTagValue(cal, 't');
+                    return style === currentFilter;
+                });
+            }
+            
+            if (filtered.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <i class="bi bi-calendar-x"></i>
+                        <h4>Aucun calendrier trouvé</h4>
+                        <p>Créez votre premier calendrier de jardinage depuis l'onglet Autonomie.</p>
+                        <a href="plantnet.html#section-autonomy" class="btn btn-success mt-3">
+                            <i class="bi bi-plus-circle"></i> Créer un calendrier
+                        </a>
+                    </div>
+                `;
+                return;
+            }
+            
+            // Sort by creation date (newest first)
+            filtered.sort((a, b) => b.created_at - a.created_at);
+            
+            let html = '';
+            
+            filtered.forEach((calendar, index) => {
+                const dTag = getTagValue(calendar, 'd') || 'unknown';
+                const title = getTagValue(calendar, 'title') || getTagValue(calendar, 'name') || dTag;
+                const style = getTagValue(calendar, 'calendar_type') || getTagValue(calendar, 't') || 'foret';
+                const year = getTagValue(calendar, 'year') || new Date(calendar.created_at * 1000).getFullYear();
+                const umap = getTagValue(calendar, 'umap') || getTagValue(calendar, 'g') || '';
+                const events = calendarEvents[dTag] || [];
+                const createdAt = new Date(calendar.created_at * 1000).toLocaleDateString('fr-FR');
+                
+                const styleInfo = getStyleInfo(style);
+                
+                html += `
+                    <div class="calendar-card">
+                        <div class="calendar-card-header">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div class="d-flex align-items-center gap-3">
+                                    <span class="fs-2">${styleInfo.icon}</span>
+                                    <div>
+                                        <h4 class="mb-1" style="color: var(--text-primary);">${escapeHtml(title)}</h4>
+                                        <div class="d-flex flex-wrap gap-2 align-items-center">
+                                            <span class="style-badge style-${style}">${styleInfo.name}</span>
+                                            ${umap ? `<span class="text-secondary small"><i class="bi bi-geo-alt"></i> ${umap}</span>` : ''}
+                                            <span class="text-secondary small"><i class="bi bi-calendar3"></i> ${year}</span>
+                                            <span class="text-secondary small"><i class="bi bi-list-check"></i> ${events.length} évts</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="d-flex gap-2">
+                                    <button class="btn btn-sm btn-outline-danger" 
+                                            onclick="showDeleteModal('calendar', '${calendar.id}', '${escapeHtml(title)}')">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="text-secondary small mt-2">
+                                <i class="bi bi-clock"></i> Créé le ${createdAt} •
+                                <i class="bi bi-key"></i> ${calendar.id.slice(0, 8)}...
+                            </div>
+                        </div>
+                        <div class="calendar-card-body">
+                            ${renderEventsList(events, dTag)}
+                        </div>
+                    </div>
+                `;
+            });
+            
+            container.innerHTML = html;
+        }
+        
+        function renderEventsList(events, calendarDTag) {
+            if (events.length === 0) {
+                return `
+                    <div class="no-events-msg">
+                        <i class="bi bi-calendar-x fs-1 mb-2 d-block" style="opacity: 0.3;"></i>
+                        <p>Aucun événement dans ce calendrier</p>
+                    </div>
+                `;
+            }
+            
+            // Sort by start date
+            events.sort((a, b) => {
+                const startA = getTagValue(a, 'start') || '';
+                const startB = getTagValue(b, 'start') || '';
+                return startA.localeCompare(startB);
+            });
+            
+            // Group by month
+            const grouped = {};
+            const now = new Date();
+            
+            events.forEach(event => {
+                const startStr = getTagValue(event, 'start');
+                if (startStr) {
+                    const date = new Date(startStr);
+                    const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+                    const monthName = date.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+                    
+                    if (!grouped[monthKey]) {
+                        grouped[monthKey] = { name: monthName, events: [], isPast: date < now };
+                    }
+                    grouped[monthKey].events.push(event);
+                }
+            });
+            
+            const sortedMonths = Object.keys(grouped).sort();
+            
+            // Grid view
+            if (currentView === 'grid') {
+                let html = '<div class="events-grid">';
+                sortedMonths.forEach(monthKey => {
+                    grouped[monthKey].events.forEach(event => {
+                        html += renderEventCard(event, calendarDTag);
+                    });
+                });
+                html += '</div>';
+                return html;
+            }
+            
+            // List view with months
+            let html = '';
+            sortedMonths.forEach(monthKey => {
+                html += renderMonthEvents(grouped[monthKey], calendarDTag);
+            });
+            
+            return html;
+        }
+        
+        function renderEventCard(event, calendarDTag) {
+            const title = getEventTitle(event);
+            const description = event.content || '';
+            const startStr = getTagValue(event, 'start');
+            const eventType = detectEventType(title);
+            const date = startStr ? new Date(startStr) : null;
+            const day = date ? date.getDate() : '?';
+            const month = date ? date.toLocaleDateString('fr-FR', { month: 'short' }) : '';
+            const time = date ? date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : '';
+            
+            return `
+                <div class="event-card">
+                    <div class="event-card-header">
+                        <div style="flex: 1;">
+                            <span class="event-type-badge type-${eventType} mb-2 d-inline-block">${eventType}</span>
+                            <div class="event-card-title">${escapeHtml(title)}</div>
+                        </div>
+                        <div class="event-card-date">
+                            <div class="day">${day}</div>
+                            <div class="month">${month}</div>
+                        </div>
+                    </div>
+                    ${description ? `<div class="event-card-description">${escapeHtml(description.slice(0, 100))}${description.length > 100 ? '...' : ''}</div>` : ''}
+                    <div class="event-card-footer">
+                        <span class="text-secondary small"><i class="bi bi-clock"></i> ${time}</span>
+                        <div class="d-flex gap-1">
+                            <button class="btn btn-sm btn-outline-primary" onclick="showEditEventModal('${event.id}', '${calendarDTag}')">
+                                <i class="bi bi-pencil"></i>
+                            </button>
+                            <button class="btn btn-sm btn-outline-danger" onclick="showDeleteModal('event', '${event.id}', '${escapeHtml(title.slice(0, 20))}')">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        function renderMonthEvents(monthData, calendarDTag) {
+            let html = `
+                <div class="month-separator">
+                    <span class="month-separator-label">
+                        <i class="bi bi-calendar3"></i> ${monthData.name}
+                        <span class="badge bg-primary ms-1">${monthData.events.length}</span>
+                    </span>
+                </div>
+            `;
+            
+            monthData.events.forEach((event, idx) => {
+                const title = getEventTitle(event);
+                const description = event.content || '';
+                const startStr = getTagValue(event, 'start');
+                const eventType = detectEventType(title);
+                const date = startStr ? new Date(startStr) : null;
+                const day = date ? date.getDate() : '?';
+                const weekday = date ? date.toLocaleDateString('fr-FR', { weekday: 'short' }) : '';
+                const time = date ? date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : '';
+                const eventUid = `evt-${calendarDTag.replace(/[^a-zA-Z0-9]/g, '')}-${idx}`;
+                
+                html += `
+                    <div class="event-list-item">
+                        <div class="event-list-header" onclick="toggleEventDetails('${eventUid}')">
+                            <div class="event-list-date-badge">
+                                <div class="day">${day}</div>
+                                <div class="weekday">${weekday}</div>
+                            </div>
+                            <div class="event-list-content">
+                                <div class="event-list-title">${escapeHtml(title)}</div>
+                                <div class="event-list-meta">
+                                    <span class="event-type-badge type-${eventType}">${eventType}</span>
+                                    <span class="ms-2"><i class="bi bi-clock"></i> ${time}</span>
+                                    ${description ? '<span class="ms-2"><i class="bi bi-text-paragraph"></i></span>' : ''}
+                                </div>
+                            </div>
+                            <div class="event-list-actions">
+                                <button class="btn btn-sm btn-outline-primary" onclick="event.stopPropagation(); showEditEventModal('${event.id}', '${calendarDTag}')">
+                                    <i class="bi bi-pencil"></i>
+                                </button>
+                                <button class="btn btn-sm btn-outline-danger" onclick="event.stopPropagation(); showDeleteModal('event', '${event.id}', '${escapeHtml(title.slice(0, 20))}')">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                                <i class="bi bi-chevron-down toggle-icon" id="icon-${eventUid}"></i>
+                            </div>
+                        </div>
+                        ${description ? `
+                            <div class="event-list-details" id="${eventUid}">
+                                <div class="event-list-description">${escapeHtml(description)}</div>
+                            </div>
+                        ` : ''}
+                    </div>
+                `;
+            });
+            
+            return html;
+        }
+        
+        function toggleEventDetails(eventUid) {
+            const details = document.getElementById(eventUid);
+            const icon = document.getElementById('icon-' + eventUid);
+            if (details) {
+                details.classList.toggle('show');
+                if (icon) icon.classList.toggle('rotated');
+            }
+        }
+        
+        function getEventTitle(event) {
+            // Try multiple sources for the title
+            let title = getTagValue(event, 'name') 
+                || getTagValue(event, 'title')
+                || getTagValue(event, 'summary');
+            
+            // If no title in tags, try to extract from content
+            if (!title && event.content) {
+                const firstLine = event.content.split('\n')[0].trim();
+                // Remove emoji prefixes if present
+                title = firstLine.replace(/^[🌱🍎💧✂️🌿❌🌸🥕🌳🥬🏙️🌾📋]+\s*/, '').trim();
+                if (title.length > 50) title = title.slice(0, 47) + '...';
+            }
+            
+            return title || 'Événement sans titre';
+        }
+        
+        // ========================================
+        // EDIT & DELETE OPERATIONS
+        // ========================================
+        function showEditEventModal(eventId, calendarDTag) {
+            const events = calendarEvents[calendarDTag] || [];
+            const event = events.find(e => e.id === eventId);
+            
+            if (!event) {
+                showNotification({ type: 'error', title: 'Erreur', message: 'Événement non trouvé' });
+                return;
+            }
+            
+            document.getElementById('edit-event-id').value = eventId;
+            document.getElementById('edit-event-calendar-id').value = calendarDTag;
+            document.getElementById('edit-event-title').value = getTagValue(event, 'name') || '';
+            document.getElementById('edit-event-description').value = event.content || '';
+            
+            const startStr = getTagValue(event, 'start');
+            const endStr = getTagValue(event, 'end');
+            
+            if (startStr) {
+                document.getElementById('edit-event-start').value = formatDateTimeLocal(startStr);
+            }
+            if (endStr) {
+                document.getElementById('edit-event-end').value = formatDateTimeLocal(endStr);
+            }
+            
+            const modal = new bootstrap.Modal(document.getElementById('editEventModal'));
+            modal.show();
+        }
+        
+        async function saveEventChanges() {
+            const eventId = document.getElementById('edit-event-id').value;
+            const calendarDTag = document.getElementById('edit-event-calendar-id').value;
+            const title = document.getElementById('edit-event-title').value;
+            const description = document.getElementById('edit-event-description').value;
+            const startStr = document.getElementById('edit-event-start').value;
+            const endStr = document.getElementById('edit-event-end').value;
+            
+            if (!title || !startStr) {
+                showNotification({ type: 'error', title: 'Erreur', message: 'Le titre et la date de début sont requis.' });
+                return;
+            }
+            
+            try {
+                // Find original event to get its d-tag
+                const events = calendarEvents[calendarDTag] || [];
+                const originalEvent = events.find(e => e.id === eventId);
+                const dTag = originalEvent ? getTagValue(originalEvent, 'd') : `event-${Date.now()}`;
+                
+                // Create updated event
+                const updatedEvent = {
+                    kind: 31922,
+                    created_at: Math.floor(Date.now() / 1000),
+                    tags: [
+                        ['d', dTag],
+                        ['name', title],
+                        ['start', new Date(startStr).toISOString()],
+                        ['a', `31924:${localUserPubkey}:${calendarDTag}`]
+                    ],
+                    content: description
+                };
+                
+                if (endStr) {
+                    updatedEvent.tags.push(['end', new Date(endStr).toISOString()]);
+                }
+                
+                // Sign and publish
+                const signedEvent = await window.nostr.signEvent(updatedEvent);
+                
+                await ensureRelayConnection();
+                const relay = window.nostrRelay;
+                
+                if (relay && relay.publish) {
+                    await relay.publish(signedEvent);
+                } else if (relay._originalRelay && relay._originalRelay.publish) {
+                    await relay._originalRelay.publish(signedEvent);
+                }
+                
+                showNotification({ type: 'success', title: 'Succès', message: 'Événement mis à jour !' });
+                
+                // Close modal and refresh
+                bootstrap.Modal.getInstance(document.getElementById('editEventModal')).hide();
+                await loadUserCalendars();
+                
+            } catch (error) {
+                console.error('[Calendars] Error saving event:', error);
+                showNotification({ type: 'error', title: 'Erreur', message: error.message });
+            }
+        }
+        
+        function showDeleteModal(type, id, name) {
+            document.getElementById('delete-type').value = type;
+            document.getElementById('delete-id').value = id;
+            
+            const typeLabel = type === 'calendar' ? 'ce calendrier' : 'cet événement';
+            document.getElementById('delete-message').innerHTML = `
+                Êtes-vous sûr de vouloir supprimer ${typeLabel} ?<br>
+                <strong class="text-warning">${name}</strong>
+            `;
+            
+            const modal = new bootstrap.Modal(document.getElementById('deleteModal'));
+            modal.show();
+        }
+        
+        async function confirmDelete() {
+            const type = document.getElementById('delete-type').value;
+            const id = document.getElementById('delete-id').value;
+            
+            try {
+                // Create deletion event (Kind 5)
+                const deleteEvent = {
+                    kind: 5,
+                    created_at: Math.floor(Date.now() / 1000),
+                    tags: [
+                        ['e', id]
+                    ],
+                    content: 'Deleted by user from calendars.html'
+                };
+                
+                // Sign and publish
+                const signedEvent = await window.nostr.signEvent(deleteEvent);
+                
+                await ensureRelayConnection();
+                const relay = window.nostrRelay;
+                
+                if (relay && relay.publish) {
+                    await relay.publish(signedEvent);
+                } else if (relay._originalRelay && relay._originalRelay.publish) {
+                    await relay._originalRelay.publish(signedEvent);
+                }
+                
+                showNotification({ type: 'success', title: 'Succès', message: 'Élément supprimé !' });
+                
+                // Close modal and refresh
+                bootstrap.Modal.getInstance(document.getElementById('deleteModal')).hide();
+                await loadUserCalendars();
+                
+            } catch (error) {
+                console.error('[Calendars] Error deleting:', error);
+                showNotification({ type: 'error', title: 'Erreur', message: error.message });
+            }
+        }
+        
+        // ========================================
+        // UTILITY FUNCTIONS
+        // ========================================
+        function refreshCalendars() {
+            loadUserCalendars();
+        }
+        
+        function filterCalendars() {
+            currentFilter = document.getElementById('filter-style').value;
+            renderCalendars(userCalendars);
+        }
+        
+        function getTagValue(event, tagName) {
+            const tag = event.tags?.find(t => t[0] === tagName);
+            return tag ? tag[1] : null;
+        }
+        
+        function getStyleInfo(style) {
+            const styles = {
+                foret: { name: 'Forêt Jardin', icon: '🌳' },
+                umap: { name: 'UMAP Optimisé', icon: '🏙️' },
+                variety: { name: 'Variété Nutritionnelle', icon: '🌿' },
+                autonomy: { name: 'Autonomie Complète', icon: '🏡' },
+                conservation: { name: 'Conservation', icon: '🥫' },
+                continuous: { name: 'Production Continue', icon: '🔄' }
+            };
+            return styles[style] || { name: style, icon: '📅' };
+        }
+        
+        function detectEventType(title) {
+            const lower = title.toLowerCase();
+            if (lower.includes('semis') || lower.includes('semer') || lower.includes('planter')) return 'semis';
+            if (lower.includes('récolte') || lower.includes('recolte') || lower.includes('cueillir')) return 'recolte';
+            if (lower.includes('lune') || lower.includes('phase') || lower.includes('🌑') || lower.includes('🌕')) return 'lune';
+            if (lower.includes('météo') || lower.includes('meteo') || lower.includes('gel') || lower.includes('pluie')) return 'meteo';
+            return 'entretien';
+        }
+        
+        function formatDateTimeLocal(isoString) {
+            const date = new Date(isoString);
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            const hours = String(date.getHours()).padStart(2, '0');
+            const minutes = String(date.getMinutes()).padStart(2, '0');
+            return `${year}-${month}-${day}T${hours}:${minutes}`;
+        }
+        
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+    </script>
+</body>
+</html>
+

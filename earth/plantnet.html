@@ -1639,8 +1639,9 @@
                                 </div>
                                 <div class="col-sm-auto">
                                     <label for="lunar-style-select" class="form-label mb-1 fw-bold" style="color: #e2e8f0;">Style de production</label>
-                                    <select class="form-select" id="lunar-style-select" style="min-width: 220px;">
-                                        <option value="umap">🏙️ UMAP Optimisé (recommandé)</option>
+                                    <select class="form-select" id="lunar-style-select" style="min-width: 260px;">
+                                        <option value="foret">🌳 Forêt Jardin (recommandé)</option>
+                                        <option value="umap">🏙️ UMAP Optimisé</option>
                                         <option value="variety">🌿 Variété Nutritionnelle</option>
                                         <option value="autonomy">🏡 Autonomie Complète</option>
                                         <option value="conservation">🥫 Conservation Longue Durée</option>
@@ -1649,18 +1650,81 @@
                                 </div>
                                 <div class="col-sm-auto">
                                     <button class="btn btn-lg" onclick="generateICalFile()" style="background: linear-gradient(135deg, #3b82f6, #6366f1); border: none; color: white;">
-                                        <i class="bi bi-download"></i> Télécharger .ics
+                                        <i class="bi bi-download"></i> .ics
                             </button>
                                 </div>
+                                <div class="col-sm-auto">
+                                    <button class="btn btn-lg" onclick="publishCalendarWithUI()" style="background: linear-gradient(135deg, #8b5cf6, #a855f7); border: none; color: white;" title="Publier sur NOSTR (NIP-52)">
+                                        <i class="bi bi-cloud-upload"></i> NOSTR
+                                    </button>
                             </div>
+                                <div class="col-sm-auto">
+                                    <button class="btn btn-lg btn-outline-secondary" onclick="syncCalendarsFromNostr()" title="Synchroniser depuis NOSTR">
+                                        <i class="bi bi-arrow-repeat"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <!-- NOSTR Status -->
+                            <div class="mt-2 d-flex justify-content-between align-items-center flex-wrap gap-2">
+                                <div id="nostr-publish-status" class="small text-muted">
+                                    <i class="bi bi-info-circle"></i> Connectez-vous pour publier votre calendrier sur NOSTR
+                                </div>
+                                <div id="nostr-sync-status" class="small text-muted"></div>
+                            </div>
+                            
                             <div class="mt-3" style="color: #cbd5e1; font-size: 0.95rem;">
                                 <i class="bi bi-calendar-check" style="color: #3b82f6;"></i> Le calendrier inclut :
                                 <strong style="color: #4ade80;">Semis optimaux</strong> selon la lune • 
                                 <strong style="color: #fbbf24;">Rappels d'entretien</strong> hebdomadaires • 
                                 <strong style="color: #ec4899;">Dates de récolte</strong> estimées • 
-                                <strong style="color: #a78bfa;">Conseils nutritionnels</strong> saisonniers • 
-                                <strong style="color: #60a5fa;">Alertes météo</strong> générales
+                                <strong style="color: #a78bfa;">Conseils nutritionnels</strong> saisonniers •
                             </div>
+                            
+                            <!-- NOSTR Calendars List -->
+                            <div id="nostr-calendars-list" class="mt-3"></div>
+                            
+                            <!-- Prévisualisation des conseils pour les 7 prochains jours -->
+                            <div class="mt-4">
+                                <h5 class="mb-3"><i class="bi bi-eye" style="color: #a78bfa;"></i> Prévisualisation des 7 prochains jours</h5>
+                                <div id="preview-container" class="row g-2">
+                                    <!-- Généré dynamiquement par JS -->
+                                    <div class="col-12 text-center py-3">
+                                        <div class="spinner-border text-success" role="status">
+                                            <span class="visually-hidden">Chargement...</span>
+                                        </div>
+                                        <p class="mt-2 text-muted">Chargement des conseils...</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Légende des icônes -->
+                    <div class="card mt-4" style="border: 1px solid rgba(167, 139, 250, 0.3); background: rgba(167, 139, 250, 0.05);">
+                        <div class="card-body py-3">
+                            <div class="row g-2 text-center">
+                                <div class="col-auto">
+                                    <span class="badge" style="background: rgba(74, 222, 128, 0.2); color: #4ade80;">🌱 Semis</span>
+                                </div>
+                                <div class="col-auto">
+                                    <span class="badge" style="background: rgba(251, 191, 36, 0.2); color: #fbbf24;">🍃 Récolte</span>
+                                </div>
+                                <div class="col-auto">
+                                    <span class="badge" style="background: rgba(59, 130, 246, 0.2); color: #3b82f6;">💧 Arrosage</span>
+                                </div>
+                                <div class="col-auto">
+                                    <span class="badge" style="background: rgba(236, 72, 153, 0.2); color: #ec4899;">✂️ Taille</span>
+                                </div>
+                                <div class="col-auto">
+                                    <span class="badge" style="background: rgba(139, 92, 246, 0.2); color: #8b5cf6;">🌳 Plantation</span>
+                                </div>
+                                <div class="col-auto">
+                                    <span class="badge" style="background: rgba(239, 68, 68, 0.2); color: #ef4444;">❌ Repos</span>
+                                </div>
+                            </div>
+                        </div> 
+                    </div>
         </div>
         </div>
                 </div>
@@ -2456,22 +2520,7 @@
                     setIsNostrConnected(true);
                     setNostrRelay(getNostrRelay()); // Ensure relay is set
                     
-                    // Force send NIP42 auth event for server verification
-                    // sendNIP42Auth is in common.js, wait a bit for relay to be fully connected
-                    const relay = getNostrRelay();
-                    if (relay && window.nostrRelay) {
-                        console.log('🔐 Waiting for relay connection before sending NIP42 auth...');
-                        // Wait a moment for relay connection to stabilize
-                        setTimeout(async () => {
-                            if (typeof window.sendNIP42Auth === 'function') {
-                                await window.sendNIP42Auth(relay, true);
-                            } else if (typeof sendNIP42Auth === 'function') {
-                                await sendNIP42Auth(relay, true);
-                            } else {
-                                console.warn('⚠️ sendNIP42Auth function not available');
-                            }
-                        }, 1000);
-                    }
+                    // NIP-42 auth is handled automatically by common.js - no duplicate needed
                     
                     updateNostrUI(true);
                     await loadUserStats();
@@ -3112,15 +3161,26 @@
             mapMarkers = userPositionMarker ? [userPositionMarker] : [];
             
             try {
-                // Load all event types in parallel for better performance
-                const [observations, recognizedPlants, umapDIDs, oreContracts, inventoryItems, maintenanceContracts] = await Promise.all([
-                    fetchPlantObservations(currentRelay),
-                    fetchRecognizedPlants(currentRelay),
-                    fetchUMAPDIDs(currentRelay),
-                    fetchOREContracts(currentRelay),
-                    fetchInventoryItems(currentRelay),
-                    fetchMaintenanceContracts(currentRelay)
-                ]);
+                // Load event types SEQUENTIALLY to avoid "too many concurrent REQs" error
+                // Strfry relay limits concurrent subscriptions per connection
+                console.log('📡 Loading events sequentially to respect relay limits...');
+                
+                const observations = await fetchPlantObservations(currentRelay);
+                await new Promise(r => setTimeout(r, 100)); // Small delay between requests
+                
+                const recognizedPlants = await fetchRecognizedPlants(currentRelay);
+                await new Promise(r => setTimeout(r, 100));
+                
+                const inventoryItems = await fetchInventoryItems(currentRelay);
+                await new Promise(r => setTimeout(r, 100));
+                
+                const maintenanceContracts = await fetchMaintenanceContracts(currentRelay);
+                await new Promise(r => setTimeout(r, 100));
+                
+                const umapDIDs = await fetchUMAPDIDs(currentRelay);
+                await new Promise(r => setTimeout(r, 100));
+                
+                const oreContracts = await fetchOREContracts(currentRelay);
                 
                 console.log(`📊 Events loaded: ${observations.length} observations, ${recognizedPlants.length} recognized, ${inventoryItems.length} inventory items, ${maintenanceContracts.length} contracts`);
                 
@@ -3175,23 +3235,34 @@
                 return [];
             }
             
-            return new Promise((resolve, reject) => {
-                const filter = {
-                    kinds: [1],
-                    '#t': ['BRO', 'plantnet'],
-                    limit: 500,
-                    since: Math.floor(Date.now() / 1000) - (90 * 24 * 60 * 60) // Last 90 days
-                };
-                
+            const filter = {
+                kinds: [1],
+                '#t': ['BRO', 'plantnet'],
+                limit: 500,
+                since: Math.floor(Date.now() / 1000) - (90 * 24 * 60 * 60) // Last 90 days
+            };
+            
+            // Use SubscriptionQueue if available
+            if (window.SubscriptionQueue) {
+                const allEvents = await window.SubscriptionQueue.createSubscription(relay, [filter], { timeout: 8000 });
+                // Filter events that have both BRO and plantnet tags with geo
+                return allEvents.filter(event => {
+                    const tags = event.tags.map(t => t[1]).filter(Boolean);
+                    const hasGeo = event.tags.find(t => t[0] === 'g');
+                    return tags.includes('BRO') && tags.includes('plantnet') && hasGeo;
+                });
+            }
+            
+            // Fallback to direct subscription
+            return new Promise((resolve) => {
                 const observations = [];
                 const sub = relay.sub([filter]);
                 const timeout = setTimeout(() => {
-                    sub.unsub();
+                    try { sub.unsub(); } catch(e) {}
                     resolve(observations);
-                }, 10000);
+                }, 8000);
                 
                 sub.on('event', (event) => {
-                    // Verify event has both BRO and plantnet tags
                     const tags = event.tags.map(t => t[1]).filter(Boolean);
                     if (tags.includes('BRO') && tags.includes('plantnet')) {
                         const geoTag = event.tags.find(t => t[0] === 'g');
@@ -3203,7 +3274,7 @@
                 
                 sub.on('eose', () => {
                     clearTimeout(timeout);
-                    sub.unsub();
+                    try { sub.unsub(); } catch(e) {}
                     resolve(observations);
                 });
             });
@@ -3211,203 +3282,172 @@
         
         // Fetch recognized plants (kind 1 with tags UPlanet and plantnet)
         async function fetchRecognizedPlants(relay) {
-            if (!relay) {
-                console.warn('⚠️ No relay provided to fetchRecognizedPlants');
-                return [];
+            if (!relay) return [];
+            
+            const filter = {
+                kinds: [1],
+                '#t': ['UPlanet', 'plantnet'],
+                limit: 500,
+                since: Math.floor(Date.now() / 1000) - (90 * 24 * 60 * 60)
+            };
+            
+            if (window.SubscriptionQueue) {
+                const allEvents = await window.SubscriptionQueue.createSubscription(relay, [filter], { timeout: 8000 });
+                return allEvents.filter(event => {
+                    const tags = event.tags.map(t => t[1]).filter(Boolean);
+                    const hasGeo = event.tags.find(t => t[0] === 'g');
+                    return tags.includes('UPlanet') && tags.includes('plantnet') && hasGeo;
+                });
             }
             
-            return new Promise((resolve, reject) => {
-                const filter = {
-                    kinds: [1],
-                    '#t': ['UPlanet', 'plantnet'],
-                    limit: 500,
-                    since: Math.floor(Date.now() / 1000) - (90 * 24 * 60 * 60) // Last 90 days
-                };
-                
+            return new Promise((resolve) => {
                 const recognized = [];
                 const sub = relay.sub([filter]);
-                const timeout = setTimeout(() => {
-                    sub.unsub();
-                    resolve(recognized);
-                }, 10000);
-                
+                const timeout = setTimeout(() => { try { sub.unsub(); } catch(e) {} resolve(recognized); }, 8000);
                 sub.on('event', (event) => {
-                    // Verify event has both UPlanet and plantnet tags
                     const tags = event.tags.map(t => t[1]).filter(Boolean);
-                    if (tags.includes('UPlanet') && tags.includes('plantnet')) {
-                        const geoTag = event.tags.find(t => t[0] === 'g');
-                        if (geoTag && geoTag[1]) {
-                            recognized.push(event);
-                        }
+                    if (tags.includes('UPlanet') && tags.includes('plantnet') && event.tags.find(t => t[0] === 'g')) {
+                        recognized.push(event);
                     }
                 });
-                
-                sub.on('eose', () => {
-                    clearTimeout(timeout);
-                    sub.unsub();
-                    resolve(recognized);
-                });
+                sub.on('eose', () => { clearTimeout(timeout); try { sub.unsub(); } catch(e) {} resolve(recognized); });
             });
         }
         
         // Fetch UMAP DIDs (kind 30800)
         async function fetchUMAPDIDs(relay) {
-            if (!relay) {
-                console.warn('⚠️ No relay provided to fetchUMAPDIDs');
-                return [];
-            }
+            if (!relay) return [];
             
-            return new Promise((resolve, reject) => {
-                const filter = {
-                    kinds: [30800],
-                    '#d': ['did'],
-                    limit: 200
-                };
-                
-                const dids = [];
-                const sub = relay.sub([filter]);
-                const timeout = setTimeout(() => {
-                    sub.unsub();
-                    resolve(dids);
-                }, 10000);
-                
-                sub.on('event', (event) => {
+            const filter = { kinds: [30800], '#d': ['did'], limit: 200 };
+            
+            if (window.SubscriptionQueue) {
+                const allEvents = await window.SubscriptionQueue.createSubscription(relay, [filter], { timeout: 8000 });
+                return allEvents.filter(event => {
                     try {
-                        // Parse DID document to check if it's a UMAP
                         const content = JSON.parse(event.content || '{}');
                         if (content.type === 'UMAPGeographicCell' && content.geographicMetadata?.coordinates) {
                             const coords = content.geographicMetadata.coordinates;
-                            // Add geographic tag if not present
+                            if (!event.tags.find(t => t[0] === 'g')) {
+                                event.tags.push(['g', `${coords.lat},${coords.lon}`]);
+                            }
+                            return true;
+                        }
+                    } catch (e) {}
+                    return false;
+                });
+            }
+            
+            return new Promise((resolve) => {
+                const dids = [];
+                const sub = relay.sub([filter]);
+                const timeout = setTimeout(() => { try { sub.unsub(); } catch(e) {} resolve(dids); }, 8000);
+                sub.on('event', (event) => {
+                    try {
+                        const content = JSON.parse(event.content || '{}');
+                        if (content.type === 'UMAPGeographicCell' && content.geographicMetadata?.coordinates) {
+                            const coords = content.geographicMetadata.coordinates;
                             if (!event.tags.find(t => t[0] === 'g')) {
                                 event.tags.push(['g', `${coords.lat},${coords.lon}`]);
                             }
                             dids.push(event);
                         }
-                    } catch (e) {
-                        // Skip invalid JSON
-                    }
+                    } catch (e) {}
                 });
-                
-                sub.on('eose', () => {
-                    clearTimeout(timeout);
-                    sub.unsub();
-                    resolve(dids);
-                });
+                sub.on('eose', () => { clearTimeout(timeout); try { sub.unsub(); } catch(e) {} resolve(dids); });
             });
         }
         
         // Fetch ORE contracts (kind 30312)
         async function fetchOREContracts(relay) {
-            if (!relay) {
-                console.warn('⚠️ No relay provided to fetchOREContracts');
-                return [];
+            if (!relay) return [];
+            
+            const filter = { kinds: [30312], '#t': ['ORE'], limit: 200 };
+            
+            if (window.SubscriptionQueue) {
+                return await window.SubscriptionQueue.createSubscription(relay, [filter], { timeout: 8000 });
             }
             
-            return new Promise((resolve, reject) => {
-                const filter = {
-                    kinds: [30312],
-                    '#t': ['ORE'],
-                    limit: 200
-                };
-                
+            return new Promise((resolve) => {
                 const contracts = [];
                 const sub = relay.sub([filter]);
-                const timeout = setTimeout(() => {
-                    sub.unsub();
-                    resolve(contracts);
-                }, 10000);
-                
-                sub.on('event', (event) => {
-                    contracts.push(event);
-                });
-                
-                sub.on('eose', () => {
-                    clearTimeout(timeout);
-                    sub.unsub();
-                    resolve(contracts);
-                });
+                const timeout = setTimeout(() => { try { sub.unsub(); } catch(e) {} resolve(contracts); }, 8000);
+                sub.on('event', (event) => { contracts.push(event); });
+                sub.on('eose', () => { clearTimeout(timeout); try { sub.unsub(); } catch(e) {} resolve(contracts); });
             });
         }
         
         // Fetch inventory items (kind 1 with #inventory tag)
         async function fetchInventoryItems(relay) {
-            if (!relay) {
-                console.warn('⚠️ No relay provided to fetchInventoryItems');
-                return [];
+            if (!relay) return [];
+            
+            const filter = {
+                kinds: [1],
+                '#t': ['inventory', 'UPlanet'],
+                limit: 500,
+                since: Math.floor(Date.now() / 1000) - (90 * 24 * 60 * 60)
+            };
+            
+            if (window.SubscriptionQueue) {
+                const allEvents = await window.SubscriptionQueue.createSubscription(relay, [filter], { timeout: 8000 });
+                return allEvents.filter(event => {
+                    const geoTag = event.tags.find(t => t[0] === 'g');
+                    if (geoTag && geoTag[1]) {
+                        const inventoryTypeTag = event.tags.find(t => t[0] === 'inventory_type');
+                        event.inventoryType = inventoryTypeTag ? inventoryTypeTag[1] : 'object';
+                        return true;
+                    }
+                    return false;
+                });
             }
             
-            return new Promise((resolve, reject) => {
-                const filter = {
-                    kinds: [1],
-                    '#t': ['inventory', 'UPlanet'],
-                    limit: 500,
-                    since: Math.floor(Date.now() / 1000) - (90 * 24 * 60 * 60) // Last 90 days
-                };
-                
+            return new Promise((resolve) => {
                 const items = [];
                 const sub = relay.sub([filter]);
-                const timeout = setTimeout(() => {
-                    sub.unsub();
-                    resolve(items);
-                }, 10000);
-                
+                const timeout = setTimeout(() => { try { sub.unsub(); } catch(e) {} resolve(items); }, 8000);
                 sub.on('event', (event) => {
-                    // Get inventory type from tags
-                    const inventoryTypeTag = event.tags.find(t => t[0] === 'inventory_type');
-                const geoTag = event.tags.find(t => t[0] === 'g');
-                    
-                if (geoTag && geoTag[1]) {
-                        // Add parsed type to event for easier handling
+                    const geoTag = event.tags.find(t => t[0] === 'g');
+                    if (geoTag && geoTag[1]) {
+                        const inventoryTypeTag = event.tags.find(t => t[0] === 'inventory_type');
                         event.inventoryType = inventoryTypeTag ? inventoryTypeTag[1] : 'object';
                         items.push(event);
                     }
                 });
-                
-                sub.on('eose', () => {
-                    clearTimeout(timeout);
-                    sub.unsub();
-                    resolve(items);
-                });
+                sub.on('eose', () => { clearTimeout(timeout); try { sub.unsub(); } catch(e) {} resolve(items); });
             });
         }
         
         // Fetch maintenance contracts (kind 30023 with #contract tag)
         async function fetchMaintenanceContracts(relay) {
-            if (!relay) {
-                console.warn('⚠️ No relay provided to fetchMaintenanceContracts');
-                return [];
-            }
+            if (!relay) return [];
             
-            return new Promise((resolve, reject) => {
-                const filter = {
-                    kinds: [30023],
-                    '#t': ['contract', 'maintenance'],
-                    limit: 200
-                };
-                
-                const contracts = [];
-                const sub = relay.sub([filter]);
-                const timeout = setTimeout(() => {
-                    sub.unsub();
-                    resolve(contracts);
-                }, 10000);
-                
-                sub.on('event', (event) => {
-                    // Check for geo tag
+            const filter = { kinds: [30023], '#t': ['contract', 'maintenance'], limit: 200 };
+            
+            if (window.SubscriptionQueue) {
+                const allEvents = await window.SubscriptionQueue.createSubscription(relay, [filter], { timeout: 8000 });
+                return allEvents.filter(event => {
                     const geoTag = event.tags.find(t => t[0] === 'g');
                     if (geoTag && geoTag[1]) {
-                        // Extract inventory type from tags
+                        const inventoryTypeTag = event.tags.find(t => t[0] === 'inventory_type');
+                        event.inventoryType = inventoryTypeTag ? inventoryTypeTag[1] : 'object';
+                        return true;
+                    }
+                    return false;
+                });
+            }
+            
+            return new Promise((resolve) => {
+                const contracts = [];
+                const sub = relay.sub([filter]);
+                const timeout = setTimeout(() => { try { sub.unsub(); } catch(e) {} resolve(contracts); }, 8000);
+                sub.on('event', (event) => {
+                    const geoTag = event.tags.find(t => t[0] === 'g');
+                    if (geoTag && geoTag[1]) {
                         const inventoryTypeTag = event.tags.find(t => t[0] === 'inventory_type');
                         event.inventoryType = inventoryTypeTag ? inventoryTypeTag[1] : 'object';
                         contracts.push(event);
                     }
                 });
-                
-                sub.on('eose', () => {
-                    clearTimeout(timeout);
-                    sub.unsub();
-                    resolve(contracts);
-                });
+                sub.on('eose', () => { clearTimeout(timeout); try { sub.unsub(); } catch(e) {} resolve(contracts); });
             });
         }
         
@@ -4334,6 +4374,11 @@
             
             // Initialize lunar calendar in header
             initializeLunarCalendar();
+            
+            // Initialize weekly preview for selected production style
+            if (typeof initializePreview === 'function') {
+                initializePreview();
+            }
             
             // Initialize inventory type filters
             initInventoryFilters();

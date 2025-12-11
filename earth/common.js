@@ -418,6 +418,10 @@ if (typeof window !== 'undefined') {
     Object.defineProperty(window, 'nostrRelay', {
         get: () => NostrState.nostrRelay,
         set: (val) => {
+            // Wrap relay with SubscriptionQueue to prevent "too many concurrent REQs"
+            if (val && typeof wrapRelayWithQueue === 'function' && !val._queueWrapped) {
+                val = wrapRelayWithQueue(val);
+            }
             NostrState.nostrRelay = val;
             syncLegacyVariables();
         },
@@ -471,6 +475,10 @@ if (typeof window !== 'undefined') {
         return NostrState.userPubkey;
     };
     window.setNostrRelay = function(relay) {
+        // Wrap relay with SubscriptionQueue to prevent "too many concurrent REQs"
+        if (relay && typeof wrapRelayWithQueue === 'function' && !relay._queueWrapped) {
+            relay = wrapRelayWithQueue(relay);
+        }
         NostrState.nostrRelay = relay;
         syncLegacyVariables();
     };
@@ -485,6 +493,256 @@ if (typeof window !== 'undefined') {
     
     // Initialize window properties
     syncLegacyVariables();
+}
+
+// ========================================
+// SUBSCRIPTION QUEUE MANAGER - Prevent "too many concurrent REQs"
+// ========================================
+/**
+ * Manages NOSTR subscriptions to avoid overwhelming the relay
+ * Strfry and other relays limit concurrent REQs per connection
+ */
+const SubscriptionQueue = {
+    MAX_CONCURRENT: 3,  // Maximum concurrent subscriptions
+    DELAY_BETWEEN: 100, // Delay between starting subscriptions (ms)
+    activeCount: 0,
+    queue: [],
+    
+    /**
+     * Create a managed subscription that respects relay limits
+     * @param {object} relay - The relay to subscribe to
+     * @param {array} filters - Array of filters
+     * @param {object} options - Options including onEvent, onEose, timeout
+     * @returns {Promise<array>} Events received
+     */
+    async createSubscription(relay, filters, options = {}) {
+        const { onEvent, onEose, timeout = 8000 } = options;
+        
+        return new Promise((resolve, reject) => {
+            const task = {
+                relay,
+                filters,
+                onEvent,
+                onEose,
+                timeout,
+                resolve,
+                reject
+            };
+            
+            this.queue.push(task);
+            this.processQueue();
+        });
+    },
+    
+    /**
+     * Process the queue, starting subscriptions as slots become available
+     */
+    processQueue() {
+        while (this.queue.length > 0 && this.activeCount < this.MAX_CONCURRENT) {
+            const task = this.queue.shift();
+            this.executeSubscription(task);
+        }
+    },
+    
+    /**
+     * Execute a single subscription
+     */
+    async executeSubscription(task) {
+        this.activeCount++;
+        console.log(`[SubQueue] Starting subscription (${this.activeCount}/${this.MAX_CONCURRENT} active, ${this.queue.length} queued)`);
+        
+        const events = [];
+        let resolved = false;
+        
+        const cleanup = () => {
+            if (!resolved) {
+                resolved = true;
+                this.activeCount--;
+                console.log(`[SubQueue] Subscription complete (${this.activeCount}/${this.MAX_CONCURRENT} active)`);
+                // Process next in queue after small delay
+                setTimeout(() => this.processQueue(), this.DELAY_BETWEEN);
+            }
+        };
+        
+        try {
+            const sub = task.relay.sub(task.filters);
+            
+            const timeoutId = setTimeout(() => {
+                try { sub.unsub(); } catch(e) {}
+                cleanup();
+                task.resolve(events);
+            }, task.timeout);
+            
+            sub.on('event', (event) => {
+                events.push(event);
+                if (task.onEvent) task.onEvent(event);
+            });
+            
+            sub.on('eose', () => {
+                clearTimeout(timeoutId);
+                try { sub.unsub(); } catch(e) {}
+                cleanup();
+                if (task.onEose) task.onEose(events);
+                task.resolve(events);
+            });
+            
+        } catch (error) {
+            cleanup();
+            console.error('[SubQueue] Subscription error:', error);
+            task.resolve(events);
+        }
+    },
+    
+    /**
+     * Reset the queue (useful when connection is lost)
+     */
+    reset() {
+        this.activeCount = 0;
+        this.queue = [];
+    }
+};
+
+// Expose to window for use in other files
+if (typeof window !== 'undefined') {
+    window.SubscriptionQueue = SubscriptionQueue;
+}
+
+/**
+ * Wrap a relay's sub method to use SubscriptionQueue automatically
+ * This prevents "too many concurrent REQs" errors on strfry relays
+ * @param {object} relay - The relay object to wrap
+ * @returns {object} The wrapped relay with managed subscriptions
+ */
+function wrapRelayWithQueue(relay) {
+    if (!relay || !relay.sub || relay._queueWrapped) {
+        return relay;
+    }
+    
+    const originalSub = relay.sub.bind(relay);
+    
+    // Create a wrapper that mimics the subscription interface
+    relay.sub = function(filters, opts = {}) {
+        console.log('[RelayWrapper] Intercepted sub() call, using SubscriptionQueue');
+        
+        // Create an event emitter-like object
+        const handlers = { event: [], eose: [] };
+        const events = [];
+        let unsubbed = false;
+        
+        const subObject = {
+            on: function(type, handler) {
+                if (handlers[type]) {
+                    handlers[type].push(handler);
+                }
+                return this;
+            },
+            unsub: function() {
+                unsubbed = true;
+                console.log('[RelayWrapper] Sub manually unsubbed');
+            }
+        };
+        
+        // Execute via SubscriptionQueue
+        SubscriptionQueue.createSubscription(relay._originalRelay || relay, filters, {
+            timeout: opts.timeout || 8000,
+            onEvent: (event) => {
+                if (!unsubbed) {
+                    events.push(event);
+                    handlers.event.forEach(h => h(event));
+                }
+            },
+            onEose: (allEvents) => {
+                if (!unsubbed) {
+                    handlers.eose.forEach(h => h());
+                }
+            },
+            // Pass the original sub function for internal use
+            _originalSub: originalSub
+        }).catch(err => {
+            console.warn('[RelayWrapper] Subscription error:', err);
+            handlers.eose.forEach(h => h());
+        });
+        
+        return subObject;
+    };
+    
+    // Store original relay reference and mark as wrapped
+    relay._originalRelay = { sub: originalSub, publish: relay.publish };
+    relay._queueWrapped = true;
+    
+    console.log('[RelayWrapper] Relay wrapped with SubscriptionQueue');
+    return relay;
+}
+
+// Modify SubscriptionQueue to use original sub when available
+const originalExecuteSubscription = SubscriptionQueue.executeSubscription.bind(SubscriptionQueue);
+SubscriptionQueue.executeSubscription = async function(task) {
+    this.activeCount++;
+    console.log(`[SubQueue] Starting (${this.activeCount}/${this.MAX_CONCURRENT} active, ${this.queue.length} queued)`);
+    
+    const events = [];
+    let resolved = false;
+    
+    const cleanup = () => {
+        if (!resolved) {
+            resolved = true;
+            this.activeCount--;
+            setTimeout(() => this.processQueue(), this.DELAY_BETWEEN);
+        }
+    };
+    
+    try {
+        // Get the actual relay sub function
+        let subFn;
+        if (task.relay._originalRelay && task.relay._originalRelay.sub) {
+            subFn = task.relay._originalRelay.sub;
+        } else if (task.relay.sub && !task.relay._queueWrapped) {
+            subFn = task.relay.sub.bind(task.relay);
+        } else if (task._originalSub) {
+            subFn = task._originalSub;
+        } else {
+            // Fallback: try to use the relay's sub
+            subFn = task.relay.sub ? task.relay.sub.bind(task.relay) : null;
+        }
+        
+        if (!subFn) {
+            console.error('[SubQueue] No sub function available');
+            cleanup();
+            task.resolve(events);
+            return;
+        }
+        
+        const sub = subFn(task.filters);
+        
+        const timeoutId = setTimeout(() => {
+            try { sub.unsub(); } catch(e) {}
+            cleanup();
+            task.resolve(events);
+        }, task.timeout);
+        
+        sub.on('event', (event) => {
+            events.push(event);
+            if (task.onEvent) task.onEvent(event);
+        });
+        
+        sub.on('eose', () => {
+            clearTimeout(timeoutId);
+            try { sub.unsub(); } catch(e) {}
+            cleanup();
+            if (task.onEose) task.onEose(events);
+            task.resolve(events);
+        });
+        
+    } catch (error) {
+        cleanup();
+        console.error('[SubQueue] Error:', error);
+        task.resolve(events);
+    }
+};
+
+// Expose wrapper function
+if (typeof window !== 'undefined') {
+    window.wrapRelayWithQueue = wrapRelayWithQueue;
 }
 
 // ========================================
@@ -752,10 +1010,12 @@ const RelayManager = {
         this.close(); // Close existing connection first
         
         const relay = NostrTools.relayInit(relayUrl);
-        NostrState.nostrRelay = relay;
+        // Wrap relay with SubscriptionQueue to prevent "too many concurrent REQs"
+        const wrappedRelay = (typeof wrapRelayWithQueue === 'function') ? wrapRelayWithQueue(relay) : relay;
+        NostrState.nostrRelay = wrappedRelay;
         syncLegacyVariables();
         
-        return relay;
+        return wrappedRelay;
     },
     
     /**
@@ -2138,9 +2398,16 @@ async function sendNIP42Auth(relayUrl, forceSend = false) {
         return;
     }
     
-    // Check cooldown period (even if forceSend, respect cooldown to avoid spam)
+    // Check cooldown period - even forced sends must respect a minimum 5-second cooldown
     const now = Date.now();
     const timeSinceLastAuth = now - NostrState.lastNIP42AuthTime;
+    const MIN_COOLDOWN = 5000; // 5 seconds minimum even for forced sends
+    
+    if (timeSinceLastAuth < MIN_COOLDOWN) {
+        console.log(`⏳ NIP-42 auth sent ${Math.floor(timeSinceLastAuth/1000)}s ago, waiting min cooldown (5s)`);
+        return;
+    }
+    
     if (!forceSend && timeSinceLastAuth < NostrState.NIP42_AUTH_COOLDOWN) {
         console.log(`⏳ NIP-42 auth sent recently (${Math.floor(timeSinceLastAuth/1000)}s ago), skipping to avoid spam`);
         return;
@@ -8075,5 +8342,27 @@ if (typeof window !== 'undefined') {
     window.fetchUserBadges = fetchUserBadges;
     window.renderBadge = renderBadge;
     window.displayUserBadges = displayUserBadges;
+    
+    // Clean up WebSocket connections when page unloads to prevent "too many concurrent REQs"
+    window.addEventListener('beforeunload', function() {
+        console.log('[Cleanup] Page unloading, closing relay connections...');
+        try {
+            if (NostrState.nostrRelay) {
+                // Close all active subscriptions
+                if (SubscriptionQueue) {
+                    SubscriptionQueue.reset();
+                }
+                // Close the WebSocket connection
+                if (NostrState.nostrRelay.close) {
+                    NostrState.nostrRelay.close();
+                }
+                NostrState.nostrRelay = null;
+                NostrState.isNostrConnected = false;
+            }
+            RelayManager.close();
+        } catch (e) {
+            console.warn('[Cleanup] Error closing relay:', e);
+        }
+    });
 }
 

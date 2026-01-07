@@ -842,7 +842,7 @@
                     <div>BILAN</div>
                     <div>USERS</div>
                     <div>RUNWAY</div>
-                    <div>CASH</div>
+                    <div>SYNC ⏰</div>
                 </div>
                 <div id="stations-list">
                     <!-- Station rows rendered here -->
@@ -877,6 +877,14 @@
                         <div class="stat-box">
                             <div class="stat-value" id="detail-zencard">--</div>
                             <div class="stat-label">ZENCARD</div>
+                        </div>
+                        <div class="stat-box" title="Solar sync time - when station runs 20h12 cycle">
+                            <div class="stat-value" id="detail-solar" style="color: var(--accent-cyan)">--:--</div>
+                            <div class="stat-label">⏰ SOLAR SYNC</div>
+                        </div>
+                        <div class="stat-box" title="Station GPS coordinates">
+                            <div class="stat-value" id="detail-geo" style="font-size: 0.9rem">--</div>
+                            <div class="stat-label">📍 LOCATION</div>
                         </div>
                     </div>
                     <div class="panel-content">
@@ -1103,13 +1111,18 @@
                 if (!existing || event.created_at > existing.created_at) {
                     stationsData.set(stationId, {
                         stationId,
-                        uplanetname: getTagValue(tags, 'uplanetname') || stationId?.substring(0, 12),
+                        // Station display name (from relay domain or truncated station ID)
+                        stationName: getTagValue(tags, 'station:name') || stationId?.substring(0, 12) || 'unknown',
+                        // Swarm ID = shared public key (NOT the secret UPLANETNAME!)
+                        swarmId: getTagValue(tags, 'swarm_id') || 'default',
                         week: getTagValue(tags, 'week'),
                         healthStatus: getTagValue(tags, 'health:status') || 'healthy',
                         bilan: parseFloat(getTagValue(tags, 'health:bilan') || 0),
+                        // Shared wallets (same for all stations in swarm)
                         cashBalance: parseFloat(getTagValue(tags, 'balance:cash') || 0),
                         rndBalance: parseFloat(getTagValue(tags, 'balance:rnd') || 0),
                         assetsBalance: parseFloat(getTagValue(tags, 'balance:assets') || 0),
+                        // Local station data (unique per station)
                         multipassUsed: parseInt(getTagValue(tags, 'capacity:multipass_used') || 0),
                         multipassTotal: parseInt(getTagValue(tags, 'capacity:multipass_total') || 250),
                         zencardTotal: parseInt(getTagValue(tags, 'capacity:zencard_total') || 0),
@@ -1118,6 +1131,10 @@
                         zencardCapacity: parseInt(getTagValue(tags, 'capacity:zencard_capacity') || 24),
                         weeksRunway: parseInt(getTagValue(tags, 'health:weeks_runway') || 0),
                         revenueTotal: parseFloat(getTagValue(tags, 'revenue:total') || 0),
+                        // Station location for solar time sync
+                        stationLat: parseFloat(getTagValue(tags, 'geo:lat') || 0),
+                        stationLon: parseFloat(getTagValue(tags, 'geo:lon') || 0),
+                        solarOffset: getTagValue(tags, 'sync:solar_offset') || '--:--',
                         created_at: event.created_at,
                         content
                     });
@@ -1173,7 +1190,7 @@
                     <div class="station-core ${station.healthStatus}">
                         ${getStatusEmoji(station.healthStatus)}
                     </div>
-                    <div class="station-label">${station.uplanetname}</div>
+                    <div class="station-label">${station.stationName}</div>
                 `;
 
                 canvas.appendChild(node);
@@ -1222,16 +1239,22 @@
                 row.className = `station-row ${station.stationId === selectedStationId ? 'selected' : ''}`;
                 row.onclick = () => selectStation(station.stationId);
 
+                // Format solar offset display
+                const solarDisplay = station.solarOffset || '--:--';
+                const hasGeo = station.stationLat && station.stationLon && station.stationLat !== 0;
+
                 row.innerHTML = `
                     <div class="station-name-cell">
                         <div class="station-mini-status ${station.healthStatus}"></div>
-                        <span>${station.uplanetname}</span>
+                        <span>${station.stationName}</span>
                     </div>
                     <div>${station.healthStatus.toUpperCase()}</div>
                     <div style="color: ${station.bilan >= 0 ? 'var(--accent-green)' : 'var(--accent-red)'}">${station.bilan.toFixed(1)} Ẑ</div>
                     <div>MP:${station.multipassUsed} ZC:${station.zencardTotal}</div>
                     <div>${station.weeksRunway}w</div>
-                    <div>${station.cashBalance.toFixed(1)} Ẑ</div>
+                    <div title="Solar sync time (20h12 local solar)" style="color: var(--accent-cyan)">
+                        ${hasGeo ? '🌍' : '📍'} ${solarDisplay}
+                    </div>
                 `;
 
                 container.appendChild(row);
@@ -1246,7 +1269,7 @@
 
             // Update details panel
             document.getElementById('station-details').classList.add('active');
-            document.getElementById('detail-name').textContent = station.uplanetname;
+            document.getElementById('detail-name').textContent = station.stationName;
             document.getElementById('detail-status').className = `station-hero-status ${station.healthStatus}`;
             document.getElementById('detail-status').innerHTML = `<span class="status-dot ${station.healthStatus === 'healthy' ? 'online' : station.healthStatus === 'warning' ? 'warning' : 'offline'}"></span>${station.healthStatus.toUpperCase()}`;
             
@@ -1258,6 +1281,13 @@
             document.getElementById('detail-cash').textContent = `${station.cashBalance.toFixed(2)} Ẑ`;
             document.getElementById('detail-rnd').textContent = `${station.rndBalance.toFixed(2)} Ẑ`;
             document.getElementById('detail-assets').textContent = `${station.assetsBalance.toFixed(2)} Ẑ`;
+            
+            // Solar sync and geo info
+            document.getElementById('detail-solar').textContent = station.solarOffset || '--:--';
+            const hasGeo = station.stationLat && station.stationLon && station.stationLat !== 0;
+            document.getElementById('detail-geo').textContent = hasGeo 
+                ? `${station.stationLat.toFixed(2)}°, ${station.stationLon.toFixed(2)}°`
+                : 'N/A';
             
             // Calculate bar widths (relative to max in constellation)
             const maxCash = Math.max(...Array.from(stationsData.values()).map(s => s.cashBalance), 1);
@@ -1314,26 +1344,50 @@
         function jumpToStation() {
             if (selectedStationId) {
                 const station = stationsData.get(selectedStationId);
-                playJumpAnimation(station.uplanetname);
+                playJumpAnimation(station.stationName);
                 // In future: could redirect to station's local dashboard
                 console.log('🚀 Jump to station:', station);
             }
         }
 
         // Update aggregates
+        // NOTE: CASH, RnD, ASSETS are SHARED wallets (same for all stations in a swarm)
+        // They should NOT be summed - we take the value from ONE station per swarm
+        // LOCAL values (users, revenue) ARE summed across all stations
         function updateAggregates() {
             const stations = Array.from(stationsData.values());
             if (stations.length === 0) return;
 
-            let totalCash = 0, totalRnd = 0, totalAssets = 0, totalRevenue = 0;
+            // Group stations by swarm_id to handle shared wallets correctly
+            const swarmMap = new Map();
+            stations.forEach(s => {
+                const swarmId = s.swarmId || s.uplanetname || 'default';
+                if (!swarmMap.has(swarmId)) {
+                    swarmMap.set(swarmId, []);
+                }
+                swarmMap.get(swarmId).push(s);
+            });
+
+            // SHARED wallets: take from most recent station per swarm (not sum!)
+            let totalCash = 0, totalRnd = 0, totalAssets = 0;
+            swarmMap.forEach((swarmStations, swarmId) => {
+                // Get most recent report for this swarm
+                const latestStation = swarmStations.reduce((latest, s) => 
+                    s.created_at > latest.created_at ? s : latest
+                );
+                // Add shared wallet values ONCE per swarm
+                totalCash += latestStation.cashBalance;
+                totalRnd += latestStation.rndBalance;
+                totalAssets += latestStation.assetsBalance;
+            });
+
+            // LOCAL values: sum across ALL stations
+            let totalRevenue = 0;
             let totalMultipass = 0, totalMultipassCap = 0;
             let totalZencardRenters = 0, totalZencardOwners = 0;
             let healthyCount = 0;
 
             stations.forEach(s => {
-                totalCash += s.cashBalance;
-                totalRnd += s.rndBalance;
-                totalAssets += s.assetsBalance;
                 totalRevenue += s.revenueTotal;
                 totalMultipass += s.multipassUsed;
                 totalMultipassCap += s.multipassTotal;
@@ -1352,6 +1406,7 @@
             document.getElementById('agg-capacity').textContent = `${capacityPercent}%`;
             document.getElementById('agg-zencard').textContent = `${totalZencardRenters}🏠+${totalZencardOwners}👑`;
 
+            // Display SHARED wallet values (correctly not summed across stations)
             document.getElementById('total-cash').textContent = `${totalCash.toFixed(2)} Ẑ`;
             document.getElementById('total-rnd').textContent = `${totalRnd.toFixed(2)} Ẑ`;
             document.getElementById('total-assets').textContent = `${totalAssets.toFixed(2)} Ẑ`;

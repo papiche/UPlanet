@@ -1,0 +1,2188 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>📝 Éditeur Collaboratif - UMAP Commons</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📝</text></svg>">
+    
+    <!-- Nostr integration -->
+    <script src="nostr.bundle.js"></script>
+    <!-- Common UPlanet JavaScript -->
+    <script src="common.js"></script>
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+    
+    <style>
+        /* ═══════════════════════════════════════════════════════════════════
+           CSS VARIABLES - Coherent with umap_index.html
+           ═══════════════════════════════════════════════════════════════════ */
+        :root {
+            --bg-primary: #0a0f1a;
+            --bg-secondary: #111827;
+            --bg-card: #1a2235;
+            --bg-card-hover: #232d42;
+            --bg-editor: #0d1117;
+            --accent-cyan: #06b6d4;
+            --accent-emerald: #10b981;
+            --accent-amber: #f59e0b;
+            --accent-rose: #f43f5e;
+            --accent-violet: #8b5cf6;
+            --text-primary: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            --border-color: #2d3a4f;
+            --glow-cyan: rgba(6, 182, 212, 0.3);
+            --glow-emerald: rgba(16, 185, 129, 0.3);
+            --selection: rgba(6, 182, 212, 0.3);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            line-height: 1.6;
+        }
+
+        /* Animated background */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: 
+                radial-gradient(ellipse at 20% 20%, rgba(6, 182, 212, 0.08) 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 80%, rgba(139, 92, 246, 0.08) 0%, transparent 50%),
+                radial-gradient(ellipse at 50% 50%, rgba(16, 185, 129, 0.05) 0%, transparent 70%);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        /* ═══════════════════════════════════════════════════════════════════
+           HEADER
+           ═══════════════════════════════════════════════════════════════════ */
+        .editor-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 24px;
+            background: linear-gradient(135deg, var(--bg-card) 0%, var(--bg-secondary) 100%);
+            border-bottom: 1px solid var(--border-color);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .back-link {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--text-secondary);
+            text-decoration: none;
+            padding: 8px 12px;
+            border-radius: 8px;
+            transition: all 0.2s;
+        }
+
+        .back-link:hover {
+            background: var(--bg-card-hover);
+            color: var(--accent-cyan);
+        }
+
+        .editor-title-input {
+            background: transparent;
+            border: none;
+            font-size: 1.4rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            width: 350px;
+            outline: none;
+            font-family: inherit;
+        }
+
+        .editor-title-input:focus {
+            border-bottom: 2px solid var(--accent-cyan);
+        }
+
+        .editor-title-input::placeholder {
+            color: var(--text-muted);
+        }
+
+        .umap-badge {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 14px;
+            background: linear-gradient(135deg, rgba(6, 182, 212, 0.2), rgba(16, 185, 129, 0.2));
+            border: 1px solid var(--accent-cyan);
+            border-radius: 20px;
+            font-size: 0.85rem;
+            color: var(--accent-cyan);
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 18px;
+            border-radius: 10px;
+            font-weight: 500;
+            font-size: 0.9rem;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-family: inherit;
+            text-decoration: none;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--accent-cyan), var(--accent-emerald));
+            color: var(--bg-primary);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 15px var(--glow-cyan);
+        }
+
+        .btn-secondary {
+            background: var(--bg-card);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+        }
+
+        .btn-secondary:hover {
+            border-color: var(--accent-cyan);
+            background: var(--bg-card-hover);
+        }
+
+        .btn-danger {
+            background: rgba(239, 68, 68, 0.2);
+            color: #ef4444;
+            border: 1px solid rgba(239, 68, 68, 0.5);
+        }
+
+        .btn-danger:hover {
+            background: rgba(239, 68, 68, 0.3);
+        }
+
+        .connection-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 14px;
+            background: var(--bg-secondary);
+            border-radius: 20px;
+            font-size: 0.85rem;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--accent-rose);
+        }
+
+        .status-dot.connected {
+            background: var(--accent-emerald);
+            box-shadow: 0 0 10px var(--accent-emerald);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        /* ═══════════════════════════════════════════════════════════════════
+           META BAR
+           ═══════════════════════════════════════════════════════════════════ */
+        .editor-meta-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 24px;
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-color);
+            font-size: 0.85rem;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .meta-left {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+
+        .version-badge {
+            background: rgba(16, 185, 129, 0.2);
+            color: var(--accent-emerald);
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-weight: 500;
+        }
+
+        .author-info {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--text-secondary);
+        }
+
+        .author-avatar {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            border: 2px solid var(--accent-cyan);
+        }
+
+        .doc-type-selector {
+            display: flex;
+            gap: 6px;
+        }
+
+        .doc-type-btn {
+            padding: 6px 12px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            background: transparent;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 0.8rem;
+            transition: all 0.2s;
+        }
+
+        .doc-type-btn:hover {
+            border-color: var(--accent-cyan);
+            color: var(--text-primary);
+        }
+
+        .doc-type-btn.active {
+            background: rgba(6, 182, 212, 0.2);
+            border-color: var(--accent-cyan);
+            color: var(--accent-cyan);
+        }
+
+        .collaborators {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .collaborator-avatars {
+            display: flex;
+        }
+
+        .collaborator-avatars img {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            border: 2px solid var(--bg-secondary);
+            margin-left: -8px;
+        }
+
+        .collaborator-avatars img:first-child {
+            margin-left: 0;
+        }
+
+        /* ═══════════════════════════════════════════════════════════════════
+           MAIN CONTAINER
+           ═══════════════════════════════════════════════════════════════════ */
+        .editor-container {
+            display: flex;
+            max-width: 1800px;
+            margin: 0 auto;
+            min-height: calc(100vh - 140px);
+            position: relative;
+            z-index: 1;
+        }
+
+        /* ═══════════════════════════════════════════════════════════════════
+           EDITOR MAIN
+           ═══════════════════════════════════════════════════════════════════ */
+        .editor-main {
+            flex: 1;
+            padding: 24px 40px;
+            overflow-y: auto;
+        }
+
+        .toolbar {
+            display: flex;
+            gap: 4px;
+            padding: 12px 16px;
+            background: var(--bg-card);
+            border-radius: 12px 12px 0 0;
+            border: 1px solid var(--border-color);
+            border-bottom: none;
+            flex-wrap: wrap;
+        }
+
+        .toolbar-btn {
+            width: 36px;
+            height: 36px;
+            border-radius: 6px;
+            border: none;
+            background: transparent;
+            color: var(--text-secondary);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1rem;
+            transition: all 0.2s ease;
+        }
+
+        .toolbar-btn:hover {
+            background: var(--bg-card-hover);
+            color: var(--text-primary);
+        }
+
+        .toolbar-btn.active {
+            background: rgba(6, 182, 212, 0.2);
+            color: var(--accent-cyan);
+        }
+
+        .toolbar-divider {
+            width: 1px;
+            height: 24px;
+            background: var(--border-color);
+            margin: 6px 8px;
+        }
+
+        .editor-wrapper {
+            background: var(--bg-editor);
+            border: 1px solid var(--border-color);
+            border-radius: 0 0 12px 12px;
+            min-height: 500px;
+            position: relative;
+        }
+
+        .editor-wrapper:focus-within {
+            border-color: var(--accent-cyan);
+            box-shadow: 0 0 0 2px var(--glow-cyan);
+        }
+
+        /* Milkdown / ProseMirror Styling */
+        #milkdown-root {
+            padding: 32px 40px;
+            min-height: 500px;
+        }
+
+        #milkdown-root .ProseMirror {
+            outline: none;
+            font-family: 'Inter', sans-serif;
+            font-size: 1.05rem;
+            line-height: 1.8;
+            color: var(--text-primary);
+        }
+
+        #milkdown-root .ProseMirror h1 {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--accent-cyan);
+            margin: 1.5em 0 0.5em;
+            padding-bottom: 0.3em;
+            border-bottom: 2px solid var(--border-color);
+        }
+
+        #milkdown-root .ProseMirror h2 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: var(--accent-emerald);
+            margin: 1.2em 0 0.4em;
+        }
+
+        #milkdown-root .ProseMirror h3 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin: 1em 0 0.3em;
+        }
+
+        #milkdown-root .ProseMirror p {
+            margin: 0.8em 0;
+        }
+
+        #milkdown-root .ProseMirror code {
+            font-family: 'JetBrains Mono', monospace;
+            background: rgba(6, 182, 212, 0.15);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.9em;
+            color: var(--accent-cyan);
+        }
+
+        #milkdown-root .ProseMirror pre {
+            background: #000;
+            border-radius: 8px;
+            padding: 16px 20px;
+            overflow-x: auto;
+            border: 1px solid var(--border-color);
+            margin: 1em 0;
+        }
+
+        #milkdown-root .ProseMirror pre code {
+            background: transparent;
+            padding: 0;
+            color: #e6edf3;
+        }
+
+        #milkdown-root .ProseMirror blockquote {
+            border-left: 4px solid var(--accent-cyan);
+            padding-left: 16px;
+            margin: 1em 0;
+            color: var(--text-secondary);
+            font-style: italic;
+        }
+
+        #milkdown-root .ProseMirror ul,
+        #milkdown-root .ProseMirror ol {
+            padding-left: 24px;
+            margin: 0.8em 0;
+        }
+
+        #milkdown-root .ProseMirror li {
+            margin: 0.3em 0;
+        }
+
+        #milkdown-root .ProseMirror li[data-checked="true"] {
+            text-decoration: line-through;
+            color: var(--text-muted);
+        }
+
+        #milkdown-root .ProseMirror a {
+            color: var(--accent-cyan);
+            text-decoration: none;
+            border-bottom: 1px dashed var(--accent-cyan);
+        }
+
+        #milkdown-root .ProseMirror a:hover {
+            border-bottom-style: solid;
+        }
+
+        #milkdown-root .ProseMirror img {
+            max-width: 100%;
+            border-radius: 8px;
+            margin: 1em 0;
+        }
+
+        #milkdown-root .ProseMirror table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1em 0;
+        }
+
+        #milkdown-root .ProseMirror th,
+        #milkdown-root .ProseMirror td {
+            border: 1px solid var(--border-color);
+            padding: 10px 14px;
+            text-align: left;
+        }
+
+        #milkdown-root .ProseMirror th {
+            background: var(--bg-card);
+            font-weight: 600;
+        }
+
+        #milkdown-root .ProseMirror ::selection {
+            background: var(--selection);
+        }
+
+        #milkdown-root .ProseMirror > *:first-child {
+            margin-top: 0;
+        }
+
+        .editor-placeholder {
+            color: var(--text-muted);
+            position: absolute;
+            top: 32px;
+            left: 40px;
+            pointer-events: none;
+            font-size: 1.05rem;
+        }
+
+        .editor-placeholder.hidden {
+            display: none;
+        }
+
+        /* ═══════════════════════════════════════════════════════════════════
+           SIDEBAR
+           ═══════════════════════════════════════════════════════════════════ */
+        .editor-sidebar {
+            width: 340px;
+            background: var(--bg-secondary);
+            border-left: 1px solid var(--border-color);
+            padding: 24px;
+            overflow-y: auto;
+        }
+
+        .sidebar-section {
+            margin-bottom: 28px;
+        }
+
+        .sidebar-title {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* Workflow Guide */
+        .workflow-steps {
+            background: var(--bg-card);
+            border-radius: 12px;
+            padding: 16px;
+            border: 1px solid var(--border-color);
+        }
+
+        .workflow-step {
+            display: flex;
+            gap: 12px;
+            padding: 12px 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .workflow-step:last-child {
+            border-bottom: none;
+            padding-bottom: 0;
+        }
+
+        .workflow-step:first-child {
+            padding-top: 0;
+        }
+
+        .step-number {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: var(--bg-secondary);
+            color: var(--accent-cyan);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 0.85rem;
+            flex-shrink: 0;
+        }
+
+        .step-number.completed {
+            background: var(--accent-emerald);
+            color: var(--bg-primary);
+        }
+
+        .step-content h4 {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 4px;
+        }
+
+        .step-content p {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+        }
+
+        /* Proposals */
+        .proposal-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 14px;
+            margin-bottom: 12px;
+        }
+
+        .proposal-card.pending {
+            border-color: var(--accent-amber);
+        }
+
+        .proposal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .proposal-author {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .proposal-author img {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+        }
+
+        .proposal-summary {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            margin-bottom: 12px;
+        }
+
+        .proposal-votes {
+            display: flex;
+            gap: 8px;
+        }
+
+        .vote-btn {
+            flex: 1;
+            padding: 8px;
+            border-radius: 6px;
+            border: none;
+            cursor: pointer;
+            font-size: 1.1rem;
+            transition: all 0.2s ease;
+        }
+
+        .vote-btn.approve {
+            background: rgba(34, 197, 94, 0.2);
+        }
+
+        .vote-btn.approve:hover {
+            background: rgba(34, 197, 94, 0.4);
+        }
+
+        .vote-btn.reject {
+            background: rgba(239, 68, 68, 0.2);
+        }
+
+        .vote-btn.reject:hover {
+            background: rgba(239, 68, 68, 0.4);
+        }
+
+        .vote-btn.fork {
+            background: rgba(139, 92, 246, 0.2);
+        }
+
+        .vote-btn.fork:hover {
+            background: rgba(139, 92, 246, 0.4);
+        }
+
+        .vote-count {
+            margin-top: 10px;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        /* History */
+        .history-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            padding: 10px 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .history-item:last-child {
+            border-bottom: none;
+        }
+
+        .history-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: var(--bg-card);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.9rem;
+            flex-shrink: 0;
+        }
+
+        .history-content {
+            flex: 1;
+        }
+
+        .history-action {
+            font-size: 0.85rem;
+            color: var(--text-primary);
+        }
+
+        .history-time {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        /* Info Panel */
+        .info-panel {
+            background: var(--bg-card);
+            border-radius: 10px;
+            padding: 16px;
+            border: 1px solid var(--border-color);
+        }
+
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid var(--border-color);
+            font-size: 0.85rem;
+        }
+
+        .info-row:last-child {
+            border-bottom: none;
+        }
+
+        .info-label {
+            color: var(--text-secondary);
+        }
+
+        .info-value {
+            color: var(--text-primary);
+            font-weight: 500;
+        }
+
+        /* ═══════════════════════════════════════════════════════════════════
+           MODALS
+           ═══════════════════════════════════════════════════════════════════ */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .modal-overlay.active {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .modal-content {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 24px;
+            max-width: 500px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+            transform: translateY(20px);
+            transition: transform 0.3s ease;
+        }
+
+        .modal-overlay.active .modal-content {
+            transform: translateY(0);
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .modal-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: var(--accent-cyan);
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            font-size: 1.5rem;
+            cursor: pointer;
+        }
+
+        .modal-close:hover {
+            color: var(--text-primary);
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-label {
+            display: block;
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+        }
+
+        .form-input,
+        .form-textarea,
+        .form-select {
+            width: 100%;
+            padding: 12px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            color: var(--text-primary);
+            font-family: inherit;
+            font-size: 0.95rem;
+        }
+
+        .form-input:focus,
+        .form-textarea:focus,
+        .form-select:focus {
+            outline: none;
+            border-color: var(--accent-cyan);
+        }
+
+        .form-textarea {
+            min-height: 100px;
+            resize: vertical;
+        }
+
+        /* ═══════════════════════════════════════════════════════════════════
+           NOTIFICATIONS
+           ═══════════════════════════════════════════════════════════════════ */
+        .notification-container {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            z-index: 1001;
+        }
+
+        .notification-toast {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 16px 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
+            animation: slideIn 0.3s ease;
+            margin-top: 12px;
+        }
+
+        .notification-toast.success {
+            border-color: var(--accent-emerald);
+        }
+
+        .notification-toast.error {
+            border-color: var(--accent-rose);
+        }
+
+        .notification-toast.info {
+            border-color: var(--accent-cyan);
+        }
+
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+
+        /* ═══════════════════════════════════════════════════════════════════
+           RESPONSIVE
+           ═══════════════════════════════════════════════════════════════════ */
+        @media (max-width: 1200px) {
+            .editor-sidebar {
+                width: 300px;
+            }
+            .editor-main {
+                padding: 20px 24px;
+            }
+        }
+
+        @media (max-width: 900px) {
+            .editor-container {
+                flex-direction: column;
+            }
+            .editor-sidebar {
+                width: 100%;
+                border-left: none;
+                border-top: 1px solid var(--border-color);
+            }
+            .editor-header {
+                flex-direction: column;
+                gap: 16px;
+            }
+            .header-left, .header-actions {
+                width: 100%;
+                justify-content: center;
+            }
+            .editor-title-input {
+                width: 100%;
+                text-align: center;
+            }
+        }
+
+        @media (max-width: 600px) {
+            .toolbar {
+                justify-content: center;
+            }
+            .toolbar-divider {
+                display: none;
+            }
+            #milkdown-root {
+                padding: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- ═══════════════════════════════════════════════════════════════════
+         HEADER
+         ═══════════════════════════════════════════════════════════════════ -->
+    <header class="editor-header">
+        <div class="header-left">
+            <a href="plantnet.html" class="back-link">
+                ← Retour
+            </a>
+            <input type="text" class="editor-title-input" id="doc-title" 
+                   placeholder="Titre du document..." value="">
+            <div class="umap-badge" id="umap-badge">
+                <span>🗺️</span>
+                <span id="umap-coords">Chargement...</span>
+            </div>
+        </div>
+        <div class="header-actions">
+            <div class="connection-status">
+                <span class="status-dot" id="connection-dot"></span>
+                <span id="connection-text">Non connecté</span>
+            </div>
+            <button class="btn btn-secondary" id="btn-connect" onclick="connectNostr()">
+                🔑 Connexion
+            </button>
+            <button class="btn btn-secondary" id="btn-load" onclick="openLoadModal()">
+                📂 Charger
+            </button>
+            <button class="btn btn-primary" id="btn-publish" onclick="proposeDocument()" disabled>
+                📤 Proposer
+            </button>
+        </div>
+    </header>
+
+    <!-- ═══════════════════════════════════════════════════════════════════
+         META BAR
+         ═══════════════════════════════════════════════════════════════════ -->
+    <div class="editor-meta-bar">
+        <div class="meta-left">
+            <span class="version-badge" id="version-badge">Nouveau</span>
+            <div class="author-info">
+                <span>Auteur:</span>
+                <img class="author-avatar" id="author-avatar" src="https://robohash.org/anonymous?set=set4&size=24x24" alt="Author">
+                <span id="author-name">Non connecté</span>
+            </div>
+            <div class="doc-type-selector">
+                <button class="doc-type-btn active" data-type="commons" title="Règles et ressources partagées">🤝 Commun</button>
+                <button class="doc-type-btn" data-type="project" title="Projet collectif">🎯 Projet</button>
+                <button class="doc-type-btn" data-type="decision" title="Proposition de décision">🗳️ Décision</button>
+                <button class="doc-type-btn" data-type="garden" title="Plan de jardin">🌱 Jardin</button>
+                <button class="doc-type-btn" data-type="resource" title="Inventaire ressources">📦 Ressource</button>
+            </div>
+        </div>
+        <div class="collaborators" id="collaborators-section" style="display: none;">
+            <span style="color: var(--text-secondary); margin-right: 8px;">Éditeurs:</span>
+            <div class="collaborator-avatars" id="collaborator-avatars"></div>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════════════
+         MAIN CONTAINER
+         ═══════════════════════════════════════════════════════════════════ -->
+    <div class="editor-container">
+        <!-- Editor Main -->
+        <main class="editor-main">
+            <!-- Toolbar -->
+            <div class="toolbar">
+                <button class="toolbar-btn" data-cmd="bold" title="Gras (Ctrl+B)">𝐁</button>
+                <button class="toolbar-btn" data-cmd="italic" title="Italique (Ctrl+I)">𝐼</button>
+                <button class="toolbar-btn" data-cmd="strike" title="Barré">S̶</button>
+                <button class="toolbar-btn" data-cmd="code" title="Code">&lt;/&gt;</button>
+                <div class="toolbar-divider"></div>
+                <button class="toolbar-btn" data-cmd="h1" title="Titre 1">H1</button>
+                <button class="toolbar-btn" data-cmd="h2" title="Titre 2">H2</button>
+                <button class="toolbar-btn" data-cmd="h3" title="Titre 3">H3</button>
+                <div class="toolbar-divider"></div>
+                <button class="toolbar-btn" data-cmd="bullet" title="Liste à puces">•</button>
+                <button class="toolbar-btn" data-cmd="ordered" title="Liste numérotée">1.</button>
+                <button class="toolbar-btn" data-cmd="task" title="Tâches">☑️</button>
+                <div class="toolbar-divider"></div>
+                <button class="toolbar-btn" data-cmd="quote" title="Citation">❝</button>
+                <button class="toolbar-btn" data-cmd="link" title="Lien">🔗</button>
+                <button class="toolbar-btn" data-cmd="image" title="Image">🖼️</button>
+                <button class="toolbar-btn" data-cmd="table" title="Tableau">⊞</button>
+                <div class="toolbar-divider"></div>
+                <button class="toolbar-btn" data-cmd="undo" title="Annuler">↩️</button>
+                <button class="toolbar-btn" data-cmd="redo" title="Refaire">↪️</button>
+            </div>
+
+            <!-- Editor -->
+            <div class="editor-wrapper">
+                <div class="editor-placeholder" id="editor-placeholder">
+                    Commencez à rédiger votre document collaboratif...
+                </div>
+                <div id="milkdown-root"></div>
+            </div>
+        </main>
+
+        <!-- Sidebar -->
+        <aside class="editor-sidebar">
+            <!-- Workflow Guide -->
+            <section class="sidebar-section">
+                <h3 class="sidebar-title">📋 Workflow Collaboratif</h3>
+                <div class="workflow-steps">
+                    <div class="workflow-step">
+                        <div class="step-number" id="step-1">1</div>
+                        <div class="step-content">
+                            <h4>Connexion Nostr</h4>
+                            <p>Connectez-vous pour identifier l'auteur du document</p>
+                        </div>
+                    </div>
+                    <div class="workflow-step">
+                        <div class="step-number" id="step-2">2</div>
+                        <div class="step-content">
+                            <h4>Rédaction</h4>
+                            <p>Rédigez ou modifiez le document avec l'éditeur Markdown</p>
+                        </div>
+                    </div>
+                    <div class="workflow-step">
+                        <div class="step-number" id="step-3">3</div>
+                        <div class="step-content">
+                            <h4>Proposition</h4>
+                            <p>Soumettez aux éditeurs de l'UMAP pour validation</p>
+                        </div>
+                    </div>
+                    <div class="workflow-step">
+                        <div class="step-number" id="step-4">4</div>
+                        <div class="step-content">
+                            <h4>Validation ou Fork</h4>
+                            <p>La communauté valide ✅, rejette ❌ ou fork 🔀</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Pending Proposals -->
+            <section class="sidebar-section">
+                <h3 class="sidebar-title">📝 Propositions en attente</h3>
+                <div id="proposals-container">
+                    <p style="color: var(--text-muted); font-size: 0.85rem;">
+                        Connectez-vous pour voir les propositions de cette UMAP
+                    </p>
+                </div>
+            </section>
+
+            <!-- Version History -->
+            <section class="sidebar-section">
+                <h3 class="sidebar-title">📜 Historique</h3>
+                <div id="history-container">
+                    <p style="color: var(--text-muted); font-size: 0.85rem;">
+                        Aucun historique disponible
+                    </p>
+                </div>
+            </section>
+
+            <!-- Document Info -->
+            <section class="sidebar-section">
+                <h3 class="sidebar-title">ℹ️ Informations</h3>
+                <div class="info-panel">
+                    <div class="info-row">
+                        <span class="info-label">Type</span>
+                        <span class="info-value" id="info-type">🤝 Commun</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Gouvernance</span>
+                        <span class="info-value" id="info-governance">Majorité (2 votes)</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Fork</span>
+                        <span class="info-value" id="info-fork">Autorisé</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Likes</span>
+                        <span class="info-value" id="info-likes">0 ❤️</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Signé par</span>
+                        <span class="info-value" id="info-signer">UMAP</span>
+                    </div>
+                </div>
+            </section>
+        </aside>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════════════
+         LOAD DOCUMENT MODAL
+         ═══════════════════════════════════════════════════════════════════ -->
+    <div class="modal-overlay" id="load-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">📂 Charger un document</h2>
+                <button class="modal-close" onclick="closeLoadModal()">&times;</button>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Documents de cette UMAP</label>
+                <div id="umap-documents-list" style="max-height: 300px; overflow-y: auto;">
+                    <p style="color: var(--text-muted); font-size: 0.85rem;">Chargement...</p>
+                </div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Ou charger par ID d'événement Nostr</label>
+                <input type="text" class="form-input" id="load-event-id" placeholder="nevent1... ou note1...">
+            </div>
+            <button class="btn btn-primary" onclick="loadDocumentById()" style="width: 100%;">
+                Charger
+            </button>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════════════
+         PROPOSE MODAL
+         ═══════════════════════════════════════════════════════════════════ -->
+    <div class="modal-overlay" id="propose-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">📤 Proposer le document</h2>
+                <button class="modal-close" onclick="closeProposeModal()">&times;</button>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Résumé des modifications</label>
+                <textarea class="form-textarea" id="change-summary" placeholder="Décrivez brièvement vos modifications..."></textarea>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Quorum requis</label>
+                <select class="form-select" id="quorum-select">
+                    <option value="1">1 validation</option>
+                    <option value="2" selected>2 validations (majorité)</option>
+                    <option value="3">3 validations</option>
+                    <option value="all">Unanimité</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Politique de fork</label>
+                <select class="form-select" id="fork-policy">
+                    <option value="allowed" selected>Autorisé</option>
+                    <option value="restricted">Sur rejet seulement</option>
+                    <option value="forbidden">Interdit</option>
+                </select>
+            </div>
+            <button class="btn btn-primary" onclick="submitProposal()" style="width: 100%;">
+                📤 Soumettre la proposition
+            </button>
+        </div>
+    </div>
+
+    <!-- Notifications Container -->
+    <div class="notification-container" id="notification-container"></div>
+
+    <!-- ═══════════════════════════════════════════════════════════════════
+         JAVASCRIPT
+         ═══════════════════════════════════════════════════════════════════ -->
+    <script type="module">
+        // ═══════════════════════════════════════════════════════════════════
+        // MILKDOWN IMPORTS
+        // ═══════════════════════════════════════════════════════════════════
+        import { Editor, rootCtx, defaultValueCtx, editorViewCtx } from 'https://esm.sh/@milkdown/core@7.3.6';
+        import { commonmark } from 'https://esm.sh/@milkdown/preset-commonmark@7.3.6';
+        import { gfm } from 'https://esm.sh/@milkdown/preset-gfm@7.3.6';
+        import { history } from 'https://esm.sh/@milkdown/plugin-history@7.3.6';
+        import { listener, listenerCtx } from 'https://esm.sh/@milkdown/plugin-listener@7.3.6';
+        import { clipboard } from 'https://esm.sh/@milkdown/plugin-clipboard@7.3.6';
+        import { cursor } from 'https://esm.sh/@milkdown/plugin-cursor@7.3.6';
+        import { indent } from 'https://esm.sh/@milkdown/plugin-indent@7.3.6';
+
+        // ═══════════════════════════════════════════════════════════════════
+        // GLOBAL STATE
+        // ═══════════════════════════════════════════════════════════════════
+        window.appState = {
+            editor: null,
+            isConnected: false,
+            userPubkey: null,
+            userNpub: null,
+            relay: null,
+            umapLat: null,
+            umapLon: null,
+            currentDocId: null,
+            currentDocEvent: null,
+            docType: 'commons',
+            markdown: ''
+        };
+
+        // ═══════════════════════════════════════════════════════════════════
+        // INITIALIZATION
+        // ═══════════════════════════════════════════════════════════════════
+        document.addEventListener('DOMContentLoaded', async () => {
+            // Parse URL parameters
+            const params = new URLSearchParams(window.location.search);
+            window.appState.umapLat = params.get('lat') || '0.00';
+            window.appState.umapLon = params.get('lon') || '0.00';
+            const docId = params.get('doc');
+            
+            // Update UMAP badge
+            document.getElementById('umap-coords').textContent = 
+                `UMAP ${window.appState.umapLat}, ${window.appState.umapLon}`;
+            document.getElementById('info-signer').textContent = 
+                `UMAP ${window.appState.umapLat.substring(0,5)}...`;
+            
+            // Initialize editor
+            await initEditor();
+            
+            // Setup document type selector
+            setupDocTypeSelector();
+            
+            // Auto-connect if extension available
+            if (window.nostr) {
+                // Don't auto-connect, let user click
+            }
+            
+            // Load document if specified
+            if (docId) {
+                await loadDocument(docId);
+            }
+            
+            // Load saved draft
+            loadDraft();
+        });
+
+        // ═══════════════════════════════════════════════════════════════════
+        // MILKDOWN EDITOR
+        // ═══════════════════════════════════════════════════════════════════
+        async function initEditor() {
+            const defaultContent = getDefaultContent();
+            
+            try {
+                window.appState.editor = await Editor.make()
+                    .config((ctx) => {
+                        ctx.set(rootCtx, document.getElementById('milkdown-root'));
+                        ctx.set(defaultValueCtx, defaultContent);
+                        
+                        ctx.get(listenerCtx).markdownUpdated((ctx, markdown, prevMarkdown) => {
+                            window.appState.markdown = markdown;
+                            saveDraft();
+                            updatePlaceholder(markdown);
+                        });
+                    })
+                    .use(commonmark)
+                    .use(gfm)
+                    .use(history)
+                    .use(listener)
+                    .use(clipboard)
+                    .use(cursor)
+                    .use(indent)
+                    .create();
+                
+                console.log('✅ Milkdown editor initialized');
+                updatePlaceholder(defaultContent);
+                
+            } catch (error) {
+                console.error('❌ Failed to initialize Milkdown:', error);
+                showNotification('Erreur lors du chargement de l\'éditeur', 'error');
+            }
+        }
+
+        function getDefaultContent() {
+            const templates = {
+                commons: `# Définition du Commun
+
+## 🎯 Objectif
+
+Décrivez ici l'objectif principal de cette ressource commune.
+
+## 📋 Règles de Gestion
+
+### Accès
+- Qui peut accéder à cette ressource ?
+- Quelles sont les conditions ?
+
+### Utilisation
+- Comment utiliser cette ressource ?
+- Quelles sont les limites ?
+
+### Maintenance
+- [ ] Tâche de maintenance 1
+- [ ] Tâche de maintenance 2
+
+## 🤝 Responsabilités
+
+| Rôle | Responsabilité | Personne |
+|------|----------------|----------|
+| Coordinateur | Organiser les réunions | À définir |
+| Mainteneur | Entretien régulier | À définir |
+
+## 📅 Calendrier
+
+- **Réunion mensuelle**: Premier lundi du mois
+- **Bilan annuel**: Décembre
+
+---
+
+*Document collaboratif de l'UMAP - Likez pour soutenir!*
+
+#UPlanet #commons #collaborative`,
+
+                project: `# Projet Collectif
+
+## 🎯 Vision
+
+Quelle est la vision de ce projet ?
+
+## 📋 Objectifs
+
+1. Objectif principal
+2. Objectif secondaire
+
+## 🗓️ Planning
+
+### Phase 1 : Préparation
+- [ ] Tâche 1
+- [ ] Tâche 2
+
+### Phase 2 : Réalisation
+- [ ] Tâche 3
+- [ ] Tâche 4
+
+## 👥 Équipe
+
+| Rôle | Personne |
+|------|----------|
+| Porteur | À définir |
+| Contributeurs | Ouverts |
+
+## 💰 Ressources
+
+- Budget estimé: À définir
+- Besoins matériels: À lister
+
+---
+
+#UPlanet #project #collaborative`,
+
+                decision: `# Proposition de Décision
+
+## 📝 Résumé
+
+Décrivez brièvement la décision à prendre.
+
+## 🔍 Contexte
+
+Pourquoi cette décision est-elle nécessaire ?
+
+## 🎯 Options
+
+### Option A
+- Avantages: 
+- Inconvénients:
+
+### Option B
+- Avantages:
+- Inconvénients:
+
+## 📊 Recommandation
+
+Quelle option est recommandée et pourquoi ?
+
+## 🗳️ Vote
+
+> Likez ce document pour voter POUR cette décision.
+> Forkez pour proposer une alternative.
+
+---
+
+#UPlanet #decision #vote`,
+
+                garden: `# Plan de Jardin
+
+## 🌱 Description
+
+Décrivez le jardin et son emplacement.
+
+## 📋 Cultures
+
+| Légume | Surface | Période | Responsable |
+|--------|---------|---------|-------------|
+| Tomates | 10m² | Mars-Sept | À définir |
+| Salades | 5m² | Avril-Oct | À définir |
+
+## 📅 Calendrier de Maintenance
+
+- [ ] **Janvier**: Préparation du sol
+- [ ] **Mars**: Semis
+- [ ] **Été**: Arrosage régulier
+- [ ] **Automne**: Récolte
+
+## 💧 Système d'Arrosage
+
+Décrire le système et les responsabilités.
+
+## 🤝 Participation
+
+Comment rejoindre ce projet jardin ?
+
+---
+
+#UPlanet #garden #ORE #collaborative`,
+
+                resource: `# Inventaire des Ressources
+
+## 📦 Description
+
+Quelle ressource est partagée ?
+
+## 📍 Localisation
+
+Où se trouve cette ressource ?
+
+## 📋 Inventaire
+
+| Item | Quantité | État | Disponibilité |
+|------|----------|------|---------------|
+| - | - | - | - |
+
+## 📝 Règles d'Emprunt
+
+1. Comment emprunter ?
+2. Durée maximum ?
+3. Comment rendre ?
+
+## 🔧 Maintenance
+
+- [ ] Vérification mensuelle
+- [ ] Nettoyage après usage
+
+---
+
+#UPlanet #resource #inventory`
+            };
+            
+            return templates[window.appState.docType] || templates.commons;
+        }
+
+        function updatePlaceholder(content) {
+            const placeholder = document.getElementById('editor-placeholder');
+            if (content && content.trim().length > 0) {
+                placeholder.classList.add('hidden');
+            } else {
+                placeholder.classList.remove('hidden');
+            }
+        }
+
+        function setEditorContent(markdown) {
+            if (window.appState.editor) {
+                window.appState.editor.action((ctx) => {
+                    const view = ctx.get(editorViewCtx);
+                    const { state } = view;
+                    const tr = state.tr.replaceWith(
+                        0, 
+                        state.doc.content.size,
+                        state.schema.nodeFromJSON({ type: 'doc', content: [] })
+                    );
+                    view.dispatch(tr);
+                });
+                
+                // Reinitialize with new content
+                initEditorWithContent(markdown);
+            }
+        }
+
+        async function initEditorWithContent(content) {
+            const root = document.getElementById('milkdown-root');
+            root.innerHTML = '';
+            
+            window.appState.editor = await Editor.make()
+                .config((ctx) => {
+                    ctx.set(rootCtx, root);
+                    ctx.set(defaultValueCtx, content);
+                    
+                    ctx.get(listenerCtx).markdownUpdated((ctx, markdown, prevMarkdown) => {
+                        window.appState.markdown = markdown;
+                        saveDraft();
+                        updatePlaceholder(markdown);
+                    });
+                })
+                .use(commonmark)
+                .use(gfm)
+                .use(history)
+                .use(listener)
+                .use(clipboard)
+                .use(cursor)
+                .use(indent)
+                .create();
+            
+            updatePlaceholder(content);
+        }
+
+        // ═══════════════════════════════════════════════════════════════════
+        // DOCUMENT TYPE SELECTOR
+        // ═══════════════════════════════════════════════════════════════════
+        function setupDocTypeSelector() {
+            const buttons = document.querySelectorAll('.doc-type-btn');
+            buttons.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    buttons.forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    
+                    const type = btn.dataset.type;
+                    window.appState.docType = type;
+                    
+                    // Update info panel
+                    const typeLabels = {
+                        commons: '🤝 Commun',
+                        project: '🎯 Projet',
+                        decision: '🗳️ Décision',
+                        garden: '🌱 Jardin',
+                        resource: '📦 Ressource'
+                    };
+                    document.getElementById('info-type').textContent = typeLabels[type];
+                    
+                    // Ask to load template if new document
+                    if (!window.appState.currentDocId) {
+                        if (confirm('Charger le template pour ce type de document ?')) {
+                            initEditorWithContent(getDefaultContent());
+                        }
+                    }
+                });
+            });
+        }
+
+        // ═══════════════════════════════════════════════════════════════════
+        // NOSTR CONNECTION
+        // ═══════════════════════════════════════════════════════════════════
+        window.connectNostr = async function() {
+            if (!window.nostr) {
+                showNotification('Extension Nostr non détectée (nos2x, Alby...)', 'error');
+                return;
+            }
+            
+            try {
+                const pubkey = await window.nostr.getPublicKey();
+                window.appState.userPubkey = pubkey;
+                window.appState.isConnected = true;
+                
+                // Convert to npub for display
+                if (window.NostrTools && window.NostrTools.nip19) {
+                    window.appState.userNpub = window.NostrTools.nip19.npubEncode(pubkey);
+                } else {
+                    window.appState.userNpub = pubkey.substring(0, 8) + '...' + pubkey.substring(pubkey.length - 4);
+                }
+                
+                // Update UI
+                document.getElementById('connection-dot').classList.add('connected');
+                document.getElementById('connection-text').textContent = 'Connecté';
+                document.getElementById('btn-connect').textContent = '✅ ' + window.appState.userNpub.substring(0, 12) + '...';
+                document.getElementById('btn-connect').disabled = true;
+                document.getElementById('btn-publish').disabled = false;
+                
+                document.getElementById('author-name').textContent = window.appState.userNpub.substring(0, 16) + '...';
+                document.getElementById('author-avatar').src = `https://robohash.org/${pubkey}?set=set4&size=24x24`;
+                
+                // Mark step 1 as completed
+                document.getElementById('step-1').classList.add('completed');
+                document.getElementById('step-1').textContent = '✓';
+                
+                // Connect to relay
+                await connectRelay();
+                
+                // Load UMAP documents
+                await loadUMAPDocuments();
+                
+                showNotification('Connecté avec succès!', 'success');
+                
+            } catch (error) {
+                console.error('Nostr connection error:', error);
+                showNotification('Erreur de connexion: ' + error.message, 'error');
+            }
+        };
+
+        async function connectRelay() {
+            const relayUrl = 'wss://relay.copylaradio.com';
+            
+            try {
+                if (window.NostrTools && window.NostrTools.Relay) {
+                    window.appState.relay = await window.NostrTools.Relay.connect(relayUrl);
+                    console.log('✅ Connected to relay:', relayUrl);
+                } else if (typeof connectToNostrRelay === 'function') {
+                    window.appState.relay = await connectToNostrRelay(relayUrl);
+                }
+            } catch (error) {
+                console.error('Relay connection error:', error);
+            }
+        }
+
+        // ═══════════════════════════════════════════════════════════════════
+        // DOCUMENT OPERATIONS
+        // ═══════════════════════════════════════════════════════════════════
+        async function loadUMAPDocuments() {
+            if (!window.appState.relay) return;
+            
+            const container = document.getElementById('umap-documents-list');
+            container.innerHTML = '<p style="color: var(--text-muted);">Chargement des documents...</p>';
+            
+            try {
+                const geoTag = `${window.appState.umapLat},${window.appState.umapLon}`;
+                
+                const filter = {
+                    kinds: [30023],
+                    '#t': ['collaborative', 'UPlanet'],
+                    '#g': [geoTag],
+                    limit: 20
+                };
+                
+                const events = [];
+                
+                const sub = window.appState.relay.subscribe([filter], {
+                    onevent(event) {
+                        events.push(event);
+                    },
+                    oneose() {
+                        renderDocumentsList(events, container);
+                    }
+                });
+                
+                // Timeout fallback
+                setTimeout(() => {
+                    if (events.length === 0) {
+                        container.innerHTML = '<p style="color: var(--text-muted);">Aucun document trouvé pour cette UMAP</p>';
+                    }
+                }, 5000);
+                
+            } catch (error) {
+                console.error('Error loading documents:', error);
+                container.innerHTML = '<p style="color: var(--text-muted);">Erreur de chargement</p>';
+            }
+        }
+
+        function renderDocumentsList(events, container) {
+            if (events.length === 0) {
+                container.innerHTML = '<p style="color: var(--text-muted);">Aucun document trouvé</p>';
+                return;
+            }
+            
+            container.innerHTML = '';
+            
+            events.sort((a, b) => b.created_at - a.created_at);
+            
+            events.forEach(event => {
+                const title = event.tags.find(t => t[0] === 'title')?.[1] || 'Sans titre';
+                const version = event.tags.find(t => t[0] === 'version')?.[1] || '1';
+                const date = new Date(event.created_at * 1000).toLocaleDateString('fr-FR');
+                
+                const item = document.createElement('div');
+                item.style.cssText = 'padding: 12px; background: var(--bg-secondary); border-radius: 8px; margin-bottom: 8px; cursor: pointer;';
+                item.innerHTML = `
+                    <div style="font-weight: 500; color: var(--text-primary);">${title}</div>
+                    <div style="font-size: 0.8rem; color: var(--text-muted);">v${version} • ${date}</div>
+                `;
+                item.addEventListener('click', () => {
+                    loadDocument(event.id);
+                    closeLoadModal();
+                });
+                container.appendChild(item);
+            });
+        }
+
+        window.loadDocument = async function(eventId) {
+            if (!window.appState.relay) {
+                showNotification('Non connecté au relay', 'error');
+                return;
+            }
+            
+            try {
+                const filter = { ids: [eventId], limit: 1 };
+                
+                const sub = window.appState.relay.subscribe([filter], {
+                    onevent(event) {
+                        window.appState.currentDocEvent = event;
+                        window.appState.currentDocId = event.id;
+                        
+                        // Update UI
+                        const title = event.tags.find(t => t[0] === 'title')?.[1] || 'Sans titre';
+                        const version = event.tags.find(t => t[0] === 'version')?.[1] || '1';
+                        
+                        document.getElementById('doc-title').value = title;
+                        document.getElementById('version-badge').textContent = `v${version}`;
+                        
+                        // Load content into editor
+                        initEditorWithContent(event.content);
+                        
+                        showNotification('Document chargé!', 'success');
+                        sub.close();
+                    }
+                });
+                
+            } catch (error) {
+                console.error('Error loading document:', error);
+                showNotification('Erreur de chargement', 'error');
+            }
+        };
+
+        window.loadDocumentById = function() {
+            const eventId = document.getElementById('load-event-id').value.trim();
+            if (eventId) {
+                loadDocument(eventId);
+                closeLoadModal();
+            }
+        };
+
+        // ═══════════════════════════════════════════════════════════════════
+        // PROPOSAL SYSTEM
+        // ═══════════════════════════════════════════════════════════════════
+        window.proposeDocument = function() {
+            if (!window.appState.isConnected) {
+                showNotification('Veuillez vous connecter d\'abord', 'error');
+                return;
+            }
+            
+            const title = document.getElementById('doc-title').value.trim();
+            if (!title) {
+                showNotification('Veuillez donner un titre au document', 'error');
+                return;
+            }
+            
+            document.getElementById('propose-modal').classList.add('active');
+        };
+
+        window.submitProposal = async function() {
+            const title = document.getElementById('doc-title').value.trim();
+            const summary = document.getElementById('change-summary').value.trim();
+            const quorum = document.getElementById('quorum-select').value;
+            const forkPolicy = document.getElementById('fork-policy').value;
+            
+            if (!summary) {
+                showNotification('Veuillez décrire vos modifications', 'error');
+                return;
+            }
+            
+            const content = window.appState.markdown;
+            const lat = window.appState.umapLat;
+            const lon = window.appState.umapLon;
+            
+            // Calculate content hash
+            const contentHash = await hashContent(content);
+            
+            // Build tags
+            const tags = [
+                ["d", `doc-${lat}-${lon}-${Date.now()}`],
+                ["title", title],
+                ["t", "collaborative"],
+                ["t", "UPlanet"],
+                ["t", window.appState.docType],
+                ["g", `${lat},${lon}`],
+                ["author", window.appState.userPubkey],
+                ["version", "1"],
+                ["quorum", quorum === 'all' ? 'unanimous' : quorum],
+                ["governance", quorum === 'all' ? 'unanimous' : 'majority'],
+                ["fork-policy", forkPolicy],
+                ["content-hash", `sha256:${contentHash}`],
+                ["change-summary", summary],
+                ["published_at", String(Math.floor(Date.now() / 1000))]
+            ];
+            
+            // If updating existing document
+            if (window.appState.currentDocEvent) {
+                const originalDTag = window.appState.currentDocEvent.tags.find(t => t[0] === 'd')?.[1];
+                const originalVersion = parseInt(window.appState.currentDocEvent.tags.find(t => t[0] === 'version')?.[1] || '1');
+                tags.push(["previous-version", window.appState.currentDocEvent.id]);
+                
+                // Update version tag
+                const versionTagIndex = tags.findIndex(t => t[0] === 'version');
+                tags[versionTagIndex] = ["version", String(originalVersion + 1)];
+            }
+            
+            const event = {
+                kind: 30023,
+                created_at: Math.floor(Date.now() / 1000),
+                tags: tags,
+                content: content
+            };
+            
+            try {
+                const signedEvent = await window.nostr.signEvent(event);
+                
+                if (window.appState.relay) {
+                    await window.appState.relay.publish(signedEvent);
+                }
+                
+                window.appState.currentDocEvent = signedEvent;
+                window.appState.currentDocId = signedEvent.id;
+                
+                // Update UI
+                document.getElementById('version-badge').textContent = 'v' + (tags.find(t => t[0] === 'version')?.[1] || '1');
+                document.getElementById('step-3').classList.add('completed');
+                document.getElementById('step-3').textContent = '✓';
+                
+                closeProposeModal();
+                showNotification('Document publié avec succès!', 'success');
+                
+                // Clear draft
+                localStorage.removeItem(`umap-draft-${lat}-${lon}`);
+                
+            } catch (error) {
+                console.error('Error publishing:', error);
+                showNotification('Erreur de publication: ' + error.message, 'error');
+            }
+        };
+
+        // ═══════════════════════════════════════════════════════════════════
+        // UTILITIES
+        // ═══════════════════════════════════════════════════════════════════
+        async function hashContent(content) {
+            const encoder = new TextEncoder();
+            const data = encoder.encode(content);
+            const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+            const hashArray = Array.from(new Uint8Array(hashBuffer));
+            return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+        }
+
+        function saveDraft() {
+            const key = `umap-draft-${window.appState.umapLat}-${window.appState.umapLon}`;
+            const draft = {
+                title: document.getElementById('doc-title').value,
+                content: window.appState.markdown,
+                docType: window.appState.docType,
+                timestamp: Date.now()
+            };
+            localStorage.setItem(key, JSON.stringify(draft));
+        }
+
+        function loadDraft() {
+            const key = `umap-draft-${window.appState.umapLat}-${window.appState.umapLon}`;
+            const draft = localStorage.getItem(key);
+            
+            if (draft) {
+                try {
+                    const data = JSON.parse(draft);
+                    // Only load if less than 24h old
+                    if (Date.now() - data.timestamp < 24 * 60 * 60 * 1000) {
+                        if (confirm('Un brouillon a été trouvé. Voulez-vous le restaurer ?')) {
+                            document.getElementById('doc-title').value = data.title || '';
+                            window.appState.docType = data.docType || 'commons';
+                            
+                            // Update doc type button
+                            document.querySelectorAll('.doc-type-btn').forEach(btn => {
+                                btn.classList.toggle('active', btn.dataset.type === window.appState.docType);
+                            });
+                            
+                            if (data.content) {
+                                initEditorWithContent(data.content);
+                            }
+                        }
+                    }
+                } catch (e) {
+                    console.error('Error loading draft:', e);
+                }
+            }
+        }
+
+        // ═══════════════════════════════════════════════════════════════════
+        // MODAL FUNCTIONS
+        // ═══════════════════════════════════════════════════════════════════
+        window.openLoadModal = function() {
+            document.getElementById('load-modal').classList.add('active');
+            if (window.appState.isConnected) {
+                loadUMAPDocuments();
+            }
+        };
+
+        window.closeLoadModal = function() {
+            document.getElementById('load-modal').classList.remove('active');
+        };
+
+        window.closeProposeModal = function() {
+            document.getElementById('propose-modal').classList.remove('active');
+        };
+
+        // Close modals on overlay click
+        document.querySelectorAll('.modal-overlay').forEach(modal => {
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    modal.classList.remove('active');
+                }
+            });
+        });
+
+        // ═══════════════════════════════════════════════════════════════════
+        // VOTING SYSTEM (Kind 7 Reactions)
+        // ═══════════════════════════════════════════════════════════════════
+        
+        // Load pending proposals for current UMAP
+        async function loadPendingProposals() {
+            if (!window.appState.relay || !window.appState.isConnected) return;
+            
+            const container = document.getElementById('proposals-container');
+            container.innerHTML = '<p style="color: var(--text-muted);">Chargement des propositions...</p>';
+            
+            try {
+                const geoTag = `${window.appState.umapLat},${window.appState.umapLon}`;
+                
+                // Fetch draft proposals (kind 30024) or collaborative documents (kind 30023)
+                const filter = {
+                    kinds: [30023, 30024],
+                    '#t': ['collaborative', 'UPlanet'],
+                    '#g': [geoTag],
+                    since: Math.floor(Date.now() / 1000) - (7 * 24 * 60 * 60), // Last 7 days
+                    limit: 20
+                };
+                
+                const events = [];
+                
+                const sub = window.appState.relay.subscribe([filter], {
+                    onevent(event) {
+                        events.push(event);
+                    },
+                    async oneose() {
+                        // For each event, fetch its votes
+                        for (const event of events) {
+                            event.votes = await fetchVotesForDocument(event.id);
+                        }
+                        renderProposals(events, container);
+                        sub.close();
+                    }
+                });
+                
+                setTimeout(() => {
+                    if (container.innerHTML.includes('Chargement')) {
+                        container.innerHTML = '<p style="color: var(--text-muted);">Aucune proposition en attente</p>';
+                    }
+                }, 8000);
+                
+            } catch (error) {
+                console.error('Error loading proposals:', error);
+                container.innerHTML = '<p style="color: var(--text-muted);">Erreur de chargement</p>';
+            }
+        }
+        
+        // Fetch votes (kind 7 reactions) for a document
+        async function fetchVotesForDocument(eventId) {
+            if (!window.appState.relay) return { approvals: 0, rejections: 0, forks: 0, voters: [] };
+            
+            return new Promise((resolve) => {
+                const votes = { approvals: 0, rejections: 0, forks: 0, voters: [] };
+                
+                const filter = {
+                    kinds: [7],
+                    '#e': [eventId],
+                    limit: 100
+                };
+                
+                const sub = window.appState.relay.subscribe([filter], {
+                    onevent(event) {
+                        const content = event.content;
+                        const voteTag = event.tags.find(t => t[0] === 'vote')?.[1];
+                        
+                        // Count by content or explicit vote tag
+                        if (content === '✅' || content === '+' || content === '👍' || voteTag === 'approve') {
+                            votes.approvals++;
+                        } else if (content === '❌' || content === '-' || content === '👎' || voteTag === 'reject') {
+                            votes.rejections++;
+                        } else if (content === '🔀' || voteTag === 'fork') {
+                            votes.forks++;
+                        }
+                        
+                        if (!votes.voters.includes(event.pubkey)) {
+                            votes.voters.push(event.pubkey);
+                        }
+                    },
+                    oneose() {
+                        sub.close();
+                        resolve(votes);
+                    }
+                });
+                
+                // Timeout fallback
+                setTimeout(() => resolve(votes), 3000);
+            });
+        }
+        
+        // Render proposals with vote counts
+        function renderProposals(events, container) {
+            if (events.length === 0) {
+                container.innerHTML = '<p style="color: var(--text-muted);">Aucune proposition en attente</p>';
+                return;
+            }
+            
+            container.innerHTML = '';
+            
+            // Sort by date (newest first)
+            events.sort((a, b) => b.created_at - a.created_at);
+            
+            // Show max 5 proposals
+            events.slice(0, 5).forEach(event => {
+                const title = event.tags.find(t => t[0] === 'title')?.[1] || 'Sans titre';
+                const summary = event.tags.find(t => t[0] === 'change-summary')?.[1] || 'Nouvelle proposition';
+                const quorum = parseInt(event.tags.find(t => t[0] === 'quorum')?.[1] || '2');
+                const authorPubkey = event.tags.find(t => t[0] === 'author')?.[1] || event.pubkey;
+                const votes = event.votes || { approvals: 0, rejections: 0, forks: 0 };
+                const timeAgo = formatTimeAgo(event.created_at);
+                
+                // Check if user already voted
+                const userVoted = votes.voters?.includes(window.appState.userPubkey);
+                
+                const card = document.createElement('div');
+                card.className = 'proposal-card' + (votes.approvals < quorum ? ' pending' : '');
+                card.innerHTML = `
+                    <div class="proposal-header">
+                        <div class="proposal-author">
+                            <img src="https://robohash.org/${authorPubkey}?set=set4&size=24x24" alt="">
+                            <span style="font-size: 0.85rem; color: var(--text-secondary);">${authorPubkey.substring(0, 8)}...</span>
+                        </div>
+                        <span style="font-size: 0.75rem; color: var(--text-muted);">${timeAgo}</span>
+                    </div>
+                    <div style="font-weight: 500; margin-bottom: 4px; color: var(--text-primary);">${escapeHtml(title)}</div>
+                    <div class="proposal-summary">${escapeHtml(summary)}</div>
+                    <div class="proposal-votes">
+                        <button class="vote-btn approve" onclick="voteOnDocument('${event.id}', 'approve')" ${userVoted ? 'disabled' : ''} title="Approuver">
+                            ✅ ${votes.approvals}
+                        </button>
+                        <button class="vote-btn reject" onclick="voteOnDocument('${event.id}', 'reject')" ${userVoted ? 'disabled' : ''} title="Rejeter">
+                            ❌ ${votes.rejections}
+                        </button>
+                        <button class="vote-btn fork" onclick="voteOnDocument('${event.id}', 'fork')" ${userVoted ? 'disabled' : ''} title="Demander Fork">
+                            🔀 ${votes.forks}
+                        </button>
+                    </div>
+                    <div class="vote-count">
+                        ${votes.approvals}/${quorum} validations • ${userVoted ? '✓ Vous avez voté' : 'En attente de votes'}
+                    </div>
+                `;
+                
+                // Add click to load document
+                card.querySelector('.proposal-header').style.cursor = 'pointer';
+                card.querySelector('.proposal-header').addEventListener('click', () => {
+                    loadDocument(event.id);
+                });
+                
+                container.appendChild(card);
+            });
+        }
+        
+        // Submit a vote (kind 7 reaction)
+        window.voteOnDocument = async function(eventId, voteType) {
+            if (!window.appState.isConnected) {
+                showNotification('Veuillez vous connecter pour voter', 'error');
+                return;
+            }
+            
+            const voteEmojis = {
+                'approve': '✅',
+                'reject': '❌',
+                'fork': '🔀'
+            };
+            
+            const event = {
+                kind: 7,
+                created_at: Math.floor(Date.now() / 1000),
+                content: voteEmojis[voteType],
+                tags: [
+                    ["e", eventId],
+                    ["vote", voteType],
+                    ["t", "collaborative-vote"],
+                    ["t", "UPlanet"]
+                ]
+            };
+            
+            try {
+                const signedEvent = await window.nostr.signEvent(event);
+                
+                if (window.appState.relay) {
+                    await window.appState.relay.publish(signedEvent);
+                }
+                
+                showNotification(`Vote "${voteType}" enregistré!`, 'success');
+                
+                // Refresh proposals
+                setTimeout(() => loadPendingProposals(), 1000);
+                
+            } catch (error) {
+                console.error('Error voting:', error);
+                showNotification('Erreur lors du vote: ' + error.message, 'error');
+            }
+        };
+        
+        // Helper: Format time ago
+        function formatTimeAgo(timestamp) {
+            const seconds = Math.floor(Date.now() / 1000) - timestamp;
+            
+            if (seconds < 60) return 'à l\'instant';
+            if (seconds < 3600) return `il y a ${Math.floor(seconds / 60)} min`;
+            if (seconds < 86400) return `il y a ${Math.floor(seconds / 3600)}h`;
+            if (seconds < 604800) return `il y a ${Math.floor(seconds / 86400)}j`;
+            return new Date(timestamp * 1000).toLocaleDateString('fr-FR');
+        }
+        
+        // Helper: Escape HTML
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
+        // Load proposals after connection
+        const originalConnectNostr = window.connectNostr;
+        window.connectNostr = async function() {
+            await originalConnectNostr();
+            if (window.appState.isConnected) {
+                await loadPendingProposals();
+            }
+        };
+
+        // ═══════════════════════════════════════════════════════════════════
+        // NOTIFICATIONS
+        // ═══════════════════════════════════════════════════════════════════
+        window.showNotification = function(message, type = 'info') {
+            const container = document.getElementById('notification-container');
+            const toast = document.createElement('div');
+            toast.className = `notification-toast ${type}`;
+            
+            const icons = { success: '✅', error: '❌', info: 'ℹ️' };
+            toast.innerHTML = `
+                <span style="font-size: 1.2rem;">${icons[type]}</span>
+                <span>${message}</span>
+            `;
+            
+            container.appendChild(toast);
+            
+            setTimeout(() => {
+                toast.style.animation = 'slideIn 0.3s ease reverse';
+                setTimeout(() => toast.remove(), 300);
+            }, 4000);
+        };
+
+        // ═══════════════════════════════════════════════════════════════════
+        // TOOLBAR (Basic - for full implementation use Milkdown commands)
+        // ═══════════════════════════════════════════════════════════════════
+        document.querySelectorAll('.toolbar-btn[data-cmd]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const cmd = btn.dataset.cmd;
+                console.log('Toolbar command:', cmd);
+                // Note: Full toolbar integration requires Milkdown command API
+                // This is a placeholder for the toolbar functionality
+            });
+        });
+    </script>
+</body>
+</html>

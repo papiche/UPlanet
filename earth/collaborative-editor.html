@@ -10,6 +10,8 @@
     <script src="nostr.bundle.js"></script>
     <!-- Common UPlanet JavaScript -->
     <script src="common.js"></script>
+    <!-- Markdown parser (local) -->
+    <script src="marked.min.js"></script>
     
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -387,21 +389,82 @@
             box-shadow: 0 0 0 2px var(--glow-cyan);
         }
 
-        /* Milkdown / ProseMirror Styling */
-        #milkdown-root {
-            padding: 32px 40px;
+        /* Split Editor Layout */
+        .editor-split {
+            display: flex;
             min-height: 500px;
         }
 
-        #milkdown-root .ProseMirror {
+        .editor-pane {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+        }
+
+        .edit-pane {
+            border-right: 1px solid var(--border-color);
+        }
+
+        .pane-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 16px;
+            background: var(--bg-card);
+            border-bottom: 1px solid var(--border-color);
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+
+        .pane-toggle {
+            padding: 4px 10px;
+            border-radius: 6px;
+            border: 1px solid var(--border-color);
+            background: transparent;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 0.75rem;
+            display: none;
+        }
+
+        .pane-toggle.active {
+            background: rgba(6, 182, 212, 0.2);
+            border-color: var(--accent-cyan);
+            color: var(--accent-cyan);
+        }
+
+        #markdown-editor {
+            flex: 1;
+            width: 100%;
+            padding: 24px;
+            background: var(--bg-editor);
+            border: none;
             outline: none;
+            resize: none;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.95rem;
+            line-height: 1.7;
+            color: var(--text-primary);
+            tab-size: 4;
+        }
+
+        #markdown-editor::placeholder {
+            color: var(--text-muted);
+        }
+
+        #markdown-preview {
+            flex: 1;
+            padding: 24px;
+            overflow-y: auto;
             font-family: 'Inter', sans-serif;
-            font-size: 1.05rem;
-            line-height: 1.8;
+            font-size: 1rem;
+            line-height: 1.7;
             color: var(--text-primary);
         }
 
-        #milkdown-root .ProseMirror h1 {
+        /* Markdown Preview Styling */
+        #markdown-preview h1 {
             font-size: 2rem;
             font-weight: 700;
             color: var(--accent-cyan);
@@ -410,25 +473,25 @@
             border-bottom: 2px solid var(--border-color);
         }
 
-        #milkdown-root .ProseMirror h2 {
+        #markdown-preview h2 {
             font-size: 1.5rem;
             font-weight: 600;
             color: var(--accent-emerald);
             margin: 1.2em 0 0.4em;
         }
 
-        #milkdown-root .ProseMirror h3 {
+        #markdown-preview h3 {
             font-size: 1.25rem;
             font-weight: 600;
             color: var(--text-primary);
             margin: 1em 0 0.3em;
         }
 
-        #milkdown-root .ProseMirror p {
+        #markdown-preview p {
             margin: 0.8em 0;
         }
 
-        #milkdown-root .ProseMirror code {
+        #markdown-preview code {
             font-family: 'JetBrains Mono', monospace;
             background: rgba(6, 182, 212, 0.15);
             padding: 2px 6px;
@@ -437,7 +500,7 @@
             color: var(--accent-cyan);
         }
 
-        #milkdown-root .ProseMirror pre {
+        #markdown-preview pre {
             background: #000;
             border-radius: 8px;
             padding: 16px 20px;
@@ -446,13 +509,13 @@
             margin: 1em 0;
         }
 
-        #milkdown-root .ProseMirror pre code {
+        #markdown-preview pre code {
             background: transparent;
             padding: 0;
             color: #e6edf3;
         }
 
-        #milkdown-root .ProseMirror blockquote {
+        #markdown-preview blockquote {
             border-left: 4px solid var(--accent-cyan);
             padding-left: 16px;
             margin: 1em 0;
@@ -460,74 +523,77 @@
             font-style: italic;
         }
 
-        #milkdown-root .ProseMirror ul,
-        #milkdown-root .ProseMirror ol {
+        #markdown-preview ul,
+        #markdown-preview ol {
             padding-left: 24px;
             margin: 0.8em 0;
         }
 
-        #milkdown-root .ProseMirror li {
+        #markdown-preview li {
             margin: 0.3em 0;
         }
 
-        #milkdown-root .ProseMirror li[data-checked="true"] {
-            text-decoration: line-through;
-            color: var(--text-muted);
+        #markdown-preview input[type="checkbox"] {
+            margin-right: 8px;
         }
 
-        #milkdown-root .ProseMirror a {
+        #markdown-preview a {
             color: var(--accent-cyan);
             text-decoration: none;
             border-bottom: 1px dashed var(--accent-cyan);
         }
 
-        #milkdown-root .ProseMirror a:hover {
+        #markdown-preview a:hover {
             border-bottom-style: solid;
         }
 
-        #milkdown-root .ProseMirror img {
+        #markdown-preview img {
             max-width: 100%;
             border-radius: 8px;
             margin: 1em 0;
         }
 
-        #milkdown-root .ProseMirror table {
+        #markdown-preview table {
             width: 100%;
             border-collapse: collapse;
             margin: 1em 0;
         }
 
-        #milkdown-root .ProseMirror th,
-        #milkdown-root .ProseMirror td {
+        #markdown-preview th,
+        #markdown-preview td {
             border: 1px solid var(--border-color);
             padding: 10px 14px;
             text-align: left;
         }
 
-        #milkdown-root .ProseMirror th {
+        #markdown-preview th {
             background: var(--bg-card);
             font-weight: 600;
         }
 
-        #milkdown-root .ProseMirror ::selection {
+        #markdown-preview ::selection {
             background: var(--selection);
         }
 
-        #milkdown-root .ProseMirror > *:first-child {
+        /* Mobile: show toggle buttons */
+        @media (max-width: 768px) {
+            .editor-split {
+                flex-direction: column;
+            }
+            .edit-pane {
+                border-right: none;
+                border-bottom: 1px solid var(--border-color);
+            }
+            .pane-toggle {
+                display: block;
+            }
+            .editor-pane.hidden {
+                display: none;
+            }
+        }
+
+        #markdown-preview > *:first-child {
             margin-top: 0;
-        }
-
-        .editor-placeholder {
-            color: var(--text-muted);
-            position: absolute;
-            top: 32px;
-            left: 40px;
-            pointer-events: none;
-            font-size: 1.05rem;
-        }
-
-        .editor-placeholder.hidden {
-            display: none;
         }
 
         /* ═══════════════════════════════════════════════════════════════════
@@ -947,8 +1013,8 @@
             .toolbar-divider {
                 display: none;
             }
-            #milkdown-root {
-                padding: 20px;
+            #markdown-editor {
+                min-height: 200px;
             }
         }
     </style>
@@ -1041,12 +1107,24 @@
                 <button class="toolbar-btn" data-cmd="redo" title="Refaire">↪️</button>
             </div>
 
-            <!-- Editor -->
+            <!-- Editor - Split view: Edit | Preview -->
             <div class="editor-wrapper">
-                <div class="editor-placeholder" id="editor-placeholder">
-                    Commencez à rédiger votre document collaboratif...
+                <div class="editor-split">
+                    <div class="editor-pane edit-pane">
+                        <div class="pane-header">
+                            <span>📝 Édition Markdown</span>
+                            <button class="pane-toggle active" data-mode="edit">Éditer</button>
+                        </div>
+                        <textarea id="markdown-editor" placeholder="Commencez à rédiger votre document collaboratif..."></textarea>
+                    </div>
+                    <div class="editor-pane preview-pane">
+                        <div class="pane-header">
+                            <span>👁️ Aperçu</span>
+                            <button class="pane-toggle" data-mode="preview">Aperçu</button>
+                        </div>
+                        <div id="markdown-preview" class="markdown-body"></div>
+                    </div>
                 </div>
-                <div id="milkdown-root"></div>
             </div>
         </main>
 
@@ -1201,25 +1279,13 @@
     <div class="notification-container" id="notification-container"></div>
 
     <!-- ═══════════════════════════════════════════════════════════════════
-         JAVASCRIPT
+         JAVASCRIPT - Using local marked.js library
          ═══════════════════════════════════════════════════════════════════ -->
-    <script type="module">
-        // ═══════════════════════════════════════════════════════════════════
-        // MILKDOWN IMPORTS - Using v7.6.x with individual packages
-        // ═══════════════════════════════════════════════════════════════════
-        import { Editor, rootCtx, defaultValueCtx, editorViewCtx } from 'https://esm.sh/@milkdown/core@7.6.4';
-        import { gfm } from 'https://esm.sh/@milkdown/preset-gfm@7.6.4';
-        import { history } from 'https://esm.sh/@milkdown/plugin-history@7.6.4';
-        import { listener, listenerCtx } from 'https://esm.sh/@milkdown/plugin-listener@7.6.4';
-        import { clipboard } from 'https://esm.sh/@milkdown/plugin-clipboard@7.6.4';
-        import { cursor } from 'https://esm.sh/@milkdown/plugin-cursor@7.6.4';
-        import { indent } from 'https://esm.sh/@milkdown/plugin-indent@7.6.4';
-
+    <script>
         // ═══════════════════════════════════════════════════════════════════
         // GLOBAL STATE
         // ═══════════════════════════════════════════════════════════════════
         window.appState = {
-            editor: null,
             isConnected: false,
             userPubkey: null,
             userNpub: null,
@@ -1235,7 +1301,16 @@
         // ═══════════════════════════════════════════════════════════════════
         // INITIALIZATION
         // ═══════════════════════════════════════════════════════════════════
-        document.addEventListener('DOMContentLoaded', async () => {
+        document.addEventListener('DOMContentLoaded', () => {
+            // Configure marked.js
+            if (typeof marked !== 'undefined') {
+                marked.setOptions({
+                    gfm: true,
+                    breaks: true,
+                    tables: true
+                });
+            }
+            
             // Parse URL parameters
             const params = new URLSearchParams(window.location.search);
             window.appState.umapLat = params.get('lat') || '0.00';
@@ -1249,63 +1324,87 @@
                 `UMAP ${window.appState.umapLat.substring(0,5)}...`;
             
             // Initialize editor
-            await initEditor();
+            initEditor();
             
             // Setup document type selector
             setupDocTypeSelector();
             
-            // Auto-connect if extension available
-            if (window.nostr) {
-                // Don't auto-connect, let user click
-            }
+            // Setup toolbar
+            setupToolbar();
             
             // Load document if specified
             if (docId) {
-                await loadDocument(docId);
+                loadDocument(docId);
             }
             
             // Load saved draft
             loadDraft();
+            
+            console.log('✅ Markdown editor initialized (using marked.js)');
         });
 
         // ═══════════════════════════════════════════════════════════════════
-        // MILKDOWN EDITOR
+        // MARKDOWN EDITOR (Simple split view)
         // ═══════════════════════════════════════════════════════════════════
-        async function initEditor() {
+        function initEditor() {
             const defaultContent = getDefaultContent();
+            const editor = document.getElementById('markdown-editor');
+            const preview = document.getElementById('markdown-preview');
             
-            try {
-                window.appState.editor = await Editor.make()
-                    // First: set root element and default content
-                    .config((ctx) => {
-                        ctx.set(rootCtx, document.getElementById('milkdown-root'));
-                        ctx.set(defaultValueCtx, defaultContent);
-                    })
-                    // Register GFM preset (includes commonmark + tables, strikethrough, etc.)
-                    .use(gfm)
-                    // Then plugins
-                    .use(history)
-                    .use(clipboard)
-                    .use(cursor)
-                    .use(indent)
-                    .use(listener)
-                    // Configure listener AFTER it's registered
-                    .config((ctx) => {
-                        ctx.get(listenerCtx).markdownUpdated((ctx, markdown, prevMarkdown) => {
-                            window.appState.markdown = markdown;
-                            saveDraft();
-                            updatePlaceholder(markdown);
-                        });
-                    })
-                    .create();
-                
-                console.log('✅ Milkdown editor initialized');
-                updatePlaceholder(defaultContent);
-                
-            } catch (error) {
-                console.error('❌ Failed to initialize Milkdown:', error);
-                showNotification('Erreur lors du chargement de l\'éditeur', 'error');
+            // Set default content
+            editor.value = defaultContent;
+            window.appState.markdown = defaultContent;
+            updatePreview();
+            
+            // Live preview on input
+            editor.addEventListener('input', () => {
+                window.appState.markdown = editor.value;
+                updatePreview();
+                saveDraft();
+            });
+            
+            // Tab key support
+            editor.addEventListener('keydown', (e) => {
+                if (e.key === 'Tab') {
+                    e.preventDefault();
+                    const start = editor.selectionStart;
+                    const end = editor.selectionEnd;
+                    editor.value = editor.value.substring(0, start) + '    ' + editor.value.substring(end);
+                    editor.selectionStart = editor.selectionEnd = start + 4;
+                    window.appState.markdown = editor.value;
+                    updatePreview();
+                }
+            });
+        }
+
+        function updatePreview() {
+            const preview = document.getElementById('markdown-preview');
+            const markdown = window.appState.markdown || '';
+            
+            if (typeof marked !== 'undefined') {
+                preview.innerHTML = marked.parse(markdown);
+            } else {
+                // Fallback: basic markdown to HTML
+                preview.innerHTML = basicMarkdownParse(markdown);
             }
+        }
+
+        function basicMarkdownParse(md) {
+            return md
+                .replace(/^### (.*$)/gim, '<h3>$1</h3>')
+                .replace(/^## (.*$)/gim, '<h2>$1</h2>')
+                .replace(/^# (.*$)/gim, '<h1>$1</h1>')
+                .replace(/\*\*(.*)\*\*/gim, '<strong>$1</strong>')
+                .replace(/\*(.*)\*/gim, '<em>$1</em>')
+                .replace(/^\- (.*$)/gim, '<li>$1</li>')
+                .replace(/\n/gim, '<br>');
+        }
+
+        function setEditorContent(content) {
+            const editor = document.getElementById('markdown-editor');
+            editor.value = content;
+            window.appState.markdown = content;
+            updatePreview();
         }
 
         function getDefaultContent() {
@@ -1485,62 +1584,95 @@ Où se trouve cette ressource ?
             return templates[window.appState.docType] || templates.commons;
         }
 
-        function updatePlaceholder(content) {
-            const placeholder = document.getElementById('editor-placeholder');
-            if (content && content.trim().length > 0) {
-                placeholder.classList.add('hidden');
-            } else {
-                placeholder.classList.remove('hidden');
-            }
-        }
-
-        function setEditorContent(markdown) {
-            if (window.appState.editor) {
-                window.appState.editor.action((ctx) => {
-                    const view = ctx.get(editorViewCtx);
-                    const { state } = view;
-                    const tr = state.tr.replaceWith(
-                        0, 
-                        state.doc.content.size,
-                        state.schema.nodeFromJSON({ type: 'doc', content: [] })
-                    );
-                    view.dispatch(tr);
+        // ═══════════════════════════════════════════════════════════════════
+        // TOOLBAR FUNCTIONALITY
+        // ═══════════════════════════════════════════════════════════════════
+        function setupToolbar() {
+            document.querySelectorAll('.toolbar-btn[data-cmd]').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const cmd = btn.dataset.cmd;
+                    executeToolbarCommand(cmd);
                 });
-                
-                // Reinitialize with new content
-                initEditorWithContent(markdown);
-            }
+            });
         }
 
-        async function initEditorWithContent(content) {
-            const root = document.getElementById('milkdown-root');
-            root.innerHTML = '';
+        function executeToolbarCommand(cmd) {
+            const editor = document.getElementById('markdown-editor');
+            const start = editor.selectionStart;
+            const end = editor.selectionEnd;
+            const text = editor.value;
+            const selectedText = text.substring(start, end);
             
-            window.appState.editor = await Editor.make()
-                // First: set root element and default content
-                .config((ctx) => {
-                    ctx.set(rootCtx, root);
-                    ctx.set(defaultValueCtx, content);
-                })
-                // Register GFM preset (includes commonmark + tables, strikethrough, etc.)
-                .use(gfm)
-                // Then plugins
-                .use(history)
-                .use(clipboard)
-                .use(cursor)
-                .use(indent)
-                .use(listener)
-                // Configure listener AFTER it's registered
-                .config((ctx) => {
-                    ctx.get(listenerCtx).markdownUpdated((ctx, markdown, prevMarkdown) => {
-                        window.appState.markdown = markdown;
-                        saveDraft();
-                        updatePlaceholder(markdown);
-                    });
-                })
-                .create();
+            let insertion = '';
+            let cursorOffset = 0;
             
-            updatePlaceholder(content);
+            switch(cmd) {
+                case 'bold':
+                    insertion = `**${selectedText || 'texte'}**`;
+                    cursorOffset = selectedText ? insertion.length : 2;
+                    break;
+                case 'italic':
+                    insertion = `*${selectedText || 'texte'}*`;
+                    cursorOffset = selectedText ? insertion.length : 1;
+                    break;
+                case 'strike':
+                    insertion = `~~${selectedText || 'texte'}~~`;
+                    cursorOffset = selectedText ? insertion.length : 2;
+                    break;
+                case 'code':
+                    insertion = selectedText.includes('\n') ? 
+                        `\`\`\`\n${selectedText || 'code'}\n\`\`\`` : 
+                        `\`${selectedText || 'code'}\``;
+                    cursorOffset = selectedText ? insertion.length : 1;
+                    break;
+                case 'h1':
+                    insertion = `# ${selectedText || 'Titre'}`;
+                    break;
+                case 'h2':
+                    insertion = `## ${selectedText || 'Sous-titre'}`;
+                    break;
+                case 'h3':
+                    insertion = `### ${selectedText || 'Section'}`;
+                    break;
+                case 'bullet':
+                    insertion = `- ${selectedText || 'élément'}`;
+                    break;
+                case 'ordered':
+                    insertion = `1. ${selectedText || 'élément'}`;
+                    break;
+                case 'task':
+                    insertion = `- [ ] ${selectedText || 'tâche'}`;
+                    break;
+                case 'quote':
+                    insertion = `> ${selectedText || 'citation'}`;
+                    break;
+                case 'link':
+                    insertion = `[${selectedText || 'lien'}](url)`;
+                    break;
+                case 'image':
+                    insertion = `![${selectedText || 'image'}](url)`;
+                    break;
+                case 'table':
+                    insertion = `| Col1 | Col2 | Col3 |\n|------|------|------|\n| A | B | C |`;
+                    break;
+                case 'undo':
+                    // Browser handles undo with Ctrl+Z
+                    document.execCommand('undo');
+                    return;
+                case 'redo':
+                    document.execCommand('redo');
+                    return;
+            }
+            
+            // Insert text
+            editor.value = text.substring(0, start) + insertion + text.substring(end);
+            editor.selectionStart = editor.selectionEnd = start + (cursorOffset || insertion.length);
+            editor.focus();
+            
+            // Update state and preview
+            window.appState.markdown = editor.value;
+            updatePreview();
+            saveDraft();
         }
 
         // ═══════════════════════════════════════════════════════════════════
@@ -1569,7 +1701,7 @@ Où se trouve cette ressource ?
                     // Ask to load template if new document
                     if (!window.appState.currentDocId) {
                         if (confirm('Charger le template pour ce type de document ?')) {
-                            initEditorWithContent(getDefaultContent());
+                            setEditorContent(getDefaultContent());
                         }
                     }
                 });
@@ -1734,7 +1866,7 @@ Où se trouve cette ressource ?
                         document.getElementById('version-badge').textContent = `v${version}`;
                         
                         // Load content into editor
-                        initEditorWithContent(event.content);
+                        setEditorContent(event.content);
                         
                         showNotification('Document chargé!', 'success');
                         sub.close();
@@ -1895,7 +2027,7 @@ Où se trouve cette ressource ?
                             });
                             
                             if (data.content) {
-                                initEditorWithContent(data.content);
+                                setEditorContent(data.content);
                             }
                         }
                     }
@@ -2179,17 +2311,6 @@ Où se trouve cette ressource ?
             }, 4000);
         };
 
-        // ═══════════════════════════════════════════════════════════════════
-        // TOOLBAR (Basic - for full implementation use Milkdown commands)
-        // ═══════════════════════════════════════════════════════════════════
-        document.querySelectorAll('.toolbar-btn[data-cmd]').forEach(btn => {
-            btn.addEventListener('click', () => {
-                const cmd = btn.dataset.cmd;
-                console.log('Toolbar command:', cmd);
-                // Note: Full toolbar integration requires Milkdown command API
-                // This is a placeholder for the toolbar functionality
-            });
-        });
     </script>
 </body>
 </html>

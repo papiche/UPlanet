@@ -72,6 +72,158 @@
         }
 
         /* ═══════════════════════════════════════════════════════════════════
+           FIXED CONNECTION BADGE
+           ═══════════════════════════════════════════════════════════════════ */
+        .connection-badge {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 9999;
+            background: rgba(10, 15, 26, 0.95);
+            backdrop-filter: blur(10px);
+            padding: 12px 16px;
+            border-radius: 16px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            transition: all 0.3s ease;
+            border: 2px solid var(--border-color);
+            cursor: pointer;
+            min-width: 180px;
+        }
+        
+        .connection-badge:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 25px rgba(0, 0, 0, 0.5);
+        }
+        
+        .connection-badge.authenticated {
+            border-color: var(--accent-emerald);
+            background: rgba(16, 185, 129, 0.15);
+        }
+        
+        .connection-badge.connected-not-auth {
+            border-color: var(--accent-amber);
+            background: rgba(245, 158, 11, 0.15);
+        }
+        
+        .connection-badge.disconnected {
+            border-color: var(--border-color);
+        }
+        
+        .badge-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 10px;
+            border: 2px solid var(--accent-cyan);
+            object-fit: cover;
+        }
+        
+        .badge-info {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            flex: 1;
+        }
+        
+        .badge-status {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+        
+        .badge-name {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+        
+        .badge-actions {
+            display: flex;
+            gap: 6px;
+        }
+        
+        .badge-btn {
+            padding: 6px 10px;
+            border-radius: 8px;
+            border: none;
+            background: var(--bg-card);
+            color: var(--text-secondary);
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .badge-btn:hover {
+            background: var(--bg-card-hover);
+            color: var(--accent-cyan);
+        }
+        
+        .badge-btn.primary {
+            background: linear-gradient(135deg, var(--accent-cyan), var(--accent-emerald));
+            color: var(--bg-primary);
+        }
+        
+        /* Badge dropdown panel */
+        .badge-panel {
+            position: absolute;
+            top: 100%;
+            right: 0;
+            margin-top: 8px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 16px;
+            min-width: 280px;
+            display: none;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
+        }
+        
+        .badge-panel.show {
+            display: block;
+        }
+        
+        .panel-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .panel-row:last-child {
+            border-bottom: none;
+        }
+        
+        .panel-row-icon {
+            font-size: 1.2rem;
+        }
+        
+        .panel-row-content {
+            flex: 1;
+        }
+        
+        .panel-row-label {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+        
+        .panel-row-value {
+            font-size: 0.85rem;
+            color: var(--text-primary);
+            font-weight: 500;
+        }
+        
+        .panel-row-value a {
+            color: var(--accent-cyan);
+            text-decoration: none;
+        }
+        
+        .panel-row-value a:hover {
+            text-decoration: underline;
+        }
+
+        /* ═══════════════════════════════════════════════════════════════════
            HEADER
            ═══════════════════════════════════════════════════════════════════ */
         .editor-header {
@@ -1021,6 +1173,52 @@
 </head>
 <body>
     <!-- ═══════════════════════════════════════════════════════════════════
+         FIXED CONNECTION BADGE
+         ═══════════════════════════════════════════════════════════════════ -->
+    <div class="connection-badge disconnected" id="connection-badge" onclick="toggleBadgePanel()">
+        <img class="badge-avatar" id="badge-avatar" src="https://robohash.org/anonymous?set=set4&size=36x36" alt="">
+        <div class="badge-info">
+            <span class="badge-status" id="badge-status">Non connecté</span>
+            <span class="badge-name" id="badge-name">Cliquez pour connecter</span>
+        </div>
+        <div class="badge-actions">
+            <button class="badge-btn primary" id="badge-connect-btn" onclick="event.stopPropagation(); connectNostr()">🔑</button>
+        </div>
+        
+        <!-- Dropdown Panel -->
+        <div class="badge-panel" id="badge-panel" onclick="event.stopPropagation()">
+            <div class="panel-row" id="panel-pubkey-row" style="display: none;">
+                <span class="panel-row-icon">🔑</span>
+                <div class="panel-row-content">
+                    <div class="panel-row-label">Public Key</div>
+                    <div class="panel-row-value" id="panel-pubkey">...</div>
+                </div>
+            </div>
+            <div class="panel-row" id="panel-udrive-row" style="display: none;">
+                <span class="panel-row-icon">📁</span>
+                <div class="panel-row-content">
+                    <div class="panel-row-label">uDRIVE</div>
+                    <div class="panel-row-value"><a href="#" id="panel-udrive-link" target="_blank">Ouvrir le stockage</a></div>
+                </div>
+            </div>
+            <div class="panel-row" id="panel-wallet-row" style="display: none;">
+                <span class="panel-row-icon">💰</span>
+                <div class="panel-row-content">
+                    <div class="panel-row-label">Wallet G1</div>
+                    <div class="panel-row-value" id="panel-wallet">...</div>
+                </div>
+            </div>
+            <div class="panel-row" id="panel-auth-row">
+                <span class="panel-row-icon" id="panel-auth-icon">⚠️</span>
+                <div class="panel-row-content">
+                    <div class="panel-row-label">Authentification NIP-42</div>
+                    <div class="panel-row-value" id="panel-auth-status">Non authentifié</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════════════
          HEADER
          ═══════════════════════════════════════════════════════════════════ -->
     <header class="editor-header">
@@ -1100,7 +1298,9 @@
                 <div class="toolbar-divider"></div>
                 <button class="toolbar-btn" data-cmd="quote" title="Citation">❝</button>
                 <button class="toolbar-btn" data-cmd="link" title="Lien">🔗</button>
-                <button class="toolbar-btn" data-cmd="image" title="Image">🖼️</button>
+                <button class="toolbar-btn" data-cmd="image" title="Image URL">🔗🖼️</button>
+                <label class="toolbar-btn" for="image-upload-input" title="Uploader une image (NIP-42 requis)" style="cursor: pointer;">📤🖼️</label>
+                <input type="file" id="image-upload-input" accept="image/*" style="display: none;" onchange="handleImageUpload(event)">
                 <button class="toolbar-btn" data-cmd="table" title="Tableau">⊞</button>
                 <div class="toolbar-divider"></div>
                 <button class="toolbar-btn" data-cmd="undo" title="Annuler">↩️</button>
@@ -1292,6 +1492,7 @@
             relay: null,
             umapLat: null,
             umapLon: null,
+            umapPubkey: null,  // UMAP's Nostr pubkey (hex) for document tagging
             currentDocId: null,
             currentDocEvent: null,
             docType: 'commons',
@@ -1315,13 +1516,22 @@
             const params = new URLSearchParams(window.location.search);
             window.appState.umapLat = params.get('lat') || '0.00';
             window.appState.umapLon = params.get('lon') || '0.00';
-            const docId = params.get('doc');
+            window.appState.umapPubkey = params.get('umap') || null;  // UMAP pubkey (hex)
+            window.appState.pendingDocId = params.get('doc') || null; // Document to load after relay connect
             
             // Update UMAP badge
             document.getElementById('umap-coords').textContent = 
                 `UMAP ${window.appState.umapLat}, ${window.appState.umapLon}`;
             document.getElementById('info-signer').textContent = 
-                `UMAP ${window.appState.umapLat.substring(0,5)}...`;
+                window.appState.umapPubkey 
+                    ? `UMAP ${window.appState.umapPubkey.substring(0,8)}...`
+                    : `UMAP ${window.appState.umapLat.substring(0,5)}...`;
+            
+            console.log('📍 UMAP:', window.appState.umapLat, window.appState.umapLon);
+            console.log('🔑 UMAP Pubkey:', window.appState.umapPubkey || 'not provided');
+            if (window.appState.pendingDocId) {
+                console.log('📄 Document to load:', window.appState.pendingDocId);
+            }
             
             // Initialize editor
             initEditor();
@@ -1332,16 +1542,46 @@
             // Setup toolbar
             setupToolbar();
             
-            // Load document if specified
-            if (docId) {
-                loadDocument(docId);
+            // Auto-connect to relay if document ID is provided (for read-only viewing)
+            if (window.appState.pendingDocId) {
+                autoConnectAndLoadDocument();
+            } else {
+                // Load saved draft only if no document to load
+                loadDraft();
             }
-            
-            // Load saved draft
-            loadDraft();
             
             console.log('✅ Markdown editor initialized (using marked.js)');
         });
+
+        // Auto-connect to relay and load document (for direct links)
+        async function autoConnectAndLoadDocument() {
+            console.log('🔄 Auto-connecting to relay to load document...');
+            
+            try {
+                // Connect to relay
+                await connectRelay();
+                
+                // Load the document
+                if (window.appState.pendingDocId && window.appState.relay) {
+                    await loadDocument(window.appState.pendingDocId);
+                    window.appState.pendingDocId = null;
+                } else if (window.appState.pendingDocId) {
+                    // Retry with fallback if relay not connected
+                    console.log('⚠️ Relay not connected, retrying...');
+                    setTimeout(async () => {
+                        await connectRelay();
+                        if (window.appState.relay) {
+                            await loadDocument(window.appState.pendingDocId);
+                        } else {
+                            showNotification('Impossible de charger le document - connectez-vous manuellement', 'error');
+                        }
+                    }, 2000);
+                }
+            } catch (e) {
+                console.error('Auto-connect failed:', e);
+                showNotification('Connexion automatique échouée - cliquez sur Connexion', 'info');
+            }
+        }
 
         // ═══════════════════════════════════════════════════════════════════
         // MARKDOWN EDITOR (Simple split view)
@@ -1709,6 +1949,165 @@ Où se trouve cette ressource ?
         }
 
         // ═══════════════════════════════════════════════════════════════════
+        // CONNECTION BADGE MANAGEMENT
+        // ═══════════════════════════════════════════════════════════════════
+        window.toggleBadgePanel = function() {
+            const panel = document.getElementById('badge-panel');
+            panel.classList.toggle('show');
+        };
+        
+        // Close badge panel when clicking outside
+        document.addEventListener('click', (e) => {
+            const badge = document.getElementById('connection-badge');
+            const panel = document.getElementById('badge-panel');
+            if (badge && panel && !badge.contains(e.target)) {
+                panel.classList.remove('show');
+            }
+        });
+        
+        function updateConnectionBadge(state, profile = null) {
+            const badge = document.getElementById('connection-badge');
+            const avatar = document.getElementById('badge-avatar');
+            const status = document.getElementById('badge-status');
+            const name = document.getElementById('badge-name');
+            const connectBtn = document.getElementById('badge-connect-btn');
+            
+            badge.className = 'connection-badge ' + state;
+            
+            switch(state) {
+                case 'disconnected':
+                    status.textContent = 'Non connecté';
+                    name.textContent = 'Cliquez pour connecter';
+                    avatar.src = 'https://robohash.org/anonymous?set=set4&size=36x36';
+                    connectBtn.innerHTML = '🔑';
+                    connectBtn.style.display = 'block';
+                    break;
+                    
+                case 'connected-not-auth':
+                    status.textContent = '🟡 Connecté';
+                    name.textContent = profile?.name || profile?.display_name || window.appState.userNpub?.substring(0, 12) + '...';
+                    avatar.src = profile?.picture || `https://robohash.org/${window.appState.userPubkey}?set=set4&size=36x36`;
+                    connectBtn.innerHTML = '🔐';
+                    connectBtn.onclick = (e) => { e.stopPropagation(); authenticateNIP42(); };
+                    break;
+                    
+                case 'authenticated':
+                    status.textContent = '🟢 Authentifié';
+                    name.textContent = profile?.name || profile?.display_name || window.appState.userNpub?.substring(0, 12) + '...';
+                    avatar.src = profile?.picture || `https://robohash.org/${window.appState.userPubkey}?set=set4&size=36x36`;
+                    connectBtn.style.display = 'none';
+                    break;
+            }
+            
+            // Update panel info
+            if (window.appState.userPubkey) {
+                document.getElementById('panel-pubkey-row').style.display = 'flex';
+                document.getElementById('panel-pubkey').textContent = 
+                    window.appState.userNpub?.substring(0, 20) + '...';
+            }
+            
+            // Update uDRIVE if available
+            if (window.appState.userProfile?.ipns_vault) {
+                const udriveRow = document.getElementById('panel-udrive-row');
+                const udriveLink = document.getElementById('panel-udrive-link');
+                udriveRow.style.display = 'flex';
+                const ipfsGw = window.appState.userProfile.ipfs_gw || 'https://ipfs.copylaradio.com';
+                udriveLink.href = `${ipfsGw}/ipns/${window.appState.userProfile.ipns_vault}`;
+                udriveLink.textContent = 'Ouvrir le stockage';
+            }
+            
+            // Update G1 wallet if available
+            if (window.appState.userProfile?.g1_address || window.appState.userProfile?.g1_address_v2) {
+                document.getElementById('panel-wallet-row').style.display = 'flex';
+                const addr = window.appState.userProfile.g1_address || window.appState.userProfile.g1_address_v2;
+                document.getElementById('panel-wallet').textContent = addr.substring(0, 12) + '...';
+            }
+        }
+        
+        // Fetch user profile from Nostr (kind 0)
+        async function fetchUserProfile(pubkey) {
+            if (!window.appState.pool || !window.appState.relayUrls) {
+                console.warn('No relay pool available for profile fetch');
+                return null;
+            }
+            
+            try {
+                const events = await window.appState.pool.querySync(
+                    window.appState.relayUrls,
+                    [{ kinds: [0], authors: [pubkey], limit: 1 }],
+                    { timeout: 5000 }
+                );
+                
+                if (events && events.length > 0) {
+                    const profileEvent = events[0];
+                    const profile = JSON.parse(profileEvent.content);
+                    
+                    // Extract additional data from 'i' tags (UPlanet extensions)
+                    if (profileEvent.tags) {
+                        profileEvent.tags.forEach(tag => {
+                            if (tag[0] === 'i') {
+                                const [type, value] = tag[1].split(':');
+                                switch(type) {
+                                    case 'g1pub': profile.g1_address = value; break;
+                                    case 'g1pubv2': profile.g1_address_v2 = value; break;
+                                    case 'zencard': profile.zen_address = value; break;
+                                    case 'ipfs_gw': profile.ipfs_gw = value; break;
+                                    case 'ipns_vault': profile.ipns_vault = value; break;
+                                }
+                            }
+                        });
+                    }
+                    
+                    window.appState.userProfile = profile;
+                    console.log('📝 User profile loaded:', profile);
+                    return profile;
+                }
+            } catch (error) {
+                console.error('Error fetching profile:', error);
+            }
+            return null;
+        }
+        
+        // NIP-42 Authentication for uDRIVE access
+        async function authenticateNIP42() {
+            if (!window.appState.userPubkey) {
+                showNotification('Connectez-vous d\'abord avec Nostr', 'error');
+                return;
+            }
+            
+            try {
+                // Create NIP-42 AUTH event
+                const authEvent = {
+                    kind: 22242,
+                    created_at: Math.floor(Date.now() / 1000),
+                    tags: [
+                        ['relay', 'wss://relay.copylaradio.com'],
+                        ['challenge', window.appState.authChallenge || 'uplanet-collaborative']
+                    ],
+                    content: ''
+                };
+                
+                // Sign the event
+                const signedEvent = await window.nostr.signEvent(authEvent);
+                window.appState.nip42Auth = signedEvent;
+                window.appState.isAuthenticated = true;
+                
+                // Update badge
+                updateConnectionBadge('authenticated', window.appState.userProfile);
+                
+                // Update panel auth status
+                document.getElementById('panel-auth-icon').textContent = '✅';
+                document.getElementById('panel-auth-status').textContent = 'Authentifié (NIP-42)';
+                
+                showNotification('Authentification NIP-42 réussie - Upload images activé', 'success');
+                
+            } catch (error) {
+                console.error('NIP-42 auth error:', error);
+                showNotification('Erreur d\'authentification: ' + error.message, 'error');
+            }
+        }
+
+        // ═══════════════════════════════════════════════════════════════════
         // NOSTR CONNECTION
         // ═══════════════════════════════════════════════════════════════════
         window.connectNostr = async function() {
@@ -1729,7 +2128,7 @@ Où se trouve cette ressource ?
                     window.appState.userNpub = pubkey.substring(0, 8) + '...' + pubkey.substring(pubkey.length - 4);
                 }
                 
-                // Update UI
+                // Update UI (legacy header)
                 document.getElementById('connection-dot').classList.add('connected');
                 document.getElementById('connection-text').textContent = 'Connecté';
                 document.getElementById('btn-connect').textContent = '✅ ' + window.appState.userNpub.substring(0, 12) + '...';
@@ -1746,10 +2145,16 @@ Où se trouve cette ressource ?
                 // Connect to relay
                 await connectRelay();
                 
+                // Fetch user profile for uDRIVE info
+                const profile = await fetchUserProfile(pubkey);
+                
+                // Update fixed badge
+                updateConnectionBadge('connected-not-auth', profile);
+                
                 // Load UMAP documents
                 await loadUMAPDocuments();
                 
-                showNotification('Connecté avec succès!', 'success');
+                showNotification('Connecté! Cliquez sur 🔐 pour activer l\'upload d\'images', 'success');
                 
             } catch (error) {
                 console.error('Nostr connection error:', error);
@@ -1758,18 +2163,47 @@ Où se trouve cette ressource ?
         };
 
         async function connectRelay() {
-            const relayUrl = 'wss://relay.copylaradio.com';
+            const relayUrls = [
+                'wss://relay.copylaradio.com',
+                'wss://relay.damus.io',
+                'wss://nos.lol'
+            ];
             
-            try {
-                if (window.NostrTools && window.NostrTools.Relay) {
-                    window.appState.relay = await window.NostrTools.Relay.connect(relayUrl);
-                    console.log('✅ Connected to relay:', relayUrl);
-                } else if (typeof connectToNostrRelay === 'function') {
-                    window.appState.relay = await connectToNostrRelay(relayUrl);
-                }
-            } catch (error) {
-                console.error('Relay connection error:', error);
+            // Try SimplePool first (can query multiple relays)
+            if (window.NostrTools && window.NostrTools.SimplePool) {
+                window.appState.pool = new window.NostrTools.SimplePool();
+                window.appState.relayUrls = relayUrls;
+                // Create a proxy object that uses pool for subscriptions
+                window.appState.relay = {
+                    subscribe: (filters, handlers) => {
+                        return window.appState.pool.subscribeMany(relayUrls, filters, handlers);
+                    },
+                    publish: async (event) => {
+                        return window.appState.pool.publish(relayUrls, event);
+                    }
+                };
+                console.log('✅ Connected to relay pool:', relayUrls);
+                return;
             }
+            
+            // Fallback to single relay connection
+            for (const relayUrl of relayUrls) {
+                try {
+                    if (window.NostrTools && window.NostrTools.Relay) {
+                        window.appState.relay = await window.NostrTools.Relay.connect(relayUrl);
+                        console.log('✅ Connected to relay:', relayUrl);
+                        return;
+                    } else if (typeof connectToNostrRelay === 'function') {
+                        window.appState.relay = await connectToNostrRelay(relayUrl);
+                        console.log('✅ Connected to relay:', relayUrl);
+                        return;
+                    }
+                } catch (error) {
+                    console.warn('Relay connection failed:', relayUrl, error);
+                }
+            }
+            
+            console.error('Failed to connect to any relay');
         }
 
         // ═══════════════════════════════════════════════════════════════════
@@ -1851,31 +2285,76 @@ Où se trouve cette ressource ?
             }
             
             try {
-                const filter = { ids: [eventId], limit: 1 };
+                // Decode NIP-19 encoded IDs (note1..., nevent1...)
+                let hexId = eventId;
+                if (eventId.startsWith('note1') || eventId.startsWith('nevent1')) {
+                    try {
+                        if (window.NostrTools && window.NostrTools.nip19) {
+                            const decoded = window.NostrTools.nip19.decode(eventId);
+                            hexId = decoded.type === 'note' ? decoded.data : decoded.data.id;
+                        }
+                    } catch (e) {
+                        console.warn('NIP-19 decode failed, using as-is:', e);
+                    }
+                }
+                
+                console.log('📄 Loading document:', hexId);
+                
+                const filter = { ids: [hexId], limit: 1 };
+                let eventFound = false;
                 
                 const sub = window.appState.relay.subscribe([filter], {
                     onevent(event) {
+                        eventFound = true;
                         window.appState.currentDocEvent = event;
                         window.appState.currentDocId = event.id;
                         
-                        // Update UI
+                        // Extract all metadata from tags
                         const title = event.tags.find(t => t[0] === 'title')?.[1] || 'Sans titre';
                         const version = event.tags.find(t => t[0] === 'version')?.[1] || '1';
+                        const docType = event.tags.find(t => t[0] === 't' && ['commons', 'project', 'decision', 'garden', 'resource'].includes(t[1]))?.[1] || 'commons';
                         
+                        // Update UI
                         document.getElementById('doc-title').value = title;
                         document.getElementById('version-badge').textContent = `v${version}`;
+                        
+                        // Update document type
+                        window.appState.docType = docType;
+                        document.querySelectorAll('.doc-type-btn').forEach(btn => {
+                            btn.classList.toggle('active', btn.dataset.type === docType);
+                        });
+                        const typeLabels = { commons: '🤝 Commun', project: '🎯 Projet', decision: '🗳️ Décision', garden: '🌱 Jardin', resource: '📦 Ressource' };
+                        document.getElementById('info-type').textContent = typeLabels[docType] || typeLabels.commons;
+                        
+                        // Mark step 2 as in progress (editing)
+                        document.getElementById('step-2').classList.add('completed');
+                        document.getElementById('step-2').textContent = '✓';
                         
                         // Load content into editor
                         setEditorContent(event.content);
                         
                         showNotification('Document chargé!', 'success');
                         sub.close();
+                    },
+                    oneose() {
+                        if (!eventFound) {
+                            showNotification('Document non trouvé', 'error');
+                        }
+                        sub.close();
                     }
                 });
                 
+                // Timeout fallback
+                setTimeout(() => {
+                    if (!eventFound) {
+                        sub.close();
+                        showNotification('Timeout - document non trouvé', 'error');
+                    }
+                }, 10000);
+                
             } catch (error) {
                 console.error('Error loading document:', error);
-                showNotification('Erreur de chargement', 'error');
+                showNotification('Erreur de chargement: ' + error.message, 'error');
             }
         };
 
@@ -1940,6 +2419,11 @@ Où se trouve cette ressource ?
                 ["change-summary", summary],
                 ["published_at", String(Math.floor(Date.now() / 1000))]
             ];
+            
+            // Add UMAP pubkey reference if available (enables discovery by UMAP)
+            if (window.appState.umapPubkey) {
+                tags.push(["p", window.appState.umapPubkey, "", "umap"]);
+            }
             
             // If updating existing document
             if (window.appState.currentDocEvent) {
@@ -2289,6 +2773,101 @@ Où se trouve cette ressource ?
             }
         };
 
+        // ═══════════════════════════════════════════════════════════════════
+        // IMAGE UPLOAD WITH NIP-42 AUTH
+        // ═══════════════════════════════════════════════════════════════════
+        window.handleImageUpload = async function(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            // Check if user is authenticated
+            if (!window.appState.isAuthenticated) {
+                showNotification('⚠️ Authentification NIP-42 requise pour uploader des images', 'error');
+                showNotification('Cliquez sur 🔐 dans le badge de connexion', 'info');
+                return;
+            }
+            
+            // Check if uDRIVE is available
+            if (!window.appState.userProfile?.ipns_vault) {
+                showNotification('uDRIVE non disponible - image convertie en base64', 'info');
+                // Fallback to base64 embedding
+                await insertImageAsBase64(file);
+                return;
+            }
+            
+            // Upload to uDRIVE
+            try {
+                showNotification('📤 Upload en cours...', 'info');
+                
+                const ipfsGw = window.appState.userProfile.ipfs_gw || 'https://ipfs.copylaradio.com';
+                const uploadUrl = `${ipfsGw}/api/v0/add?pin=true`;
+                
+                const formData = new FormData();
+                formData.append('file', file);
+                
+                // Add NIP-42 auth header if available
+                const headers = {};
+                if (window.appState.nip42Auth) {
+                    headers['X-Nostr-Auth'] = JSON.stringify(window.appState.nip42Auth);
+                }
+                
+                const response = await fetch(uploadUrl, {
+                    method: 'POST',
+                    headers,
+                    body: formData
+                });
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    const imageUrl = `${ipfsGw}/ipfs/${result.Hash}`;
+                    insertImageAtCursor(file.name, imageUrl);
+                    showNotification('✅ Image uploadée sur IPFS!', 'success');
+                } else {
+                    throw new Error(`Upload failed: ${response.statusText}`);
+                }
+                
+            } catch (error) {
+                console.error('Upload error:', error);
+                showNotification('Erreur upload - fallback base64', 'info');
+                await insertImageAsBase64(file);
+            }
+            
+            // Reset input
+            event.target.value = '';
+        };
+        
+        // Insert image markdown at cursor position
+        function insertImageAtCursor(altText, url) {
+            const editor = document.getElementById('markdown-editor');
+            const start = editor.selectionStart;
+            const end = editor.selectionEnd;
+            const text = editor.value;
+            
+            const insertion = `![${altText}](${url})`;
+            editor.value = text.substring(0, start) + insertion + text.substring(end);
+            editor.selectionStart = editor.selectionEnd = start + insertion.length;
+            editor.focus();
+            
+            window.appState.markdown = editor.value;
+            updatePreview();
+            saveDraft();
+        }
+        
+        // Fallback: Convert image to base64 and embed
+        async function insertImageAsBase64(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const base64 = e.target.result;
+                    insertImageAtCursor(file.name, base64);
+                    showNotification('Image intégrée (base64)', 'success');
+                    resolve();
+                };
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+        }
+        
         // ═══════════════════════════════════════════════════════════════════
         // NOTIFICATIONS
         // ═══════════════════════════════════════════════════════════════════

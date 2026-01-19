@@ -1114,8 +1114,12 @@
 
         // Initialize
         window.addEventListener('load', () => {
+            console.log('🌌 economy.Swarm.html loaded');
+            console.log('   EVENT_KIND_STATION:', EVENT_KIND_STATION);
+            
             setTimeout(() => {
                 const relayUrl = new URLSearchParams(window.location.search).get('relay') || detectRelayUrl();
+                console.log('🔗 Connecting to relay:', relayUrl);
                 document.getElementById('relay-url').textContent = relayUrl.replace(/^wss?:\/\//, '');
                 connectToRelay(relayUrl);
             }, 100);
@@ -1134,13 +1138,15 @@
 
             ws.onmessage = (event) => handleMessage(JSON.parse(event.data));
 
-            ws.onerror = () => {
+            ws.onerror = (error) => {
+                console.error('❌ WebSocket error:', error);
                 document.getElementById('connection-status').className = 'status-dot offline';
                 document.getElementById('relay-status').textContent = 'ERROR';
                 hideLoading();
             };
 
-            ws.onclose = () => {
+            ws.onclose = (event) => {
+                console.log('🔌 WebSocket closed:', event.code, event.reason);
                 document.getElementById('connection-status').className = 'status-dot warning';
                 document.getElementById('relay-status').textContent = 'DISCONNECTED';
             };
@@ -1149,10 +1155,19 @@
         // Subscribe to events
         function subscribeToEvents() {
             const since = Math.floor(Date.now() / 1000) - (30 * 24 * 60 * 60);
-            ws.send(JSON.stringify(['REQ', 'constellation-' + Date.now(), { kinds: [EVENT_KIND_STATION], since, limit: 500 }]));
+            const subId = 'constellation-' + Date.now();
+            const filter = { kinds: [EVENT_KIND_STATION], since, limit: 500 };
+            
+            console.log('📡 Subscribing to events...');
+            console.log('   subId:', subId);
+            console.log('   filter:', JSON.stringify(filter));
+            console.log('   kind:', EVENT_KIND_STATION, '| since:', new Date(since * 1000).toISOString());
+            
+            ws.send(JSON.stringify(['REQ', subId, filter]));
             
             setTimeout(() => {
                 if (stationsData.size === 0) {
+                    console.log('⏰ Timeout: No stations received after 5s');
                     hideLoading();
                     document.getElementById('main-container').style.display = 'block';
                 }
@@ -1164,23 +1179,47 @@
             const [type, ...data] = message;
 
             if (type === 'EVENT') {
+                console.log('📨 EVENT received:', type, 'subId:', data[0]);
                 processStationEvent(data[1]);
             } else if (type === 'EOSE') {
+                console.log('✅ EOSE - End of stored events. Total stations:', stationsData.size);
                 hideLoading();
                 document.getElementById('main-container').style.display = 'block';
                 updateUI();
+            } else if (type === 'NOTICE') {
+                console.log('📢 NOTICE from relay:', data[0]);
+            } else if (type === 'OK') {
+                console.log('👍 OK response:', data);
+            } else {
+                console.log('📩 Unknown message type:', type, data);
             }
         }
 
         // Process station event
         function processStationEvent(event) {
             try {
+                console.log('🛰️ Processing event kind:', event.kind, 'created_at:', new Date(event.created_at * 1000).toISOString());
+                console.log('   pubkey:', event.pubkey?.substring(0, 16) + '...');
+                
                 const content = JSON.parse(event.content);
                 const tags = event.tags;
                 const stationId = getTagValue(tags, 'station');
+                const stationName = getTagValue(tags, 'station:name');
+                const week = getTagValue(tags, 'week');
+                const healthStatus = getTagValue(tags, 'health:status');
+                const bilan = getTagValue(tags, 'health:bilan');
+                
+                console.log('   station:', stationId, '| name:', stationName, '| week:', week);
+                console.log('   health:', healthStatus, '| bilan:', bilan, 'Ẑ');
+                console.log('   tags count:', tags?.length, '| content keys:', Object.keys(content || {}).join(', '));
                 
                 const existing = stationsData.get(stationId);
+                if (existing) {
+                    console.log('   ↳ Existing station, created_at comparison:', existing.created_at, 'vs', event.created_at);
+                }
+                
                 if (!existing || event.created_at > existing.created_at) {
+                    console.log('   ✅ Adding/updating station:', stationId);
                     stationsData.set(stationId, {
                         stationId,
                         // Station display name (from relay domain or truncated station ID)
@@ -1224,7 +1263,9 @@
                     });
                 }
             } catch (e) {
-                console.error('Error processing event:', e);
+                console.error('❌ Error processing event:', e);
+                console.error('   Event content preview:', event?.content?.substring(0, 200));
+                console.error('   Event tags:', event?.tags?.slice(0, 5));
             }
         }
 
@@ -1234,7 +1275,17 @@
 
         // Update all UI elements
         function updateUI() {
+            console.log('🔄 updateUI() called');
+            console.log('   Total stations in memory:', stationsData.size);
+            
             stationOrder = Array.from(stationsData.keys());
+            console.log('   Station order:', stationOrder);
+            
+            // Log station details
+            stationsData.forEach((station, id) => {
+                console.log(`   📊 ${station.stationName}: ${station.healthStatus} | bilan: ${station.bilan}Ẑ | MP: ${station.multipassUsed} | ZC: ${station.zencardTotal}`);
+            });
+            
             renderConstellationMap();
             renderStationsList();
             updateAggregates();

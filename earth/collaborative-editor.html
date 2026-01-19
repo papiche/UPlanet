@@ -1514,21 +1514,51 @@
             
             // Parse URL parameters
             const params = new URLSearchParams(window.location.search);
-            window.appState.umapLat = params.get('lat') || '0.00';
-            window.appState.umapLon = params.get('lon') || '0.00';
-            window.appState.umapPubkey = params.get('umap') || null;  // UMAP pubkey (hex)
-            window.appState.pendingDocId = params.get('doc') || null; // Document to load after relay connect
+            const rawLat = params.get('lat');
+            const rawLon = params.get('lon');
+            const rawUmap = params.get('umap');
+            
+            // Validate UMAP parameters - CRITICAL for document association
+            window.appState.umapLat = rawLat || null;
+            window.appState.umapLon = rawLon || null;
+            window.appState.umapPubkey = rawUmap || null;  // UMAP pubkey (hex)
+            window.appState.pendingDocId = params.get('doc') || null;
+            
+            // Check if UMAP configuration is valid
+            const hasValidUmap = rawUmap && rawUmap.length >= 32; // hex pubkey should be 64 chars
+            const hasValidCoords = rawLat && rawLon && rawLat !== '_LAT_' && rawLon !== '_LON_';
+            window.appState.isUmapConfigured = hasValidUmap && hasValidCoords;
+            
+            // Warn if UMAP is not properly configured
+            if (!window.appState.isUmapConfigured) {
+                console.warn('⚠️ UMAP not properly configured!');
+                console.warn('   - lat:', rawLat || 'MISSING');
+                console.warn('   - lon:', rawLon || 'MISSING');
+                console.warn('   - umap:', rawUmap ? `${rawUmap.substring(0,8)}... (${rawUmap.length} chars)` : 'MISSING');
+                
+                // Show warning in UI
+                setTimeout(() => {
+                    showNotification('⚠️ UMAP non configurée - Accédez via une page UMAP valide', 'error');
+                    document.getElementById('btn-publish').disabled = true;
+                    document.getElementById('btn-publish').title = 'Publication désactivée: UMAP non configurée';
+                }, 500);
+            }
             
             // Update UMAP badge
+            const displayLat = window.appState.umapLat || '???';
+            const displayLon = window.appState.umapLon || '???';
             document.getElementById('umap-coords').textContent = 
-                `UMAP ${window.appState.umapLat}, ${window.appState.umapLon}`;
+                window.appState.isUmapConfigured 
+                    ? `UMAP ${displayLat}, ${displayLon}`
+                    : `⚠️ UMAP non configurée`;
             document.getElementById('info-signer').textContent = 
                 window.appState.umapPubkey 
                     ? `UMAP ${window.appState.umapPubkey.substring(0,8)}...`
-                    : `UMAP ${window.appState.umapLat.substring(0,5)}...`;
+                    : `⚠️ Non défini`;
             
-            console.log('📍 UMAP:', window.appState.umapLat, window.appState.umapLon);
-            console.log('🔑 UMAP Pubkey:', window.appState.umapPubkey || 'not provided');
+            console.log('📍 UMAP:', displayLat, displayLon);
+            console.log('🔑 UMAP Pubkey:', window.appState.umapPubkey || 'NOT PROVIDED');
+            console.log('✅ UMAP Configured:', window.appState.isUmapConfigured);
             if (window.appState.pendingDocId) {
                 console.log('📄 Document to load:', window.appState.pendingDocId);
             }

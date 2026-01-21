@@ -1,0 +1,1806 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🌳 Crowdfunding Forêt Jardin - UPlanet</title>
+    <link rel="icon" type="image/x-icon" href="https://ipfs.copylaradio.com/ipfs/QmQRq211EMmQJ7QE44FrVZt8EMF7JJWnayDXHyKzes4pX1">
+    <script src="jquery-3.6.3.min.js"></script>
+    <script src="nostr.bundle.js"></script>
+    <script src="bootstrap.bundle.min.js"></script>
+    <link rel="stylesheet" href="bootstrap.min.css">
+    <style>
+        :root {
+            --bg-deep: #0a0e14;
+            --bg-card: #111820;
+            --border: #1e2a38;
+            --text: #e4e8ed;
+            --text-dim: #8a9bae;
+            --accent-green: #22c55e;
+            --accent-gold: #fbbf24;
+            --accent-cyan: #06b6d4;
+            --accent-purple: #a855f7;
+            --accent-red: #ef4444;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background: var(--bg-deep);
+            color: var(--text);
+            min-height: 100vh;
+            background-image: 
+                radial-gradient(ellipse at 20% 20%, rgba(34, 197, 94, 0.08) 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 80%, rgba(168, 85, 247, 0.06) 0%, transparent 50%);
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        /* Connection Bar */
+        .connection-bar {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 20px;
+            background: var(--bg-card);
+            border-bottom: 1px solid var(--border);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .connection-bar .logo {
+            font-size: 1.5rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--accent-green), var(--accent-cyan));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .profile-section {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-left: auto;
+        }
+
+        .profile-mini {
+            display: none;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 12px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 20px;
+            cursor: pointer;
+        }
+
+        .profile-mini.connected {
+            display: flex;
+        }
+
+        .profile-mini img {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            border: 2px solid var(--accent-cyan);
+        }
+
+        .profile-mini .name {
+            font-size: 0.85rem;
+            max-width: 100px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .zen-balance {
+            display: none;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            background: linear-gradient(135deg, rgba(251, 191, 36, 0.2), rgba(34, 197, 94, 0.1));
+            border: 1px solid var(--accent-gold);
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--accent-gold);
+        }
+
+        .zen-balance.visible {
+            display: flex;
+        }
+
+        .btn-connect {
+            padding: 8px 16px;
+            background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
+            border: none;
+            border-radius: 20px;
+            color: white;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-connect:hover {
+            transform: scale(1.05);
+            filter: brightness(1.1);
+        }
+
+        .btn-connect:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-connect.connected {
+            display: none;
+        }
+
+        /* Header */
+        .header {
+            text-align: center;
+            padding: 40px 20px;
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            background: linear-gradient(135deg, var(--accent-green), var(--accent-cyan));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            color: var(--text-dim);
+            font-size: 1.1rem;
+        }
+
+        /* Stats Bar */
+        .stats-bar {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .stat-card .icon {
+            font-size: 2rem;
+            margin-bottom: 10px;
+        }
+
+        .stat-card .value {
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: var(--accent-cyan);
+        }
+
+        .stat-card .label {
+            font-size: 0.85rem;
+            color: var(--text-dim);
+            text-transform: uppercase;
+        }
+
+        /* Tabs */
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 10px;
+            flex-wrap: wrap;
+        }
+
+        .tab-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-dim);
+            padding: 10px 20px;
+            font-size: 1rem;
+            cursor: pointer;
+            border-radius: 8px;
+            transition: all 0.2s;
+        }
+
+        .tab-btn:hover {
+            background: rgba(255,255,255,0.05);
+            color: var(--text);
+        }
+
+        .tab-btn.active {
+            background: var(--accent-green);
+            color: white;
+        }
+
+        /* Project Cards */
+        .projects-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 20px;
+        }
+
+        .project-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            overflow: hidden;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .project-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+        }
+
+        .project-header {
+            background: linear-gradient(135deg, rgba(34, 197, 94, 0.2), rgba(6, 182, 212, 0.1));
+            padding: 20px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .project-header .status-badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+
+        .status-badge.draft { background: var(--text-dim); color: #000; }
+        .status-badge.crowdfunding { background: var(--accent-gold); color: #000; }
+        .status-badge.funded { background: var(--accent-green); color: #fff; }
+        .status-badge.completed { background: var(--accent-purple); color: #fff; }
+
+        .project-header h3 {
+            font-size: 1.3rem;
+            margin-bottom: 5px;
+        }
+
+        .project-header .location {
+            color: var(--text-dim);
+            font-size: 0.9rem;
+        }
+
+        .project-body {
+            padding: 20px;
+        }
+
+        .owner-list {
+            margin-bottom: 20px;
+        }
+
+        .owner-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px;
+            background: rgba(255,255,255,0.02);
+            border-radius: 8px;
+            margin-bottom: 8px;
+        }
+
+        .owner-item .mode-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+        }
+
+        .owner-item .mode-icon.commons {
+            background: linear-gradient(135deg, var(--accent-green), #059669);
+        }
+
+        .owner-item .mode-icon.cash {
+            background: linear-gradient(135deg, var(--accent-gold), #d97706);
+        }
+
+        .owner-item .info {
+            flex: 1;
+        }
+
+        .owner-item .info .email {
+            font-weight: 500;
+            font-size: 0.9rem;
+        }
+
+        .owner-item .info .details {
+            font-size: 0.8rem;
+            color: var(--text-dim);
+        }
+
+        /* Progress Bars */
+        .campaign-section {
+            margin-top: 15px;
+        }
+
+        .campaign-item {
+            margin-bottom: 15px;
+        }
+
+        .campaign-item .campaign-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .campaign-item .campaign-header .type {
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+
+        .campaign-item .campaign-header .amounts {
+            font-size: 0.85rem;
+            color: var(--text-dim);
+        }
+
+        .progress-bar {
+            height: 10px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 5px;
+            overflow: hidden;
+        }
+
+        .progress-bar .fill {
+            height: 100%;
+            border-radius: 5px;
+            transition: width 0.5s ease;
+        }
+
+        .progress-bar .fill.zen {
+            background: linear-gradient(90deg, var(--accent-gold), #f59e0b);
+        }
+
+        .progress-bar .fill.g1 {
+            background: linear-gradient(90deg, var(--accent-purple), #7c3aed);
+        }
+
+        /* Actions */
+        .project-actions {
+            display: flex;
+            gap: 10px;
+            padding: 15px 20px;
+            border-top: 1px solid var(--border);
+        }
+
+        .btn {
+            flex: 1;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: var(--accent-green);
+            color: white;
+        }
+
+        .btn-secondary {
+            background: rgba(255,255,255,0.1);
+            color: var(--text);
+        }
+
+        .btn:hover {
+            transform: scale(1.02);
+            filter: brightness(1.1);
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* Create Project Form */
+        .create-form {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 30px;
+            margin-bottom: 30px;
+        }
+
+        .create-form h2 {
+            margin-bottom: 20px;
+            color: var(--accent-green);
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .form-group label {
+            font-size: 0.85rem;
+            color: var(--text-dim);
+            margin-bottom: 5px;
+        }
+
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 12px;
+            color: var(--text);
+            font-size: 1rem;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: var(--accent-green);
+        }
+
+        /* Contribute Modal */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.8);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            width: 90%;
+            max-width: 500px;
+            max-height: 90vh;
+            overflow-y: auto;
+            padding: 30px;
+        }
+
+        .modal-content h3 {
+            margin-bottom: 20px;
+        }
+
+        .close-btn {
+            float: right;
+            background: none;
+            border: none;
+            color: var(--text-dim);
+            font-size: 1.5rem;
+            cursor: pointer;
+        }
+
+        /* Donation Amount Selector */
+        .donation-section {
+            margin-top: 20px;
+            padding: 20px;
+            background: rgba(251, 191, 36, 0.1);
+            border: 1px solid var(--accent-gold);
+            border-radius: 12px;
+        }
+
+        .donation-section h4 {
+            margin-bottom: 15px;
+            color: var(--accent-gold);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .donation-amount-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 8px;
+            margin-bottom: 15px;
+        }
+
+        .donation-amount-btn {
+            padding: 12px 8px;
+            background: rgba(255,255,255,0.05);
+            border: 2px solid transparent;
+            border-radius: 8px;
+            color: var(--text);
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .donation-amount-btn:hover {
+            background: rgba(251, 191, 36, 0.2);
+            border-color: var(--accent-gold);
+        }
+
+        .donation-amount-btn.selected {
+            background: var(--accent-gold);
+            color: #000;
+            border-color: var(--accent-gold);
+        }
+
+        .custom-amount {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .custom-amount input {
+            flex: 1;
+            padding: 10px;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text);
+            font-size: 1rem;
+        }
+
+        .donation-info {
+            margin-top: 15px;
+            padding: 12px;
+            background: rgba(0,0,0,0.3);
+            border-radius: 8px;
+            font-size: 0.85rem;
+        }
+
+        .donation-info .row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+        }
+
+        .donation-info .total {
+            font-weight: 700;
+            font-size: 1.1rem;
+            color: var(--accent-gold);
+            border-top: 1px solid var(--border);
+            padding-top: 8px;
+            margin-top: 8px;
+        }
+
+        .send-donation-btn {
+            width: 100%;
+            padding: 15px;
+            margin-top: 15px;
+            background: linear-gradient(135deg, var(--accent-gold), #d97706);
+            border: none;
+            border-radius: 10px;
+            color: #000;
+            font-size: 1.1rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .send-donation-btn:hover:not(:disabled) {
+            transform: scale(1.02);
+            filter: brightness(1.1);
+        }
+
+        .send-donation-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .send-donation-btn .spinner {
+            display: inline-block;
+            width: 18px;
+            height: 18px;
+            border: 2px solid #000;
+            border-top-color: transparent;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 8px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Not Connected Warning */
+        .not-connected-warning {
+            text-align: center;
+            padding: 20px;
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid var(--accent-red);
+            border-radius: 12px;
+            margin-bottom: 20px;
+        }
+
+        .not-connected-warning p {
+            margin-bottom: 15px;
+            color: var(--text-dim);
+        }
+
+        /* QR Code Section */
+        .qr-section {
+            text-align: center;
+            padding: 20px;
+            background: rgba(255,255,255,0.03);
+            border-radius: 12px;
+            margin-top: 15px;
+        }
+
+        .qr-section img {
+            max-width: 200px;
+            margin-bottom: 10px;
+        }
+
+        .qr-section .wallet-address {
+            font-family: monospace;
+            font-size: 0.8rem;
+            color: var(--text-dim);
+            word-break: break-all;
+            padding: 10px;
+            background: rgba(0,0,0,0.3);
+            border-radius: 8px;
+        }
+
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--text-dim);
+        }
+
+        .empty-state .icon {
+            font-size: 4rem;
+            margin-bottom: 20px;
+            opacity: 0.5;
+        }
+
+        /* Footer */
+        .footer {
+            text-align: center;
+            padding: 30px;
+            color: var(--text-dim);
+            font-size: 0.9rem;
+            border-top: 1px solid var(--border);
+            margin-top: 40px;
+        }
+
+        /* Notification Toast */
+        .toast-container {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 2000;
+        }
+
+        .toast {
+            padding: 15px 20px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            margin-top: 10px;
+            animation: slideIn 0.3s ease;
+            max-width: 350px;
+        }
+
+        .toast.success { border-color: var(--accent-green); }
+        .toast.error { border-color: var(--accent-red); }
+        .toast.info { border-color: var(--accent-cyan); }
+
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 1.8rem;
+            }
+
+            .stats-bar {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .projects-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .tabs {
+                flex-wrap: wrap;
+            }
+
+            .donation-amount-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .connection-bar {
+                flex-wrap: wrap;
+                gap: 8px;
+            }
+
+            .profile-section {
+                width: 100%;
+                justify-content: center;
+                margin-left: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Connection Bar -->
+    <div class="connection-bar">
+        <span class="logo">🌳 UPlanet CF</span>
+        <div class="profile-section">
+            <div class="zen-balance" id="zenBalance">
+                <span>💰</span>
+                <span id="zenAmount">0 Ẑ</span>
+            </div>
+            <div class="profile-mini" id="profileMini">
+                <img id="profileImg" src="https://robohash.org/default?set=set4" alt="Profile">
+                <span class="name" id="profileName">...</span>
+            </div>
+            <button class="btn-connect" id="btnConnect" disabled>⏳ Chargement...</button>
+        </div>
+    </div>
+
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <h1>🌳 Crowdfunding Forêt Jardin</h1>
+            <p>Financez collectivement l'acquisition d'espaces naturels pour les Communs</p>
+        </header>
+
+        <!-- Stats Bar -->
+        <div class="stats-bar">
+            <div class="stat-card">
+                <div class="icon">🚀</div>
+                <div class="value" id="activeProjectsCount">0</div>
+                <div class="label">Campagnes actives</div>
+            </div>
+            <div class="stat-card">
+                <div class="icon">💰</div>
+                <div class="value" id="totalCollected">0 Ẑ</div>
+                <div class="label">Ẑen collectés</div>
+            </div>
+            <div class="stat-card">
+                <div class="icon">🪙</div>
+                <div class="value" id="totalG1">0 Ğ1</div>
+                <div class="label">Ğ1 collectés</div>
+            </div>
+            <div class="stat-card">
+                <div class="icon">✅</div>
+                <div class="value" id="completedProjects">0</div>
+                <div class="label">Projets réalisés</div>
+            </div>
+        </div>
+
+        <!-- Tabs -->
+        <div class="tabs">
+            <button class="tab-btn active" data-tab="active">🚀 Campagnes actives</button>
+            <button class="tab-btn" data-tab="all">📋 Tous les projets</button>
+            <button class="tab-btn" data-tab="create">➕ Créer un projet</button>
+        </div>
+
+        <!-- Content Sections -->
+        <div id="activeTab" class="tab-content">
+            <div class="projects-grid" id="activeProjects-grid">
+                <!-- Dynamic content -->
+            </div>
+            <div class="empty-state" id="noActiveProjects" style="display: none;">
+                <div class="icon">🌱</div>
+                <h3>Aucune campagne active</h3>
+                <p>Créez un nouveau projet pour lancer une campagne de crowdfunding</p>
+            </div>
+        </div>
+
+        <div id="allTab" class="tab-content" style="display: none;">
+            <div class="projects-grid" id="allProjects-grid">
+                <!-- Dynamic content -->
+            </div>
+        </div>
+
+        <div id="createTab" class="tab-content" style="display: none;">
+            <div class="create-form">
+                <h2>➕ Créer un nouveau projet</h2>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Nom du projet *</label>
+                        <input type="text" id="projectName" placeholder="Forêt Enchantée">
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Latitude *</label>
+                        <input type="number" id="projectLat" step="0.0001" placeholder="43.6047">
+                    </div>
+                    <div class="form-group">
+                        <label>Longitude *</label>
+                        <input type="number" id="projectLon" step="0.0001" placeholder="1.4442">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Description</label>
+                    <textarea id="projectDesc" rows="3" placeholder="Projet de forêt jardin collaborative..."></textarea>
+                </div>
+
+                <hr style="border-color: var(--border); margin: 20px 0;">
+
+                <h3 style="margin-bottom: 15px;">👥 Propriétaires</h3>
+                <p style="color: var(--text-dim); margin-bottom: 15px; font-size: 0.9rem;">
+                    Ajoutez les propriétaires et leur intention (donation aux Communs ou vente en €)
+                </p>
+
+                <div id="ownersContainer">
+                    <!-- Owner entries will be added here -->
+                </div>
+
+                <button class="btn btn-secondary" style="margin-bottom: 20px;" onclick="addOwnerEntry()">
+                    ➕ Ajouter un propriétaire
+                </button>
+
+                <div class="form-row">
+                    <button class="btn btn-primary" onclick="createProject()" style="padding: 15px;">
+                        🚀 Créer le projet
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- OpenCollective Promotion Card -->
+        <div class="opencollective-promo" style="background: linear-gradient(135deg, rgba(34, 197, 94, 0.15), rgba(168, 85, 247, 0.1)); border: 1px solid var(--accent-green); border-radius: 16px; padding: 25px; margin-top: 30px; text-align: center;">
+            <h3 style="color: var(--accent-green); margin-bottom: 10px;">💳 Recharger votre MULTIPASS</h3>
+            <p style="color: var(--text-dim); margin-bottom: 15px;">
+                Besoin de plus de Ẑen ? Devenez Sociétaire et rechargez votre compte via OpenCollective
+            </p>
+            <div style="display: flex; gap: 15px; justify-content: center; flex-wrap: wrap;">
+                <a href="https://opencollective.com/uplanet-zero" target="_blank" class="btn btn-primary" style="text-decoration: none; display: inline-flex; align-items: center; gap: 8px;">
+                    🌟 OpenCollective UPlanet
+                </a>
+                <a href="collaborative-editor.html?lat=_LAT_&lon=_LON_" class="btn btn-secondary" style="text-decoration: none; display: inline-flex; align-items: center; gap: 8px;">
+                    📝 Créer un document Crowdfund
+                </a>
+            </div>
+            <p style="font-size: 0.8rem; color: var(--text-dim); margin-top: 15px;">
+                🛡️ Sociétaire Satellite: 54€/an | 🌟 Constellation: 540€/an
+            </p>
+        </div>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <p>🌍 UPlanet ẐEN - Financement participatif des Communs</p>
+            <p style="margin-top: 5px;">
+                <a href="https://opencollective.com/uplanet-zero" style="color: var(--accent-green); margin-right: 15px;">💳 OpenCollective</a>
+                <a href="https://ipfs.copylaradio.com/ipns/copylaradio.com" style="color: var(--accent-cyan);">En savoir plus</a>
+            </p>
+        </footer>
+    </div>
+
+    <!-- Contribute Modal -->
+    <div class="modal-overlay" id="contributeModal">
+        <div class="modal-content">
+            <button class="close-btn" onclick="closeModal()">&times;</button>
+            <h3>💰 Contribuer au projet</h3>
+            
+            <div id="modalProjectInfo"></div>
+
+            <!-- Not Connected Warning -->
+            <div class="not-connected-warning" id="notConnectedWarning">
+                <p>⚠️ Connectez-vous avec votre MULTIPASS pour envoyer des Ẑen</p>
+                <button class="btn btn-primary" onclick="connectWallet()">
+                    🔐 Se connecter
+                </button>
+                <p style="margin-top: 15px; font-size: 0.85rem;">
+                    Pas encore de MULTIPASS ? 
+                    <a href="https://opencollective.com/uplanet-zero" target="_blank" style="color: var(--accent-green);">
+                        Devenez Sociétaire →
+                    </a>
+                </p>
+            </div>
+
+            <!-- Donation Section (visible when connected) -->
+            <div class="donation-section" id="donationSection" style="display: none;">
+                <h4>💸 Envoyer des Ẑen (convertibles €)</h4>
+                <p style="font-size: 0.85rem; color: var(--text-dim); margin-bottom: 15px;">
+                    Vos Ẑen seront envoyés à la UMAP du projet via une réaction Nostr (kind 7).
+                    <br>Le montant sera converti en Ğ1 (1 Ẑ = 0.1 Ğ1).
+                </p>
+
+                <!-- Amount Selection -->
+                <div class="donation-amount-grid">
+                    <button class="donation-amount-btn" data-amount="1">1 Ẑ</button>
+                    <button class="donation-amount-btn" data-amount="5">5 Ẑ</button>
+                    <button class="donation-amount-btn" data-amount="10">10 Ẑ</button>
+                    <button class="donation-amount-btn selected" data-amount="50">50 Ẑ</button>
+                    <button class="donation-amount-btn" data-amount="100">100 Ẑ</button>
+                    <button class="donation-amount-btn" data-amount="200">200 Ẑ</button>
+                    <button class="donation-amount-btn" data-amount="500">500 Ẑ</button>
+                    <button class="donation-amount-btn" data-amount="1000">1000 Ẑ</button>
+                </div>
+
+                <div class="custom-amount">
+                    <input type="number" id="customAmount" placeholder="Montant personnalisé" min="1" max="1000">
+                    <button class="btn btn-secondary" onclick="setCustomAmount()">OK</button>
+                </div>
+
+                <!-- Donation Info -->
+                <div class="donation-info">
+                    <div class="row">
+                        <span>Montant sélectionné:</span>
+                        <span id="selectedAmountDisplay">50 Ẑen</span>
+                    </div>
+                    <div class="row">
+                        <span>Équivalent Ğ1:</span>
+                        <span id="g1Equivalent">5.0 Ğ1</span>
+                    </div>
+                    <div class="row">
+                        <span>Votre solde:</span>
+                        <span id="yourBalance">-- Ẑen</span>
+                    </div>
+                    <div class="row total">
+                        <span>Total envoyé:</span>
+                        <span id="totalToSend">50 Ẑen</span>
+                    </div>
+                </div>
+
+                <!-- Low Balance Warning -->
+                <div id="lowBalanceWarning" style="display: none; margin-top: 15px; padding: 12px; background: rgba(239, 68, 68, 0.1); border: 1px solid var(--accent-red); border-radius: 8px; text-align: center;">
+                    <p style="color: var(--accent-red); margin-bottom: 10px;">⚠️ Solde insuffisant</p>
+                    <a href="https://opencollective.com/uplanet-zero" target="_blank" class="btn btn-primary" style="text-decoration: none; font-size: 0.85rem;">
+                        💳 Recharger sur OpenCollective
+                    </a>
+                </div>
+
+                <!-- Send Button -->
+                <button class="send-donation-btn" id="sendDonationBtn" onclick="sendDonation()">
+                    🚀 Envoyer la contribution
+                </button>
+            </div>
+
+            <!-- Alternative: Manual Transfer -->
+            <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--border);">
+                <p style="font-size: 0.85rem; color: var(--text-dim); text-align: center;">
+                    Ou transfert manuel vers le wallet du projet:
+                </p>
+                <div class="qr-section" id="qrSection">
+                    <div class="wallet-address" id="walletAddress">
+                        <!-- Dynamic wallet address -->
+                    </div>
+                    <p style="margin-top: 10px; font-size: 0.8rem; color: var(--text-dim);">
+                        Commentaire: <code id="txComment" style="color: var(--accent-gold);">CF:PROJECT_ID</code>
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <script>
+        // ========================================
+        // CONFIGURATION
+        // ========================================
+        const DEFAULT_RELAYS = [
+            'wss://relay.copylaradio.com',
+            'wss://nos.lol',
+            'wss://relay.damus.io'
+        ];
+        
+        const IPFS_GATEWAY = window.location.origin.includes('localhost') 
+            ? 'http://127.0.0.1:8080' 
+            : 'https://ipfs.copylaradio.com';
+
+        // ========================================
+        // STATE
+        // ========================================
+        let publicKey = '';
+        let pool = null;
+        let userProfile = null;
+        let userZenBalance = 0;
+        let projects = [];
+        let currentProject = null;
+        let selectedAmount = 50;
+
+        // ========================================
+        // NOSTR UTILITIES
+        // ========================================
+        function getPool() {
+            if (!pool) pool = new NostrTools.SimplePool({ getTimeout: 6000, listTimeout: 6000 });
+            return pool;
+        }
+
+        function log(msg) {
+            console.log(`[CF] ${msg}`);
+        }
+
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.innerHTML = message;
+            container.appendChild(toast);
+            
+            setTimeout(() => toast.remove(), 5000);
+        }
+
+        // ========================================
+        // CONNECTION SYSTEM
+        // ========================================
+        function checkExtension() {
+            if (typeof window.nostr !== 'undefined') {
+                log('Nostr extension found');
+                $('#btnConnect').prop('disabled', false).text('🔐 Connexion');
+            } else {
+                log('No Nostr extension');
+                $('#btnConnect').text('Extension ?').prop('disabled', true);
+                // Retry after delay
+                setTimeout(() => {
+                    if (typeof window.nostr !== 'undefined') {
+                        $('#btnConnect').prop('disabled', false).text('🔐 Connexion');
+                    }
+                }, 2000);
+            }
+        }
+
+        async function connectWallet() {
+            log('Connecting...');
+            try {
+                $('#btnConnect').prop('disabled', true).text('⏳...');
+                publicKey = await window.nostr.getPublicKey();
+                log(`Connected: ${publicKey.slice(0, 12)}...`);
+                
+                $('#btnConnect').addClass('connected');
+                $('#profileMini').addClass('connected');
+                
+                await fetchProfile();
+                await fetchZenBalance();
+                
+                updateConnectionUI();
+                showToast('✅ Connexion réussie !', 'success');
+            } catch (e) {
+                log(`ERROR: ${e.message}`);
+                $('#btnConnect').prop('disabled', false).text('🔐 Réessayer');
+                showToast(`❌ Erreur: ${e.message}`, 'error');
+            }
+        }
+
+        function updateConnectionUI() {
+            // Update modal
+            if (publicKey) {
+                $('#notConnectedWarning').hide();
+                $('#donationSection').show();
+                $('#yourBalance').text(`${userZenBalance} Ẑen`);
+            } else {
+                $('#notConnectedWarning').show();
+                $('#donationSection').hide();
+            }
+        }
+
+        async function fetchProfile() {
+            const p = getPool();
+            for (const relay of DEFAULT_RELAYS) {
+                try {
+                    const events = await p.list([relay], [{ kinds: [0], authors: [publicKey], limit: 1 }]);
+                    if (events.length) {
+                        userProfile = JSON.parse(events[0].content);
+                        
+                        // Extract g1pub from tags
+                        if (events[0].tags) {
+                            events[0].tags.forEach(tag => {
+                                if (tag.length >= 2 && tag[0] === 'i') {
+                                    const value = tag[1];
+                                    if (value.startsWith('g1pub:')) {
+                                        userProfile.g1pub = value.substring(6);
+                                    }
+                                }
+                            });
+                        }
+                        
+                        // Update UI
+                        $('#profileImg').attr('src', userProfile.picture || `https://robohash.org/${publicKey}?set=set4`);
+                        $('#profileName').text(userProfile.display_name || userProfile.name || publicKey.slice(0, 8));
+                        log(`Profile: ${userProfile.name || userProfile.display_name}`);
+                        break;
+                    }
+                } catch (e) { 
+                    log(`Profile error: ${e.message}`); 
+                }
+            }
+        }
+
+        async function fetchZenBalance() {
+            if (!userProfile?.g1pub) {
+                log('No g1pub found, cannot fetch balance');
+                return;
+            }
+
+            try {
+                const apiUrl = getApiServerUrl();
+                const g1pubParts = userProfile.g1pub.split(':');
+                const mainPub = g1pubParts[0];
+                
+                const response = await fetch(`${apiUrl}/check_balance?g1pub=${mainPub}`, { 
+                    timeout: 5000 
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.balance) {
+                        const g1Balance = parseFloat(data.balance);
+                        userZenBalance = Math.floor((g1Balance - 1) * 10);
+                        if (userZenBalance < 0) userZenBalance = 0;
+                        
+                        $('#zenBalance').addClass('visible');
+                        $('#zenAmount').text(`${userZenBalance} Ẑ`);
+                        log(`ZEN Balance: ${userZenBalance}`);
+                    }
+                }
+            } catch (error) {
+                log(`Balance error: ${error.message}`);
+            }
+        }
+
+        function getApiServerUrl() {
+            const url = new URL(window.location.href);
+            let hostname = url.hostname.replace(/^ipfs\./, 'u.');
+            let port = url.port;
+            if (port === '8080') port = '54321';
+            const protocol = url.protocol;
+            return port ? `${protocol}//${hostname}:${port}` : `${protocol}//${hostname}`;
+        }
+
+        // ========================================
+        // KIND 7 DONATION SYSTEM
+        // ========================================
+        function selectAmount(amount) {
+            selectedAmount = amount;
+            
+            // Update UI
+            $('.donation-amount-btn').removeClass('selected');
+            $(`.donation-amount-btn[data-amount="${amount}"]`).addClass('selected');
+            
+            updateDonationInfo();
+        }
+
+        function setCustomAmount() {
+            const amount = parseInt($('#customAmount').val());
+            if (amount && amount >= 1 && amount <= 1000) {
+                selectedAmount = amount;
+                $('.donation-amount-btn').removeClass('selected');
+                updateDonationInfo();
+            } else {
+                showToast('❌ Montant invalide (1-1000 Ẑ)', 'error');
+            }
+        }
+
+        function updateDonationInfo() {
+            const g1Equiv = (selectedAmount * 0.1).toFixed(1);
+            $('#selectedAmountDisplay').text(`${selectedAmount} Ẑen`);
+            $('#g1Equivalent').text(`${g1Equiv} Ğ1`);
+            $('#totalToSend').text(`${selectedAmount} Ẑen`);
+            
+            // Check if user has enough balance
+            const $sendBtn = $('#sendDonationBtn');
+            const $lowBalanceWarning = $('#lowBalanceWarning');
+            
+            if (userZenBalance > 0 && selectedAmount > userZenBalance) {
+                $sendBtn.prop('disabled', true);
+                $('#yourBalance').css('color', 'var(--accent-red)');
+                $lowBalanceWarning.show();
+            } else {
+                $sendBtn.prop('disabled', false);
+                $('#yourBalance').css('color', '');
+                $lowBalanceWarning.hide();
+            }
+        }
+
+        async function sendDonation() {
+            if (!publicKey) {
+                showToast('❌ Veuillez vous connecter d\'abord', 'error');
+                return;
+            }
+
+            if (!currentProject) {
+                showToast('❌ Aucun projet sélectionné', 'error');
+                return;
+            }
+
+            const $btn = $('#sendDonationBtn');
+            $btn.prop('disabled', true).html('<span class="spinner"></span> Envoi en cours...');
+
+            try {
+                // Create kind 7 reaction event
+                // Content: "+{amount}" sends {amount} Ẑen via 7.sh
+                const content = selectedAmount === 1 ? '+' : `+${selectedAmount}`;
+                
+                const event = {
+                    kind: 7,
+                    created_at: Math.floor(Date.now() / 1000),
+                    tags: [
+                        // Reference the project (UMAP pubkey)
+                        ['p', currentProject.umapPubkey || currentProject.id],
+                        // Tag for crowdfunding identification
+                        ['t', 'crowdfunding'],
+                        ['t', 'UPlanet'],
+                        ['project-id', currentProject.id],
+                        ['target', 'ZEN_CONVERTIBLE']
+                    ],
+                    content: content
+                };
+
+                // If project has an event ID, reference it
+                if (currentProject.eventId) {
+                    event.tags.unshift(['e', currentProject.eventId]);
+                    event.tags.push(['k', '30904']); // Crowdfund event kind
+                }
+
+                log(`Sending kind 7 reaction: ${content} to project ${currentProject.id}`);
+
+                // Sign the event
+                const signedEvent = await window.nostr.signEvent(event);
+                log(`Signed event: ${signedEvent.id}`);
+
+                // Publish to relays
+                const p = getPool();
+                let successCount = 0;
+
+                await Promise.all(DEFAULT_RELAYS.map(async (relay) => {
+                    try {
+                        const ws = await p.publish([relay], signedEvent);
+                        successCount++;
+                        log(`Published to ${relay}`);
+                    } catch (e) {
+                        log(`Failed to publish to ${relay}: ${e.message}`);
+                    }
+                }));
+
+                if (successCount > 0) {
+                    showToast(`✅ ${selectedAmount} Ẑen envoyés au projet !`, 'success');
+                    
+                    // Update local state (UI only, real update comes from UMAP.refresh)
+                    currentProject.totals.zen_convertible_collected += selectedAmount;
+                    currentProject.contributions.push({
+                        contributor: publicKey,
+                        amount: selectedAmount,
+                        currency: 'ZEN',
+                        timestamp: new Date().toISOString(),
+                        eventId: signedEvent.id
+                    });
+                    
+                    renderProjects();
+                    closeModal();
+                } else {
+                    throw new Error('Impossible de publier sur les relays');
+                }
+
+            } catch (error) {
+                log(`Donation error: ${error.message}`);
+                showToast(`❌ Erreur: ${error.message}`, 'error');
+            } finally {
+                $btn.prop('disabled', false).html('🚀 Envoyer la contribution');
+            }
+        }
+
+        // ========================================
+        // TAB NAVIGATION
+        // ========================================
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                
+                document.querySelectorAll('.tab-content').forEach(c => c.style.display = 'none');
+                document.getElementById(btn.dataset.tab + 'Tab').style.display = 'block';
+            });
+        });
+
+        // ========================================
+        // PROJECT MANAGEMENT
+        // ========================================
+        let ownerCount = 0;
+        
+        function addOwnerEntry() {
+            ownerCount++;
+            const container = document.getElementById('ownersContainer');
+            const entry = document.createElement('div');
+            entry.className = 'owner-entry';
+            entry.style.cssText = 'background: rgba(255,255,255,0.03); padding: 15px; border-radius: 8px; margin-bottom: 10px;';
+            entry.innerHTML = `
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Email du propriétaire</label>
+                        <input type="email" class="owner-email" placeholder="proprietaire@example.com">
+                    </div>
+                    <div class="form-group">
+                        <label>Mode</label>
+                        <select class="owner-mode">
+                            <option value="commons">🤝 Commons (donation Ẑen)</option>
+                            <option value="cash">💶 Cash (vente €)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Montant</label>
+                        <input type="number" class="owner-amount" placeholder="500">
+                    </div>
+                    <button class="btn btn-secondary" onclick="this.parentElement.parentElement.remove()" style="align-self: flex-end; padding: 10px;">
+                        🗑️
+                    </button>
+                </div>
+            `;
+            container.appendChild(entry);
+        }
+
+        async function createProject() {
+            const name = document.getElementById('projectName').value;
+            const lat = document.getElementById('projectLat').value;
+            const lon = document.getElementById('projectLon').value;
+            const desc = document.getElementById('projectDesc').value;
+
+            if (!name || !lat || !lon) {
+                showToast('❌ Veuillez remplir les champs obligatoires', 'error');
+                return;
+            }
+
+            // Collect owners
+            const owners = [];
+            document.querySelectorAll('.owner-entry').forEach(entry => {
+                const email = entry.querySelector('.owner-email').value;
+                const mode = entry.querySelector('.owner-mode').value;
+                const amount = parseFloat(entry.querySelector('.owner-amount').value) || 0;
+                if (email && amount > 0) {
+                    owners.push({ email, mode, amount });
+                }
+            });
+
+            // Generate UMAP pubkey placeholder (in production, use keygen)
+            const umapId = `UMAP_${parseFloat(lat).toFixed(2)}_${parseFloat(lon).toFixed(2)}`;
+            
+            const project = {
+                id: 'CF-' + Date.now().toString(36).toUpperCase(),
+                name,
+                location: { latitude: parseFloat(lat), longitude: parseFloat(lon) },
+                description: desc,
+                status: owners.length > 0 ? 'crowdfunding' : 'draft',
+                umapId: umapId,
+                // In production, this would be the actual UMAP Nostr pubkey
+                umapPubkey: null,
+                owners: owners.map(o => ({
+                    email: o.email,
+                    mode: o.mode,
+                    amount_zen: o.mode === 'commons' ? o.amount : 0,
+                    amount_eur: o.mode === 'cash' ? o.amount : 0,
+                    status: 'pending'
+                })),
+                totals: {
+                    commons_zen: owners.filter(o => o.mode === 'commons').reduce((s, o) => s + o.amount, 0),
+                    cash_eur: owners.filter(o => o.mode === 'cash').reduce((s, o) => s + o.amount, 0),
+                    zen_convertible_target: owners.filter(o => o.mode === 'cash').reduce((s, o) => s + o.amount, 0),
+                    zen_convertible_collected: 0,
+                    g1_target: 100,
+                    g1_collected: 0
+                },
+                campaigns: {
+                    zen_convertible_campaign_active: owners.some(o => o.mode === 'cash'),
+                    g1_campaign_active: true
+                },
+                contributions: []
+            };
+
+            projects.push(project);
+            renderProjects();
+            
+            // Switch to active tab
+            document.querySelector('[data-tab="active"]').click();
+            
+            showToast(`✅ Projet "${name}" créé !`, 'success');
+        }
+
+        function renderProjects() {
+            const activeGrid = document.getElementById('activeProjects-grid');
+            const allGrid = document.getElementById('allProjects-grid');
+            
+            const activeProjects = projects.filter(p => p.status === 'crowdfunding' || p.status === 'draft');
+            
+            // Update stats
+            document.getElementById('activeProjectsCount').textContent = activeProjects.length;
+            document.getElementById('completedProjects').textContent = projects.filter(p => p.status === 'completed').length;
+            
+            const totalZen = projects.reduce((s, p) => s + (p.totals?.zen_convertible_collected || 0), 0);
+            const totalG1 = projects.reduce((s, p) => s + (p.totals?.g1_collected || 0), 0);
+            document.getElementById('totalCollected').textContent = totalZen + ' Ẑ';
+            document.getElementById('totalG1').textContent = totalG1.toFixed(1) + ' Ğ1';
+            
+            // Render active projects
+            activeGrid.innerHTML = activeProjects.map(p => renderProjectCard(p)).join('');
+            document.getElementById('noActiveProjects').style.display = activeProjects.length === 0 ? 'block' : 'none';
+            
+            // Render all projects
+            allGrid.innerHTML = projects.map(p => renderProjectCard(p)).join('');
+        }
+
+        function renderProjectCard(project) {
+            const zenTarget = project.totals?.zen_convertible_target || 0;
+            const zenCollected = project.totals?.zen_convertible_collected || 0;
+            const g1Target = project.totals?.g1_target || 0;
+            const g1Collected = project.totals?.g1_collected || 0;
+            
+            const zenPct = zenTarget > 0 ? (zenCollected / zenTarget * 100) : 0;
+            const g1Pct = g1Target > 0 ? (g1Collected / g1Target * 100) : 0;
+
+            return `
+                <div class="project-card">
+                    <div class="project-header">
+                        <span class="status-badge ${project.status}">${getStatusLabel(project.status)}</span>
+                        <h3>🌳 ${project.name}</h3>
+                        <div class="location">📍 (${project.location.latitude}, ${project.location.longitude})</div>
+                        ${project.umapId ? `<div style="font-size: 0.75rem; color: var(--text-dim); margin-top: 4px;">${project.umapId}</div>` : ''}
+                    </div>
+                    <div class="project-body">
+                        ${project.owners?.length > 0 ? `
+                            <div class="owner-list">
+                                <strong style="font-size: 0.9rem; color: var(--text-dim);">👥 Propriétaires</strong>
+                                ${project.owners.map(o => `
+                                    <div class="owner-item">
+                                        <div class="mode-icon ${o.mode}">${o.mode === 'commons' ? '🤝' : '💶'}</div>
+                                        <div class="info">
+                                            <div class="email">${o.email}</div>
+                                            <div class="details">${o.mode === 'commons' ? o.amount_zen + ' Ẑen (Communs)' : o.amount_eur + '€ (Cash)'}</div>
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        ` : ''}
+                        
+                        ${(project.campaigns?.zen_convertible_campaign_active || project.campaigns?.g1_campaign_active) ? `
+                            <div class="campaign-section">
+                                ${project.campaigns?.zen_convertible_campaign_active && zenTarget > 0 ? `
+                                    <div class="campaign-item">
+                                        <div class="campaign-header">
+                                            <span class="type">💶 Ẑen convertible €</span>
+                                            <span class="amounts">${zenCollected}/${zenTarget} Ẑ</span>
+                                        </div>
+                                        <div class="progress-bar">
+                                            <div class="fill zen" style="width: ${Math.min(zenPct, 100)}%"></div>
+                                        </div>
+                                    </div>
+                                ` : ''}
+                                ${project.campaigns?.g1_campaign_active && g1Target > 0 ? `
+                                    <div class="campaign-item">
+                                        <div class="campaign-header">
+                                            <span class="type">🪙 Don Ğ1</span>
+                                            <span class="amounts">${g1Collected.toFixed(1)}/${g1Target} Ğ1</span>
+                                        </div>
+                                        <div class="progress-bar">
+                                            <div class="fill g1" style="width: ${Math.min(g1Pct, 100)}%"></div>
+                                        </div>
+                                    </div>
+                                ` : ''}
+                            </div>
+                        ` : ''}
+                        
+                        ${project.contributions?.length > 0 ? `
+                            <div style="margin-top: 15px; font-size: 0.8rem; color: var(--text-dim);">
+                                📊 ${project.contributions.length} contribution(s) reçue(s)
+                            </div>
+                        ` : ''}
+                    </div>
+                    <div class="project-actions">
+                        <button class="btn btn-primary" onclick="openContributeModal('${project.id}')">
+                            💰 Contribuer
+                        </button>
+                        <button class="btn btn-secondary" onclick="viewDetails('${project.id}')">
+                            📋 Détails
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function getStatusLabel(status) {
+            const labels = {
+                draft: '📝 Brouillon',
+                crowdfunding: '🚀 Financement',
+                funded: '💰 Financé',
+                completed: '✅ Terminé'
+            };
+            return labels[status] || status;
+        }
+
+        // ========================================
+        // MODAL FUNCTIONS
+        // ========================================
+        function openContributeModal(projectId) {
+            currentProject = projects.find(p => p.id === projectId);
+            if (!currentProject) return;
+
+            document.getElementById('modalProjectInfo').innerHTML = `
+                <p><strong>🌳 ${currentProject.name}</strong></p>
+                <p style="color: var(--text-dim); font-size: 0.9rem;">ID: ${currentProject.id}</p>
+                ${currentProject.umapId ? `<p style="color: var(--text-dim); font-size: 0.8rem;">${currentProject.umapId}</p>` : ''}
+            `;
+            
+            // Update wallet info for manual transfer
+            const walletAddress = currentProject.umapPubkey || currentProject.umapId || 'UMAP_WALLET';
+            document.getElementById('walletAddress').textContent = walletAddress;
+            document.getElementById('txComment').textContent = `CF:${currentProject.id}`;
+            
+            // Update connection state
+            updateConnectionUI();
+            updateDonationInfo();
+            
+            document.getElementById('contributeModal').classList.add('active');
+        }
+
+        function closeModal() {
+            document.getElementById('contributeModal').classList.remove('active');
+            currentProject = null;
+        }
+
+        function viewDetails(projectId) {
+            const project = projects.find(p => p.id === projectId);
+            if (!project) return;
+            
+            // Format contributions for display
+            const contribDetails = project.contributions?.length > 0
+                ? project.contributions.map(c => 
+                    `• ${c.amount} ${c.currency} (${new Date(c.timestamp).toLocaleDateString()})`
+                ).join('\n')
+                : 'Aucune contribution';
+            
+            showToast(`
+                <strong>📋 ${project.name}</strong><br>
+                <small>
+                    Status: ${getStatusLabel(project.status)}<br>
+                    Ẑen: ${project.totals.zen_convertible_collected}/${project.totals.zen_convertible_target}<br>
+                    Ğ1: ${project.totals.g1_collected}/${project.totals.g1_target}<br>
+                    Contributions: ${project.contributions?.length || 0}
+                </small>
+            `, 'info');
+        }
+
+        // ========================================
+        // NOSTR CROWDFUNDING PROJECT FETCHING
+        // ========================================
+        async function fetchCrowdfundingProjects() {
+            log('Fetching crowdfunding projects from Nostr...');
+            const p = getPool();
+            
+            try {
+                // Fetch kind 30023 documents with crowdfund tag
+                const events = await p.querySync(
+                    DEFAULT_RELAYS,
+                    [{ 
+                        kinds: [30023], 
+                        '#t': ['crowdfund', 'UPlanet'],
+                        limit: 50 
+                    }],
+                    { timeout: 8000 }
+                );
+                
+                log(`Found ${events.length} crowdfunding documents`);
+                
+                for (const event of events) {
+                    const project = parseCrowdfundDocument(event);
+                    if (project && !projects.find(p => p.id === project.id)) {
+                        projects.push(project);
+                    }
+                }
+                
+                // Also fetch kind 30904 dedicated crowdfunding events (NIP-75 extension)
+                const cfEvents = await p.querySync(
+                    DEFAULT_RELAYS,
+                    [{ 
+                        kinds: [30904], 
+                        '#t': ['crowdfunding', 'UPlanet'],
+                        limit: 50 
+                    }],
+                    { timeout: 8000 }
+                );
+                
+                log(`Found ${cfEvents.length} kind 30904 crowdfunding events`);
+                
+                for (const event of cfEvents) {
+                    const project = parseKind30904Event(event);
+                    if (project) {
+                        // Update existing or add new
+                        const idx = projects.findIndex(p => p.id === project.id);
+                        if (idx >= 0) {
+                            projects[idx] = { ...projects[idx], ...project };
+                        } else {
+                            projects.push(project);
+                        }
+                    }
+                }
+                
+                renderProjects();
+                
+            } catch (error) {
+                log(`Fetch error: ${error.message}`);
+            }
+        }
+        
+        function parseCrowdfundDocument(event) {
+            try {
+                const tags = event.tags;
+                const title = tags.find(t => t[0] === 'title')?.[1];
+                const geoTag = tags.find(t => t[0] === 'g')?.[1];
+                const dTag = tags.find(t => t[0] === 'd')?.[1];
+                
+                if (!title || !geoTag) return null;
+                
+                const [lat, lon] = geoTag.split(',').map(parseFloat);
+                
+                // Extract UMAP pubkey from p tags
+                const umapTag = tags.find(t => t[0] === 'p' && t[3] === 'umap');
+                const umapPubkey = umapTag ? umapTag[1] : null;
+                
+                // Parse markdown content to extract structured data
+                const content = event.content;
+                const owners = extractOwnersFromMarkdown(content);
+                const totals = extractTotalsFromMarkdown(content);
+                
+                return {
+                    id: dTag || `CF-${event.id.substring(0, 8).toUpperCase()}`,
+                    eventId: event.id,
+                    name: title.replace(/^🌳\s*/, '').replace(/\s*-\s*Forêt Jardin$/, ''),
+                    location: { latitude: lat, longitude: lon },
+                    description: '',
+                    status: 'crowdfunding',
+                    umapPubkey: umapPubkey,
+                    umapId: `UMAP_${lat.toFixed(2)}_${lon.toFixed(2)}`,
+                    owners: owners,
+                    totals: totals,
+                    campaigns: {
+                        zen_convertible_campaign_active: totals.zen_convertible_target > 0,
+                        g1_campaign_active: totals.g1_target > 0
+                    },
+                    contributions: [],
+                    author: event.pubkey,
+                    created_at: event.created_at
+                };
+            } catch (e) {
+                log(`Parse error: ${e.message}`);
+                return null;
+            }
+        }
+        
+        function parseKind30904Event(event) {
+            try {
+                // Kind 30904 stores JSON in content
+                const data = JSON.parse(event.content);
+                const tags = event.tags;
+                const dTag = tags.find(t => t[0] === 'd')?.[1];
+                
+                return {
+                    id: dTag || data.id,
+                    eventId: event.id,
+                    ...data,
+                    author: event.pubkey,
+                    created_at: event.created_at
+                };
+            } catch (e) {
+                log(`Kind 30904 parse error: ${e.message}`);
+                return null;
+            }
+        }
+        
+        function extractOwnersFromMarkdown(content) {
+            const owners = [];
+            // Match table rows like: | alice@example.com | 🤝 Commons | 500 Ẑen | En attente |
+            const tableRegex = /\|\s*([^\|]+@[^\|]+)\s*\|\s*(🤝|💶)[^\|]*\s*\|\s*(\d+)\s*(Ẑen|€)/gi;
+            let match;
+            while ((match = tableRegex.exec(content)) !== null) {
+                const mode = match[2] === '🤝' ? 'commons' : 'cash';
+                const amount = parseInt(match[3]);
+                owners.push({
+                    email: match[1].trim(),
+                    mode: mode,
+                    amount_zen: mode === 'commons' ? amount : 0,
+                    amount_eur: mode === 'cash' ? amount : 0,
+                    status: 'pending'
+                });
+            }
+            return owners;
+        }
+        
+        function extractTotalsFromMarkdown(content) {
+            const totals = {
+                commons_zen: 0,
+                cash_eur: 0,
+                zen_convertible_target: 0,
+                zen_convertible_collected: 0,
+                g1_target: 100,
+                g1_collected: 0
+            };
+            
+            // Try to extract from goal tables
+            const zenTargetMatch = content.match(/Ẑen.*?(\d+)\s*Ẑ/i);
+            const g1TargetMatch = content.match(/Ğ1.*?(\d+(?:\.\d+)?)\s*Ğ1/i);
+            
+            if (zenTargetMatch) totals.zen_convertible_target = parseInt(zenTargetMatch[1]);
+            if (g1TargetMatch) totals.g1_target = parseFloat(g1TargetMatch[1]);
+            
+            return totals;
+        }
+
+        // ========================================
+        // INITIALIZATION
+        // ========================================
+        $(document).ready(function() {
+            log('Document ready');
+            
+            // Wait for NostrTools
+            let attempts = 0;
+            const checkLib = setInterval(() => {
+                attempts++;
+                if (typeof NostrTools !== 'undefined' && NostrTools.SimplePool) {
+                    clearInterval(checkLib);
+                    log('NostrTools OK');
+                    checkExtension();
+                    // Fetch crowdfunding projects from Nostr
+                    fetchCrowdfundingProjects();
+                } else if (attempts > 50) {
+                    clearInterval(checkLib);
+                    log('ERROR: NostrTools failed');
+                    $('#btnConnect').text('Erreur').prop('disabled', true);
+                }
+            }, 100);
+
+            // Setup event handlers
+            $('#btnConnect').on('click', connectWallet);
+            
+            // Amount selection buttons
+            $(document).on('click', '.donation-amount-btn', function() {
+                selectAmount(parseInt($(this).data('amount')));
+            });
+
+            // Initialize with sample owner entry
+            addOwnerEntry();
+            renderProjects();
+        });
+
+        // Close modal on overlay click
+        document.getElementById('contributeModal').addEventListener('click', function(e) {
+            if (e.target === this) closeModal();
+        });
+
+        // Close modal on Escape key
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') closeModal();
+        });
+    </script>
+</body>
+</html>

@@ -1267,6 +1267,7 @@
                 <button class="doc-type-btn" data-type="decision" title="Proposition de décision">🗳️ Décision</button>
                 <button class="doc-type-btn" data-type="garden" title="Plan de jardin">🌱 Jardin</button>
                 <button class="doc-type-btn" data-type="resource" title="Inventaire ressources">📦 Ressource</button>
+                <button class="doc-type-btn" data-type="crowdfund" title="Crowdfunding - Acquisition collaborative">🏡 Crowdfund</button>
             </div>
         </div>
         <div class="collaborators" id="collaborators-section" style="display: none;">
@@ -1848,7 +1849,94 @@ Où se trouve cette ressource ?
 
 ---
 
-#UPlanet #resource #inventory`
+#UPlanet #resource #inventory`,
+
+                crowdfund: `# 🌳 Nom du Projet - Forêt Jardin
+
+## 📍 Localisation
+
+**Coordonnées**: ${window.appState.umapLat || '___'}, ${window.appState.umapLon || '___'}
+
+**Surface**: ___ hectares
+
+## 📋 Description du Projet
+
+Décrivez le projet de forêt jardin, ses objectifs et sa vision.
+
+## 👥 Propriétaires
+
+| Propriétaire | Mode | Montant | Statut |
+|--------------|------|---------|--------|
+| alice@example.com | 🤝 Commons (donation Ẑen) | 500 Ẑen | En attente |
+| bob@example.com | 💶 Cash (vente €) | 1000€ | En attente |
+
+### Modes de sortie
+
+- **🤝 Commons**: Donation aux communs en Ẑen (non-convertible €)
+  - Accès à tous les lieux du réseau UPlanet ẐEN
+  - Inscription au portefeuille CAPITAL
+
+- **💶 Cash**: Vente en € (liquidité immédiate)
+  - Nécessite fonds ASSETS ou crowdfunding
+  - Paiement via le portefeuille coopératif
+
+## 💰 Objectifs de Financement
+
+### Ẑen Convertible € (pour rachats cash)
+
+| Objectif | Collecté | Progression |
+|----------|----------|-------------|
+| ___ Ẑen | 0 Ẑen | 0% |
+
+> Ces fonds permettent de racheter les parts des propriétaires souhaitant une sortie en €
+
+### Don de Ğ1 (June)
+
+| Objectif | Collecté | Progression |
+|----------|----------|-------------|
+| ___ Ğ1 | 0 Ğ1 | 0% |
+
+> Ces fonds alimentent le portefeuille coopératif UPLANETNAME_G1
+
+## 🤝 Comment Contribuer
+
+### En Ẑen (convertible €)
+Envoyez vos Ẑen vers le portefeuille **ASSETS** avec le commentaire:
+\`CF:PROJECT_ID:ZEN\`
+
+### En Ğ1 (June)
+Envoyez vos Ğ1 vers le portefeuille **UPLANETNAME_G1** avec le commentaire:
+\`CF:PROJECT_ID:G1\`
+
+## 📅 Calendrier
+
+- **Phase 1**: Collecte des fonds (___ - ___)
+- **Phase 2**: Validation communautaire
+- **Phase 3**: Finalisation des transferts
+
+## 📋 Conditions et Gouvernance
+
+- **Quorum requis**: ___ validations
+- **Politique de fork**: Autorisé / Restreint / Interdit
+
+## 💳 Pas encore de Ẑen ?
+
+Rechargez votre MULTIPASS en devenant Sociétaire sur [OpenCollective UPlanet](https://opencollective.com/uplanet-zero):
+- 🛡️ **Satellite**: 54€/an (540 Ẑen)
+- 🌟 **Constellation**: 540€/an (5400 Ẑen + accès IA)
+
+## 🔗 Références
+
+- **ID Projet**: CF-XXXXXXXX-XXXX
+- **Interface**: [crowdfunding.html](crowdfunding.html)
+- **CLI**: \`./CROWDFUNDING.sh status CF-XXXXXXXX-XXXX\`
+
+---
+
+*Likez ce document pour soutenir le projet! ❤️*
+*Envoyez des Ẑen via l'interface [Crowdfunding](crowdfunding.html)*
+
+#UPlanet #crowdfunding #commons #foret-jardin`
             };
             
             return templates[window.appState.docType] || templates.commons;
@@ -1964,7 +2052,8 @@ Où se trouve cette ressource ?
                         project: '🎯 Projet',
                         decision: '🗳️ Décision',
                         garden: '🌱 Jardin',
-                        resource: '📦 Ressource'
+                        resource: '📦 Ressource',
+                        crowdfund: '🏡 Crowdfund'
                     };
                     document.getElementById('info-type').textContent = typeLabels[type];
                     
@@ -2483,6 +2572,11 @@ Où se trouve cette ressource ?
                 window.appState.currentDocEvent = signedEvent;
                 window.appState.currentDocId = signedEvent.id;
                 
+                // If crowdfund document, also publish structured kind 30904 event
+                if (window.appState.docType === 'crowdfund') {
+                    await publishCrowdfundEvent(signedEvent, title, lat, lon, content);
+                }
+                
                 // Update UI
                 document.getElementById('version-badge').textContent = 'v' + (tags.find(t => t[0] === 'version')?.[1] || '1');
                 document.getElementById('step-3').classList.add('completed');
@@ -2490,6 +2584,13 @@ Où se trouve cette ressource ?
                 
                 closeProposeModal();
                 showNotification('Document publié avec succès!', 'success');
+                
+                // Show crowdfunding link if applicable
+                if (window.appState.docType === 'crowdfund') {
+                    setTimeout(() => {
+                        showNotification('🌳 Voir le projet sur <a href="crowdfunding.html" style="color: var(--accent-emerald)">Crowdfunding</a>', 'info');
+                    }, 2000);
+                }
                 
                 // Clear draft
                 localStorage.removeItem(`umap-draft-${lat}-${lon}`);
@@ -2499,6 +2600,106 @@ Où se trouve cette ressource ?
                 showNotification('Erreur de publication: ' + error.message, 'error');
             }
         };
+        
+        // Publish structured kind 30904 crowdfunding event
+        async function publishCrowdfundEvent(docEvent, title, lat, lon, markdownContent) {
+            console.log('📦 Publishing kind 30904 crowdfunding metadata...');
+            
+            // Extract owners from markdown table
+            const owners = extractOwnersFromMarkdown(markdownContent);
+            
+            // Calculate totals
+            const totals = calculateTotals(owners);
+            
+            // Generate project ID
+            const projectId = `CF-${Date.now().toString(36).toUpperCase()}`;
+            
+            // Build structured data
+            const crowdfundData = {
+                id: projectId,
+                name: title.replace(/^🌳\s*/, '').replace(/\s*-\s*Forêt Jardin$/, ''),
+                location: {
+                    latitude: parseFloat(lat),
+                    longitude: parseFloat(lon)
+                },
+                status: owners.length > 0 ? 'crowdfunding' : 'draft',
+                umapId: `UMAP_${parseFloat(lat).toFixed(2)}_${parseFloat(lon).toFixed(2)}`,
+                umapPubkey: window.appState.umapPubkey,
+                documentEventId: docEvent.id,
+                owners: owners,
+                totals: totals,
+                campaigns: {
+                    zen_convertible_campaign_active: totals.zen_convertible_target > 0,
+                    g1_campaign_active: totals.g1_target > 0
+                },
+                contributions: [],
+                opencollective: 'https://opencollective.com/uplanet-zero'
+            };
+            
+            // Build kind 30904 event
+            const cfEvent = {
+                kind: 30904,
+                created_at: Math.floor(Date.now() / 1000),
+                tags: [
+                    ['d', projectId],
+                    ['title', title],
+                    ['t', 'crowdfunding'],
+                    ['t', 'UPlanet'],
+                    ['t', 'foret-jardin'],
+                    ['g', `${lat},${lon}`],
+                    ['e', docEvent.id, '', 'document'],
+                    ['zen_target', String(totals.zen_convertible_target)],
+                    ['g1_target', String(totals.g1_target)]
+                ],
+                content: JSON.stringify(crowdfundData)
+            };
+            
+            // Add UMAP pubkey if available
+            if (window.appState.umapPubkey) {
+                cfEvent.tags.push(['p', window.appState.umapPubkey, '', 'umap']);
+            }
+            
+            try {
+                const signedCfEvent = await window.nostr.signEvent(cfEvent);
+                
+                if (window.appState.relay) {
+                    await window.appState.relay.publish(signedCfEvent);
+                    console.log('✅ Kind 30904 crowdfunding event published:', signedCfEvent.id);
+                }
+            } catch (error) {
+                console.error('Error publishing crowdfund event:', error);
+            }
+        }
+        
+        function extractOwnersFromMarkdown(content) {
+            const owners = [];
+            // Match table rows: | email | mode | amount | status |
+            const tableRegex = /\|\s*([^\|]+@[^\|]+)\s*\|\s*(🤝|💶)[^\|]*\|[^\|]*(\d+)\s*(Ẑen|€)/gi;
+            let match;
+            while ((match = tableRegex.exec(content)) !== null) {
+                const mode = match[2] === '🤝' ? 'commons' : 'cash';
+                const amount = parseInt(match[3]);
+                owners.push({
+                    email: match[1].trim(),
+                    mode: mode,
+                    amount_zen: mode === 'commons' ? amount : 0,
+                    amount_eur: mode === 'cash' ? amount : 0,
+                    status: 'pending'
+                });
+            }
+            return owners;
+        }
+        
+        function calculateTotals(owners) {
+            return {
+                commons_zen: owners.filter(o => o.mode === 'commons').reduce((s, o) => s + o.amount_zen, 0),
+                cash_eur: owners.filter(o => o.mode === 'cash').reduce((s, o) => s + o.amount_eur, 0),
+                zen_convertible_target: owners.filter(o => o.mode === 'cash').reduce((s, o) => s + o.amount_eur, 0),
+                zen_convertible_collected: 0,
+                g1_target: 100, // Default G1 target
+                g1_collected: 0
+            };
+        }
 
         // ═══════════════════════════════════════════════════════════════════
         // UTILITIES

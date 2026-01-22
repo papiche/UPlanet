@@ -776,7 +776,7 @@
     <div class="container">
         <!-- Header -->
         <header class="header">
-            <h1>🌳 Crowdfunding Forêt Jardin</h1>
+            <h1>🌳 Crowdfunding des Communs</h1>
             <p>Financez collectivement l'acquisition d'espaces naturels pour les Communs</p>
         </header>
 
@@ -853,7 +853,7 @@
 
                 <div class="form-group">
                     <label>Description</label>
-                    <textarea id="projectDesc" rows="3" placeholder="Projet de forêt jardin collaborative..."></textarea>
+                    <textarea id="projectDesc" rows="3" placeholder="Description du projet de bien commun..."></textarea>
                 </div>
 
                 <hr style="border-color: var(--border); margin: 20px 0;">
@@ -1246,12 +1246,19 @@
                 // Content: "+{amount}" sends {amount} Ẑen via 7.sh
                 const content = selectedAmount === 1 ? '+' : `+${selectedAmount}`;
                 
+                // Use Bien identity (project's dedicated wallet) if available, fallback to UMAP
+                // bien_identity.hex is the project's own NOSTR pubkey that can receive +ZEN
+                const targetPubkey = currentProject.bien_identity?.hex 
+                    || currentProject.bienHex 
+                    || currentProject.umapPubkey 
+                    || currentProject.id;
+                
                 const event = {
                     kind: 7,
                     created_at: Math.floor(Date.now() / 1000),
                     tags: [
-                        // Reference the project (UMAP pubkey)
-                        ['p', currentProject.umapPubkey || currentProject.id],
+                        // Reference the Bien's pubkey (project's dedicated wallet)
+                        ['p', targetPubkey],
                         // Tag for crowdfunding identification
                         ['t', 'crowdfunding'],
                         ['t', 'UPlanet'],
@@ -1260,6 +1267,11 @@
                     ],
                     content: content
                 };
+                
+                // Add Bien G1 wallet for blockchain traceability
+                if (currentProject.bien_identity?.g1pub || currentProject.bienG1Pub) {
+                    event.tags.push(['i', `g1pub:${currentProject.bien_identity?.g1pub || currentProject.bienG1Pub}`]);
+                }
 
                 // If project has an event ID, reference it
                 if (currentProject.eventId) {
@@ -1432,7 +1444,7 @@
             const activeGrid = document.getElementById('activeProjects-grid');
             const allGrid = document.getElementById('allProjects-grid');
             
-            const activeProjects = projects.filter(p => p.status === 'crowdfunding' || p.status === 'draft');
+            const activeProjects = projects.filter(p => p.status === 'crowdfunding' || p.status === 'draft' || p.status === 'vote_pending');
             
             // Update stats
             document.getElementById('activeProjectsCount').textContent = activeProjects.length;
@@ -1459,6 +1471,19 @@
             
             const zenPct = zenTarget > 0 ? (zenCollected / zenTarget * 100) : 0;
             const g1Pct = g1Target > 0 ? (g1Collected / g1Target * 100) : 0;
+            
+            // Vote data
+            const vote = project.vote || {};
+            const voteActive = vote.assets_vote_active || false;
+            const voteZenTotal = vote.votes_zen_total || 0;
+            const voteThreshold = vote.vote_threshold || 100;
+            const votersCount = vote.voters_count || 0;
+            const voteQuorum = vote.vote_quorum || 10;
+            const voteStatus = vote.vote_status || 'pending';
+            const assetsAmount = vote.assets_amount_zen || 0;
+            
+            const votePct = voteThreshold > 0 ? (voteZenTotal / voteThreshold * 100) : 0;
+            const quorumPct = voteQuorum > 0 ? (votersCount / voteQuorum * 100) : 0;
 
             return `
                 <div class="project-card">
@@ -1481,6 +1506,44 @@
                                         </div>
                                     </div>
                                 `).join('')}
+                            </div>
+                        ` : ''}
+                        
+                        ${voteActive ? `
+                            <div class="vote-section" style="margin: 15px 0; padding: 15px; background: linear-gradient(135deg, rgba(168, 85, 247, 0.15), rgba(139, 92, 246, 0.1)); border: 1px solid rgba(168, 85, 247, 0.3); border-radius: 10px;">
+                                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
+                                    <span style="font-size: 1.2rem;">🗳️</span>
+                                    <strong style="color: #a855f7;">VOTE ASSETS EN COURS</strong>
+                                    ${voteStatus === 'approved' ? '<span style="color: #22c55e; margin-left: auto;">✅ APPROUVÉ</span>' : ''}
+                                </div>
+                                <div style="font-size: 0.85rem; color: var(--text-dim); margin-bottom: 10px;">
+                                    Proposition: utiliser <strong style="color: #a855f7;">${assetsAmount} Ẑen</strong> depuis ASSETS
+                                </div>
+                                <div class="campaign-item" style="margin-bottom: 8px;">
+                                    <div class="campaign-header">
+                                        <span class="type" style="color: #a855f7;">💜 Votes Ẑen</span>
+                                        <span class="amounts">${voteZenTotal}/${voteThreshold} Ẑ</span>
+                                    </div>
+                                    <div class="progress-bar">
+                                        <div class="fill" style="width: ${Math.min(votePct, 100)}%; background: linear-gradient(90deg, #a855f7, #8b5cf6);"></div>
+                                    </div>
+                                </div>
+                                <div class="campaign-item">
+                                    <div class="campaign-header">
+                                        <span class="type" style="color: #a855f7;">👥 Quorum</span>
+                                        <span class="amounts">${votersCount}/${voteQuorum} votants</span>
+                                    </div>
+                                    <div class="progress-bar">
+                                        <div class="fill" style="width: ${Math.min(quorumPct, 100)}%; background: linear-gradient(90deg, #8b5cf6, #7c3aed);"></div>
+                                    </div>
+                                </div>
+                                ${voteStatus !== 'approved' ? `
+                                    <div style="margin-top: 12px; text-align: center;">
+                                        <button class="btn" style="background: linear-gradient(135deg, #a855f7, #8b5cf6); color: white; border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer;" onclick="openVoteModal('${project.id}')">
+                                            🗳️ Voter (+Ẑen)
+                                        </button>
+                                    </div>
+                                ` : ''}
                             </div>
                         ` : ''}
                         
@@ -1532,11 +1595,207 @@
         function getStatusLabel(status) {
             const labels = {
                 draft: '📝 Brouillon',
+                vote_pending: '🗳️ Vote',
                 crowdfunding: '🚀 Financement',
                 funded: '💰 Financé',
                 completed: '✅ Terminé'
             };
             return labels[status] || status;
+        }
+        
+        // ========================================
+        // VOTE MODAL FUNCTIONS
+        // ========================================
+        let currentVoteProject = null;
+        let selectedVoteAmount = 1;
+        
+        function openVoteModal(projectId) {
+            currentVoteProject = projects.find(p => p.id === projectId);
+            if (!currentVoteProject) return;
+            
+            const vote = currentVoteProject.vote || {};
+            const assetsAmount = vote.assets_amount_zen || 0;
+            const voteZenTotal = vote.votes_zen_total || 0;
+            const voteThreshold = vote.vote_threshold || 100;
+            const votersCount = vote.voters_count || 0;
+            const voteQuorum = vote.vote_quorum || 10;
+            
+            const voteModalHTML = `
+                <div class="modal-backdrop active" id="voteModal">
+                    <div class="modal">
+                        <div class="modal-header">
+                            <h3>🗳️ Vote ASSETS</h3>
+                            <button class="modal-close" onclick="closeVoteModal()">×</button>
+                        </div>
+                        <div class="modal-body">
+                            <div style="background: rgba(168, 85, 247, 0.1); padding: 15px; border-radius: 10px; margin-bottom: 20px; border: 1px solid rgba(168, 85, 247, 0.3);">
+                                <strong style="color: #a855f7;">📋 Proposition</strong>
+                                <p style="margin: 10px 0; color: var(--text);">
+                                    Utiliser <strong>${assetsAmount} Ẑen</strong> du portefeuille ASSETS 
+                                    pour financer les rachats cash du projet <strong>"${currentVoteProject.name}"</strong>.
+                                </p>
+                                <p style="font-size: 0.8rem; color: var(--text-dim);">
+                                    Progression: ${voteZenTotal}/${voteThreshold} Ẑen • ${votersCount}/${voteQuorum} votants
+                                </p>
+                            </div>
+                            
+                            <div id="voteNotConnectedWarning" style="padding: 15px; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 8px; margin-bottom: 15px; ${publicKey ? 'display:none' : ''}">
+                                <p style="margin: 0; color: #ef4444;">⚠️ Connectez-vous pour voter</p>
+                            </div>
+                            
+                            <div id="voteSection" style="${!publicKey ? 'display:none' : ''}">
+                                <label style="display: block; margin-bottom: 10px; color: var(--text-dim);">
+                                    Poids de votre vote (Ẑen):
+                                </label>
+                                <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 15px;">
+                                    <button class="vote-amount-btn selected" onclick="selectVoteAmount(1)">+1 Ẑ</button>
+                                    <button class="vote-amount-btn" onclick="selectVoteAmount(5)">+5 Ẑ</button>
+                                    <button class="vote-amount-btn" onclick="selectVoteAmount(10)">+10 Ẑ</button>
+                                    <button class="vote-amount-btn" onclick="selectVoteAmount(20)">+20 Ẑ</button>
+                                </div>
+                                <p style="font-size: 0.8rem; color: var(--text-dim); margin-bottom: 15px;">
+                                    💡 Plus vous votez avec de Ẑen, plus votre voix pèse dans la décision.
+                                </p>
+                                <button id="sendVoteBtn" class="btn btn-primary" style="width: 100%; background: linear-gradient(135deg, #a855f7, #8b5cf6);" onclick="sendVote()">
+                                    🗳️ Voter +<span id="voteAmountDisplay">1</span> Ẑen
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            // Append modal to body
+            const modalContainer = document.createElement('div');
+            modalContainer.innerHTML = voteModalHTML;
+            document.body.appendChild(modalContainer.firstElementChild);
+            
+            // Add CSS for vote buttons if not already present
+            if (!document.getElementById('voteButtonStyles')) {
+                const style = document.createElement('style');
+                style.id = 'voteButtonStyles';
+                style.textContent = `
+                    .vote-amount-btn {
+                        padding: 8px 16px;
+                        background: rgba(168, 85, 247, 0.2);
+                        border: 1px solid rgba(168, 85, 247, 0.3);
+                        border-radius: 8px;
+                        color: #a855f7;
+                        cursor: pointer;
+                        transition: all 0.2s;
+                    }
+                    .vote-amount-btn:hover {
+                        background: rgba(168, 85, 247, 0.3);
+                    }
+                    .vote-amount-btn.selected {
+                        background: #a855f7;
+                        color: white;
+                        border-color: #a855f7;
+                    }
+                    .status-badge.vote_pending {
+                        background: linear-gradient(135deg, rgba(168, 85, 247, 0.3), rgba(139, 92, 246, 0.2));
+                        border: 1px solid #a855f7;
+                        color: #a855f7;
+                    }
+                `;
+                document.head.appendChild(style);
+            }
+        }
+        
+        function closeVoteModal() {
+            const modal = document.getElementById('voteModal');
+            if (modal) modal.remove();
+            currentVoteProject = null;
+            selectedVoteAmount = 1;
+        }
+        
+        function selectVoteAmount(amount) {
+            selectedVoteAmount = amount;
+            document.querySelectorAll('.vote-amount-btn').forEach(btn => btn.classList.remove('selected'));
+            event.target.classList.add('selected');
+            document.getElementById('voteAmountDisplay').textContent = amount;
+        }
+        
+        async function sendVote() {
+            if (!publicKey) {
+                showToast('❌ Veuillez vous connecter d\'abord', 'error');
+                return;
+            }
+            
+            if (!currentVoteProject) {
+                showToast('❌ Aucun projet sélectionné', 'error');
+                return;
+            }
+            
+            const $btn = $('#sendVoteBtn');
+            $btn.prop('disabled', true).html('<span class="spinner"></span> Vote en cours...');
+            
+            try {
+                // Create kind 7 reaction event with vote-assets tag
+                const content = selectedVoteAmount === 1 ? '+' : `+${selectedVoteAmount}`;
+                
+                // Use Bien identity (project's dedicated wallet) if available
+                const targetPubkey = currentVoteProject.bien_identity?.hex 
+                    || currentVoteProject.bienHex 
+                    || currentVoteProject.umapPubkey 
+                    || currentVoteProject.id;
+                
+                const event = {
+                    kind: 7,
+                    created_at: Math.floor(Date.now() / 1000),
+                    tags: [
+                        ['p', targetPubkey],
+                        ['t', 'vote-assets'],  // Tag spécifique pour le vote ASSETS
+                        ['t', 'UPlanet'],
+                        ['project-id', currentVoteProject.id],
+                        ['vote-type', 'ASSETS_USAGE']
+                    ],
+                    content: content
+                };
+                
+                if (currentVoteProject.eventId) {
+                    event.tags.unshift(['e', currentVoteProject.eventId]);
+                    event.tags.push(['k', '30904']);
+                }
+                
+                log(`Sending vote: ${content} for project ${currentVoteProject.id}`);
+                
+                const signedEvent = await window.nostr.signEvent(event);
+                log(`Signed vote event: ${signedEvent.id}`);
+                
+                const p = getPool();
+                let successCount = 0;
+                
+                await Promise.all(DEFAULT_RELAYS.map(async (relay) => {
+                    try {
+                        await p.publish([relay], signedEvent);
+                        successCount++;
+                        log(`Vote published to ${relay}`);
+                    } catch (e) {
+                        log(`Failed to publish vote to ${relay}: ${e.message}`);
+                    }
+                }));
+                
+                if (successCount > 0) {
+                    showToast(`✅ Vote enregistré: +${selectedVoteAmount} Ẑen !`, 'success');
+                    
+                    // Update local state
+                    if (!currentVoteProject.vote) currentVoteProject.vote = {};
+                    currentVoteProject.vote.votes_zen_total = (currentVoteProject.vote.votes_zen_total || 0) + selectedVoteAmount;
+                    currentVoteProject.vote.voters_count = (currentVoteProject.vote.voters_count || 0) + 1;
+                    
+                    renderProjects();
+                    closeVoteModal();
+                } else {
+                    throw new Error('Impossible de publier le vote sur les relays');
+                }
+                
+            } catch (error) {
+                log(`Vote error: ${error.message}`);
+                showToast(`❌ Erreur: ${error.message}`, 'error');
+            } finally {
+                $btn.prop('disabled', false).html(`🗳️ Voter +${selectedVoteAmount} Ẑen`);
+            }
         }
 
         // ========================================
@@ -1675,7 +1934,7 @@
                 return {
                     id: dTag || `CF-${event.id.substring(0, 8).toUpperCase()}`,
                     eventId: event.id,
-                    name: title.replace(/^🌳\s*/, '').replace(/\s*-\s*Forêt Jardin$/, ''),
+                    name: title.replace(/^🌳\s*/, '').replace(/\s*-\s*(Forêt Jardin|Communs)$/, ''),
                     location: { latitude: lat, longitude: lon },
                     description: '',
                     status: 'crowdfunding',

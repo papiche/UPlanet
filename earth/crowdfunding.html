@@ -415,6 +415,24 @@
             cursor: not-allowed;
         }
 
+        .btn-follow {
+            background: rgba(100, 116, 139, 0.2);
+            color: var(--text-dim);
+            border: 1px solid var(--border);
+        }
+        
+        .btn-follow:hover {
+            background: rgba(34, 197, 94, 0.15);
+            border-color: var(--accent-green);
+            color: var(--accent-green);
+        }
+        
+        .btn-follow.following {
+            background: rgba(34, 197, 94, 0.2);
+            border-color: var(--accent-green);
+            color: var(--accent-green);
+        }
+
         /* Create Project Form */
         .create-form {
             background: var(--bg-card);
@@ -1580,7 +1598,18 @@
                             </div>
                         ` : ''}
                     </div>
+                        ${project.followers ? `
+                            <div style="margin-top: 10px; display: flex; align-items: center; gap: 8px; color: var(--text-dim); font-size: 0.85rem;">
+                                <span>👁️ ${project.followers} intéressé(s)</span>
+                            </div>
+                        ` : ''}
+                    </div>
                     <div class="project-actions">
+                        <button class="btn btn-follow ${isFollowingProject(project.id) ? 'following' : ''}" 
+                                onclick="toggleFollow('${project.id}')"
+                                title="Montrer votre intérêt pour ce projet">
+                            ${isFollowingProject(project.id) ? '💚 Intéressé' : '👁️ S\'intéresser'}
+                        </button>
                         <button class="btn btn-primary" onclick="openContributeModal('${project.id}')">
                             💰 Contribuer
                         </button>
@@ -1601,6 +1630,127 @@
                 completed: '✅ Terminé'
             };
             return labels[status] || status;
+        }
+        
+        // ========================================
+        // FOLLOW / INTEREST FUNCTIONS
+        // Following a project indicates interest (no ZEN spent)
+        // Uses localStorage + optional NOSTR kind 3 (contact list)
+        // ========================================
+        
+        // Get followed projects from localStorage
+        function getFollowedProjects() {
+            try {
+                return JSON.parse(localStorage.getItem('crowdfunding_follows') || '[]');
+            } catch {
+                return [];
+            }
+        }
+        
+        // Save followed projects to localStorage
+        function saveFollowedProjects(follows) {
+            localStorage.setItem('crowdfunding_follows', JSON.stringify(follows));
+        }
+        
+        // Check if user is following a project
+        function isFollowingProject(projectId) {
+            return getFollowedProjects().includes(projectId);
+        }
+        
+        // Toggle follow status
+        async function toggleFollow(projectId) {
+            const follows = getFollowedProjects();
+            const project = projects.find(p => p.id === projectId);
+            const isCurrentlyFollowing = follows.includes(projectId);
+            
+            if (isCurrentlyFollowing) {
+                // Unfollow
+                const idx = follows.indexOf(projectId);
+                if (idx > -1) follows.splice(idx, 1);
+                saveFollowedProjects(follows);
+                
+                // Update local counter
+                if (project && project.followers) {
+                    project.followers = Math.max(0, project.followers - 1);
+                }
+                
+                showToast(`👁️ Vous ne suivez plus ce projet`, 'info');
+            } else {
+                // Follow
+                follows.push(projectId);
+                saveFollowedProjects(follows);
+                
+                // Update local counter
+                if (project) {
+                    project.followers = (project.followers || 0) + 1;
+                }
+                
+                // If connected to NOSTR, also follow the Bien's pubkey
+                if (publicKey && project?.bien_identity?.hex) {
+                    try {
+                        await followBienOnNostr(project.bien_identity.hex, project.name);
+                    } catch (e) {
+                        log(`Follow on NOSTR failed: ${e.message}`);
+                    }
+                }
+                
+                showToast(`💚 Vous suivez maintenant ce projet !`, 'success');
+            }
+            
+            renderProjects();
+        }
+        
+        // Follow Bien's NOSTR profile (kind 3 contact list update)
+        async function followBienOnNostr(bienHex, projectName) {
+            if (!window.nostr) return;
+            
+            log(`Following Bien ${bienHex} on NOSTR...`);
+            
+            // Get current contact list (kind 3)
+            const p = getPool();
+            let currentContacts = [];
+            
+            try {
+                const events = await p.querySync(
+                    DEFAULT_RELAYS,
+                    [{ kinds: [3], authors: [publicKey], limit: 1 }],
+                    { timeout: 5000 }
+                );
+                
+                if (events.length > 0) {
+                    // Extract existing contacts
+                    currentContacts = events[0].tags.filter(t => t[0] === 'p');
+                }
+            } catch (e) {
+                log(`Error fetching contacts: ${e.message}`);
+            }
+            
+            // Check if already following
+            if (currentContacts.some(c => c[1] === bienHex)) {
+                log(`Already following ${bienHex}`);
+                return;
+            }
+            
+            // Add new contact with petname
+            currentContacts.push(['p', bienHex, '', `🌳 ${projectName}`]);
+            
+            // Create new kind 3 event
+            const event = {
+                kind: 3,
+                created_at: Math.floor(Date.now() / 1000),
+                tags: currentContacts,
+                content: ''  // Content can store relay recommendations (JSON)
+            };
+            
+            try {
+                const signedEvent = await window.nostr.signEvent(event);
+                await Promise.all(DEFAULT_RELAYS.map(relay => 
+                    p.publish([relay], signedEvent).catch(e => log(`Publish to ${relay} failed`))
+                ));
+                log(`✅ Now following Bien on NOSTR`);
+            } catch (e) {
+                log(`Error publishing follow: ${e.message}`);
+            }
         }
         
         // ========================================
@@ -1731,7 +1881,9 @@
             $btn.prop('disabled', true).html('<span class="spinner"></span> Vote en cours...');
             
             try {
-                // Create kind 7 reaction event with vote-assets tag
+                // Create kind 7 reaction event
+                // Votes are crowdfunding contributions with target=VOTE
+                // This sends real ZEN and records the vote
                 const content = selectedVoteAmount === 1 ? '+' : `+${selectedVoteAmount}`;
                 
                 // Use Bien identity (project's dedicated wallet) if available
@@ -1745,20 +1897,25 @@
                     created_at: Math.floor(Date.now() / 1000),
                     tags: [
                         ['p', targetPubkey],
-                        ['t', 'vote-assets'],  // Tag spécifique pour le vote ASSETS
+                        ['t', 'crowdfunding'],  // Same as contribution
                         ['t', 'UPlanet'],
                         ['project-id', currentVoteProject.id],
-                        ['vote-type', 'ASSETS_USAGE']
+                        ['target', 'VOTE']  // Distinguishes vote from regular contribution
                     ],
                     content: content
                 };
+                
+                // Add Bien G1 wallet reference if available
+                if (currentVoteProject.bien_identity?.g1pub || currentVoteProject.bienG1Pub) {
+                    event.tags.push(['i', `g1pub:${currentVoteProject.bien_identity?.g1pub || currentVoteProject.bienG1Pub}`]);
+                }
                 
                 if (currentVoteProject.eventId) {
                     event.tags.unshift(['e', currentVoteProject.eventId]);
                     event.tags.push(['k', '30904']);
                 }
                 
-                log(`Sending vote: ${content} for project ${currentVoteProject.id}`);
+                log(`Sending vote contribution: ${content} for project ${currentVoteProject.id}`);
                 
                 const signedEvent = await window.nostr.signEvent(event);
                 log(`Signed vote event: ${signedEvent.id}`);
@@ -1777,12 +1934,16 @@
                 }));
                 
                 if (successCount > 0) {
-                    showToast(`✅ Vote enregistré: +${selectedVoteAmount} Ẑen !`, 'success');
+                    showToast(`✅ Vote envoyé: +${selectedVoteAmount} Ẑen au projet !`, 'success');
                     
-                    // Update local state
+                    // Update local state (real state comes from blockchain/nostr scan)
                     if (!currentVoteProject.vote) currentVoteProject.vote = {};
                     currentVoteProject.vote.votes_zen_total = (currentVoteProject.vote.votes_zen_total || 0) + selectedVoteAmount;
                     currentVoteProject.vote.voters_count = (currentVoteProject.vote.voters_count || 0) + 1;
+                    
+                    // Also update contributions as votes are real payments
+                    currentVoteProject.totals.zen_convertible_collected = 
+                        (currentVoteProject.totals.zen_convertible_collected || 0) + selectedVoteAmount;
                     
                     renderProjects();
                     closeVoteModal();
@@ -1858,12 +2019,12 @@
             const p = getPool();
             
             try {
-                // Fetch kind 30023 documents with crowdfund tag
+                // Fetch kind 30023 documents with crowdfunding tag
                 const events = await p.querySync(
                     DEFAULT_RELAYS,
                     [{ 
                         kinds: [30023], 
-                        '#t': ['crowdfund', 'UPlanet'],
+                        '#t': ['crowdfunding', 'UPlanet'],
                         limit: 50 
                     }],
                     { timeout: 8000 }
@@ -1962,10 +2123,30 @@
                 const data = JSON.parse(event.content);
                 const tags = event.tags;
                 const dTag = tags.find(t => t[0] === 'd')?.[1];
+                const projectIdTag = tags.find(t => t[0] === 'project-id')?.[1];
+                
+                // Extract bien_identity from tags if not in content
+                if (!data.bien_identity) {
+                    const bienPTag = tags.find(t => t[0] === 'p' && t[3] === 'bien');
+                    const g1pubTag = tags.find(t => t[0] === 'i' && t[1]?.startsWith('g1pub:'));
+                    
+                    if (bienPTag || g1pubTag) {
+                        data.bien_identity = {
+                            hex: bienPTag ? bienPTag[1] : null,
+                            g1pub: g1pubTag ? g1pubTag[1].replace('g1pub:', '') : null
+                        };
+                    }
+                }
+                
+                // Also expose bien identity at top level for easy access
+                const bienHex = data.bien_identity?.hex;
+                const bienG1Pub = data.bien_identity?.g1pub;
                 
                 return {
-                    id: dTag || data.id,
+                    id: projectIdTag || dTag || data.id,
                     eventId: event.id,
+                    bienHex: bienHex,
+                    bienG1Pub: bienG1Pub,
                     ...data,
                     author: event.pubkey,
                     created_at: event.created_at

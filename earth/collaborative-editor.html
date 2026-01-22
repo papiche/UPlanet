@@ -2511,10 +2511,21 @@ Votez en envoyant des Ẑen avec le tag vote sur l'interface crowdfunding !
         };
 
         window.submitProposal = async function() {
+            console.log('═══════════════════════════════════════════════════════════');
+            console.log('📝 PUBLISHING DOCUMENT (kind 30023)');
+            console.log('═══════════════════════════════════════════════════════════');
+            
             const title = document.getElementById('doc-title').value.trim();
             const summary = document.getElementById('change-summary').value.trim();
             const quorum = document.getElementById('quorum-select').value;
             const forkPolicy = document.getElementById('fork-policy').value;
+            
+            console.log('📄 Document metadata:');
+            console.log('   - Title:', title);
+            console.log('   - Doc type:', window.appState.docType);
+            console.log('   - Summary:', summary);
+            console.log('   - Quorum:', quorum);
+            console.log('   - Fork policy:', forkPolicy);
             
             if (!summary) {
                 showNotification('Veuillez décrire vos modifications', 'error');
@@ -2525,8 +2536,13 @@ Votez en envoyant des Ẑen avec le tag vote sur l'interface crowdfunding !
             const lat = window.appState.umapLat;
             const lon = window.appState.umapLon;
             
+            console.log('📍 Location:', lat, lon);
+            console.log('📝 Content length:', content.length, 'chars');
+            
             // Calculate content hash
+            console.log('🔐 Calculating content hash...');
             const contentHash = await hashContent(content);
+            console.log('   - Hash:', `${contentHash.substring(0, 16)}...`);
             
             // Build tags
             const tags = [
@@ -2549,6 +2565,7 @@ Votez en envoyant des Ẑen avec le tag vote sur l'interface crowdfunding !
             // Add UMAP pubkey reference if available (enables discovery by UMAP)
             if (window.appState.umapPubkey) {
                 tags.push(["p", window.appState.umapPubkey, "", "umap"]);
+                console.log('   + Added UMAP pubkey tag');
             }
             
             // If updating existing document
@@ -2560,7 +2577,13 @@ Votez en envoyant des Ẑen avec le tag vote sur l'interface crowdfunding !
                 // Update version tag
                 const versionTagIndex = tags.findIndex(t => t[0] === 'version');
                 tags[versionTagIndex] = ["version", String(originalVersion + 1)];
+                console.log('   - Updating existing document (version', originalVersion + 1, ')');
             }
+            
+            console.log('🏷️ Tags:', tags.length);
+            tags.forEach((tag, i) => {
+                console.log(`   [${i+1}] ${tag[0]}: ${tag[1]?.substring(0, 40) || tag[1]}`);
+            });
             
             const event = {
                 kind: 30023,
@@ -2570,10 +2593,18 @@ Votez en envoyant des Ẑen avec le tag vote sur l'interface crowdfunding !
             };
             
             try {
+                console.log('✍️ Signing kind 30023 event...');
                 const signedEvent = await window.nostr.signEvent(event);
+                console.log('✅ Event signed');
+                console.log('   - Event ID:', signedEvent.id);
+                console.log('   - Signature:', `${signedEvent.sig.substring(0, 16)}...`);
                 
                 if (window.appState.relay) {
+                    console.log('📡 Publishing to relay:', window.appState.relay.url || 'default');
                     await window.appState.relay.publish(signedEvent);
+                    console.log('✅ Kind 30023 document published successfully');
+                } else {
+                    console.error('❌ No relay available');
                 }
                 
                 window.appState.currentDocEvent = signedEvent;
@@ -2581,7 +2612,10 @@ Votez en envoyant des Ẑen avec le tag vote sur l'interface crowdfunding !
                 
                 // If crowdfund document, also publish structured kind 30904 event
                 if (window.appState.docType === 'crowdfund') {
+                    console.log('🌳 Document type is "crowdfund" - will publish kind 30904 next...');
                     await publishCrowdfundEvent(signedEvent, title, lat, lon, content);
+                } else {
+                    console.log('✅ Document published (not a crowdfund, skipping kind 30904)');
                 }
                 
                 // Update UI
@@ -2601,55 +2635,107 @@ Votez en envoyant des Ẑen avec le tag vote sur l'interface crowdfunding !
                 
                 // Clear draft
                 localStorage.removeItem(`umap-draft-${lat}-${lon}`);
+                console.log('═══════════════════════════════════════════════════════════');
                 
             } catch (error) {
-                console.error('Error publishing:', error);
+                console.error('═══════════════════════════════════════════════════════════');
+                console.error('❌ ERROR PUBLISHING DOCUMENT');
+                console.error('═══════════════════════════════════════════════════════════');
+                console.error('Error type:', error.constructor.name);
+                console.error('Error message:', error.message);
+                console.error('Error stack:', error.stack);
+                console.error('Event that failed:', JSON.stringify(event, null, 2));
+                console.error('═══════════════════════════════════════════════════════════');
                 showNotification('Erreur de publication: ' + error.message, 'error');
             }
         };
         
         // Publish structured kind 30904 crowdfunding event
         async function publishCrowdfundEvent(docEvent, title, lat, lon, markdownContent) {
-            console.log('📦 Publishing kind 30904 crowdfunding metadata...');
+            console.log('═══════════════════════════════════════════════════════════');
+            console.log('📦 PUBLISHING KIND 30904 CROWDFUNDING EVENT');
+            console.log('═══════════════════════════════════════════════════════════');
+            console.log('📄 Input parameters:');
+            console.log('   - Title:', title);
+            console.log('   - Location:', lat, lon);
+            console.log('   - Document event ID:', docEvent.id);
+            console.log('   - Markdown length:', markdownContent.length, 'chars');
             
             // Extract owners from markdown table
             const owners = extractOwnersFromMarkdown(markdownContent);
+            console.log('👥 Extracted owners:', owners.length);
+            if (owners.length > 0) {
+                owners.forEach((o, i) => {
+                    console.log(`   [${i+1}] ${o.email} - ${o.mode} - ${o.mode === 'commons' ? o.amount_zen + ' Ẑen' : o.amount_eur + '€'}`);
+                });
+            }
             
             // Calculate totals
             const totals = calculateTotals(owners);
+            console.log('💰 Calculated totals:');
+            console.log('   - Ẑen convertible target:', totals.zen_convertible_target);
+            console.log('   - Ğ1 target:', totals.g1_target);
+            console.log('   - Commons Ẑen:', totals.commons_zen);
+            console.log('   - Cash €:', totals.cash_eur);
             
             // Project name (clean title)
             const projectName = title.replace(/^🌳\s*/, '').replace(/\s*-\s*(Forêt Jardin|Crowdfunding)$/, '');
             const desc = `Crowdfunding: ${projectName}`;
+            console.log('📝 Project name (cleaned):', projectName);
             
             // Try to create project via API to get Bien identity
             let projectId = `CF-${Date.now().toString(36).toUpperCase()}`;
             let bienIdentity = null;
             
+            const apiUrl = window.appState.apiServer || `${window.location.protocol}//${window.location.hostname}:54321`;
+            console.log('🌐 API URL:', apiUrl);
+            
             try {
-                const apiUrl = window.appState.apiServer || `${window.location.protocol}//${window.location.hostname}:54321`;
+                console.log('📡 Step 1/5: Creating project via API...');
+                const createPayload = {
+                    lat: parseFloat(lat),
+                    lon: parseFloat(lon),
+                    name: projectName,
+                    description: desc,
+                    npub: window.appState.userNpub || ''
+                };
+                console.log('   Request payload:', JSON.stringify(createPayload, null, 2));
+                
                 const response = await fetch(`${apiUrl}/api/crowdfunding/create`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        lat: parseFloat(lat),
-                        lon: parseFloat(lon),
-                        name: projectName,
-                        description: desc,
-                        npub: window.appState.userNpub || ''
-                    })
+                    body: JSON.stringify(createPayload)
                 });
+                
+                console.log('   Response status:', response.status, response.statusText);
                 
                 if (response.ok) {
                     const apiResult = await response.json();
+                    console.log('   Response data:', JSON.stringify(apiResult, null, 2));
+                    
                     if (apiResult.success && apiResult.project_id) {
                         projectId = apiResult.project_id;
                         bienIdentity = apiResult.bien_identity || apiResult.project?.bien_identity;
-                        console.log('✅ Project created via API:', projectId, bienIdentity);
+                        console.log('✅ Step 1/5: Project created via API');
+                        console.log('   - Project ID:', projectId);
+                        console.log('   - Bien identity:', {
+                            hex: bienIdentity?.hex ? `${bienIdentity.hex.substring(0, 16)}...` : 'MISSING',
+                            g1pub: bienIdentity?.g1pub ? `${bienIdentity.g1pub.substring(0, 8)}...` : 'MISSING',
+                            npub: bienIdentity?.npub ? `${bienIdentity.npub.substring(0, 20)}...` : 'MISSING'
+                        });
+                    } else {
+                        console.warn('⚠️ API returned success=false or missing project_id');
+                        console.warn('   Response:', apiResult);
                     }
+                } else {
+                    const errorText = await response.text();
+                    console.error('❌ API call failed:', response.status, errorText);
                 }
             } catch (e) {
-                console.warn('API call failed, using local project ID:', e.message);
+                console.error('❌ Step 1/5: API call exception:', e);
+                console.error('   Error message:', e.message);
+                console.error('   Stack:', e.stack);
+                console.warn('⚠️ Using fallback local project ID:', projectId);
             }
             
             // Build structured data
@@ -2674,34 +2760,85 @@ Votez en envoyant des Ẑen avec le tag vote sur l'interface crowdfunding !
                 opencollective: 'https://opencollective.com/uplanet-zero'
             };
             
-            // Add bien_identity if we got it from API
-            if (bienIdentity) {
-                crowdfundData.bien_identity = bienIdentity;
+            // Validate: bien_identity is REQUIRED
+            console.log('🔍 Step 2/5: Validating bien_identity...');
+            if (!bienIdentity) {
+                console.error('❌ Step 2/5: bien_identity is null/undefined');
+                console.error('   This means the API /crowdfunding/create failed or did not return bien_identity');
+                showNotification('❌ Erreur: L\'identité du Bien est requise. Le projet doit être créé via l\'API.', 'error');
+                return;
             }
             
-            // Get IPFSNODEID from API
-            // This identifies which node created the project (prevents duplication)
+            if (!bienIdentity.hex) {
+                console.error('❌ Step 2/5: bien_identity.hex is missing');
+                console.error('   bien_identity object:', bienIdentity);
+                showNotification('❌ Erreur: bien_identity.hex manquant', 'error');
+                return;
+            }
+            
+            if (!bienIdentity.g1pub) {
+                console.error('❌ Step 2/5: bien_identity.g1pub is missing');
+                console.error('   bien_identity object:', bienIdentity);
+                showNotification('❌ Erreur: bien_identity.g1pub manquant', 'error');
+                return;
+            }
+            
+            console.log('✅ Step 2/5: bien_identity validated');
+            console.log('   - hex:', `${bienIdentity.hex.substring(0, 16)}... (${bienIdentity.hex.length} chars)`);
+            console.log('   - g1pub:', `${bienIdentity.g1pub.substring(0, 8)}... (${bienIdentity.g1pub.length} chars)`);
+            console.log('   - npub:', bienIdentity.npub ? `${bienIdentity.npub.substring(0, 20)}...` : 'not provided');
+            
+            // Add bien_identity to data (REQUIRED)
+            crowdfundData.bien_identity = bienIdentity;
+            
+            // Get IPFSNODEID from API (REQUIRED to prevent duplication)
+            console.log('🌐 Step 3/5: Getting IPFSNODEID...');
             let creatorNodeId = null;
             try {
                 // Get IPFSNODEID from /api/myGPS endpoint
-                // This requires NIP-42 auth, but we can try anyway
                 if (window.appState?.userNpub) {
-                    const gpsResponse = await fetch(`${apiUrl}/api/myGPS?npub=${window.appState.userNpub}`);
+                    console.log('   - User npub available:', `${window.appState.userNpub.substring(0, 16)}...`);
+                    const gpsUrl = `${apiUrl}/api/myGPS?npub=${window.appState.userNpub}`;
+                    console.log('   - Requesting:', gpsUrl);
+                    
+                    const gpsResponse = await fetch(gpsUrl);
+                    console.log('   - Response status:', gpsResponse.status, gpsResponse.statusText);
+                    
                     if (gpsResponse.ok) {
                         const gpsData = await gpsResponse.json();
+                        console.log('   - Response data:', gpsData);
                         creatorNodeId = gpsData.ipfsnodeid;
-                        console.log('✅ Got IPFSNODEID from /api/myGPS:', creatorNodeId);
+                        
+                        if (creatorNodeId) {
+                            console.log('✅ Step 3/5: Got IPFSNODEID from /api/myGPS:', creatorNodeId);
+                        } else {
+                            console.warn('⚠️ Step 3/5: /api/myGPS response missing ipfsnodeid field');
+                            console.warn('   Response keys:', Object.keys(gpsData));
+                        }
+                    } else {
+                        const errorText = await gpsResponse.text();
+                        console.warn('⚠️ Step 3/5: /api/myGPS failed:', gpsResponse.status, errorText);
                     }
+                } else {
+                    console.warn('⚠️ Step 3/5: No userNpub available for /api/myGPS request');
                 }
                 
                 // Fallback: try to get from window state if available
                 if (!creatorNodeId) {
                     creatorNodeId = window.appState?.ipfsNodeId || null;
+                    if (creatorNodeId) {
+                        console.log('✅ Step 3/5: Got IPFSNODEID from window.appState:', creatorNodeId);
+                    }
                 }
             } catch (e) {
-                console.warn('Could not get IPFSNODEID from API:', e);
-                // Fallback to window state
+                console.error('❌ Step 3/5: Exception getting IPFSNODEID:', e);
+                console.error('   Error:', e.message);
                 creatorNodeId = window.appState?.ipfsNodeId || null;
+            }
+            
+            // Warn if IPFSNODEID is missing (not fatal, but recommended)
+            if (!creatorNodeId) {
+                console.warn('⚠️ Step 3/5: IPFSNODEID not available - project may be duplicated on other nodes');
             }
             
             // Add creator node ID to data
@@ -2709,88 +2846,167 @@ Votez en envoyant des Ẑen avec le tag vote sur l'interface crowdfunding !
                 crowdfundData.creator_node_id = creatorNodeId;
             }
             
-            // Build kind 30904 event
+            // Build kind 30904 event with REQUIRED tags
+            console.log('🏗️ Step 4/5: Building kind 30904 event...');
             const cfEvent = {
                 kind: 30904,
                 created_at: Math.floor(Date.now() / 1000),
                 tags: [
-                    ['d', projectId],
-                    ['title', title],
-                    ['t', 'crowdfunding'],
+                    ['d', projectId],  // REQUIRED: Unique identifier
+                    ['title', title],  // REQUIRED: Campaign title
+                    ['t', 'crowdfunding'],  // REQUIRED: Type marker
                     ['t', 'UPlanet'],
-                    ['g', `${lat},${lon}`],
-                    ['e', docEvent.id, '', 'document'],
-                    ['project-id', projectId],
+                    ['g', `${lat},${lon}`],  // REQUIRED: Geographic coordinates
+                    ['project-id', projectId],  // REQUIRED: Project identifier
+                    ['status', crowdfundData.status],  // REQUIRED: Campaign status
+                    ['e', docEvent.id, '', 'document'],  // Reference to kind 30023
                     ['zen_target', String(totals.zen_convertible_target)],
                     ['g1_target', String(totals.g1_target)]
                 ],
                 content: JSON.stringify(crowdfundData)
             };
             
-            // Add creator IPFSNODEID tag (identifies which node created this project)
+            console.log('   Base tags:', cfEvent.tags.length);
+            cfEvent.tags.forEach((tag, i) => {
+                console.log(`   [${i+1}] ${tag[0]}: ${tag[1]?.substring(0, 30) || tag[1]}${tag[2] ? ` (${tag[2]})` : ''}${tag[3] ? ` [${tag[3]}]` : ''}`);
+            });
+            
+            // Add creator IPFSNODEID tag (REQUIRED to prevent duplication)
             if (creatorNodeId) {
                 cfEvent.tags.push(['ipfsnodeid', creatorNodeId]);
+                console.log('   + Added ipfsnodeid tag:', creatorNodeId);
+            } else {
+                console.warn('   ⚠️ Missing ipfsnodeid tag (will be added if available)');
             }
             
             // Add UMAP pubkey if available
             if (window.appState.umapPubkey) {
                 cfEvent.tags.push(['p', window.appState.umapPubkey, '', 'umap']);
+                console.log('   + Added UMAP pubkey tag:', `${window.appState.umapPubkey.substring(0, 16)}...`);
+            } else {
+                console.log('   - No UMAP pubkey available');
             }
             
-            // Add Bien identity tags if available (for easier discovery)
+            // Add Bien identity tags (REQUIRED for payments)
             // The Bien's hex is the pubkey that can receive payments
-            if (bienIdentity) {
-                if (bienIdentity.hex) {
-                    // Tag p with bien marker - this is the Bien's NOSTR pubkey
-                    cfEvent.tags.push(['p', bienIdentity.hex, '', 'bien']);
-                }
-                if (bienIdentity.g1pub) {
-                    // Tag i with g1pub - this is the Bien's Ğ1 wallet
-                    cfEvent.tags.push(['i', `g1pub:${bienIdentity.g1pub}`]);
-                }
+            if (bienIdentity.hex) {
+                // Tag p with bien marker - this is the Bien's NOSTR pubkey (REQUIRED)
+                cfEvent.tags.push(['p', bienIdentity.hex, '', 'bien']);
+                console.log('   + Added Bien hex tag (p):', `${bienIdentity.hex.substring(0, 16)}...`);
+            } else {
+                console.error('   ❌ Missing Bien hex for p tag!');
             }
+            
+            if (bienIdentity.g1pub) {
+                // Tag i with g1pub - this is the Bien's Ğ1 wallet (REQUIRED)
+                cfEvent.tags.push(['i', `g1pub:${bienIdentity.g1pub}`]);
+                console.log('   + Added Bien g1pub tag (i):', `g1pub:${bienIdentity.g1pub.substring(0, 8)}...`);
+            } else {
+                console.error('   ❌ Missing Bien g1pub for i tag!');
+            }
+            
+            console.log('   Final tags count:', cfEvent.tags.length);
+            console.log('   Content length:', cfEvent.content.length, 'chars');
+            console.log('   Content preview:', cfEvent.content.substring(0, 200) + '...');
             
             try {
+                console.log('✍️ Step 5/5: Signing and publishing event...');
+                
+                if (!window.nostr) {
+                    console.error('❌ Step 5/5: window.nostr not available');
+                    showNotification('❌ Extension Nostr non disponible', 'error');
+                    return;
+                }
+                
+                console.log('   - Signing event with NIP-07...');
                 const signedCfEvent = await window.nostr.signEvent(cfEvent);
+                console.log('✅ Event signed successfully');
+                console.log('   - Event ID:', signedCfEvent.id);
+                console.log('   - Signature:', `${signedCfEvent.sig.substring(0, 16)}...`);
                 
                 if (window.appState.relay) {
+                    console.log('   - Publishing to relay:', window.appState.relay.url || 'default');
                     await window.appState.relay.publish(signedCfEvent);
-                    console.log('✅ Kind 30904 crowdfunding event published:', signedCfEvent.id);
+                    console.log('✅ Step 5/5: Kind 30904 crowdfunding event published successfully');
+                    console.log('═══════════════════════════════════════════════════════════');
+                    console.log('🎉 WORKFLOW COMPLETED SUCCESSFULLY');
+                    console.log('   Project ID:', projectId);
+                    console.log('   Event ID:', signedCfEvent.id);
+                    console.log('   Bien hex:', `${bienIdentity.hex.substring(0, 16)}...`);
+                    console.log('═══════════════════════════════════════════════════════════');
                     showNotification(`🌳 Projet crowdfunding créé: ${projectId}`, 'success');
+                } else {
+                    console.error('❌ Step 5/5: No relay available');
+                    console.error('   window.appState.relay:', window.appState.relay);
+                    showNotification('❌ Aucun relay disponible', 'error');
                 }
             } catch (error) {
-                console.error('Error publishing crowdfund event:', error);
+                console.error('═══════════════════════════════════════════════════════════');
+                console.error('❌ WORKFLOW FAILED AT STEP 5/5');
+                console.error('═══════════════════════════════════════════════════════════');
+                console.error('Error type:', error.constructor.name);
+                console.error('Error message:', error.message);
+                console.error('Error stack:', error.stack);
+                console.error('Event that failed:', JSON.stringify(cfEvent, null, 2));
+                console.error('═══════════════════════════════════════════════════════════');
+                showNotification('❌ Erreur de publication: ' + error.message, 'error');
             }
         }
         
         function extractOwnersFromMarkdown(content) {
+            console.log('🔍 Extracting owners from markdown...');
             const owners = [];
             // Match table rows: | email | mode | amount | status |
             const tableRegex = /\|\s*([^\|]+@[^\|]+)\s*\|\s*(🤝|💶)[^\|]*\|[^\|]*(\d+)\s*(Ẑen|€)/gi;
             let match;
+            let matchCount = 0;
+            
             while ((match = tableRegex.exec(content)) !== null) {
+                matchCount++;
                 const mode = match[2] === '🤝' ? 'commons' : 'cash';
                 const amount = parseInt(match[3]);
-                owners.push({
+                const owner = {
                     email: match[1].trim(),
                     mode: mode,
                     amount_zen: mode === 'commons' ? amount : 0,
                     amount_eur: mode === 'cash' ? amount : 0,
                     status: 'pending'
-                });
+                };
+                owners.push(owner);
+                console.log(`   Match ${matchCount}: ${owner.email} - ${owner.mode} - ${amount} ${match[4]}`);
             }
+            
+            if (matchCount === 0) {
+                console.log('   ⚠️ No owners found in markdown (project will be in draft status)');
+            } else {
+                console.log(`   ✅ Extracted ${owners.length} owner(s)`);
+            }
+            
             return owners;
         }
         
         function calculateTotals(owners) {
-            return {
-                commons_zen: owners.filter(o => o.mode === 'commons').reduce((s, o) => s + o.amount_zen, 0),
-                cash_eur: owners.filter(o => o.mode === 'cash').reduce((s, o) => s + o.amount_eur, 0),
-                zen_convertible_target: owners.filter(o => o.mode === 'cash').reduce((s, o) => s + o.amount_eur, 0),
+            console.log('🧮 Calculating totals from', owners.length, 'owner(s)...');
+            
+            const commons_zen = owners.filter(o => o.mode === 'commons').reduce((s, o) => s + o.amount_zen, 0);
+            const cash_eur = owners.filter(o => o.mode === 'cash').reduce((s, o) => s + o.amount_eur, 0);
+            const zen_convertible_target = owners.filter(o => o.mode === 'cash').reduce((s, o) => s + o.amount_eur, 0);
+            
+            const totals = {
+                commons_zen: commons_zen,
+                cash_eur: cash_eur,
+                zen_convertible_target: zen_convertible_target,
                 zen_convertible_collected: 0,
                 g1_target: 100, // Default G1 target
                 g1_collected: 0
             };
+            
+            console.log('   - Commons Ẑen:', commons_zen);
+            console.log('   - Cash €:', cash_eur);
+            console.log('   - Ẑen convertible target:', zen_convertible_target);
+            console.log('   - Ğ1 target (default):', totals.g1_target);
+            
+            return totals;
         }
 
         // ═══════════════════════════════════════════════════════════════════

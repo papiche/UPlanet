@@ -2679,6 +2679,36 @@ Votez en envoyant des Ẑen avec le tag vote sur l'interface crowdfunding !
                 crowdfundData.bien_identity = bienIdentity;
             }
             
+            // Get IPFSNODEID from API
+            // This identifies which node created the project (prevents duplication)
+            let creatorNodeId = null;
+            try {
+                // Get IPFSNODEID from /api/myGPS endpoint
+                // This requires NIP-42 auth, but we can try anyway
+                if (window.appState?.userNpub) {
+                    const gpsResponse = await fetch(`${apiUrl}/api/myGPS?npub=${window.appState.userNpub}`);
+                    if (gpsResponse.ok) {
+                        const gpsData = await gpsResponse.json();
+                        creatorNodeId = gpsData.ipfsnodeid;
+                        console.log('✅ Got IPFSNODEID from /api/myGPS:', creatorNodeId);
+                    }
+                }
+                
+                // Fallback: try to get from window state if available
+                if (!creatorNodeId) {
+                    creatorNodeId = window.appState?.ipfsNodeId || null;
+                }
+            } catch (e) {
+                console.warn('Could not get IPFSNODEID from API:', e);
+                // Fallback to window state
+                creatorNodeId = window.appState?.ipfsNodeId || null;
+            }
+            
+            // Add creator node ID to data
+            if (creatorNodeId) {
+                crowdfundData.creator_node_id = creatorNodeId;
+            }
+            
             // Build kind 30904 event
             const cfEvent = {
                 kind: 30904,
@@ -2697,17 +2727,25 @@ Votez en envoyant des Ẑen avec le tag vote sur l'interface crowdfunding !
                 content: JSON.stringify(crowdfundData)
             };
             
+            // Add creator IPFSNODEID tag (identifies which node created this project)
+            if (creatorNodeId) {
+                cfEvent.tags.push(['ipfsnodeid', creatorNodeId]);
+            }
+            
             // Add UMAP pubkey if available
             if (window.appState.umapPubkey) {
                 cfEvent.tags.push(['p', window.appState.umapPubkey, '', 'umap']);
             }
             
             // Add Bien identity tags if available (for easier discovery)
+            // The Bien's hex is the pubkey that can receive payments
             if (bienIdentity) {
                 if (bienIdentity.hex) {
+                    // Tag p with bien marker - this is the Bien's NOSTR pubkey
                     cfEvent.tags.push(['p', bienIdentity.hex, '', 'bien']);
                 }
                 if (bienIdentity.g1pub) {
+                    // Tag i with g1pub - this is the Bien's Ğ1 wallet
                     cfEvent.tags.push(['i', `g1pub:${bienIdentity.g1pub}`]);
                 }
             }

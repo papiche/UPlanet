@@ -432,6 +432,36 @@
             border-color: var(--accent-green);
             color: var(--accent-green);
         }
+        
+        /* Coordinate Selector Map Styles */
+        #coordinateMap {
+            background: var(--bg-deep);
+        }
+        
+        /* Leaflet map dark theme adjustments */
+        #coordinateMap .leaflet-container {
+            background: var(--bg-deep);
+        }
+        
+        #coordinateMap .leaflet-popup-content-wrapper {
+            background: var(--bg-card);
+            color: var(--text);
+            border: 1px solid var(--border);
+        }
+        
+        #coordinateMap .leaflet-control {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+        }
+        
+        #coordinateMap .leaflet-control a {
+            color: var(--text);
+            background: var(--bg-card);
+        }
+        
+        #coordinateMap .leaflet-control a:hover {
+            background: rgba(255,255,255,0.1);
+        }
 
         /* Create Project Form */
         .create-form {
@@ -907,9 +937,9 @@
                 <a href="https://opencollective.com/uplanet-zero" target="_blank" class="btn btn-primary" style="text-decoration: none; display: inline-flex; align-items: center; gap: 8px;">
                     🌟 OpenCollective UPlanet
                 </a>
-                <a href="collaborative-editor.html?lat=_LAT_&lon=_LON_" class="btn btn-secondary" style="text-decoration: none; display: inline-flex; align-items: center; gap: 8px;">
+                <button class="btn btn-secondary" onclick="openCoordinateSelector()" style="display: inline-flex; align-items: center; gap: 8px;">
                     📝 Créer un document Crowdfund
-                </a>
+                </button>
             </div>
             <p style="font-size: 0.8rem; color: var(--text-dim); margin-top: 15px;">
                 🛡️ Sociétaire Satellite: 54€/an | 🌟 Constellation: 540€/an
@@ -1024,8 +1054,76 @@
         </div>
     </div>
 
+    <!-- Coordinate Selector Modal -->
+    <div class="modal-overlay" id="coordinateSelectorModal">
+        <div class="modal-content" style="max-width: 800px; max-height: 90vh;">
+            <button class="close-btn" onclick="closeCoordinateSelector()">&times;</button>
+            <h3>📍 Sélectionner les coordonnées UMAP</h3>
+            <p style="color: var(--text-dim); font-size: 0.9rem; margin-bottom: 20px;">
+                Sélectionnez la localisation du projet (précision 0.01° = ~1.2 km²)
+            </p>
+            
+            <!-- Map Container -->
+            <div id="coordinateMap" style="width: 100%; height: 400px; border-radius: 12px; margin-bottom: 20px; border: 1px solid var(--border);"></div>
+            
+            <!-- Coordinate Display -->
+            <div style="background: rgba(34, 197, 94, 0.1); border: 1px solid var(--accent-green); border-radius: 8px; padding: 15px; margin-bottom: 20px;">
+                <div style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap;">
+                    <div style="flex: 1; min-width: 200px;">
+                        <label style="display: block; color: var(--text-dim); font-size: 0.85rem; margin-bottom: 5px;">Latitude (UMAP)</label>
+                        <input type="number" id="selectedLat" step="0.01" min="-90" max="90" 
+                               style="width: 100%; padding: 10px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-family: monospace; font-size: 1rem;"
+                               onchange="updateMapFromInputs()">
+                    </div>
+                    <div style="flex: 1; min-width: 200px;">
+                        <label style="display: block; color: var(--text-dim); font-size: 0.85rem; margin-bottom: 5px;">Longitude (UMAP)</label>
+                        <input type="number" id="selectedLon" step="0.01" min="-180" max="180"
+                               style="width: 100%; padding: 10px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-family: monospace; font-size: 1rem;"
+                               onchange="updateMapFromInputs()">
+                    </div>
+                </div>
+                <div style="margin-top: 10px; font-size: 0.8rem; color: var(--text-dim);">
+                    <strong>UMAP ID:</strong> <code id="umapIdDisplay" style="color: var(--accent-cyan);">UMAP_0.00_0.00</code>
+                </div>
+            </div>
+            
+            <!-- Quick Location Buttons -->
+            <div style="margin-bottom: 20px;">
+                <p style="color: var(--text-dim); font-size: 0.85rem; margin-bottom: 10px;">📍 Localisations rapides:</p>
+                <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                    <button class="btn btn-secondary" onclick="setQuickLocation(43.60, 1.44)" style="font-size: 0.85rem;">
+                        🏛️ Toulouse
+                    </button>
+                    <button class="btn btn-secondary" onclick="setQuickLocation(48.85, 2.35)" style="font-size: 0.85rem;">
+                        🗼 Paris
+                    </button>
+                    <button class="btn btn-secondary" onclick="setQuickLocation(45.75, 4.85)" style="font-size: 0.85rem;">
+                        🏔️ Lyon
+                    </button>
+                    <button class="btn btn-secondary" onclick="useCurrentLocation()" style="font-size: 0.85rem;">
+                        📍 Ma position
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Actions -->
+            <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                <button class="btn btn-secondary" onclick="closeCoordinateSelector()">
+                    Annuler
+                </button>
+                <button class="btn btn-primary" onclick="openCollaborativeEditor()" id="openEditorBtn">
+                    📝 Ouvrir l'éditeur collaboratif
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- Toast Container -->
     <div class="toast-container" id="toastContainer"></div>
+
+    <!-- Leaflet CSS & JS (for coordinate selector map) -->
+    <link rel="stylesheet" href="leaflet.css" />
+    <script src="leaflet.js"></script>
 
     <script>
         // ========================================
@@ -1630,6 +1728,142 @@
                 completed: '✅ Terminé'
             };
             return labels[status] || status;
+        }
+        
+        // ========================================
+        // COORDINATE SELECTOR FUNCTIONS
+        // ========================================
+        let coordinateMap = null;
+        let coordinateMarker = null;
+        let selectedCoordinates = { lat: 43.60, lon: 1.44 }; // Default: Toulouse
+        
+        function openCoordinateSelector() {
+            document.getElementById('coordinateSelectorModal').classList.add('active');
+            
+            // Initialize map if not already done
+            if (!coordinateMap) {
+                setTimeout(() => {
+                    initCoordinateMap();
+                }, 100);
+            } else {
+                // Update map with current selection
+                updateMapMarker(selectedCoordinates.lat, selectedCoordinates.lon);
+            }
+        }
+        
+        function closeCoordinateSelector() {
+            document.getElementById('coordinateSelectorModal').classList.remove('active');
+        }
+        
+        function initCoordinateMap() {
+            const mapContainer = document.getElementById('coordinateMap');
+            if (!mapContainer) return;
+            
+            // Initialize Leaflet map
+            coordinateMap = L.map('coordinateMap', {
+                center: [selectedCoordinates.lat, selectedCoordinates.lon],
+                zoom: 13,
+                zoomControl: true
+            });
+            
+            // Add OpenStreetMap tiles
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors',
+                maxZoom: 19
+            }).addTo(coordinateMap);
+            
+            // Add marker
+            coordinateMarker = L.marker([selectedCoordinates.lat, selectedCoordinates.lon], {
+                draggable: true
+            }).addTo(coordinateMap);
+            
+            // Update coordinates when marker is dragged
+            coordinateMarker.on('dragend', function(e) {
+                const pos = e.target.getLatLng();
+                updateCoordinatesFromMap(pos.lat, pos.lng);
+            });
+            
+            // Update coordinates when map is clicked
+            coordinateMap.on('click', function(e) {
+                updateCoordinatesFromMap(e.latlng.lat, e.latlng.lng);
+                coordinateMarker.setLatLng([e.latlng.lat, e.latlng.lng]);
+            });
+            
+            // Update inputs when map moves
+            coordinateMap.on('move', function() {
+                const center = coordinateMap.getCenter();
+                updateCoordinatesFromMap(center.lat, center.lng);
+            });
+            
+            // Initialize inputs
+            updateInputs(selectedCoordinates.lat, selectedCoordinates.lon);
+        }
+        
+        function updateCoordinatesFromMap(lat, lon) {
+            // Round to UMAP precision (0.01°)
+            selectedCoordinates.lat = Math.floor(lat * 100) / 100;
+            selectedCoordinates.lon = Math.floor(lon * 100) / 100;
+            updateInputs(selectedCoordinates.lat, selectedCoordinates.lon);
+        }
+        
+        function updateInputs(lat, lon) {
+            document.getElementById('selectedLat').value = lat.toFixed(2);
+            document.getElementById('selectedLon').value = lon.toFixed(2);
+            document.getElementById('umapIdDisplay').textContent = `UMAP_${lat.toFixed(2)}_${lon.toFixed(2)}`;
+        }
+        
+        function updateMapFromInputs() {
+            const lat = parseFloat(document.getElementById('selectedLat').value);
+            const lon = parseFloat(document.getElementById('selectedLon').value);
+            
+            if (!isNaN(lat) && !isNaN(lon) && lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180) {
+                // Round to UMAP precision
+                selectedCoordinates.lat = Math.floor(lat * 100) / 100;
+                selectedCoordinates.lon = Math.floor(lon * 100) / 100;
+                updateMapMarker(selectedCoordinates.lat, selectedCoordinates.lon);
+                updateInputs(selectedCoordinates.lat, selectedCoordinates.lon);
+            }
+        }
+        
+        function updateMapMarker(lat, lon) {
+            if (coordinateMap && coordinateMarker) {
+                coordinateMarker.setLatLng([lat, lon]);
+                coordinateMap.setView([lat, lon], coordinateMap.getZoom());
+            }
+        }
+        
+        function setQuickLocation(lat, lon) {
+            selectedCoordinates.lat = Math.floor(lat * 100) / 100;
+            selectedCoordinates.lon = Math.floor(lon * 100) / 100;
+            updateInputs(selectedCoordinates.lat, selectedCoordinates.lon);
+            updateMapMarker(selectedCoordinates.lat, selectedCoordinates.lon);
+        }
+        
+        function useCurrentLocation() {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    function(position) {
+                        setQuickLocation(position.coords.latitude, position.coords.longitude);
+                        showToast('📍 Position actuelle chargée', 'success');
+                    },
+                    function(error) {
+                        showToast('❌ Impossible d\'obtenir votre position', 'error');
+                    }
+                );
+            } else {
+                showToast('❌ Géolocalisation non supportée', 'error');
+            }
+        }
+        
+        function openCollaborativeEditor() {
+            const lat = selectedCoordinates.lat.toFixed(2);
+            const lon = selectedCoordinates.lon.toFixed(2);
+            const editorUrl = `https://ipfs.copylaradio.com/ipns/copylaradio.com/collaborative-editor.html?lat=${lat}&lon=${lon}`;
+            
+            log(`Opening collaborative editor: ${editorUrl}`);
+            window.open(editorUrl, '_blank');
+            closeCoordinateSelector();
+            showToast(`📝 Éditeur collaboratif ouvert pour UMAP ${lat}, ${lon}`, 'success');
         }
         
         // ========================================

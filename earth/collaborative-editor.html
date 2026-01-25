@@ -2150,48 +2150,73 @@ Votez en envoyant des Ẑen avec le tag vote sur l'interface crowdfunding !
             }
         }
         
-        // Fetch user profile from Nostr (kind 0)
+        // Fetch user profile from Nostr (kind 0) - uses common.js fetchUserMetadata if available
         async function fetchUserProfile(pubkey) {
-            if (!window.appState.pool || !window.appState.relayUrls) {
-                console.warn('No relay pool available for profile fetch');
-                return null;
-            }
-            
             try {
-                const events = await window.appState.pool.querySync(
-                    window.appState.relayUrls,
-                    [{ kinds: [0], authors: [pubkey], limit: 1 }],
-                    { timeout: 5000 }
-                );
+                // Use common.js fetchUserMetadata if available
+                if (typeof fetchUserMetadata === 'function') {
+                    const profile = await fetchUserMetadata(pubkey);
+                    if (profile) {
+                        window.appState.userProfile = profile;
+                        console.log('📝 User profile loaded (via common.js):', profile);
+                        return profile;
+                    }
+                }
                 
-                if (events && events.length > 0) {
-                    const profileEvent = events[0];
-                    const profile = JSON.parse(profileEvent.content);
-                    
-                    // Extract additional data from 'i' tags (UPlanet extensions)
-                    if (profileEvent.tags) {
-                        profileEvent.tags.forEach(tag => {
-                            if (tag[0] === 'i') {
-                                const [type, value] = tag[1].split(':');
-                                switch(type) {
-                                    case 'g1pub': profile.g1_address = value; break;
-                                    case 'g1pubv2': profile.g1_address_v2 = value; break;
-                                    case 'zencard': profile.zen_address = value; break;
-                                    case 'ipfs_gw': profile.ipfs_gw = value; break;
-                                    case 'ipns_vault': profile.ipns_vault = value; break;
+                // Fallback: use window.nostrRelay.sub from common.js
+                if (window.nostrRelay && typeof window.nostrRelay.sub === 'function') {
+                    return new Promise((resolve) => {
+                        const sub = window.nostrRelay.sub([{
+                            kinds: [0],
+                            authors: [pubkey],
+                            limit: 1
+                        }]);
+                        
+                        let profile = null;
+                        const timeout = setTimeout(() => {
+                            sub.unsub();
+                            resolve(profile);
+                        }, 5000);
+                        
+                        sub.on('event', (event) => {
+                            try {
+                                profile = JSON.parse(event.content);
+                                // Extract UPlanet extensions from 'i' tags
+                                if (event.tags) {
+                                    event.tags.forEach(tag => {
+                                        if (tag[0] === 'i') {
+                                            const [type, value] = tag[1].split(':');
+                                            switch(type) {
+                                                case 'g1pub': profile.g1_address = value; break;
+                                                case 'g1pubv2': profile.g1_address_v2 = value; break;
+                                                case 'zencard': profile.zen_address = value; break;
+                                                case 'ipfs_gw': profile.ipfs_gw = value; break;
+                                                case 'ipns_vault': profile.ipns_vault = value; break;
+                                            }
+                                        }
+                                    });
                                 }
+                                window.appState.userProfile = profile;
+                                console.log('📝 User profile loaded:', profile);
+                            } catch (e) {
+                                console.error('Error parsing profile:', e);
                             }
                         });
-                    }
-                    
-                    window.appState.userProfile = profile;
-                    console.log('📝 User profile loaded:', profile);
-                    return profile;
+                        
+                        sub.on('eose', () => {
+                            clearTimeout(timeout);
+                            sub.unsub();
+                            resolve(profile);
+                        });
+                    });
                 }
+                
+                console.warn('No relay available for profile fetch');
+                return null;
             } catch (error) {
                 console.error('Error fetching profile:', error);
+                return null;
             }
-            return null;
         }
         
         // NIP-42 Authentication for uDRIVE access
@@ -2289,38 +2314,30 @@ Votez en envoyant des Ẑen avec le tag vote sur l'interface crowdfunding !
         };
 
         async function connectRelay() {
-            const relayUrls = [
-                'wss://relay.copylaradio.com',
-                'wss://relay.damus.io',
-                'wss://nos.lol'
-            ];
-            
-            // Try SimplePool first (can query multiple relays)
-            if (window.NostrTools && window.NostrTools.SimplePool) {
-                window.appState.pool = new window.NostrTools.SimplePool();
-                window.appState.relayUrls = relayUrls;
-                // Create a proxy object that uses pool for subscriptions
-                window.appState.relay = {
-                    subscribe: (filters, handlers) => {
-                        return window.appState.pool.subscribeMany(relayUrls, filters, handlers);
-                    },
-                    publish: async (event) => {
-                        return window.appState.pool.publish(relayUrls, event);
+            // Use common.js connectToRelay if available
+            if (typeof connectToRelay === 'function') {
+                try {
+                    await connectToRelay();
+                    // common.js sets window.nostrRelay
+                    if (window.nostrRelay) {
+                        window.appState.relay = window.nostrRelay;
+                        window.appState.relayUrls = window.DEFAULT_RELAYS || ['wss://relay.copylaradio.com'];
+                        console.log('✅ Connected to relay via common.js');
+                        return;
                     }
-                };
-                console.log('✅ Connected to relay pool:', relayUrls);
-                return;
+                } catch (e) {
+                    console.warn('common.js connectToRelay failed:', e);
+                }
             }
             
-            // Fallback to single relay connection
+            // Fallback: direct relay connection
+            const relayUrls = ['wss://relay.copylaradio.com', 'wss://relay.damus.io', 'wss://nos.lol'];
+            window.appState.relayUrls = relayUrls;
+            
             for (const relayUrl of relayUrls) {
                 try {
                     if (window.NostrTools && window.NostrTools.Relay) {
                         window.appState.relay = await window.NostrTools.Relay.connect(relayUrl);
-                        console.log('✅ Connected to relay:', relayUrl);
-                        return;
-                    } else if (typeof connectToNostrRelay === 'function') {
-                        window.appState.relay = await connectToNostrRelay(relayUrl);
                         console.log('✅ Connected to relay:', relayUrl);
                         return;
                     }
@@ -2332,11 +2349,42 @@ Votez en envoyant des Ẑen avec le tag vote sur l'interface crowdfunding !
             console.error('Failed to connect to any relay');
         }
 
+        // Helper: Subscribe to relay with both API styles (common.js .sub() and newer .subscribe())
+        function relaySubscribe(filters, handlers) {
+            const relay = window.appState.relay || window.nostrRelay;
+            if (!relay) {
+                console.error('No relay available for subscription');
+                return { unsub: () => {}, close: () => {} };
+            }
+            
+            // common.js style API (.sub with .on events)
+            if (typeof relay.sub === 'function') {
+                const sub = relay.sub(Array.isArray(filters) ? filters : [filters]);
+                if (handlers.onevent) sub.on('event', handlers.onevent);
+                if (handlers.oneose) sub.on('eose', () => {
+                    handlers.oneose();
+                    // Auto-unsub on eose if not explicitly kept open
+                });
+                // Add close method for compatibility
+                sub.close = sub.unsub;
+                return sub;
+            }
+            
+            // Newer nostr-tools API (.subscribe with object handlers)
+            if (typeof relay.subscribe === 'function') {
+                return relay.subscribe(Array.isArray(filters) ? filters : [filters], handlers);
+            }
+            
+            console.error('Unknown relay API');
+            return { unsub: () => {}, close: () => {} };
+        }
+
         // ═══════════════════════════════════════════════════════════════════
         // DOCUMENT OPERATIONS
         // ═══════════════════════════════════════════════════════════════════
         async function loadUMAPDocuments() {
-            if (!window.appState.relay) return;
+            const relay = window.appState.relay || window.nostrRelay;
+            if (!relay) return;
             
             const container = document.getElementById('umap-documents-list');
             container.innerHTML = '<p style="color: var(--text-muted);">Chargement des documents...</p>';
@@ -2353,18 +2401,34 @@ Votez en envoyant des Ẑen avec le tag vote sur l'interface crowdfunding !
                 
                 const events = [];
                 
-                const sub = window.appState.relay.subscribe([filter], {
-                    onevent(event) {
+                // Use relay.sub() method (common.js style)
+                if (typeof relay.sub === 'function') {
+                    const sub = relay.sub([filter]);
+                    
+                    sub.on('event', (event) => {
                         events.push(event);
-                    },
-                    oneose() {
+                    });
+                    
+                    sub.on('eose', () => {
                         renderDocumentsList(events, container);
-                    }
-                });
+                        sub.unsub();
+                    });
+                } 
+                // Fallback for newer nostr-tools API
+                else if (typeof relay.subscribe === 'function') {
+                    const sub = relay.subscribe([filter], {
+                        onevent(event) {
+                            events.push(event);
+                        },
+                        oneose() {
+                            renderDocumentsList(events, container);
+                        }
+                    });
+                }
                 
                 // Timeout fallback
                 setTimeout(() => {
-                    if (events.length === 0) {
+                    if (events.length === 0 && container.innerHTML.includes('Chargement')) {
                         container.innerHTML = '<p style="color: var(--text-muted);">Aucun document trouvé pour cette UMAP</p>';
                     }
                 }, 5000);
@@ -2429,7 +2493,7 @@ Votez en envoyant des Ẑen avec le tag vote sur l'interface crowdfunding !
                 const filter = { ids: [hexId], limit: 1 };
                 let eventFound = false;
                 
-                const sub = window.appState.relay.subscribe([filter], {
+                const sub = relaySubscribe([filter], {
                     onevent(event) {
                         eventFound = true;
                         window.appState.currentDocEvent = event;
@@ -3093,7 +3157,8 @@ Votez en envoyant des Ẑen avec le tag vote sur l'interface crowdfunding !
         
         // Load pending proposals for current UMAP
         async function loadPendingProposals() {
-            if (!window.appState.relay || !window.appState.isConnected) return;
+            const relay = window.appState.relay || window.nostrRelay;
+            if (!relay || !window.appState.isConnected) return;
             
             const container = document.getElementById('proposals-container');
             container.innerHTML = '<p style="color: var(--text-muted);">Chargement des propositions...</p>';
@@ -3112,7 +3177,7 @@ Votez en envoyant des Ẑen avec le tag vote sur l'interface crowdfunding !
                 
                 const events = [];
                 
-                const sub = window.appState.relay.subscribe([filter], {
+                const sub = relaySubscribe([filter], {
                     onevent(event) {
                         events.push(event);
                     },
@@ -3140,7 +3205,8 @@ Votez en envoyant des Ẑen avec le tag vote sur l'interface crowdfunding !
         
         // Fetch votes (kind 7 reactions) for a document
         async function fetchVotesForDocument(eventId) {
-            if (!window.appState.relay) return { approvals: 0, rejections: 0, forks: 0, voters: [] };
+            const relay = window.appState.relay || window.nostrRelay;
+            if (!relay) return { approvals: 0, rejections: 0, forks: 0, voters: [] };
             
             return new Promise((resolve) => {
                 const votes = { approvals: 0, rejections: 0, forks: 0, voters: [] };
@@ -3151,7 +3217,7 @@ Votez en envoyant des Ẑen avec le tag vote sur l'interface crowdfunding !
                     limit: 100
                 };
                 
-                const sub = window.appState.relay.subscribe([filter], {
+                const sub = relaySubscribe([filter], {
                     onevent(event) {
                         const content = event.content;
                         const voteTag = event.tags.find(t => t[0] === 'vote')?.[1];

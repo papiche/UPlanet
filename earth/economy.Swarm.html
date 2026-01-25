@@ -1090,19 +1090,22 @@
         // Configuration
         const EVENT_KIND_STATION = 30850;
         let ws = null;
+        let relay = null; // common.js relay object
         let stationsData = new Map();
         let selectedStationId = null;
         let stationOrder = [];
 
-        // Detect relay URL
+        // Detect relay URL - uses common.js DEFAULT_RELAYS if available
         function detectRelayUrl() {
+            // Use common.js DEFAULT_RELAYS if available
+            if (window.DEFAULT_RELAYS && window.DEFAULT_RELAYS.length > 0) {
+                return window.DEFAULT_RELAYS[0];
+            }
             if (typeof NostrState !== 'undefined' && NostrState.DEFAULT_RELAYS?.length > 0) {
                 return NostrState.DEFAULT_RELAYS[0];
             }
             
             const hostname = window.location.hostname;
-            const port = window.location.port;
-
             if (hostname === "127.0.0.1" || hostname === "localhost") {
                 return "ws://127.0.0.1:7777";
             } else if (hostname.startsWith("ipfs.") || hostname.startsWith("u.")) {
@@ -1113,30 +1116,59 @@
         }
 
         // Initialize
-        window.addEventListener('load', () => {
+        window.addEventListener('load', async () => {
             console.log('🌌 economy.Swarm.html loaded');
             console.log('   EVENT_KIND_STATION:', EVENT_KIND_STATION);
             
-            setTimeout(() => {
-                const relayUrl = new URLSearchParams(window.location.search).get('relay') || detectRelayUrl();
-                console.log('🔗 Connecting to relay:', relayUrl);
-                document.getElementById('relay-url').textContent = relayUrl.replace(/^wss?:\/\//, '');
-                connectToRelay(relayUrl);
-            }, 100);
+            // Wait for common.js to initialize
+            await new Promise(r => setTimeout(r, 200));
+            
+            const relayUrl = new URLSearchParams(window.location.search).get('relay') || detectRelayUrl();
+            console.log('🔗 Connecting to relay:', relayUrl);
+            document.getElementById('relay-url').textContent = relayUrl.replace(/^wss?:\/\//, '');
+            
+            // Try common.js relay first, then fallback to WebSocket
+            await initializeRelay(relayUrl);
         });
 
-        // Connect to relay
-        function connectToRelay(relayUrl) {
+        // Initialize relay connection - tries common.js first, then WebSocket
+        async function initializeRelay(relayUrl) {
+            // Option 1: Use common.js connectToRelay if available
+            if (typeof connectToRelay === 'function' && connectToRelay !== initializeRelay) {
+                try {
+                    console.log('📡 Trying common.js connectToRelay...');
+                    await connectToRelay();
+                    
+                    if (window.nostrRelay && typeof window.nostrRelay.sub === 'function') {
+                        relay = window.nostrRelay;
+                        console.log('✅ Using common.js relay');
+                        document.getElementById('connection-status').className = 'status-dot online';
+                        document.getElementById('relay-status').textContent = 'CONNECTED';
+                        subscribeWithCommonJS();
+                        return;
+                    }
+                } catch (e) {
+                    console.warn('⚠️ common.js connectToRelay failed:', e);
+                }
+            }
+            
+            // Option 2: Fallback to direct WebSocket
+            console.log('📡 Using direct WebSocket connection...');
+            connectWebSocket(relayUrl);
+        }
+
+        // Connect via WebSocket (fallback)
+        function connectWebSocket(relayUrl) {
             ws = new WebSocket(relayUrl);
 
             ws.onopen = () => {
-                console.log('✅ Connected to:', relayUrl);
+                console.log('✅ WebSocket connected to:', relayUrl);
                 document.getElementById('connection-status').className = 'status-dot online';
                 document.getElementById('relay-status').textContent = 'CONNECTED';
-                subscribeToEvents();
+                subscribeWithWebSocket();
             };
 
-            ws.onmessage = (event) => handleMessage(JSON.parse(event.data));
+            ws.onmessage = (event) => handleWebSocketMessage(JSON.parse(event.data));
 
             ws.onerror = (error) => {
                 console.error('❌ WebSocket error:', error);
@@ -1152,16 +1184,46 @@
             };
         }
 
-        // Subscribe to events
-        function subscribeToEvents() {
+        // Subscribe using common.js relay
+        function subscribeWithCommonJS() {
+            const since = Math.floor(Date.now() / 1000) - (30 * 24 * 60 * 60);
+            const filter = { kinds: [EVENT_KIND_STATION], since, limit: 500 };
+            
+            console.log('📡 Subscribing via common.js relay...');
+            console.log('   filter:', JSON.stringify(filter));
+            
+            const sub = relay.sub([filter]);
+            
+            sub.on('event', (event) => {
+                console.log('📨 EVENT received via common.js');
+                processStationEvent(event);
+            });
+            
+            sub.on('eose', () => {
+                console.log('✅ EOSE - End of stored events. Total stations:', stationsData.size);
+                hideLoading();
+                document.getElementById('main-container').style.display = 'block';
+                updateUI();
+            });
+            
+            setTimeout(() => {
+                if (stationsData.size === 0) {
+                    console.log('⏰ Timeout: No stations received after 5s');
+                    hideLoading();
+                    document.getElementById('main-container').style.display = 'block';
+                }
+            }, 5000);
+        }
+
+        // Subscribe via WebSocket (fallback)
+        function subscribeWithWebSocket() {
             const since = Math.floor(Date.now() / 1000) - (30 * 24 * 60 * 60);
             const subId = 'constellation-' + Date.now();
             const filter = { kinds: [EVENT_KIND_STATION], since, limit: 500 };
             
-            console.log('📡 Subscribing to events...');
+            console.log('📡 Subscribing via WebSocket...');
             console.log('   subId:', subId);
             console.log('   filter:', JSON.stringify(filter));
-            console.log('   kind:', EVENT_KIND_STATION, '| since:', new Date(since * 1000).toISOString());
             
             ws.send(JSON.stringify(['REQ', subId, filter]));
             
@@ -1174,12 +1236,12 @@
             }, 5000);
         }
 
-        // Handle messages
-        function handleMessage(message) {
+        // Handle WebSocket messages
+        function handleWebSocketMessage(message) {
             const [type, ...data] = message;
 
             if (type === 'EVENT') {
-                console.log('📨 EVENT received:', type, 'subId:', data[0]);
+                console.log('📨 EVENT received via WebSocket');
                 processStationEvent(data[1]);
             } else if (type === 'EOSE') {
                 console.log('✅ EOSE - End of stored events. Total stations:', stationsData.size);
@@ -1190,11 +1252,10 @@
                 console.log('📢 NOTICE from relay:', data[0]);
             } else if (type === 'OK') {
                 console.log('👍 OK response:', data);
-            } else {
-                console.log('📩 Unknown message type:', type, data);
             }
         }
 
+        // Handle messages
         // Process station event
         function processStationEvent(event) {
             try {

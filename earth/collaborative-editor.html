@@ -1459,6 +1459,34 @@
     </div>
 
     <!-- ═══════════════════════════════════════════════════════════════════
+         UMAP SELECTION MODAL
+         ═══════════════════════════════════════════════════════════════════ -->
+    <div class="modal-overlay" id="umap-select-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">🗺️ Sélectionner une UMAP</h2>
+                <button class="modal-close" onclick="closeUmapSelectModal()">&times;</button>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Latitude</label>
+                <input type="number" class="form-input" id="umap-lat-input" step="0.0001" placeholder="43.60">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Longitude</label>
+                <input type="number" class="form-input" id="umap-lon-input" step="0.0001" placeholder="1.44">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Clé publique UMAP (hex, optionnel)</label>
+                <input type="text" class="form-input" id="umap-pubkey-input" placeholder="ab12cd34... (64 caractères hex)">
+                <small style="color: var(--text-muted); font-size: 0.8rem;">Si non fournie, sera recherchée automatiquement</small>
+            </div>
+            <button class="btn btn-primary" onclick="confirmUmapSelection()" style="width: 100%;">
+                ✅ Confirmer l'UMAP
+            </button>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════════════
          PROPOSE MODAL
          ═══════════════════════════════════════════════════════════════════ -->
     <div class="modal-overlay" id="propose-modal">
@@ -1487,6 +1515,28 @@
                     <option value="restricted">Sur rejet seulement</option>
                     <option value="forbidden">Interdit</option>
                 </select>
+            </div>
+            <!-- Crowdfunding specific fields -->
+            <div id="crowdfund-fields" style="display: none;">
+                <div class="form-group">
+                    <label class="form-label">💰 Prix total du bien en €</label>
+                    <input type="number" class="form-input" id="crowdfund-price-eur" step="0.01" min="0" placeholder="1000.00">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">🔄 Part ẐEN convertible (jeton d'usage) en €</label>
+                    <input type="number" class="form-input" id="crowdfund-zen-convertible" step="0.01" min="0" placeholder="500.00">
+                    <small style="color: var(--text-muted); font-size: 0.8rem;">Partie qui peut être convertie en € (1 Ẑen = 0.10€)</small>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">💎 Part ZENCard (Ẑ de capital) en Ẑen</label>
+                    <input type="number" class="form-input" id="crowdfund-zen-capital" step="1" min="0" placeholder="5000">
+                    <small style="color: var(--text-muted); font-size: 0.8rem;">Partie en capital non-convertible (don aux Communs)</small>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">👤 Porteur (pubkey hex, par défaut: vous)</label>
+                    <input type="text" class="form-input" id="crowdfund-holder" placeholder="Laisser vide pour utiliser votre clé">
+                    <small style="color: var(--text-muted); font-size: 0.8rem;">Clé publique hex du porteur (64 caractères)</small>
+                </div>
             </div>
             <button class="btn btn-primary" onclick="submitProposal()" style="width: 100%;">
                 📤 Soumettre la proposition
@@ -1548,16 +1598,16 @@
             const hasValidCoords = rawLat && rawLon && rawLat !== '_LAT_' && rawLon !== '_LON_';
             window.appState.isUmapConfigured = hasValidUmap && hasValidCoords;
             
-            // Warn if UMAP is not properly configured
+            // Warn if UMAP is not properly configured and show selection modal
             if (!window.appState.isUmapConfigured) {
                 console.warn('⚠️ UMAP not properly configured!');
                 console.warn('   - lat:', rawLat || 'MISSING');
                 console.warn('   - lon:', rawLon || 'MISSING');
                 console.warn('   - umap:', rawUmap ? `${rawUmap.substring(0,8)}... (${rawUmap.length} chars)` : 'MISSING');
                 
-                // Show warning in UI
+                // Show UMAP selection modal
                 setTimeout(() => {
-                    showNotification('⚠️ UMAP non configurée - Accédez via une page UMAP valide', 'error');
+                    document.getElementById('umap-select-modal').classList.add('active');
                     document.getElementById('btn-publish').disabled = true;
                     document.getElementById('btn-publish').title = 'Publication désactivée: UMAP non configurée';
                 }, 500);
@@ -1891,42 +1941,55 @@ Où se trouve cette ressource ?
 
 ---
 
-## 💰 Montant Total et Parts des Propriétaires
+## 💰 Mise en Commun - Comptabilité ẐEN
 
-### Indiquez le prix total et la répartition souhaitée :
+### Le modèle ẐEN : Séparer l'Intendance de la Gouvernance
 
-| Propriétaire | Mode | Montant souhaité | Description |
-|--------------|------|------------------|-------------|
-| email@exemple.com | 🤝 CAPITAL | 500 Ẑen | Part transférée aux Communs |
-| email2@exemple.com | 💶 CASH | 1000€ | Part à racheter en € |
+Dans le système UPlanet, nous distinguons deux types de comptabilité pour gérer les Biens Communs :
 
-### Explications des modes :
+#### 🔄 **ẐEN Convertible (Jeton d'Usage)**
+- **Fonction** : Gérer les frais réels (Capex/Opex) du bien
+- **Conversion** : 1 Ẑen = 0.10€ (convertible en euros)
+- **Usage** : Paiement des charges (électricité, entretien, serveurs, matériel)
+- **Exemple** : Pour un terrain à 1000€, si 500€ sont en ẐEN convertible, cela permet de couvrir les frais d'entretien
 
-- **🤝 CAPITAL (Commons)**: Le propriétaire fait don de sa part aux Communs
-  - Reçoit des Ẑen non-convertibles en €
-  - Obtient l'accès à tous les lieux du réseau UPlanet
-  - Le bien est géré collectivement
+#### 💎 **ZENCard (Ẑ de Capital)**
+- **Fonction** : Capital non-convertible, don aux Communs
+- **Conversion** : Aucune (reste en ẐEN dans la coopérative)
+- **Usage** : Part de propriété collective, accès au réseau UPlanet
+- **Exemple** : 5000 ẐEN de capital = accès à tous les lieux du réseau, sans conversion possible
 
-- **💶 CASH (€)**: Le propriétaire souhaite une vente en euros
-  - Nécessite une collecte de Ẑen convertibles
-  - Les sociétaires votent pour valider l'utilisation des fonds ASSETS
-  - Paiement en € via le portefeuille coopératif
+### Pourquoi cette séparation ?
+
+> *"Le DU n'est peut-être pas fait pour « jouer à la marchande », mais pour fonctionner comme les parts d'une coopérative."*  
+> — [Vers une économie de Communs](https://forum.monnaie-libre.fr/t/vers-une-economie-de-communs-sortir-du-salaire-en-du-pour-la-v2-modele-en-uplanet/33150)
+
+- **Le ẐEN** = Notre "Excel partagé" pour la logistique et les frais réels
+- **Le DU** = Jeton de vote pour orienter les priorités du bien commun
+- **Séparation** : On ne transforme pas les contributeurs en "prestataires", mais en "coopérateurs"
+
+### 💡 Exemple Concret
+
+Pour un bien à **1000€** :
+- **500€ en ẐEN Convertible** : Permet de payer les charges (électricité, entretien) en convertissant en € si nécessaire
+- **5000 ẐEN en Capital** : Don aux Communs, non-convertible, donne accès au réseau UPlanet
+
+**Résultat** : Le bien est géré collectivement, les frais sont couverts par les ẐEN convertibles, et le capital reste dans la coopérative pour développer d'autres communs.
 
 ---
 
 ## 📊 Objectifs de la Collecte
 
-### Ẑen à collecter (pour parts CASH)
+Les montants seront définis lors de la soumission du document via le formulaire.
 
-| Objectif | Pour quoi |
-|----------|-----------|
-| ___ Ẑen | Rachat des parts CASH (1 Ẑen = 0.10€) |
+### Ẑen Convertible (pour frais réels)
+- Objectif : ___ € (convertibles en ẐEN au taux 1 Ẑen = 0.10€)
+
+### ẐEN Capital (don aux Communs)
+- Objectif : ___ ẐEN (non-convertible, accès réseau UPlanet)
 
 ### Don Ğ1 complémentaire (optionnel)
-
-| Objectif | Pour quoi |
-|----------|-----------|
-| ___ Ğ1 | Alimentation du fonds coopératif |
+- Objectif : ___ Ğ1 (alimentation du fonds coopératif)
 
 ---
 
@@ -1963,8 +2026,9 @@ Votez en envoyant des Ẑen avec le tag vote sur l'interface crowdfunding !
 
 *Ce document sera transformé en projet crowdfunding lors de la publication.*
 *L'identité NOSTR du Bien sera générée automatiquement.*
+*Les montants seront définis via le formulaire de soumission.*
 
-#UPlanet #crowdfunding #commons`
+#UPlanet #crowdfunding #commons #ẐEN`
             };
             
             return templates[window.appState.docType] || templates.commons;
@@ -2707,13 +2771,84 @@ Votez en envoyant des Ẑen avec le tag vote sur l'interface crowdfunding !
                 return;
             }
             
+            // Check UMAP configuration
+            if (!window.appState.isUmapConfigured) {
+                showNotification('⚠️ UMAP non configurée - Veuillez sélectionner une UMAP', 'error');
+                document.getElementById('umap-select-modal').classList.add('active');
+                return;
+            }
+            
             const title = document.getElementById('doc-title').value.trim();
             if (!title) {
                 showNotification('Veuillez donner un titre au document', 'error');
                 return;
             }
             
+            // Show/hide crowdfunding fields based on doc type
+            const crowdfundFields = document.getElementById('crowdfund-fields');
+            if (window.appState.docType === 'crowdfund') {
+                crowdfundFields.style.display = 'block';
+            } else {
+                crowdfundFields.style.display = 'none';
+            }
+            
             document.getElementById('propose-modal').classList.add('active');
+        };
+        
+        // UMAP Selection Modal Functions
+        window.confirmUmapSelection = function() {
+            const lat = document.getElementById('umap-lat-input').value.trim();
+            const lon = document.getElementById('umap-lon-input').value.trim();
+            const umapPubkey = document.getElementById('umap-pubkey-input').value.trim();
+            
+            if (!lat || !lon) {
+                showNotification('Veuillez saisir les coordonnées GPS', 'error');
+                return;
+            }
+            
+            // Validate coordinates
+            const latNum = parseFloat(lat);
+            const lonNum = parseFloat(lon);
+            if (isNaN(latNum) || latNum < -90 || latNum > 90) {
+                showNotification('Latitude invalide (doit être entre -90 et 90)', 'error');
+                return;
+            }
+            if (isNaN(lonNum) || lonNum < -180 || lonNum > 180) {
+                showNotification('Longitude invalide (doit être entre -180 et 180)', 'error');
+                return;
+            }
+            
+            // Update app state
+            window.appState.umapLat = lat;
+            window.appState.umapLon = lon;
+            if (umapPubkey && umapPubkey.length >= 32) {
+                window.appState.umapPubkey = umapPubkey;
+            }
+            window.appState.isUmapConfigured = true;
+            
+            // Update URL without reload
+            const url = new URL(window.location);
+            url.searchParams.set('lat', lat);
+            url.searchParams.set('lon', lon);
+            if (umapPubkey) {
+                url.searchParams.set('umap', umapPubkey);
+            }
+            window.history.replaceState({}, '', url);
+            
+            // Update UI
+            document.getElementById('umap-coords').textContent = `UMAP ${lat}, ${lon}`;
+            document.getElementById('info-signer').textContent = umapPubkey 
+                ? `UMAP ${umapPubkey.substring(0,8)}...`
+                : `UMAP ${lat}, ${lon}`;
+            document.getElementById('btn-publish').disabled = false;
+            document.getElementById('btn-publish').title = '';
+            
+            closeUmapSelectModal();
+            showNotification('✅ UMAP configurée avec succès', 'success');
+        };
+        
+        window.closeUmapSelectModal = function() {
+            document.getElementById('umap-select-modal').classList.remove('active');
         };
 
         window.submitProposal = async function() {
@@ -2857,7 +2992,7 @@ Votez en envoyant des Ẑen avec le tag vote sur l'interface crowdfunding !
         };
         
         // Publish structured kind 30904 crowdfunding event
-        async function publishCrowdfundEvent(docEvent, title, lat, lon, markdownContent) {
+        async function publishCrowdfundEvent(docEvent, title, lat, lon, markdownContent, financialData = null) {
             console.log('═══════════════════════════════════════════════════════════');
             console.log('📦 PUBLISHING KIND 30904 CROWDFUNDING EVENT');
             console.log('═══════════════════════════════════════════════════════════');
@@ -2867,17 +3002,76 @@ Votez en envoyant des Ẑen avec le tag vote sur l'interface crowdfunding !
             console.log('   - Document event ID:', docEvent.id);
             console.log('   - Markdown length:', markdownContent.length, 'chars');
             
-            // Extract owners from markdown table
-            const owners = extractOwnersFromMarkdown(markdownContent);
-            console.log('👥 Extracted owners:', owners.length);
-            if (owners.length > 0) {
-                owners.forEach((o, i) => {
-                    console.log(`   [${i+1}] ${o.email} - ${o.mode} - ${o.mode === 'commons' ? o.amount_zen + ' Ẑen' : o.amount_eur + '€'}`);
-                });
+            // Extract owners from form data or markdown (prefer form data)
+            let owners = [];
+            let totals = {
+                commons_zen: 0,
+                cash_eur: 0,
+                zen_convertible_target: 0,
+                zen_convertible_collected: 0,
+                g1_target: 100,
+                g1_collected: 0
+            };
+            
+            if (financialData && financialData.priceEur > 0) {
+                // Use form data (new method)
+                console.log('💰 Using form financial data:');
+                console.log('   - Price EUR:', financialData.priceEur);
+                console.log('   - ẐEN Convertible:', financialData.zenConvertible);
+                console.log('   - ẐEN Capital:', financialData.zenCapital);
+                console.log('   - Holder:', financialData.holderPubkey.substring(0, 16) + '...');
+                
+                // Create owner entry from form data
+                const holderEmail = window.appState.userProfile?.nip05 || window.appState.userNpub?.substring(0, 20) + '...';
+                
+                // Calculate parts
+                const capitalPart = financialData.zenCapital;
+                const cashPart = financialData.zenConvertible;
+                
+                if (capitalPart > 0) {
+                    owners.push({
+                        email: holderEmail,
+                        pubkey: financialData.holderPubkey,
+                        mode: 'commons',
+                        amount_zen: capitalPart,
+                        amount_eur: 0,
+                        status: 'pending'
+                    });
+                }
+                
+                if (cashPart > 0) {
+                    owners.push({
+                        email: holderEmail,
+                        pubkey: financialData.holderPubkey,
+                        mode: 'cash',
+                        amount_zen: 0,
+                        amount_eur: cashPart,
+                        status: 'pending'
+                    });
+                }
+                
+                totals = {
+                    commons_zen: capitalPart,
+                    cash_eur: cashPart,
+                    zen_convertible_target: cashPart, // ẐEN convertible = € amount (1 Ẑen = 0.10€)
+                    zen_convertible_collected: 0,
+                    g1_target: 100,
+                    g1_collected: 0
+                };
+                
+                console.log('👥 Created owner entries:', owners.length);
+            } else {
+                // Fallback: extract from markdown (old method)
+                owners = extractOwnersFromMarkdown(markdownContent);
+                console.log('👥 Extracted owners from markdown:', owners.length);
+                totals = calculateTotals(owners);
             }
             
-            // Calculate totals
-            const totals = calculateTotals(owners);
+            if (owners.length > 0) {
+                owners.forEach((o, i) => {
+                    console.log(`   [${i+1}] ${o.email || o.pubkey?.substring(0, 16)} - ${o.mode} - ${o.mode === 'commons' ? o.amount_zen + ' Ẑen' : o.amount_eur + '€'}`);
+                });
+            }
             console.log('💰 Calculated totals:');
             console.log('   - Ẑen convertible target:', totals.zen_convertible_target);
             console.log('   - Ğ1 target:', totals.g1_target);

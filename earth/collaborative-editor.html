@@ -72,30 +72,27 @@
         }
 
         /* ═══════════════════════════════════════════════════════════════════
-           FIXED CONNECTION BADGE
+           CONNECTION BADGE IN HEADER
            ═══════════════════════════════════════════════════════════════════ */
         .connection-badge {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            z-index: 9999;
+            position: relative;
             background: rgba(10, 15, 26, 0.95);
             backdrop-filter: blur(10px);
-            padding: 12px 16px;
-            border-radius: 16px;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+            padding: 8px 14px;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
             display: flex;
             align-items: center;
-            gap: 12px;
+            gap: 10px;
             transition: all 0.3s ease;
             border: 2px solid var(--border-color);
             cursor: pointer;
-            min-width: 180px;
+            min-width: 160px;
         }
         
         .connection-badge:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 25px rgba(0, 0, 0, 0.5);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+            border-color: var(--accent-cyan);
         }
         
         .connection-badge.authenticated {
@@ -113,9 +110,9 @@
         }
         
         .badge-avatar {
-            width: 36px;
-            height: 36px;
-            border-radius: 10px;
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
             border: 2px solid var(--accent-cyan);
             object-fit: cover;
         }
@@ -235,7 +232,7 @@
             border-bottom: 1px solid var(--border-color);
             position: sticky;
             top: 0;
-            z-index: 100;
+            z-index: 150;
         }
 
         .header-left {
@@ -773,6 +770,35 @@
             display: flex;
             align-items: center;
             gap: 8px;
+            cursor: pointer;
+            user-select: none;
+            transition: color 0.2s;
+        }
+        
+        .sidebar-title:hover {
+            color: var(--accent-cyan);
+        }
+        
+        .sidebar-title.collapsible::after {
+            content: '▼';
+            margin-left: auto;
+            font-size: 0.7rem;
+            transition: transform 0.3s;
+        }
+        
+        .sidebar-title.collapsible.collapsed::after {
+            transform: rotate(-90deg);
+        }
+        
+        .sidebar-content {
+            transition: max-height 0.3s ease, opacity 0.3s ease;
+            overflow: hidden;
+        }
+        
+        .sidebar-content.collapsed {
+            max-height: 0;
+            opacity: 0;
+            margin-bottom: 0;
         }
 
         /* Workflow Guide */
@@ -1172,51 +1198,6 @@
     </style>
 </head>
 <body>
-    <!-- ═══════════════════════════════════════════════════════════════════
-         FIXED CONNECTION BADGE
-         ═══════════════════════════════════════════════════════════════════ -->
-    <div class="connection-badge disconnected" id="connection-badge" onclick="toggleBadgePanel()">
-        <img class="badge-avatar" id="badge-avatar" src="https://robohash.org/anonymous?set=set4&size=36x36" alt="">
-        <div class="badge-info">
-            <span class="badge-status" id="badge-status">Non connecté</span>
-            <span class="badge-name" id="badge-name">Cliquez pour connecter</span>
-        </div>
-        <div class="badge-actions">
-            <button class="badge-btn primary" id="badge-connect-btn" onclick="event.stopPropagation(); connectNostr()">🔑</button>
-        </div>
-        
-        <!-- Dropdown Panel -->
-        <div class="badge-panel" id="badge-panel" onclick="event.stopPropagation()">
-            <div class="panel-row" id="panel-pubkey-row" style="display: none;">
-                <span class="panel-row-icon">🔑</span>
-                <div class="panel-row-content">
-                    <div class="panel-row-label">Public Key</div>
-                    <div class="panel-row-value" id="panel-pubkey">...</div>
-                </div>
-            </div>
-            <div class="panel-row" id="panel-udrive-row" style="display: none;">
-                <span class="panel-row-icon">📁</span>
-                <div class="panel-row-content">
-                    <div class="panel-row-label">uDRIVE</div>
-                    <div class="panel-row-value"><a href="#" id="panel-udrive-link" target="_blank">Ouvrir le stockage</a></div>
-                </div>
-            </div>
-            <div class="panel-row" id="panel-wallet-row" style="display: none;">
-                <span class="panel-row-icon">💰</span>
-                <div class="panel-row-content">
-                    <div class="panel-row-label">Wallet G1</div>
-                    <div class="panel-row-value" id="panel-wallet">...</div>
-                </div>
-            </div>
-            <div class="panel-row" id="panel-auth-row">
-                <span class="panel-row-icon" id="panel-auth-icon">⚠️</span>
-                <div class="panel-row-content">
-                    <div class="panel-row-label">Authentification NIP-42</div>
-                    <div class="panel-row-value" id="panel-auth-status">Non authentifié</div>
-                </div>
-            </div>
-        </div>
-    </div>
 
     <!-- ═══════════════════════════════════════════════════════════════════
          HEADER
@@ -1234,13 +1215,49 @@
             </div>
         </div>
         <div class="header-actions">
-            <div class="connection-status">
-                <span class="status-dot" id="connection-dot"></span>
-                <span id="connection-text">Non connecté</span>
+            <!-- Connection Badge in Header -->
+            <div class="connection-badge disconnected" id="connection-badge" onclick="toggleBadgePanel()">
+                <img class="badge-avatar" id="badge-avatar" src="https://robohash.org/anonymous?set=set4&size=32x32" alt="">
+                <div class="badge-info">
+                    <span class="badge-status" id="badge-status">Non connecté</span>
+                    <span class="badge-name" id="badge-name">Cliquez pour connecter</span>
+                </div>
+                <div class="badge-actions">
+                    <button class="badge-btn primary" id="badge-connect-btn" onclick="event.stopPropagation(); connectNostr()">🔑</button>
+                </div>
+                
+                <!-- Dropdown Panel -->
+                <div class="badge-panel" id="badge-panel" onclick="event.stopPropagation()">
+                    <div class="panel-row" id="panel-pubkey-row" style="display: none;">
+                        <span class="panel-row-icon">🔑</span>
+                        <div class="panel-row-content">
+                            <div class="panel-row-label">Public Key</div>
+                            <div class="panel-row-value" id="panel-pubkey">...</div>
+                        </div>
+                    </div>
+                    <div class="panel-row" id="panel-udrive-row" style="display: none;">
+                        <span class="panel-row-icon">📁</span>
+                        <div class="panel-row-content">
+                            <div class="panel-row-label">uDRIVE</div>
+                            <div class="panel-row-value"><a href="#" id="panel-udrive-link" target="_blank">Ouvrir le stockage</a></div>
+                        </div>
+                    </div>
+                    <div class="panel-row" id="panel-wallet-row" style="display: none;">
+                        <span class="panel-row-icon">💰</span>
+                        <div class="panel-row-content">
+                            <div class="panel-row-label">Wallet G1</div>
+                            <div class="panel-row-value" id="panel-wallet">...</div>
+                        </div>
+                    </div>
+                    <div class="panel-row" id="panel-auth-row">
+                        <span class="panel-row-icon" id="panel-auth-icon">⚠️</span>
+                        <div class="panel-row-content">
+                            <div class="panel-row-label">Authentification NIP-42</div>
+                            <div class="panel-row-value" id="panel-auth-status">Non authentifié</div>
+                        </div>
+                    </div>
+                </div>
             </div>
-            <button class="btn btn-secondary" id="btn-connect" onclick="connectNostr()">
-                🔑 Connexion
-            </button>
             <button class="btn btn-secondary" id="btn-load" onclick="openLoadModal()">
                 📂 Charger
             </button>
@@ -1333,8 +1350,8 @@
         <aside class="editor-sidebar">
             <!-- Workflow Guide -->
             <section class="sidebar-section">
-                <h3 class="sidebar-title">📋 Workflow Collaboratif</h3>
-                <div class="workflow-steps">
+                <h3 class="sidebar-title collapsible" onclick="toggleWorkflowSection()">📋 Workflow Collaboratif</h3>
+                <div class="sidebar-content workflow-steps" id="workflow-content">
                     <div class="workflow-step">
                         <div class="step-number" id="step-1">1</div>
                         <div class="step-content">
@@ -1363,6 +1380,7 @@
                             <p>La communauté valide ✅, rejette ❌ ou fork 🔀</p>
                         </div>
                     </div>
+                </div>
                 </div>
             </section>
 
@@ -1572,6 +1590,9 @@
             
             // Setup toolbar
             setupToolbar();
+            
+            // Initialize connection status monitoring
+            initConnectionMonitoring();
             
             // Auto-connect to relay if document ID is provided (for read-only viewing)
             if (window.appState.pendingDocId) {
@@ -2082,6 +2103,16 @@ Votez en envoyant des Ẑen avec le tag vote sur l'interface crowdfunding !
             panel.classList.toggle('show');
         };
         
+        // Toggle workflow section
+        window.toggleWorkflowSection = function() {
+            const title = document.querySelector('.sidebar-title.collapsible');
+            const content = document.getElementById('workflow-content');
+            if (title && content) {
+                title.classList.toggle('collapsed');
+                content.classList.toggle('collapsed');
+            }
+        };
+        
         // Close badge panel when clicking outside
         document.addEventListener('click', (e) => {
             const badge = document.getElementById('connection-badge');
@@ -2279,13 +2310,7 @@ Votez en envoyant des Ẑen avec le tag vote sur l'interface crowdfunding !
                     window.appState.userNpub = pubkey.substring(0, 8) + '...' + pubkey.substring(pubkey.length - 4);
                 }
                 
-                // Update UI (legacy header)
-                document.getElementById('connection-dot').classList.add('connected');
-                document.getElementById('connection-text').textContent = 'Connecté';
-                document.getElementById('btn-connect').textContent = '✅ ' + window.appState.userNpub.substring(0, 12) + '...';
-                document.getElementById('btn-connect').disabled = true;
-                document.getElementById('btn-publish').disabled = false;
-                
+                // Update author info
                 document.getElementById('author-name').textContent = window.appState.userNpub.substring(0, 16) + '...';
                 document.getElementById('author-avatar').src = `https://robohash.org/${pubkey}?set=set4&size=24x24`;
                 
@@ -2299,8 +2324,8 @@ Votez en envoyant des Ẑen avec le tag vote sur l'interface crowdfunding !
                 // Fetch user profile for uDRIVE info
                 const profile = await fetchUserProfile(pubkey);
                 
-                // Update fixed badge
-                updateConnectionBadge('connected-not-auth', profile);
+                // Sync connection status (updates both badge and header)
+                syncConnectionStatus();
                 
                 // Load UMAP documents
                 await loadUMAPDocuments();
@@ -2314,7 +2339,21 @@ Votez en envoyant des Ẑen avec le tag vote sur l'interface crowdfunding !
         };
 
         async function connectRelay() {
-            // Use common.js connectToRelay if available
+            // Use common.js ensureRelayConnection if available (preferred)
+            if (typeof ensureRelayConnection === 'function') {
+                try {
+                    await ensureRelayConnection({ silent: true, forceAuth: false, maxWaitSeconds: 10 });
+                    // common.js manages relay connection via RelayManager
+                    console.log('✅ Connected to relay via common.js ensureRelayConnection');
+                    // Update UI to reflect real connection state
+                    syncConnectionStatus();
+                    return;
+                } catch (e) {
+                    console.warn('common.js ensureRelayConnection failed:', e);
+                }
+            }
+            
+            // Fallback: use connectToRelay if available
             if (typeof connectToRelay === 'function') {
                 try {
                     await connectToRelay();
@@ -2322,7 +2361,9 @@ Votez en envoyant des Ẑen avec le tag vote sur l'interface crowdfunding !
                     if (window.nostrRelay) {
                         window.appState.relay = window.nostrRelay;
                         window.appState.relayUrls = window.DEFAULT_RELAYS || ['wss://relay.copylaradio.com'];
-                        console.log('✅ Connected to relay via common.js');
+                        console.log('✅ Connected to relay via common.js connectToRelay');
+                        // Update UI to reflect real connection state
+                        syncConnectionStatus();
                         return;
                     }
                 } catch (e) {
@@ -2339,6 +2380,8 @@ Votez en envoyant des Ẑen avec le tag vote sur l'interface crowdfunding !
                     if (window.NostrTools && window.NostrTools.Relay) {
                         window.appState.relay = await window.NostrTools.Relay.connect(relayUrl);
                         console.log('✅ Connected to relay:', relayUrl);
+                        // Update UI to reflect real connection state
+                        syncConnectionStatus();
                         return;
                     }
                 } catch (error) {
@@ -2347,6 +2390,105 @@ Votez en envoyant des Ẑen avec le tag vote sur l'interface crowdfunding !
             }
             
             console.error('Failed to connect to any relay');
+            // Update UI to reflect connection failure
+            syncConnectionStatus();
+        }
+        
+        // Initialize connection status monitoring
+        function initConnectionMonitoring() {
+            // Initial sync
+            syncConnectionStatus();
+            
+            // Periodic sync every 2 seconds to ensure UI reflects truth
+            setInterval(() => {
+                syncConnectionStatus();
+            }, 2000);
+            
+            // Listen to common.js relay events if available
+            if (typeof getRelayManager === 'function') {
+                const relayManager = getRelayManager();
+                if (relayManager) {
+                    // Listen to connection state changes
+                    if (typeof relayManager.on === 'function') {
+                        relayManager.on('connect', () => {
+                            console.log('[Connection Monitor] Relay connected');
+                            syncConnectionStatus();
+                        });
+                        relayManager.on('disconnect', () => {
+                            console.log('[Connection Monitor] Relay disconnected');
+                            syncConnectionStatus();
+                        });
+                    }
+                }
+            } else if (window.relayManager && typeof window.relayManager.on === 'function') {
+                window.relayManager.on('connect', () => {
+                    console.log('[Connection Monitor] Relay connected');
+                    syncConnectionStatus();
+                });
+                window.relayManager.on('disconnect', () => {
+                    console.log('[Connection Monitor] Relay disconnected');
+                    syncConnectionStatus();
+                });
+            }
+            
+            // Also listen to window events from common.js
+            window.addEventListener('nostr:relay:connected', () => {
+                console.log('[Connection Monitor] Relay connected (event)');
+                syncConnectionStatus();
+            });
+            window.addEventListener('nostr:relay:disconnected', () => {
+                console.log('[Connection Monitor] Relay disconnected (event)');
+                syncConnectionStatus();
+            });
+        }
+        
+        // Synchronize connection status using common.js functions
+        function syncConnectionStatus() {
+            // Use common.js RelayManager if available
+            let isRelayConnected = false;
+            if (typeof getRelayManager === 'function') {
+                const relayManager = getRelayManager();
+                if (relayManager && typeof relayManager.isConnected === 'function') {
+                    isRelayConnected = relayManager.isConnected();
+                }
+            } else if (window.relayManager && typeof window.relayManager.isConnected === 'function') {
+                isRelayConnected = window.relayManager.isConnected();
+            } else {
+                // Fallback: check relay directly
+                const relay = window.appState.relay || window.nostrRelay;
+                isRelayConnected = relay && (
+                    (relay.status === 1) || // WebSocket OPEN
+                    (typeof relay.isConnected === 'function' && relay.isConnected())
+                );
+            }
+            
+            const hasNostrExtension = !!window.nostr;
+            const hasPubkey = !!window.appState.userPubkey;
+            const isAuthenticated = !!window.appState.isAuthenticated;
+            
+            // Determine actual state based on real connection status
+            let actualState = 'disconnected';
+            if (isRelayConnected && hasPubkey && isAuthenticated) {
+                actualState = 'authenticated';
+            } else if (isRelayConnected && hasPubkey) {
+                actualState = 'connected-not-auth';
+            } else if (hasNostrExtension && hasPubkey) {
+                // Has extension but relay not connected yet
+                actualState = 'disconnected';
+            }
+            
+            // Update badge with accurate state
+            if (hasPubkey) {
+                updateConnectionBadge(actualState, window.appState.userProfile);
+            } else {
+                updateConnectionBadge('disconnected', null);
+            }
+            
+            // Update publish button based on connection state
+            const btnPublish = document.getElementById('btn-publish');
+            if (btnPublish) {
+                btnPublish.disabled = !(isRelayConnected && hasPubkey);
+            }
         }
 
         // Helper: Subscribe to relay with both API styles (common.js .sub() and newer .subscribe())

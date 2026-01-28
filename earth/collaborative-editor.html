@@ -12,6 +12,9 @@
     <script src="common.js"></script>
     <!-- Markdown parser (local) -->
     <script src="marked.min.js"></script>
+    <!-- Leaflet CSS & JS (for coordinate selector map) -->
+    <link rel="stylesheet" href="leaflet.css" />
+    <script src="leaflet.js"></script>
     
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -1110,6 +1113,38 @@
         }
 
         /* ═══════════════════════════════════════════════════════════════════
+           COORDINATE SELECTOR MAP STYLES
+           ═══════════════════════════════════════════════════════════════════ */
+        #coordinateMap {
+            background: var(--bg-primary);
+        }
+        
+        /* Leaflet map dark theme adjustments */
+        #coordinateMap .leaflet-container {
+            background: var(--bg-primary);
+        }
+        
+        #coordinateMap .leaflet-popup-content-wrapper {
+            background: var(--bg-card);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+        }
+        
+        #coordinateMap .leaflet-control {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+        }
+        
+        #coordinateMap .leaflet-control a {
+            color: var(--text-primary);
+            background: var(--bg-card);
+        }
+        
+        #coordinateMap .leaflet-control a:hover {
+            background: rgba(255,255,255,0.1);
+        }
+
+        /* ═══════════════════════════════════════════════════════════════════
            NOTIFICATIONS
            ═══════════════════════════════════════════════════════════════════ */
         .notification-container {
@@ -1462,24 +1497,59 @@
          UMAP SELECTION MODAL
          ═══════════════════════════════════════════════════════════════════ -->
     <div class="modal-overlay" id="umap-select-modal">
-        <div class="modal-content">
+        <div class="modal-content" style="max-width: 600px;">
             <div class="modal-header">
                 <h2 class="modal-title">🗺️ Sélectionner une UMAP</h2>
                 <button class="modal-close" onclick="closeUmapSelectModal()">&times;</button>
             </div>
-            <div class="form-group">
-                <label class="form-label">Latitude</label>
-                <input type="number" class="form-input" id="umap-lat-input" step="0.0001" placeholder="43.60">
+            
+            <!-- Map Container (shown when coordinates are NOT in URL) -->
+            <div id="umap-coordinate-selector" style="display: none;">
+                <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 20px;">
+                    Sélectionnez la localisation du projet (précision 0.01° = ~1.2 km²)
+                </p>
+                
+                <!-- Map Container -->
+                <div id="coordinateMap" style="width: 100%; height: 400px; border-radius: 12px; margin-bottom: 20px; border: 1px solid var(--border-color);"></div>
+                
+                <!-- Coordinate Display -->
+                <div style="background: rgba(34, 197, 94, 0.1); border: 1px solid var(--accent-emerald); border-radius: 8px; padding: 15px; margin-bottom: 20px;">
+                    <div style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap;">
+                        <div style="flex: 1; min-width: 200px;">
+                            <label style="display: block; color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 5px;">Latitude (UMAP)</label>
+                            <input type="number" id="umap-lat-input" step="0.01" min="-90" max="90" 
+                                   class="form-input" style="font-family: monospace; font-size: 1rem;"
+                                   onchange="updateMapFromInputs()">
+                        </div>
+                        <div style="flex: 1; min-width: 200px;">
+                            <label style="display: block; color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 5px;">Longitude (UMAP)</label>
+                            <input type="number" id="umap-lon-input" step="0.01" min="-180" max="180"
+                                   class="form-input" style="font-family: monospace; font-size: 1rem;"
+                                   onchange="updateMapFromInputs()">
+                        </div>
+                    </div>
+                    <div style="margin-top: 10px; font-size: 0.8rem; color: var(--text-secondary);">
+                        <strong>UMAP ID:</strong> <code id="umapIdDisplay" style="color: var(--accent-cyan);">UMAP_0.00_0.00</code>
+                    </div>
+                </div>
+                
+                <!-- Current Location Button -->
+                <div style="margin-bottom: 20px;">
+                    <button class="btn btn-secondary" onclick="useCurrentLocation()" style="width: 100%; font-size: 0.85rem;">
+                        📍 Utiliser ma position actuelle
+                    </button>
+                </div>
             </div>
-            <div class="form-group">
-                <label class="form-label">Longitude</label>
-                <input type="number" class="form-input" id="umap-lon-input" step="0.0001" placeholder="1.44">
+            
+            <!-- Simple Inputs (shown when coordinates ARE in URL, only for pubkey) -->
+            <div id="umap-pubkey-only" style="display: none;">
+                <div class="form-group">
+                    <label class="form-label">Clé publique UMAP (hex, optionnel)</label>
+                    <input type="text" class="form-input" id="umap-pubkey-input" placeholder="ab12cd34... (64 caractères hex)">
+                    <small style="color: var(--text-muted); font-size: 0.8rem;">Si non fournie, sera recherchée automatiquement</small>
+                </div>
             </div>
-            <div class="form-group">
-                <label class="form-label">Clé publique UMAP (hex, optionnel)</label>
-                <input type="text" class="form-input" id="umap-pubkey-input" placeholder="ab12cd34... (64 caractères hex)">
-                <small style="color: var(--text-muted); font-size: 0.8rem;">Si non fournie, sera recherchée automatiquement</small>
-            </div>
+            
             <button class="btn btn-primary" onclick="confirmUmapSelection()" style="width: 100%;">
                 ✅ Confirmer l'UMAP
             </button>
@@ -1605,8 +1675,9 @@
                 console.warn('   - lon:', rawLon || 'MISSING');
                 console.warn('   - umap:', rawUmap ? `${rawUmap.substring(0,8)}... (${rawUmap.length} chars)` : 'MISSING');
                 
-                // Show UMAP selection modal
+                // Show UMAP selection modal with appropriate content
                 setTimeout(() => {
+                    setupUmapSelectModal();
                     document.getElementById('umap-select-modal').classList.add('active');
                     document.getElementById('btn-publish').disabled = true;
                     document.getElementById('btn-publish').title = 'Publication désactivée: UMAP non configurée';
@@ -2797,26 +2868,51 @@ Votez en envoyant des Ẑen avec le tag vote sur l'interface crowdfunding !
         
         // UMAP Selection Modal Functions
         window.confirmUmapSelection = function() {
-            const lat = document.getElementById('umap-lat-input').value.trim();
-            const lon = document.getElementById('umap-lon-input').value.trim();
-            const umapPubkey = document.getElementById('umap-pubkey-input').value.trim();
+            const params = new URLSearchParams(window.location.search);
+            const rawLat = params.get('lat');
+            const rawLon = params.get('lon');
+            const hasValidCoords = rawLat && rawLon && rawLat !== '_LAT_' && rawLon !== '_LON_';
             
-            if (!lat || !lon) {
-                showNotification('Veuillez saisir les coordonnées GPS', 'error');
-                return;
+            let lat, lon;
+            
+            if (hasValidCoords) {
+                // Coordinates are already in URL - use them
+                lat = rawLat;
+                lon = rawLon;
+            } else {
+                // Get coordinates from map/inputs
+                const latInput = document.getElementById('umap-lat-input');
+                const lonInput = document.getElementById('umap-lon-input');
+                
+                if (latInput && lonInput) {
+                    lat = latInput.value.trim();
+                    lon = lonInput.value.trim();
+                } else {
+                    // Fallback to selected coordinates from map
+                    lat = selectedCoordinates.lat.toString();
+                    lon = selectedCoordinates.lon.toString();
+                }
+                
+                if (!lat || !lon) {
+                    showNotification('Veuillez sélectionner les coordonnées GPS', 'error');
+                    return;
+                }
+                
+                // Validate coordinates
+                const latNum = parseFloat(lat);
+                const lonNum = parseFloat(lon);
+                if (isNaN(latNum) || latNum < -90 || latNum > 90) {
+                    showNotification('Latitude invalide (doit être entre -90 et 90)', 'error');
+                    return;
+                }
+                if (isNaN(lonNum) || lonNum < -180 || lonNum > 180) {
+                    showNotification('Longitude invalide (doit être entre -180 et 180)', 'error');
+                    return;
+                }
             }
             
-            // Validate coordinates
-            const latNum = parseFloat(lat);
-            const lonNum = parseFloat(lon);
-            if (isNaN(latNum) || latNum < -90 || latNum > 90) {
-                showNotification('Latitude invalide (doit être entre -90 et 90)', 'error');
-                return;
-            }
-            if (isNaN(lonNum) || lonNum < -180 || lonNum > 180) {
-                showNotification('Longitude invalide (doit être entre -180 et 180)', 'error');
-                return;
-            }
+            const umapPubkeyInput = document.getElementById('umap-pubkey-input');
+            const umapPubkey = umapPubkeyInput ? umapPubkeyInput.value.trim() : '';
             
             // Update app state
             window.appState.umapLat = lat;
@@ -2826,14 +2922,21 @@ Votez en envoyant des Ẑen avec le tag vote sur l'interface crowdfunding !
             }
             window.appState.isUmapConfigured = true;
             
-            // Update URL without reload
-            const url = new URL(window.location);
-            url.searchParams.set('lat', lat);
-            url.searchParams.set('lon', lon);
-            if (umapPubkey) {
+            // Update URL without reload (only if coordinates weren't already there)
+            if (!hasValidCoords) {
+                const url = new URL(window.location);
+                url.searchParams.set('lat', lat);
+                url.searchParams.set('lon', lon);
+                if (umapPubkey) {
+                    url.searchParams.set('umap', umapPubkey);
+                }
+                window.history.replaceState({}, '', url);
+            } else if (umapPubkey) {
+                // Only update umap param if coordinates were already there
+                const url = new URL(window.location);
                 url.searchParams.set('umap', umapPubkey);
+                window.history.replaceState({}, '', url);
             }
-            window.history.replaceState({}, '', url);
             
             // Update UI
             document.getElementById('umap-coords').textContent = `UMAP ${lat}, ${lon}`;
@@ -2849,6 +2952,144 @@ Votez en envoyant des Ẑen avec le tag vote sur l'interface crowdfunding !
         
         window.closeUmapSelectModal = function() {
             document.getElementById('umap-select-modal').classList.remove('active');
+        };
+        
+        // ═══════════════════════════════════════════════════════════════════
+        // COORDINATE MAP FUNCTIONS
+        // ═══════════════════════════════════════════════════════════════════
+        let coordinateMap = null;
+        let coordinateMarker = null;
+        let selectedCoordinates = { lat: 43.60, lon: 1.44 }; // Default: Toulouse
+        
+        function setupUmapSelectModal() {
+            const params = new URLSearchParams(window.location.search);
+            const rawLat = params.get('lat');
+            const rawLon = params.get('lon');
+            const hasValidCoords = rawLat && rawLon && rawLat !== '_LAT_' && rawLon !== '_LON_';
+            
+            const coordinateSelector = document.getElementById('umap-coordinate-selector');
+            const pubkeyOnly = document.getElementById('umap-pubkey-only');
+            
+            if (hasValidCoords) {
+                // Coordinates are in URL - only show pubkey input
+                coordinateSelector.style.display = 'none';
+                pubkeyOnly.style.display = 'block';
+            } else {
+                // No coordinates in URL - show map selector
+                coordinateSelector.style.display = 'block';
+                pubkeyOnly.style.display = 'none';
+                
+                // Initialize map if not already done
+                if (!coordinateMap) {
+                    initCoordinateMap();
+                } else {
+                    // Update map with current selection
+                    updateMapMarker(selectedCoordinates.lat, selectedCoordinates.lon);
+                }
+            }
+        }
+        
+        function initCoordinateMap() {
+            const mapContainer = document.getElementById('coordinateMap');
+            if (!mapContainer) return;
+            
+            // Initialize Leaflet map
+            coordinateMap = L.map('coordinateMap', {
+                center: [selectedCoordinates.lat, selectedCoordinates.lon],
+                zoom: 13,
+                zoomControl: true
+            });
+            
+            // Add OpenStreetMap tiles
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors',
+                maxZoom: 19
+            }).addTo(coordinateMap);
+            
+            // Add marker
+            coordinateMarker = L.marker([selectedCoordinates.lat, selectedCoordinates.lon], {
+                draggable: true
+            }).addTo(coordinateMap);
+            
+            // Update coordinates when marker is dragged
+            coordinateMarker.on('dragend', function(e) {
+                const pos = e.target.getLatLng();
+                updateCoordinatesFromMap(pos.lat, pos.lng);
+            });
+            
+            // Update coordinates when map is clicked
+            coordinateMap.on('click', function(e) {
+                updateCoordinatesFromMap(e.latlng.lat, e.latlng.lng);
+                coordinateMarker.setLatLng([e.latlng.lat, e.latlng.lng]);
+            });
+            
+            // Initialize inputs
+            updateInputs(selectedCoordinates.lat, selectedCoordinates.lon);
+        }
+        
+        function updateCoordinatesFromMap(lat, lon) {
+            // Round to UMAP precision (0.01°)
+            selectedCoordinates.lat = Math.floor(lat * 100) / 100;
+            selectedCoordinates.lon = Math.floor(lon * 100) / 100;
+            updateInputs(selectedCoordinates.lat, selectedCoordinates.lon);
+        }
+        
+        function updateInputs(lat, lon) {
+            const latInput = document.getElementById('umap-lat-input');
+            const lonInput = document.getElementById('umap-lon-input');
+            const umapIdDisplay = document.getElementById('umapIdDisplay');
+            
+            if (latInput) latInput.value = lat.toFixed(2);
+            if (lonInput) lonInput.value = lon.toFixed(2);
+            if (umapIdDisplay) umapIdDisplay.textContent = `UMAP_${lat.toFixed(2)}_${lon.toFixed(2)}`;
+        }
+        
+        window.updateMapFromInputs = function() {
+            const latInput = document.getElementById('umap-lat-input');
+            const lonInput = document.getElementById('umap-lon-input');
+            
+            if (!latInput || !lonInput) return;
+            
+            const lat = parseFloat(latInput.value);
+            const lon = parseFloat(lonInput.value);
+            
+            if (!isNaN(lat) && !isNaN(lon) && lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180) {
+                // Round to UMAP precision
+                selectedCoordinates.lat = Math.floor(lat * 100) / 100;
+                selectedCoordinates.lon = Math.floor(lon * 100) / 100;
+                updateMapMarker(selectedCoordinates.lat, selectedCoordinates.lon);
+                updateInputs(selectedCoordinates.lat, selectedCoordinates.lon);
+            }
+        };
+        
+        function updateMapMarker(lat, lon) {
+            if (coordinateMap && coordinateMarker) {
+                coordinateMarker.setLatLng([lat, lon]);
+                coordinateMap.setView([lat, lon], coordinateMap.getZoom());
+            }
+        }
+        
+        window.setQuickLocation = function(lat, lon) {
+            selectedCoordinates.lat = Math.floor(lat * 100) / 100;
+            selectedCoordinates.lon = Math.floor(lon * 100) / 100;
+            updateInputs(selectedCoordinates.lat, selectedCoordinates.lon);
+            updateMapMarker(selectedCoordinates.lat, selectedCoordinates.lon);
+        };
+        
+        window.useCurrentLocation = function() {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    function(position) {
+                        setQuickLocation(position.coords.latitude, position.coords.longitude);
+                        showNotification('📍 Position actuelle chargée', 'success');
+                    },
+                    function(error) {
+                        showNotification('❌ Impossible d\'obtenir votre position', 'error');
+                    }
+                );
+            } else {
+                showNotification('❌ Géolocalisation non supportée', 'error');
+            }
         };
 
         window.submitProposal = async function() {

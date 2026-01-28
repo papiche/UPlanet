@@ -475,6 +475,10 @@
             position: relative;
             z-index: 1;
         }
+        
+        .editor-container.has-sidebar-toggle {
+            position: relative;
+        }
 
         /* ═══════════════════════════════════════════════════════════════════
            EDITOR MAIN
@@ -757,6 +761,49 @@
             border-left: 1px solid var(--border-color);
             padding: 24px;
             overflow-y: auto;
+            transition: width 0.3s ease, padding 0.3s ease;
+            position: relative;
+        }
+        
+        .editor-sidebar.collapsed {
+            width: 0;
+            padding: 0;
+            overflow: hidden;
+            border-left: none;
+        }
+        
+        .sidebar-toggle-btn {
+            position: fixed;
+            right: 340px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 40px;
+            height: 80px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-right: none;
+            border-radius: 12px 0 0 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            z-index: 100;
+            transition: right 0.3s ease;
+            color: var(--text-secondary);
+            font-size: 1.2rem;
+            box-shadow: -2px 0 8px rgba(0, 0, 0, 0.2);
+        }
+        
+        .sidebar-toggle-btn:hover {
+            background: var(--bg-card-hover);
+            color: var(--accent-cyan);
+        }
+        
+        
+        @media (max-width: 900px) {
+            .sidebar-toggle-btn {
+                display: none;
+            }
         }
 
         .sidebar-section {
@@ -1239,9 +1286,6 @@
          ═══════════════════════════════════════════════════════════════════ -->
     <header class="editor-header">
         <div class="header-left">
-            <a href="plantnet.html" class="back-link">
-                ← Retour
-            </a>
             <input type="text" class="editor-title-input" id="doc-title" 
                    placeholder="Titre du document..." value="">
             <div class="umap-badge" id="umap-badge">
@@ -1382,7 +1426,7 @@
         </main>
 
         <!-- Sidebar -->
-        <aside class="editor-sidebar">
+        <aside class="editor-sidebar" id="editor-sidebar">
             <!-- Workflow Guide -->
             <section class="sidebar-section">
                 <h3 class="sidebar-title collapsible" onclick="toggleWorkflowSection()">📋 Workflow Collaboratif</h3>
@@ -1466,6 +1510,11 @@
                 </div>
             </section>
         </aside>
+        
+        <!-- Sidebar Toggle Button -->
+        <button class="sidebar-toggle-btn" id="sidebar-toggle-btn" onclick="toggleSidebar()" title="Replier/Déplier la sidebar">
+            ◀
+        </button>
     </div>
 
     <!-- ═══════════════════════════════════════════════════════════════════
@@ -2247,6 +2296,46 @@ Votez en envoyant des Ẑen avec le tag vote sur l'interface crowdfunding !
                 content.classList.toggle('collapsed');
             }
         };
+        
+        // Toggle sidebar (horizontal collapse)
+        window.toggleSidebar = function() {
+            const sidebar = document.getElementById('editor-sidebar');
+            const toggleBtn = document.getElementById('sidebar-toggle-btn');
+            if (sidebar && toggleBtn) {
+                const isCollapsed = sidebar.classList.contains('collapsed');
+                sidebar.classList.toggle('collapsed');
+                toggleBtn.textContent = !isCollapsed ? '▶' : '◀';
+                updateToggleButtonPosition();
+            }
+        };
+        
+        // Update toggle button position based on sidebar state
+        function updateToggleButtonPosition() {
+            const sidebar = document.getElementById('editor-sidebar');
+            const toggleBtn = document.getElementById('sidebar-toggle-btn');
+            
+            if (sidebar && toggleBtn) {
+                const isCollapsed = sidebar.classList.contains('collapsed');
+                
+                if (isCollapsed) {
+                    toggleBtn.style.right = '0px';
+                } else {
+                    const sidebarWidth = window.innerWidth <= 1200 ? 300 : 340;
+                    toggleBtn.style.right = `${sidebarWidth}px`;
+                }
+            }
+        }
+        
+        // Initialize toggle button position on load and resize
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', () => {
+                updateToggleButtonPosition();
+                window.addEventListener('resize', updateToggleButtonPosition);
+            });
+        } else {
+            updateToggleButtonPosition();
+            window.addEventListener('resize', updateToggleButtonPosition);
+        }
         
         // Close badge panel when clicking outside
         document.addEventListener('click', (e) => {

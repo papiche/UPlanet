@@ -1837,6 +1837,30 @@
                     updatePreview();
                 }
             });
+            
+            // Paste: upload image and insert link only (no base64 in .md body)
+            editor.addEventListener('paste', (e) => {
+                const items = e.clipboardData?.items;
+                if (!items) return;
+                const file = Array.from(items).find(item => item.kind === 'file' && item.type.startsWith('image/'));
+                if (!file) return;
+                const blob = file.getAsFile();
+                if (!blob) return;
+                e.preventDefault();
+                const f = new File([blob], blob.name || 'pasted-image.png', { type: blob.type });
+                handleImageUpload({ target: { files: [f], value: '' } });
+            });
+            
+            // Drop: upload image and insert link only
+            editor.addEventListener('dragover', (e) => {
+                if (e.dataTransfer?.types?.includes('Files')) e.preventDefault();
+            });
+            editor.addEventListener('drop', (e) => {
+                const file = e.dataTransfer?.files?.[0];
+                if (!file || !file.type.startsWith('image/')) return;
+                e.preventDefault();
+                handleImageUpload({ target: { files: [file], value: '' } });
+            });
         }
 
         function updatePreview() {
@@ -4058,17 +4082,16 @@ Votez en envoyant des Ẑen avec le tag vote sur l'interface crowdfunding !
                 return;
             }
             
-            // Check if uDRIVE is available
+            // Check if uDRIVE is available - only links are inserted in .md, no base64
             if (!window.appState.userProfile?.ipns_vault) {
-                showNotification('uDRIVE non disponible - image convertie en base64', 'info');
-                // Fallback to base64 embedding
-                await insertImageAsBase64(file);
+                showNotification('uDRIVE not available - add ipns_vault to your profile to upload images', 'error');
+                event.target.value = '';
                 return;
             }
             
-            // Upload to uDRIVE
+            // Upload to uDRIVE and insert link only (like UPassport dev.html)
             try {
-                showNotification('📤 Upload en cours...', 'info');
+                showNotification('📤 Uploading...', 'info');
                 
                 const ipfsGw = window.appState.userProfile.ipfs_gw || 'https://ipfs.copylaradio.com';
                 const uploadUrl = `${ipfsGw}/api/v0/add?pin=true`;
@@ -4076,7 +4099,6 @@ Votez en envoyant des Ẑen avec le tag vote sur l'interface crowdfunding !
                 const formData = new FormData();
                 formData.append('file', file);
                 
-                // Add NIP-42 auth header if available
                 const headers = {};
                 if (window.appState.nip42Auth) {
                     headers['X-Nostr-Auth'] = JSON.stringify(window.appState.nip42Auth);
@@ -4092,18 +4114,16 @@ Votez en envoyant des Ẑen avec le tag vote sur l'interface crowdfunding !
                     const result = await response.json();
                     const imageUrl = `${ipfsGw}/ipfs/${result.Hash}`;
                     insertImageAtCursor(file.name, imageUrl);
-                    showNotification('✅ Image uploadée sur IPFS!', 'success');
+                    showNotification('✅ Image uploaded, link inserted', 'success');
                 } else {
                     throw new Error(`Upload failed: ${response.statusText}`);
                 }
                 
             } catch (error) {
                 console.error('Upload error:', error);
-                showNotification('Erreur upload - fallback base64', 'info');
-                await insertImageAsBase64(file);
+                showNotification('Upload failed - check NIP-42 auth and uDRIVE', 'error');
             }
             
-            // Reset input
             event.target.value = '';
         };
         
@@ -4122,21 +4142,6 @@ Votez en envoyant des Ẑen avec le tag vote sur l'interface crowdfunding !
             window.appState.markdown = editor.value;
             updatePreview();
             saveDraft();
-        }
-        
-        // Fallback: Convert image to base64 and embed
-        async function insertImageAsBase64(file) {
-            return new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = (e) => {
-                    const base64 = e.target.result;
-                    insertImageAtCursor(file.name, base64);
-                    showNotification('Image intégrée (base64)', 'success');
-                    resolve();
-                };
-                reader.onerror = reject;
-                reader.readAsDataURL(file);
-            });
         }
         
         // ═══════════════════════════════════════════════════════════════════

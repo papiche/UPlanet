@@ -1548,15 +1548,15 @@
     <div class="modal-overlay" id="umap-select-modal">
         <div class="modal-content" style="max-width: 600px;">
             <div class="modal-header">
-                <h2 class="modal-title">🗺️ Sélectionner une UMAP</h2>
+                <h2 class="modal-title">🗺️ Choisir les coordonnées UMAP</h2>
                 <button class="modal-close" onclick="closeUmapSelectModal()">&times;</button>
             </div>
             
-            <!-- Map Container (shown when coordinates are NOT in URL) -->
-            <div id="umap-coordinate-selector" style="display: none;">
-                <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 20px;">
-                    Sélectionnez la localisation du projet (précision 0.01° = ~1.2 km²)
-                </p>
+            <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 16px;">
+                Cliquez sur la carte ou déplacez le marqueur (précision 0.01° = ~1.2 km²)
+            </p>
+            
+            <div id="umap-coordinate-selector">
                 
                 <!-- Map Container -->
                 <div id="coordinateMap" style="width: 100%; height: 400px; border-radius: 12px; margin-bottom: 20px; border: 1px solid var(--border-color);"></div>
@@ -1587,15 +1587,6 @@
                     <button class="btn btn-secondary" onclick="useCurrentLocation()" style="width: 100%; font-size: 0.85rem;">
                         📍 Utiliser ma position actuelle
                     </button>
-                </div>
-            </div>
-            
-            <!-- Simple Inputs (shown when coordinates ARE in URL, only for pubkey) -->
-            <div id="umap-pubkey-only" style="display: none;">
-                <div class="form-group">
-                    <label class="form-label">Clé publique UMAP (hex, optionnel)</label>
-                    <input type="text" class="form-input" id="umap-pubkey-input" placeholder="ab12cd34... (64 caractères hex)">
-                    <small style="color: var(--text-muted); font-size: 0.8rem;">Si non fournie, sera recherchée automatiquement</small>
                 </div>
             </div>
             
@@ -1700,31 +1691,37 @@
                 });
             }
             
-            // Parse URL parameters
+            // Parse URL parameters - UMAP = coordinates at 0.01° precision (hex key is internal)
             const params = new URLSearchParams(window.location.search);
             const rawLat = params.get('lat');
             const rawLon = params.get('lon');
             const rawUmap = params.get('umap');
-            
-            // Validate UMAP parameters - CRITICAL for document association
-            window.appState.umapLat = rawLat || null;
-            window.appState.umapLon = rawLon || null;
-            window.appState.umapPubkey = rawUmap || null;  // UMAP pubkey (hex)
+            window.appState.umapPubkey = rawUmap || null;
             window.appState.pendingDocId = params.get('doc') || null;
             
-            // Check if UMAP configuration is valid
-            const hasValidUmap = rawUmap && rawUmap.length >= 32; // hex pubkey should be 64 chars
-            const hasValidCoords = rawLat && rawLon && rawLat !== '_LAT_' && rawLon !== '_LON_';
-            window.appState.isUmapConfigured = hasValidUmap && hasValidCoords;
+            // Valid UMAP coords: lat & lon in URL, parse as numbers, 0.01° precision (no hex required)
+            function parseUmapCoordsFromUrl() {
+                if (!rawLat || !rawLon || rawLat === '_LAT_' || rawLon === '_LON_') return null;
+                const latNum = parseFloat(rawLat);
+                const lonNum = parseFloat(rawLon);
+                if (isNaN(latNum) || isNaN(lonNum) || latNum < -90 || latNum > 90 || lonNum < -180 || lonNum > 180) return null;
+                const lat = Math.round(latNum * 100) / 100;
+                const lon = Math.round(lonNum * 100) / 100;
+                return { lat: lat.toFixed(2), lon: lon.toFixed(2) };
+            }
+            const coords = parseUmapCoordsFromUrl();
+            window.appState.isUmapConfigured = !!coords;
+            if (coords) {
+                window.appState.umapLat = coords.lat;
+                window.appState.umapLon = coords.lon;
+            } else {
+                window.appState.umapLat = null;
+                window.appState.umapLon = null;
+            }
             
-            // Warn if UMAP is not properly configured and show selection modal
+            // Only show "Sélectionner une UMAP" when URL has no valid lat/lon
             if (!window.appState.isUmapConfigured) {
-                console.warn('⚠️ UMAP not properly configured!');
-                console.warn('   - lat:', rawLat || 'MISSING');
-                console.warn('   - lon:', rawLon || 'MISSING');
-                console.warn('   - umap:', rawUmap ? `${rawUmap.substring(0,8)}... (${rawUmap.length} chars)` : 'MISSING');
-                
-                // Show UMAP selection modal with appropriate content
+                console.warn('⚠️ UMAP coordinates missing in URL - will ask user to choose on map');
                 setTimeout(() => {
                     setupUmapSelectModal();
                     document.getElementById('umap-select-modal').classList.add('active');
@@ -1741,12 +1738,11 @@
                     ? `UMAP ${displayLat}, ${displayLon}`
                     : `⚠️ UMAP non configurée`;
             document.getElementById('info-signer').textContent = 
-                window.appState.umapPubkey 
-                    ? `UMAP ${window.appState.umapPubkey.substring(0,8)}...`
+                window.appState.isUmapConfigured 
+                    ? `UMAP ${displayLat}, ${displayLon}`
                     : `⚠️ Non défini`;
             
             console.log('📍 UMAP:', displayLat, displayLon);
-            console.log('🔑 UMAP Pubkey:', window.appState.umapPubkey || 'NOT PROVIDED');
             console.log('✅ UMAP Configured:', window.appState.isUmapConfigured);
             if (window.appState.pendingDocId) {
                 console.log('📄 Document to load:', window.appState.pendingDocId);
@@ -2979,83 +2975,44 @@ Votez en envoyant des Ẑen avec le tag vote sur l'interface crowdfunding !
             document.getElementById('propose-modal').classList.add('active');
         };
         
-        // UMAP Selection Modal Functions
+        // UMAP Selection Modal Functions - user chooses coordinates on map only (no hex key)
         window.confirmUmapSelection = function() {
-            const params = new URLSearchParams(window.location.search);
-            const rawLat = params.get('lat');
-            const rawLon = params.get('lon');
-            const hasValidCoords = rawLat && rawLon && rawLat !== '_LAT_' && rawLon !== '_LON_';
+            const latInput = document.getElementById('umap-lat-input');
+            const lonInput = document.getElementById('umap-lon-input');
+            let lat = (latInput && latInput.value.trim()) || selectedCoordinates.lat.toString();
+            let lon = (lonInput && lonInput.value.trim()) || selectedCoordinates.lon.toString();
             
-            let lat, lon;
-            
-            if (hasValidCoords) {
-                // Coordinates are already in URL - use them
-                lat = rawLat;
-                lon = rawLon;
-            } else {
-                // Get coordinates from map/inputs
-                const latInput = document.getElementById('umap-lat-input');
-                const lonInput = document.getElementById('umap-lon-input');
-                
-                if (latInput && lonInput) {
-                    lat = latInput.value.trim();
-                    lon = lonInput.value.trim();
-                } else {
-                    // Fallback to selected coordinates from map
-                    lat = selectedCoordinates.lat.toString();
-                    lon = selectedCoordinates.lon.toString();
-                }
-                
-                if (!lat || !lon) {
-                    showNotification('Veuillez sélectionner les coordonnées GPS', 'error');
-                    return;
-                }
-                
-                // Validate coordinates
-                const latNum = parseFloat(lat);
-                const lonNum = parseFloat(lon);
-                if (isNaN(latNum) || latNum < -90 || latNum > 90) {
-                    showNotification('Latitude invalide (doit être entre -90 et 90)', 'error');
-                    return;
-                }
-                if (isNaN(lonNum) || lonNum < -180 || lonNum > 180) {
-                    showNotification('Longitude invalide (doit être entre -180 et 180)', 'error');
-                    return;
-                }
+            if (!lat || !lon) {
+                showNotification('Veuillez choisir les coordonnées sur la carte (clic ou glisser le marqueur)', 'error');
+                return;
             }
             
-            const umapPubkeyInput = document.getElementById('umap-pubkey-input');
-            const umapPubkey = umapPubkeyInput ? umapPubkeyInput.value.trim() : '';
+            const latNum = parseFloat(lat);
+            const lonNum = parseFloat(lon);
+            if (isNaN(latNum) || latNum < -90 || latNum > 90) {
+                showNotification('Latitude invalide (doit être entre -90 et 90)', 'error');
+                return;
+            }
+            if (isNaN(lonNum) || lonNum < -180 || lonNum > 180) {
+                showNotification('Longitude invalide (doit être entre -180 et 180)', 'error');
+                return;
+            }
             
-            // Update app state
+            // Round to UMAP precision (0.01°)
+            lat = (Math.round(latNum * 100) / 100).toFixed(2);
+            lon = (Math.round(lonNum * 100) / 100).toFixed(2);
+            
             window.appState.umapLat = lat;
             window.appState.umapLon = lon;
-            if (umapPubkey && umapPubkey.length >= 32) {
-                window.appState.umapPubkey = umapPubkey;
-            }
             window.appState.isUmapConfigured = true;
             
-            // Update URL without reload (only if coordinates weren't already there)
-            if (!hasValidCoords) {
-                const url = new URL(window.location);
-                url.searchParams.set('lat', lat);
-                url.searchParams.set('lon', lon);
-                if (umapPubkey) {
-                    url.searchParams.set('umap', umapPubkey);
-                }
-                window.history.replaceState({}, '', url);
-            } else if (umapPubkey) {
-                // Only update umap param if coordinates were already there
-                const url = new URL(window.location);
-                url.searchParams.set('umap', umapPubkey);
-                window.history.replaceState({}, '', url);
-            }
+            const url = new URL(window.location);
+            url.searchParams.set('lat', lat);
+            url.searchParams.set('lon', lon);
+            window.history.replaceState({}, '', url);
             
-            // Update UI
             document.getElementById('umap-coords').textContent = `UMAP ${lat}, ${lon}`;
-            document.getElementById('info-signer').textContent = umapPubkey 
-                ? `UMAP ${umapPubkey.substring(0,8)}...`
-                : `UMAP ${lat}, ${lon}`;
+            document.getElementById('info-signer').textContent = `UMAP ${lat}, ${lon}`;
             document.getElementById('btn-publish').disabled = false;
             document.getElementById('btn-publish').title = '';
             
@@ -3075,30 +3032,11 @@ Votez en envoyant des Ẑen avec le tag vote sur l'interface crowdfunding !
         let selectedCoordinates = { lat: 43.60, lon: 1.44 }; // Default: Toulouse
         
         function setupUmapSelectModal() {
-            const params = new URLSearchParams(window.location.search);
-            const rawLat = params.get('lat');
-            const rawLon = params.get('lon');
-            const hasValidCoords = rawLat && rawLon && rawLat !== '_LAT_' && rawLon !== '_LON_';
-            
-            const coordinateSelector = document.getElementById('umap-coordinate-selector');
-            const pubkeyOnly = document.getElementById('umap-pubkey-only');
-            
-            if (hasValidCoords) {
-                // Coordinates are in URL - only show pubkey input
-                coordinateSelector.style.display = 'none';
-                pubkeyOnly.style.display = 'block';
+            // Modal is only shown when URL has no lat/lon - show Leaflet map to choose coordinates
+            if (!coordinateMap) {
+                initCoordinateMap();
             } else {
-                // No coordinates in URL - show map selector
-                coordinateSelector.style.display = 'block';
-                pubkeyOnly.style.display = 'none';
-                
-                // Initialize map if not already done
-                if (!coordinateMap) {
-                    initCoordinateMap();
-                } else {
-                    // Update map with current selection
-                    updateMapMarker(selectedCoordinates.lat, selectedCoordinates.lon);
-                }
+                updateMapMarker(selectedCoordinates.lat, selectedCoordinates.lon);
             }
         }
         

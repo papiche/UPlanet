@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login/Pass → Nostr nsec (keygen compatible)</title>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            max-width: 520px;
+            margin: 0 auto;
+            padding: 1rem;
+            background: #1a1a1a;
+            color: #e0e0e0;
+            min-height: 100vh;
+        }
+        h1 { font-size: 1.25rem; margin-bottom: 0.5rem; color: #fff; }
+        .subtitle { font-size: 0.85rem; color: #888; margin-bottom: 1.25rem; }
+        label { display: block; margin-bottom: 0.35rem; font-weight: 600; color: #ccc; }
+        input[type="text"], input[type="password"] {
+            width: 100%;
+            padding: 0.6rem 0.75rem;
+            margin-bottom: 1rem;
+            border: 1px solid #444;
+            border-radius: 6px;
+            background: #2a2a2a;
+            color: #eee;
+            font-size: 1rem;
+        }
+        input:focus { outline: none; border-color: #0a7ea4; }
+        button {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            background: #0a7ea4;
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        button:hover { background: #096a8a; }
+        button:disabled { background: #444; cursor: not-allowed; }
+        .warning {
+            background: #3a3520;
+            border: 1px solid #6b5c20;
+            color: #e6d68a;
+            padding: 0.75rem;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            margin-bottom: 1.25rem;
+        }
+        .result {
+            margin-top: 1.25rem;
+            padding: 1rem;
+            background: #252525;
+            border-radius: 6px;
+            border: 1px solid #333;
+        }
+        .result h3 { margin: 0 0 0.5rem; font-size: 0.9rem; color: #888; }
+        .result pre, .result code {
+            font-family: ui-monospace, monospace;
+            font-size: 0.8rem;
+            word-break: break-all;
+            white-space: pre-wrap;
+        }
+        .result pre { margin: 0.25rem 0 0.75rem; }
+        .result pre:last-child { margin-bottom: 0; }
+        .error { color: #e66; }
+        .success { color: #6a6; }
+    </style>
+</head>
+<body>
+    <h1>Login / Pass → Nostr nsec</h1>
+    <p class="subtitle">Compatible with Astroport.ONE keygen and gcli: Scrypt(salt, pepper) then SHA256 → nsec / npub.</p>
+
+    <div class="warning">
+        Use only on a trusted device and connection. Credentials are processed in memory only and never sent anywhere.
+    </div>
+
+    <label for="salt">Salt (login / username)</label>
+    <input type="text" id="salt" placeholder="e.g. mylogin or UPLANETNAME+LAT" autocomplete="username">
+
+    <label for="pepper">Pepper (password)</label>
+    <input type="password" id="pepper" placeholder="Your password" autocomplete="current-password">
+
+    <button id="btn">Derive nsec / npub</button>
+
+    <div id="status" class="result" style="display: none;"></div>
+    <div id="out" class="result" style="display: none;"></div>
+    <details style="margin-top: 1rem;">
+        <summary style="cursor: pointer; color: #888;">Debug logs</summary>
+        <pre id="debugLog" style="font-size: 0.75rem; max-height: 200px; overflow: auto; background: #222; padding: 0.5rem; border-radius: 4px; margin: 0.25rem 0 0;"></pre>
+    </details>
+
+    <!-- Local libs: scrypt.min.js (already in earth), nostr-tools.bundle.js (run ./tools/fetch-login-to-nsec-libs.sh to update) -->
+    <script src="scrypt.min.js"></script>
+    <script type="module">
+        import * as NostrTools from './nostr-tools.bundle.js';
+
+        const saltEl = document.getElementById('salt');
+        const pepperEl = document.getElementById('pepper');
+        const btn = document.getElementById('btn');
+        const statusEl = document.getElementById('status');
+        const outEl = document.getElementById('out');
+        const debugEl = document.getElementById('debugLog');
+        const debugLines = [];
+        function debugLog(msg) {
+            debugLines.push(msg);
+            if (debugEl) debugEl.textContent = debugLines.join('\n');
+        }
+
+        const N = 4096, r = 16, p = 1, dkLen = 32;
+
+        function scryptPromise(password, salt, N, r, p, dkLen) {
+            return new Promise(function (resolve, reject) {
+                if (typeof scrypt !== 'undefined' && scrypt.scrypt) {
+                    scrypt.scrypt(password, salt, N, r, p, dkLen).then(function (key) {
+                        resolve(new Uint8Array(key));
+                    }).catch(reject);
+                    return;
+                }
+                scrypt(password, salt, N, r, p, dkLen, function (err, key) {
+                    if (err) reject(err);
+                    else resolve(new Uint8Array(key));
+                });
+            });
+        }
+
+        function sha256Bytes(data) {
+            return crypto.subtle.digest('SHA-256', data).then(function (buf) {
+                return new Uint8Array(buf);
+            });
+        }
+
+        function bytesToHex(bytes) {
+            return Array.from(bytes).map(function (b) {
+                return ('0' + b.toString(16)).slice(-2);
+            }).join('');
+        }
+
+        function hexToBytes(hex) {
+            const bytes = new Uint8Array(hex.length / 2);
+            for (let i = 0; i < bytes.length; i++) {
+                bytes[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+            }
+            return bytes;
+        }
+
+        function escapeHtml(s) {
+            const div = document.createElement('div');
+            div.textContent = s;
+            return div.innerHTML;
+        }
+
+        function logStep(step, value) {
+            const type = value === null ? 'null' : value === undefined ? 'undefined' : typeof value;
+            const preview = typeof value === 'string' ? (value.length > 20 ? value.slice(0, 20) + '…' : value) : (value instanceof Uint8Array ? 'Uint8Array(' + value.length + ')' : String(value).slice(0, 50));
+            const msg = step + ' type=' + type + ' preview=' + preview;
+            console.log('[login-to-nsec] ' + msg);
+            debugLog(msg);
+        }
+
+        async function derive() {
+            const salt = (saltEl.value || '').trim();
+            const pepper = pepperEl.value || '';
+
+            if (!salt || !pepper) {
+                statusEl.style.display = 'block';
+                statusEl.innerHTML = '<span class="error">Please enter both salt (login) and pepper (password).</span>';
+                outEl.style.display = 'none';
+                return;
+            }
+
+            btn.disabled = true;
+            statusEl.style.display = 'block';
+            statusEl.innerHTML = 'Deriving key (Scrypt + SHA256)…';
+            statusEl.classList.remove('error', 'success');
+            outEl.style.display = 'none';
+
+            debugLines.length = 0;
+            if (debugEl) debugEl.textContent = '';
+
+            try {
+                const passwordBytes = new TextEncoder().encode(pepper);
+                const saltBytes = new TextEncoder().encode(salt);
+                logStep('scrypt input pepper', passwordBytes);
+                logStep('scrypt input salt', saltBytes);
+
+                const ed25519Seed = await scryptPromise(
+                    passwordBytes, saltBytes, N, r, p, dkLen
+                );
+                const privateKeyBytes = await sha256Bytes(ed25519Seed);
+                const privateKeyHex = bytesToHex(privateKeyBytes);
+                logStep('privateKeyBytes', privateKeyBytes);
+                logStep('privateKeyHex', privateKeyHex);
+
+                let publicKeyHex, publicKeyBytes, nsec, npub;
+
+                try {
+                    logStep('before getPublicKey', privateKeyBytes);
+                    publicKeyHex = NostrTools.getPublicKey(privateKeyBytes);
+                    logStep('getPublicKey result publicKeyHex', publicKeyHex);
+                } catch (e) {
+                    debugLog('ERROR getPublicKey: ' + (e.message || e));
+                    console.error('[login-to-nsec] getPublicKey failed', e);
+                    throw e;
+                }
+
+                try {
+                    publicKeyBytes = hexToBytes(publicKeyHex);
+                    logStep('publicKeyBytes', publicKeyBytes);
+                } catch (e) {
+                    debugLog('ERROR hexToBytes: ' + (e.message || e));
+                    console.error('[login-to-nsec] hexToBytes(publicKeyHex) failed', e);
+                    throw e;
+                }
+
+                try {
+                    logStep('before nsecEncode', privateKeyBytes);
+                    nsec = NostrTools.nip19.nsecEncode(privateKeyBytes);
+                    logStep('nsecEncode result', nsec);
+                } catch (e) {
+                    debugLog('ERROR nsecEncode: ' + (e.message || e));
+                    console.error('[login-to-nsec] nsecEncode failed', e);
+                    throw e;
+                }
+
+                try {
+                    logStep('before npubEncode (hex)', publicKeyHex);
+                    npub = NostrTools.nip19.npubEncode(publicKeyHex);
+                    logStep('npubEncode result', npub);
+                } catch (e) {
+                    debugLog('ERROR npubEncode: ' + (e.message || e));
+                    console.error('[login-to-nsec] npubEncode failed', e);
+                    throw e;
+                }
+
+                statusEl.innerHTML = '<span class="success">Keys derived successfully.</span>';
+                statusEl.classList.add('success');
+
+                outEl.style.display = 'block';
+                outEl.innerHTML =
+                    '<h3>nsec (private — keep secret)</h3><pre>' + escapeHtml(nsec) + '</pre>' +
+                    '<h3>npub (public)</h3><pre>' + escapeHtml(npub) + '</pre>' +
+                    '<h3>Private key (hex)</h3><pre>' + escapeHtml(privateKeyHex) + '</pre>' +
+                    '<h3>Public key (hex)</h3><pre>' + escapeHtml(publicKeyHex) + '</pre>';
+            } catch (e) {
+                debugLog('FINAL ERROR: ' + (e.message || e));
+                if (e.stack) debugLog(e.stack.slice(0, 300));
+                statusEl.innerHTML = '<span class="error">Error: ' + escapeHtml(String(e.message || e)) + '</span>';
+                statusEl.classList.add('error');
+                outEl.style.display = 'none';
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        btn.addEventListener('click', derive);
+        pepperEl.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter') derive();
+        });
+    </script>
+</body>
+</html>

@@ -538,6 +538,45 @@
             border-color: var(--terminal-orange);
         }
 
+        /* DID / UPlanet service levels section (DID_IMPLEMENTATION.md, UPLANET.official.sh) */
+        .did-section {
+            margin-top: 18px;
+            padding: 12px;
+            background: rgba(177, 156, 217, 0.12);
+            border: 1px solid var(--terminal-purple);
+            border-radius: 6px;
+            font-size: 0.9em;
+            line-height: 1.45;
+        }
+        .did-section h4 {
+            color: var(--terminal-purple);
+            font-family: 'Share Tech Mono', monospace;
+            margin: 0 0 10px 0;
+            font-size: 1em;
+            border-bottom: 1px dashed var(--terminal-border);
+            padding-bottom: 6px;
+        }
+        .did-section .did-id {
+            word-break: break-all;
+            color: var(--terminal-cyan);
+            font-size: 0.85em;
+            margin-bottom: 8px;
+        }
+        .did-section .did-field {
+            margin-bottom: 6px;
+            padding: 4px 0;
+        }
+        .did-section .did-field strong {
+            color: var(--terminal-purple);
+        }
+        .did-section .did-field span {
+            color: var(--text-color);
+        }
+        .did-section.no-did {
+            color: var(--terminal-border);
+            font-style: italic;
+        }
+
         /* Modal styles */
         .image-modal {
             display: none; /* Hidden by default */
@@ -2064,6 +2103,81 @@
                 }
             }
 
+            /** Fetch DID document (kind 30800 - NIP-101) for this pubkey. Returns parsed DID or null. */
+            async function fetchDidDocument(hex, nostrRelayUrl) {
+                try {
+                    const relay = nostrTools.relayInit(nostrRelayUrl);
+                    await relay.connect();
+                    const sub = relay.sub([{
+                        kinds: [30800],
+                        authors: [hex],
+                        '#d': ['did'],
+                        limit: 1
+                    }]);
+                    return new Promise((resolve) => {
+                        let didDoc = null;
+                        const timeout = setTimeout(() => {
+                            sub.unsub();
+                            relay.close();
+                            resolve(didDoc);
+                        }, 6000);
+                        sub.on('event', (event) => {
+                            clearTimeout(timeout);
+                            try {
+                                didDoc = JSON.parse(event.content);
+                            } catch (e) {
+                                console.warn('DID content parse error:', e);
+                            }
+                            sub.unsub();
+                            relay.close();
+                            resolve(didDoc);
+                        });
+                        sub.on('eose', () => {
+                            if (didDoc === null) {
+                                clearTimeout(timeout);
+                                sub.unsub();
+                                relay.close();
+                                resolve(null);
+                            }
+                        });
+                        relay.on('error', () => {
+                            clearTimeout(timeout);
+                            sub.unsub();
+                            try { relay.close(); } catch (e) {}
+                            resolve(null);
+                        });
+                    });
+                } catch (err) {
+                    console.warn('DID fetch error:', err);
+                    return null;
+                }
+            }
+
+            /** Human-readable label for UPlanet contractStatus (from did_manager_nostr.sh / UPLANET.official.sh) */
+            function didContractStatusLabel(status) {
+                if (!status) return '—';
+                const labels = {
+                    new_user: 'New user',
+                    new_multipass: 'New MULTIPASS',
+                    active_rental: 'MULTIPASS (active)',
+                    cooperative_member_satellite: 'Sociétaire Satellite',
+                    cooperative_member_constellation: 'Sociétaire Constellation',
+                    infrastructure_contributor: 'Infrastructure contributor',
+                    astroport_captain: 'Astroport Captain',
+                    cooperative_treasury_contributor: 'Coop Treasury',
+                    cooperative_rnd_contributor: 'Coop R&D',
+                    cooperative_assets_contributor: 'Coop Assets',
+                    account_deactivated: 'Deactivated',
+                    ore_guardian_authority: 'ORE Guardian',
+                    ore_contract_active: 'ORE Contract',
+                    ore_compliance_verified: 'ORE Verified',
+                    ore_reward_distributed: 'ORE Reward',
+                    plantnet_detection_recorded: 'PlantNet',
+                    inventory_item_registered: 'Inventory'
+                };
+                return labels[status] || status;
+            }
+
             async function fetchNostrMessages(hex, nostrRelayUrl) {
                 try {
                     const relay = nostrTools.relayInit(nostrRelayUrl);
@@ -2288,6 +2402,26 @@
                     // Display additional fields if any
                     if (additionalFields.length > 0) {
                         profileHTML += `<div class="profile-additional-fields">${additionalFields.join('')}</div>`;
+                    }
+
+                    // DID document (kind 30800) – UPlanet service levels from DID_IMPLEMENTATION.md / UPLANET.official.sh
+                    const didDoc = await fetchDidDocument(hexKey, relayUrl);
+                    if (didDoc && (didDoc.id || (didDoc.metadata && (didDoc.metadata.contractStatus || didDoc.metadata.services)))) {
+                        const meta = didDoc.metadata || {};
+                        const didId = (didDoc.id || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                        const status = meta.contractStatus || '';
+                        const statusLabel = didContractStatusLabel(status);
+                        const quota = (meta.storageQuota || '—').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                        const services = (meta.services || '—').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                        profileHTML += `<div class="did-section">
+                            <h4>🪪 UPlanet DID – Service level</h4>
+                            ${didId ? `<div class="did-id">${didId}</div>` : ''}
+                            <div class="did-field"><strong>Status:</strong> <span>${statusLabel}</span></div>
+                            <div class="did-field"><strong>Storage:</strong> <span>${quota}</span></div>
+                            <div class="did-field"><strong>Services:</strong> <span>${services}</span></div>
+                        </div>`;
+                    } else {
+                        profileHTML += `<div class="did-section no-did">No UPlanet DID (kind 30800) found for this profile.</div>`;
                     }
                     
                     profileContentDiv.innerHTML = profileHTML;

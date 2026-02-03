@@ -241,6 +241,44 @@
             word-break: break-word;
         }
 
+        .message-content.markdown-content h1, .message-content.markdown-content h2, .message-content.markdown-content h3, .message-content.markdown-content h4 {
+            color: var(--terminal-cyan);
+            margin: 1em 0 0.4em;
+            font-size: 1em;
+            border-bottom: 1px solid var(--terminal-border);
+        }
+        .message-content.markdown-content h1 { font-size: 1.15em; }
+        .message-content.markdown-content pre {
+            background: rgba(0, 255, 0, 0.08);
+            border: 1px solid var(--terminal-border);
+            padding: 12px;
+            border-radius: 4px;
+            overflow-x: auto;
+            margin: 10px 0;
+            font-size: 0.9em;
+        }
+        .message-content.markdown-content code {
+            background: rgba(0, 255, 0, 0.1);
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 0.9em;
+        }
+        .message-content.markdown-content pre code { background: none; padding: 0; }
+        .message-content.markdown-content a { color: var(--terminal-cyan); text-decoration: underline; }
+        .message-content.markdown-content a:hover { color: var(--terminal-green); }
+        .message-content.markdown-content blockquote {
+            border-left: 4px solid var(--terminal-green);
+            padding-left: 14px;
+            margin: 10px 0;
+            color: var(--terminal-purple);
+        }
+        .message-content.markdown-content ul, .message-content.markdown-content ol { margin: 8px 0; padding-left: 24px; }
+        .message-content.markdown-content li { margin: 4px 0; }
+        .message-content.markdown-content p { margin: 8px 0; }
+        .message-content.markdown-content table { border-collapse: collapse; margin: 10px 0; font-size: 0.9em; }
+        .message-content.markdown-content th, .message-content.markdown-content td { border: 1px solid var(--terminal-border); padding: 6px 10px; text-align: left; }
+        .message-content.markdown-content th { color: var(--terminal-cyan); background: rgba(0, 255, 0, 0.05); }
+
         .message-actions {
             display: flex;
             gap: 16px;
@@ -512,6 +550,7 @@
         </div>
     </div>
 
+    <script src="marked.min.js"></script>
     <script>
         // Matrix effect (simplifié)
         const canvas = document.getElementById('matrix');
@@ -935,13 +974,7 @@
             const date = new Date(message.created_at * 1000);
             const fullDate = date.toLocaleString('fr-FR');
             const authorName = profile.name || profile.display_name || `${message.pubkey.substring(0, 8)}...`;
-            const content = makeLinksClickable(
-                message.content
-                    .replace(/&/g, '&amp;')
-                    .replace(/</g, '&lt;')
-                    .replace(/>/g, '&gt;')
-                    .replace(/\n/g, '<br>')
-            );
+            const { html: content, isMarkdown } = renderMessageContent(message.content);
 
             // Extract images from imeta tags (NIP-94)
             const imetaImages = extractImagesFromImetaTags(message);
@@ -999,13 +1032,7 @@
             const profile = await fetchProfile(reply.pubkey, relayUrl);
             const timeAgo = formatRelativeTime(reply.created_at);
             const authorName = profile.name || profile.display_name || `${reply.pubkey.substring(0, 8)}...`;
-            const content = makeLinksClickable(
-                reply.content
-                    .replace(/&/g, '&amp;')
-                    .replace(/</g, '&lt;')
-                    .replace(/>/g, '&gt;')
-                    .replace(/\n/g, '<br>')
-            );
+            const { html: content, isMarkdown } = renderMessageContent(reply.content);
 
             // Extract images from imeta tags (NIP-94) for replies too
             const imetaImages = extractImagesFromImetaTags(reply);
@@ -1035,7 +1062,7 @@
                         <a href="nostr_profile_viewer.html?hex=${reply.pubkey}" class="reply-author">${authorName}</a>
                         <span class="reply-time">${timeAgo}</span>
                     </div>
-                    <div class="reply-content">${content}</div>
+                    <div class="reply-content${isMarkdown ? ' markdown-content' : ''}">${content}</div>
                     ${imetaImagesHtml}
                     <div style="margin-top: 8px; display: flex; gap: 12px; font-size: 12px; opacity: 0.8; flex-wrap: wrap;">
                         <a href="nostr_profile_viewer.html?hex=${reply.pubkey}" target="_blank" style="color: var(--terminal-cyan); text-decoration: none;">

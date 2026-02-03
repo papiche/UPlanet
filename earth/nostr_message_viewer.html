@@ -552,7 +552,11 @@
 
     <script src="marked.min.js"></script>
     <script>
-        // Matrix effect (simplifié)
+        // nostr_message_viewer: standalone page to view one Nostr kind-1 note and its replies.
+        // URL params: event= or id= (hex event id). Uses relay from host (ipfs.* -> relay.*), or local relay on localhost:8080.
+        // Renders content as Markdown when applicable (marked), else plain text with linkified URLs. Supports NIP-94 imeta, media, like/reply links.
+
+        // Matrix effect (simplified)
         const canvas = document.getElementById('matrix');
         const ctx = canvas.getContext('2d');
         canvas.width = window.innerWidth;
@@ -628,9 +632,10 @@
 
         async function getRelayURL() {
             const currentUrl = new URL(window.location.href);
-            let relayName = currentUrl.hostname.replace('ipfs.', 'relay.');
-            if (currentUrl.port === '8080' || currentUrl.port !== '') {
-                return `ws://127.0.0.1:7777`;
+            const relayName = currentUrl.hostname.replace('ipfs.', 'relay.');
+            // Use local relay only for localhost or explicit dev port
+            if (currentUrl.hostname === 'localhost' || currentUrl.port === '8080') {
+                return 'ws://127.0.0.1:7777';
             }
             return `wss://${relayName}`;
         }
@@ -654,43 +659,45 @@
             });
         }
 
-        // Function to process media links and return appropriate HTML
+        // Function to process media links and return appropriate HTML (URLs escaped for attributes)
         function processMediaLink(url) {
             const urlLower = url.toLowerCase();
-            
+            const urlSafe = escapeHtmlAttr(url);
+            const urlDisplay = escapeHtml(url);
+
             // Image formats
             if (urlLower.match(/\.(jpg|jpeg|png|gif|webp|svg|bmp|ico)$/)) {
                 return `<div class="media-container">
-                    <img src="${url}" alt="Image" class="message-image" onclick="openImageModal('${url}')" title="Click to enlarge">
-                    <a href="${url}" target="_blank" rel="noopener noreferrer" class="media-link">${url}</a>
+                    <img src="${urlSafe}" alt="Image" class="message-image" onclick="openImageModal(this.getAttribute('data-src'))" data-src="${urlSafe}" title="Click to enlarge">
+                    <a href="${urlSafe}" target="_blank" rel="noopener noreferrer" class="media-link">${urlDisplay}</a>
                 </div>`;
             }
-            
+
             // Video formats
             else if (urlLower.match(/\.(mp4|webm|ogg|mov|avi|mkv)$/)) {
                 return `<div class="media-container">
                     <video controls class="message-video" preload="metadata">
-                        <source src="${url}" type="video/${urlLower.split('.').pop()}">
+                        <source src="${urlSafe}" type="video/${urlLower.split('.').pop()}">
                         Your browser does not support the video tag.
                     </video>
-                    <a href="${url}" target="_blank" rel="noopener noreferrer" class="media-link">${url}</a>
+                    <a href="${urlSafe}" target="_blank" rel="noopener noreferrer" class="media-link">${urlDisplay}</a>
                 </div>`;
             }
-            
+
             // Audio formats
             else if (urlLower.match(/\.(mp3|wav|ogg|flac|aac|m4a)$/)) {
                 return `<div class="media-container">
                     <audio controls class="message-audio" preload="metadata">
-                        <source src="${url}" type="audio/${urlLower.split('.').pop()}">
+                        <source src="${urlSafe}" type="audio/${urlLower.split('.').pop()}">
                         Your browser does not support the audio tag.
                     </audio>
-                    <a href="${url}" target="_blank" rel="noopener noreferrer" class="media-link">${url}</a>
+                    <a href="${urlSafe}" target="_blank" rel="noopener noreferrer" class="media-link">${urlDisplay}</a>
                 </div>`;
             }
-            
+
             // Regular links
             else {
-                return `<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`;
+                return `<a href="${urlSafe}" target="_blank" rel="noopener noreferrer">${urlDisplay}</a>`;
             }
         }
 
@@ -959,6 +966,34 @@
             }
         }
 
+        // Render message body: markdown or plain text (escape HTML, linkify URLs)
+        async function renderMessageContent(rawContent) {
+            if (rawContent == null || rawContent === '') return { html: '', isMarkdown: false };
+            const text = String(rawContent).trim();
+            const looksLikeMarkdown = /^(#{1,6}\s|```|-\s|\*\s|>\s|\d+\.\s)/m.test(text) || /\n#{1,6}\s/m.test(text);
+            if (looksLikeMarkdown && typeof marked !== 'undefined') {
+                try {
+                    if (marked.setOptions) marked.setOptions({ breaks: true });
+                    const html = await Promise.resolve(marked.parse(text));
+                    return { html: html || escapeHtml(text), isMarkdown: true };
+                } catch (e) {
+                    // fallback to plain
+                }
+            }
+            const escaped = escapeHtml(text);
+            const linkified = escaped.replace(
+                /(https?:\/\/[^\s<]+)/g,
+                '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>'
+            );
+            return { html: linkified, isMarkdown: false };
+        }
+
+        function escapeHtml(s) {
+            const div = document.createElement('div');
+            div.textContent = s;
+            return div.innerHTML;
+        }
+
         // Display functions
         function renderAuthorAvatar(profile, pubkey) {
             if (profile.picture) {
@@ -972,9 +1007,9 @@
         async function renderMessage(message, profile) {
             const timeAgo = formatRelativeTime(message.created_at);
             const date = new Date(message.created_at * 1000);
-            const fullDate = date.toLocaleString('fr-FR');
-            const authorName = profile.name || profile.display_name || `${message.pubkey.substring(0, 8)}...`;
-            const { html: content, isMarkdown } = renderMessageContent(message.content);
+            const fullDate = escapeHtml(date.toLocaleString('fr-FR'));
+            const authorName = escapeHtml(profile.name || profile.display_name || `${message.pubkey.substring(0, 8)}...`);
+            const { html: content, isMarkdown } = await renderMessageContent(message.content);
 
             // Extract images from imeta tags (NIP-94)
             const imetaImages = extractImagesFromImetaTags(message);
@@ -1014,7 +1049,7 @@
                             </div>
                         </div>
                     </div>
-                    <div class="message-content">${content}</div>
+                    <div class="message-content${isMarkdown ? ' markdown-content' : ''}">${content}</div>
                     ${imetaImagesHtml}
                     <div class="message-actions">
                         <button class="action-button" onclick="likeMessage('${message.id}', '${message.pubkey}')">❤️ J'aime</button>
@@ -1032,7 +1067,7 @@
             const profile = await fetchProfile(reply.pubkey, relayUrl);
             const timeAgo = formatRelativeTime(reply.created_at);
             const authorName = profile.name || profile.display_name || `${reply.pubkey.substring(0, 8)}...`;
-            const { html: content, isMarkdown } = renderMessageContent(reply.content);
+            const { html: content, isMarkdown } = await renderMessageContent(reply.content);
 
             // Extract images from imeta tags (NIP-94) for replies too
             const imetaImages = extractImagesFromImetaTags(reply);
@@ -1152,8 +1187,9 @@
                 // Fetch author profile
                 const profile = await fetchProfile(message.pubkey, relayUrl);
 
-                // Fetch replies
-                const replies = await fetchReplies(eventId, relayUrl);
+                // Fetch replies (exclude root in case it appears in the list)
+                let replies = await fetchReplies(eventId, relayUrl);
+                replies = replies.filter(r => r.id !== eventId);
 
                 // Render
                 let html = await renderMessage(message, profile);

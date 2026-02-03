@@ -2119,10 +2119,10 @@
                     created_at: Math.floor(Date.now() / 1000),
                     tags: [
                         ['p', targetPubkey],
-                        ['t', 'crowdfunding'],  // Same as contribution
+                        ['t', 'vote-assets'],   // Contract 6.4: required for 7.sh vote routing
                         ['t', 'UPlanet'],
                         ['project-id', currentVoteProject.id],
-                        ['target', 'VOTE']  // Distinguishes vote from regular contribution
+                        ['vote-type', 'ASSETS_USAGE']
                     ],
                     content: content
                 };
@@ -2300,6 +2300,9 @@
                 const title = tags.find(t => t[0] === 'title')?.[1];
                 const geoTag = tags.find(t => t[0] === 'g')?.[1];
                 const dTag = tags.find(t => t[0] === 'd')?.[1];
+                const projectIdTag = tags.find(t => t[0] === 'project-id')?.[1];
+                // Contract: kind 30023 uses d="crowdfunding-{PROJECT_ID}"; prefer project-id or strip prefix
+                const projectId = projectIdTag || (dTag && dTag.startsWith('crowdfunding-') ? dTag.replace(/^crowdfunding-/, '') : dTag) || `CF-${event.id.substring(0, 8).toUpperCase()}`;
                 
                 if (!title || !geoTag) return null;
                 
@@ -2315,7 +2318,7 @@
                 const totals = extractTotalsFromMarkdown(content);
                 
                 return {
-                    id: dTag || `CF-${event.id.substring(0, 8).toUpperCase()}`,
+                    id: projectId,
                     eventId: event.id,
                     name: title.replace(/^🌳\s*/, '').replace(/\s*-\s*(Forêt Jardin|Communs)$/, ''),
                     location: { latitude: lat, longitude: lon },

@@ -223,7 +223,15 @@
             text-align: center;
             margin-bottom: 20px;
         }
-        #follow-button {
+        .action-buttons {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            justify-content: center;
+            align-items: center;
+        }
+        #follow-button,
+        #mute-button {
             background-color: var(--terminal-green);
             color: var(--terminal-bg);
             border: 1px solid var(--terminal-green);
@@ -245,6 +253,26 @@
             color: #888;
             cursor: not-allowed;
             box-shadow: none;
+        }
+        #mute-button {
+            background-color: var(--terminal-orange, #fb8532);
+            border-color: var(--terminal-orange, #fb8532);
+            color: var(--terminal-bg);
+        }
+        #mute-button:hover:not(:disabled) {
+            background-color: var(--terminal-red);
+            border-color: var(--terminal-red);
+            box-shadow: 0 0 10px rgba(255, 68, 68, 0.5);
+        }
+        #mute-button:disabled {
+            background-color: #555;
+            color: #888;
+            cursor: not-allowed;
+            box-shadow: none;
+        }
+        #mute-button.muted {
+            background-color: var(--terminal-red);
+            border-color: var(--terminal-red);
         }
         #follow-error-message {
             color: var(--terminal-red);
@@ -731,7 +759,10 @@
             </div>
 
             <div id="follow-button-container">
-                <button id="follow-button">Follow</button>
+                <div class="action-buttons">
+                    <button id="follow-button">Follow</button>
+                    <button id="mute-button" title="Mute this user (NIP-51 mute list)">Mute</button>
+                </div>
                 <div id="follow-error-message"></div>
             </div>
 
@@ -741,8 +772,8 @@
             </div>
 
             <div id="analytics-container" class="messages loading">
-                <h2>Analytics Events (All Sources)</h2>
-                <div id="analytics-content" class="messages-scrollable">loading analytics...</div>
+                <h2>Muted profiles (NIP-51)</h2>
+                <div id="analytics-content" class="messages-scrollable">loading...</div>
             </div>
             <!-- End of original content -->
         </div>
@@ -2030,7 +2061,7 @@
             
             profileContentDiv.innerText = `Fetching profile for pubkey: ${hexKey.substring(0,10)}...`;
             messagesContentDiv.innerText = `Fetching recent messages...`;
-            analyticsContentDiv.innerText = `Fetching analytics events from all sources...`;
+            analyticsContentDiv.innerText = `Fetching muted profiles...`;
 
             async function fetchNostrProfile(hex, nostrRelayUrl) { // Renamed relayUrl param
                 try {
@@ -2216,40 +2247,43 @@
                 }
             }
 
-            async function fetchNostrAnalytics(nostrRelayUrl) {
+            // Fetch this profile's NIP-51 mute list (kind 10000); returns single replaceable event or null
+            async function fetchMuteListForProfile(authorHex, nostrRelayUrl) {
                 try {
                     const relay = nostrTools.relayInit(nostrRelayUrl);
                     await relay.connect();
-                    const now = Math.floor(Date.now() / 1000);
-                    const oneMonthAgo = now - (30 * 24 * 3600); // Last 30 days
-                    // Fetch kind 10000 (Analytics events) from all sources
-                    const sub = relay.sub([{ kinds: [10000], since: oneMonthAgo, limit: 200 }]);
-                    const analytics = [];
+                    const sub = relay.sub([{ kinds: [10000], authors: [authorHex], limit: 1 }]);
                     return new Promise((resolve, reject) => {
-                        let timeout = setTimeout(() => {
+                        let muteEvent = null;
+                        const timeout = setTimeout(() => {
                             sub.unsub();
                             relay.close();
-                            console.warn(`Timeout fetching analytics from all sources`);
-                            resolve(analytics.sort((a,b) => b.created_at - a.created_at)); // Sort what we have
-                        }, 15000);
-
-                        sub.on('event', event => { analytics.push(event); });
-                        sub.on('eose', () => {
+                            resolve(muteEvent);
+                        }, 8000);
+                        sub.on('event', event => {
                             clearTimeout(timeout);
+                            muteEvent = event;
                             sub.unsub();
                             relay.close();
-                            resolve(analytics.sort((a,b) => b.created_at - a.created_at));
+                            resolve(muteEvent);
+                        });
+                        sub.on('eose', () => {
+                            if (!muteEvent) {
+                                clearTimeout(timeout);
+                                sub.unsub();
+                                relay.close();
+                                resolve(null);
+                            }
                         });
                         relay.on('error', (err) => {
                             clearTimeout(timeout);
                             sub.unsub();
                             try { relay.close(); } catch(e) {}
-                            console.error(`Relay error fetching analytics on ${nostrRelayUrl}:`, err);
-                            reject(`Relay error fetching analytics`);
+                            reject(err);
                         });
                     });
                 } catch (error) {
-                    console.error("Nostr Analytics Fetch Error:", error);
+                    console.error("Fetch mute list error:", error);
                     throw error;
                 }
             }
@@ -2292,6 +2326,47 @@
                     });
                 } catch (error) {
                     console.error("Error fetching existing follow list:", error);
+                    throw error;
+                }
+            };
+
+            // NIP-51: fetch current mute list (kind 10000) for the given user
+            window.fetchExistingMuteList = async function(publicKey, nostrRelayUrl) {
+                try {
+                    const relay = nostrTools.relayInit(nostrRelayUrl);
+                    await relay.connect();
+                    const sub = relay.sub([{ kinds: [10000], authors: [publicKey], limit: 1 }]);
+                    return new Promise((resolve, reject) => {
+                        let muteListEvent = null;
+                        const timeout = setTimeout(() => {
+                            sub.unsub();
+                            relay.close();
+                            resolve(null);
+                        }, 5000);
+                        sub.on('event', event => {
+                            clearTimeout(timeout);
+                            muteListEvent = event;
+                            sub.unsub();
+                            relay.close();
+                            resolve(muteListEvent);
+                        });
+                        sub.on('eose', () => {
+                            if (!muteListEvent) {
+                                clearTimeout(timeout);
+                                sub.unsub();
+                                relay.close();
+                                resolve(null);
+                            }
+                        });
+                        relay.on('error', (err) => {
+                            clearTimeout(timeout);
+                            sub.unsub();
+                            try { relay.close(); } catch(e) {}
+                            reject(err);
+                        });
+                    });
+                } catch (error) {
+                    console.error("Error fetching mute list:", error);
                     throw error;
                 }
             }
@@ -2501,102 +2576,57 @@
                 }
 
                 try {
-                    const analyticsData = await fetchNostrAnalytics(relayUrl);
+                    const muteListEvent = await fetchMuteListForProfile(hexKey, relayUrl);
                     analyticsContainerDiv.classList.remove('loading');
-                    let analyticsHTML = '';
-                    if (analyticsData && analyticsData.length > 0) {
-                        analyticsHTML += `<div style="margin-bottom: 15px; padding: 10px; background: rgba(0, 255, 0, 0.1); border: 1px solid var(--terminal-green); border-radius: 4px;">
-                            <strong style="color: var(--terminal-green);">📊 Showing ${analyticsData.length} analytics events from all sources</strong>
-                        </div>`;
-                        
-                        analyticsData.forEach(analyticsEvent => {
-                            const date = new Date(analyticsEvent.created_at * 1000);
-                            const authorPubkey = analyticsEvent.pubkey;
-                            const isCurrentProfile = authorPubkey === hexKey;
-                            
-                            // Parse analytics content (JSON string)
-                            let analyticsContent = {};
-                            try {
-                                analyticsContent = JSON.parse(analyticsEvent.content);
-                            } catch (e) {
-                                console.warn('Failed to parse analytics content as JSON:', e);
-                                analyticsContent = { raw: analyticsEvent.content };
-                            }
-                            
-                            // Extract tags
-                            const eventType = analyticsEvent.tags?.find(tag => tag[0] === 't' && tag[1] !== 'analytics')?.[1] || 'unknown';
-                            const source = analyticsEvent.tags?.find(tag => tag[0] === 'source')?.[1] || analyticsContent.source || 'unknown';
-                            const url = analyticsEvent.tags?.find(tag => tag[0] === 'url')?.[1] || analyticsContent.current_url || '';
-                            
-                            // Build analytics display
-                            let analyticsDetails = '';
-                            analyticsDetails += `<div style="font-size: 0.85em; color: var(--terminal-cyan); margin: 3px 0;">`;
-                            analyticsDetails += `<strong>Type:</strong> ${eventType} • `;
-                            analyticsDetails += `<strong>Source:</strong> ${source}`;
-                            if (url) {
-                                analyticsDetails += ` • <a href="${url}" target="_blank" rel="noopener noreferrer" style="color: var(--terminal-green);">URL</a>`;
-                            }
-                            analyticsDetails += `</div>`;
-                            
-                            // Author information
-                            let authorInfo = '';
-                            if (isCurrentProfile) {
-                                authorInfo = `<div style="font-size: 0.85em; color: var(--terminal-green); margin: 3px 0;">
-                                    <strong>Author:</strong> <span style="color: var(--terminal-green);">Current profile</span> (${authorPubkey.substring(0, 10)}...)
-                                </div>`;
-                            } else {
-                                authorInfo = `<div style="font-size: 0.85em; color: var(--terminal-cyan); margin: 3px 0;">
-                                    <strong>Author:</strong> <a href="#" onclick="loadProfile('${authorPubkey}'); return false;" style="color: var(--terminal-purple); text-decoration: underline;" title="View profile for ${authorPubkey.substring(0, 10)}...">${authorPubkey.substring(0, 10)}...</a>
-                                </div>`;
-                            }
-                            
-                            // Display key analytics data
-                            let dataPreview = '';
-                            if (analyticsContent.type) {
-                                dataPreview += `<div style="margin: 5px 0;"><strong style="color: var(--terminal-purple);">Type:</strong> ${analyticsContent.type}</div>`;
-                            }
-                            if (analyticsContent.video_event_id) {
-                                dataPreview += `<div style="margin: 5px 0;"><strong style="color: var(--terminal-purple);">Video Event ID:</strong> <code style="color: var(--terminal-cyan);">${analyticsContent.video_event_id.substring(0, 16)}...</code></div>`;
-                            }
-                            if (analyticsContent.video_title) {
-                                dataPreview += `<div style="margin: 5px 0;"><strong style="color: var(--terminal-purple);">Video Title:</strong> ${analyticsContent.video_title}</div>`;
-                            }
-                            if (analyticsContent.email) {
-                                dataPreview += `<div style="margin: 5px 0;"><strong style="color: var(--terminal-purple);">Email:</strong> ${analyticsContent.email}</div>`;
-                            }
-                            if (analyticsContent.viewport) {
-                                dataPreview += `<div style="margin: 5px 0;"><strong style="color: var(--terminal-purple);">Viewport:</strong> ${analyticsContent.viewport.width}x${analyticsContent.viewport.height}</div>`;
-                            }
-                            
-                            // Full data (collapsible)
-                            const fullDataJson = JSON.stringify(analyticsContent, null, 2);
-                            const dataId = `analytics-${analyticsEvent.id.substring(0, 8)}`;
-                            
-                            analyticsHTML += `<div class="message-item" style="border-left: 3px solid var(--terminal-green); padding-left: 10px;">
-                                                <div style="flex: 1;">
-                                                    <strong style="color: var(--terminal-green);">📊 ${eventType}</strong>
-                                                    <div style="font-size: 0.85em; color: var(--terminal-cyan); margin: 3px 0;">
-                                                        ${date.toLocaleDateString()} ${date.toLocaleTimeString()}
-                                                    </div>
-                                                    ${authorInfo}
-                                                    ${analyticsDetails}
-                                                    ${dataPreview}
-                                                    <details style="margin-top: 10px;">
-                                                        <summary style="color: var(--terminal-cyan); cursor: pointer; font-size: 0.9em;">Show full data ▼</summary>
-                                                        <pre style="background: rgba(0, 255, 0, 0.1); padding: 10px; border-radius: 4px; margin-top: 5px; overflow-x: auto; font-size: 0.85em; color: var(--text-color);">${fullDataJson.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</pre>
-                                                    </details>
-                                                </div>
-                                            </div>`;
-                        });
+                    const pTags = muteListEvent && muteListEvent.tags ? muteListEvent.tags.filter(t => t[0] === 'p' && t[1]) : [];
+                    if (pTags.length === 0) {
+                        analyticsContentDiv.innerHTML = '<p>No muted profiles (NIP-51 kind 10000 list is empty or not set).</p>';
                     } else {
-                        analyticsHTML = "<p>No analytics events found on this relay.</p>";
+                        let mutedHTML = `<p style="margin-bottom: 12px; color: var(--terminal-cyan);">${pTags.length} muted profile(s)</p>`;
+                        for (const tag of pTags) {
+                            const pubkey = tag[1];
+                            const profileData = await fetchNostrProfile(pubkey, relayUrl);
+                            const name = profileData.name || profileData.display_name || (pubkey.substring(0, 8) + '...');
+                            const picture = profileData.picture || '';
+                            const safeName = (name || '').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+                            const safePic = (picture || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                            const initials = safeName.substring(0, 2).toUpperCase();
+                            const imgTag = safePic
+                                ? `<img src="${safePic}" alt="" style="width:40px;height:40px;border-radius:50%;object-fit:cover;border:1px solid var(--terminal-border);" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';"><span style="display:none;width:40px;height:40px;border-radius:50%;background:var(--terminal-purple);color:white;align-items:center;justify-content:center;font-size:0.9em;">${initials}</span>`
+                                : `<span style="display:flex;width:40px;height:40px;border-radius:50%;background:var(--terminal-purple);color:white;align-items:center;justify-content:center;font-size:0.9em;">${initials}</span>`;
+                            mutedHTML += `<div class="message-item" style="display: flex; align-items: center; gap: 12px; padding: 10px; border-left: 3px solid var(--terminal-orange); margin-bottom: 8px;">
+                                <div style="flex-shrink: 0;">${imgTag}</div>
+                                <div style="flex: 1; min-width: 0;">
+                                    <a href="#" onclick="loadProfile('${pubkey}'); return false;" style="color: var(--terminal-cyan); font-weight: bold; text-decoration: none;">${safeName}</a>
+                                    <div style="font-size: 0.8em; color: var(--terminal-purple); font-family: monospace;">${pubkey.substring(0, 16)}...</div>
+                                </div>
+                                <a href="nostr_profile_viewer.html?hex=${pubkey}" target="_blank" rel="noopener noreferrer" style="color: var(--terminal-green); font-size: 0.85em;">Open profile ↗</a>
+                            </div>`;
+                        }
+                        analyticsContentDiv.innerHTML = mutedHTML;
                     }
-                    analyticsContentDiv.innerHTML = analyticsHTML;
-                } catch (analyticsError) {
-                    console.error("Analytics display error:", analyticsError);
+                } catch (muteError) {
+                    console.error("Muted profiles display error:", muteError);
                     analyticsContainerDiv.classList.remove('loading');
-                    analyticsContentDiv.innerHTML = `<p style="color:var(--terminal-red)">Error loading analytics from ${relayUrl}: ${analyticsError.message || analyticsError}</p>`;
+                    analyticsContentDiv.innerHTML = `<p style="color:var(--terminal-red)">Error loading muted profiles: ${muteError.message || muteError}</p>`;
                 }
+
+                // Update mute button state if this profile is already in our NIP-51 mute list
+                (async function updateMuteButtonState() {
+                    const nostr = getNostrExtension();
+                    const mb = document.getElementById('mute-button');
+                    if (!nostr || !hexKey || !mb) return;
+                    try {
+                        const myPub = await nostr.getPublicKey();
+                        if (myPub === hexKey) return;
+                        const r = relayUrl || await getRelayURL();
+                        const muteEvent = await window.fetchExistingMuteList(myPub, r);
+                        if (muteEvent && muteEvent.tags && muteEvent.tags.some(t => t[0] === 'p' && t[1] === hexKey)) {
+                            mb.textContent = 'Muted';
+                            mb.classList.add('muted');
+                        }
+                    } catch (e) { /* ignore */ }
+                })();
             }
             displayNostrData();
         }
@@ -2761,6 +2791,74 @@
                 }, 3000);
             }
         });
+
+        // Mute button: NIP-51 mute list (kind 10000) – add this profile's pubkey to our mute list
+        const muteButton = document.getElementById('mute-button');
+        if (muteButton) {
+            muteButton.addEventListener('click', async function(event) {
+                event.preventDefault();
+                const followErrorMessageDiv = document.getElementById('follow-error-message');
+                followErrorMessageDiv.textContent = '';
+
+                const nostr = getNostrExtension();
+                if (!nostr) {
+                    followErrorMessageDiv.textContent = 'Nostr extension required to mute.';
+                    return;
+                }
+                if (!hexKey) {
+                    followErrorMessageDiv.textContent = 'Target pubkey not available.';
+                    return;
+                }
+
+                try {
+                    muteButton.disabled = true;
+                    muteButton.textContent = 'Processing...';
+                    const userPublicKey = await nostr.getPublicKey();
+                    if (userPublicKey === hexKey) {
+                        followErrorMessageDiv.textContent = 'You cannot mute yourself.';
+                        muteButton.disabled = false;
+                        muteButton.textContent = 'Mute';
+                        return;
+                    }
+                    if (!relayUrl) relayUrl = await getRelayURL();
+
+                    const existingMuteEvent = await window.fetchExistingMuteList(userPublicKey, relayUrl);
+                    let pTags = existingMuteEvent && existingMuteEvent.tags
+                        ? existingMuteEvent.tags.filter(t => t[0] === 'p').slice()
+                        : [];
+                    if (pTags.some(t => t[1] === hexKey)) {
+                        followErrorMessageDiv.textContent = 'Already muted.';
+                        muteButton.textContent = 'Muted';
+                        muteButton.classList.add('muted');
+                        muteButton.disabled = false;
+                        return;
+                    }
+                    pTags.push(['p', hexKey]);
+
+                    const newEvent = {
+                        kind: 10000,
+                        pubkey: userPublicKey,
+                        created_at: Math.floor(Date.now() / 1000),
+                        tags: pTags,
+                        content: existingMuteEvent ? existingMuteEvent.content : ''
+                    };
+
+                    const signedEvent = await nostr.signEvent(newEvent);
+                    const relay = nostrTools.relayInit(relayUrl);
+                    await relay.connect();
+                    await relay.publish(signedEvent);
+                    relay.close();
+
+                    muteButton.textContent = 'Muted';
+                    muteButton.classList.add('muted');
+                } catch (error) {
+                    console.error('Error muting:', error);
+                    followErrorMessageDiv.textContent = `Error: ${error.message || error}`;
+                } finally {
+                    muteButton.disabled = false;
+                }
+            });
+        }
 
         // Test function for the specific problematic nprofile
         window.testSpecificNprofile = function() {

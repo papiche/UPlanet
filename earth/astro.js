@@ -76,7 +76,7 @@
  *    <script src="path/to/common.js"></script>  <!-- Load common.js for NOSTR -->
  *    <script src="path/to/astro.js"></script>
  *    <script>
- *        // Send encrypted analytics (kind 10000 with encrypted content) - only user can decrypt
+ *        // Send encrypted analytics (kind 10600 with encrypted content) - only user can decrypt
  *        // Requires: nostr.bundle.js loaded, user private key available
  *        uPlanetAnalytics.sendEncryptedAsNostrEvent({
  *            type: 'page_view',
@@ -94,12 +94,12 @@
  * NOSTR INTEGRATION:
  * ------------------
  * If common.js is loaded and NOSTR is connected (websocket confirmed), analytics
- * are sent as NOSTR events (kind 10000) instead of HTTP POST to /ping.
+ * are sent as NOSTR events (kind 10600) instead of HTTP POST to /ping.
  * 
  * ENCRYPTED ANALYTICS:
  * --------------------
  * If nostr.bundle.js is loaded and user private key is available, analytics can
- * be encrypted using NIP-44 (kind 10000 with encrypted content). Only the user can decrypt their own
+ * be encrypted using NIP-44 (kind 10600 with encrypted content). Only the user can decrypt their own
  * analytics, providing a private navigation history. The encryption status is indicated by tags
  * (["t", "encrypted"]) and the encrypted content field.
  * 
@@ -109,9 +109,9 @@
  * - Queryable: can be queried via NOSTR filters
  * - Privacy: user controls which relays store their analytics
  * 
- * Event Structure (kind 10000):
+ * Event Structure (kind 10600):
  * {
- *     kind: 10000,  // Used for both encrypted and unencrypted analytics
+ *     kind: 10600,  // Used for both encrypted and unencrypted analytics
  *     content: JSON.stringify(analytics_data) or encrypted_content (NIP-44),
  *     tags: [
  *         ['t', 'analytics'],
@@ -315,7 +315,7 @@ window.uPlanetAnalytics = {
 
     /**
      * Send analytics as NOSTR event (if common.js is loaded and NOSTR is connected)
-     * Uses kind 10000 for analytics events (custom kind for UPlanet analytics)
+     * Uses kind 10600 for analytics events (custom kind for UPlanet analytics)
      * 
      * @param {Object} data - Analytics data to send
      * @param {boolean} includeContext - Include page context (default: true)
@@ -367,7 +367,7 @@ window.uPlanetAnalytics = {
                 const result = await publishNote(
                     content,
                     tags,
-                    10000,  // Kind 10000: UPlanet Analytics Event
+                    10600,  // Kind 10600: UPlanet Analytics (NIP-51 reserves kind 10000 for mute list)
                     {
                         silent: true,  // Don't show alerts
                         timeout: 5000
@@ -416,7 +416,7 @@ window.uPlanetAnalytics = {
     },
 
     /**
-     * Send encrypted analytics as NOSTR event (kind 10000 with encrypted content)
+     * Send encrypted analytics as NOSTR event (kind 10600 with encrypted content)
      * Encrypts analytics data using NIP-44 so only the user can decrypt it
      * 
      * Uses APPROACH A (Direct Encryption) by default - recommended for analytics (~3-5 KB)
@@ -571,7 +571,7 @@ window.uPlanetAnalytics = {
                 const result = await publishNote(
                     encryptedContent,
                     tags,
-                    10000,  // Kind 10000: UPlanet Analytics Event (encrypted content)
+                    10600,  // Kind 10600: UPlanet Analytics (NIP-51 reserves kind 10000 for mute list) (encrypted content)
                     {
                         silent: true,  // Don't show alerts
                         timeout: 5000
@@ -786,7 +786,7 @@ window.uPlanetAnalytics = {
                 const result = await publishNote(
                     encryptedContent,  // Contains encrypted CID + gateway
                     tags,
-                    10000,  // Kind 10000: UPlanet Analytics Event (encrypted content via IPFS)
+                    10600,  // Kind 10600: UPlanet Analytics (NIP-51 reserves kind 10000 for mute list) (encrypted content via IPFS)
                     {
                         silent: true,
                         timeout: 5000

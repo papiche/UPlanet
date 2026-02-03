@@ -1697,6 +1697,92 @@ async function fetchUserFollowList(pubkey, timeout = 3000) {
 }
 
 /**
+ * Fetch user's mute list (NIP-51 kind 10000)
+ * @param {string} pubkey - User public key (hex)
+ * @param {number} timeout - Timeout in ms (default: 5000)
+ * @returns {Promise<Array<string>>} Array of muted pubkeys from "p" tags
+ */
+async function fetchUserMuteList(pubkey, timeout = 5000) {
+    if (!nostrRelay || !pubkey) return [];
+
+    return new Promise((resolve) => {
+        const sub = nostrRelay.sub([{
+            kinds: [10000],
+            authors: [pubkey],
+            limit: 1
+        }]);
+
+        let muteEvent = null;
+
+        sub.on('event', (event) => {
+            muteEvent = event;
+        });
+
+        sub.on('eose', () => {
+            sub.unsub();
+            if (muteEvent && muteEvent.tags) {
+                const list = muteEvent.tags
+                    .filter(tag => tag[0] === 'p' && tag[1])
+                    .map(tag => tag[1]);
+                resolve(list);
+            } else {
+                resolve([]);
+            }
+        });
+
+        setTimeout(() => {
+            sub.unsub();
+            if (muteEvent && muteEvent.tags) {
+                const list = muteEvent.tags
+                    .filter(tag => tag[0] === 'p' && tag[1])
+                    .map(tag => tag[1]);
+                resolve(list);
+            } else {
+                resolve([]);
+            }
+        }, timeout);
+    });
+}
+
+/** Cached muted pubkeys Set for current user (NIP-51). Populated by loadMuteList(). */
+let mutedPubkeys = new Set();
+
+/**
+ * Load current user's mute list and cache it in mutedPubkeys (and window.mutedPubkeys).
+ * Call when user is connected to filter messages.
+ * @returns {Promise<Set<string>>} Set of muted pubkeys
+ */
+async function loadMuteList() {
+    const pubkey = typeof getUserPubkey === 'function' ? getUserPubkey() : (userPubkey || window.userPubkey);
+    if (!pubkey) {
+        mutedPubkeys = new Set();
+        if (typeof window !== 'undefined') window.mutedPubkeys = mutedPubkeys;
+        return mutedPubkeys;
+    }
+    try {
+        const list = await fetchUserMuteList(pubkey);
+        mutedPubkeys = new Set(list);
+        if (typeof window !== 'undefined') window.mutedPubkeys = mutedPubkeys;
+        return mutedPubkeys;
+    } catch (e) {
+        console.debug('loadMuteList error:', e);
+        mutedPubkeys = new Set();
+        if (typeof window !== 'undefined') window.mutedPubkeys = mutedPubkeys;
+        return mutedPubkeys;
+    }
+}
+
+/**
+ * Get cached muted pubkeys (Set). Returns empty Set if loadMuteList() not called yet.
+ * If window.mutedPubkeys is set (e.g. by app using its own pool), that Set is returned.
+ * @returns {Set<string>}
+ */
+function getMutedPubkeys() {
+    if (typeof window !== 'undefined' && window.mutedPubkeys instanceof Set) return window.mutedPubkeys;
+    return mutedPubkeys || new Set();
+}
+
+/**
  * Check if current user follows target user
  * @param {string} targetPubkey - User to check
  * @returns {Promise<boolean>} True if following
@@ -3996,6 +4082,9 @@ if (typeof window !== 'undefined') {
     window.fetchUserEmailWithFallback = fetchUserEmailWithFallback;
     window.fetchUserFollowsWithMetadata = fetchUserFollowsWithMetadata;
     window.fetchUserFollowList = fetchUserFollowList;
+    window.fetchUserMuteList = fetchUserMuteList;
+    window.loadMuteList = loadMuteList;
+    window.getMutedPubkeys = getMutedPubkeys;
     window.fetchUserMetadata = fetchUserMetadata;
     window.fetchUserIdentities = fetchUserIdentities;
     window.fetchUserUDriveInfo = fetchUserUDriveInfo;

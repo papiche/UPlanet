@@ -55,8 +55,8 @@ Le point de départ n'est pas un formulaire, mais une communauté. Rejoignez le 
 
 **Étape 2 : Devenir Co-Propriétaire (L'Apport au Capital)**
 C'est l'acte qui vous fait passer de visiteur à associé.
-*   Rendez-vous sur la page des sociétaires **[UPlanet Ẑen](https://opencollective.com/uplanet-zero)**.
-*   Choisissez votre niveau d'implication (ex: [Part "Satellite" à 50€/an](https://opencollective.com/uplanet-zero/contribute/achat-128-go-sur-nanopi5-86611)).
+*   Rendez-vous sur la page des sociétaires **[UPlanet Ẑen](https://opencollective.com/monnaie-libre)**.
+*   Choisissez votre niveau d'implication (ex: [Part "Satellite" à 50€/an](https://opencollective.com/monnaie-libre/contribute/parrainage-infrastructure-extension-128-go-98386)).
 *   **Important :** Utilisez le même email que celui que vous souhaitez pour votre MULTIPASS. Ce paiement vous donne accès à vos services **sans payer de "loyer" hebdomadaire**.
 
 **Étape 3 : Sceller le Pacte (La Preuve d'Humanité)**

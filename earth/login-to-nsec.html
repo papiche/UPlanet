@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Keygen: Nostr + Ğ1 (Duniter) + IPNS (IPFS)</title>
+    <title>Keygen: Nostr + Ğ1 (Duniter) + IPNS</title>
     <style>
         * { box-sizing: border-box; }
         body {
@@ -42,53 +42,29 @@
         }
         button:hover { background: #096a8a; }
         button:disabled { background: #444; cursor: not-allowed; }
-        .result {
-            margin-top: 1.25rem;
-            padding: 1rem;
-            background: #252525;
-            border-radius: 6px;
-            border: 1px solid #333;
-        }
-        .result h3 { margin: 0 0 0.5rem; font-size: 0.9rem; color: #888; }
-        .result pre, .result code {
-            font-family: ui-monospace, monospace;
-            font-size: 0.8rem;
-            word-break: break-all;
-            white-space: pre-wrap;
-        }
-        .error { color: #e66; }
-        .success { color: #6a6; }
+        .result { margin-top: 1.25rem; padding: 1rem; background: #252525; border-radius: 6px; border: 1px solid #333; }
+        .result pre { font-family: ui-monospace, monospace; font-size: 0.8rem; word-break: break-all; white-space: pre-wrap; color: #fff; }
+        .error { color: #e66; } .success { color: #6a6; }
         
-        .extra-keys {
-            margin-top: 1.5rem;
-            padding-top: 1rem;
-            border-top: 1px solid #333;
-            display: grid;
-            gap: 1rem;
-        }
+        .extra-keys { margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid #333; display: grid; gap: 1rem; }
         .key-block label { font-size: 0.85rem; color: #aaa; }
         .key-block input { font-family: ui-monospace, monospace; font-size: 0.9rem; margin-bottom: 0; }
-        
         .g1-key input { color: #ffd700; border-color: #554400; }
         .ipfs-key input { color: #69c4cd; border-color: #204d52; }
     </style>
 
-    <!-- Lib Crypto: NaCl (Ed25519) -->
-    <!-- Si vous l'avez en local, gardez votre chemin, sinon voici le CDN fiable -->
-    <script src="https://unpkg.com/tweetnacl/nacl-fast.min.js"></script>
+    <!-- 1. CHARGEMENT DES LIBRAIRIES JS LOCALE / IPFS -->
+    <!-- Assure-toi que ces fichiers sont dans le même dossier -->
+    <script src="nacl-fast.min.js"></script>
+    <script src="scrypt.min.js"></script>
+    
+    <!-- ICI : On utilise nostr.bundle.js qui est souvent la version 'window' -->
+    <script src="nostr.bundle.js"></script> 
 
-    <!-- 
-       CORRECTION : Remplacement du chargement externe de bs58.js
-       On définit ici une version minimaliste de Base58 compatible navigateur
-    -->
+    <!-- 2. MINI-LIBRAIRIE BASE58 INTÉGRÉE -->
     <script>
         (function() {
             const ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
-            const ALPHABET_MAP = {};
-            for(let i = 0; i < ALPHABET.length; i++) {
-                ALPHABET_MAP[ALPHABET.charAt(i)] = i;
-            }
-            
             window.bs58 = {
                 encode: function(buffer) {
                     if (buffer.length === 0) return "";
@@ -107,13 +83,8 @@
                             carry = (carry / 58) | 0;
                         }
                     }
-                    // Deal with leading zeros
-                    for (i = 0; i < buffer.length && buffer[i] === 0; i++) {
-                        digits.push(0);
-                    }
-                    return digits.reverse().map(function(digit) { 
-                        return ALPHABET[digit]; 
-                    }).join("");
+                    for (i = 0; i < buffer.length && buffer[i] === 0; i++) digits.push(0);
+                    return digits.reverse().map(d => ALPHABET[d]).join("");
                 }
             };
         })();
@@ -152,14 +123,8 @@
         <pre id="debugLog" style="font-size: 0.75rem; max-height: 200px; overflow: auto; background: #222; padding: 0.5rem; border-radius: 4px; margin: 0.25rem 0 0;"></pre>
     </details>
 
-    <!-- Charge scrypt localement ou via CDN -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/scrypt-js/3.0.1/scrypt.min.js"></script>
-    
-    <script type="module">
-        import * as NostrTools from 'https://unpkg.com/nostr-tools@1.17.0/lib/nostr.bundle.js'; 
-        // Note: Assurez-vous d'avoir le bon bundle nostr-tools. 
-        // Si vous utilisez votre version locale './nostr-tools.bundle.js', remettez votre import.
-
+    <!-- 3. SCRIPT PRINCIPAL -->
+    <script>
         const saltEl = document.getElementById('salt');
         const pepperEl = document.getElementById('pepper');
         const btn = document.getElementById('btn');
@@ -173,13 +138,150 @@
         function debugLog(msg) {
             debugLines.push(msg);
             if (debugEl) debugEl.textContent = debugLines.join('\n');
+            console.log(msg);
         }
 
-        // Paramètres Scrypt standard (N=4096 pour compatibilité Astroport/Duniter classique)
         const N = 4096, r = 16, p = 1, dkLen = 32;
 
-        // Base36 Encoder pour IPNS (CIDv1)
         function toBase36(uint8array) {
             const alphabet = '0123456789abcdefghijklmnopqrstuvwxyz';
             let value = 0n;
-            f
+            for (const byte of uint8array) value = (value << 8n) + BigInt(byte);
+            let output = '';
+            while (value > 0n) {
+                output = alphabet[Number(value % 36n)] + output;
+                value /= 36n;
+            }
+            return output || '0';
+        }
+
+        function scryptPromise(password, salt) {
+            return new Promise((resolve, reject) => {
+                if (typeof scrypt === 'undefined') return reject("scrypt.min.js missing");
+                
+                try {
+                    // Tente la version Promise
+                    const res = scrypt.scrypt(password, salt, N, r, p, dkLen);
+                    if(res instanceof Promise) res.then(k => resolve(new Uint8Array(k))).catch(reject);
+                    else scrypt.scrypt(password, salt, N, r, p, dkLen, (e, k) => e ? reject(e) : resolve(new Uint8Array(k)));
+                } catch(e) {
+                    // Fallback version function directe
+                    try {
+                        scrypt(password, salt, N, r, p, dkLen, (e, k) => e ? reject(e) : resolve(new Uint8Array(k)));
+                    } catch(e2) { reject(e2); }
+                }
+            });
+        }
+
+        async function derive() {
+            // --- 1. DÉTECTION NOSTR ---
+            // On cherche l'objet global, peu importe comment le fichier s'appelle
+            const NostrLib = window.NostrTools || window.Nostr || window.nostrTools;
+            
+            if (!NostrLib) {
+                alert("ERREUR CRITIQUE: Librairie Nostr introuvable.\nVérifiez que 'nostr.bundle.js' est bien chargé.");
+                return;
+            }
+
+            const salt = (saltEl.value || '').trim();
+            const pepper = pepperEl.value || '';
+
+            if (!salt || !pepper) {
+                statusEl.style.display = 'block';
+                statusEl.innerHTML = '<span class="error">Entrez un login et un mot de passe.</span>';
+                return;
+            }
+
+            btn.disabled = true;
+            statusEl.style.display = 'block';
+            statusEl.innerHTML = 'Calcul des clés...';
+            statusEl.className = 'result';
+            outEl.style.display = 'none';
+            debugLines.length = 0;
+            debugEl.textContent = "";
+
+            try {
+                // --- 2. SCRYPT ---
+                const passwordBytes = new TextEncoder().encode(pepper);
+                const saltBytes = new TextEncoder().encode(salt);
+                const seed = await scryptPromise(passwordBytes, saltBytes);
+                debugLog('Seed Scrypt OK');
+
+                // --- 3. ED25519 (G1 & IPFS) ---
+                if (typeof nacl === 'undefined') throw new Error("nacl-fast.min.js manquant");
+                
+                const edKeyPair = nacl.sign.keyPair.fromSeed(seed);
+                const pubKeyBytes = edKeyPair.publicKey; // 32 bytes
+
+                // G1 (Base58)
+                const g1Pub = window.bs58.encode(pubKeyBytes);
+                g1El.value = g1Pub;
+                
+                // IPNS (CIDv1 Base36)
+                const header = new Uint8Array([0x01, 0x72, 0x00, 0x24, 0x08, 0x01, 0x12, 0x20]);
+                const ipnsBuffer = new Uint8Array(header.length + pubKeyBytes.length);
+                ipnsBuffer.set(header);
+                ipnsBuffer.set(pubKeyBytes, header.length);
+                ipnsEl.value = 'k' + toBase36(ipnsBuffer);
+
+                // --- 4. NOSTR (Secp256k1) ---
+                // Hash de la seed pour avoir une clé privée compatible
+                const privKeyBuf = await crypto.subtle.digest('SHA-256', seed);
+                const privKeyBytes = new Uint8Array(privKeyBuf);
+                
+                // Conversion Hex
+                const privHex = Array.from(privKeyBytes).map(b => ('0'+b.toString(16)).slice(-2)).join('');
+
+                // Utilisation de la librairie détectée
+                let pubHex, nsec, npub;
+
+                // Cas 1: Librairie type "nostr-tools" v1+
+                if (NostrLib.getPublicKey) {
+                    pubHex = NostrLib.getPublicKey(privHex); 
+                } 
+                // Cas 2: Anciennes versions ou variantes
+                else if (typeof NostrLib.getPublicKey === 'function') {
+                    pubHex = NostrLib.getPublicKey(privHex);
+                }
+                
+                // Encodage bech32 (nip19)
+                if (NostrLib.nip19) {
+                    nsec = NostrLib.nip19.nsecEncode(privHex); // Parfois prend hex, parfois bytes
+                    npub = NostrLib.nip19.npubEncode(pubHex);
+                } else {
+                    nsec = "Erreur lib (nip19 missing)";
+                    npub = "Erreur lib";
+                }
+
+                statusEl.innerHTML = '<span class="success">Clés générées avec succès !</span>';
+                statusEl.classList.add('success');
+                
+                outEl.style.display = 'block';
+                outEl.innerHTML = 
+                    '<h3>Nostr nsec</h3><pre>' + (nsec) + '</pre>' +
+                    '<h3>Nostr npub</h3><pre>' + (npub) + '</pre>';
+
+            } catch (e) {
+                console.error(e);
+                statusEl.innerHTML = '<span class="error">Erreur: ' + (e.message || e) + '</span>';
+                statusEl.classList.add('error');
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        btn.addEventListener('click', derive);
+        pepperEl.addEventListener('keydown', e => { if(e.key === 'Enter') derive() });
+        
+        // Debug au chargement
+        window.addEventListener('load', () => {
+             const nlib = window.NostrTools || window.Nostr;
+             debugLog("Page chargée.");
+             debugLog("Libs: NaCl=" + (typeof nacl !== 'undefined') + 
+                      ", Scrypt=" + (typeof scrypt !== 'undefined') + 
+                      ", Nostr=" + (!!nlib));
+             if(nlib) debugLog("Lib Nostr détectée: " + (window.NostrTools ? "NostrTools" : "Nostr"));
+        });
+    </script>
+</body>
+</html>

@@ -42,15 +42,6 @@
         }
         button:hover { background: #096a8a; }
         button:disabled { background: #444; cursor: not-allowed; }
-        .warning {
-            background: #3a3520;
-            border: 1px solid #6b5c20;
-            color: #e6d68a;
-            padding: 0.75rem;
-            border-radius: 6px;
-            font-size: 0.85rem;
-            margin-bottom: 1.25rem;
-        }
         .result {
             margin-top: 1.25rem;
             padding: 1rem;
@@ -65,12 +56,9 @@
             word-break: break-all;
             white-space: pre-wrap;
         }
-        .result pre { margin: 0.25rem 0 0.75rem; }
-        .result pre:last-child { margin-bottom: 0; }
         .error { color: #e66; }
         .success { color: #6a6; }
         
-        /* Styles spécifiques pour les identités tierces */
         .extra-keys {
             margin-top: 1.5rem;
             padding-top: 1rem;
@@ -78,37 +66,65 @@
             display: grid;
             gap: 1rem;
         }
-        .key-block label {
-            font-size: 0.85rem;
-            color: #aaa;
-        }
-        .key-block input {
-            font-family: ui-monospace, monospace;
-            font-size: 0.9rem;
-            margin-bottom: 0;
-        }
+        .key-block label { font-size: 0.85rem; color: #aaa; }
+        .key-block input { font-family: ui-monospace, monospace; font-size: 0.9rem; margin-bottom: 0; }
         
-        /* Couleur Duniter */
         .g1-key input { color: #ffd700; border-color: #554400; }
-        
-        /* Couleur IPFS */
         .ipfs-key input { color: #69c4cd; border-color: #204d52; }
-
     </style>
 
-    <script src="nacl-fast.min.js"></script>
-    <script src="bs58.js"></script>
+    <!-- Lib Crypto: NaCl (Ed25519) -->
+    <!-- Si vous l'avez en local, gardez votre chemin, sinon voici le CDN fiable -->
+    <script src="https://unpkg.com/tweetnacl/nacl-fast.min.js"></script>
+
+    <!-- 
+       CORRECTION : Remplacement du chargement externe de bs58.js
+       On définit ici une version minimaliste de Base58 compatible navigateur
+    -->
+    <script>
+        (function() {
+            const ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+            const ALPHABET_MAP = {};
+            for(let i = 0; i < ALPHABET.length; i++) {
+                ALPHABET_MAP[ALPHABET.charAt(i)] = i;
+            }
+            
+            window.bs58 = {
+                encode: function(buffer) {
+                    if (buffer.length === 0) return "";
+                    let i, j, digits = [0];
+                    for (i = 0; i < buffer.length; i++) {
+                        for (j = 0; j < digits.length; j++) digits[j] <<= 8;
+                        digits[0] += buffer[i];
+                        let carry = 0;
+                        for (j = 0; j < digits.length; ++j) {
+                            digits[j] += carry;
+                            carry = (digits[j] / 58) | 0;
+                            digits[j] %= 58;
+                        }
+                        while (carry) {
+                            digits.push(carry % 58);
+                            carry = (carry / 58) | 0;
+                        }
+                    }
+                    // Deal with leading zeros
+                    for (i = 0; i < buffer.length && buffer[i] === 0; i++) {
+                        digits.push(0);
+                    }
+                    return digits.reverse().map(function(digit) { 
+                        return ALPHABET[digit]; 
+                    }).join("");
+                }
+            };
+        })();
+    </script>
 </head>
 <body>
     <h1>Login/Pass → Universal Keygen</h1>
     <p class="subtitle">Derives keys for Nostr, Duniter (Ğ1) and IPFS (IPNS) from a single Scrypt seed.</p>
 
-    <div class="warning">
-        Use only on a trusted device. Credentials are processed locally in memory.
-    </div>
-
     <label for="salt">Salt (login / username)</label>
-    <input type="text" id="salt" placeholder="e.g. mylogin or UPLANETNAME+LAT" autocomplete="username">
+    <input type="text" id="salt" placeholder="e.g. mylogin" autocomplete="username">
 
     <label for="pepper">Pepper (password)</label>
     <input type="password" id="pepper" placeholder="Your password" autocomplete="current-password">
@@ -117,15 +133,14 @@
 
     <div id="status" class="result" style="display: none;"></div>
     
-    <!-- Zone Clés Supplémentaires -->
     <div class="extra-keys">
         <div class="key-block g1-key">
-            <label>Ğ1 Public Key (Duniter v1):</label>
+            <label>Ğ1 Public Key (Duniter v1) - Base58:</label>
             <input type="text" id="g1_pub" readonly placeholder="..." />
         </div>
 
         <div class="key-block ipfs-key">
-            <label>IPNS Name (IPFS Peer ID - k51...):</label>
+            <label>IPNS Name (IPFS Peer ID) - Base36 CIDv1:</label>
             <input type="text" id="ipns_key" readonly placeholder="..." />
         </div>
     </div>
@@ -137,10 +152,13 @@
         <pre id="debugLog" style="font-size: 0.75rem; max-height: 200px; overflow: auto; background: #222; padding: 0.5rem; border-radius: 4px; margin: 0.25rem 0 0;"></pre>
     </details>
 
-    <script src="scrypt.min.js"></script>
+    <!-- Charge scrypt localement ou via CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/scrypt-js/3.0.1/scrypt.min.js"></script>
     
     <script type="module">
-        import * as NostrTools from './nostr-tools.bundle.js';
+        import * as NostrTools from 'https://unpkg.com/nostr-tools@1.17.0/lib/nostr.bundle.js'; 
+        // Note: Assurez-vous d'avoir le bon bundle nostr-tools. 
+        // Si vous utilisez votre version locale './nostr-tools.bundle.js', remettez votre import.
 
         const saltEl = document.getElementById('salt');
         const pepperEl = document.getElementById('pepper');
@@ -157,106 +175,11 @@
             if (debugEl) debugEl.textContent = debugLines.join('\n');
         }
 
+        // Paramètres Scrypt standard (N=4096 pour compatibilité Astroport/Duniter classique)
         const N = 4096, r = 16, p = 1, dkLen = 32;
 
-        // --- Base36 Encoder (pour IPNS) ---
+        // Base36 Encoder pour IPNS (CIDv1)
         function toBase36(uint8array) {
             const alphabet = '0123456789abcdefghijklmnopqrstuvwxyz';
             let value = 0n;
-            for (const byte of uint8array) {
-                value = (value << 8n) + BigInt(byte);
-            }
-            let output = '';
-            while (value > 0n) {
-                output = alphabet[Number(value % 36n)] + output;
-                value /= 36n;
-            }
-            // Gestion des zéros initiaux (pour Base36 standard, '0' est le char 0)
-            // Note: Pour les CIDs IPFS, l'encodage se fait sur le nombre global, 
-            // mais on ajoute souvent un padding si nécessaire. Ici implementation simple.
-            // Si le résultat est vide (input=0), on met '0'
-            return output || '0';
-        }
-
-        function scryptPromise(password, salt, N, r, p, dkLen) {
-            return new Promise(function (resolve, reject) {
-                if (typeof scrypt !== 'undefined' && scrypt.scrypt) {
-                    scrypt.scrypt(password, salt, N, r, p, dkLen).then(function (key) {
-                        resolve(new Uint8Array(key));
-                    }).catch(reject);
-                    return;
-                }
-                scrypt(password, salt, N, r, p, dkLen, function (err, key) {
-                    if (err) reject(err);
-                    else resolve(new Uint8Array(key));
-                });
-            });
-        }
-
-        function sha256Bytes(data) {
-            return crypto.subtle.digest('SHA-256', data).then(function (buf) {
-                return new Uint8Array(buf);
-            });
-        }
-
-        function bytesToHex(bytes) {
-            return Array.from(bytes).map(function (b) {
-                return ('0' + b.toString(16)).slice(-2);
-            }).join('');
-        }
-
-        function hexToBytes(hex) {
-            const bytes = new Uint8Array(hex.length / 2);
-            for (let i = 0; i < bytes.length; i++) {
-                bytes[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
-            }
-            return bytes;
-        }
-
-        function escapeHtml(s) {
-            const div = document.createElement('div');
-            div.textContent = s;
-            return div.innerHTML;
-        }
-
-        function logStep(step, value) {
-            const type = value === null ? 'null' : value === undefined ? 'undefined' : typeof value;
-            const preview = typeof value === 'string' ? (value.length > 20 ? value.slice(0, 20) + '…' : value) : (value instanceof Uint8Array ? 'Uint8Array(' + value.length + ')' : String(value).slice(0, 50));
-            debugLog(step + ' type=' + type + ' preview=' + preview);
-        }
-
-        async function derive() {
-            const salt = (saltEl.value || '').trim();
-            const pepper = pepperEl.value || '';
-
-            if (!salt || !pepper) {
-                statusEl.style.display = 'block';
-                statusEl.innerHTML = '<span class="error">Please enter both salt (login) and pepper (password).</span>';
-                outEl.style.display = 'none';
-                return;
-            }
-
-            btn.disabled = true;
-            statusEl.style.display = 'block';
-            statusEl.innerHTML = 'Deriving keys (Nostr + G1 + IPFS)…';
-            statusEl.classList.remove('error', 'success');
-            outEl.style.display = 'none';
-            g1El.value = "";
-            ipnsEl.value = "";
-
-            debugLines.length = 0;
-            if (debugEl) debugEl.textContent = '';
-
-            try {
-                const passwordBytes = new TextEncoder().encode(pepper);
-                const saltBytes = new TextEncoder().encode(salt);
-
-                // 1. Scrypt Derivation (Seed commune)
-                const ed25519Seed = await scryptPromise(
-                    passwordBytes, saltBytes, N, r, p, dkLen
-                );
-                
-                // --- 2. Génération Ed25519 (G1 + IPNS) ---
-                try {
-                    if (typeof nacl === 'undefined' || typeof bs58 === 'undefined') {
-                        throw new Error("Missing libs: nacl-fast
+            f

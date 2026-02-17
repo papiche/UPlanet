@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Universal Keygen: v1 (Scrypt) & v2 (Mnemonic)</title>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 1rem;
+            background: #1a1a1a;
+            color: #e0e0e0;
+            min-height: 100vh;
+        }
+        h1 { font-size: 1.25rem; margin-bottom: 0.5rem; color: #fff; }
+        .subtitle { font-size: 0.85rem; color: #888; margin-bottom: 1.25rem; }
+        
+        /* TABS CSS */
+        .tabs { display: flex; border-bottom: 1px solid #444; margin-bottom: 1rem; }
+        .tab {
+            padding: 0.75rem 1rem;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            color: #888;
+            font-weight: 600;
+        }
+        .tab.active { color: #0a7ea4; border-bottom-color: #0a7ea4; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        label { display: block; margin-bottom: 0.35rem; font-weight: 600; color: #ccc; }
+        input[type="text"], input[type="password"], textarea {
+            width: 100%;
+            padding: 0.6rem 0.75rem;
+            margin-bottom: 1rem;
+            border: 1px solid #444;
+            border-radius: 6px;
+            background: #2a2a2a;
+            color: #eee;
+            font-size: 1rem;
+        }
+        textarea { resize: vertical; min-height: 80px; font-family: ui-monospace, monospace; }
+        input:focus, textarea:focus { outline: none; border-color: #0a7ea4; }
+        
+        button {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            background: #0a7ea4;
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            margin-bottom: 0.5rem;
+        }
+        button.secondary { background: #444; }
+        button:hover { filter: brightness(1.1); }
+        button:disabled { background: #444; cursor: not-allowed; opacity: 0.7; }
+
+        .result { margin-top: 1.25rem; padding: 1rem; background: #252525; border-radius: 6px; border: 1px solid #333; }
+        .result pre { font-family: ui-monospace, monospace; font-size: 0.8rem; word-break: break-all; white-space: pre-wrap; color: #fff; }
+        .error { color: #e66; } .success { color: #6a6; }
+        
+        .extra-keys { margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid #333; display: grid; gap: 1rem; }
+        .key-block label { font-size: 0.85rem; color: #aaa; }
+        .key-block input { font-family: ui-monospace, monospace; font-size: 0.9rem; margin-bottom: 0; }
+        .g1-key input { color: #ffd700; border-color: #554400; }
+        .ipfs-key input { color: #69c4cd; border-color: #204d52; }
+    </style>
+
+    <!-- 1. LIBRAIRIES -->
+    <!-- NaCl & Scrypt (Legacy v1) -->
+    <script src="nacl-fast.min.js"></script>
+    <script src="scrypt.min.js"></script>
+    
+    <!-- Nostr (Standalone) -->
+    <script src="nostr.bundle.js"></script>
+
+    <!-- BIP39 (Utilisation de la version 2.6.0 qui contient le build navigateur https://unpkg.com/bip39@2.6.0/index.js -->
+    <script src="bip39.js"></script>
+
+    <!-- 2. MINI-LIB BASE58 (Interne) -->
+    <script>
+        (function() {
+            const ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+            window.bs58 = {
+                encode: function(buffer) {
+                    if (buffer.length === 0) return "";
+                    let i, j, digits = [0];
+                    for (i = 0; i < buffer.length; i++) {
+                        for (j = 0; j < digits.length; j++) digits[j] <<= 8;
+                        digits[0] += buffer[i];
+                        let carry = 0;
+                        for (j = 0; j < digits.length; ++j) {
+                            digits[j] += carry;
+                            carry = (digits[j] / 58) | 0;
+                            digits[j] %= 58;
+                        }
+                        while (carry) {
+                            digits.push(carry % 58);
+                            carry = (carry / 58) | 0;
+                        }
+                    }
+                    for (i = 0; i < buffer.length && buffer[i] === 0; i++) digits.push(0);
+                    return digits.reverse().map(d => ALPHABET[d]).join("");
+                }
+            };
+        })();
+    </script>
+</head>
+<body>
+    <h1>Universal Keygen</h1>
+    <p class="subtitle">Compatible Duniter v1 (Login/Pass) & v2 (Mnemonic/BIP39)</p>
+
+    <!-- TABS -->
+    <div class="tabs">
+        <div class="tab active" onclick="switchTab('v1')">Legacy (v1)</div>
+        <div class="tab" onclick="switchTab('v2')">Mnemonic (v2)</div>
+    </div>
+
+    <!-- CONTENU V1 -->
+    <div id="tab-v1" class="tab-content active">
+        <label for="salt">Salt (login / username)</label>
+        <input type="text" id="salt" placeholder="e.g. mylogin" autocomplete="username">
+        <label for="pepper">Pepper (password)</label>
+        <input type="password" id="pepper" placeholder="Your password" autocomplete="current-password">
+    </div>
+
+    <!-- CONTENU V2 -->
+    <div id="tab-v2" class="tab-content">
+        <label for="mnemonic">Mnemonic Phrase (12 or 24 words)</label>
+        <textarea id="mnemonic" placeholder="abandon ability able about above absent..."></textarea>
+        <button class="secondary" id="btn-gen" style="width:auto; font-size: 0.8rem; padding: 0.4rem 0.8rem;">🎲 Generate Random Words</button>
+        <div style="margin-top: 1rem;">
+            <label for="passphrase">Passphrase (Optional)</label>
+            <input type="password" id="passphrase" placeholder="Optional BIP39 passphrase">
+        </div>
+    </div>
+
+    <button id="btn">Derive All Keys</button>
+
+    <div id="status" class="result" style="display: none;"></div>
+    
+    <div class="extra-keys">
+        <div class="key-block g1-key">
+            <label>Ed25519 PubKey (Duniter/G1) - Base58:</label>
+            <input type="text" id="g1_pub" readonly placeholder="..." />
+        </div>
+        <div class="key-block ipfs-key">
+            <label>IPNS Name (CIDv1 Base36):</label>
+            <input type="text" id="ipns_key" readonly placeholder="..." />
+        </div>
+    </div>
+
+    <div id="out" class="result" style="display: none;"></div>
+
+    <details style="margin-top: 1rem;">
+        <summary style="cursor: pointer; color: #888;">Debug logs</summary>
+        <pre id="debugLog" style="font-size: 0.75rem; max-height: 200px; overflow: auto; background: #222; padding: 0.5rem; border-radius: 4px; margin: 0.25rem 0 0;"></pre>
+    </details>
+
+    <!-- SCRIPT LOGIQUE -->
+    <script>
+        // --- ETAT GLOBAL ---
+        let currentMode = 'v1'; // 'v1' ou 'v2'
+
+        // --- DOM ELEMENTS ---
+        const saltEl = document.getElementById('salt');
+        const pepperEl = document.getElementById('pepper');
+        const mnemonicEl = document.getElementById('mnemonic');
+        const passphraseEl = document.getElementById('passphrase');
+        const btn = document.getElementById('btn');
+        const btnGen = document.getElementById('btn-gen');
+        const statusEl = document.getElementById('status');
+        const outEl = document.getElementById('out');
+        const g1El = document.getElementById('g1_pub');
+        const ipnsEl = document.getElementById('ipns_key');
+        const debugEl = document.getElementById('debugLog');
+        const debugLines = [];
+
+        // --- UTILS ---
+        function debugLog(msg) {
+            debugLines.push(msg);
+            if (debugEl) debugEl.textContent = debugLines.join('\n');
+            console.log(msg);
+        }
+
+        function switchTab(mode) {
+            currentMode = mode;
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            
+            // Activate
+            const index = mode === 'v1' ? 0 : 1;
+            document.querySelectorAll('.tab')[index].classList.add('active');
+            document.getElementById('tab-' + mode).classList.add('active');
+            
+            statusEl.style.display = 'none';
+            outEl.style.display = 'none';
+        }
+
+        function toBase36(uint8array) {
+            const alphabet = '0123456789abcdefghijklmnopqrstuvwxyz';
+            let value = 0n;
+            for (const byte of uint8array) value = (value << 8n) + BigInt(byte);
+            let output = '';
+            while (value > 0n) {
+                output = alphabet[Number(value % 36n)] + output;
+                value /= 36n;
+            }
+            return output || '0';
+        }
+        
+        // Helper pour convertir HEX string en Uint8Array (nécessaire pour la compatibilité BIP39 v2.6.0)
+        function hexToBytes(hex) {
+            if (hex.length % 2 !== 0) hex = "0" + hex;
+            const bytes = new Uint8Array(hex.length / 2);
+            for (let i = 0; i < bytes.length; i++) {
+                bytes[i] = parseInt(hex.substr(i * 2, 2), 16);
+            }
+            return bytes;
+        }
+
+        // --- LOGIQUE V1 (Scrypt) ---
+        const N = 4096, r = 16, p = 1, dkLen = 32;
+        function scryptPromise(password, salt) {
+            return new Promise((resolve, reject) => {
+                if (typeof scrypt === 'undefined') return reject("scrypt.min.js missing");
+                try {
+                    const res = scrypt.scrypt(password, salt, N, r, p, dkLen);
+                    if(res instanceof Promise) res.then(k => resolve(new Uint8Array(k))).catch(reject);
+                    else scrypt.scrypt(password, salt, N, r, p, dkLen, (e, k) => e ? reject(e) : resolve(new Uint8Array(k)));
+                } catch(e) {
+                    try { scrypt(password, salt, N, r, p, dkLen, (e, k) => e ? reject(e) : resolve(new Uint8Array(k))); } catch(e2) { reject(e2); }
+                }
+            });
+        }
+
+        // --- MAIN DERIVATION ---
+        async function derive() {
+            const NostrLib = window.NostrTools || window.Nostr;
+            if (!NostrLib) { alert("ERREUR: nostr.bundle.js manquant"); return; }
+            if (typeof nacl === 'undefined') { alert("ERREUR: nacl-fast.min.js manquant"); return; }
+
+            // UI Reset
+            btn.disabled = true;
+            statusEl.style.display = 'block';
+            statusEl.innerHTML = 'Computing...';
+            statusEl.className = 'result';
+            outEl.style.display = 'none';
+            debugLines.length = 0;
+            debugEl.textContent = "";
+
+            try {
+                let seed; // Doit être 32 bytes Uint8Array
+
+                if (currentMode === 'v1') {
+                    // --- MODE V1: Login/Pass ---
+                    const salt = (saltEl.value || '').trim();
+                    const pepper = pepperEl.value || '';
+                    if (!salt || !pepper) throw new Error("Please enter login and password");
+                    
+                    debugLog("Mode V1: Scrypt derivation...");
+                    const passwordBytes = new TextEncoder().encode(pepper);
+                    const saltBytes = new TextEncoder().encode(salt);
+                    seed = await scryptPromise(passwordBytes, saltBytes);
+                } 
+                else {
+                    // --- MODE V2: Mnemonic ---
+                    if (typeof bip39 === 'undefined') throw new Error("Lib bip39 manquante.");
+                    
+                    const mnemonic = (mnemonicEl.value || '').trim();
+                    const passphrase = passphraseEl.value || '';
+                    if (!mnemonic) throw new Error("Please enter a mnemonic phrase");
+                    
+                    if (!bip39.validateMnemonic(mnemonic)) {
+                        throw new Error("Invalid mnemonic phrase (checksum failed)");
+                    }
+
+                    debugLog("Mode V2: BIP39 derivation...");
+                    
+                    // 1. Mnemonic -> SeedHex (méthode compatible v2.6.0)
+                    // Cette version de la lib retourne une string HEX
+                    const seedHex = bip39.mnemonicToSeedHex(mnemonic, passphrase);
+                    
+                    // 2. Conversion Hex -> Bytes (64 bytes)
+                    const rawSeed = hexToBytes(seedHex);
+                    
+                    // 3. Selection des 32 premiers octets pour Ed25519 (Standard "MiniSecret")
+                    seed = rawSeed.slice(0, 32);
+                    debugLog("Seed computed from mnemonic.");
+                }
+
+                // --- SUITE COMMUNE (Ed25519 & Nostr) ---
+                
+                // 1. Ed25519 Keys (G1 / IPNS)
+                const edKeyPair = nacl.sign.keyPair.fromSeed(seed);
+                const pubKeyBytes = edKeyPair.publicKey;
+                
+                // G1
+                const g1Pub = window.bs58.encode(pubKeyBytes);
+                g1El.value = g1Pub;
+                
+                // IPNS
+                const header = new Uint8Array([0x01, 0x72, 0x00, 0x24, 0x08, 0x01, 0x12, 0x20]);
+                const ipnsBuffer = new Uint8Array(header.length + pubKeyBytes.length);
+                ipnsBuffer.set(header);
+                ipnsBuffer.set(pubKeyBytes, header.length);
+                ipnsEl.value = 'k' + toBase36(ipnsBuffer);
+
+                // 2. Nostr Keys (Secp256k1)
+                // On hash la seed pour Nostr pour bien séparer les domaines
+                const privKeyBuf = await crypto.subtle.digest('SHA-256', seed);
+                const privKeyBytes = new Uint8Array(privKeyBuf);
+                const privHex = Array.from(privKeyBytes).map(b => ('0'+b.toString(16)).slice(-2)).join('');
+
+                let pubHex, nsec, npub;
+                // Gestion des différentes versions de la lib Nostr
+                if (NostrLib.getPublicKey) pubHex = NostrLib.getPublicKey(privHex);
+                else pubHex = NostrLib.getPublicKey(privKeyBytes);
+
+                if (NostrLib.nip19) {
+                    nsec = NostrLib.nip19.nsecEncode(privHex);
+                    npub = NostrLib.nip19.npubEncode(pubHex);
+                }
+
+                statusEl.innerHTML = '<span class="success">Keys generated successfully!</span>';
+                statusEl.classList.add('success');
+                outEl.style.display = 'block';
+                outEl.innerHTML = 
+                    '<h3>Nostr nsec</h3><pre>' + nsec + '</pre>' +
+                    '<h3>Nostr npub</h3><pre>' + npub + '</pre>';
+
+            } catch (e) {
+                console.error(e);
+                statusEl.innerHTML = '<span class="error">Error: ' + (e.message || e) + '</span>';
+                statusEl.classList.add('error');
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        // --- EVENT LISTENERS ---
+        btn.addEventListener('click', derive);
+        
+        btnGen.addEventListener('click', () => {
+            if (typeof bip39 !== 'undefined') {
+                const mn = bip39.generateMnemonic(); // Par défaut 128 bits -> 12 mots
+                mnemonicEl.value = mn;
+                statusEl.style.display = 'block';
+                statusEl.innerHTML = 'New mnemonic generated.';
+                statusEl.className = 'result';
+            } else {
+                alert("BIP39 lib not loaded");
+            }
+        });
+
+        // Debug init
+        window.addEventListener('load', () => {
+            debugLog("Ready. Mode: " + currentMode);
+            if(typeof bip39 !== 'undefined') debugLog("BIP39 Lib OK");
+            else debugLog("WARNING: BIP39 Lib MISSING");
+        });
+    </script>
+</body>
+</html>

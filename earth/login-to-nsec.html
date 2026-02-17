@@ -3,12 +3,12 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login/Pass → Nostr nsec (keygen compatible)</title>
+    <title>Keygen: Nostr + Ğ1 (Duniter) + IPNS (IPFS)</title>
     <style>
         * { box-sizing: border-box; }
         body {
             font-family: system-ui, -apple-system, sans-serif;
-            max-width: 520px;
+            max-width: 600px;
             margin: 0 auto;
             padding: 1rem;
             background: #1a1a1a;
@@ -69,14 +69,42 @@
         .result pre:last-child { margin-bottom: 0; }
         .error { color: #e66; }
         .success { color: #6a6; }
+        
+        /* Styles spécifiques pour les identités tierces */
+        .extra-keys {
+            margin-top: 1.5rem;
+            padding-top: 1rem;
+            border-top: 1px solid #333;
+            display: grid;
+            gap: 1rem;
+        }
+        .key-block label {
+            font-size: 0.85rem;
+            color: #aaa;
+        }
+        .key-block input {
+            font-family: ui-monospace, monospace;
+            font-size: 0.9rem;
+            margin-bottom: 0;
+        }
+        
+        /* Couleur Duniter */
+        .g1-key input { color: #ffd700; border-color: #554400; }
+        
+        /* Couleur IPFS */
+        .ipfs-key input { color: #69c4cd; border-color: #204d52; }
+
     </style>
+
+    <script src="nacl-fast.min.js"></script>
+    <script src="bs58.js"></script>
 </head>
 <body>
-    <h1>Login / Pass → Nostr nsec</h1>
-    <p class="subtitle">Compatible with Astroport.ONE keygen and gcli: Scrypt(salt, pepper) then SHA256 → nsec / npub.</p>
+    <h1>Login/Pass → Universal Keygen</h1>
+    <p class="subtitle">Derives keys for Nostr, Duniter (Ğ1) and IPFS (IPNS) from a single Scrypt seed.</p>
 
     <div class="warning">
-        Use only on a trusted device and connection. Credentials are processed in memory only and never sent anywhere.
+        Use only on a trusted device. Credentials are processed locally in memory.
     </div>
 
     <label for="salt">Salt (login / username)</label>
@@ -85,17 +113,32 @@
     <label for="pepper">Pepper (password)</label>
     <input type="password" id="pepper" placeholder="Your password" autocomplete="current-password">
 
-    <button id="btn">Derive nsec / npub</button>
+    <button id="btn">Derive All Keys</button>
 
     <div id="status" class="result" style="display: none;"></div>
+    
+    <!-- Zone Clés Supplémentaires -->
+    <div class="extra-keys">
+        <div class="key-block g1-key">
+            <label>Ğ1 Public Key (Duniter v1):</label>
+            <input type="text" id="g1_pub" readonly placeholder="..." />
+        </div>
+
+        <div class="key-block ipfs-key">
+            <label>IPNS Name (IPFS Peer ID - k51...):</label>
+            <input type="text" id="ipns_key" readonly placeholder="..." />
+        </div>
+    </div>
+
     <div id="out" class="result" style="display: none;"></div>
+
     <details style="margin-top: 1rem;">
         <summary style="cursor: pointer; color: #888;">Debug logs</summary>
         <pre id="debugLog" style="font-size: 0.75rem; max-height: 200px; overflow: auto; background: #222; padding: 0.5rem; border-radius: 4px; margin: 0.25rem 0 0;"></pre>
     </details>
 
-    <!-- Local libs: scrypt.min.js (already in earth), nostr-tools.bundle.js (run ./tools/fetch-login-to-nsec-libs.sh to update) -->
     <script src="scrypt.min.js"></script>
+    
     <script type="module">
         import * as NostrTools from './nostr-tools.bundle.js';
 
@@ -104,14 +147,36 @@
         const btn = document.getElementById('btn');
         const statusEl = document.getElementById('status');
         const outEl = document.getElementById('out');
+        const g1El = document.getElementById('g1_pub');
+        const ipnsEl = document.getElementById('ipns_key');
         const debugEl = document.getElementById('debugLog');
         const debugLines = [];
+
         function debugLog(msg) {
             debugLines.push(msg);
             if (debugEl) debugEl.textContent = debugLines.join('\n');
         }
 
         const N = 4096, r = 16, p = 1, dkLen = 32;
+
+        // --- Base36 Encoder (pour IPNS) ---
+        function toBase36(uint8array) {
+            const alphabet = '0123456789abcdefghijklmnopqrstuvwxyz';
+            let value = 0n;
+            for (const byte of uint8array) {
+                value = (value << 8n) + BigInt(byte);
+            }
+            let output = '';
+            while (value > 0n) {
+                output = alphabet[Number(value % 36n)] + output;
+                value /= 36n;
+            }
+            // Gestion des zéros initiaux (pour Base36 standard, '0' est le char 0)
+            // Note: Pour les CIDs IPFS, l'encodage se fait sur le nombre global, 
+            // mais on ajoute souvent un padding si nécessaire. Ici implementation simple.
+            // Si le résultat est vide (input=0), on met '0'
+            return output || '0';
+        }
 
         function scryptPromise(password, salt, N, r, p, dkLen) {
             return new Promise(function (resolve, reject) {
@@ -157,9 +222,7 @@
         function logStep(step, value) {
             const type = value === null ? 'null' : value === undefined ? 'undefined' : typeof value;
             const preview = typeof value === 'string' ? (value.length > 20 ? value.slice(0, 20) + '…' : value) : (value instanceof Uint8Array ? 'Uint8Array(' + value.length + ')' : String(value).slice(0, 50));
-            const msg = step + ' type=' + type + ' preview=' + preview;
-            console.log('[login-to-nsec] ' + msg);
-            debugLog(msg);
+            debugLog(step + ' type=' + type + ' preview=' + preview);
         }
 
         async function derive() {
@@ -175,9 +238,11 @@
 
             btn.disabled = true;
             statusEl.style.display = 'block';
-            statusEl.innerHTML = 'Deriving key (Scrypt + SHA256)…';
+            statusEl.innerHTML = 'Deriving keys (Nostr + G1 + IPFS)…';
             statusEl.classList.remove('error', 'success');
             outEl.style.display = 'none';
+            g1El.value = "";
+            ipnsEl.value = "";
 
             debugLines.length = 0;
             if (debugEl) debugEl.textContent = '';
@@ -185,82 +250,13 @@
             try {
                 const passwordBytes = new TextEncoder().encode(pepper);
                 const saltBytes = new TextEncoder().encode(salt);
-                logStep('scrypt input pepper', passwordBytes);
-                logStep('scrypt input salt', saltBytes);
 
+                // 1. Scrypt Derivation (Seed commune)
                 const ed25519Seed = await scryptPromise(
                     passwordBytes, saltBytes, N, r, p, dkLen
                 );
-                const privateKeyBytes = await sha256Bytes(ed25519Seed);
-                const privateKeyHex = bytesToHex(privateKeyBytes);
-                logStep('privateKeyBytes', privateKeyBytes);
-                logStep('privateKeyHex', privateKeyHex);
-
-                let publicKeyHex, publicKeyBytes, nsec, npub;
-
+                
+                // --- 2. Génération Ed25519 (G1 + IPNS) ---
                 try {
-                    logStep('before getPublicKey', privateKeyBytes);
-                    publicKeyHex = NostrTools.getPublicKey(privateKeyBytes);
-                    logStep('getPublicKey result publicKeyHex', publicKeyHex);
-                } catch (e) {
-                    debugLog('ERROR getPublicKey: ' + (e.message || e));
-                    console.error('[login-to-nsec] getPublicKey failed', e);
-                    throw e;
-                }
-
-                try {
-                    publicKeyBytes = hexToBytes(publicKeyHex);
-                    logStep('publicKeyBytes', publicKeyBytes);
-                } catch (e) {
-                    debugLog('ERROR hexToBytes: ' + (e.message || e));
-                    console.error('[login-to-nsec] hexToBytes(publicKeyHex) failed', e);
-                    throw e;
-                }
-
-                try {
-                    logStep('before nsecEncode', privateKeyBytes);
-                    nsec = NostrTools.nip19.nsecEncode(privateKeyBytes);
-                    logStep('nsecEncode result', nsec);
-                } catch (e) {
-                    debugLog('ERROR nsecEncode: ' + (e.message || e));
-                    console.error('[login-to-nsec] nsecEncode failed', e);
-                    throw e;
-                }
-
-                try {
-                    logStep('before npubEncode (hex)', publicKeyHex);
-                    npub = NostrTools.nip19.npubEncode(publicKeyHex);
-                    logStep('npubEncode result', npub);
-                } catch (e) {
-                    debugLog('ERROR npubEncode: ' + (e.message || e));
-                    console.error('[login-to-nsec] npubEncode failed', e);
-                    throw e;
-                }
-
-                statusEl.innerHTML = '<span class="success">Keys derived successfully.</span>';
-                statusEl.classList.add('success');
-
-                outEl.style.display = 'block';
-                outEl.innerHTML =
-                    '<h3>nsec (private — keep secret)</h3><pre>' + escapeHtml(nsec) + '</pre>' +
-                    '<h3>npub (public)</h3><pre>' + escapeHtml(npub) + '</pre>' +
-                    '<h3>Private key (hex)</h3><pre>' + escapeHtml(privateKeyHex) + '</pre>' +
-                    '<h3>Public key (hex)</h3><pre>' + escapeHtml(publicKeyHex) + '</pre>';
-            } catch (e) {
-                debugLog('FINAL ERROR: ' + (e.message || e));
-                if (e.stack) debugLog(e.stack.slice(0, 300));
-                statusEl.innerHTML = '<span class="error">Error: ' + escapeHtml(String(e.message || e)) + '</span>';
-                statusEl.classList.add('error');
-                outEl.style.display = 'none';
-            } finally {
-                btn.disabled = false;
-            }
-        }
-
-        btn.addEventListener('click', derive);
-        pepperEl.addEventListener('keydown', function (e) {
-            if (e.key === 'Enter') derive();
-        });
-    </script>
-</body>
-</html>
+                    if (typeof nacl === 'undefined' || typeof bs58 === 'undefined') {
+                        throw new Error("Missing libs: nacl-fast

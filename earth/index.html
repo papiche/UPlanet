@@ -57,10 +57,10 @@ function getStationUrl() {
     
     // Check and replace the port if it's 8080
     if (port === "8080") {
-        port = "1234";
+        port = "12345";
     }
-    
-    const zHost = urlInfo.hostname.replace("ipfs", "astroport");
+
+    const zHost = urlInfo.hostname.replace(/^ipfs\./, 'u.');
     return `${urlInfo.protocol}://${zHost}${port ? `:${port}` : ""}`;
 }
 
@@ -73,8 +73,8 @@ function getUSPOTUrl(route = '') {
         newUrl.hostname = urlInfo.hostname.replace('ipfs.', 'u.');
     }
 
-    // Changer le port en 54321 si nécessaire
-    if (urlInfo.port === '8080' || urlInfo.port !== '') {
+    // Changer le port en 54321 si un port explicite est présent (accès local)
+    if (urlInfo.port !== '') {
         newUrl.port = '54321';
     }
 
@@ -159,7 +159,12 @@ function updateAsciiArt(color) {
     // Create wrapper link if it doesn't exist
     if (!asciiArt.parentElement.matches('a')) {
         const link = document.createElement('a');
-        link.href = 'https://coracle.copylaradio.com';
+        // Build coracle.domain from current gateway (ipfs.domain → coracle.domain)
+        const urlInfo = getCurrentUrlInfo();
+        const domain = urlInfo.hostname.replace(/^ipfs\./, '');
+        link.href = domain && domain !== urlInfo.hostname
+            ? `${urlInfo.protocol}://coracle.${domain}`
+            : 'https://coracle.social';
         link.target = '_blank';
         asciiArt.parentNode.insertBefore(link, asciiArt);
         link.appendChild(asciiArt);
@@ -226,6 +231,10 @@ async function fetchAndDisplayUPLANETG1PUB() {
 }
 
 function displayG1PUBData(data) {
+    if (!data || !data.UPLANETG1PUB) {
+        console.warn('displayG1PUBData: missing UPLANETG1PUB field');
+        data = { UPLANETG1PUB: '4ZqazktD' };
+    }
     const g1pub = data.UPLANETG1PUB.substring(0, 8);
     const color = generateColorFromHash(data.UPLANETG1PUB);
     
@@ -240,6 +249,56 @@ function displayG1PUBData(data) {
     displayElement.style.color = color;
     
     updateAsciiArt(color);
+}
+
+// Check for Ginkgo app availability via station IPNS publication
+async function checkGinkgoApp() {
+    try {
+        // Step 1: Get IPFSNODEID from UPassport /Ustats API
+        const ustatsUrl = getUSPOTUrl('Ustats');
+        console.log('Ginkgo: fetching IPFSNODEID from', ustatsUrl);
+
+        const controller = new AbortController();
+        setTimeout(() => controller.abort(), 8000);
+        const resp = await fetch(ustatsUrl, { signal: controller.signal });
+        if (!resp.ok) return;
+
+        const data = await resp.json();
+        const nodeId = data.IPFSNODEID;
+        if (!nodeId) return;
+
+        // Step 2: Fetch ginkgo.cid from station IPNS publication
+        const urlInfo = getCurrentUrlInfo();
+        const gwBase = urlInfo.hostname.startsWith('ipfs.')
+            ? urlInfo.origin
+            : (urlInfo.port ? `${urlInfo.protocol}://${urlInfo.hostname}:8080` : `${urlInfo.protocol}//ipfs.${urlInfo.hostname.replace(/^(u\.|www\.)/, '')}`);
+        const cidUrl = `${gwBase}/ipns/${nodeId}/ginkgo.cid`;
+        console.log('Ginkgo: checking', cidUrl);
+
+        const cidResp = await fetch(cidUrl, { signal: AbortSignal.timeout(5000) });
+        if (!cidResp.ok) return;
+
+        const cid = (await cidResp.text()).trim();
+        if (!cid || cid.length < 10) return;
+
+        // Step 3: Add Ginkgo button to the UI
+        const ginkgoUrl = `${gwBase}/ipfs/${cid}/`;
+        console.log('Ginkgo: app found at', ginkgoUrl);
+
+        const btn = document.createElement('button');
+        btn.className = 'btn btn-primary btn-lg';
+        btn.title = 'Ginkgo - UPlanet Market App';
+        btn.textContent = '🌱';
+        btn.style.cssText = 'position:fixed;bottom:80px;left:20px;z-index:1051;border-radius:50%;width:50px;height:50px;box-shadow:0 4px 20px rgba(76,175,80,0.4);background:linear-gradient(135deg,#4CAF50,#2E7D32);border:none;font-size:1.4rem;cursor:pointer;transition:all 0.3s;';
+        btn.onmouseenter = function() { this.style.transform = 'scale(1.1)'; this.style.boxShadow = '0 8px 25px rgba(76,175,80,0.6)'; };
+        btn.onmouseleave = function() { this.style.transform = 'none'; this.style.boxShadow = '0 4px 20px rgba(76,175,80,0.4)'; };
+        btn.onclick = function() { window.open(ginkgoUrl, '_blank'); };
+        document.body.appendChild(btn);
+
+    } catch (e) {
+        // Ginkgo not available — silent fail
+        if (e.name !== 'AbortError') console.log('Ginkgo: not available', e.message);
+    }
 }
 
 // Safe initialization function
@@ -281,6 +340,9 @@ function initializeUPlanet() {
             
             // Fetch and display G1PUB data
             fetchAndDisplayUPLANETG1PUB();
+
+            // Check for Ginkgo app on this station
+            checkGinkgoApp();
         }, 500); // Wait 500ms for all scripts to load
     });
 }
@@ -381,10 +443,10 @@ $(document).ready(function() {
         <button id="fan-menu-toggle" class="btn btn-primary btn-lg" onclick="toggleFanMenu()" title="Open menu">☰</button>
         <div id="fan-menu-buttons" class="fan-menu-closed">
             <button class="btn btn-primary btn-lg fan-menu-item" data-index="0" onclick="go2UPassport('nostr', '_blank'); setTimeout(toggleFanMenu, 300);" data-bs-toggle="popover" data-bs-trigger="hover" data-bs-placement="left" data-bs-content="Terminal #BRO : Dialoguez avec votre IA, parcourez NOSTR Tube et accédez au crowdfunding des Communs / #BRO Terminal: Chat with your AI, browse NOSTR Tube and access the Commons crowdfunding" title="Terminal #BRO / #BRO Terminal">💬</button>
-            <button class="btn btn-primary btn-lg fan-menu-item" data-index="2" onclick="go2UPassport('youtube?html=1', '_blank'); setTimeout(toggleFanMenu, 300);" data-bs-toggle="popover" data-bs-trigger="hover" data-bs-placement="left" data-bs-content="Regarder du contenu vidéo décentralisé sur Nostr Tube / Watch decentralized video content on Nostr Tube" title="Nostr Tube">▶️</button>
-            <button class="btn btn-primary btn-lg fan-menu-item" data-index="3" onclick="window.open('plantnet.html', '_blank'); setTimeout(toggleFanMenu, 300);" data-bs-toggle="popover" data-bs-trigger="hover" data-bs-placement="left" data-bs-content="Accéder aux outils d'organisation collective et services oracle / Access collective organization tools and oracle services" title="Organisation Collective / Collective Organization">🔮</button>
-            <button class="btn btn-primary btn-lg fan-menu-item" data-index="4" onclick="go2UPassport('wotx2'); setTimeout(toggleFanMenu, 300);" data-bs-toggle="popover" data-bs-trigger="hover" data-bs-placement="left" data-bs-content="Système WoTx2 : Créez et gérez des maîtrises auto-proclamées avec progression automatique illimitée / WoTx2 System: Create and manage self-proclaimed masteries with unlimited automatic progression" title="WoTx2 System">🎓</button>
-            <button class="btn btn-primary btn-lg fan-menu-item" data-index="5" onclick="go2UPassport('dev', '_blank'); setTimeout(toggleFanMenu, 300);" data-bs-toggle="popover" data-bs-trigger="hover" data-bs-placement="left" data-bs-content="Outils et ressources pour développeurs sur UPlanet / Developer tools and resources for building on UPlanet" title="Outils Développeur / Developer Tools">👨‍💻</button>
+            <button class="btn btn-primary btn-lg fan-menu-item" data-index="1" onclick="go2UPassport('youtube?html=1', '_blank'); setTimeout(toggleFanMenu, 300);" data-bs-toggle="popover" data-bs-trigger="hover" data-bs-placement="left" data-bs-content="Regarder du contenu vidéo décentralisé sur Nostr Tube / Watch decentralized video content on Nostr Tube" title="Nostr Tube">▶️</button>
+            <button class="btn btn-primary btn-lg fan-menu-item" data-index="2" onclick="window.open('plantnet.html', '_blank'); setTimeout(toggleFanMenu, 300);" data-bs-toggle="popover" data-bs-trigger="hover" data-bs-placement="left" data-bs-content="Accéder aux outils d'organisation collective et services oracle / Access collective organization tools and oracle services" title="Organisation Collective / Collective Organization">🔮</button>
+            <button class="btn btn-primary btn-lg fan-menu-item" data-index="3" onclick="go2UPassport('wotx2'); setTimeout(toggleFanMenu, 300);" data-bs-toggle="popover" data-bs-trigger="hover" data-bs-placement="left" data-bs-content="Système WoTx2 : Créez et gérez des maîtrises auto-proclamées avec progression automatique illimitée / WoTx2 System: Create and manage self-proclaimed masteries with unlimited automatic progression" title="WoTx2 System">🎓</button>
+            <button class="btn btn-primary btn-lg fan-menu-item" data-index="4" onclick="go2UPassport('dev', '_blank'); setTimeout(toggleFanMenu, 300);" data-bs-toggle="popover" data-bs-trigger="hover" data-bs-placement="left" data-bs-content="Outils et ressources pour développeurs sur UPlanet / Developer tools and resources for building on UPlanet" title="Outils Développeur / Developer Tools">👨‍💻</button>
     </div>
     
     <form style="position: fixed; bottom: 0; left: 0; right: 0; width: 100%; z-index: 10050; transition: bottom 0.4s ease; max-height: 50vh; overflow-y: auto;" class="bg-dark bg-opacity-90 p-3 rounded-top shadow-lg" id="addressForm">
@@ -766,11 +828,11 @@ function removeFloatingButton() {
     }
 }
 
-function showFlyover(imageKey = 'console-toggle') {
+function showFlyover(imageKey = 'console-toggle', e) {
     clearTimeout(flyoverTimeout);
-    
+
     // Store reference to trigger button
-    currentTriggerButton = event.target;
+    currentTriggerButton = e ? e.target : null;
     
     // COMMENTED: Flyover help images display
     /*
@@ -922,13 +984,27 @@ document.addEventListener('mouseup', function(e) {
     }
 });
 
-// Touch events for mobile
+// Touch events for mobile (unified handler for double-tap, drag and pinch-zoom)
 let lastTouchTime = 0;
+let initialDistance = 0;
+let initialScale = 1;
 
 document.getElementById('flyover-image').addEventListener('touchstart', function(e) {
+    // Pinch to zoom (2 fingers)
+    if (e.touches.length === 2) {
+        initialDistance = Math.hypot(
+            e.touches[0].clientX - e.touches[1].clientX,
+            e.touches[0].clientY - e.touches[1].clientY
+        );
+        initialScale = scale;
+        e.preventDefault();
+        return;
+    }
+
+    // Single finger: double-tap or drag
     const currentTime = new Date().getTime();
     const timeDiff = currentTime - lastTouchTime;
-    
+
     if (timeDiff < 300 && timeDiff > 0) {
         // Double tap detected
         toggleZoom(e);
@@ -940,11 +1016,34 @@ document.getElementById('flyover-image').addEventListener('touchstart', function
         startY = e.touches[0].clientY - translateY;
         e.preventDefault();
     }
-    
+
     lastTouchTime = currentTime;
 });
 
 document.addEventListener('touchmove', function(e) {
+    // Pinch to zoom
+    if (e.touches.length === 2) {
+        const currentDistance = Math.hypot(
+            e.touches[0].clientX - e.touches[1].clientX,
+            e.touches[0].clientY - e.touches[1].clientY
+        );
+
+        scale = Math.min(Math.max(0.5, initialScale * (currentDistance / initialDistance)), 4);
+
+        if (scale > 1) {
+            document.getElementById('flyover-image').classList.add('zoomed');
+            isZoomed = true;
+        } else {
+            document.getElementById('flyover-image').classList.remove('zoomed');
+            isZoomed = false;
+        }
+
+        document.getElementById('flyover-image').style.transform = `scale(${scale}) translate(${translateX}px, ${translateY}px)`;
+        e.preventDefault();
+        return;
+    }
+
+    // Single finger drag
     if (isDragging && isZoomed) {
         translateX = e.touches[0].clientX - startX;
         translateY = e.touches[0].clientY - startY;
@@ -956,46 +1055,8 @@ document.addEventListener('touchmove', function(e) {
 document.addEventListener('touchend', function(e) {
     if (isDragging) {
         isDragging = false;
-        // Prevent any unwanted zoom reset
         e.preventDefault();
         e.stopPropagation();
-    }
-});
-
-// Pinch to zoom for mobile
-let initialDistance = 0;
-let initialScale = 1;
-
-document.getElementById('flyover-image').addEventListener('touchstart', function(e) {
-    if (e.touches.length === 2) {
-        initialDistance = Math.hypot(
-            e.touches[0].clientX - e.touches[1].clientX,
-            e.touches[0].clientY - e.touches[1].clientY
-        );
-        initialScale = scale;
-        e.preventDefault();
-    }
-});
-
-document.addEventListener('touchmove', function(e) {
-    if (e.touches.length === 2) {
-        const currentDistance = Math.hypot(
-            e.touches[0].clientX - e.touches[1].clientX,
-            e.touches[0].clientY - e.touches[1].clientY
-        );
-        
-        scale = Math.min(Math.max(0.5, initialScale * (currentDistance / initialDistance)), 4);
-        
-        if (scale > 1) {
-            document.getElementById('flyover-image').classList.add('zoomed');
-            isZoomed = true;
-        } else {
-            document.getElementById('flyover-image').classList.remove('zoomed');
-            isZoomed = false;
-        }
-        
-        document.getElementById('flyover-image').style.transform = `scale(${scale}) translate(${translateX}px, ${translateY}px)`;
-        e.preventDefault();
     }
 });
 
@@ -1155,10 +1216,6 @@ document.addEventListener('click', function(e) {
     transform: translateX(-63px) translateY(220px) rotate(3deg) scale(1.15);
 }
 
-#fan-menu-buttons.fan-menu-open .fan-menu-item[data-index="5"]:hover {
-    transform: translateX(-68px) translateY(275px) rotate(5deg) scale(1.15);
-}
-
 /* Hover effects for each button position - left menu */
 #left-fan-menu-buttons.fan-menu-open .fan-menu-item[data-index="0"]:hover {
     transform: translateX(68px) translateY(0px) rotate(5deg) scale(1.15);
@@ -1218,11 +1275,6 @@ document.addEventListener('click', function(e) {
     transition-delay: 0.25s;
 }
 
-#fan-menu-buttons.fan-menu-open .fan-menu-item[data-index="5"] {
-    transform: translateX(-60px) translateY(275px) rotate(5deg) scale(1);
-    transition-delay: 0.3s;
-}
-
 /* Fan spread animation - creates arc pattern for left menu (opens to the right) */
 #left-fan-menu-buttons.fan-menu-open .fan-menu-item[data-index="0"] {
     transform: translateX(60px) translateY(0px) rotate(5deg) scale(1);
@@ -1270,11 +1322,7 @@ document.addEventListener('click', function(e) {
     #fan-menu-buttons.fan-menu-open .fan-menu-item[data-index="4"] {
         transform: translateX(-45px) translateY(200px) rotate(2deg) scale(1);
     }
-    
-    #fan-menu-buttons.fan-menu-open .fan-menu-item[data-index="5"] {
-        transform: translateX(-50px) translateY(250px) rotate(3deg) scale(1);
-    }
-    
+
     /* Mobile responsiveness - left menu */
     #left-fan-menu-buttons.fan-menu-open .fan-menu-item[data-index="0"] {
         transform: translateX(50px) translateY(0px) rotate(3deg) scale(1);

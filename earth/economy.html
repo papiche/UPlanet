@@ -2831,15 +2831,24 @@
         }
 
         // Scrypt derivation (same as keygen.html: scrypt(pepper, salt) → 32 bytes seed)
+        // N=4096, r=16, p=1, dkLen=32 — matches tools/keygen -t nostr
         function scryptDerive(pepper, salt) {
+            const password = new TextEncoder().encode(pepper);
+            const saltBytes = new TextEncoder().encode(salt);
+            const N = 4096, r = 16, p = 1, dkLen = 32;
             return new Promise((resolve, reject) => {
+                if (typeof scrypt === 'undefined') return reject(new Error('scrypt.min.js missing'));
                 try {
-                    scrypt(new TextEncoder().encode(pepper), new TextEncoder().encode(salt),
-                        16384, 16, 1, 32, function(error, progress, key) {
-                            if (error) reject(error);
-                            else if (key) resolve(new Uint8Array(key));
-                        });
-                } catch(e) { reject(e); }
+                    const res = scrypt.scrypt(password, saltBytes, N, r, p, dkLen);
+                    if (res instanceof Promise) {
+                        res.then(k => resolve(new Uint8Array(k))).catch(reject);
+                    } else {
+                        scrypt.scrypt(password, saltBytes, N, r, p, dkLen, (e, k) => e ? reject(e) : resolve(new Uint8Array(k)));
+                    }
+                } catch(e) {
+                    try { scrypt(password, saltBytes, N, r, p, dkLen, (e2, k) => e2 ? reject(e2) : resolve(new Uint8Array(k))); }
+                    catch(e3) { reject(e3); }
+                }
             });
         }
 

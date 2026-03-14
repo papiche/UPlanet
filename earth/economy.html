@@ -2973,15 +2973,20 @@
 
         const COMMENTS = ['_comment_fiscal', '_comment_shares', '_comment_3x13', '_comment_oc'];
 
+        // isNewConfig: true when no cooperative-config existed on NOSTR (first setup)
+        let isNewConfig = false;
+
         function renderCoopSection(config, decrypted, editable) {
             const container = document.getElementById('coop-config-content');
             if (!container) return;
             let html = '';
 
             for (const sec of SECTIONS) {
-                const secReadonly = sec.readonly || false;
+                // Fiscal params: editable only on first setup (new UPlanet), locked after
+                const secReadonly = sec.readonly && !isNewConfig;
                 html += '<div style="margin-bottom:8px;"><span style="color:#eaf6ff;font-weight:600;">' + sec.title + '</span>';
                 if (secReadonly && editable) html += '<span style="color:#7f8c8d;font-size:0.7em;margin-left:6px;">🔒 non modifiable</span>';
+                if (sec.readonly && isNewConfig && editable) html += '<span style="color:#2ecc71;font-size:0.7em;margin-left:6px;">✏️ première configuration</span>';
                 html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:4px;margin-top:4px;">';
                 for (const k of sec.keys) {
                     const v = config[k];
@@ -3163,7 +3168,8 @@
                 statusEl.textContent = 'Connexion à ' + relayUrl + '...';
                 coopEvent = await fetchCoopConfig(relayUrl);
                 if (!coopEvent) {
-                    document.getElementById('coop-config-content').innerHTML = '<div style="color:#f39c12;">Aucune config coopérative trouvée.<br><span style="font-size:0.85em;color:#b8c6e0;">Entrez UPLANETNAME et cliquez 🔑 Connexion pour créer la config initiale.</span></div>';
+                    isNewConfig = true;
+                    document.getElementById('coop-config-content').innerHTML = '<div style="color:#f39c12;">Aucune config coopérative trouvée.<br><span style="font-size:0.85em;color:#b8c6e0;">Authentifiez-vous pour créer la config initiale (paramètres fiscaux modifiables uniquement à la création).</span></div>';
                     statusEl.textContent = relayUrl;
                 } else {
                     coopConfig = JSON.parse(coopEvent.content);

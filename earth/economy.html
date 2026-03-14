@@ -2965,9 +2965,10 @@
         };
 
         const SECTIONS = [
-            { title: '📊 Fiscalité', keys: ['TVA_RATE', 'IS_RATE_REDUCED', 'IS_RATE_NORMAL', 'IS_THRESHOLD'] },
+            { title: '📊 Fiscalité', keys: ['TVA_RATE', 'IS_RATE_REDUCED', 'IS_RATE_NORMAL', 'IS_THRESHOLD'], readonly: true },
             { title: '⭐ Parts coopératives', keys: ['ZENCARD_SATELLITE', 'ZENCARD_CONSTELLATION'] },
-            { title: '🤝 Règle 3x1/3 + 1%', keys: ['TREASURY_PERCENT', 'RND_PERCENT', 'ASSETS_PERCENT', 'CAPTAIN_BONUS_PERCENT'] }
+            { title: '🤝 Règle 3x1/3 + 1%', keys: ['TREASURY_PERCENT', 'RND_PERCENT', 'ASSETS_PERCENT', 'CAPTAIN_BONUS_PERCENT'] },
+            { title: '🌐 OpenCollective', keys: ['OPENCOLLECTIVE_COLLECTIVE', 'OPENCOLLECTIVE_SLUG'] }
         ];
 
         const COMMENTS = ['_comment_fiscal', '_comment_shares', '_comment_3x13', '_comment_oc'];
@@ -2978,7 +2979,9 @@
             let html = '';
 
             for (const sec of SECTIONS) {
+                const secReadonly = sec.readonly || false;
                 html += '<div style="margin-bottom:8px;"><span style="color:#eaf6ff;font-weight:600;">' + sec.title + '</span>';
+                if (secReadonly && editable) html += '<span style="color:#7f8c8d;font-size:0.7em;margin-left:6px;">🔒 non modifiable</span>';
                 html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:4px;margin-top:4px;">';
                 for (const k of sec.keys) {
                     const v = config[k];
@@ -2987,7 +2990,7 @@
                     let display = enc ? '🔒' : v;
                     if (enc && decrypted && decrypted[k]) display = decrypted[k];
                     const label = LABELS[k] || k;
-                    if (editable && !enc) {
+                    if (editable && !enc && !secReadonly) {
                         html += '<div style="background:rgba(255,255,255,0.05);padding:4px 8px;border-radius:6px;">'
                             + '<div style="color:#7f8c8d;font-size:0.75em;">' + label + '</div>'
                             + '<input data-key="' + k + '" value="' + display + '" style="background:rgba(255,255,255,0.1);border:1px solid rgba(155,89,182,0.3);color:#eaf6ff;padding:2px 6px;border-radius:4px;width:90%;font-size:0.95em;">'
@@ -3001,7 +3004,7 @@
                 html += '</div></div>';
             }
 
-            // Other keys
+            // Other keys (API keys, credentials — may be encrypted)
             const shown = new Set(SECTIONS.flatMap(s => s.keys).concat(COMMENTS).concat(['COOPERATIVE_VERSION', 'CREATED_AT']));
             const others = Object.keys(config).filter(k => !shown.has(k));
             if (others.length) {
@@ -3011,9 +3014,17 @@
                     const v = config[k]; const enc = isEncrypted(v);
                     let display = enc ? '🔒 chiffré' : v;
                     if (enc && decrypted && decrypted[k]) display = decrypted[k];
-                    html += '<div style="background:rgba(255,255,255,0.05);padding:4px 8px;border-radius:6px;">'
-                        + '<div style="color:#7f8c8d;font-size:0.75em;">' + k + '</div>'
-                        + '<div style="color:#eaf6ff;font-size:0.9em;">' + display + '</div></div>';
+                    const canEdit = editable && (!enc || (decrypted && decrypted[k]));
+                    if (canEdit) {
+                        html += '<div style="background:rgba(255,255,255,0.05);padding:4px 8px;border-radius:6px;">'
+                            + '<div style="color:#7f8c8d;font-size:0.75em;">' + k + (enc ? ' 🔐' : '') + '</div>'
+                            + '<input data-key="' + k + '"' + (enc ? ' data-encrypted="true"' : '') + ' value="' + display + '" style="background:rgba(255,255,255,0.1);border:1px solid rgba(231,76,60,0.3);color:#eaf6ff;padding:2px 6px;border-radius:4px;width:90%;font-size:0.85em;">'
+                            + '</div>';
+                    } else {
+                        html += '<div style="background:rgba(255,255,255,0.05);padding:4px 8px;border-radius:6px;">'
+                            + '<div style="color:#7f8c8d;font-size:0.75em;">' + k + '</div>'
+                            + '<div style="color:#eaf6ff;font-size:0.9em;">' + display + '</div></div>';
+                    }
                 }
                 html += '</div></div>';
             }
@@ -3048,10 +3059,20 @@
             const NostrLib = window.NostrTools || window.Nostr;
             const statusEl = document.getElementById('coop-status');
 
-            // Collect edited values
+            // Collect edited values, re-encrypt those that were encrypted
             const inputs = document.querySelectorAll('#coop-config-content input[data-key]');
             const updated = { ...coopConfig };
-            inputs.forEach(input => { updated[input.dataset.key] = input.value.trim(); });
+            for (const input of inputs) {
+                const key = input.dataset.key;
+                const newVal = input.value.trim();
+                if (input.dataset.encrypted === 'true' && uplanetname) {
+                    // Re-encrypt modified credential values
+                    const keyHex = await sha256hex(uplanetname);
+                    updated[key] = await aesEncrypt(newVal, keyHex);
+                } else {
+                    updated[key] = newVal;
+                }
+            }
 
             // Build and sign kind 30800 event
             const event = {

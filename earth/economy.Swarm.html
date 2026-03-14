@@ -1029,6 +1029,44 @@
             </div>
         </div>
 
+        <!-- Cooperative Config Editor (Captain only) -->
+        <div class="aggregate-panel" id="coop-config-panel" style="margin-bottom: 20px;">
+            <div class="map-header">
+                <div class="map-title">⚙️ COOPERATIVE CONFIG</div>
+                <button class="map-btn" onclick="toggleCoopConfig()">EDIT</button>
+            </div>
+            <div id="coop-config-editor" style="display:none; padding:15px;">
+                <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(250px, 1fr)); gap:10px;">
+                    <div>
+                        <label style="font-size:0.75rem; color:var(--text-dim); letter-spacing:1px;">OC URL SATELLITE</label>
+                        <input id="cfg-oc-satellite" type="text" placeholder="https://opencollective.com/..."
+                            style="width:100%; padding:8px; background:var(--bg-card); border:1px solid var(--border-glow); border-radius:2px; color:var(--text-primary); font-family:'Share Tech Mono',monospace; font-size:0.8rem;" />
+                    </div>
+                    <div>
+                        <label style="font-size:0.75rem; color:var(--text-dim); letter-spacing:1px;">OC URL CONSTELLATION</label>
+                        <input id="cfg-oc-constellation" type="text" placeholder="https://opencollective.com/..."
+                            style="width:100%; padding:8px; background:var(--bg-card); border:1px solid var(--border-glow); border-radius:2px; color:var(--text-primary); font-family:'Share Tech Mono',monospace; font-size:0.8rem;" />
+                    </div>
+                    <div>
+                        <label style="font-size:0.75rem; color:var(--text-dim); letter-spacing:1px;">OC SLUG</label>
+                        <input id="cfg-oc-slug" type="text" placeholder="monnaie-libre"
+                            style="width:100%; padding:8px; background:var(--bg-card); border:1px solid var(--border-glow); border-radius:2px; color:var(--text-primary); font-family:'Share Tech Mono',monospace; font-size:0.8rem;" />
+                    </div>
+                    <div>
+                        <label style="font-size:0.75rem; color:var(--text-dim); letter-spacing:1px;">PAF / SEMAINE</label>
+                        <input id="cfg-paf" type="number" value="14"
+                            style="width:100%; padding:8px; background:var(--bg-card); border:1px solid var(--border-glow); border-radius:2px; color:var(--text-primary); font-family:'Share Tech Mono',monospace; font-size:0.8rem;" />
+                    </div>
+                </div>
+                <div style="margin-top:10px; text-align:right;">
+                    <button class="nav-btn" onclick="saveCoopConfig()" style="background:var(--accent-green); color:var(--bg-void); border-color:var(--accent-green);">
+                        💾 SAVE TO DID
+                    </button>
+                    <span id="coop-save-status" style="font-size:0.8rem; color:var(--text-dim); margin-left:10px;"></span>
+                </div>
+            </div>
+        </div>
+
         <!-- Navigation Links -->
         <div class="aggregate-panel" style="margin-bottom: 20px;">
             <div class="map-header">
@@ -1699,6 +1737,82 @@
 
         function hideLoading() {
             document.getElementById('loading-overlay').style.display = 'none';
+        }
+
+        // ========================================
+        // COOPERATIVE CONFIG EDITOR
+        // ========================================
+        function toggleCoopConfig() {
+            const editor = document.getElementById('coop-config-editor');
+            editor.style.display = editor.style.display === 'none' ? 'block' : 'none';
+            if (editor.style.display === 'block') loadCoopConfig();
+        }
+
+        async function loadCoopConfig() {
+            // Load current config from the first station's content (shared across swarm)
+            const stations = Array.from(stationsData.values());
+            if (stations.length === 0) return;
+
+            const station = stations[0];
+            // Pre-fill from station data
+            document.getElementById('cfg-paf').value = station.costPaf || 14;
+
+            // Try to fetch DID config via API
+            try {
+                const hostname = window.location.hostname;
+                const baseUrl = hostname === '127.0.0.1' || hostname === 'localhost'
+                    ? 'http://127.0.0.1:54321'
+                    : `https://u.${hostname.replace(/^(ipfs\.|u\.)/, '')}`;
+                const resp = await fetch(`${baseUrl}/api/cooperative/config`, { signal: AbortSignal.timeout(5000) });
+                if (resp.ok) {
+                    const cfg = await resp.json();
+                    if (cfg.OC_URL_SATELLITE) document.getElementById('cfg-oc-satellite').value = cfg.OC_URL_SATELLITE;
+                    if (cfg.OC_URL_CONSTELLATION) document.getElementById('cfg-oc-constellation').value = cfg.OC_URL_CONSTELLATION;
+                    if (cfg.OCSLUG) document.getElementById('cfg-oc-slug').value = cfg.OCSLUG;
+                }
+            } catch (e) {
+                console.log('Config API not available, using defaults');
+                document.getElementById('cfg-oc-satellite').value = 'https://opencollective.com/monnaie-libre/contribute/parrainage-infrastructure-extension-128-go-98386';
+                document.getElementById('cfg-oc-constellation').value = 'https://opencollective.com/monnaie-libre/contribute/parrainage-infrastructure-module-gpu-1-24-98385';
+                document.getElementById('cfg-oc-slug').value = 'monnaie-libre';
+            }
+        }
+
+        async function saveCoopConfig() {
+            const status = document.getElementById('coop-save-status');
+            status.textContent = 'Saving...';
+            status.style.color = 'var(--accent-yellow)';
+
+            const config = {
+                OC_URL_SATELLITE: document.getElementById('cfg-oc-satellite').value,
+                OC_URL_CONSTELLATION: document.getElementById('cfg-oc-constellation').value,
+                OCSLUG: document.getElementById('cfg-oc-slug').value,
+                PAF: document.getElementById('cfg-paf').value
+            };
+
+            try {
+                const hostname = window.location.hostname;
+                const baseUrl = hostname === '127.0.0.1' || hostname === 'localhost'
+                    ? 'http://127.0.0.1:54321'
+                    : `https://u.${hostname.replace(/^(ipfs\.|u\.)/, '')}`;
+                const resp = await fetch(`${baseUrl}/api/cooperative/config`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(config),
+                    signal: AbortSignal.timeout(10000)
+                });
+
+                if (resp.ok) {
+                    status.textContent = 'Saved to DID NOSTR';
+                    status.style.color = 'var(--accent-green)';
+                } else {
+                    throw new Error(`HTTP ${resp.status}`);
+                }
+            } catch (e) {
+                console.error('Save failed:', e);
+                status.textContent = 'Save via CLI: cooperative_config.sh set KEY VALUE';
+                status.style.color = 'var(--accent-orange)';
+            }
         }
     </script>
 </body>

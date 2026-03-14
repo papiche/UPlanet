@@ -1888,6 +1888,12 @@
                 </div>
             `;
 
+            // Re-append the cooperative config (kind 30800) section if it was created
+            // before this innerHTML replacement destroyed it
+            if (window._coopConfigSection) {
+                dashboard.appendChild(window._coopConfigSection);
+            }
+
             // Create the legal wallets section (async - will load balances in background)
             // Only create if we have wallet data (not in partial loading state)
             if (!isPartialData || (data.UPLANETNAME_G1 || data.UPLANETNAME_TREASURY)) {
@@ -1946,10 +1952,12 @@
                 let uplanetDistribution = null;
                 if (totalWeeklyRevenue >= uplanetThreshold) {
                     const totalUPlanetProfit = uplanetPayment;
+                    const _cc = window._coopConfigData;
                     uplanetDistribution = {
-                        cash: totalUPlanetProfit * 0.34, // 34% pour la trésorerie
-                        infra: totalUPlanetProfit * 0.33, // 33% pour l'infrastructure
-                        rd: totalUPlanetProfit * 0.33 // 33% pour la R&D
+                        cash: totalUPlanetProfit * (_cc && _cc.TREASURY_PERCENT ? parseFloat(_cc.TREASURY_PERCENT) / 100 : 0.33),
+                        infra: totalUPlanetProfit * (_cc && _cc.ASSETS_PERCENT ? parseFloat(_cc.ASSETS_PERCENT) / 100 : 0.33),
+                        rd: totalUPlanetProfit * (_cc && _cc.RND_PERCENT ? parseFloat(_cc.RND_PERCENT) / 100 : 0.33),
+                        captain: totalUPlanetProfit * (_cc && _cc.CAPTAIN_BONUS_PERCENT ? parseFloat(_cc.CAPTAIN_BONUS_PERCENT) / 100 : 0.01)
                     };
                 }
 
@@ -2019,10 +2027,18 @@
                 const totalTaxProvision = weeklyVAT + corporateTaxProvision; // TVA + IS
                 const netSurplus = totalUPlanetProfit - corporateTaxProvision; // Only subtract IS from surplus (VAT is on revenue)
                 
-                // 3x1/3 allocation on net surplus (after tax provision)
-                const cashAmount = netSurplus * 0.3333; // Treasury (1/3)
-                const rdAmount = netSurplus * 0.3333;   // R&D (1/3)
-                const assetsAmount = netSurplus * 0.3334; // Assets (1/3)
+                // 3x1/3 + 1% allocation on net surplus (after tax provision)
+                // 33% Treasury + 33% R&D + 33% Assets + 1% Captain bonus = 100%
+                // Use cooperative config ratios if available, otherwise defaults from ZEN.COOPERATIVE.3x1-3.sh
+                const cc = window._coopConfigData;
+                const treasuryPct = cc && cc.TREASURY_PERCENT ? parseFloat(cc.TREASURY_PERCENT) / 100 : 0.33;
+                const rndPct = cc && cc.RND_PERCENT ? parseFloat(cc.RND_PERCENT) / 100 : 0.33;
+                const assetsPct = cc && cc.ASSETS_PERCENT ? parseFloat(cc.ASSETS_PERCENT) / 100 : 0.33;
+                const captainBonusPct = cc && cc.CAPTAIN_BONUS_PERCENT ? parseFloat(cc.CAPTAIN_BONUS_PERCENT) / 100 : 0.01;
+                const cashAmount = netSurplus * treasuryPct;
+                const rdAmount = netSurplus * rndPct;
+                const assetsAmount = netSurplus * assetsPct;
+                const captainBonusAmount = netSurplus * captainBonusPct;
 
                 // Get legal structure for display
                 const legalStructure = document.getElementById('legal-structure')?.value || 'association';
@@ -2067,17 +2083,22 @@
                         <div class="metric-box" style="background: linear-gradient(145deg, #232733, #1e2a22); border-color: #3498db; color: #eaf6ff;">
                             <div class="metric-title">Trésorerie</div>
                             <div class="metric-value">${cashAmount.toFixed(2)} Ẑ</div>
-                            <div class="metric-subtitle">1/3 du net</div>
+                            <div class="metric-subtitle">${(treasuryPct * 100).toFixed(0)}%</div>
                         </div>
                         <div class="metric-box" style="background: linear-gradient(145deg, #232733, #23271a); border-color: #f1c40f; color: #eaf6ff;">
                             <div class="metric-title">R&D</div>
                             <div class="metric-value">${rdAmount.toFixed(2)} Ẑ</div>
-                            <div class="metric-subtitle">1/3 du net</div>
+                            <div class="metric-subtitle">${(rndPct * 100).toFixed(0)}%</div>
                         </div>
                         <div class="metric-box" style="background: linear-gradient(145deg, #232733, #1e2a22); border-color: #2ecc71; color: #eaf6ff;">
                             <div class="metric-title">Actifs Réels</div>
                             <div class="metric-value">${assetsAmount.toFixed(2)} Ẑ</div>
-                            <div class="metric-subtitle">1/3 du net</div>
+                            <div class="metric-subtitle">${(assetsPct * 100).toFixed(0)}%</div>
+                        </div>
+                        <div class="metric-box" style="background: linear-gradient(145deg, #232733, #2a2533); border-color: #9b59b6; color: #eaf6ff;">
+                            <div class="metric-title">Capitaine</div>
+                            <div class="metric-value">${captainBonusAmount.toFixed(2)} Ẑ</div>
+                            <div class="metric-subtitle">${(captainBonusPct * 100).toFixed(0)}% prime</div>
                         </div>
                     </div>
                 </div>`;
@@ -2750,5 +2771,383 @@
         });
 
     </script>
+
+    <!-- Cooperative Config: NOSTR kind 30800 d-tag "cooperative-config" -->
+    <script src="nacl-fast.min.js"></script>
+    <script src="scrypt.min.js"></script>
+    <script src="nostr.bundle.js"></script>
+    <script>
+    (function() {
+        const COOP_KIND = 30800;
+        const COOP_DTAG = 'cooperative-config';
+        let coopConfig = null;
+        let coopEvent = null;
+        let uplanetname = null;
+        let captainPrivHex = null;
+        let captainPubHex = null;
+        let relayUrl = null;
+        // Expose the section element so createEconomicDashboard can re-append it
+        window._coopConfigSection = null;
+        // Expose coop config data so the simulator can read it
+        window._coopConfigData = null;
+
+        function detectRelay() {
+            const h = window.location.hostname;
+            if (h === '127.0.0.1' || h === 'localhost') return 'ws://127.0.0.1:7777';
+            const base = h.replace(/^(ipfs\.|u\.)/, '');
+            return 'wss://relay.' + base;
+        }
+
+        function isEncrypted(val) {
+            if (typeof val !== 'string') return false;
+            const idx = val.indexOf(':');
+            if (idx !== 32) return false;
+            return /^[0-9a-f]{32}$/.test(val.substring(0, 32));
+        }
+
+        async function aesDecrypt(ivHex, b64Ciphertext, keyHex) {
+            const iv = new Uint8Array(ivHex.match(/.{2}/g).map(b => parseInt(b, 16)));
+            const keyBytes = new Uint8Array(keyHex.match(/.{2}/g).map(b => parseInt(b, 16)));
+            const raw = atob(b64Ciphertext);
+            const ct = new Uint8Array(raw.length);
+            for (let i = 0; i < raw.length; i++) ct[i] = raw.charCodeAt(i);
+            const key = await crypto.subtle.importKey('raw', keyBytes, 'AES-CBC', false, ['decrypt']);
+            return new TextDecoder().decode(await crypto.subtle.decrypt({ name: 'AES-CBC', iv }, key, ct));
+        }
+
+        async function aesEncrypt(plaintext, keyHex) {
+            const iv = crypto.getRandomValues(new Uint8Array(16));
+            const ivHex = Array.from(iv).map(b => b.toString(16).padStart(2, '0')).join('');
+            const keyBytes = new Uint8Array(keyHex.match(/.{2}/g).map(b => parseInt(b, 16)));
+            const key = await crypto.subtle.importKey('raw', keyBytes, 'AES-CBC', false, ['encrypt']);
+            const enc = await crypto.subtle.encrypt({ name: 'AES-CBC', iv }, key, new TextEncoder().encode(plaintext));
+            const b64 = btoa(String.fromCharCode(...new Uint8Array(enc)));
+            return ivHex + ':' + b64;
+        }
+
+        async function sha256hex(str) {
+            const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+            return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
+        }
+
+        // Scrypt derivation (same as keygen.html: scrypt(pepper, salt) → 32 bytes seed)
+        function scryptDerive(pepper, salt) {
+            return new Promise((resolve, reject) => {
+                try {
+                    scrypt(new TextEncoder().encode(pepper), new TextEncoder().encode(salt),
+                        16384, 16, 1, 32, function(error, progress, key) {
+                            if (error) reject(error);
+                            else if (key) resolve(new Uint8Array(key));
+                        });
+                } catch(e) { reject(e); }
+            });
+        }
+
+        // Derive NOSTR keys from salt/pepper (same algo as tools/keygen -t nostr)
+        async function deriveNostrKeys(salt, pepper) {
+            const NostrLib = window.NostrTools || window.Nostr;
+            if (!NostrLib) throw new Error('nostr.bundle.js manquant');
+            const seed = await scryptDerive(pepper, salt);
+            const privBuf = await crypto.subtle.digest('SHA-256', seed);
+            const privHex = Array.from(new Uint8Array(privBuf)).map(b => b.toString(16).padStart(2, '0')).join('');
+            const pubHex = NostrLib.getPublicKey(privHex);
+            return { privHex, pubHex };
+        }
+
+        function fetchCoopConfig(relay) {
+            return new Promise((resolve, reject) => {
+                const ws = new WebSocket(relay);
+                const subId = 'coop-' + Date.now();
+                let result = null;
+                const timeout = setTimeout(() => { ws.close(); reject('timeout'); }, 8000);
+                ws.onopen = () => ws.send(JSON.stringify(['REQ', subId, { kinds: [COOP_KIND], '#d': [COOP_DTAG], limit: 10 }]));
+                ws.onmessage = (e) => {
+                    const msg = JSON.parse(e.data);
+                    if (msg[0] === 'EVENT' && msg[2]) { const ev = msg[2]; if (!result || ev.created_at > result.created_at) result = ev; }
+                    if (msg[0] === 'EOSE') { clearTimeout(timeout); ws.close(); resolve(result); }
+                };
+                ws.onerror = () => { clearTimeout(timeout); reject('ws error'); };
+            });
+        }
+
+        function publishEvent(relay, signedEvent) {
+            return new Promise((resolve, reject) => {
+                const ws = new WebSocket(relay);
+                const timeout = setTimeout(() => { ws.close(); reject('timeout'); }, 8000);
+                ws.onopen = () => ws.send(JSON.stringify(['EVENT', signedEvent]));
+                ws.onmessage = (e) => {
+                    const msg = JSON.parse(e.data);
+                    if (msg[0] === 'OK') { clearTimeout(timeout); ws.close(); resolve(msg[2]); }
+                };
+                ws.onerror = () => { clearTimeout(timeout); reject('ws error'); };
+            });
+        }
+
+        const LABELS = {
+            'COOPERATIVE_VERSION': 'Version', 'CREATED_AT': 'Créé le',
+            'TVA_RATE': 'TVA (%)', 'IS_RATE_REDUCED': 'IS réduit (%)', 'IS_RATE_NORMAL': 'IS normal (%)', 'IS_THRESHOLD': 'Seuil IS (€)',
+            'ZENCARD_SATELLITE': 'Part Satellite (Ẑ)', 'ZENCARD_CONSTELLATION': 'Part Constellation (Ẑ)',
+            'TREASURY_PERCENT': 'Trésorerie (%)', 'RND_PERCENT': 'R&D (%)', 'ASSETS_PERCENT': 'Actifs (%)', 'CAPTAIN_BONUS_PERCENT': 'Capitaine (%)',
+            'OPENCOLLECTIVE_COLLECTIVE': 'OC Collectif', 'OPENCOLLECTIVE_SLUG': 'OC Slug'
+        };
+
+        const SECTIONS = [
+            { title: '📊 Fiscalité', keys: ['TVA_RATE', 'IS_RATE_REDUCED', 'IS_RATE_NORMAL', 'IS_THRESHOLD'] },
+            { title: '⭐ Parts coopératives', keys: ['ZENCARD_SATELLITE', 'ZENCARD_CONSTELLATION'] },
+            { title: '🤝 Règle 3x1/3 + 1%', keys: ['TREASURY_PERCENT', 'RND_PERCENT', 'ASSETS_PERCENT', 'CAPTAIN_BONUS_PERCENT'] }
+        ];
+
+        const COMMENTS = ['_comment_fiscal', '_comment_shares', '_comment_3x13', '_comment_oc'];
+
+        function renderCoopSection(config, decrypted, editable) {
+            const container = document.getElementById('coop-config-content');
+            if (!container) return;
+            let html = '';
+
+            for (const sec of SECTIONS) {
+                html += '<div style="margin-bottom:8px;"><span style="color:#eaf6ff;font-weight:600;">' + sec.title + '</span>';
+                html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:4px;margin-top:4px;">';
+                for (const k of sec.keys) {
+                    const v = config[k];
+                    if (v === undefined) continue;
+                    const enc = isEncrypted(v);
+                    let display = enc ? '🔒' : v;
+                    if (enc && decrypted && decrypted[k]) display = decrypted[k];
+                    const label = LABELS[k] || k;
+                    if (editable && !enc) {
+                        html += '<div style="background:rgba(255,255,255,0.05);padding:4px 8px;border-radius:6px;">'
+                            + '<div style="color:#7f8c8d;font-size:0.75em;">' + label + '</div>'
+                            + '<input data-key="' + k + '" value="' + display + '" style="background:rgba(255,255,255,0.1);border:1px solid rgba(155,89,182,0.3);color:#eaf6ff;padding:2px 6px;border-radius:4px;width:90%;font-size:0.95em;">'
+                            + '</div>';
+                    } else {
+                        html += '<div style="background:rgba(255,255,255,0.05);padding:4px 8px;border-radius:6px;">'
+                            + '<div style="color:#7f8c8d;font-size:0.75em;">' + label + '</div>'
+                            + '<div style="color:#eaf6ff;font-size:1em;">' + display + '</div></div>';
+                    }
+                }
+                html += '</div></div>';
+            }
+
+            // Other keys
+            const shown = new Set(SECTIONS.flatMap(s => s.keys).concat(COMMENTS).concat(['COOPERATIVE_VERSION', 'CREATED_AT']));
+            const others = Object.keys(config).filter(k => !shown.has(k));
+            if (others.length) {
+                html += '<div style="margin-top:8px;"><span style="color:#eaf6ff;font-weight:600;">🔐 Credentials</span>';
+                html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:4px;margin-top:4px;">';
+                for (const k of others) {
+                    const v = config[k]; const enc = isEncrypted(v);
+                    let display = enc ? '🔒 chiffré' : v;
+                    if (enc && decrypted && decrypted[k]) display = decrypted[k];
+                    html += '<div style="background:rgba(255,255,255,0.05);padding:4px 8px;border-radius:6px;">'
+                        + '<div style="color:#7f8c8d;font-size:0.75em;">' + k + '</div>'
+                        + '<div style="color:#eaf6ff;font-size:0.9em;">' + display + '</div></div>';
+                }
+                html += '</div></div>';
+            }
+
+            if (editable) {
+                html += '<div style="margin-top:10px;text-align:right;">'
+                    + '<button id="coop-save-btn" style="background:#2ecc71;color:white;border:none;padding:6px 16px;border-radius:6px;cursor:pointer;font-size:0.9em;">💾 Publier sur NOSTR</button>'
+                    + '</div>';
+            }
+
+            container.innerHTML = html;
+
+            if (editable) {
+                document.getElementById('coop-save-btn').addEventListener('click', saveCoopConfig);
+            }
+        }
+
+        async function decryptAll(config, key) {
+            const keyHex = await sha256hex(key);
+            const result = {};
+            for (const [k, v] of Object.entries(config)) {
+                if (isEncrypted(v)) {
+                    try { result[k] = await aesDecrypt(v.substring(0, 32), v.substring(33), keyHex); }
+                    catch (e) { result[k] = '❌ erreur'; }
+                }
+            }
+            return result;
+        }
+
+        async function saveCoopConfig() {
+            if (!captainPrivHex || !coopConfig) return;
+            const NostrLib = window.NostrTools || window.Nostr;
+            const statusEl = document.getElementById('coop-status');
+
+            // Collect edited values
+            const inputs = document.querySelectorAll('#coop-config-content input[data-key]');
+            const updated = { ...coopConfig };
+            inputs.forEach(input => { updated[input.dataset.key] = input.value.trim(); });
+
+            // Build and sign kind 30800 event
+            const event = {
+                kind: COOP_KIND,
+                created_at: Math.floor(Date.now() / 1000),
+                tags: [['d', COOP_DTAG], ['t', 'uplanet'], ['t', 'cooperative-config']],
+                content: JSON.stringify(updated),
+                pubkey: captainPubHex
+            };
+
+            const signedEvent = NostrLib.finalize ? NostrLib.finalize(event, captainPrivHex) : NostrLib.signEvent(event, captainPrivHex);
+
+            try {
+                statusEl.textContent = 'Publication en cours...';
+                const ok = await publishEvent(relayUrl, signedEvent);
+                // Also publish to public relay
+                if (relayUrl !== 'wss://relay.copylaradio.com') {
+                    await publishEvent('wss://relay.copylaradio.com', signedEvent).catch(() => {});
+                }
+                coopConfig = updated;
+                window._coopConfigData = updated;
+                applyCoopConfigToSimulator(updated);
+                statusEl.textContent = ok ? '✅ Config publiée sur NOSTR' : '❌ Relay a refusé';
+                statusEl.style.color = ok ? '#2ecc71' : '#e74c3c';
+            } catch (e) {
+                statusEl.textContent = '❌ Erreur publication: ' + e;
+                statusEl.style.color = '#e74c3c';
+            }
+        }
+
+        // Apply cooperative config values to the simulator inputs
+        function applyCoopConfigToSimulator(config) {
+            if (!config) return;
+            const vatInput = document.getElementById('vat-rate');
+            const isInput = document.getElementById('corporate-tax-rate');
+            if (vatInput && config.TVA_RATE) {
+                vatInput.value = config.TVA_RATE;
+                vatInput.dispatchEvent(new Event('input'));
+            }
+            if (isInput && config.IS_RATE_NORMAL) {
+                isInput.value = config.IS_RATE_NORMAL;
+                isInput.dispatchEvent(new Event('input'));
+            }
+            // Select SCIC structure by default when coop config exists
+            const structureSelect = document.getElementById('legal-structure');
+            if (structureSelect) {
+                structureSelect.value = 'scic';
+            }
+        }
+
+        // Init
+        window.addEventListener('load', async () => {
+            const dashboard = document.querySelector('.economic-dashboard');
+            if (!dashboard) return;
+
+            const section = document.createElement('div');
+            section.className = 'status-section';
+            section.style.cssText = 'background:linear-gradient(145deg,#1e2533,#232733);border:1px solid rgba(155,89,182,0.3);margin-top:12px;padding:12px;';
+            section.innerHTML = `
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:6px;">
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <span style="font-size:1.3em;">⚙️</span>
+                        <span style="color:#bb86fc;font-size:1.1em;font-weight:600;">Cooperative Config</span>
+                        <span style="color:#7f8c8d;font-size:0.8em;">(kind 30800)</span>
+                    </div>
+                </div>
+                <div id="coop-auth" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:8px;
+                    padding:8px;background:rgba(255,255,255,0.03);border-radius:8px;border:1px solid rgba(155,89,182,0.15);">
+                    <div style="display:flex;gap:4px;align-items:center;">
+                        <input id="coop-uplanetname" type="password" placeholder="UPLANETNAME"
+                            style="background:rgba(255,255,255,0.08);border:1px solid rgba(155,89,182,0.3);color:#eaf6ff;padding:4px 8px;border-radius:6px;font-size:0.85em;width:200px;">
+                        <button id="coop-login-btn" style="background:#9b59b6;color:white;border:none;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:0.85em;">🔑 Connexion</button>
+                    </div>
+                    <span id="coop-auth-status" style="color:#7f8c8d;font-size:0.8em;"></span>
+                </div>
+                <div id="coop-config-content" style="color:#7f8c8d;font-size:0.9em;">
+                    Chargement depuis NOSTR relay...
+                </div>
+                <div id="coop-status" style="color:#7f8c8d;font-size:0.75em;margin-top:6px;"></div>
+            `;
+            dashboard.appendChild(section);
+            window._coopConfigSection = section;
+
+            // Fetch config
+            relayUrl = detectRelay();
+            const statusEl = document.getElementById('coop-status');
+            try {
+                statusEl.textContent = 'Connexion à ' + relayUrl + '...';
+                coopEvent = await fetchCoopConfig(relayUrl);
+                if (!coopEvent) {
+                    document.getElementById('coop-config-content').innerHTML = '<div style="color:#f39c12;">Aucune config coopérative trouvée.<br><span style="font-size:0.85em;color:#b8c6e0;">Entrez UPLANETNAME et cliquez 🔑 Connexion pour créer la config initiale.</span></div>';
+                    statusEl.textContent = relayUrl;
+                } else {
+                    coopConfig = JSON.parse(coopEvent.content);
+                    window._coopConfigData = coopConfig;
+                    statusEl.textContent = 'Pubkey: ' + coopEvent.pubkey.substring(0, 16) + '... | ' + new Date(coopEvent.created_at * 1000).toLocaleString() + ' | ' + relayUrl;
+                    renderCoopSection(coopConfig, null, false);
+
+                    // Apply coop config values to simulator inputs
+                    applyCoopConfigToSimulator(coopConfig);
+                }
+            } catch (e) {
+                document.getElementById('coop-config-content').textContent = 'Erreur: ' + e;
+            }
+
+            // Single login: UPLANETNAME → derive keys (salt=pepper=UPLANETNAME) + decrypt
+            document.getElementById('coop-login-btn').addEventListener('click', async () => {
+                uplanetname = document.getElementById('coop-uplanetname').value.trim();
+                const authStatus = document.getElementById('coop-auth-status');
+                if (!uplanetname) { authStatus.textContent = '❌ UPLANETNAME requis'; return; }
+                try {
+                    authStatus.textContent = 'Dérivation scrypt...';
+                    // salt = pepper = UPLANETNAME.G1 (same as cooperative_config.sh keyfile derivation)
+                    const saltPepper = uplanetname + '.G1';
+                    const keys = await deriveNostrKeys(saltPepper, saltPepper);
+                    captainPrivHex = keys.privHex;
+                    captainPubHex = keys.pubHex;
+
+                    // If no config exists, initialize default (same as coop_config_init in cooperative_config.sh)
+                    if (!coopConfig) {
+                        coopConfig = {
+                            "COOPERATIVE_VERSION": "1.0",
+                            "CREATED_AT": new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'),
+                            "_comment_fiscal": "=== FISCAL PARAMETERS ===",
+                            "TVA_RATE": "20.0",
+                            "IS_RATE_REDUCED": "15.0",
+                            "IS_RATE_NORMAL": "25.0",
+                            "IS_THRESHOLD": "42500",
+                            "_comment_shares": "=== COOPERATIVE SHARES ===",
+                            "ZENCARD_SATELLITE": "50",
+                            "ZENCARD_CONSTELLATION": "540",
+                            "_comment_3x13": "=== 3x1/3 + 1% RULE ===",
+                            "TREASURY_PERCENT": "33",
+                            "RND_PERCENT": "33",
+                            "ASSETS_PERCENT": "33",
+                            "CAPTAIN_BONUS_PERCENT": "1",
+                            "_comment_oc": "=== OPENCOLLECTIVE ===",
+                            "OPENCOLLECTIVE_COLLECTIVE": "uplanet-zero",
+                            "OPENCOLLECTIVE_SLUG": "monnaie-libre"
+                        };
+                        authStatus.innerHTML = '✅ ' + captainPubHex.substring(0, 12) + '... <span style="color:#f39c12;">(nouvelle config)</span>';
+                        authStatus.style.color = '#2ecc71';
+                        statusEl.textContent = 'Config par défaut créée — modifiez puis cliquez 💾 Publier sur NOSTR';
+                        renderCoopSection(coopConfig, null, true);
+                    } else {
+                        // Check if this pubkey matches the event author
+                        const isAuthor = coopEvent && coopEvent.pubkey === captainPubHex;
+                        authStatus.innerHTML = '✅ ' + captainPubHex.substring(0, 12) + '...' + (isAuthor ? ' <span style="color:#2ecc71;">(auteur)</span>' : ' <span style="color:#f39c12;">(non-auteur)</span>');
+                        authStatus.style.color = '#2ecc71';
+
+                        // Decrypt all encrypted values with UPLANETNAME
+                        let decrypted = null;
+                        try {
+                            decrypted = await decryptAll(coopConfig, uplanetname);
+                        } catch (e) { /* ignore decrypt errors */ }
+
+                        // Enable editing + show decrypted values
+                        renderCoopSection(coopConfig, decrypted, true);
+                    }
+
+                    // Clear sensitive input
+                    document.getElementById('coop-uplanetname').value = '';
+                } catch (e) {
+                    authStatus.textContent = '❌ ' + (e.message || e);
+                    authStatus.style.color = '#e74c3c';
+                }
+            });
+        });
+    })();
+    </script>
 </body>
-</html> 
+</html>

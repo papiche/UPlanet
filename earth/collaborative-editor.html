@@ -74,145 +74,7 @@
             z-index: 0;
         }
 
-        /* ═══════════════════════════════════════════════════════════════════
-           CONNECTION BADGE IN HEADER
-           ═══════════════════════════════════════════════════════════════════ */
-        .connection-badge {
-            position: relative;
-            background: rgba(10, 15, 26, 0.95);
-            backdrop-filter: blur(10px);
-            padding: 8px 14px;
-            border-radius: 12px;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            transition: all 0.3s ease;
-            border: 2px solid var(--border-color);
-            cursor: pointer;
-            min-width: 160px;
-        }
-        
-        .connection-badge:hover {
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
-            border-color: var(--accent-cyan);
-        }
-        
-        .connection-badge.authenticated {
-            border-color: var(--accent-emerald);
-            background: rgba(16, 185, 129, 0.15);
-        }
-        
-        .connection-badge.connected-not-auth {
-            border-color: var(--accent-amber);
-            background: rgba(245, 158, 11, 0.15);
-        }
-        
-        .connection-badge.disconnected {
-            border-color: var(--border-color);
-        }
-        
-        .badge-avatar {
-            width: 32px;
-            height: 32px;
-            border-radius: 8px;
-            border: 2px solid var(--accent-cyan);
-            object-fit: cover;
-        }
-        
-        .badge-info {
-            display: flex;
-            flex-direction: column;
-            gap: 2px;
-            flex: 1;
-        }
-        
-        .badge-status {
-            font-size: 0.75rem;
-            color: var(--text-muted);
-        }
-        
-        .badge-name {
-            font-size: 0.85rem;
-            font-weight: 600;
-            color: var(--text-primary);
-        }
-        
-        .badge-actions {
-            display: flex;
-            gap: 6px;
-        }
-        
-        .badge-btn {
-            padding: 6px 10px;
-            border-radius: 8px;
-            border: none;
-            background: var(--bg-card);
-            color: var(--text-secondary);
-            font-size: 0.75rem;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-        
-        .badge-btn:hover {
-            background: var(--bg-card-hover);
-            color: var(--accent-cyan);
-        }
-        
-        .badge-btn.primary {
-            background: linear-gradient(135deg, var(--accent-cyan), var(--accent-emerald));
-            color: var(--bg-primary);
-        }
-        
-        /* Badge dropdown panel */
-        .badge-panel {
-            position: absolute;
-            top: 100%;
-            right: 0;
-            margin-top: 8px;
-            background: var(--bg-card);
-            border: 1px solid var(--border-color);
-            border-radius: 12px;
-            padding: 16px;
-            min-width: 280px;
-            display: none;
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
-        }
-        
-        .badge-panel.show {
-            display: block;
-        }
-        
-        .panel-row {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            padding: 10px 0;
-            border-bottom: 1px solid var(--border-color);
-        }
-        
-        .panel-row:last-child {
-            border-bottom: none;
-        }
-        
-        .panel-row-icon {
-            font-size: 1.2rem;
-        }
-        
-        .panel-row-content {
-            flex: 1;
-        }
-        
-        .panel-row-label {
-            font-size: 0.75rem;
-            color: var(--text-muted);
-        }
-        
-        .panel-row-value {
-            font-size: 0.85rem;
-            color: var(--text-primary);
-            font-weight: 500;
-        }
+        /* Connection button replaces old badge */
         
         .panel-row-value a {
             color: var(--accent-cyan);
@@ -1313,48 +1175,22 @@
             <span class="version-badge" id="version-badge">Nouveau</span>
         </div>
         <div class="header-actions">
-            <!-- Connection Badge (compact) -->
-            <div class="connection-badge disconnected" id="connection-badge" onclick="toggleBadgePanel()">
-                <img class="badge-avatar" id="badge-avatar" src="https://robohash.org/anonymous?set=set4&size=32x32" alt="">
-                <div class="badge-info">
-                    <span class="badge-status" id="badge-status">Non connect&eacute;</span>
-                    <span class="badge-name" id="badge-name">Cliquez pour connecter</span>
+            <!-- Connection: single button that handles NIP-07 + NIP-42 -->
+            <button class="btn btn-secondary" id="btn-connect" onclick="connectNostr()" title="Connexion Nostr + NIP-42">
+                <img class="badge-avatar" id="badge-avatar" src="https://robohash.org/anonymous?set=set4&size=32x32" alt="" style="width:24px;height:24px;border-radius:6px;border:2px solid var(--border-color);">
+                <span id="badge-name">Connexion</span>
+            </button>
+            <!-- Hidden: kept for JS references -->
+            <div style="display:none;">
+                <span class="badge-status" id="badge-status"></span>
+                <span id="badge-connect-btn"></span>
+                <div id="badge-panel">
+                    <div id="panel-pubkey-row"><span id="panel-pubkey"></span></div>
+                    <div id="panel-udrive-row"><a id="panel-udrive-link" href="#"></a></div>
+                    <div id="panel-wallet-row"><span id="panel-wallet"></span></div>
+                    <div id="panel-auth-row"><span id="panel-auth-icon"></span><span id="panel-auth-status"></span></div>
                 </div>
-                <div class="badge-actions">
-                    <button class="badge-btn primary" id="badge-connect-btn" onclick="event.stopPropagation(); connectNostr()">🔑</button>
-                </div>
-
-                <!-- Dropdown Panel -->
-                <div class="badge-panel" id="badge-panel" onclick="event.stopPropagation()">
-                    <div class="panel-row" id="panel-pubkey-row" style="display: none;">
-                        <span class="panel-row-icon">🔑</span>
-                        <div class="panel-row-content">
-                            <div class="panel-row-label">Public Key</div>
-                            <div class="panel-row-value" id="panel-pubkey">...</div>
-                        </div>
-                    </div>
-                    <div class="panel-row" id="panel-udrive-row" style="display: none;">
-                        <span class="panel-row-icon">📁</span>
-                        <div class="panel-row-content">
-                            <div class="panel-row-label">uDRIVE</div>
-                            <div class="panel-row-value"><a href="#" id="panel-udrive-link" target="_blank">Ouvrir le stockage</a></div>
-                        </div>
-                    </div>
-                    <div class="panel-row" id="panel-wallet-row" style="display: none;">
-                        <span class="panel-row-icon">💰</span>
-                        <div class="panel-row-content">
-                            <div class="panel-row-label">Wallet G1</div>
-                            <div class="panel-row-value" id="panel-wallet">...</div>
-                        </div>
-                    </div>
-                    <div class="panel-row" id="panel-auth-row">
-                        <span class="panel-row-icon" id="panel-auth-icon">⚠️</span>
-                        <div class="panel-row-content">
-                            <div class="panel-row-label">Authentification NIP-42</div>
-                            <div class="panel-row-value" id="panel-auth-status">Non authentifi&eacute;</div>
-                        </div>
-                    </div>
-                </div>
+                <div class="connection-badge" id="connection-badge"></div>
             </div>
             <button class="btn btn-secondary" id="btn-load" onclick="openLoadModal()">
                 📂 Charger
@@ -2313,8 +2149,7 @@ Votez en envoyant des Ẑen avec le tag vote sur l'interface crowdfunding !
         // CONNECTION BADGE MANAGEMENT
         // ═══════════════════════════════════════════════════════════════════
         window.toggleBadgePanel = function() {
-            const panel = document.getElementById('badge-panel');
-            panel.classList.toggle('show');
+            // Legacy — badge panel removed, no-op
         };
         
         // Toggle workflow section
@@ -2367,14 +2202,7 @@ Votez en envoyant des Ẑen avec le tag vote sur l'interface crowdfunding !
             window.addEventListener('resize', updateToggleButtonPosition);
         }
         
-        // Close badge panel when clicking outside
-        document.addEventListener('click', (e) => {
-            const badge = document.getElementById('connection-badge');
-            const panel = document.getElementById('badge-panel');
-            if (badge && panel && !badge.contains(e.target)) {
-                panel.classList.remove('show');
-            }
-        });
+        // Legacy badge panel listener — no-op
         
         function updateConnectionBadge(state, profile = null) {
             const badge = document.getElementById('connection-badge');
@@ -2551,43 +2379,67 @@ Votez en envoyant des Ẑen avec le tag vote sur l'interface crowdfunding !
                 showNotification('Extension Nostr non détectée (nos2x, Alby...)', 'error');
                 return;
             }
-            
+
+            // Already connected? Skip
+            if (window.appState.isConnected && window.appState.isAuthenticated) {
+                showNotification('Déjà connecté et authentifié', 'info');
+                return;
+            }
+
+            const connectBtn = document.getElementById('btn-connect');
+
             try {
+                // Step 1: NIP-07 — get public key from extension
+                connectBtn.querySelector('#badge-name').textContent = 'Connexion...';
                 const pubkey = await window.nostr.getPublicKey();
                 window.appState.userPubkey = pubkey;
                 window.appState.isConnected = true;
-                
+
                 // Convert to npub for display
                 if (window.NostrTools && window.NostrTools.nip19) {
                     window.appState.userNpub = window.NostrTools.nip19.npubEncode(pubkey);
                 } else {
                     window.appState.userNpub = pubkey.substring(0, 8) + '...' + pubkey.substring(pubkey.length - 4);
                 }
-                
+
                 // Update author info
                 document.getElementById('author-name').textContent = window.appState.userNpub.substring(0, 16) + '...';
                 document.getElementById('author-avatar').src = `https://robohash.org/${pubkey}?set=set4&size=24x24`;
-                
+
                 // Mark step 1 as completed
                 document.getElementById('step-1').classList.add('completed');
                 document.getElementById('step-1').textContent = '✓';
-                
-                // Connect to relay
+
+                // Step 2: Connect to relay
                 await connectRelay();
-                
-                // Fetch user profile for uDRIVE info
+
+                // Step 3: Fetch user profile
                 const profile = await fetchUserProfile(pubkey);
-                
-                // Sync connection status (updates both badge and header)
+
+                // Step 4: NIP-42 — authenticate automatically
+                connectBtn.querySelector('#badge-name').textContent = 'Auth NIP-42...';
+                await authenticateNIP42();
+
+                // Update connect button to show identity
+                const displayName = profile?.name || profile?.display_name || window.appState.userNpub?.substring(0, 12) + '...';
+                connectBtn.querySelector('#badge-name').textContent = displayName;
+                connectBtn.querySelector('#badge-avatar').src = profile?.picture || `https://robohash.org/${pubkey}?set=set4&size=32x32`;
+                connectBtn.querySelector('#badge-avatar').style.borderColor = 'var(--accent-emerald)';
+                connectBtn.style.borderColor = 'var(--accent-emerald)';
+                connectBtn.onclick = null; // Disable re-click
+                connectBtn.title = `Connecté: ${displayName}`;
+
+                // Sync connection status
                 syncConnectionStatus();
-                
+
                 // Load UMAP documents
                 await loadUMAPDocuments();
-                
-                showNotification('Connecté! Cliquez sur 🔐 pour activer l\'upload d\'images', 'success');
-                
+
+                showNotification('Connecté et authentifié — vous pouvez publier et voter', 'success');
+
             } catch (error) {
                 console.error('Nostr connection error:', error);
+                connectBtn.querySelector('#badge-name').textContent = 'Connexion';
                 showNotification('Erreur de connexion: ' + error.message, 'error');
             }
         };

@@ -1081,6 +1081,9 @@
                     mergedData._originalApiUrl = apiUrl;
                     console.log('Merged data:', mergedData);
 
+                    // Load Duniter nodes from IPNS (async, non-blocking)
+                    loadDuniterNodes(ipfsGatewayUrl, ipfsNodeId).catch(() => {});
+
                     // Call callback with merged data (for complete display)
                     if (onMynodeLoaded) {
                         onMynodeLoaded(mergedData);
@@ -1098,29 +1101,90 @@
             }
         }
 
+        // Duniter nodes discovered from IPNS (loaded by loadDuniterNodes)
+        window._duniterSquids = [];
+
+        // Load duniter_nodes.json from station IPNS
+        async function loadDuniterNodes(ipfsGatewayUrl, ipfsNodeId) {
+            try {
+                const url = `${ipfsGatewayUrl}/ipns/${ipfsNodeId}/duniter_nodes.json`;
+                console.log('Loading Duniter nodes from:', url);
+                const resp = await fetch(url, { signal: AbortSignal.timeout(8000) });
+                const data = await resp.json();
+                if (data && data.squid && data.squid.length > 0) {
+                    window._duniterSquids = data.squid.map(n => n.url);
+                    console.log('Duniter squids loaded:', window._duniterSquids);
+                }
+                if (data && data.rpc) {
+                    window._duniterRpc = data.rpc.map(n => n.url);
+                }
+                return data;
+            } catch (e) {
+                console.warn('duniter_nodes.json not available:', e.message);
+                return null;
+            }
+        }
+
+        // Query squid GraphQL directly for account balance (SS58 address required)
+        // GraphQL: accounts(condition:{id:$w}){nodes{totalBalance}}
+        async function fetchBalanceFromSquid(ss58Address) {
+            for (const squidUrl of window._duniterSquids) {
+                try {
+                    const query = JSON.stringify({
+                        query: `query($w:String!){accounts(condition:{id:$w}){nodes{totalBalance}}}`,
+                        variables: { w: ss58Address }
+                    });
+                    const resp = await fetch(squidUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: query,
+                        signal: AbortSignal.timeout(6000)
+                    });
+                    const data = await resp.json();
+                    const raw = data?.data?.accounts?.nodes?.[0]?.totalBalance;
+                    if (raw !== undefined && raw !== null) {
+                        const g1 = parseFloat(raw) / 100;
+                        const zen = Math.max(0, (g1 - 1) * 10);
+                        console.log(`Squid direct (${squidUrl}): ${ss58Address} = ${g1} G1`);
+                        return { balance: g1.toFixed(2), zen: zen.toFixed(2), source: 'squid' };
+                    }
+                } catch (e) {
+                    console.warn(`Squid ${squidUrl} failed:`, e.message);
+                }
+            }
+            return null;
+        }
+
         // Fonction pour récupérer le solde d'un portefeuille
-        async function fetchWalletBalance(g1pub, apiBaseUrl) {
+        // Tries squid GraphQL direct first (if SS58 available), then UPassport fallback
+        async function fetchWalletBalance(g1pub, apiBaseUrl, ss58Address) {
             try {
                 if (!g1pub || g1pub === 'N/A') {
                     return { balance: '0.00', zen: '0.00' };
                 }
 
-                // Ensure proper URL construction without double slashes
-                const cleanApiBaseUrl = apiBaseUrl.replace(/\/+$/, ''); // Remove trailing slashes
+                // Try squid GraphQL direct if we have SS58 and squid nodes
+                if (ss58Address && window._duniterSquids.length > 0) {
+                    const squidResult = await fetchBalanceFromSquid(ss58Address);
+                    if (squidResult) return squidResult;
+                }
+
+                // Fallback: UPassport /check_balance
+                const cleanApiBaseUrl = apiBaseUrl.replace(/\/+$/, '');
                 const balanceUrl = `${cleanApiBaseUrl}/check_balance?g1pub=${g1pub}`;
-                console.log('Fetching balance from:', balanceUrl);
-                
+                console.log('Fallback UPassport:', balanceUrl);
+
                 const response = await fetch(balanceUrl);
                 const data = await response.json();
-                
+
                 if (data && data.balance) {
                     const g1Balance = parseFloat(data.balance);
-                    // Convert Ğ1 to ẐEN (1 Ğ1 = 10 ẐEN, but we need to subtract 1 first)
                     const zenBalance = (g1Balance - 1) * 10;
-                    
+
                     return {
                         balance: g1Balance.toFixed(2),
-                        zen: Math.max(0, zenBalance).toFixed(2) // Ensure non-negative
+                        zen: Math.max(0, zenBalance).toFixed(2),
+                        source: 'upassport'
                     };
                 } else {
                     console.warn('Invalid balance response for', g1pub, data);

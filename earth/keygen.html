@@ -100,6 +100,9 @@
     <!-- BIP39 — new lib with CDN wordlist loading -->
     <script src="bip39-libs.js"></script>
 
+    <!-- Blake2b -->
+    <script src="blake2b_browser.js"></script>
+
     <!-- Base58 -->
     <script>
         (function() {
@@ -133,6 +136,7 @@
     <div class="tabs">
         <div class="tab active" onclick="switchTab('v1')">Legacy (v1)</div>
         <div class="tab" onclick="switchTab('v2')">Mnemonic (v2)</div>
+        <div class="tab" onclick="switchTab('live')">Live Typing</div>
     </div>
 
     <!-- V1 -->
@@ -141,6 +145,36 @@
         <input type="text" id="salt" placeholder="e.g. mylogin" autocomplete="username">
         <label for="pepper">Pepper (password)</label>
         <input type="password" id="pepper" placeholder="Your password" autocomplete="current-password">
+    </div>
+
+    <!-- Live Typing -->
+    <div id="tab-live" class="tab-content">
+        <label for="live-input">Type your phrase (alternates letters to salt/pepper)</label>
+        <textarea id="live-input" placeholder="Start typing here..." style="min-height: 120px;"></textarea>
+        
+        <div style="margin-bottom: 1rem; background: #222; padding: 1rem; border-radius: 6px; border: 1px solid #444;">
+            <label style="margin-bottom: 0.5rem;">Security Level (Entropy)</label>
+            <div style="width: 100%; height: 12px; background: #333; border-radius: 6px; overflow: hidden; margin-bottom: 0.5rem;">
+                <div id="entropy-bar" style="height: 100%; width: 0%; background: #e66; transition: width 0.3s, background-color 0.3s;"></div>
+            </div>
+            <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: #888;">
+                <span>0 bits</span>
+                <span id="entropy-text">0 bits</span>
+                <span>128 bits (12 words)</span>
+            </div>
+            <p id="entropy-status" style="font-size: 0.8rem; margin-top: 0.5rem; margin-bottom: 0; color: #e66;">Too weak</p>
+        </div>
+
+        <div style="display: flex; gap: 1rem; margin-bottom: 1rem;">
+            <div style="flex: 1;">
+                <label>Salt (odd letters)</label>
+                <input type="text" id="live-salt" readonly style="background: #222; color: #888;">
+            </div>
+            <div style="flex: 1;">
+                <label>Pepper (even letters)</label>
+                <input type="text" id="live-pepper" readonly style="background: #222; color: #888;">
+            </div>
+        </div>
     </div>
 
     <!-- V2 -->
@@ -199,6 +233,10 @@
             <label>Ed25519 PubKey (Duniter/G1) - Base58:</label>
             <input type="text" id="g1_pub" readonly placeholder="…" />
         </div>
+        <div class="key-block g1-key">
+            <label>Duniter v2 SS58 Address (Ğ1v2):</label>
+            <input type="text" id="g1_v2_pub" readonly placeholder="…" />
+        </div>
         <div class="key-block ipfs-key">
             <label>IPNS Name (CIDv1 Base36):</label>
             <input type="text" id="ipns_key" readonly placeholder="…" />
@@ -229,6 +267,7 @@
         const statusEl     = document.getElementById('status');
         const outEl        = document.getElementById('out');
         const g1El         = document.getElementById('g1_pub');
+        const g1v2El       = document.getElementById('g1_v2_pub');
         const ipnsEl       = document.getElementById('ipns_key');
         const debugEl      = document.getElementById('debugLog');
         const debugLines   = [];
@@ -248,10 +287,22 @@
             currentMode = mode;
             document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
             document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-            document.querySelectorAll('.tab')[mode === 'v1' ? 0 : 1].classList.add('active');
+            
+            let tabIndex = 0;
+            if (mode === 'v2') tabIndex = 1;
+            else if (mode === 'live') tabIndex = 2;
+            
+            document.querySelectorAll('.tab')[tabIndex].classList.add('active');
             document.getElementById('tab-' + mode).classList.add('active');
             statusEl.style.display = 'none';
             outEl.style.display = 'none';
+            
+            if (mode === 'live') {
+                btn.style.display = 'none';
+                document.getElementById('live-input').focus();
+            } else {
+                btn.style.display = 'block';
+            }
         }
 
         async function onLangChange(lang) {
@@ -280,6 +331,12 @@
 
         // ── V1: Scrypt ───────────────────────────────────────────────────────
         const N = 4096, r = 16, p = 1, dkLen = 32;
+        
+        // Calcul de la mémoire consommée par Scrypt
+        // Formule approximative : 128 * N * r * p octets
+        const scryptMemoryBytes = 128 * N * r * p;
+        const scryptMemoryMB = (scryptMemoryBytes / (1024 * 1024)).toFixed(2);
+
         function scryptPromise(password, salt) {
             return new Promise((resolve, reject) => {
                 if (typeof scrypt === 'undefined') return reject(new Error('scrypt.min.js missing'));
@@ -298,7 +355,7 @@
         }
 
         // ── MAIN DERIVE ──────────────────────────────────────────────────────
-        async function derive() {
+        async function derive(forceSalt = null, forcePepper = null) {
             const NostrLib = window.NostrTools || window.Nostr;
             if (!NostrLib) { alert('ERREUR: nostr.bundle.js manquant'); return; }
             if (typeof nacl === 'undefined') { alert('ERREUR: nacl-fast.min.js manquant'); return; }
@@ -314,12 +371,27 @@
             try {
                 let seed; // 32 bytes Uint8Array
 
-                if (currentMode === 'v1') {
-                    const salt   = (saltEl.value || '').trim();
-                    const pepper = pepperEl.value || '';
-                    if (!salt || !pepper) throw new Error('Please enter login and password');
-                    debugLog('Mode V1: Scrypt derivation…');
+                if (currentMode === 'v1' || currentMode === 'live') {
+                    let salt, pepper;
+                    if (currentMode === 'live') {
+                        salt = forceSalt || '';
+                        pepper = forcePepper || '';
+                        if (!salt && !pepper) throw new Error('Please type something');
+                    } else {
+                        salt   = (saltEl.value || '').trim();
+                        pepper = pepperEl.value || '';
+                        if (!salt || !pepper) throw new Error('Please enter login and password');
+                    }
+                    
+                    const startTime = performance.now();
+                    debugLog('Mode ' + currentMode + ': Scrypt derivation… (N=' + N + ', r=' + r + ', p=' + p + ')');
+                    debugLog('Estimated memory usage: ~' + scryptMemoryMB + ' MB');
+                    
                     seed = await scryptPromise(new TextEncoder().encode(pepper), new TextEncoder().encode(salt));
+                    
+                    const endTime = performance.now();
+                    const duration = (endTime - startTime).toFixed(0);
+                    debugLog('Scrypt computation finished in ' + duration + ' ms');
 
                 } else {
                     // ── MODE V2: Mnemonic ──────────────────────────────────
@@ -353,6 +425,28 @@
 
                 g1El.value  = window.bs58.encode(pubKeyBytes);
 
+                // ── Duniter v2 SS58 Address ──────────────────────────────
+                const SS58_PREFIX = 4450;
+                const first = ((SS58_PREFIX & 0xFC) >> 2) | 0x40;
+                const second = (SS58_PREFIX >> 8) | ((SS58_PREFIX & 0x03) << 6);
+                const payload = new Uint8Array(2 + pubKeyBytes.length);
+                payload[0] = first;
+                payload[1] = second;
+                payload.set(pubKeyBytes, 2);
+                
+                const prefixBytes = new TextEncoder().encode('SS58PRE');
+                const checksumInput = new Uint8Array(prefixBytes.length + payload.length);
+                checksumInput.set(prefixBytes, 0);
+                checksumInput.set(payload, prefixBytes.length);
+                
+                const checksum = window.blake2b.blake2b(checksumInput, null, 64).slice(0, 2);
+                
+                const ss58Bytes = new Uint8Array(payload.length + checksum.length);
+                ss58Bytes.set(payload, 0);
+                ss58Bytes.set(checksum, payload.length);
+                
+                g1v2El.value = window.bs58.encode(ss58Bytes);
+
                 const header    = new Uint8Array([0x01, 0x72, 0x00, 0x24, 0x08, 0x01, 0x12, 0x20]);
                 const ipnsBuf   = new Uint8Array(header.length + pubKeyBytes.length);
                 ipnsBuf.set(header);
@@ -373,8 +467,17 @@
 
                 statusEl.innerHTML = '<span class="success">✓ Keys generated successfully!</span>';
                 outEl.style.display = 'block';
-                outEl.innerHTML =
-                    '<h3>Nostr nsec</h3><pre>' + (nsec || privHex) + '</pre>' +
+                
+                let extensionLink = '';
+                const isFirefox = navigator.userAgent.toLowerCase().indexOf('firefox') > -1;
+                if (isFirefox) {
+                    extensionLink = '<p style="font-size: 0.85rem; margin-bottom: 1rem;">🦊 <a href="https://addons.mozilla.org/fr/firefox/addon/nos2x-fox/" target="_blank" style="color: #0a7ea4;">Installer l\'extension nos2x-fox pour Firefox</a></p>';
+                } else {
+                    extensionLink = '<p style="font-size: 0.85rem; margin-bottom: 1rem;">🧩 <a href="https://chromewebstore.google.com/detail/nos2x/kpgefcfmnafjgpblomihpgmejjdanjjp" target="_blank" style="color: #0a7ea4;">Installer l\'extension nos2x pour Chrome/Brave</a></p>';
+                }
+
+                outEl.innerHTML = extensionLink +
+                    '<h3>Nostr nsec</h3><pre style="cursor: pointer;" onclick="copyNsec(this, \'' + (nsec || privHex) + '\')" title="Cliquez pour copier et ouvrir Coracle">' + (nsec || privHex) + '</pre>' +
                     '<h3>Nostr npub</h3><pre>' + (npub || pubHex) + '</pre>';
 
             } catch(e) {
@@ -429,6 +532,97 @@
         });
 
         btn.addEventListener('click', derive);
+
+        // ── Copy nsec & Open Coracle ─────────────────────────────────────────
+        function copyNsec(el, nsec) {
+            navigator.clipboard.writeText(nsec).then(() => {
+                const originalText = el.innerText;
+                el.innerText = '✓ Copié dans le presse-papier !';
+                el.style.color = '#6a6';
+                setTimeout(() => {
+                    el.innerText = originalText;
+                    el.style.color = '#fff';
+                }, 2000);
+                
+                // Afficher la frame d'explication et ouvrir Coracle
+                showNostrConnectFrame();
+            }).catch(err => {
+                console.error('Erreur lors de la copie :', err);
+                alert('Erreur lors de la copie du nsec.');
+            });
+        }
+
+        function showNostrConnectFrame() {
+            // Créer l'overlay
+            const overlay = document.createElement('div');
+            overlay.style.position = 'fixed';
+            overlay.style.top = '0';
+            overlay.style.left = '0';
+            overlay.style.width = '100%';
+            overlay.style.height = '100%';
+            overlay.style.backgroundColor = 'rgba(0, 0, 0, 0.8)';
+            overlay.style.zIndex = '9999';
+            overlay.style.display = 'flex';
+            overlay.style.flexDirection = 'column';
+            overlay.style.alignItems = 'center';
+            overlay.style.justifyContent = 'center';
+            overlay.style.padding = '2rem';
+
+            // Créer la boîte de dialogue
+            const dialog = document.createElement('div');
+            dialog.style.backgroundColor = '#1a1a1a';
+            dialog.style.padding = '2rem';
+            dialog.style.borderRadius = '8px';
+            dialog.style.border = '1px solid #444';
+            dialog.style.maxWidth = '600px';
+            dialog.style.width = '100%';
+            dialog.style.textAlign = 'center';
+            dialog.style.boxShadow = '0 4px 20px rgba(0,0,0,0.5)';
+
+            dialog.innerHTML = `
+                <h2 style="color: #fff; margin-top: 0;">🔑 Activer Nostr Connect</h2>
+                <p style="color: #ccc; text-align: left; line-height: 1.5;">
+                    Votre clé privée (nsec) a été copiée dans le presse-papier.
+                </p>
+                <ol style="color: #ccc; text-align: left; line-height: 1.5; margin-bottom: 2rem;">
+                    <li>Ouvrez l'extension <strong>nos2x</strong> (ou <strong>nos2x-fox</strong>) que vous venez d'installer.</li>
+                    <li>Allez dans les <strong>Options</strong> ou <strong>Paramètres</strong> de l'extension.</li>
+                    <li>Collez votre clé privée (nsec) dans le champ prévu à cet effet.</li>
+                    <li>Enregistrez. L'extension gérera désormais vos signatures de manière sécurisée.</li>
+                </ol>
+                <p style="color: #ccc; text-align: left; line-height: 1.5; margin-bottom: 2rem;">
+                    Une fois cela fait, vous pourrez vous connecter à Coracle en utilisant l'extension (Nostr Connect / NIP-07).
+                </p>
+                <div style="display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap;">
+                    <button id="btn-open-coracle" style="background: #0a7ea4; color: #fff; border: none; padding: 0.75rem 1.5rem; border-radius: 6px; font-size: 1rem; cursor: pointer; font-weight: bold;">
+                        Ouvrir Coracle
+                    </button>
+                    <button id="btn-open-uplanet" style="background: #204d52; color: #fff; border: none; padding: 0.75rem 1.5rem; border-radius: 6px; font-size: 1rem; cursor: pointer; font-weight: bold;">
+                        Ouvrir UPlanet
+                    </button>
+                </div>
+                <button id="btn-close-dialog" style="background: transparent; color: #888; border: none; padding: 0.75rem 1.5rem; margin-top: 1rem; cursor: pointer; text-decoration: underline;">
+                    Fermer
+                </button>
+            `;
+
+            overlay.appendChild(dialog);
+            document.body.appendChild(overlay);
+
+            document.getElementById('btn-open-coracle').addEventListener('click', () => {
+                window.open('/ipns/coracle.copylaradio.com', '_blank');
+                document.body.removeChild(overlay);
+            });
+
+            document.getElementById('btn-open-uplanet').addEventListener('click', () => {
+                window.open('https://u.copylaradio.com/g1', '_blank');
+                document.body.removeChild(overlay);
+            });
+
+            document.getElementById('btn-close-dialog').addEventListener('click', () => {
+                document.body.removeChild(overlay);
+            });
+        }
 
         // ── Init ─────────────────────────────────────────────────────────────
         window.addEventListener('load', async () => {

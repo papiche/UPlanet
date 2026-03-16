@@ -226,9 +226,9 @@ function blake2bCompress (ctx, last) {
   // twelve rounds of mixing
   // uncomment the DebugPrint calls to log the computation
   // and match the RFC sample documentation
-  // util.debugPrint('          m[16]', m, 64)
+  // debugPrint('          m[16]', m, 64)
   for (i = 0; i < 12; i++) {
-    // util.debugPrint('   (i=' + (i < 10 ? ' ' : '') + i + ') v[16]', v, 64)
+    // debugPrint('   (i=' + (i < 10 ? ' ' : '') + i + ') v[16]', v, 64)
     B2B_G(0, 8, 16, 24, SIGMA82[i * 16 + 0], SIGMA82[i * 16 + 1])
     B2B_G(2, 10, 18, 26, SIGMA82[i * 16 + 2], SIGMA82[i * 16 + 3])
     B2B_G(4, 12, 20, 28, SIGMA82[i * 16 + 4], SIGMA82[i * 16 + 5])
@@ -238,12 +238,12 @@ function blake2bCompress (ctx, last) {
     B2B_G(4, 14, 16, 26, SIGMA82[i * 16 + 12], SIGMA82[i * 16 + 13])
     B2B_G(6, 8, 18, 28, SIGMA82[i * 16 + 14], SIGMA82[i * 16 + 15])
   }
-  // util.debugPrint('   (i=12) v[16]', v, 64)
+  // debugPrint('   (i=12) v[16]', v, 64)
 
   for (i = 0; i < 16; i++) {
     ctx.h[i] = ctx.h[i] ^ v[i] ^ v[i + 16]
   }
-  // util.debugPrint('h[8]', ctx.h, 64)
+  // debugPrint('h[8]', ctx.h, 64)
 }
 
 // reusable parameterBlock
@@ -412,12 +412,12 @@ function blake2bFinal (ctx) {
 function blake2b (input, key, outlen, salt, personal) {
   // preprocess inputs
   outlen = outlen || 64
-  input = util.normalizeInput(input)
+  input = normalizeInput(input)
   if (salt) {
-    salt = util.normalizeInput(salt)
+    salt = normalizeInput(salt)
   }
   if (personal) {
-    personal = util.normalizeInput(personal)
+    personal = normalizeInput(personal)
   }
 
   // do the math
@@ -438,7 +438,7 @@ function blake2b (input, key, outlen, salt, personal) {
 // - personal - optional personal bytes, string, Buffer or Uint8Array
 function blake2bHex (input, key, outlen, salt, personal) {
   const output = blake2b(input, key, outlen, salt, personal)
-  return util.toHex(output)
+  return toHex(output)
 }
 
 window.blake2b = {

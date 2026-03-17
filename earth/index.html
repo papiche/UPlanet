@@ -164,7 +164,7 @@ function updateAsciiArt(color) {
         const domain = urlInfo.hostname.replace(/^ipfs\./, '');
         link.href = domain && domain !== urlInfo.hostname
             ? `${urlInfo.protocol}://coracle.${domain}`
-            : 'https://coracle.social';
+            : 'https://ipfs.copylaradio.com/ipns/copracle.copylaradio.com';
         link.target = '_blank';
         asciiArt.parentNode.insertBefore(link, asciiArt);
         link.appendChild(asciiArt);
@@ -251,56 +251,6 @@ function displayG1PUBData(data) {
     updateAsciiArt(color);
 }
 
-// Check for Ginkgo app availability via station IPNS publication
-async function checkGinkgoApp() {
-    try {
-        // Step 1: Get IPFSNODEID from UPassport /Ustats API
-        const ustatsUrl = getUSPOTUrl('Ustats');
-        console.log('Ginkgo: fetching IPFSNODEID from', ustatsUrl);
-
-        const controller = new AbortController();
-        setTimeout(() => controller.abort(), 8000);
-        const resp = await fetch(ustatsUrl, { signal: controller.signal });
-        if (!resp.ok) return;
-
-        const data = await resp.json();
-        const nodeId = data.IPFSNODEID;
-        if (!nodeId) return;
-
-        // Step 2: Fetch ginkgo.cid from station IPNS publication
-        const urlInfo = getCurrentUrlInfo();
-        const gwBase = urlInfo.hostname.startsWith('ipfs.')
-            ? urlInfo.origin
-            : (urlInfo.port ? `${urlInfo.protocol}://${urlInfo.hostname}:8080` : `${urlInfo.protocol}//ipfs.${urlInfo.hostname.replace(/^(u\.|www\.)/, '')}`);
-        const cidUrl = `${gwBase}/ipns/${nodeId}/ginkgo.cid`;
-        console.log('Ginkgo: checking', cidUrl);
-
-        const cidResp = await fetch(cidUrl, { signal: AbortSignal.timeout(5000) });
-        if (!cidResp.ok) return;
-
-        const cid = (await cidResp.text()).trim();
-        if (!cid || cid.length < 10) return;
-
-        // Step 3: Add Ginkgo button to the UI
-        const ginkgoUrl = `${gwBase}/ipfs/${cid}/`;
-        console.log('Ginkgo: app found at', ginkgoUrl);
-
-        const btn = document.createElement('button');
-        btn.className = 'btn btn-primary btn-lg';
-        btn.title = 'Ginkgo - UPlanet Market App';
-        btn.textContent = '🌱';
-        btn.style.cssText = 'position:fixed;bottom:80px;left:20px;z-index:1051;border-radius:50%;width:50px;height:50px;box-shadow:0 4px 20px rgba(76,175,80,0.4);background:linear-gradient(135deg,#4CAF50,#2E7D32);border:none;font-size:1.4rem;cursor:pointer;transition:all 0.3s;';
-        btn.onmouseenter = function() { this.style.transform = 'scale(1.1)'; this.style.boxShadow = '0 8px 25px rgba(76,175,80,0.6)'; };
-        btn.onmouseleave = function() { this.style.transform = 'none'; this.style.boxShadow = '0 4px 20px rgba(76,175,80,0.4)'; };
-        btn.onclick = function() { window.open(ginkgoUrl, '_blank'); };
-        document.body.appendChild(btn);
-
-    } catch (e) {
-        // Ginkgo not available — silent fail
-        if (e.name !== 'AbortError') console.log('Ginkgo: not available', e.message);
-    }
-}
-
 // Safe initialization function
 function initializeUPlanet() {
     console.log('Initializing UPlanet...');
@@ -341,8 +291,6 @@ function initializeUPlanet() {
             // Fetch and display G1PUB data
             fetchAndDisplayUPLANETG1PUB();
 
-            // Check for Ginkgo app on this station
-            checkGinkgoApp();
         }, 500); // Wait 500ms for all scripts to load
     });
 }

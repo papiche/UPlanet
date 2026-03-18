@@ -696,7 +696,7 @@
         <div class="tab-content" id="tab-live">
             <div class="info-box">
                 <strong>Saisie libre</strong> – Tapez n'importe quelle phrase : les caractères pairs forment votre identifiant, les impairs votre mot de passe.
-                La dérivation se lance automatiquement après 0.5 s de pause.
+                La dérivation se lance automatiquement après 2 s de pause.
             </div>
             <label for="live-input">Tapez votre phrase secrète</label>
             <textarea id="live-input" style="min-height: 110px;" placeholder="Commencez à taper…"></textarea>
@@ -731,7 +731,7 @@
     </div>
 
     <!-- Nostr (Clef principale) -->
-    <div class="card">
+    <div class="card" id="card-nostr">
         <div class="card-title">🟣 Clefs Nostr (réseau social décentralisé)</div>
         <div id="ext-link-box" class="ext-link" style="display:none;"></div>
 
@@ -765,7 +765,7 @@
     </div>
 
     <!-- IPNS -->
-    <div class="card">
+    <div class="card" id="card-ipns">
         <div class="card-title">🔵 Identité IPFS / IPNS</div>
         <div class="key-block">
             <label>Nom IPNS (CIDv1 Base36) – identité dans le réseau IPFS</label>
@@ -1269,6 +1269,23 @@ async function derive(forceSalt = null, forcePepper = null) {
         showStatus('ok', '✅ Clefs générées avec succès !');
         goStep(3);
 
+        // En mode BIP39 (Forgeron Ğ1) : n'afficher que les clefs Duniter/G1
+        {
+            const isV2 = (currentMode === 'v2');
+            const cardNostr = document.getElementById('card-nostr');
+            const cardIpns  = document.getElementById('card-ipns');
+            const extBox    = document.getElementById('ext-link-box');
+            const btnNext   = document.getElementById('btn-step3-next');
+            if (cardNostr) cardNostr.style.display = isV2 ? 'none' : '';
+            if (cardIpns)  cardIpns.style.display  = isV2 ? 'none' : '';
+            if (isV2) {
+                if (extBox)  extBox.style.display = 'none';
+                if (btnNext) btnNext.textContent  = '⚒️ Clefs Ğ1 prêtes — Suivant';
+            } else {
+                if (btnNext) btnNext.textContent  = 'Continuer → Activation';
+            }
+        }
+
     } catch(e) {
         console.error(e);
         showStatus('err', '❌ Erreur : ' + (e.message || e));
@@ -1401,6 +1418,25 @@ function preparestep4(skip = false) {
         if (sn4) sn4.style.display = skip ? '' : 'none';
     } else {
         mpForm.style.display = 'block';
+
+        // ⛔ Clef BIP39 (v2) incompatible avec MULTIPASS / ZEN
+        // L'API /g1nostr n'accepte que salt + pepper (v1 ou saisie libre).
+        // Une clef mnémonique BIP39 est réservée à la ToC Ğ1 (Forgeron).
+        if (currentMode === 'v2') {
+            const title = document.getElementById('mp-title');
+            const intro = document.getElementById('mp-intro');
+            const btnReg = document.getElementById('btn-register');
+            title.textContent = '⛔ Inscription impossible avec une clef BIP39';
+            intro.innerHTML = '<strong>⚒️ Clef Forgeron Ğ1 détectée</strong><br><br>'
+                + 'Cette clef <strong>mnémonique BIP39</strong> est destinée à devenir membre '
+                + 'certifié de la <strong>Toile de Confiance Duniter</strong> (Forgeron Ğ1).<br>'
+                + 'Elle ne peut pas être enregistrée comme <strong>MULTIPASS</strong>.<br><br>'
+                + '👉 Retournez à l\'étape précédente et régénérez vos clefs avec<br>'
+                + '<strong>🔐 Identifiant (v1)</strong> ou <strong>⌨️ Saisie libre</strong>.';
+            if (btnReg) btnReg.disabled = true;
+            return; // Ne pas pré-remplir les champs du formulaire
+        }
+
         // Adapter le titre et intro selon ZEN
         const title = document.getElementById('mp-title');
         const intro = document.getElementById('mp-intro');
@@ -1475,6 +1511,12 @@ function validateReferrer(value) {
 
 // ── Soumission inscription UPlanet ────────────────────────
 async function submitRegistration() {
+    // Garde : une clef BIP39 (v2) ne peut pas s'inscrire comme MULTIPASS
+    if (currentMode === 'v2') {
+        showMpStatus('err', '⛔ Clef BIP39 incompatible — régénérez vos clefs avec 🔐 Identifiant (v1) ou ⌨️ Saisie libre');
+        return;
+    }
+
     const email    = (document.getElementById('reg-email').value    || '').trim();
     const lat      = (document.getElementById('reg-lat').value      || '').trim();
     const lon      = (document.getElementById('reg-lon').value      || '').trim();

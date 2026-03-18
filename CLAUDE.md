@@ -11,8 +11,7 @@ UPlanet is the web application tier of the UPlanet cooperative ecosystem, publis
 - **earth/** — Main web application directory (published to IPFS as the user-facing app)
 - **book/** — Educational markdown chapters about decentralization (1.1.md through 5.3.md)
 - **microledger.me.sh** — IPFS versioning + git auto-commit script (adds earth/ to IPFS, tracks hash in `.chain`)
-- **page_screenshot.py** — Pyppeteer headless screenshot utility for Leaflet maps
-- **keygen.html** / **G1PUB2IPNS.html** — Standalone crypto key conversion tools (G1, NOSTR, Bitcoin, IPNS)
+- **keygen-2.html** — Standalone crypto key conversion tools (G1, NOSTR, Bitcoin, IPNS) used choose your key creation process and choose to enter UPlanet ẐEN
 
 ## Deployment
 
@@ -88,8 +87,6 @@ Bootstrap 5, jQuery (1.7.2 + 3.6.3), Leaflet + MarkerCluster, D3.js, p5.js, NaCl
 No formal test framework. Debug through:
 - **nostr_console.html** — NOSTR event inspection
 - **nostr_message_viewer.html** / **nostr_profile_viewer.html** — Data verification
-- **page_screenshot.py** — Visual capture: `python page_screenshot.py <URL> <output> <width> <height>`
-- Browser console (extensive `console.log` in common.js)
 
 ## Two-Economy Model
 

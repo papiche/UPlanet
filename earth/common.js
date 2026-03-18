@@ -1176,6 +1176,18 @@ function getAPIBaseUrl() {
 }
 
 /**
+ * Génère l'URL d'un avatar Robohash via l'API locale (évite la fuite IP vers robohash.org)
+ * @param {string} key - pubkey ou identifiant
+ * @param {number} size - taille en pixels (défaut: 200)
+ * @param {number} set  - jeu de sprites 1-4 (défaut: 4 = chats)
+ */
+function getRoboHashUrl(key, size, set) {
+    size = size || 200;
+    set = set || 4;
+    return `${getAPIBaseUrl()}/robohash/${encodeURIComponent(key)}?size=${size}&set=${set}`;
+}
+
+/**
  * Ouvre la page de création de compte MULTIPASS
  */
 function openCreateAccountPage() {

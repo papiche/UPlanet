@@ -1487,8 +1487,22 @@ async function submitRegistration() {
         currentReferrer = referrer;
     }
 
+    // Déterminer le bon endpoint API :
+    // Si la page est servie depuis une gateway IPFS (ex: ipfs.copylaradio.com),
+    // rediriger vers le nœud API (u.copylaradio.com) pour éviter une 404.
+    function getApiBase() {
+        const h = window.location.hostname;
+        const proto = window.location.protocol;
+        if (h.startsWith('ipfs.')) {
+            // ipfs.mondomaine.tld → u.mondomaine.tld
+            return proto + '//' + 'u.' + h.slice(5);
+        }
+        // Sur le serveur local ou u. directement → URL relative
+        return '';
+    }
+
     try {
-        const resp = await fetch('/g1nostr', {
+        const resp = await fetch(getApiBase() + '/g1nostr', {
             method: 'POST',
             body: formData
         });

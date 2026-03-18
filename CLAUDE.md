@@ -62,9 +62,6 @@ Key functions: `getStationUrl()` → port 12345, `getUSPOTUrl()` → port 54321.
 
 ### Sub-Applications
 - **coinflip/** — Coin flip game with NOSTR auth + ZEN payments (Practice/Live modes)
-- **g1gate/** — Ğ1 blockchain transaction explorer using D3.js treemaps
-- **login/** — QR code scanner entry (Instascan)
-- **getreceiver/** — Payment receiver endpoint
 - **collaborative-editor.html** — Real-time document editing
 - **plantnet.html** — Plant identification interface
 

@@ -12,6 +12,33 @@
 'use strict';
 
 // ================================================================
+// LOGGING UTILITY
+// ================================================================
+/**
+ * Lightweight logger for Nostr Profile Viewer.
+ * Prefix: [NPV]  — filtrable dans la console avec "NPV"
+ * Niveaux : log | warn | error | group | groupEnd
+ * Pour activer le mode verbose : window.NPV_DEBUG = true
+ */
+const npvLog = (function () {
+    const TAG = '%c[NPV]%c';
+    const S1  = 'color:#0ff;font-weight:bold;';
+    const S2  = 'color:inherit;font-weight:normal;';
+    return {
+        log:      function () { if (window.NPV_DEBUG !== false) console.log(TAG, S1, S2, ...arguments); },
+        warn:     function () { console.warn(TAG, S1, S2, ...arguments); },
+        error:    function () { console.error(TAG, S1, S2, ...arguments); },
+        group:    function (label) { if (window.NPV_DEBUG !== false) console.group(TAG + ' ' + label, S1, S2, ''); },
+        groupEnd: function ()      { if (window.NPV_DEBUG !== false) console.groupEnd(); },
+        time:     function (label) { if (window.NPV_DEBUG !== false) console.time('[NPV] ' + label); },
+        timeEnd:  function (label) { if (window.NPV_DEBUG !== false) console.timeEnd('[NPV] ' + label); }
+    };
+})();
+// Expose pour accès console : npvLog.log / window.NPV_DEBUG = false pour silencer
+window.npvLog = npvLog;
+npvLog.log('nostr_profile_viewer.js chargé ✓');
+
+// ================================================================
 // MATRIX BACKGROUND ANIMATION
 // ================================================================
 let canvas, ctx, columns, rainDrops;
@@ -145,6 +172,7 @@ function navigateForward() { const p = getURLParams(); if (p.next)     loadProfi
 function goToInitial()     { const p = getURLParams(); if (p.origin)   loadProfile(p.origin,   'origin'); }
 
 function loadProfile(hex, action = 'click') {
+    npvLog.log(`loadProfile → ${hex.substring(0,12)}… (action: ${action})`);
     updateURLParams(hex, action);
     window.hexKey = hex;
     updateNavigationButtonsFromURL();
@@ -497,16 +525,22 @@ async function getRelayURL() {
         if (relay) {
             // Convert wss:// to ws:// if running on localhost/port
             const url = new URL(window.location.href);
-            if (url.port === '8080' || (url.hostname === '127.0.0.1') || url.hostname === 'localhost')
+            if (url.port === '8080' || (url.hostname === '127.0.0.1') || url.hostname === 'localhost') {
+                npvLog.log('getRelayURL → local ws://127.0.0.1:7777 (common.js + localhost)');
                 return 'ws://127.0.0.1:7777';
+            }
+            npvLog.log(`getRelayURL → ${relay} (via common.js detectUSPOTAPI)`);
             return relay;
         }
     }
     // Fallback: local detection
     const currentUrl = new URL(window.location.href);
-    if (currentUrl.port === '8080' || currentUrl.hostname === '127.0.0.1' || currentUrl.hostname === 'localhost')
+    if (currentUrl.port === '8080' || currentUrl.hostname === '127.0.0.1' || currentUrl.hostname === 'localhost') {
+        npvLog.log('getRelayURL → local ws://127.0.0.1:7777 (fallback)');
         return 'ws://127.0.0.1:7777';
+    }
     const relayName = currentUrl.hostname.replace('ipfs.', 'relay.');
+    npvLog.log(`getRelayURL → wss://${relayName} (hostname fallback)`);
     return `wss://${relayName}`;
 }
 
@@ -545,6 +579,7 @@ function getApiServerUrl() {
 // ================================================================
 
 async function fetchNostrProfile(hex, nostrRelayUrl) {
+    npvLog.log(`fetchNostrProfile ${hex.substring(0,12)}… → ${nostrRelayUrl}`);
     try {
         const relay = NostrTools.relayInit(nostrRelayUrl);
         await relay.connect();
@@ -552,6 +587,7 @@ async function fetchNostrProfile(hex, nostrRelayUrl) {
         return new Promise((resolve, reject) => {
             let profileData = null;
             const timeout = setTimeout(function () {
+                npvLog.warn(`fetchNostrProfile timeout pour ${hex.substring(0,12)}…`);
                 sub.unsub(); relay.close();
                 resolve({});
             }, 5000);
@@ -572,25 +608,31 @@ async function fetchNostrProfile(hex, nostrRelayUrl) {
                         });
                     }
                 } catch (e) { profileData = {}; }
+                npvLog.log(`fetchNostrProfile ✓ ${hex.substring(0,12)}… → name="${profileData && (profileData.name || profileData.display_name) || '?'}"`);
                 sub.unsub(); relay.close();
                 resolve(profileData);
             });
             sub.on('eose', function () {
-                if (!profileData) { clearTimeout(timeout); sub.unsub(); relay.close(); resolve({}); }
+                if (!profileData) {
+                    npvLog.warn(`fetchNostrProfile EOSE sans event pour ${hex.substring(0,12)}…`);
+                    clearTimeout(timeout); sub.unsub(); relay.close(); resolve({});
+                }
             });
             relay.on('error', function (err) {
+                npvLog.error(`fetchNostrProfile relay error pour ${hex.substring(0,12)}…`, err);
                 clearTimeout(timeout);
                 try { relay.close(); } catch (e) {}
                 reject('Relay error fetching profile');
             });
         });
     } catch (error) {
-        console.error('fetchNostrProfile error:', error);
+        npvLog.error('fetchNostrProfile exception:', error);
         throw error;
     }
 }
 
 async function fetchDidDocument(hex, nostrRelayUrl) {
+    npvLog.log(`fetchDidDocument ${hex.substring(0,12)}… (kind 30800)`);
     try {
         const relay = NostrTools.relayInit(nostrRelayUrl);
         await relay.connect();
@@ -601,14 +643,18 @@ async function fetchDidDocument(hex, nostrRelayUrl) {
             sub.on('event', function (event) {
                 clearTimeout(timeout);
                 try { didDoc = JSON.parse(event.content); } catch (e) {}
+                npvLog.log(`fetchDidDocument ✓ ${hex.substring(0,12)}… → status="${didDoc && didDoc.metadata && didDoc.metadata.contractStatus || 'n/a'}"`);
                 sub.unsub(); relay.close(); resolve(didDoc);
             });
             sub.on('eose', function () {
-                if (!didDoc) { clearTimeout(timeout); sub.unsub(); relay.close(); resolve(null); }
+                if (!didDoc) {
+                    npvLog.log(`fetchDidDocument → pas de DID pour ${hex.substring(0,12)}…`);
+                    clearTimeout(timeout); sub.unsub(); relay.close(); resolve(null);
+                }
             });
             relay.on('error', function () { clearTimeout(timeout); try { relay.close(); } catch (e) {} resolve(null); });
         });
-    } catch (err) { return null; }
+    } catch (err) { npvLog.warn('fetchDidDocument exception:', err); return null; }
 }
 
 function didContractStatusLabel(status) {
@@ -627,6 +673,8 @@ function didContractStatusLabel(status) {
 }
 
 async function fetchNostrMessages(hex, nostrRelayUrl) {
+    npvLog.log(`fetchNostrMessages ${hex.substring(0,12)}… (kinds 1+30023, 7 derniers jours)`);
+    npvLog.time('fetchNostrMessages');
     try {
         const relay = NostrTools.relayInit(nostrRelayUrl);
         await relay.connect();
@@ -636,42 +684,58 @@ async function fetchNostrMessages(hex, nostrRelayUrl) {
         const messages = [];
         return new Promise(function (resolve, reject) {
             const timeout = setTimeout(function () {
+                npvLog.warn(`fetchNostrMessages timeout — ${messages.length} messages partiels`);
                 sub.unsub(); relay.close();
+                npvLog.timeEnd('fetchNostrMessages');
                 resolve(messages.sort((a, b) => b.created_at - a.created_at));
             }, 10000);
             sub.on('event', function (event) { messages.push(event); });
             sub.on('eose', function () {
                 clearTimeout(timeout); sub.unsub(); relay.close();
+                npvLog.log(`fetchNostrMessages ✓ → ${messages.length} message(s)`);
+                npvLog.timeEnd('fetchNostrMessages');
                 resolve(messages.sort((a, b) => b.created_at - a.created_at));
             });
             relay.on('error', function (err) {
+                npvLog.error('fetchNostrMessages relay error:', err);
                 clearTimeout(timeout);
                 try { relay.close(); } catch (e) {}
+                npvLog.timeEnd('fetchNostrMessages');
                 reject('Relay error fetching messages');
             });
         });
-    } catch (error) { throw error; }
+    } catch (error) { npvLog.error('fetchNostrMessages exception:', error); throw error; }
 }
 
 async function fetchMuteListForProfile(authorHex, nostrRelayUrl) {
+    npvLog.log(`fetchMuteListForProfile ${authorHex.substring(0,12)}… (kind 10000 NIP-51)`);
     try {
         const relay = NostrTools.relayInit(nostrRelayUrl);
         await relay.connect();
         const sub = relay.sub([{ kinds: [10000], authors: [authorHex], limit: 1 }]);
         return new Promise(function (resolve, reject) {
             let muteEvent = null;
-            const timeout = setTimeout(function () { sub.unsub(); relay.close(); resolve(null); }, 8000);
+            const timeout = setTimeout(function () {
+                npvLog.warn(`fetchMuteListForProfile timeout pour ${authorHex.substring(0,12)}…`);
+                sub.unsub(); relay.close(); resolve(null);
+            }, 8000);
             sub.on('event', function (event) {
+                const count = (event.tags || []).filter(t => t[0] === 'p').length;
+                npvLog.log(`fetchMuteListForProfile ✓ → ${count} profil(s) muté(s)`);
                 clearTimeout(timeout); muteEvent = event; sub.unsub(); relay.close(); resolve(muteEvent);
             });
             sub.on('eose', function () {
-                if (!muteEvent) { clearTimeout(timeout); sub.unsub(); relay.close(); resolve(null); }
+                if (!muteEvent) {
+                    npvLog.log(`fetchMuteListForProfile → liste vide ou absente`);
+                    clearTimeout(timeout); sub.unsub(); relay.close(); resolve(null);
+                }
             });
             relay.on('error', function (err) {
+                npvLog.error('fetchMuteListForProfile relay error:', err);
                 clearTimeout(timeout); try { relay.close(); } catch (e) {} reject(err);
             });
         });
-    } catch (error) { throw error; }
+    } catch (error) { npvLog.error('fetchMuteListForProfile exception:', error); throw error; }
 }
 
 window.fetchExistingFollowList = async function (publicKey, nostrRelayUrl) {
@@ -800,9 +864,13 @@ async function likeMessage(messageId, authorPubkey, heartButton) {
 // ================================================================
 async function displayNostrData() {
     const hexKey = window.hexKey;
-    if (!hexKey) return;
+    if (!hexKey) { npvLog.warn('displayNostrData : hexKey manquant'); return; }
+
+    npvLog.group(`displayNostrData ${hexKey.substring(0,16)}…`);
+    npvLog.time('displayNostrData');
 
     relayUrl = await getRelayURL();
+    npvLog.log(`Relay utilisé : ${relayUrl}`);
     resetMediaCollection();
 
     const profileContentDiv   = document.getElementById('profile-content');
@@ -813,6 +881,7 @@ async function displayNostrData() {
     const analyticsContainerDiv = document.getElementById('analytics-container');
 
     // ---- PROFILE ----
+    npvLog.log('► Chargement profil…');
     try {
         const profileData = await fetchNostrProfile(hexKey, relayUrl);
         profileContainerDiv.classList.remove('loading');
@@ -917,13 +986,15 @@ async function displayNostrData() {
         }
 
         profileContentDiv.innerHTML = profileHTML;
+        npvLog.log('✓ Profil rendu dans le DOM');
     } catch (profileError) {
-        console.error('Profile error:', profileError);
+        npvLog.error('Erreur profil:', profileError);
         profileContainerDiv.classList.remove('loading');
         profileContentDiv.innerHTML = `<p style="color:var(--terminal-red)">Error loading profile: ${profileError.message || profileError}</p>`;
     }
 
     // ---- MESSAGES ----
+    npvLog.log('► Chargement messages…');
     try {
         const messagesData = await fetchNostrMessages(hexKey, relayUrl);
         window.currentMessagesData = messagesData;
@@ -968,13 +1039,15 @@ async function displayNostrData() {
             messagesHTML = '<p>No recent messages found.</p>';
         }
         messagesContentDiv.innerHTML = messagesHTML;
+        npvLog.log(`✓ Messages rendus : ${window.currentMessagesData.length}`);
     } catch (messagesError) {
-        console.error('Messages error:', messagesError);
+        npvLog.error('Erreur messages:', messagesError);
         messagesContainerDiv.classList.remove('loading');
         messagesContentDiv.innerHTML = `<p style="color:var(--terminal-red)">Error: ${messagesError.message || messagesError}</p>`;
     }
 
     // ---- MUTED PROFILES (analytics / NIP-51) ----
+    npvLog.log('► Chargement liste mutée (NIP-51)…');
     try {
         const muteListEvent = await fetchMuteListForProfile(hexKey, relayUrl);
         analyticsContainerDiv.classList.remove('loading');
@@ -1003,8 +1076,9 @@ async function displayNostrData() {
             }
             analyticsContentDiv.innerHTML = mutedHTML;
         }
+        npvLog.log(`✓ Liste mutée rendue`);
     } catch (muteError) {
-        console.error('Mute list error:', muteError);
+        npvLog.error('Erreur liste mutée:', muteError);
         analyticsContainerDiv.classList.remove('loading');
         analyticsContentDiv.innerHTML = `<p style="color:var(--terminal-red)">Error: ${muteError.message || muteError}</p>`;
     }
@@ -1026,7 +1100,10 @@ async function displayNostrData() {
     })();
 
     // ---- Load N1 network zone (non-blocking) ----
-    loadN1Zone().catch(function (e) { console.warn('N1 zone load error:', e); });
+    npvLog.log('► Déclenchement loadN1Zone (non-bloquant)…');
+    npvLog.timeEnd('displayNostrData');
+    npvLog.groupEnd();
+    loadN1Zone().catch(function (e) { npvLog.error('N1 zone load error:', e); });
 }
 
 // ================================================================
@@ -1046,6 +1123,7 @@ async function displayNostrData() {
         const hexKey = window.hexKey;
         if (!hexKey) { errDiv.textContent = 'Target pubkey not available.'; return; }
         try {
+            npvLog.log(`followButton click → cible ${hexKey.substring(0,12)}…`);
             followButton.disabled = true;
             followButton.textContent = 'Processing...';
             const userPublicKey = await nostr.getPublicKey();
@@ -1059,10 +1137,11 @@ async function displayNostrData() {
             await relay.connect();
             await relay.publish(signed);
             relay.close();
+            npvLog.log(`followButton ✓ follow publié (kind 3) par ${userPublicKey.substring(0,12)}…`);
             followButton.style.backgroundColor = 'var(--terminal-cyan)';
             followButton.textContent = 'Followed!';
         } catch (error) {
-            console.error('Follow error:', error);
+            npvLog.error('followButton erreur:', error);
             document.getElementById('follow-error-message').textContent = `Error: ${error.message || error}`;
             followButton.style.backgroundColor = 'var(--terminal-red)';
             followButton.textContent = 'Failed';
@@ -1088,6 +1167,7 @@ async function displayNostrData() {
         const hexKey = window.hexKey;
         if (!hexKey) { errDiv.textContent = 'Target pubkey not available.'; return; }
         try {
+            npvLog.log(`muteButton click → cible ${hexKey.substring(0,12)}…`);
             muteButton.disabled = true;
             muteButton.textContent = 'Processing...';
             const userPublicKey = await nostr.getPublicKey();
@@ -1109,10 +1189,11 @@ async function displayNostrData() {
             await relay.connect();
             await relay.publish(signed);
             relay.close();
+            npvLog.log(`muteButton ✓ mute publié (kind 10000) → ${hexKey.substring(0,12)}…`);
             muteButton.textContent = 'Muted';
             muteButton.classList.add('muted');
         } catch (error) {
-            console.error('Mute error:', error);
+            npvLog.error('muteButton erreur:', error);
             errDiv.textContent = `Error: ${error.message || error}`;
         } finally {
             muteButton.disabled = false;
@@ -1152,53 +1233,71 @@ async function displayNostrData() {
 
 /** Fetch the follow list (kind 3) of the viewed profile → people they follow */
 async function fetchProfileFollowList(pubkey, nostrRelayUrl) {
+    npvLog.log(`fetchProfileFollowList ${pubkey.substring(0,12)}…`);
     try {
         const relay = NostrTools.relayInit(nostrRelayUrl);
         await relay.connect();
         const sub = relay.sub([{ kinds: [3], authors: [pubkey], limit: 1 }]);
         return new Promise(function (resolve) {
             let tags = [];
-            const timeout = setTimeout(function () { sub.unsub(); relay.close(); resolve(tags); }, 8000);
+            const timeout = setTimeout(function () {
+                npvLog.warn(`fetchProfileFollowList timeout → 0 follows pour ${pubkey.substring(0,12)}…`);
+                sub.unsub(); relay.close(); resolve(tags);
+            }, 8000);
             sub.on('event', function (event) {
                 clearTimeout(timeout);
                 tags = (event.tags || []).filter(t => t[0] === 'p' && t[1]).map(t => t[1]);
+                npvLog.log(`fetchProfileFollowList ✓ → ${tags.length} follow(s)`);
                 sub.unsub(); relay.close(); resolve(tags);
             });
             sub.on('eose', function () {
-                if (tags.length === 0) { clearTimeout(timeout); sub.unsub(); relay.close(); resolve(tags); }
+                if (tags.length === 0) {
+                    npvLog.log(`fetchProfileFollowList EOSE → pas de follows`);
+                    clearTimeout(timeout); sub.unsub(); relay.close(); resolve(tags);
+                }
             });
             relay.on('error', function () { clearTimeout(timeout); try { relay.close(); } catch (e) {} resolve(tags); });
         });
-    } catch (e) { console.error('fetchProfileFollowList error:', e); return []; }
+    } catch (e) { npvLog.error('fetchProfileFollowList exception:', e); return []; }
 }
 
 /** Fetch pubkeys of accounts that follow the viewed profile (kind 3 events with #p tag) */
 async function fetchProfileFollowers(pubkey, nostrRelayUrl) {
+    npvLog.log(`fetchProfileFollowers ${pubkey.substring(0,12)}… (kind 3 #p tag, max 300)`);
+    npvLog.time('fetchProfileFollowers');
     try {
         const relay = NostrTools.relayInit(nostrRelayUrl);
         await relay.connect();
         const sub = relay.sub([{ kinds: [3], '#p': [pubkey], limit: 300 }]);
         const followers = [];
         return new Promise(function (resolve) {
-            const timeout = setTimeout(function () { sub.unsub(); relay.close(); resolve([...new Set(followers)]); }, 12000);
+            const timeout = setTimeout(function () {
+                npvLog.warn(`fetchProfileFollowers timeout → ${followers.length} followers partiels`);
+                npvLog.timeEnd('fetchProfileFollowers');
+                sub.unsub(); relay.close(); resolve([...new Set(followers)]);
+            }, 12000);
             sub.on('event', function (event) {
                 if (event.pubkey && event.pubkey !== pubkey) followers.push(event.pubkey);
             });
             sub.on('eose', function () {
                 clearTimeout(timeout); sub.unsub(); relay.close();
-                resolve([...new Set(followers)]);
+                const unique = [...new Set(followers)];
+                npvLog.log(`fetchProfileFollowers ✓ → ${unique.length} follower(s) unique(s)`);
+                npvLog.timeEnd('fetchProfileFollowers');
+                resolve(unique);
             });
             relay.on('error', function () { clearTimeout(timeout); try { relay.close(); } catch (e) {} resolve([...new Set(followers)]); });
         });
-    } catch (e) { console.error('fetchProfileFollowers error:', e); return []; }
+    } catch (e) { npvLog.error('fetchProfileFollowers exception:', e); return []; }
 }
 
 /** Fetch MY follow list to determine Follow/Unfollow button state */
 async function fetchMyFollowList(nostrRelayUrl) {
     const nostr = getNostrExtension();
-    if (!nostr) return [];
+    if (!nostr) { npvLog.log('fetchMyFollowList → pas d\'extension Nostr, liste vide'); return []; }
     try {
         const myPub = await nostr.getPublicKey();
+        npvLog.log(`fetchMyFollowList → ${myPub.substring(0,12)}…`);
         const relay = NostrTools.relayInit(nostrRelayUrl);
         await relay.connect();
         const sub = relay.sub([{ kinds: [3], authors: [myPub], limit: 1 }]);
@@ -1208,20 +1307,22 @@ async function fetchMyFollowList(nostrRelayUrl) {
             sub.on('event', function (event) {
                 clearTimeout(timeout);
                 tags = (event.tags || []).filter(t => t[0] === 'p' && t[1]).map(t => t[1]);
+                npvLog.log(`fetchMyFollowList ✓ → ${tags.length} follow(s)`);
                 sub.unsub(); relay.close(); resolve(tags);
             });
             sub.on('eose', function () { clearTimeout(timeout); sub.unsub(); relay.close(); resolve(tags); });
             relay.on('error', function () { clearTimeout(timeout); try { relay.close(); } catch (e) {} resolve(tags); });
         });
-    } catch (e) { console.warn('fetchMyFollowList error:', e); return []; }
+    } catch (e) { npvLog.warn('fetchMyFollowList error:', e); return []; }
 }
 
 /** Fetch MY mute list to determine Mute button state */
 async function fetchMyMuteList(nostrRelayUrl) {
     const nostr = getNostrExtension();
-    if (!nostr) return [];
+    if (!nostr) { npvLog.log('fetchMyMuteList → pas d\'extension Nostr, liste vide'); return []; }
     try {
         const myPub = await nostr.getPublicKey();
+        npvLog.log(`fetchMyMuteList → ${myPub.substring(0,12)}…`);
         const relay = NostrTools.relayInit(nostrRelayUrl);
         await relay.connect();
         const sub = relay.sub([{ kinds: [10000], authors: [myPub], limit: 1 }]);
@@ -1231,12 +1332,13 @@ async function fetchMyMuteList(nostrRelayUrl) {
             sub.on('event', function (event) {
                 clearTimeout(timeout);
                 tags = (event.tags || []).filter(t => t[0] === 'p' && t[1]).map(t => t[1]);
+                npvLog.log(`fetchMyMuteList ✓ → ${tags.length} muté(s)`);
                 sub.unsub(); relay.close(); resolve(tags);
             });
             sub.on('eose', function () { clearTimeout(timeout); sub.unsub(); relay.close(); resolve(tags); });
             relay.on('error', function () { clearTimeout(timeout); try { relay.close(); } catch (e) {} resolve(tags); });
         });
-    } catch (e) { console.warn('fetchMyMuteList error:', e); return []; }
+    } catch (e) { npvLog.warn('fetchMyMuteList error:', e); return []; }
 }
 
 /**
@@ -1312,6 +1414,7 @@ window.followFromNetwork = async function (pubkey, btn) {
     const nostr = getNostrExtension();
     if (!nostr) { alert('Nostr extension required.'); return; }
     try {
+        npvLog.log(`followFromNetwork → ${pubkey.substring(0,12)}…`);
         btn.disabled = true; btn.textContent = '...';
         const myPub = await nostr.getPublicKey();
         if (myPub === pubkey) { btn.textContent = '(you)'; return; }
@@ -1323,6 +1426,7 @@ window.followFromNetwork = async function (pubkey, btn) {
         const signed = await nostr.signEvent(newEv);
         const relay  = NostrTools.relayInit(relayUrl);
         await relay.connect(); await relay.publish(signed); relay.close();
+        npvLog.log(`followFromNetwork ✓ publié (kind 3) → ${pubkey.substring(0,12)}…`);
         // Refresh action buttons in card
         const actDiv = btn.closest('.network-person-card') && btn.closest('.network-person-card').querySelector('.net-actions');
         if (actDiv) actDiv.innerHTML = `
@@ -1341,6 +1445,7 @@ window.unfollowFromNetwork = async function (pubkey, btn) {
     const nostr = getNostrExtension();
     if (!nostr) { alert('Nostr extension required.'); return; }
     try {
+        npvLog.log(`unfollowFromNetwork → ${pubkey.substring(0,12)}…`);
         btn.disabled = true; btn.textContent = '...';
         const myPub = await nostr.getPublicKey();
         if (!relayUrl) relayUrl = await getRelayURL();
@@ -1350,6 +1455,7 @@ window.unfollowFromNetwork = async function (pubkey, btn) {
         const signed = await nostr.signEvent(newEv);
         const relay  = NostrTools.relayInit(relayUrl);
         await relay.connect(); await relay.publish(signed); relay.close();
+        npvLog.log(`unfollowFromNetwork ✓ publié (kind 3) → ${pubkey.substring(0,12)}…`);
         const actDiv = btn.closest('.network-person-card') && btn.closest('.network-person-card').querySelector('.net-actions');
         if (actDiv) actDiv.innerHTML = `
             <button class="net-action-btn follow" onclick="followFromNetwork('${pubkey}',this)">➕ Follow</button>
@@ -1366,6 +1472,7 @@ window.muteFromNetwork = async function (pubkey, btn) {
     const nostr = getNostrExtension();
     if (!nostr) { alert('Nostr extension required.'); return; }
     try {
+        npvLog.log(`muteFromNetwork → ${pubkey.substring(0,12)}…`);
         btn.disabled = true; btn.textContent = '...';
         const myPub = await nostr.getPublicKey();
         if (myPub === pubkey) { btn.textContent = '(you)'; return; }
@@ -1377,6 +1484,7 @@ window.muteFromNetwork = async function (pubkey, btn) {
         const signed = await nostr.signEvent(newEv);
         const relay  = NostrTools.relayInit(relayUrl);
         await relay.connect(); await relay.publish(signed); relay.close();
+        npvLog.log(`muteFromNetwork ✓ publié (kind 10000) → ${pubkey.substring(0,12)}…`);
         btn.textContent = '🔇 Muted';
         btn.disabled    = true;
         btn.style.opacity = '0.45';
@@ -1393,6 +1501,7 @@ async function displayN1Zone(filter) {
     const n1Content   = document.getElementById('n1-content');
     const n1Container = document.getElementById('n1-container');
     if (!n1Content) return;
+    npvLog.log(`displayN1Zone filter="${filter}"`);
 
     document.querySelectorAll('#n1-filter-bar .net-filter-btn').forEach(function (btn) {
         btn.classList.toggle('active', btn.dataset.filter === filter);
@@ -1412,16 +1521,19 @@ async function displayN1Zone(filter) {
         return;
     }
 
+    npvLog.log(`displayN1Zone → ${subset.length} profil(s) à afficher (limité à 50)`);
     n1Content.innerHTML = `<p style="color:var(--terminal-cyan);margin-bottom:10px;">${subset.length} profil(s) — filtre : <strong>${filter}</strong></p>`;
     if (n1Container) n1Container.classList.remove('loading');
 
     const limited = subset.slice(0, 50);
+    npvLog.time(`displayN1Zone render ${limited.length}`);
     for (const pubkey of limited) {
         try {
             const cardHTML = await renderNetworkPersonCard(pubkey, myFollowList, myMuteList, null);
             n1Content.insertAdjacentHTML('beforeend', cardHTML);
-        } catch (e) { console.warn('N1 card error:', e); }
+        } catch (e) { npvLog.warn('N1 card error:', e); }
     }
+    npvLog.timeEnd(`displayN1Zone render ${limited.length}`);
     if (subset.length > 50)
         n1Content.insertAdjacentHTML('beforeend', `<p style="color:var(--terminal-border);text-align:center;padding:8px;">+ ${subset.length - 50} profils supplémentaires…</p>`);
 }
@@ -1429,28 +1541,39 @@ async function displayN1Zone(filter) {
 // ---- Load N1 data then display ----
 async function loadN1Zone() {
     const hexKey = window.hexKey;
-    if (!hexKey || !relayUrl) return;
+    if (!hexKey || !relayUrl) { npvLog.warn('loadN1Zone : hexKey ou relayUrl manquant'); return; }
     const n1Content   = document.getElementById('n1-content');
     const n1Container = document.getElementById('n1-container');
     if (!n1Content) return;
 
+    npvLog.group(`loadN1Zone ${hexKey.substring(0,12)}…`);
+    npvLog.time('loadN1Zone');
     n1Content.innerHTML = '<p style="color:var(--terminal-cyan)">Chargement des connexions directes...</p>';
     if (n1Container) n1Container.classList.add('loading');
 
     try {
+        npvLog.log('loadN1Zone → fetch followList + followerList en parallèle');
         const [followList, followerList] = await Promise.all([
             fetchProfileFollowList(hexKey, relayUrl),
             fetchProfileFollowers(hexKey, relayUrl)
         ]);
+        npvLog.log(`loadN1Zone → followList=${followList.length}, followerList=${followerList.length}`);
+        npvLog.log('loadN1Zone → fetch myFollowList + myMuteList en parallèle');
         const [myFollowList, myMuteList] = await Promise.all([
             fetchMyFollowList(relayUrl),
             fetchMyMuteList(relayUrl)
         ]);
+        npvLog.log(`loadN1Zone → myFollowList=${myFollowList.length}, myMuteList=${myMuteList.length}`);
         const followerSet = new Set(followerList);
         window.n1Data = { followList, followerSet, myFollowList, myMuteList, loaded: true };
+        npvLog.log('loadN1Zone → n1Data prêt, appel displayN1Zone');
         await displayN1Zone(n1CurrentFilter);
+        npvLog.timeEnd('loadN1Zone');
+        npvLog.groupEnd();
     } catch (e) {
-        console.error('loadN1Zone error:', e);
+        npvLog.error('loadN1Zone erreur:', e);
+        npvLog.timeEnd('loadN1Zone');
+        npvLog.groupEnd();
         if (n1Content)   n1Content.innerHTML = `<p style="color:var(--terminal-red)">Erreur N1 : ${e.message || e}</p>`;
         if (n1Container) n1Container.classList.remove('loading');
     }
@@ -1513,18 +1636,23 @@ async function displayN2Zone(filter) {
 // ---- Load N2 data on demand (triggered by user button) ----
 window.loadN2Zone = async function () {
     const hexKey = window.hexKey;
-    if (!hexKey || !relayUrl) return;
+    if (!hexKey || !relayUrl) { npvLog.warn('loadN2Zone : hexKey ou relayUrl manquant'); return; }
     const n2Content   = document.getElementById('n2-content');
     const n2Container = document.getElementById('n2-container');
     if (!n2Content) return;
 
+    npvLog.group(`loadN2Zone ${hexKey.substring(0,12)}…`);
+    npvLog.time('loadN2Zone');
     n2Content.innerHTML = '<p style="color:var(--terminal-cyan)">Chargement N² en cours… (peut prendre quelques secondes)</p>';
     if (n2Container) n2Container.classList.add('loading');
 
     try {
         // Use already-fetched N1 follow list or re-fetch
         let n1Follows = (window.n1Data && window.n1Data.loaded) ? window.n1Data.followList : [];
-        if (n1Follows.length === 0) n1Follows = await fetchProfileFollowList(hexKey, relayUrl);
+        if (n1Follows.length === 0) {
+            npvLog.log('loadN2Zone → N1 non chargé, re-fetch followList');
+            n1Follows = await fetchProfileFollowList(hexKey, relayUrl);
+        }
 
         if (n1Follows.length === 0) {
             n2Content.innerHTML = '<p>Ce profil ne suit personne (impossible de charger N²).</p>';
@@ -1537,6 +1665,7 @@ window.loadN2Zone = async function () {
         const n1Set    = new Set([...n1Follows, hexKey]);
         const viaMap   = {};   // pubkey → via (N1 pubkey)
 
+        npvLog.log(`loadN2Zone → itération sur ${n1Sample.length} contacts N1 (throttle 150ms)`);
         for (const n1Pub of n1Sample) {
             try {
                 await new Promise(function (r) { setTimeout(r, 150); }); // throttle
@@ -1544,17 +1673,24 @@ window.loadN2Zone = async function () {
                 for (const n2Pub of n2List) {
                     if (!n1Set.has(n2Pub) && !viaMap[n2Pub]) viaMap[n2Pub] = n1Pub;
                 }
-            } catch (e) { console.warn('N2 fetch sub-error:', e); }
+                npvLog.log(`loadN2Zone → via ${n1Pub.substring(0,10)}… : ${n2List.length} follows → ${Object.keys(viaMap).length} N2 total`);
+            } catch (e) { npvLog.warn('N2 fetch sub-error:', e); }
         }
 
         const pubkeys      = Object.keys(viaMap);
+        npvLog.log(`loadN2Zone → ${pubkeys.length} profils N² uniques trouvés`);
         const myFollowList = (window.n1Data && window.n1Data.loaded) ? window.n1Data.myFollowList : await fetchMyFollowList(relayUrl);
         const myMuteList   = (window.n1Data && window.n1Data.loaded) ? window.n1Data.myMuteList  : await fetchMyMuteList(relayUrl);
 
         window.n2Data = { pubkeys, viaMap, followerSet: new Set(), myFollowList, myMuteList, loaded: true };
+        npvLog.log('loadN2Zone → n2Data prêt, appel displayN2Zone');
         await displayN2Zone(n2CurrentFilter);
+        npvLog.timeEnd('loadN2Zone');
+        npvLog.groupEnd();
     } catch (e) {
-        console.error('loadN2Zone error:', e);
+        npvLog.error('loadN2Zone erreur:', e);
+        npvLog.timeEnd('loadN2Zone');
+        npvLog.groupEnd();
         if (n2Content)   n2Content.innerHTML = `<p style="color:var(--terminal-red)">Erreur N2 : ${e.message || e}</p>`;
         if (n2Container) n2Container.classList.remove('loading');
     }

@@ -16,7 +16,6 @@
 <link rel="stylesheet" href="earth.css">
 <link rel="stylesheet" href="optimized-styles.css">
 
-<!-- Optimized script loading - jQuery first, then dependencies -->
 <script type="text/javascript" src="requestanimationframe.polyfill.js"></script>
 <script type="text/javascript" src="jquery-1.7.2.min.js"></script>
 <script type="text/javascript" src="jquery-ui.0.min.js"></script>
@@ -27,10 +26,9 @@
 <script type="text/javascript" src="demo.js"></script>
 <script src="astro.js"></script>
 
-
 <script type="text/javascript">
 
-// Optimized URL utilities with caching
+// URL utilities with caching
 const URL_CACHE = new Map();
 
 function getCurrentUrlInfo() {
@@ -38,7 +36,6 @@ function getCurrentUrlInfo() {
     if (URL_CACHE.has(cacheKey)) {
         return URL_CACHE.get(cacheKey);
     }
-    
     const currentURL = new URL(window.location.href);
     const info = {
         hostname: currentURL.hostname,
@@ -46,7 +43,6 @@ function getCurrentUrlInfo() {
         protocol: currentURL.protocol.split(":")[0],
         origin: currentURL.origin
     };
-    
     URL_CACHE.set(cacheKey, info);
     return info;
 }
@@ -54,12 +50,9 @@ function getCurrentUrlInfo() {
 function getStationUrl() {
     const urlInfo = getCurrentUrlInfo();
     let port = urlInfo.port;
-    
-    // Check and replace the port if it's 8080
     if (port === "8080") {
         port = "12345";
     }
-
     const zHost = urlInfo.hostname.replace(/^ipfs\./, 'u.');
     return `${urlInfo.protocol}://${zHost}${port ? `:${port}` : ""}`;
 }
@@ -68,12 +61,10 @@ function getUSPOTUrl(route = '') {
     const urlInfo = getCurrentUrlInfo();
     let newUrl = new URL(urlInfo.origin);
 
-    // Transformation de 'ipfs.domain.tld' en `u.domain.tld`
     if (urlInfo.hostname.startsWith('ipfs.')) {
         newUrl.hostname = urlInfo.hostname.replace('ipfs.', 'u.');
     }
 
-    // Changer le port en 54321 si un port explicite est présent (accès local)
     if (urlInfo.port !== '') {
         newUrl.port = '54321';
     }
@@ -82,25 +73,15 @@ function getUSPOTUrl(route = '') {
 }
 
 var station = getStationUrl();
-console.log('Station URL:', station);
-
 var upassport = getUSPOTUrl('');
-console.log('uSPOT URL:', upassport);
-
-// Debug URL construction
-console.log('Current location:', window.location.href);
-console.log('URL info:', getCurrentUrlInfo());
 
 function go2UPassport(route, target = '_parent') {
-    // Reuse optimized URL generation
     const finalUrl = getUSPOTUrl(route);
 
-    // Optimized target handling with early returns
     switch (target) {
         case '_blank':
             window.open(finalUrl, '_blank');
             return;
-            
         case 'console':
             const consoleFrame = document.querySelector('#aframe');
             if (consoleFrame) {
@@ -109,7 +90,6 @@ function go2UPassport(route, target = '_parent') {
                 window.parent.location.href = finalUrl;
             }
             return;
-            
         default:
             window.parent.location.href = finalUrl;
     }
@@ -122,12 +102,12 @@ if (typeof examples === 'undefined') {
 
 examples['simple_mars'] = function() {
     $('#sphere').earth3d({
-        texture: 'maps/sector0_miz.jpg', // texture used on sphere
-        dragElement: $('#locations') // where do we catch the mouse drag
+        texture: 'maps/sector0_miz.jpg',
+        dragElement: $('#locations')
     });
 };
 
-// Optimized function with caching and error handling
+// G1PUB display with caching
 const G1PUB_CACHE = new Map();
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
@@ -155,11 +135,9 @@ function createDisplayElement() {
 function updateAsciiArt(color) {
     const asciiArt = document.getElementById('ascii-art');
     if (!asciiArt) return;
-    
-    // Create wrapper link if it doesn't exist
+
     if (!asciiArt.parentElement.matches('a')) {
         const link = document.createElement('a');
-        // Build coracle.domain from current gateway (ipfs.domain → coracle.domain)
         const urlInfo = getCurrentUrlInfo();
         const domain = urlInfo.hostname.replace(/^ipfs\./, '');
         link.href = domain && domain !== urlInfo.hostname
@@ -169,7 +147,7 @@ function updateAsciiArt(color) {
         asciiArt.parentNode.insertBefore(link, asciiArt);
         link.appendChild(asciiArt);
     }
-    
+
     Object.assign(asciiArt.style, {
         color: color,
         fontSize: '24px',
@@ -182,133 +160,98 @@ function updateAsciiArt(color) {
 async function fetchAndDisplayUPLANETG1PUB() {
     const cacheKey = upassport;
     const cached = G1PUB_CACHE.get(cacheKey);
-    
-    // Return cached data if still valid
+
     if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
         displayG1PUBData(cached.data);
         return;
     }
-    
+
     try {
-        console.log('Fetching from uSPOT URL:', upassport);
-        
         const response = await fetch(upassport, {
-            headers: { 
+            headers: {
                 'Accept': 'application/json',
                 'Content-Type': 'application/json'
             },
             cache: 'default',
             mode: 'cors'
         });
-        
-        console.log('uSPOT Response status:', response.status);
-        
+
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
-        
+
         const data = await response.json();
-        console.log('uSPOT Data received:', data);
-        
-        // Cache the result
+
         G1PUB_CACHE.set(cacheKey, {
             data: data,
             timestamp: Date.now()
         });
-        
+
         displayG1PUBData(data);
-        
+
     } catch (error) {
         console.error('Error fetching UPLANETG1PUB:', error);
-        console.log('Falling back to default styling');
-        
-        // Fallback to default styling with ORIGIN
-        const fallbackData = {
-            UPLANETG1PUB: '4ZqazktD' // Default to ORIGIN
-        };
-        displayG1PUBData(fallbackData);
+        displayG1PUBData({ UPLANETG1PUB: '4ZqazktD' });
     }
 }
 
 function displayG1PUBData(data) {
     if (!data || !data.UPLANETG1PUB) {
-        console.warn('displayG1PUBData: missing UPLANETG1PUB field');
         data = { UPLANETG1PUB: '4ZqazktD' };
     }
     const g1pub = data.UPLANETG1PUB.substring(0, 8);
     const color = generateColorFromHash(data.UPLANETG1PUB);
-    
-    // Create or update display element
+
     let displayElement = document.getElementById('g1pub-display');
     if (!displayElement) {
         displayElement = createDisplayElement();
         document.getElementById('g1pub-container').appendChild(displayElement);
     }
-    
+
     displayElement.textContent = g1pub === '4ZqazktD' ? 'ORIGIN' : `ẐEN[${g1pub}]`;
     displayElement.style.color = color;
-    
+
     updateAsciiArt(color);
 }
 
-// Safe initialization function
 function initializeUPlanet() {
-    console.log('Initializing UPlanet...');
-    
-    // Wait for jQuery to be available
     if (typeof $ === 'undefined') {
-        console.log('jQuery not ready, retrying...');
         setTimeout(initializeUPlanet, 100);
         return;
     }
-    
-    // Initialize the earth3d when DOM is ready
+
     $(document).ready(function() {
-        console.log('DOM ready, initializing earth3d...');
-        
-        // Wait a bit more for all scripts to load
         setTimeout(function() {
-            // Check if sphere element exists
             const sphereElement = document.getElementById('sphere');
             if (!sphereElement) {
                 console.error('Sphere element not found!');
                 return;
             }
-            
-            // Initialize examples if needed
+
             if (typeof examples !== 'undefined' && examples['simple_mars']) {
-                console.log('Initializing earth3d...');
                 try {
                     examples['simple_mars']();
-                    console.log('earth3d initialized successfully');
                 } catch (error) {
                     console.error('Error initializing earth3d:', error);
                 }
-            } else {
-                console.error('examples or simple_mars function not available');
             }
-            
-            // Fetch and display G1PUB data
+
             fetchAndDisplayUPLANETG1PUB();
 
-        }, 500); // Wait 500ms for all scripts to load
+        }, 500);
     });
 }
 
-// Start initialization
 initializeUPlanet();
 
-// Initialize Bootstrap tooltips and popovers when DOM is ready
 $(document).ready(function() {
-    // Wait for Bootstrap to be fully loaded
     if (typeof bootstrap === 'undefined') {
         console.error('Bootstrap is not loaded');
         return;
     }
-    
-    // Initialize all tooltips
+
     var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+    tooltipTriggerList.map(function (tooltipTriggerEl) {
         try {
             return new bootstrap.Tooltip(tooltipTriggerEl);
         } catch (e) {
@@ -316,10 +259,9 @@ $(document).ready(function() {
             return null;
         }
     });
-    
-    // Initialize all popovers with custom options
+
     var popoverTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="popover"]'));
-    var popoverList = popoverTriggerList.map(function (popoverTriggerEl) {
+    popoverTriggerList.map(function (popoverTriggerEl) {
         try {
             return new bootstrap.Popover(popoverTriggerEl, {
                 html: true,
@@ -332,16 +274,14 @@ $(document).ready(function() {
             return null;
         }
     });
-    
-    // Close left fan menu when clicking outside
+
     document.addEventListener('click', function(e) {
         const leftFanMenu = document.getElementById('left-fan-menu');
         if (leftFanMenuOpen && !leftFanMenu.contains(e.target)) {
             toggleLeftFanMenu();
         }
     });
-    
-    // Ensure recommendations panel is hidden by default
+
     const recommendationsPanel = document.getElementById('software-recommendations');
     if (recommendationsPanel) {
         recommendationsPanel.style.pointerEvents = 'none';
@@ -349,13 +289,12 @@ $(document).ready(function() {
 });
 </script>
 
-<!-- CSS moved to optimized-styles.css for better performance -->
 </head>
 
 <body>
     <br>
     <h1>
-        <button onclick="window.open('keygen-v2.html', '_blank');" data-bs-toggle="popover" data-bs-trigger="hover" data-bs-placement="right" data-bs-content="Register your Ğ1 identity to participate in the UPlanet network" title="Ğ1 Registration">✨</button>
+        <button onclick="window.open('GAFAM.html', '_blank');" data-bs-toggle="popover" data-bs-trigger="hover" data-bs-placement="right" data-bs-content="Register your MULTIPASS to participate in the UPlanet network" title="UPlanet Registration">✨</button>
          _ UPlanet _ 
         <button onclick="go2UPassport('scan');" title="🛂 MULTIPASS Scanner">🛂</button>
     </h1>
@@ -364,7 +303,7 @@ $(document).ready(function() {
 
     <div id="g1pub-container" style="width: 100%; text-align: center; margin: 10px 0; z-index: 100;"></div>
 
-        <div id="countdown"></div>
+    <div id="countdown"></div>
 
     <div id="container">
     <br><br>
@@ -372,21 +311,21 @@ $(document).ready(function() {
           <div id="glow-shadows" class="earth"></div>
           <div id="flights"></div>
           <div id="locations"></div>
-
     </div>
-    <!-- Left side fan menu container -->
+
+    <!-- Left side fan menu -->
     <div id="left-fan-menu" style="position: fixed; top: 5px; left: 5px; z-index: 1002;">
         <button id="left-fan-menu-toggle" class="btn btn-primary btn-lg" onclick="toggleLeftFanMenu()" title="Open console menu">ة_ة</button>
         <div id="left-fan-menu-buttons" class="fan-menu-closed">
-            <button class="btn btn-primary btn-lg fan-menu-item" data-index="0" onclick="go2UPassport('g1', 'parent'); setTimeout(toggleLeftFanMenu, 300);" data-bs-toggle="popover" data-bs-trigger="hover" data-bs-placement="right" data-bs-content="Register your Ğ1 identity to participate in the UPlanet network and access all features" title="Ğ1 Registration">✨</button>
+            <button class="btn btn-primary btn-lg fan-menu-item" data-index="0" onclick="go2UPassport('g1', 'parent'); setTimeout(toggleLeftFanMenu, 300);" data-bs-toggle="popover" data-bs-trigger="hover" data-bs-placement="right" data-bs-content="Register your MULTIPASS to participate in the UPlanet network and access all features" title="Ğ1 Registration">✨</button>
             <button class="btn btn-primary btn-lg fan-menu-item" data-index="1" onclick="window.open('nostr_console.html', '_blank'); setTimeout(toggleLeftFanMenu, 300);" data-bs-toggle="popover" data-bs-trigger="hover" data-bs-placement="right" data-bs-content="Access the Nostr relay console to manage your decentralized communication channels" title="Nostr Relay Console">📡</button>
             <button class="btn btn-primary btn-lg fan-menu-item" data-index="2" onclick="window.open('economy.html', '_blank'); setTimeout(toggleLeftFanMenu, 300);" data-bs-toggle="popover" data-bs-trigger="hover" data-bs-placement="right" data-bs-content="View the ♥️BOX Economic Dashboard - Station status, cooperative wallets, and ZEN economy simulator" title="Station Economy">♥️</button>
             <button class="btn btn-primary btn-lg fan-menu-item" data-index="3" onclick="window.open('economy.Swarm.html', '_blank'); setTimeout(toggleLeftFanMenu, 300);" data-bs-toggle="popover" data-bs-trigger="hover" data-bs-placement="right" data-bs-content="Constellation Command - View all stations health, swarm resources, and N² network status" title="Constellation Command">🌌</button>
             <button class="btn btn-primary btn-lg fan-menu-item" data-index="4" onclick="window.open('Unation.html', '_blank'); setTimeout(toggleLeftFanMenu, 300);" data-bs-toggle="popover" data-bs-trigger="hover" data-bs-placement="right" data-bs-content="Understand UPlanet ẐEN and CopyLaRadio services" title="What are we doing here ?">🛈</button>
         </div>
     </div>
-    
-    <!-- Right side fan menu container -->
+
+    <!-- Right side fan menu -->
     <div id="right-fan-menu" style="position: fixed; top: 5px; right: 5px; z-index: 1002;">
         <button id="fan-menu-toggle" class="btn btn-primary btn-lg" onclick="toggleFanMenu()" title="Open menu">☰</button>
         <div id="fan-menu-buttons" class="fan-menu-closed">
@@ -395,8 +334,9 @@ $(document).ready(function() {
             <button class="btn btn-primary btn-lg fan-menu-item" data-index="2" onclick="window.open('plantnet.html', '_blank'); setTimeout(toggleFanMenu, 300);" data-bs-toggle="popover" data-bs-trigger="hover" data-bs-placement="left" data-bs-content="Accéder aux outils d'organisation collective et services oracle / Access collective organization tools and oracle services" title="Organisation Collective / Collective Organization">🔮</button>
             <button class="btn btn-primary btn-lg fan-menu-item" data-index="3" onclick="go2UPassport('wotx2'); setTimeout(toggleFanMenu, 300);" data-bs-toggle="popover" data-bs-trigger="hover" data-bs-placement="left" data-bs-content="Système WoTx2 : Créez et gérez des maîtrises auto-proclamées avec progression automatique illimitée / WoTx2 System: Create and manage self-proclaimed masteries with unlimited automatic progression" title="WoTx2 System">🎓</button>
             <button class="btn btn-primary btn-lg fan-menu-item" data-index="4" onclick="go2UPassport('dev', '_blank'); setTimeout(toggleFanMenu, 300);" data-bs-toggle="popover" data-bs-trigger="hover" data-bs-placement="left" data-bs-content="Outils et ressources pour développeurs sur UPlanet / Developer tools and resources for building on UPlanet" title="Outils Développeur / Developer Tools">👨‍💻</button>
+        </div>
     </div>
-    
+
     <form style="position: fixed; bottom: 0; left: 0; right: 0; width: 100%; z-index: 10050; transition: bottom 0.4s ease; max-height: 50vh; overflow-y: auto;" class="bg-dark bg-opacity-90 p-3 rounded-top shadow-lg" id="addressForm">
     <div class="container text-center">
         <div class="row align-items-center mb-2">
@@ -417,7 +357,7 @@ $(document).ready(function() {
             </h5>
         </div>
         <p id="result" class="text-white small mb-0">
-            <a target="entrance" href="entrance.html" class="text-white text-decoration-none" title="CopyLaRadio = Web3 Internet Self Hosting ẐEN Cooperative"> UPlanet ẐEN </a>
+            <a target="entrance" href="https://opencollective.com/monnaie-libre" class="text-white text-decoration-none" title="CopyLaRadio = Web3 Internet Self Hosting ẐEN Cooperative"> Open Collective </a>
             - <a target="code" href="https://github.com/papiche/Astroport.ONE" class="text-white text-decoration-none" title="and build Astroport.ONE source code">[code (Astroport.ONE)]</a>
             - <a target="goodies" href="https://astroport.myspreadshop.fr/" class="text-white text-decoration-none" title="You can get Tee Shirt & more"> goodies </a> 
             - <a target="sponsor" href="https://g1sms.fr" class="text-white text-decoration-none" title="G1FabLab makes the Open Source code selections"> Ğ1FabLab </a>
@@ -425,20 +365,10 @@ $(document).ready(function() {
         </p>
     </div>
     </form>
-    
-
-<!-- Flyover Modal -->
-<div id="flyover-modal">
-    <div id="flyover-content">
-        <span id="flyover-close">&times;</span>
-        <img id="flyover-image" src="/ipfs/QmUCShpeuJ1QXyjBTBKZtw9WJDKRULgptpNAoH3ihM2SzG/UPlanet_nav0_explain.png" alt="UPlanet Navigation Explanation" draggable="false">
-    </div>
-</div>
 
 <!-- Bang App Modal -->
 <div id="bang-app-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.95); backdrop-filter: blur(10px); z-index: 99999; overflow: hidden;">
     <div style="position: relative; width: 100%; height: 100%; display: flex; flex-direction: column;">
-        <!-- Modal Header -->
         <div style="background: linear-gradient(135deg, rgba(102, 126, 234, 0.9), rgba(118, 75, 162, 0.9)); padding: 15px 20px; border-bottom: 1px solid rgba(255, 255, 255, 0.1); display: flex; align-items: center; justify-content: space-between;">
             <div style="display: flex; align-items: center; gap: 10px;">
                 <img src="/ipfs/QmagEQC8KJUsjuDXbcuWHxmA8vwRF9y9d6LGtc3iSEqZE2/uplanet.png" 
@@ -453,8 +383,6 @@ $(document).ready(function() {
                 &times;
             </button>
         </div>
-        
-        <!-- Modal Content -->
         <div style="flex: 1; position: relative;">
             <iframe id="bang-app-iframe" 
                     src="" 
@@ -466,27 +394,21 @@ $(document).ready(function() {
 </div>
 
 <script>
-// Function to extract URL parameters
+// URL parameters
 function getUrlParameter(name) {
   name = name.replace(/[\[]/, '\\[').replace(/[\]]/, '\\]');
   const regex = new RegExp('[\\?&]' + name + '=([^&#]*)');
   const results = regex.exec(location.search);
   return results === null ? '' : decodeURIComponent(results[1].replace(/\+/g, ' '));
 }
-const defaultIPNS = '';
-const defaultIPFS = '';
-const defaultPUB = '';
 
-const myIPFS = getUrlParameter('ipfs') || defaultIPFS;
-const myPUBKEY = getUrlParameter('g1pub') || defaultPUB;
-const sectorIPNS = getUrlParameter('ipns') || defaultIPNS;
-console.log('myIPFS: /ipfs/', myIPFS);
-console.log('myPUBKEY: /g1pub/', myPUBKEY);
-console.log('sectorIPNS: /ipns/', sectorIPNS);
+const myIPFS = getUrlParameter('ipfs');
+const myPUBKEY = getUrlParameter('g1pub');
+const sectorIPNS = getUrlParameter('ipns');
 
-if (sectorIPNS !== '' ) {
+if (sectorIPNS !== '') {
     const buttonContainer = document.createElement('div');
-    buttonContainer.id = 'button-container'
+    buttonContainer.id = 'button-container';
     buttonContainer.style.position = 'absolute';
     buttonContainer.style.bottom = '0px';
     buttonContainer.style.left = '0px';
@@ -501,18 +423,15 @@ if (sectorIPNS !== '' ) {
     const button = document.createElement('button');
     button.innerText = 'EXPLORE';
     button.className = 'button';
-
-    // Add an event listener to the button
     button.addEventListener('click', function() {
-        window.open( '/ipns/'+ sectorIPNS, "AstroTab");
+        window.open('/ipns/' + sectorIPNS, "AstroTab");
     });
 
-    // Append the button to the button container
     buttonContainer.appendChild(button);
     document.body.appendChild(buttonContainer);
 }
 
-// Optimized geolocation with caching and better error handling
+// Geolocation with caching
 const GEO_CACHE = new Map();
 const GEO_CACHE_DURATION = 10 * 60 * 1000; // 10 minutes
 
@@ -525,7 +444,6 @@ function getCoordinates() {
         return;
     }
 
-    // Check cache first
     const cacheKey = address.toLowerCase();
     const cached = GEO_CACHE.get(cacheKey);
     if (cached && Date.now() - cached.timestamp < GEO_CACHE_DURATION) {
@@ -533,16 +451,13 @@ function getCoordinates() {
         return;
     }
 
-    // Optimized API call with timeout
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 5000);
 
     const formattedAddress = encodeURIComponent(address);
     fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${formattedAddress}&limit=1`, {
         signal: controller.signal,
-        headers: {
-            'User-Agent': 'UPlanet/1.0'
-        }
+        headers: { 'User-Agent': 'UPlanet/1.0' }
     })
     .then(response => {
         clearTimeout(timeoutId);
@@ -553,14 +468,7 @@ function getCoordinates() {
         if (data.length > 0) {
             const lat = parseFloat(data[0].lat) - 0.025;
             const lon = parseFloat(data[0].lon) - 0.025;
-            
-            // Cache the result
-            GEO_CACHE.set(cacheKey, {
-                lat: lat,
-                lon: lon,
-                timestamp: Date.now()
-            });
-            
+            GEO_CACHE.set(cacheKey, { lat, lon, timestamp: Date.now() });
             navigateToCoordinates(lat, lon);
         } else {
             showError('Coordinates not found. Click on surrounding dots to zoom in.');
@@ -586,7 +494,6 @@ function showError(message) {
     }
 }
 
-// Optimized event listener with debouncing
 let addressInputDebounce;
 document.getElementById('address').addEventListener('keypress', function (e) {
     if (e.key === 'Enter') {
@@ -610,35 +517,15 @@ function getLocation() {
     }
 }
 
-
-// Flyover functionality
-let flyoverTimeout;
-let isZoomed = false;
-let scale = 1;
-let isDragging = false;
-let startX, startY, translateX = 0, translateY = 0;
-let currentFloatingButton = null;
-let currentTriggerButton = null;
-
-// Image mappings for different buttons
-const flyoverImages = {
-    'g1-registration': '/ipfs/QmXEE5Qv6gKX2EUEuz5TGB2HcgfXYrYjhv1cRGEMC3ASTN/UPlanet_g1new_nav.png',
-    'nostr-console': '/ipfs/Qmei7n7VMunNwv3tUbhet1dbMWR8W34J4GUUmV6qzxWGr4/UPlanet_stream_nav.png',
-    'economic-level': '/ipfs/QmXqT3gjTkccKBuEJGjJcAptCbpmjpc1GEDhshQcbZLcRg/UPlanet_eco_nav.png',
-    'zen-club': '/ipfs/QmeUqKdaLAEvegJSfFn5hBf61B3TqiRShCegvmjr7EKxDc/UPlanet_clubzen_nav.png',
-    'geo-message': '/ipfs/QmVZ4oxg8CG2qvNWNTJnWFNzBUBj6bqkUxzDSLjCLupQbD/UPlanet_geomessage_nav.png',
-    'console-toggle': '/ipfs/QmUCShpeuJ1QXyjBTBKZtw9WJDKRULgptpNAoH3ihM2SzG/UPlanet_nav0_explain.png'
-};
-
-// Left fan menu functionality
+// Left fan menu
 let leftFanMenuOpen = false;
 
 function toggleLeftFanMenu() {
     const menuButtons = document.getElementById('left-fan-menu-buttons');
     const toggleBtn = document.getElementById('left-fan-menu-toggle');
-    
+
     leftFanMenuOpen = !leftFanMenuOpen;
-    
+
     if (leftFanMenuOpen) {
         menuButtons.classList.remove('fan-menu-closed');
         menuButtons.classList.add('fan-menu-open');
@@ -652,391 +539,15 @@ function toggleLeftFanMenu() {
     }
 }
 
-function createFloatingActionButton(triggerButton, imageKey) {
-    // Remove existing floating button
-    removeFloatingButton();
-    
-    // Clone the original button
-    const floatingButton = triggerButton.cloneNode(true);
-    floatingButton.classList.add('floating-action-button');
-    floatingButton.classList.remove('flyover-trigger');
-    
-    // Remove flyover events from clone
-    floatingButton.removeAttribute('onmouseenter');
-    floatingButton.removeAttribute('onmouseleave');
-    
-    // Position the floating button over the image
-    const modal = document.getElementById('flyover-modal');
-    const image = document.getElementById('flyover-image');
-    
-    // Calculate position relative to the image
-    setTimeout(() => {
-        const imageRect = image.getBoundingClientRect();
-        const modalRect = modal.getBoundingClientRect();
-        
-        // Responsive positioning based on screen size
-        const isMobile = window.innerWidth <= 768;
-        
-        if (isMobile) {
-            // Center bottom on mobile
-            floatingButton.style.position = 'fixed';
-            floatingButton.style.left = '50%';
-            floatingButton.style.transform = 'translateX(-50%)';
-            floatingButton.style.bottom = '80px';
-            floatingButton.style.fontSize = '20px';
-            floatingButton.style.padding = '12px 20px';
-        } else {
-            // Bottom-right corner of image on desktop
-            floatingButton.style.position = 'fixed';
-            floatingButton.style.left = (imageRect.right - 120) + 'px';
-            floatingButton.style.top = (imageRect.bottom - 70) + 'px';
-            floatingButton.style.transform = 'none';
-        }
-        
-        floatingButton.style.zIndex = '10100';
-        
-        // Add glow effect based on image key
-        const glowColors = {
-            'g1-registration': 'rgba(241, 196, 15, 0.6)',
-            'nostr-console': 'rgba(155, 89, 182, 0.6)', 
-            'economic-level': 'rgba(231, 76, 60, 0.6)',
-            'zen-club': 'rgba(52, 152, 219, 0.6)',
-            'geo-message': 'rgba(46, 204, 113, 0.6)',
-            'console-toggle': 'rgba(142, 68, 173, 0.6)'
-        };
-        
-        // Enhanced gradients and colors
-        const gradients = {
-            'g1-registration': 'linear-gradient(135deg, #f1c40f, #f39c12)',
-            'nostr-console': 'linear-gradient(135deg, #9b59b6, #8e44ad)', 
-            'economic-level': 'linear-gradient(135deg, #e74c3c, #c0392b)',
-            'zen-club': 'linear-gradient(135deg, #3498db, #2980b9)',
-            'geo-message': 'linear-gradient(135deg, #2ecc71, #27ae60)',
-            'console-toggle': 'linear-gradient(135deg, #8e44ad, #9b59b6)'
-        };
-        
-        floatingButton.style.background = gradients[imageKey] || 'linear-gradient(135deg, #667eea, #764ba2)';
-        floatingButton.style.boxShadow = `0 20px 40px ${glowColors[imageKey] || 'rgba(102, 126, 234, 0.6)'}`;
-        
-        // Enhanced animation sequence
-        floatingButton.style.animation = 'floatIn 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275), pulse 3s infinite 1.2s';
-        
-        // Add interactive hover effects
-        floatingButton.addEventListener('mouseenter', () => {
-            floatingButton.style.animation = 'pulse 0.8s infinite';
-            if (isMobile) {
-                floatingButton.style.transform = 'translateX(-50%) scale(1.05)';
-            } else {
-                floatingButton.style.transform = 'scale(1.05) translateY(-3px)';
-            }
-        });
-        
-        floatingButton.addEventListener('mouseleave', () => {
-            floatingButton.style.animation = 'floatIn 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275), pulse 3s infinite 1.2s';
-            if (isMobile) {
-                floatingButton.style.transform = 'translateX(-50%)';
-            } else {
-                floatingButton.style.transform = 'none';
-            }
-        });
-        
-        // Add click feedback animation
-        floatingButton.addEventListener('click', () => {
-            if (isMobile) {
-                floatingButton.style.transform = 'translateX(-50%) scale(0.95)';
-            } else {
-                floatingButton.style.transform = 'scale(0.95)';
-            }
-            setTimeout(() => {
-                if (isMobile) {
-                    floatingButton.style.transform = 'translateX(-50%)';
-                } else {
-                    floatingButton.style.transform = 'none';
-                }
-            }, 150);
-        });
-        
-    }, 150);
-    
-    // Add click handler that closes flyover after action
-    const originalOnClick = floatingButton.getAttribute('onclick');
-    floatingButton.setAttribute('onclick', `${originalOnClick}; setTimeout(closeFlyover, 300);`);
-    
-    // Add to modal
-    modal.appendChild(floatingButton);
-    currentFloatingButton = floatingButton;
-    
-    return floatingButton;
-}
-
-function removeFloatingButton() {
-    if (currentFloatingButton) {
-        currentFloatingButton.remove();
-        currentFloatingButton = null;
-    }
-}
-
-function showFlyover(imageKey = 'console-toggle', e) {
-    clearTimeout(flyoverTimeout);
-
-    // Store reference to trigger button
-    currentTriggerButton = e ? e.target : null;
-    
-    // COMMENTED: Flyover help images display
-    /*
-    flyoverTimeout = setTimeout(() => {
-        // Only show if console is not visible for console-toggle, or always for other buttons
-        const console = document.getElementById('console');
-        if (imageKey !== 'console-toggle' || console.style.visibility !== 'visible') {
-            const modal = document.getElementById('flyover-modal');
-            const image = document.getElementById('flyover-image');
-            
-            // Set the appropriate image
-            image.src = flyoverImages[imageKey] || flyoverImages['console-toggle'];
-            image.alt = `UPlanet ${imageKey} Navigation Explanation`;
-            
-            // Mark current trigger as active and hide conflicting buttons
-            markActiveTrigger(currentTriggerButton);
-            hideConflictingButtons();
-            
-            modal.style.display = 'block';
-            document.body.style.overflow = 'hidden';
-            
-            // Create floating action button after modal is visible
-            setTimeout(() => {
-                createFloatingActionButton(currentTriggerButton, imageKey);
-            }, 200);
-        }
-    }, 1000); // Add delay for more control
-    */
-}
-
-function markActiveTrigger(trigger) {
-    // Remove previous active states
-    document.querySelectorAll('.flyover-trigger-active').forEach(btn => {
-        btn.classList.remove('flyover-trigger-active');
-    });
-    
-    // Mark current trigger as active
-    if (trigger) {
-        trigger.classList.add('flyover-trigger-active');
-    }
-}
-
-function hideConflictingButtons() {
-    // Hide buttons that might interfere with flyover reading
-    const interfering = document.querySelectorAll('h1 button, button[onclick*="nostr"], button[title*="Scanner"]');
-    interfering.forEach(btn => {
-        if (!btn.classList.contains('flyover-trigger-active')) {
-            btn.classList.add('flyover-hidden');
-            btn.dataset.hiddenForFlyover = 'true';
-        }
-    });
-}
-
-function showConflictingButtons() {
-    // Restore hidden buttons
-    const hidden = document.querySelectorAll('[data-hidden-for-flyover="true"]');
-    hidden.forEach(btn => {
-        btn.classList.remove('flyover-hidden');
-        btn.removeAttribute('data-hidden-for-flyover');
-    });
-    
-    // Remove all active trigger states
-    document.querySelectorAll('.flyover-trigger-active').forEach(btn => {
-        btn.classList.remove('flyover-trigger-active');
-    });
-}
-
-function hideFlyover() {
-    clearTimeout(flyoverTimeout);
-    // Auto-hide after a short delay if not interacting with modal
-    setTimeout(() => {
-        const modal = document.getElementById('flyover-modal');
-        if (modal.style.display === 'block' && !modal.matches(':hover')) {
-            closeFlyover();
-        }
-    }, 300);
-}
-
-function closeFlyover() {
-    clearTimeout(flyoverTimeout);
-    removeFloatingButton(); // Remove floating button first
-    showConflictingButtons(); // Restore hidden buttons
-    document.getElementById('flyover-modal').style.display = 'none';
-    document.body.style.overflow = 'auto'; // Restore scrolling
-    resetImage();
-    currentTriggerButton = null;
-}
-
-function resetImage() {
-    const image = document.getElementById('flyover-image');
-    image.classList.remove('zoomed');
-    image.style.transform = 'scale(1) translate(0, 0)';
-    scale = 1;
-    translateX = 0;
-    translateY = 0;
-    isZoomed = false;
-}
-
-function toggleZoom(event) {
-    const image = document.getElementById('flyover-image');
-    
-    if (!isZoomed) {
-        // Zoom in
-        scale = 2;
-        image.classList.add('zoomed');
-        
-        // Calculate zoom position - center at 2/3 width and mid-height
-        const rect = image.getBoundingClientRect();
-        const x = rect.width * (2/3);  // Position at 2/3 of image width
-        const y = rect.height / 2;     // Position at mid-height
-        
-        translateX = (rect.width / 2 - x) * (scale - 1);
-        translateY = (rect.height / 2 - y) * (scale - 1);
-        
-        image.style.transform = `scale(${scale}) translate(${translateX}px, ${translateY}px)`;
-        isZoomed = true;
-    } else {
-        // Zoom out
-        resetImage();
-    }
-}
-
-// Mouse events for desktop
-document.getElementById('flyover-image').addEventListener('click', toggleZoom);
-
-document.getElementById('flyover-image').addEventListener('mousedown', function(e) {
-    if (isZoomed) {
-        isDragging = true;
-        startX = e.clientX - translateX;
-        startY = e.clientY - translateY;
-        e.preventDefault();
-    }
-});
-
-document.addEventListener('mousemove', function(e) {
-    if (isDragging && isZoomed) {
-        translateX = e.clientX - startX;
-        translateY = e.clientY - startY;
-        document.getElementById('flyover-image').style.transform = `scale(${scale}) translate(${translateX}px, ${translateY}px)`;
-    }
-});
-
-document.addEventListener('mouseup', function(e) {
-    if (isDragging) {
-        isDragging = false;
-        // Prevent any unwanted zoom reset
-        e.preventDefault();
-        e.stopPropagation();
-    }
-});
-
-// Touch events for mobile (unified handler for double-tap, drag and pinch-zoom)
-let lastTouchTime = 0;
-let initialDistance = 0;
-let initialScale = 1;
-
-document.getElementById('flyover-image').addEventListener('touchstart', function(e) {
-    // Pinch to zoom (2 fingers)
-    if (e.touches.length === 2) {
-        initialDistance = Math.hypot(
-            e.touches[0].clientX - e.touches[1].clientX,
-            e.touches[0].clientY - e.touches[1].clientY
-        );
-        initialScale = scale;
-        e.preventDefault();
-        return;
-    }
-
-    // Single finger: double-tap or drag
-    const currentTime = new Date().getTime();
-    const timeDiff = currentTime - lastTouchTime;
-
-    if (timeDiff < 300 && timeDiff > 0) {
-        // Double tap detected
-        toggleZoom(e);
-        e.preventDefault();
-    } else if (isZoomed && e.touches.length === 1) {
-        // Single touch for dragging
-        isDragging = true;
-        startX = e.touches[0].clientX - translateX;
-        startY = e.touches[0].clientY - translateY;
-        e.preventDefault();
-    }
-
-    lastTouchTime = currentTime;
-});
-
-document.addEventListener('touchmove', function(e) {
-    // Pinch to zoom
-    if (e.touches.length === 2) {
-        const currentDistance = Math.hypot(
-            e.touches[0].clientX - e.touches[1].clientX,
-            e.touches[0].clientY - e.touches[1].clientY
-        );
-
-        scale = Math.min(Math.max(0.5, initialScale * (currentDistance / initialDistance)), 4);
-
-        if (scale > 1) {
-            document.getElementById('flyover-image').classList.add('zoomed');
-            isZoomed = true;
-        } else {
-            document.getElementById('flyover-image').classList.remove('zoomed');
-            isZoomed = false;
-        }
-
-        document.getElementById('flyover-image').style.transform = `scale(${scale}) translate(${translateX}px, ${translateY}px)`;
-        e.preventDefault();
-        return;
-    }
-
-    // Single finger drag
-    if (isDragging && isZoomed) {
-        translateX = e.touches[0].clientX - startX;
-        translateY = e.touches[0].clientY - startY;
-        document.getElementById('flyover-image').style.transform = `scale(${scale}) translate(${translateX}px, ${translateY}px)`;
-        e.preventDefault();
-    }
-});
-
-document.addEventListener('touchend', function(e) {
-    if (isDragging) {
-        isDragging = false;
-        e.preventDefault();
-        e.stopPropagation();
-    }
-});
-
-// Close modal events
-document.getElementById('flyover-close').addEventListener('click', closeFlyover);
-document.getElementById('flyover-modal').addEventListener('click', function(e) {
-    if (e.target === this) {
-        closeFlyover();
-    }
-});
-
-// ESC key to close
-document.addEventListener('keydown', function(e) {
-    if (e.key === 'Escape' && document.getElementById('flyover-modal').style.display === 'block') {
-        closeFlyover();
-    }
-});
-
-// Prevent context menu on long press
-document.getElementById('flyover-image').addEventListener('contextmenu', function(e) {
-    e.preventDefault();
-});
-
-// Fan menu functionality
+// Right fan menu
 let fanMenuOpen = false;
 
 function toggleFanMenu() {
     const menuButtons = document.getElementById('fan-menu-buttons');
     const toggleBtn = document.getElementById('fan-menu-toggle');
-    
+
     fanMenuOpen = !fanMenuOpen;
-    
+
     if (fanMenuOpen) {
         menuButtons.classList.remove('fan-menu-closed');
         menuButtons.classList.add('fan-menu-open');
@@ -1060,7 +571,7 @@ document.addEventListener('click', function(e) {
 </script>
 
 <style>
-/* Bootstrap Popover custom styling for better visibility */
+/* Bootstrap Popover custom styling */
 .popover {
     background: rgba(20, 20, 40, 0.95) !important;
     border: 1px solid rgba(102, 126, 234, 0.5) !important;
@@ -1143,47 +654,19 @@ document.addEventListener('click', function(e) {
     z-index: 1003;
 }
 
-/* Hover effects for each button position - right menu */
-#fan-menu-buttons.fan-menu-open .fan-menu-item[data-index="0"]:hover {
-    transform: translateX(-68px) translateY(0px) rotate(-5deg) scale(1.15);
-}
+/* Hover effects - right menu */
+#fan-menu-buttons.fan-menu-open .fan-menu-item[data-index="0"]:hover { transform: translateX(-68px) translateY(0px) rotate(-5deg) scale(1.15); }
+#fan-menu-buttons.fan-menu-open .fan-menu-item[data-index="1"]:hover { transform: translateX(-63px) translateY(55px) rotate(-3deg) scale(1.15); }
+#fan-menu-buttons.fan-menu-open .fan-menu-item[data-index="2"]:hover { transform: translateX(-53px) translateY(110px) rotate(-1deg) scale(1.15); }
+#fan-menu-buttons.fan-menu-open .fan-menu-item[data-index="3"]:hover { transform: translateX(-53px) translateY(165px) rotate(1deg) scale(1.15); }
+#fan-menu-buttons.fan-menu-open .fan-menu-item[data-index="4"]:hover { transform: translateX(-63px) translateY(220px) rotate(3deg) scale(1.15); }
 
-#fan-menu-buttons.fan-menu-open .fan-menu-item[data-index="1"]:hover {
-    transform: translateX(-63px) translateY(55px) rotate(-3deg) scale(1.15);
-}
-
-#fan-menu-buttons.fan-menu-open .fan-menu-item[data-index="2"]:hover {
-    transform: translateX(-53px) translateY(110px) rotate(-1deg) scale(1.15);
-}
-
-#fan-menu-buttons.fan-menu-open .fan-menu-item[data-index="3"]:hover {
-    transform: translateX(-53px) translateY(165px) rotate(1deg) scale(1.15);
-}
-
-#fan-menu-buttons.fan-menu-open .fan-menu-item[data-index="4"]:hover {
-    transform: translateX(-63px) translateY(220px) rotate(3deg) scale(1.15);
-}
-
-/* Hover effects for each button position - left menu */
-#left-fan-menu-buttons.fan-menu-open .fan-menu-item[data-index="0"]:hover {
-    transform: translateX(68px) translateY(0px) rotate(5deg) scale(1.15);
-}
-
-#left-fan-menu-buttons.fan-menu-open .fan-menu-item[data-index="1"]:hover {
-    transform: translateX(63px) translateY(55px) rotate(3deg) scale(1.15);
-}
-
-#left-fan-menu-buttons.fan-menu-open .fan-menu-item[data-index="2"]:hover {
-    transform: translateX(53px) translateY(110px) rotate(1deg) scale(1.15);
-}
-
-#left-fan-menu-buttons.fan-menu-open .fan-menu-item[data-index="3"]:hover {
-    transform: translateX(53px) translateY(165px) rotate(-1deg) scale(1.15);
-}
-
-#left-fan-menu-buttons.fan-menu-open .fan-menu-item[data-index="4"]:hover {
-    transform: translateX(63px) translateY(220px) rotate(-3deg) scale(1.15);
-}
+/* Hover effects - left menu */
+#left-fan-menu-buttons.fan-menu-open .fan-menu-item[data-index="0"]:hover { transform: translateX(68px) translateY(0px) rotate(5deg) scale(1.15); }
+#left-fan-menu-buttons.fan-menu-open .fan-menu-item[data-index="1"]:hover { transform: translateX(63px) translateY(55px) rotate(3deg) scale(1.15); }
+#left-fan-menu-buttons.fan-menu-open .fan-menu-item[data-index="2"]:hover { transform: translateX(53px) translateY(110px) rotate(1deg) scale(1.15); }
+#left-fan-menu-buttons.fan-menu-open .fan-menu-item[data-index="3"]:hover { transform: translateX(53px) translateY(165px) rotate(-1deg) scale(1.15); }
+#left-fan-menu-buttons.fan-menu-open .fan-menu-item[data-index="4"]:hover { transform: translateX(63px) translateY(220px) rotate(-3deg) scale(1.15); }
 
 .fan-menu-closed .fan-menu-item {
     opacity: 0;
@@ -1197,100 +680,33 @@ document.addEventListener('click', function(e) {
     pointer-events: auto;
 }
 
-/* Fan spread animation - creates arc pattern for right menu */
-#fan-menu-buttons.fan-menu-open .fan-menu-item[data-index="0"] {
-    transform: translateX(-60px) translateY(0px) rotate(-5deg) scale(1);
-    transition-delay: 0.05s;
-}
+/* Fan spread - right menu */
+#fan-menu-buttons.fan-menu-open .fan-menu-item[data-index="0"] { transform: translateX(-60px) translateY(0px) rotate(-5deg) scale(1); transition-delay: 0.05s; }
+#fan-menu-buttons.fan-menu-open .fan-menu-item[data-index="1"] { transform: translateX(-55px) translateY(55px) rotate(-3deg) scale(1); transition-delay: 0.1s; }
+#fan-menu-buttons.fan-menu-open .fan-menu-item[data-index="2"] { transform: translateX(-45px) translateY(110px) rotate(-1deg) scale(1); transition-delay: 0.15s; }
+#fan-menu-buttons.fan-menu-open .fan-menu-item[data-index="3"] { transform: translateX(-45px) translateY(165px) rotate(1deg) scale(1); transition-delay: 0.2s; }
+#fan-menu-buttons.fan-menu-open .fan-menu-item[data-index="4"] { transform: translateX(-55px) translateY(220px) rotate(3deg) scale(1); transition-delay: 0.25s; }
 
-#fan-menu-buttons.fan-menu-open .fan-menu-item[data-index="1"] {
-    transform: translateX(-55px) translateY(55px) rotate(-3deg) scale(1);
-    transition-delay: 0.1s;
-}
+/* Fan spread - left menu */
+#left-fan-menu-buttons.fan-menu-open .fan-menu-item[data-index="0"] { transform: translateX(60px) translateY(0px) rotate(5deg) scale(1); transition-delay: 0.05s; }
+#left-fan-menu-buttons.fan-menu-open .fan-menu-item[data-index="1"] { transform: translateX(55px) translateY(55px) rotate(3deg) scale(1); transition-delay: 0.1s; }
+#left-fan-menu-buttons.fan-menu-open .fan-menu-item[data-index="2"] { transform: translateX(45px) translateY(110px) rotate(1deg) scale(1); transition-delay: 0.15s; }
+#left-fan-menu-buttons.fan-menu-open .fan-menu-item[data-index="3"] { transform: translateX(45px) translateY(165px) rotate(-1deg) scale(1); transition-delay: 0.2s; }
+#left-fan-menu-buttons.fan-menu-open .fan-menu-item[data-index="4"] { transform: translateX(55px) translateY(220px) rotate(-3deg) scale(1); transition-delay: 0.25s; }
 
-#fan-menu-buttons.fan-menu-open .fan-menu-item[data-index="2"] {
-    transform: translateX(-45px) translateY(110px) rotate(-1deg) scale(1);
-    transition-delay: 0.15s;
-}
-
-#fan-menu-buttons.fan-menu-open .fan-menu-item[data-index="3"] {
-    transform: translateX(-45px) translateY(165px) rotate(1deg) scale(1);
-    transition-delay: 0.2s;
-}
-
-#fan-menu-buttons.fan-menu-open .fan-menu-item[data-index="4"] {
-    transform: translateX(-55px) translateY(220px) rotate(3deg) scale(1);
-    transition-delay: 0.25s;
-}
-
-/* Fan spread animation - creates arc pattern for left menu (opens to the right) */
-#left-fan-menu-buttons.fan-menu-open .fan-menu-item[data-index="0"] {
-    transform: translateX(60px) translateY(0px) rotate(5deg) scale(1);
-    transition-delay: 0.05s;
-}
-
-#left-fan-menu-buttons.fan-menu-open .fan-menu-item[data-index="1"] {
-    transform: translateX(55px) translateY(55px) rotate(3deg) scale(1);
-    transition-delay: 0.1s;
-}
-
-#left-fan-menu-buttons.fan-menu-open .fan-menu-item[data-index="2"] {
-    transform: translateX(45px) translateY(110px) rotate(1deg) scale(1);
-    transition-delay: 0.15s;
-}
-
-#left-fan-menu-buttons.fan-menu-open .fan-menu-item[data-index="3"] {
-    transform: translateX(45px) translateY(165px) rotate(-1deg) scale(1);
-    transition-delay: 0.2s;
-}
-
-#left-fan-menu-buttons.fan-menu-open .fan-menu-item[data-index="4"] {
-    transform: translateX(55px) translateY(220px) rotate(-3deg) scale(1);
-    transition-delay: 0.25s;
-}
-
-/* Mobile responsiveness - right menu */
+/* Mobile responsiveness */
 @media (max-width: 768px) {
-    #fan-menu-buttons.fan-menu-open .fan-menu-item[data-index="0"] {
-        transform: translateX(-50px) translateY(0px) rotate(-3deg) scale(1);
-    }
-    
-    #fan-menu-buttons.fan-menu-open .fan-menu-item[data-index="1"] {
-        transform: translateX(-45px) translateY(50px) rotate(-2deg) scale(1);
-    }
-    
-    #fan-menu-buttons.fan-menu-open .fan-menu-item[data-index="2"] {
-        transform: translateX(-40px) translateY(100px) rotate(-1deg) scale(1);
-    }
-    
-    #fan-menu-buttons.fan-menu-open .fan-menu-item[data-index="3"] {
-        transform: translateX(-40px) translateY(150px) rotate(1deg) scale(1);
-    }
-    
-    #fan-menu-buttons.fan-menu-open .fan-menu-item[data-index="4"] {
-        transform: translateX(-45px) translateY(200px) rotate(2deg) scale(1);
-    }
+    #fan-menu-buttons.fan-menu-open .fan-menu-item[data-index="0"] { transform: translateX(-50px) translateY(0px) rotate(-3deg) scale(1); }
+    #fan-menu-buttons.fan-menu-open .fan-menu-item[data-index="1"] { transform: translateX(-45px) translateY(50px) rotate(-2deg) scale(1); }
+    #fan-menu-buttons.fan-menu-open .fan-menu-item[data-index="2"] { transform: translateX(-40px) translateY(100px) rotate(-1deg) scale(1); }
+    #fan-menu-buttons.fan-menu-open .fan-menu-item[data-index="3"] { transform: translateX(-40px) translateY(150px) rotate(1deg) scale(1); }
+    #fan-menu-buttons.fan-menu-open .fan-menu-item[data-index="4"] { transform: translateX(-45px) translateY(200px) rotate(2deg) scale(1); }
 
-    /* Mobile responsiveness - left menu */
-    #left-fan-menu-buttons.fan-menu-open .fan-menu-item[data-index="0"] {
-        transform: translateX(50px) translateY(0px) rotate(3deg) scale(1);
-    }
-    
-    #left-fan-menu-buttons.fan-menu-open .fan-menu-item[data-index="1"] {
-        transform: translateX(45px) translateY(50px) rotate(2deg) scale(1);
-    }
-    
-    #left-fan-menu-buttons.fan-menu-open .fan-menu-item[data-index="2"] {
-        transform: translateX(40px) translateY(100px) rotate(1deg) scale(1);
-    }
-    
-    #left-fan-menu-buttons.fan-menu-open .fan-menu-item[data-index="3"] {
-        transform: translateX(40px) translateY(150px) rotate(-1deg) scale(1);
-    }
-    
-    #left-fan-menu-buttons.fan-menu-open .fan-menu-item[data-index="4"] {
-        transform: translateX(45px) translateY(200px) rotate(-2deg) scale(1);
-    }
+    #left-fan-menu-buttons.fan-menu-open .fan-menu-item[data-index="0"] { transform: translateX(50px) translateY(0px) rotate(3deg) scale(1); }
+    #left-fan-menu-buttons.fan-menu-open .fan-menu-item[data-index="1"] { transform: translateX(45px) translateY(50px) rotate(2deg) scale(1); }
+    #left-fan-menu-buttons.fan-menu-open .fan-menu-item[data-index="2"] { transform: translateX(40px) translateY(100px) rotate(1deg) scale(1); }
+    #left-fan-menu-buttons.fan-menu-open .fan-menu-item[data-index="3"] { transform: translateX(40px) translateY(150px) rotate(-1deg) scale(1); }
+    #left-fan-menu-buttons.fan-menu-open .fan-menu-item[data-index="4"] { transform: translateX(45px) translateY(200px) rotate(-2deg) scale(1); }
 }
 </style>
 
@@ -1298,7 +714,6 @@ document.addEventListener('click', function(e) {
 <div id="software-recommendations" style="position: fixed; bottom: 0; left: 0; right: 0; background: linear-gradient(135deg, rgba(0, 0, 0, 0.9), rgba(20, 20, 40, 0.9)); backdrop-filter: blur(15px); border-top: 1px solid rgba(255, 255, 255, 0.1); padding: 15px 20px; z-index: 1050; transform: translateY(100%); transition: transform 0.4s ease; pointer-events: none; overflow: hidden;">
     <div style="max-width: 1200px; margin: 0 auto; padding: 0 10px;">
 
-        
         <!-- Guide Link -->
         <div style="text-align: center; margin-top: 15px;">
             <a href="https://pad.p2p.legal/s/UPlanet_Enter_Help" target="_blank" 
@@ -1331,7 +746,7 @@ document.addEventListener('click', function(e) {
             <h4 style="color: #ffffff; margin: 0 0 5px 0; font-size: 18px; font-weight: bold;">🔧 Essential Tools for UPlanet</h4>
             <p style="color: #a0a0a0; margin: 0; font-size: 12px; line-height: 1.4;">Sovereign digital identity • Decentralized communication • Cryptographic security</p>
         </div>
-        
+
         <!-- Browser Section -->
         <div style="margin-bottom: 15px;">
             <h5 style="color: #ffffff; margin: 0 0 8px 0; font-size: 14px; font-weight: 600; text-align: center;">🌐 Web3-Ready Browser</h5>
@@ -1345,13 +760,12 @@ document.addEventListener('click', function(e) {
                 </a>
             </div>
         </div>
-        
+
         <!-- NOSTR Extension Section -->
         <div>
             <h5 style="color: #ffffff; margin: 0 0 8px 0; font-size: 14px; font-weight: 600; text-align: center;">🔐 NOSTR Identity Extensions</h5>
             <p style="color: #a0a0a0; margin: 0 0 10px 0; font-size: 11px; text-align: center; line-height: 1.3;">Sign events without exposing your private keys • Essential for MULTIPASS authentication</p>
             <div style="display: flex; justify-content: center; gap: 10px; flex-wrap: wrap;">
-                <!-- Nostr Connect -->
                 <a href="https://addons.mozilla.org/fr/firefox/addon/nostr-connect/" target="_blank"
                    style="display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; background: linear-gradient(135deg, #9b59b6, #8e44ad); color: white; text-decoration: none; border-radius: 20px; font-size: 13px; font-weight: 500; transition: all 0.3s ease; box-shadow: 0 4px 15px rgba(155, 89, 182, 0.3); width: 130px; max-width: 130px; justify-content: center; white-space: nowrap; overflow: hidden;"
                    onmouseover="this.style.transform='translateY(-2px) scale(1.05)'; this.style.boxShadow='0 8px 25px rgba(155, 89, 182, 0.5)';"
@@ -1359,7 +773,6 @@ document.addEventListener('click', function(e) {
                    title="NOSTR signer by Reya - Secure key management for decentralized identity">
                     📡 <span>"NOSTR Connect"</span>
                 </a>
-
             </div>
         </div>
 
@@ -1384,52 +797,37 @@ document.addEventListener('click', function(e) {
 </button>
 
 <script>
-// Software recommendations toggle functionality
 let recommendationsVisible = false;
 
 function toggleRecommendations() {
     const panel = document.getElementById('software-recommendations');
     const toggleBtn = document.getElementById('show-recommendations-btn');
     const addressForm = document.getElementById('addressForm');
-    
+
     if (!panel) return;
-    
+
     if (recommendationsVisible) {
-        // Hide panel
         panel.style.transform = 'translateY(100%)';
         panel.style.pointerEvents = 'none';
-        if (toggleBtn) {
-            toggleBtn.style.display = 'flex';
-        }
-        // Restore form position
-        if (addressForm) {
-            addressForm.style.bottom = '0';
-        }
+        if (toggleBtn) toggleBtn.style.display = 'flex';
+        if (addressForm) addressForm.style.bottom = '0';
         recommendationsVisible = false;
     } else {
-        // Show panel
         panel.style.transform = 'translateY(0)';
         panel.style.pointerEvents = 'auto';
-        if (toggleBtn) {
-            toggleBtn.style.display = 'none';
-        }
-        // Calculate panel height and move form up accordingly
+        if (toggleBtn) toggleBtn.style.display = 'none';
         if (addressForm) {
             const panelHeight = panel.offsetHeight || 300;
             addressForm.style.bottom = panelHeight + 'px';
         }
         recommendationsVisible = true;
-        
-        // Auto-hide after 10 seconds
+
         setTimeout(() => {
-            if (recommendationsVisible) {
-                toggleRecommendations();
-            }
+            if (recommendationsVisible) toggleRecommendations();
         }, 10000);
     }
 }
 
-// Mobile responsiveness for recommendations
 window.addEventListener('resize', function() {
     const panel = document.getElementById('software-recommendations');
     if (window.innerWidth <= 768) {
@@ -1439,35 +837,23 @@ window.addEventListener('resize', function() {
     }
 });
 
-// Bang App modal functionality
 function openBangApp() {
     const modal = document.getElementById('bang-app-modal');
     const iframe = document.getElementById('bang-app-iframe');
-    
-    // Set the iframe source
     iframe.src = 'bang.html';
-    
-    // Show the modal
     modal.style.display = 'block';
     document.body.style.overflow = 'hidden';
-    
-    // Add animation
     modal.style.animation = 'modalFadeIn 0.4s ease-out';
 }
 
 function closeBangApp() {
     const modal = document.getElementById('bang-app-modal');
     const iframe = document.getElementById('bang-app-iframe');
-    
-    // Hide the modal
     modal.style.display = 'none';
     document.body.style.overflow = 'auto';
-    
-    // Clear iframe source to stop any ongoing processes
     iframe.src = '';
 }
 
-// Close Bang App modal with ESC key
 document.addEventListener('keydown', function(e) {
     if (e.key === 'Escape') {
         const bangModal = document.getElementById('bang-app-modal');
@@ -1477,7 +863,6 @@ document.addEventListener('keydown', function(e) {
     }
 });
 
-// Close Bang App modal by clicking outside
 document.getElementById('bang-app-modal').addEventListener('click', function(e) {
     if (e.target === this) {
         closeBangApp();

@@ -2534,13 +2534,35 @@ async function sendNIP42Auth(relayUrl, forceSend = false) {
             console.log('📝 Force sending NIP-42 authentication event (user initiated connection)...');
         }
         
+        // ── Fetch a dynamic server-issued challenge (nonce) ─────────────────
+        // The API stores the nonce per pubkey (TTL 120s) and the relay write-policy
+        // plugin (filter/22242.sh) writes it into the marker so the API can verify
+        // that the client signed the correct server-issued nonce, preventing
+        // replay attacks with previously-seen kind-22242 events.
+        let nip42Challenge = 'auth-' + Date.now(); // fallback if API unreachable
+        try {
+            const upassportBase = NostrState.upassportUrl || window.upassportUrl || '';
+            const challengeUrl = `${upassportBase}/api/nip42/challenge?npub=${encodeURIComponent(NostrState.userPubkey)}`;
+            const challengeRes = await fetch(challengeUrl, { method: 'GET', signal: AbortSignal.timeout(3000) });
+            if (challengeRes.ok) {
+                const challengeData = await challengeRes.json();
+                if (challengeData.challenge && typeof challengeData.challenge === 'string' && challengeData.challenge.length === 64) {
+                    nip42Challenge = challengeData.challenge;
+                    console.log('🔑 Dynamic NIP-42 challenge from API:', nip42Challenge.substring(0, 16) + '…');
+                }
+            }
+        } catch (challengeFetchErr) {
+            // Non-fatal: fall back to timestamp-based nonce (weaker but functional)
+            console.warn('⚠️ Could not fetch dynamic NIP-42 challenge, using local nonce:', challengeFetchErr.message);
+        }
+
         // Create NIP-42 authentication event (kind 22242)
         const authEvent = {
             kind: 22242,
             created_at: Math.floor(Date.now() / 1000),
             tags: [
                 ['relay', relayUrl],
-                ['challenge', 'auth-' + Date.now()]
+                ['challenge', nip42Challenge]
             ],
             content: '',
             pubkey: NostrState.userPubkey

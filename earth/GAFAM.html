@@ -728,6 +728,11 @@
             <p id="mp-result-msg" data-i18n="mp_result_default_desc">
                 Votre identité est maintenant enregistrée sur le réseau UPlanet.
             </p>
+            <div class="info-box"
+                 style="max-width:480px; margin:1rem auto; text-align:left; font-size:0.82rem; background:rgba(56,189,248,0.08); border-color:rgba(56,189,248,0.25);">
+                🔑 <strong>Votre clef <code>nsec</code> MULTIPASS est dans l'email reçu.</strong><br>
+                Installez <a href="https://chromewebstore.google.com/detail/nos2x/kpgefcfmnafjgpblomihpgmejjdanjjp" target="_blank" style="color:var(--accent);">nos2x</a> (Chrome/Brave) ou <a href="https://addons.mozilla.org/fr/firefox/addon/nos2x-fox/" target="_blank" style="color:var(--accent);">nos2x-fox</a> (Firefox), ouvrez ses options et collez votre <code>nsec…</code> — l'extension signera vos messages à votre place sans jamais envoyer votre clef sur internet.
+            </div>
             <div class="info-box success-box"
                  style="max-width:480px; margin:1rem auto; text-align:left; font-size:0.82rem;"
                  data-i18n="mp_result_tip">
@@ -1211,18 +1216,30 @@ async function derive(forceSalt = null, forcePepper = null) {
         showStatus('ok', t('status_keys_ok'));
         goStep(3);
 
-        // En mode BIP39 : n'afficher que les clefs Duniter/G1
+        // En mode BIP39 ou MULTIPASS/ZEN : masquer les clefs Nostr locales.
+        // Pour MULTIPASS/ZEN, la nsec affichée ici est DIFFÉRENTE de celle du MULTIPASS réel
+        // (généré aléatoirement côté serveur par make_NOSTRCARD.sh). La vraie nsec est
+        // envoyée par email — l'utilisateur doit la coller dans l'extension nos2x.
         {
-            const isV2    = (currentMode === 'v2');
-            const cardNostr = document.getElementById('card-nostr');
-            const cardIpns  = document.getElementById('card-ipns');
-            const extB      = document.getElementById('ext-link-box');
-            const btnNext   = document.getElementById('btn-step3-next');
-            if (cardNostr) cardNostr.style.display = isV2 ? 'none' : '';
-            if (cardIpns)  cardIpns.style.display  = isV2 ? 'none' : '';
+            const isV2         = (currentMode === 'v2');
+            const isMultipass  = (currentOrigin === 'multi' || currentOrigin === 'zen');
+            const hideNostr    = isV2 || isMultipass;
+            const cardNostr    = document.getElementById('card-nostr');
+            const cardIpns     = document.getElementById('card-ipns');
+            const extB         = document.getElementById('ext-link-box');
+            const btnNext      = document.getElementById('btn-step3-next');
+            if (cardNostr) cardNostr.style.display = hideNostr ? 'none' : '';
+            if (cardIpns)  cardIpns.style.display  = isV2     ? 'none' : '';
             if (isV2) {
                 if (extB)    extB.style.display = 'none';
                 if (btnNext) btnNext.textContent = t('btn_g1_ready');
+            } else if (isMultipass) {
+                // Pour MULTIPASS : informer que la nsec est dans l'email
+                if (extB) {
+                    extB.innerHTML = '<strong>🔑 Votre vraie clef <code>nsec</code> MULTIPASS sera envoyée par email.</strong><br>Installez <a href="https://chromewebstore.google.com/detail/nos2x/kpgefcfmnafjgpblomihpgmejjdanjjp" target="_blank">nos2x</a> (Chrome) ou <a href="https://addons.mozilla.org/fr/firefox/addon/nos2x-fox/" target="_blank">nos2x-fox</a> (Firefox) et collez-y la <code>nsec…</code> reçue.';
+                    extB.style.display = 'block';
+                }
+                if (btnNext) btnNext.textContent = t('btn_step3_next');
             } else {
                 if (btnNext) btnNext.textContent = t('btn_step3_next');
             }

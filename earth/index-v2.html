@@ -1,0 +1,1374 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>UPlanet — Public Goods For A Better Tomorrow</title>
+    <meta name="description" content="UPlanet - Infrastructure Internet décentralisée et réseau social coopératif / Decentralized Internet Infrastructure and Social Network">
+    <link rel="icon" type="image/x-icon" href="favicon.ring.ico">
+    <link rel="preconnect" href="https://nominatim.openstreetmap.org">
+
+    <!-- Bootstrap -->
+    <link rel="stylesheet" href="bootstrap.min.css">
+    <link rel="stylesheet" href="jquery-ui.min.css">
+    <link rel="stylesheet" href="earth.css">
+
+    <!-- Globe JS (same as index.html) -->
+    <script src="requestanimationframe.polyfill.js"></script>
+    <script src="jquery-1.7.2.min.js"></script>
+    <script src="jquery-ui.0.min.js"></script>
+    <script src="bootstrap.bundle.min.js"></script>
+    <script src="sphere-hacked.js"></script>
+    <script src="jquery.earth-3d.js"></script>
+    <script src="world.js"></script>
+    <script src="demo.js"></script>
+    <script src="astro.js"></script>
+
+    <style>
+        /* ── DESIGN SYSTEM ── */
+        @font-face {
+            font-family: 'Orbitron';
+            src: url('./fonts/Orbitron/Orbitron-VariableFont_wght.ttf') format('truetype');
+            font-weight: 400 900;
+            font-display: swap;
+        }
+
+        :root {
+            --bg-void: #030508;
+            --bg-deep: #0a0e14;
+            --bg-panel: #0d1219;
+            --bg-card: #111820;
+            --bg-hover: #1a222d;
+            --text-primary: #e8f4ff;
+            --text-secondary: #6b8299;
+            --text-dim: #3d5066;
+            --cyan: #00d4ff;
+            --green: #00ff88;
+            --yellow: #ffd000;
+            --orange: #ff8800;
+            --red: #ff3366;
+            --purple: #9966ff;
+            --pink: #ff66aa;
+            --border: rgba(0,212,255,0.15);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        html { scroll-behavior: smooth; }
+
+        body {
+            font-family: 'Rajdhani', 'Segoe UI', 'Arial', sans-serif;
+            background: var(--bg-void);
+            color: var(--text-primary);
+            overflow-x: hidden;
+        }
+
+        /* Background grid */
+        body::before {
+            content: '';
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background-image:
+                linear-gradient(rgba(0,212,255,0.025) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0,212,255,0.025) 1px, transparent 1px);
+            background-size: 60px 60px;
+            pointer-events: none; z-index: 0;
+        }
+
+        /* ── TOP NAV ── */
+        .topnav {
+            position: fixed;
+            top: 0; left: 0; right: 0;
+            height: 56px;
+            background: rgba(3,5,8,0.92);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 20px;
+            z-index: 1000;
+        }
+
+        .topnav-brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            text-decoration: none;
+        }
+
+        .brand-logo {
+            font-size: 1.5rem;
+            animation: glow-pulse 3s ease-in-out infinite;
+        }
+
+        @keyframes glow-pulse {
+            0%, 100% { filter: drop-shadow(0 0 4px var(--cyan)); }
+            50% { filter: drop-shadow(0 0 16px var(--cyan)); }
+        }
+
+        .brand-name {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1rem;
+            font-weight: 700;
+            letter-spacing: 3px;
+            background: linear-gradient(90deg, var(--cyan), var(--purple));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .topnav-actions {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .btn-nav {
+            padding: 6px 14px;
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            background: rgba(0,212,255,0.06);
+            color: var(--text-primary);
+            font-size: 0.82rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .btn-nav:hover {
+            background: rgba(0,212,255,0.15);
+            border-color: var(--cyan);
+            color: var(--cyan);
+        }
+
+        .btn-nav.primary {
+            background: linear-gradient(135deg, var(--cyan), #0088aa);
+            border-color: transparent;
+            color: var(--bg-void);
+            font-weight: 600;
+        }
+
+        .btn-nav.primary:hover {
+            box-shadow: 0 0 20px rgba(0,212,255,0.4);
+            color: var(--bg-void);
+        }
+
+        .lang-btn {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.65rem;
+            letter-spacing: 1px;
+        }
+
+        /* ── HERO SECTION ── */
+        .hero {
+            position: relative;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding-top: 56px;
+            overflow: hidden;
+        }
+
+        /* Globe container — positioned behind everything */
+        .globe-wrap {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            width: 480px;
+            height: 480px;
+            opacity: 0.35;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .globe-wrap #sphere { width: 100%; height: 100%; }
+        .globe-wrap #glow-shadows { position: absolute; top: 0; left: 0; right: 0; bottom: 0; }
+
+        .hero-content {
+            position: relative;
+            z-index: 2;
+            text-align: center;
+            max-width: 700px;
+            padding: 20px;
+        }
+
+        .hero-tagline {
+            font-family: 'Orbitron', sans-serif;
+            font-size: clamp(0.65rem, 2vw, 0.82rem);
+            letter-spacing: 4px;
+            color: var(--cyan);
+            margin-bottom: 12px;
+            opacity: 0.8;
+        }
+
+        .hero-title {
+            font-family: 'Orbitron', sans-serif;
+            font-size: clamp(2rem, 6vw, 3.5rem);
+            font-weight: 900;
+            line-height: 1.1;
+            background: linear-gradient(135deg, #ffffff, var(--cyan), var(--purple));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 16px;
+        }
+
+        .hero-subtitle {
+            font-size: clamp(0.9rem, 2.5vw, 1.1rem);
+            color: var(--text-secondary);
+            line-height: 1.6;
+            margin-bottom: 20px;
+        }
+
+        /* Station badge */
+        .station-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            padding: 6px 16px;
+            background: rgba(0,212,255,0.08);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            font-size: 0.85rem;
+            margin-bottom: 28px;
+        }
+
+        .station-dot {
+            width: 8px; height: 8px;
+            border-radius: 50%;
+            background: var(--green);
+            box-shadow: 0 0 8px var(--green);
+            animation: blink 2s infinite;
+        }
+
+        @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+        /* ZEN display */
+        .zen-display {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.4rem;
+            font-weight: 700;
+            color: var(--cyan);
+            text-shadow: 0 0 20px rgba(0,212,255,0.5);
+        }
+
+        /* Hero CTA buttons */
+        .hero-ctas {
+            display: flex;
+            gap: 14px;
+            flex-wrap: wrap;
+            justify-content: center;
+            margin-bottom: 32px;
+        }
+
+        .btn-hero {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            border: none;
+        }
+
+        .btn-hero.primary {
+            background: linear-gradient(135deg, var(--cyan), #0088aa);
+            color: var(--bg-void);
+        }
+
+        .btn-hero.primary:hover {
+            box-shadow: 0 4px 24px rgba(0,212,255,0.5);
+            transform: translateY(-2px);
+            color: var(--bg-void);
+        }
+
+        .btn-hero.secondary {
+            background: rgba(153,102,255,0.15);
+            border: 1px solid rgba(153,102,255,0.4);
+            color: var(--purple);
+        }
+
+        .btn-hero.secondary:hover {
+            background: rgba(153,102,255,0.25);
+            box-shadow: 0 4px 20px rgba(153,102,255,0.3);
+            transform: translateY(-2px);
+            color: var(--purple);
+        }
+
+        /* Hero address search */
+        .hero-search {
+            display: flex;
+            gap: 8px;
+            max-width: 440px;
+            width: 100%;
+            margin: 0 auto;
+        }
+
+        .hero-search input {
+            flex: 1;
+            padding: 10px 16px;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text-primary);
+            font-size: 0.9rem;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .hero-search input:focus { border-color: var(--cyan); }
+        .hero-search input::placeholder { color: var(--text-dim); }
+
+        .hero-search button {
+            padding: 10px 18px;
+            background: linear-gradient(135deg, var(--cyan), #0088aa);
+            border: none;
+            border-radius: 8px;
+            color: var(--bg-void);
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .hero-search button:hover {
+            box-shadow: 0 2px 12px rgba(0,212,255,0.4);
+        }
+
+        /* Scroll indicator */
+        .scroll-indicator {
+            position: absolute;
+            bottom: 24px; left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 6px;
+            color: var(--text-dim);
+            font-size: 0.75rem;
+            animation: float-down 2s ease-in-out infinite;
+        }
+
+        @keyframes float-down {
+            0%, 100% { transform: translateX(-50%) translateY(0); }
+            50% { transform: translateX(-50%) translateY(6px); }
+        }
+
+        /* ── SECTION TABS (sticky) ── */
+        .section-tabs {
+            position: sticky;
+            top: 56px;
+            z-index: 990;
+            background: rgba(3,5,8,0.95);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            overflow-x: auto;
+            scrollbar-width: none;
+            gap: 0;
+        }
+
+        .section-tabs::-webkit-scrollbar { display: none; }
+
+        .tab-btn {
+            flex-shrink: 0;
+            padding: 14px 20px;
+            background: transparent;
+            border: none;
+            border-bottom: 2px solid transparent;
+            color: var(--text-secondary);
+            font-size: 0.82rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            white-space: nowrap;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .tab-btn:hover { color: var(--text-primary); background: rgba(255,255,255,0.03); }
+        .tab-btn.active { color: var(--cyan); border-bottom-color: var(--cyan); }
+
+        /* ── CONTENT SECTIONS ── */
+        .page-section {
+            padding: 60px 20px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .page-section + .page-section {
+            border-top: 1px solid rgba(255,255,255,0.04);
+        }
+
+        .section-header {
+            max-width: 1100px;
+            margin: 0 auto 32px;
+        }
+
+        .section-label {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.65rem;
+            letter-spacing: 4px;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            margin-bottom: 6px;
+        }
+
+        .section-title {
+            font-family: 'Orbitron', sans-serif;
+            font-size: clamp(1.1rem, 3vw, 1.5rem);
+            font-weight: 700;
+            margin-bottom: 6px;
+        }
+
+        .section-sub {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+        }
+
+        /* ── CARDS GRID ── */
+        .cards-grid {
+            max-width: 1100px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+            gap: 16px;
+        }
+
+        .cards-grid.two-col { grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); }
+        .cards-grid.three-col { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
+
+        /* App Card */
+        .app-card {
+            background: var(--bg-panel);
+            border: 1px solid rgba(255,255,255,0.06);
+            border-radius: 12px;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            color: inherit;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .app-card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 2px;
+            background: var(--card-accent, var(--cyan));
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .app-card:hover {
+            transform: translateY(-4px);
+            border-color: rgba(255,255,255,0.12);
+            box-shadow: 0 12px 40px rgba(0,0,0,0.3);
+            color: inherit;
+        }
+
+        .app-card:hover::before { opacity: 1; }
+
+        .card-icon { font-size: 2rem; line-height: 1; }
+        .card-name {
+            font-weight: 700;
+            font-size: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .card-tag {
+            font-size: 0.65rem;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+        }
+
+        .tag-new { background: rgba(0,255,136,0.15); color: var(--green); }
+        .tag-admin { background: rgba(255,208,0,0.12); color: var(--yellow); }
+        .tag-ext { background: rgba(0,212,255,0.1); color: var(--cyan); }
+
+        .card-desc {
+            font-size: 0.83rem;
+            color: var(--text-secondary);
+            line-height: 1.5;
+        }
+
+        .card-desc-en {
+            font-size: 0.75rem;
+            color: var(--text-dim);
+            font-style: italic;
+            line-height: 1.4;
+        }
+
+        .card-arrow {
+            margin-top: auto;
+            padding-top: 8px;
+            font-size: 0.75rem;
+            color: var(--text-dim);
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .app-card:hover .card-arrow { color: var(--cyan); }
+
+        /* Section accent colors */
+        .sec-discover .section-title { color: var(--green); }
+        .sec-discover .app-card { --card-accent: var(--green); }
+        .sec-discover .app-card:hover { box-shadow: 0 12px 40px rgba(0,255,136,0.08); }
+
+        .sec-account .section-title { color: var(--cyan); }
+        .sec-account .app-card { --card-accent: var(--cyan); }
+
+        .sec-comms .section-title { color: var(--purple); }
+        .sec-comms .app-card { --card-accent: var(--purple); }
+        .sec-comms .app-card:hover { box-shadow: 0 12px 40px rgba(153,102,255,0.08); }
+
+        .sec-explore .section-title { color: var(--yellow); }
+        .sec-explore .app-card { --card-accent: var(--yellow); }
+
+        .sec-economy .section-title { color: var(--orange); }
+        .sec-economy .app-card { --card-accent: var(--orange); }
+
+        .sec-tools .section-title { color: var(--text-secondary); }
+        .sec-tools .app-card { --card-accent: var(--text-secondary); }
+
+        /* Featured card */
+        .app-card.featured {
+            background: linear-gradient(145deg, var(--bg-panel), #0d1a2a);
+            border-color: rgba(0,212,255,0.2);
+        }
+
+        /* ── FOOTER ── */
+        .page-footer {
+            position: relative; z-index: 1;
+            padding: 32px 20px;
+            border-top: 1px solid rgba(255,255,255,0.06);
+            text-align: center;
+        }
+
+        .footer-links {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            flex-wrap: wrap;
+            margin-bottom: 12px;
+        }
+
+        .footer-links a {
+            color: var(--text-dim);
+            font-size: 0.82rem;
+            text-decoration: none;
+            transition: color 0.2s;
+        }
+
+        .footer-links a:hover { color: var(--cyan); }
+
+        .footer-note {
+            font-size: 0.72rem;
+            color: var(--text-dim);
+            line-height: 1.6;
+        }
+
+        /* ── RESPONSIVE ── */
+        @media (max-width: 640px) {
+            .hero-ctas { flex-direction: column; align-items: center; }
+            .topnav-actions .btn-nav.desktop-only { display: none; }
+            .cards-grid { grid-template-columns: 1fr; }
+        }
+
+        /* Smooth reveal */
+        .page-section { opacity: 0; transform: translateY(20px); animation: reveal 0.5s ease forwards; }
+        .page-section:nth-child(2) { animation-delay: 0.1s; }
+        .page-section:nth-child(3) { animation-delay: 0.15s; }
+        .page-section:nth-child(4) { animation-delay: 0.2s; }
+        .page-section:nth-child(5) { animation-delay: 0.25s; }
+        .page-section:nth-child(6) { animation-delay: 0.3s; }
+        .page-section:nth-child(7) { animation-delay: 0.35s; }
+
+        @keyframes reveal {
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body>
+
+<!-- ── TOP NAV ── -->
+<nav class="topnav">
+    <a class="topnav-brand" href="index-v2.html">
+        <span class="brand-logo">🌍</span>
+        <span class="brand-name">UPLANET</span>
+    </a>
+    <div class="topnav-actions">
+        <button class="btn-nav lang-btn" onclick="toggleLang()" id="lang-btn" title="Switch language / Changer de langue">🌐 EN</button>
+        <a class="btn-nav desktop-only" href="javascript:void(0)" onclick="goUPassport('scan')">🛂 <span data-fr="Scanner" data-en="Scan">Scanner</span></a>
+        <a class="btn-nav primary" href="javascript:void(0)" onclick="goUPassport('g1')">✨ <span data-fr="Mon MULTIPASS" data-en="My MULTIPASS">Mon MULTIPASS</span></a>
+    </div>
+</nav>
+
+<!-- ── HERO SECTION ── -->
+<section class="hero" id="hero">
+    <!-- Globe 3D background -->
+    <div class="globe-wrap">
+        <div id="sphere"></div>
+        <div id="glow-shadows" class="earth"></div>
+        <div id="flights"></div>
+        <div id="locations"></div>
+    </div>
+
+    <div class="hero-content">
+        <div class="hero-tagline" data-fr="INFRASTRUCTURE DÉCENTRALISÉE · COOPÉRATIVE ẐEN" data-en="DECENTRALIZED INFRASTRUCTURE · ẐEN COOPERATIVE">
+            INFRASTRUCTURE DÉCENTRALISÉE · COOPÉRATIVE ẐEN
+        </div>
+        <h1 class="hero-title">UPlanet</h1>
+        <p class="hero-subtitle">
+            <span data-fr="Un internet décentralisé, souverain et coopératif. Vos données. Votre commun. Votre planète." 
+                  data-en="A decentralized, sovereign and cooperative internet. Your data. Your commons. Your planet.">
+                Un internet décentralisé, souverain et coopératif. Vos données. Votre commun. Votre planète.
+            </span>
+        </p>
+
+        <div class="station-badge">
+            <span class="station-dot"></span>
+            <span data-fr="Station" data-en="Station">Station</span>
+            <span class="zen-display" id="station-name">⏳</span>
+        </div>
+
+        <div class="hero-ctas">
+            <a class="btn-hero primary" href="contribute.html">
+                🌌 <span data-fr="Rejoindre l'essaim" data-en="Join the swarm">Rejoindre l'essaim</span>
+            </a>
+            <a class="btn-hero secondary" href="javascript:void(0)" onclick="scrollToSection('discover')">
+                🆕 <span data-fr="Découvrir UPlanet" data-en="Discover UPlanet">Découvrir UPlanet</span>
+            </a>
+        </div>
+
+        <!-- Address search -->
+        <div class="hero-search">
+            <input type="text" id="address" placeholder="📍 Où êtes-vous ? / Where are you?" 
+                   data-placeholder-fr="📍 Où êtes-vous ?"
+                   data-placeholder-en="📍 Where are you?">
+            <button onclick="getCoordinates()">⌂ ?</button>
+        </div>
+        <div id="geo-result" style="font-size:0.75rem; color:var(--text-dim); margin-top:6px;"></div>
+    </div>
+
+    <div class="scroll-indicator">
+        <span data-fr="Découvrir" data-en="Discover">Découvrir</span>
+        <span>▾</span>
+    </div>
+</section>
+
+<!-- ── SECTION TABS (sticky) ── -->
+<div class="section-tabs" id="section-tabs">
+    <button class="tab-btn" onclick="scrollToSection('discover')">🆕 <span data-fr="Découvrir" data-en="Discover">Découvrir</span></button>
+    <button class="tab-btn" onclick="scrollToSection('account')">👤 <span data-fr="Mon Compte" data-en="My Account">Mon Compte</span></button>
+    <button class="tab-btn" onclick="scrollToSection('comms')">💬 <span data-fr="Communiquer" data-en="Communicate">Communiquer</span></button>
+    <button class="tab-btn" onclick="scrollToSection('explore')">🗺️ <span data-fr="Explorer" data-en="Explore">Explorer</span></button>
+    <button class="tab-btn" onclick="scrollToSection('economy')">💰 <span data-fr="Économie" data-en="Economy">Économie</span></button>
+    <button class="tab-btn" onclick="scrollToSection('tools')">🔧 <span data-fr="Outils" data-en="Tools">Outils</span></button>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════ -->
+<!-- SECTION 1 — DÉCOUVRIR                                        -->
+<!-- ══════════════════════════════════════════════════════════════ -->
+<section class="page-section sec-discover" id="discover">
+    <div class="section-header">
+        <div class="section-label">01 — <span data-fr="NOUVEAU ICI" data-en="NEW HERE">NOUVEAU ICI</span></div>
+        <div class="section-title">🆕 <span data-fr="Découvrir UPlanet" data-en="Discover UPlanet">Découvrir UPlanet</span></div>
+        <div class="section-sub">
+            <span data-fr="Comprendre ce qu'est UPlanet, pourquoi ça existe, et comment y participer." 
+                  data-en="Understand what UPlanet is, why it exists, and how to participate.">
+                Comprendre ce qu'est UPlanet, pourquoi ça existe, et comment y participer.
+            </span>
+        </div>
+    </div>
+    <div class="cards-grid three-col">
+
+        <a class="app-card featured" href="Unation.html" target="_blank">
+            <div class="card-icon">🌐</div>
+            <div class="card-name">
+                <span data-fr="Qu'est-ce qu'UPlanet ?" data-en="What is UPlanet?">Qu'est-ce qu'UPlanet ?</span>
+                <span class="card-tag tag-new">START</span>
+            </div>
+            <div class="card-desc" data-fr="L'essaim coopératif, la Monnaie Libre Ğ1, et les communs numériques expliqués simplement." 
+                 data-en="The cooperative swarm, Libre Currency Ğ1, and digital commons explained simply.">
+                L'essaim coopératif, la Monnaie Libre Ğ1, et les communs numériques expliqués simplement.
+            </div>
+            <div class="card-desc-en" data-fr="Unation.html" data-en="Unation.html">Unation.html</div>
+            <div class="card-arrow">▶ <span data-fr="Lire" data-en="Read">Lire</span></div>
+        </a>
+
+        <a class="app-card" href="GAFAM.html" target="_blank">
+            <div class="card-icon">⚔️</div>
+            <div class="card-name">
+                <span data-fr="UPlanet vs GAFAM" data-en="UPlanet vs GAFAM">UPlanet vs GAFAM</span>
+            </div>
+            <div class="card-desc" data-fr="Pourquoi l'infrastructure décentralisée est cruciale pour la liberté numérique." 
+                 data-en="Why decentralized infrastructure is crucial for digital freedom.">
+                Pourquoi l'infrastructure décentralisée est cruciale pour la liberté numérique.
+            </div>
+            <div class="card-desc-en" data-fr="GAFAM.html" data-en="GAFAM.html">GAFAM.html</div>
+            <div class="card-arrow">▶ <span data-fr="Comparer" data-en="Compare">Comparer</span></div>
+        </a>
+
+        <a class="app-card" href="javascript:void(0)" onclick="openBangApp()">
+            <div class="card-icon">📺</div>
+            <div class="card-name">
+                <span data-fr="De Web0 à Web3" data-en="From Web0 to Web3">De Web0 à Web3</span>
+            </div>
+            <div class="card-desc" data-fr="L'histoire interactive du réseau UPlanet : pourquoi ce projet existe." 
+                 data-en="The interactive history of the UPlanet network: why this project exists.">
+                L'histoire interactive du réseau UPlanet : pourquoi ce projet existe.
+            </div>
+            <div class="card-desc-en">bang.html</div>
+            <div class="card-arrow">▶ <span data-fr="Explorer" data-en="Explore">Explorer</span></div>
+        </a>
+
+        <a class="app-card" href="contribute.html">
+            <div class="card-icon">🌌</div>
+            <div class="card-name">
+                <span data-fr="Rejoindre l'essaim" data-en="Join the swarm">Rejoindre l'essaim</span>
+                <span class="card-tag tag-new">NEW</span>
+            </div>
+            <div class="card-desc" data-fr="Satellite, Constellation, Cloud, Membre résident — 4 façons de contribuer. 1€ = 1Ẑ." 
+                 data-en="Satellite, Constellation, Cloud, Resident Member — 4 ways to contribute. 1€ = 1Ẑ.">
+                Satellite, Constellation, Cloud, Membre résident — 4 façons de contribuer. 1€ = 1Ẑ.
+            </div>
+            <div class="card-desc-en">contribute.html</div>
+            <div class="card-arrow">▶ <span data-fr="Contribuer" data-en="Contribute">Contribuer</span></div>
+        </a>
+
+        <a class="app-card" href="https://pad.p2p.legal/s/UPlanet_Enter_Help" target="_blank">
+            <div class="card-icon">📚</div>
+            <div class="card-name">
+                <span data-fr="Guide & Documentation" data-en="Guide & Documentation">Guide & Documentation</span>
+                <span class="card-tag tag-ext">↗</span>
+            </div>
+            <div class="card-desc" data-fr="Documentation complète pour premiers pas, configuration et dépannage." 
+                 data-en="Full documentation for first steps, configuration and troubleshooting.">
+                Documentation complète pour premiers pas, configuration et dépannage.
+            </div>
+            <div class="card-desc-en">pad.p2p.legal</div>
+            <div class="card-arrow">▶ <span data-fr="Lire le guide" data-en="Read the guide">Lire le guide</span></div>
+        </a>
+
+    </div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════════════ -->
+<!-- SECTION 2 — MON COMPTE                                       -->
+<!-- ══════════════════════════════════════════════════════════════ -->
+<section class="page-section sec-account" id="account">
+    <div class="section-header">
+        <div class="section-label">02 — <span data-fr="IDENTITÉ NUMÉRIQUE" data-en="DIGITAL IDENTITY">IDENTITÉ NUMÉRIQUE</span></div>
+        <div class="section-title">👤 <span data-fr="Mon Compte" data-en="My Account">Mon Compte</span></div>
+        <div class="section-sub">
+            <span data-fr="Votre MULTIPASS (clé Ğ1 + NOSTR), vos ẐEN, votre réseau social décentralisé." 
+                  data-en="Your MULTIPASS (Ğ1 + NOSTR key), your ẐEN, your decentralized social network.">
+                Votre MULTIPASS (clé Ğ1 + NOSTR), vos ẐEN, votre réseau social décentralisé.
+            </span>
+        </div>
+    </div>
+    <div class="cards-grid">
+
+        <a class="app-card featured" href="javascript:void(0)" onclick="goUPassport('g1')">
+            <div class="card-icon">✨</div>
+            <div class="card-name">MULTIPASS</div>
+            <div class="card-desc" data-fr="Créez ou consultez votre portefeuille ẐEN. Clé Ğ1 + identité NOSTR unifiées." 
+                 data-en="Create or view your ẐEN wallet. Unified Ğ1 key + NOSTR identity.">
+                Créez ou consultez votre portefeuille ẐEN. Clé Ğ1 + identité NOSTR unifiées.
+            </div>
+            <div class="card-desc-en">UPassport /g1</div>
+            <div class="card-arrow">▶ <span data-fr="Accéder" data-en="Access">Accéder</span></div>
+        </a>
+
+        <a class="app-card" href="javascript:void(0)" onclick="goUPassport('scan')">
+            <div class="card-icon">🛂</div>
+            <div class="card-name">
+                <span data-fr="Scanner MULTIPASS" data-en="MULTIPASS Scanner">Scanner MULTIPASS</span>
+            </div>
+            <div class="card-desc" data-fr="Scannez un QR code MULTIPASS pour vérifier une identité ou initier un paiement ẐEN." 
+                 data-en="Scan a MULTIPASS QR code to verify an identity or initiate a ẐEN payment.">
+                Scannez un QR code MULTIPASS pour vérifier une identité ou initier un paiement ẐEN.
+            </div>
+            <div class="card-desc-en">UPassport /scan</div>
+            <div class="card-arrow">▶ <span data-fr="Scanner" data-en="Scan">Scanner</span></div>
+        </a>
+
+        <a class="app-card" id="coracle-card" href="#" target="_blank">
+            <div class="card-icon">💫</div>
+            <div class="card-name">
+                <span data-fr="Réseau Social NOSTR" data-en="NOSTR Social Network">Réseau Social NOSTR</span>
+            </div>
+            <div class="card-desc" data-fr="Votre client social décentralisé sur le relai local. Messages, follows, profil." 
+                 data-en="Your decentralized social client on the local relay. Messages, follows, profile.">
+                Votre client social décentralisé sur le relai local. Messages, follows, profil.
+            </div>
+            <div class="card-desc-en">coracle.DOMAIN</div>
+            <div class="card-arrow">▶ <span data-fr="Ouvrir Coracle" data-en="Open Coracle">Ouvrir Coracle</span></div>
+        </a>
+
+        <a class="app-card" href="keygen.html" target="_blank">
+            <div class="card-icon">🔑</div>
+            <div class="card-name">
+                <span data-fr="Générateur de clés" data-en="Key Generator">Générateur de clés</span>
+            </div>
+            <div class="card-desc" data-fr="Générez une paire de clés Ğ1 ou NOSTR directement dans le navigateur (côté client)." 
+                 data-en="Generate a Ğ1 or NOSTR key pair directly in the browser (client-side).">
+                Générez une paire de clés Ğ1 ou NOSTR directement dans le navigateur (côté client).
+            </div>
+            <div class="card-desc-en">keygen.html</div>
+            <div class="card-arrow">▶ <span data-fr="Générer" data-en="Generate">Générer</span></div>
+        </a>
+
+    </div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════════════ -->
+<!-- SECTION 3 — COMMUNIQUER                                      -->
+<!-- ══════════════════════════════════════════════════════════════ -->
+<section class="page-section sec-comms" id="comms">
+    <div class="section-header">
+        <div class="section-label">03 — <span data-fr="COMMUNICATION P2P" data-en="P2P COMMUNICATION">COMMUNICATION P2P</span></div>
+        <div class="section-title">💬 <span data-fr="Communiquer" data-en="Communicate">Communiquer</span></div>
+        <div class="section-sub">
+            <span data-fr="Chat IA, vidéo décentralisée, relay NOSTR — aucune surveillance, aucun GAFAM." 
+                  data-en="AI chat, decentralized video, NOSTR relay — no surveillance, no big tech.">
+                Chat IA, vidéo décentralisée, relay NOSTR — aucune surveillance, aucun GAFAM.
+            </span>
+        </div>
+    </div>
+    <div class="cards-grid">
+
+        <a class="app-card featured" href="javascript:void(0)" onclick="goUPassport('nostr', '_blank')">
+            <div class="card-icon">💬</div>
+            <div class="card-name">Terminal BRO</div>
+            <div class="card-desc" data-fr="Chat avec l'IA locale, parcourez NOSTR Tube, accédez au crowdfunding des Communs." 
+                 data-en="Chat with local AI, browse NOSTR Tube, access the Commons crowdfunding.">
+                Chat avec l'IA locale, parcourez NOSTR Tube, accédez au crowdfunding des Communs.
+            </div>
+            <div class="card-desc-en">UPassport /nostr</div>
+            <div class="card-arrow">▶ <span data-fr="Ouvrir le terminal" data-en="Open terminal">Ouvrir le terminal</span></div>
+        </a>
+
+        <a class="app-card" href="javascript:void(0)" onclick="goUPassport('youtube?html=1', '_blank')">
+            <div class="card-icon">▶️</div>
+            <div class="card-name">NOSTR Tube</div>
+            <div class="card-desc" data-fr="Regardez et partagez du contenu vidéo décentralisé. Stocké sur IPFS, signé NOSTR." 
+                 data-en="Watch and share decentralized video content. Stored on IPFS, signed with NOSTR.">
+                Regardez et partagez du contenu vidéo décentralisé. Stocké sur IPFS, signé NOSTR.
+            </div>
+            <div class="card-desc-en">UPassport /youtube</div>
+            <div class="card-arrow">▶ <span data-fr="Regarder" data-en="Watch">Regarder</span></div>
+        </a>
+
+        <a class="app-card" href="nostr_console.html" target="_blank">
+            <div class="card-icon">📡</div>
+            <div class="card-name">
+                <span data-fr="Console Relai NOSTR" data-en="NOSTR Relay Console">Console Relai NOSTR</span>
+                <span class="card-tag tag-admin">ADMIN</span>
+            </div>
+            <div class="card-desc" data-fr="Console de gestion du relai NOSTR local. Filtres, statistiques, événements bruts." 
+                 data-en="Local NOSTR relay management console. Filters, statistics, raw events.">
+                Console de gestion du relai NOSTR local. Filtres, statistiques, événements bruts.
+            </div>
+            <div class="card-desc-en">nostr_console.html</div>
+            <div class="card-arrow">▶ <span data-fr="Console" data-en="Console">Console</span></div>
+        </a>
+
+        <a class="app-card" href="https://vdo.copylaradio.com/?room=UPLANET&effects&record" target="_blank">
+            <div class="card-icon">🎥</div>
+            <div class="card-name">
+                VISIO <span class="card-tag tag-ext">↗</span>
+            </div>
+            <div class="card-desc" data-fr="Vidéoconférence peer-to-peer via vdo.ninja/CopyLaRadio. Sans serveur central." 
+                 data-en="Peer-to-peer video conference via vdo.ninja/CopyLaRadio. No central server.">
+                Vidéoconférence peer-to-peer via vdo.ninja/CopyLaRadio. Sans serveur central.
+            </div>
+            <div class="card-desc-en">vdo.copylaradio.com</div>
+            <div class="card-arrow">▶ <span data-fr="Rejoindre la visio" data-en="Join visio">Rejoindre la visio</span></div>
+        </a>
+
+    </div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════════════ -->
+<!-- SECTION 4 — EXPLORER                                         -->
+<!-- ══════════════════════════════════════════════════════════════ -->
+<section class="page-section sec-explore" id="explore">
+    <div class="section-header">
+        <div class="section-label">04 — <span data-fr="GÉOGRAPHIE DÉCENTRALISÉE" data-en="DECENTRALIZED GEOGRAPHY">GÉOGRAPHIE DÉCENTRALISÉE</span></div>
+        <div class="section-title">🗺️ <span data-fr="Explorer" data-en="Explore">Explorer</span></div>
+        <div class="section-sub">
+            <span data-fr="Naviguer dans les zones UPlanet (0.01°), découvrir les UMAPs et les stations voisines." 
+                  data-en="Navigate UPlanet zones (0.01°), discover UMAPs and nearby stations.">
+                Naviguer dans les zones UPlanet (0.01°), découvrir les UMAPs et les stations voisines.
+            </span>
+        </div>
+    </div>
+    <div class="cards-grid">
+
+        <a class="app-card featured" href="javascript:void(0)" onclick="openMapSearch()">
+            <div class="card-icon">🌍</div>
+            <div class="card-name">
+                <span data-fr="Carte UPlanet" data-en="UPlanet Map">Carte UPlanet</span>
+            </div>
+            <div class="card-desc" data-fr="Naviguez sur la carte des zones 0.01°. Trouvez les nœuds actifs et les UMAPs à proximité." 
+                 data-en="Navigate the 0.01° zone map. Find active nodes and nearby UMAPs.">
+                Naviguez sur la carte des zones 0.01°. Trouvez les nœuds actifs et les UMAPs à proximité.
+            </div>
+            <div class="card-desc-en">map_render.html</div>
+            <div class="card-arrow">▶ <span data-fr="Explorer la carte" data-en="Explore the map">Explorer la carte</span></div>
+        </a>
+
+        <a class="app-card" href="Umap.html" target="_blank">
+            <div class="card-icon">📍</div>
+            <div class="card-name">UMAPs</div>
+            <div class="card-desc" data-fr="Universal Maps — les cartes collaboratives des zones UPlanet. Spots communautaires." 
+                 data-en="Universal Maps — collaborative maps of UPlanet zones. Community spots.">
+                Universal Maps — les cartes collaboratives des zones UPlanet. Spots communautaires.
+            </div>
+            <div class="card-desc-en">Umap.html</div>
+            <div class="card-arrow">▶ <span data-fr="Voir les UMAPs" data-en="See UMAPs">Voir les UMAPs</span></div>
+        </a>
+
+        <a class="app-card" href="sat_render.html" target="_blank">
+            <div class="card-icon">🛰️</div>
+            <div class="card-name">
+                <span data-fr="Vue Satellite" data-en="Satellite View">Vue Satellite</span>
+            </div>
+            <div class="card-desc" data-fr="Rendu satellite des zones UPlanet superposé avec les données du réseau." 
+                 data-en="Satellite rendering of UPlanet zones overlaid with network data.">
+                Rendu satellite des zones UPlanet superposé avec les données du réseau.
+            </div>
+            <div class="card-desc-en">sat_render.html</div>
+            <div class="card-arrow">▶ <span data-fr="Vue satellite" data-en="Satellite view">Vue satellite</span></div>
+        </a>
+
+        <a class="app-card" href="scan.html" target="_blank">
+            <div class="card-icon">📷</div>
+            <div class="card-name">
+                <span data-fr="Scanner QR" data-en="QR Scanner">Scanner QR</span>
+            </div>
+            <div class="card-desc" data-fr="Scanner général de QR codes UPlanet : zones, MULTIPASS, événements NOSTR." 
+                 data-en="General UPlanet QR scanner: zones, MULTIPASS, NOSTR events.">
+                Scanner général de QR codes UPlanet : zones, MULTIPASS, événements NOSTR.
+            </div>
+            <div class="card-desc-en">scan.html</div>
+            <div class="card-arrow">▶ <span data-fr="Scanner" data-en="Scan">Scanner</span></div>
+        </a>
+
+    </div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════════════ -->
+<!-- SECTION 5 — ÉCONOMIE                                         -->
+<!-- ══════════════════════════════════════════════════════════════ -->
+<section class="page-section sec-economy" id="economy">
+    <div class="section-header">
+        <div class="section-label">05 — <span data-fr="ÉCONOMIE ẐEN" data-en="ẐEN ECONOMY">ÉCONOMIE ẐEN</span></div>
+        <div class="section-title">💰 <span data-fr="Économie Coopérative" data-en="Cooperative Economy">Économie Coopérative</span></div>
+        <div class="section-sub">
+            <span data-fr="Dashboards, santé de l'essaim, simulation économique et contribution à la coopérative." 
+                  data-en="Dashboards, swarm health, economic simulation and cooperative contribution.">
+                Dashboards, santé de l'essaim, simulation économique et contribution à la coopérative.
+            </span>
+        </div>
+    </div>
+    <div class="cards-grid">
+
+        <a class="app-card featured" href="economy.html" target="_blank">
+            <div class="card-icon">♥️</div>
+            <div class="card-name">
+                <span data-fr="Dashboard Station" data-en="Station Dashboard">Dashboard Station</span>
+            </div>
+            <div class="card-desc" data-fr="Portefeuilles coopératifs, bilan ẐEN, capacités MULTIPASS / ZEN Card, provisions fiscales." 
+                 data-en="Cooperative wallets, ẐEN balance, MULTIPASS / ZEN Card capacity, tax provisions.">
+                Portefeuilles coopératifs, bilan ẐEN, capacités MULTIPASS / ZEN Card, provisions fiscales.
+            </div>
+            <div class="card-desc-en">economy.html</div>
+            <div class="card-arrow">▶ <span data-fr="Voir le dashboard" data-en="See dashboard">Voir le dashboard</span></div>
+        </a>
+
+        <a class="app-card" href="economy.Swarm.html" target="_blank">
+            <div class="card-icon">🌌</div>
+            <div class="card-name">Constellation Command</div>
+            <div class="card-desc" data-fr="Monitoring N² en temps réel — santé économique de toutes les stations via NOSTR kind:30850." 
+                 data-en="Real-time N² monitoring — economic health of all stations via NOSTR kind:30850.">
+                Monitoring N² en temps réel — santé économique de toutes les stations via NOSTR kind:30850.
+            </div>
+            <div class="card-desc-en">economy.Swarm.html</div>
+            <div class="card-arrow">▶ <span data-fr="Voir la constellation" data-en="See constellation">Voir la constellation</span></div>
+        </a>
+
+        <a class="app-card" href="economy.Constellation.html" target="_blank">
+            <div class="card-icon">🏛️</div>
+            <div class="card-name">
+                <span data-fr="Simulateur Stratégique" data-en="Strategic Simulator">Simulateur Stratégique</span>
+            </div>
+            <div class="card-desc" data-fr="Projetez la viabilité économique sur 13 cycles. Impact écologique, répartition 3x1/3." 
+                 data-en="Project economic viability over 13 cycles. Ecological impact, 3x1/3 distribution.">
+                Projetez la viabilité économique sur 13 cycles. Impact écologique, répartition 3x1/3.
+            </div>
+            <div class="card-desc-en">economy.Constellation.html</div>
+            <div class="card-arrow">▶ <span data-fr="Simuler" data-en="Simulate">Simuler</span></div>
+        </a>
+
+        <a class="app-card" href="contribute.html">
+            <div class="card-icon">🌌</div>
+            <div class="card-name">
+                <span data-fr="Contribuer / Rejoindre" data-en="Contribute / Join">Contribuer / Rejoindre</span>
+                <span class="card-tag tag-new">NEW</span>
+            </div>
+            <div class="card-desc" data-fr="4 tiers de contribution : Satellite 50€/an, Constellation 540€/3ans, Cloud, Membre résident." 
+                 data-en="4 contribution tiers: Satellite 50€/yr, Constellation 540€/3yrs, Cloud, Resident Member.">
+                4 tiers de contribution : Satellite 50€/an, Constellation 540€/3ans, Cloud, Membre résident.
+            </div>
+            <div class="card-desc-en">contribute.html</div>
+            <div class="card-arrow">▶ <span data-fr="Contribuer" data-en="Contribute">Contribuer</span></div>
+        </a>
+
+        <a class="app-card" href="economy.btop.html" target="_blank">
+            <div class="card-icon">📊</div>
+            <div class="card-name">
+                <span data-fr="Moniteur Système" data-en="System Monitor">Moniteur Système</span>
+            </div>
+            <div class="card-desc" data-fr="Statistiques système de la station en temps réel : CPU, RAM, réseau, IPFS." 
+                 data-en="Real-time station system stats: CPU, RAM, network, IPFS.">
+                Statistiques système de la station en temps réel : CPU, RAM, réseau, IPFS.
+            </div>
+            <div class="card-desc-en">economy.btop.html</div>
+            <div class="card-arrow">▶ <span data-fr="Moniteur" data-en="Monitor">Moniteur</span></div>
+        </a>
+
+    </div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════════════ -->
+<!-- SECTION 6 — OUTILS                                           -->
+<!-- ══════════════════════════════════════════════════════════════ -->
+<section class="page-section sec-tools" id="tools">
+    <div class="section-header">
+        <div class="section-label">06 — <span data-fr="OUTILS & DÉVELOPPEMENT" data-en="TOOLS & DEVELOPMENT">OUTILS & DÉVELOPPEMENT</span></div>
+        <div class="section-title">🔧 <span data-fr="Outils & Dev" data-en="Tools & Dev">Outils & Dev</span></div>
+        <div class="section-sub">
+            <span data-fr="Oracle, maîtrises WoTx2, PlantNet, outils développeur et ressources avancées." 
+                  data-en="Oracle, WoTx2 masteries, PlantNet, developer tools and advanced resources.">
+                Oracle, maîtrises WoTx2, PlantNet, outils développeur et ressources avancées.
+            </span>
+        </div>
+    </div>
+    <div class="cards-grid">
+
+        <a class="app-card" href="javascript:void(0)" onclick="goUPassport('wotx2')">
+            <div class="card-icon">🎓</div>
+            <div class="card-name">WoTx2</div>
+            <div class="card-desc" data-fr="Système de maîtrises auto-proclamées avec progression Web of Trust. Créez vos maîtrises." 
+                 data-en="Self-proclaimed mastery system with Web of Trust progression. Create your masteries.">
+                Système de maîtrises auto-proclamées avec progression Web of Trust. Créez vos maîtrises.
+            </div>
+            <div class="card-desc-en">UPassport /wotx2</div>
+            <div class="card-arrow">▶ <span data-fr="Maîtrises" data-en="Masteries">Maîtrises</span></div>
+        </a>
+
+        <a class="app-card" href="plantnet.html" target="_blank">
+            <div class="card-icon">🔮</div>
+            <div class="card-name">
+                <span data-fr="Oracle & PlantNet" data-en="Oracle & PlantNet">Oracle & PlantNet</span>
+            </div>
+            <div class="card-desc" data-fr="Identification de plantes via IA, oracle communautaire, outils d'organisation collective." 
+                 data-en="Plant identification via AI, community oracle, collective organization tools.">
+                Identification de plantes via IA, oracle communautaire, outils d'organisation collective.
+            </div>
+            <div class="card-desc-en">plantnet.html</div>
+            <div class="card-arrow">▶ <span data-fr="Ouvrir" data-en="Open">Ouvrir</span></div>
+        </a>
+
+        <a class="app-card" href="javascript:void(0)" onclick="goUPassport('dev', '_blank')">
+            <div class="card-icon">👨‍💻</div>
+            <div class="card-name">
+                <span data-fr="Outils Développeur" data-en="Developer Tools">Outils Développeur</span>
+            </div>
+            <div class="card-desc" data-fr="APIs UPassport, NOSTR SDK, exemples de code, documentation technique UPlanet." 
+                 data-en="UPassport APIs, NOSTR SDK, code examples, UPlanet technical documentation.">
+                APIs UPassport, NOSTR SDK, exemples de code, documentation technique UPlanet.
+            </div>
+            <div class="card-desc-en">UPassport /dev</div>
+            <div class="card-arrow">▶ <span data-fr="Outils dev" data-en="Dev tools">Outils dev</span></div>
+        </a>
+
+        <a class="app-card" href="crowdfunding.html" target="_blank">
+            <div class="card-icon">🌱</div>
+            <div class="card-name">
+                <span data-fr="Crowdfunding Commons" data-en="Commons Crowdfunding">Crowdfunding Commons</span>
+            </div>
+            <div class="card-desc" data-fr="Financer des projets communs via ẐEN. Forêts-jardins, biens communs numériques." 
+                 data-en="Fund common projects via ẐEN. Forest gardens, digital common goods.">
+                Financer des projets communs via ẐEN. Forêts-jardins, biens communs numériques.
+            </div>
+            <div class="card-desc-en">crowdfunding.html</div>
+            <div class="card-arrow">▶ <span data-fr="Financer" data-en="Fund">Financer</span></div>
+        </a>
+
+        <a class="app-card" href="https://github.com/papiche/Astroport.ONE" target="_blank">
+            <div class="card-icon">💻</div>
+            <div class="card-name">
+                <span data-fr="Code Source" data-en="Source Code">Code Source</span>
+                <span class="card-tag tag-ext">↗</span>
+            </div>
+            <div class="card-desc" data-fr="Astroport.ONE sur GitHub. AGPL-3.0. Contributions bienvenues." 
+                 data-en="Astroport.ONE on GitHub. AGPL-3.0. Contributions welcome.">
+                Astroport.ONE sur GitHub. AGPL-3.0. Contributions bienvenues.
+            </div>
+            <div class="card-desc-en">github.com/papiche</div>
+            <div class="card-arrow">▶ GitHub</div>
+        </a>
+
+        <a class="app-card" href="javascript:void(0)" onclick="goUPassport('vocals-read', '_blank')">
+            <div class="card-icon">🎙️</div>
+            <div class="card-name">Vocals-Read <span class="card-tag tag-new">NEW</span></div>
+            <div class="card-desc" data-fr="Lecteur vocal NOSTR : écoute tes notes en mains-libres, mode speech-to-text intégré."
+                 data-en="NOSTR voice reader: listen to notes hands-free, integrated speech-to-text mode.">
+                Lecteur vocal NOSTR : écoute tes notes en mains-libres, mode speech-to-text intégré.
+            </div>
+            <div class="card-desc-en">UPassport /vocals-read</div>
+            <div class="card-arrow">▶ <span data-fr="Écouter" data-en="Listen">Écouter</span></div>
+        </a>
+
+        <a class="app-card" href="https://astroport.myspreadshop.fr/" target="_blank">
+            <div class="card-icon">👕</div>
+            <div class="card-name">Goodies <span class="card-tag tag-ext">↗</span></div>
+            <div class="card-desc" data-fr="T-shirts, stickers UPlanet/Astroport pour soutenir le projet."
+                 data-en="UPlanet/Astroport T-shirts, stickers to support the project.">
+                T-shirts, stickers UPlanet/Astroport pour soutenir le projet.
+            </div>
+            <div class="card-desc-en">astroport.myspreadshop.fr</div>
+            <div class="card-arrow">▶ <span data-fr="Boutique" data-en="Shop">Boutique</span></div>
+        </a>
+
+    </div>
+</section>
+
+<!-- ── FOOTER ── -->
+<footer class="page-footer">
+    <div class="footer-links">
+        <a href="https://opencollective.com/monnaie-libre" target="_blank">🔗 OpenCollective</a>
+        <a href="https://github.com/papiche/Astroport.ONE" target="_blank">💻 GitHub</a>
+        <a href="https://g1sms.fr" target="_blank">⚗️ G1FabLab</a>
+        <a href="https://astroport.myspreadshop.fr/" target="_blank">👕 Goodies</a>
+        <a href="mailto:support@qo-op.com">✉️ Contact</a>
+        <a href="index.html">← <span data-fr="Ancienne interface" data-en="Legacy interface">Ancienne interface</span></a>
+    </div>
+    <div class="footer-note">
+        UPlanet · Infrastructure coopérative décentralisée ·
+        <a href="https://github.com/papiche/Astroport.ONE" target="_blank" style="color:var(--text-dim)">Astroport.ONE</a> · AGPL-3.0<br>
+        <span data-fr="Aucune surveillance · Vos données restent chez vous · Propulsé par Ğ1 (Monnaie Libre)"
+              data-en="No surveillance · Your data stays with you · Powered by Ğ1 (Libre Currency)">
+            Aucune surveillance · Vos données restent chez vous · Propulsé par Ğ1 (Monnaie Libre)
+        </span>
+    </div>
+</footer>
+
+<!-- ── BANG APP MODAL ── -->
+<div id="bang-app-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.95); backdrop-filter:blur(10px); z-index:99999;">
+    <div style="position:relative; width:100%; height:100%; display:flex; flex-direction:column;">
+        <div style="background:linear-gradient(135deg,rgba(102,126,234,0.9),rgba(118,75,162,0.9)); padding:12px 20px; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid rgba(255,255,255,0.1);">
+            <span style="color:#fff; font-family:'Orbitron',sans-serif; font-size:0.8rem; letter-spacing:2px;">📺 WEB0 → WEB3</span>
+            <button onclick="closeBangApp()" style="background:rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.2); color:#fff; border-radius:50%; width:36px; height:36px; cursor:pointer; font-size:18px;">×</button>
+        </div>
+        <div style="flex:1;"><iframe id="bang-app-iframe" src="" style="width:100%; height:100%; border:none;"></iframe></div>
+    </div>
+</div>
+
+<!-- ── MAP MODAL ── -->
+<div id="map-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7); backdrop-filter:blur(8px); z-index:9999; align-items:center; justify-content:center;">
+    <div style="background:var(--bg-panel); border:1px solid var(--border); border-radius:12px; padding:24px; max-width:460px; width:90%; position:relative;">
+        <button onclick="document.getElementById('map-modal').style.display='none'" style="position:absolute; top:12px; right:12px; background:none; border:none; color:var(--text-dim); font-size:1.3rem; cursor:pointer;">×</button>
+        <h3 style="font-family:'Orbitron',sans-serif; font-size:0.82rem; color:var(--cyan); letter-spacing:2px; margin-bottom:16px;">🌍 EXPLORER UNE ZONE</h3>
+        <div style="display:flex; gap:8px; margin-bottom:10px;">
+            <input id="map-address" type="text" placeholder="Bordeaux, Paris, Berlin…"
+                   style="flex:1; padding:10px 14px; background:rgba(255,255,255,0.06); border:1px solid var(--border); border-radius:8px; color:var(--text-primary); outline:none; font-size:0.9rem;">
+            <button onclick="searchMap()" style="padding:10px 16px; background:linear-gradient(135deg,var(--cyan),#0088aa); border:none; border-radius:8px; color:var(--bg-void); font-weight:600; cursor:pointer;">⌂</button>
+        </div>
+        <button onclick="useGeoLocation()" style="width:100%; padding:10px; background:rgba(0,255,136,0.08); border:1px solid rgba(0,255,136,0.2); border-radius:8px; color:var(--green); cursor:pointer; font-size:0.85rem;">
+            📍 <span data-fr="Ma position actuelle" data-en="My current location">Ma position actuelle</span>
+        </button>
+        <div id="map-error" style="font-size:0.75rem; color:var(--red); margin-top:8px;"></div>
+    </div>
+</div>
+
+<script>
+// ── URL UTILS ──
+function getUSPOTUrl(route) {
+    const u = new URL(window.location.href);
+    let api = new URL(u.origin);
+    if (u.hostname.startsWith('ipfs.')) api.hostname = u.hostname.replace('ipfs.', 'u.');
+    if (u.port !== '') api.port = '54321';
+    const base = api.toString().replace(/\/+$/, '');
+    return route ? base + '/' + route.replace(/^\//, '') : base;
+}
+
+function goUPassport(route, target) {
+    const url = getUSPOTUrl(route);
+    if (target === '_blank') { window.open(url, '_blank'); return; }
+    window.parent ? (window.parent.location.href = url) : (window.location.href = url);
+}
+
+// ── LANGUAGE ──
+let currentLang = localStorage.getItem('uplanet-lang') || 'fr';
+
+function toggleLang() {
+    currentLang = currentLang === 'fr' ? 'en' : 'fr';
+    localStorage.setItem('uplanet-lang', currentLang);
+    document.getElementById('lang-btn').textContent = '🌐 ' + (currentLang === 'fr' ? 'EN' : 'FR');
+    applyLang();
+}
+
+function applyLang() {
+    const attr = 'data-' + currentLang;
+    document.querySelectorAll('[' + attr + ']').forEach(el => {
+        if (!el.children.length) el.textContent = el.getAttribute(attr);
+    });
+    document.querySelectorAll('[data-placeholder-' + currentLang + ']').forEach(el => {
+        el.placeholder = el.getAttribute('data-placeholder-' + currentLang);
+    });
+    document.getElementById('lang-btn').textContent = '🌐 ' + (currentLang === 'fr' ? 'EN' : 'FR');
+}
+
+// ── STATION ──
+async function loadStationInfo() {
+    try {
+        const r = await fetch(getUSPOTUrl(''), { signal: AbortSignal.timeout(6000) });
+        const d = await r.json();
+        document.getElementById('station-name').textContent = d.myDAMAIN || ('…' + (d.IPFSNODEID?.slice(-8) || '----'));
+        const u = new URL(window.location.href);
+        const domain = u.hostname.replace(/^(ipfs\.|u\.)/, '');
+        const coracleHref = (domain && domain !== u.hostname)
+            ? `${u.protocol}//coracle.${domain}`
+            : 'https://ipfs.copylaradio.com/ipns/coracle.copylaradio.com';
+        const cc = document.getElementById('coracle-card');
+        if (cc) cc.href = coracleHref;
+    } catch { document.getElementById('station-name').textContent = 'ORIGIN'; }
+}
+
+// ── GEO ──
+const GEO_CACHE = new Map();
+
+function getCoordinates() {
+    const addr = document.getElementById('address').value.trim();
+    addr ? geocodeAddress(addr, (lat, lon) => navigateToMap(lat, lon)) : useGeoLocation();
+}
+
+function openMapSearch() {
+    document.getElementById('map-modal').style.display = 'flex';
+    document.getElementById('map-address').focus();
+}
+
+function searchMap() {
+    const addr = document.getElementById('map-address').value.trim();
+    if (!addr) { useGeoLocation(); return; }
+    geocodeAddress(addr,
+        (lat, lon) => { document.getElementById('map-modal').style.display = 'none'; navigateToMap(lat, lon); },
+        err => { document.getElementById('map-error').textContent = err; }
+    );
+}
+
+function geocodeAddress(addr, ok, fail) {
+    const key = addr.toLowerCase();
+    const c = GEO_CACHE.get(key);
+    if (c && Date.now() - c.ts < 600000) { ok(c.lat, c.lon); return; }
+    const ctrl = new AbortController();
+    setTimeout(() => ctrl.abort(), 5000);
+    fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(addr)}&limit=1`,
+        { signal: ctrl.signal, headers: { 'User-Agent': 'UPlanet/2.0' } }
+    ).then(r => r.json()).then(data => {
+        if (data.length) {
+            const lat = parseFloat(data[0].lat) - 0.025, lon = parseFloat(data[0].lon) - 0.025;
+            GEO_CACHE.set(key, { lat, lon, ts: Date.now() });
+            ok(lat, lon);
+        } else fail?.('Adresse non trouvée');
+    }).catch(e => fail?.(e.name === 'AbortError' ? 'Timeout' : e.message));
+}
+
+function useGeoLocation() {
+    if (!navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(
+        p => navigateToMap(p.coords.latitude - 0.025, p.coords.longitude - 0.025),
+        () => {}
+    );
+}
+
+function navigateToMap(lat, lon) {
+    window.location.href = `map_render.html?southWestLat=${lat.toFixed(2)}&southWestLon=${lon.toFixed(2)}&deg=0.1`;
+}
+
+document.getElementById('address').addEventListener('keypress', e => { if (e.key === 'Enter') getCoordinates(); });
+
+// ── SCROLL / TABS ──
+function scrollToSection(id) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - 104, behavior: 'smooth' });
+}
+
+const obs = new IntersectionObserver(entries => {
+    entries.forEach(e => {
+        if (e.isIntersecting) {
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            const id = e.target.id;
+            const btn = [...document.querySelectorAll('.tab-btn')].find(b => b.getAttribute('onclick')?.includes(`'${id}'`));
+            if (btn) btn.classList.add('active');
+        }
+    });
+}, { rootMargin: '-56px 0px -60% 0px' });
+
+['discover','account','comms','explore','economy','tools'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) obs.observe(el);
+});
+
+// ── GLOBE ──
+if (typeof $ !== 'undefined' && typeof $.fn.earth3d !== 'undefined') {
+    $(document).ready(() => setTimeout(() => {
+        try { $('#sphere').earth3d({ texture: 'maps/sector0_miz.jpg', dragElement: $('#locations') }); }
+        catch(e) { console.warn('Globe:', e); }
+    }, 600));
+}
+
+// ── BANG MODAL ──
+function openBangApp() {
+    document.getElementById('bang-app-iframe').src = 'bang.html';
+    document.getElementById('bang-app-modal').style.display = 'block';
+    document.body.style.overflow = 'hidden';
+}
+function closeBangApp() {
+    document.getElementById('bang-app-modal').style.display = 'none';
+    document.getElementById('bang-app-iframe').src = '';
+    document.body.style.overflow = '';
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeBangApp(); });
+
+// ── INIT ──
+applyLang();
+loadStationInfo();
+</script>
+</body>
+</html>

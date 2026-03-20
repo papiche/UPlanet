@@ -102,6 +102,13 @@
     // ========================================
 
     function detectRelay() {
+        // Utiliser common.js DEFAULT_RELAYS en priorité
+        if (window.DEFAULT_RELAYS && window.DEFAULT_RELAYS.length > 0) {
+            return window.DEFAULT_RELAYS[0];
+        }
+        if (window.NostrState && window.NostrState.DEFAULT_RELAYS?.length > 0) {
+            return window.NostrState.DEFAULT_RELAYS[0];
+        }
         const h = window.location.hostname;
         if (h === '127.0.0.1' || h === 'localhost') return 'ws://127.0.0.1:7777';
         const base = h.replace(/^(ipfs\.|u\.)/, '');
@@ -131,7 +138,11 @@
             ws.onopen = () => ws.send(JSON.stringify(['EVENT', signedEvent]));
             ws.onmessage = (e) => {
                 const msg = JSON.parse(e.data);
-                if (msg[0] === 'OK') { clearTimeout(timeout); ws.close(); resolve(msg[2]); }
+                if (msg[0] === 'OK') {
+                    clearTimeout(timeout); ws.close();
+                    // msg[2] = true/false, msg[3] = raison du refus si false
+                    resolve({ ok: msg[2], reason: msg[3] || '' });
+                }
             };
             ws.onerror = () => { clearTimeout(timeout); reject('ws error'); };
         });
@@ -281,21 +292,53 @@
             pubkey: captainPubHex
         };
 
-        const signedEvent = NostrLib.finalize ? NostrLib.finalize(event, captainPrivHex) : NostrLib.signEvent(event, captainPrivHex);
+        // ── Signature moderne nostr-tools ──────────────────────────────────────
+        // getEventHash() calcule l'id, getSignature() retourne la signature (NIP-01)
+        // signEvent() est DÉPRÉCIÉE → ne plus utiliser
+        event.id = NostrLib.getEventHash(event);
+        let signedEvent;
+        if (NostrLib.getSignature) {
+            // nostr-tools v1.17+ : getSignature(event, privKeyHex) → sig string
+            event.sig = NostrLib.getSignature(event, captainPrivHex);
+            signedEvent = event;
+        } else if (NostrLib.finalizeEvent) {
+            // nostr-tools v2+ : finalizeEvent(event, privKeyBytes)
+            const privBytes = Uint8Array.from(captainPrivHex.match(/.{2}/g).map(b => parseInt(b, 16)));
+            signedEvent = NostrLib.finalizeEvent(event, privBytes);
+        } else if (NostrLib.finalize) {
+            signedEvent = NostrLib.finalize(event, captainPrivHex);
+        } else {
+            // Dernier recours — dépréciée mais peut encore fonctionner
+            signedEvent = NostrLib.signEvent(event, captainPrivHex);
+        }
 
+        // ── Publication ────────────────────────────────────────────────────────
         try {
-            statusEl.textContent = 'Publication en cours...';
-            const ok = await publishEvent(relayUrl, signedEvent);
+            statusEl.textContent = '📡 Publication en cours sur ' + relayUrl + '…';
+            const result = await publishEvent(relayUrl, signedEvent);
+
+            // Publication sur le relay global en parallèle si différent
             if (relayUrl !== 'wss://relay.copylaradio.com') {
-                await publishEvent('wss://relay.copylaradio.com', signedEvent).catch(() => { });
+                publishEvent('wss://relay.copylaradio.com', signedEvent).catch(() => {});
             }
+
             coopConfig = updated;
             window._coopConfigData = updated;
-            statusEl.textContent = ok ? 'Config publiee sur NOSTR (kind 30800)' : 'Relay a refuse';
-            statusEl.style.color = ok ? '#2ecc71' : '#e74c3c';
+
+            if (result.ok) {
+                statusEl.textContent = '✅ Config publiee sur NOSTR (kind 30800)';
+                statusEl.style.color = '#2ecc71';
+            } else {
+                // Afficher la raison exacte du refus par le relay
+                const reason = result.reason || 'raison inconnue';
+                statusEl.textContent = '❌ Relay a refuse : ' + reason;
+                statusEl.style.color = '#e74c3c';
+                console.warn('[coop-config] Relay rejection:', relayUrl, reason);
+            }
         } catch (e) {
-            statusEl.textContent = 'Erreur: ' + e;
+            statusEl.textContent = '❌ Erreur: ' + (e.message || e);
             statusEl.style.color = '#e74c3c';
+            console.error('[coop-config] publish error:', e);
         }
     }
 
@@ -378,8 +421,14 @@
         });
     }
 
-    // Expose for external use
-    window.CoopConfig = { init: initCoopConfig, isEncrypted, aesDecrypt, aesEncrypt, sha256hex, deriveNostrKeys };
+    // Expose for external use (economy.html, economy.Swarm.html, index-v2.html...)
+    window.CoopConfig = {
+        init: initCoopConfig,
+        // Crypto (economy.html can delegate to these instead of duplicating)
+        isEncrypted, aesDecrypt, aesEncrypt, sha256hex, scryptDerive, deriveNostrKeys,
+        // Relay utilities
+        detectRelay, fetchCoopConfig, publishEvent
+    };
 
     // Auto-init if root element exists
     if (document.readyState === 'loading') {

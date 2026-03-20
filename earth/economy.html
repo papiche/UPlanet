@@ -2876,106 +2876,17 @@
         // Expose coop config data so the simulator can read it
         window._coopConfigData = null;
 
-        function detectRelay() {
-            const h = window.location.hostname;
-            if (h === '127.0.0.1' || h === 'localhost') return 'ws://127.0.0.1:7777';
-            const base = h.replace(/^(ipfs\.|u\.)/, '');
-            return 'wss://relay.' + base;
-        }
-
-        function isEncrypted(val) {
-            if (typeof val !== 'string') return false;
-            const idx = val.indexOf(':');
-            if (idx !== 32) return false;
-            return /^[0-9a-f]{32}$/.test(val.substring(0, 32));
-        }
-
-        async function aesDecrypt(ivHex, b64Ciphertext, keyHex) {
-            const iv = new Uint8Array(ivHex.match(/.{2}/g).map(b => parseInt(b, 16)));
-            const keyBytes = new Uint8Array(keyHex.match(/.{2}/g).map(b => parseInt(b, 16)));
-            const raw = atob(b64Ciphertext);
-            const ct = new Uint8Array(raw.length);
-            for (let i = 0; i < raw.length; i++) ct[i] = raw.charCodeAt(i);
-            const key = await crypto.subtle.importKey('raw', keyBytes, 'AES-CBC', false, ['decrypt']);
-            return new TextDecoder().decode(await crypto.subtle.decrypt({ name: 'AES-CBC', iv }, key, ct));
-        }
-
-        async function aesEncrypt(plaintext, keyHex) {
-            const iv = crypto.getRandomValues(new Uint8Array(16));
-            const ivHex = Array.from(iv).map(b => b.toString(16).padStart(2, '0')).join('');
-            const keyBytes = new Uint8Array(keyHex.match(/.{2}/g).map(b => parseInt(b, 16)));
-            const key = await crypto.subtle.importKey('raw', keyBytes, 'AES-CBC', false, ['encrypt']);
-            const enc = await crypto.subtle.encrypt({ name: 'AES-CBC', iv }, key, new TextEncoder().encode(plaintext));
-            const b64 = btoa(String.fromCharCode(...new Uint8Array(enc)));
-            return ivHex + ':' + b64;
-        }
-
-        async function sha256hex(str) {
-            const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
-            return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
-        }
-
-        // Scrypt derivation (same as keygen.html: scrypt(pepper, salt) → 32 bytes seed)
-        // N=4096, r=16, p=1, dkLen=32 — matches tools/keygen -t nostr
-        function scryptDerive(pepper, salt) {
-            const password = new TextEncoder().encode(pepper);
-            const saltBytes = new TextEncoder().encode(salt);
-            const N = 4096, r = 16, p = 1, dkLen = 32;
-            return new Promise((resolve, reject) => {
-                if (typeof scrypt === 'undefined') return reject(new Error('scrypt.min.js missing'));
-                try {
-                    const res = scrypt.scrypt(password, saltBytes, N, r, p, dkLen);
-                    if (res instanceof Promise) {
-                        res.then(k => resolve(new Uint8Array(k))).catch(reject);
-                    } else {
-                        scrypt.scrypt(password, saltBytes, N, r, p, dkLen, (e, k) => e ? reject(e) : resolve(new Uint8Array(k)));
-                    }
-                } catch(e) {
-                    try { scrypt(password, saltBytes, N, r, p, dkLen, (e2, k) => e2 ? reject(e2) : resolve(new Uint8Array(k))); }
-                    catch(e3) { reject(e3); }
-                }
-            });
-        }
-
-        // Derive NOSTR keys from salt/pepper (same algo as tools/keygen -t nostr)
-        async function deriveNostrKeys(salt, pepper) {
-            const NostrLib = window.NostrTools || window.Nostr;
-            if (!NostrLib) throw new Error('nostr.bundle.js manquant');
-            const seed = await scryptDerive(pepper, salt);
-            const privBuf = await crypto.subtle.digest('SHA-256', seed);
-            const privHex = Array.from(new Uint8Array(privBuf)).map(b => b.toString(16).padStart(2, '0')).join('');
-            const pubHex = NostrLib.getPublicKey(privHex);
-            return { privHex, pubHex };
-        }
-
-        function fetchCoopConfig(relay) {
-            return new Promise((resolve, reject) => {
-                const ws = new WebSocket(relay);
-                const subId = 'coop-' + Date.now();
-                let result = null;
-                const timeout = setTimeout(() => { ws.close(); reject('timeout'); }, 8000);
-                ws.onopen = () => ws.send(JSON.stringify(['REQ', subId, { kinds: [COOP_KIND], '#d': [COOP_DTAG], limit: 10 }]));
-                ws.onmessage = (e) => {
-                    const msg = JSON.parse(e.data);
-                    if (msg[0] === 'EVENT' && msg[2]) { const ev = msg[2]; if (!result || ev.created_at > result.created_at) result = ev; }
-                    if (msg[0] === 'EOSE') { clearTimeout(timeout); ws.close(); resolve(result); }
-                };
-                ws.onerror = () => { clearTimeout(timeout); reject('ws error'); };
-            });
-        }
-
-        function publishEvent(relay, signedEvent) {
-            return new Promise((resolve, reject) => {
-                const ws = new WebSocket(relay);
-                const timeout = setTimeout(() => { ws.close(); reject('timeout'); }, 8000);
-                ws.onopen = () => ws.send(JSON.stringify(['EVENT', signedEvent]));
-                ws.onmessage = (e) => {
-                    const msg = JSON.parse(e.data);
-                    if (msg[0] === 'OK') { clearTimeout(timeout); ws.close(); resolve(msg[2]); }
-                };
-                ws.onerror = () => { clearTimeout(timeout); reject('ws error'); };
-            });
-        }
+        // ── Crypto & relay — déléguées à coop-config.js (chargé en bas du body) ──
+        // Toutes ces fonctions sont appelées inside des event handlers → coop-config.js est chargé.
+        function detectRelay()            { return window.CoopConfig?.detectRelay()          ?? 'ws://127.0.0.1:7777'; }
+        function isEncrypted(v)           { return window.CoopConfig?.isEncrypted(v)         ?? false; }
+        function sha256hex(s)             { return window.CoopConfig?.sha256hex(s)            ?? Promise.resolve(''); }
+        function aesEncrypt(p, k)         { return window.CoopConfig?.aesEncrypt(p, k)        ?? Promise.resolve(p); }
+        function aesDecrypt(iv, ct, k)    { return window.CoopConfig?.aesDecrypt(iv, ct, k)   ?? Promise.resolve(''); }
+        function scryptDerive(p, s)       { return window.CoopConfig?.scryptDerive(p, s)      ?? Promise.reject('CoopConfig not loaded'); }
+        function deriveNostrKeys(s, p)    { return window.CoopConfig?.deriveNostrKeys(s, p)   ?? Promise.reject('CoopConfig not loaded'); }
+        function fetchCoopConfig(relay)   { return window.CoopConfig?.fetchCoopConfig(relay)  ?? Promise.reject('CoopConfig not loaded'); }
+        function publishEvent(relay, ev)  { return window.CoopConfig?.publishEvent(relay, ev) ?? Promise.resolve({ok: false, reason: 'CoopConfig not loaded'}); }
 
         const LABELS = {
             'COOPERATIVE_VERSION': 'Version', 'CREATED_AT': 'Créé le',
@@ -3117,20 +3028,41 @@
                 pubkey: captainPubHex
             };
 
-            const signedEvent = NostrLib.finalize ? NostrLib.finalize(event, captainPrivHex) : NostrLib.signEvent(event, captainPrivHex);
+            // ── Signature moderne nostr-tools ──────────────────────────────
+            // getEventHash() calcule l'id, getSignature() retourne la sig
+            // signEvent() est DÉPRÉCIÉE → relays modernes refusent les events mal formés
+            event.id = NostrLib.getEventHash(event);
+            let signedEvent;
+            if (NostrLib.getSignature) {
+                event.sig = NostrLib.getSignature(event, captainPrivHex);
+                signedEvent = event;
+            } else if (NostrLib.finalizeEvent) {
+                const privBytes = Uint8Array.from(captainPrivHex.match(/.{2}/g).map(b => parseInt(b, 16)));
+                signedEvent = NostrLib.finalizeEvent(event, privBytes);
+            } else if (NostrLib.finalize) {
+                signedEvent = NostrLib.finalize(event, captainPrivHex);
+            } else {
+                signedEvent = NostrLib.signEvent(event, captainPrivHex); // legacy fallback
+            }
 
             try {
-                statusEl.textContent = 'Publication en cours...';
-                const ok = await publishEvent(relayUrl, signedEvent);
-                // Also publish to public relay
+                statusEl.textContent = '📡 Publication en cours sur ' + relayUrl + '…';
+                const result = await publishEvent(relayUrl, signedEvent);
+                // Publication sur le relay global en parallèle si différent
                 if (relayUrl !== 'wss://relay.copylaradio.com') {
-                    await publishEvent('wss://relay.copylaradio.com', signedEvent).catch(() => {});
+                    publishEvent('wss://relay.copylaradio.com', signedEvent).catch(() => {});
                 }
                 coopConfig = updated;
                 window._coopConfigData = updated;
                 applyCoopConfigToSimulator(updated);
-                statusEl.textContent = ok ? '✅ Config publiée sur NOSTR' : '❌ Relay a refusé';
-                statusEl.style.color = ok ? '#2ecc71' : '#e74c3c';
+                if (result.ok) {
+                    statusEl.textContent = '✅ Config publiée sur NOSTR (kind 30800)';
+                    statusEl.style.color = '#2ecc71';
+                } else {
+                    statusEl.textContent = '❌ Relay a refusé : ' + (result.reason || 'raison inconnue');
+                    statusEl.style.color = '#e74c3c';
+                    console.warn('[economy.html coop] Relay rejection:', relayUrl, result.reason);
+                }
             } catch (e) {
                 statusEl.textContent = '❌ Erreur publication: ' + e;
                 statusEl.style.color = '#e74c3c';
@@ -3286,5 +3218,13 @@
         });
     })();
     </script>
+
+    <!-- ── NOSTR + CRYPTO LIBS (requis par coop-config.js) ── -->
+    <script src="nacl-fast.min.js"></script>
+    <script src="scrypt.min.js"></script>
+    <script src="nostr.bundle.js"></script>
+    <script src="common.js"></script>
+    <!-- coop-config.js : gestion DID NOSTR kind 30800 (partagé avec economy.Swarm.html) -->
+    <script src="coop-config.js"></script>
 </body>
 </html>

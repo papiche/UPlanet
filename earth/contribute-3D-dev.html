@@ -1,0 +1,750 @@
+<!DOCTYPE html>
+<html lang="fr" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>UPlanet — Rejoindre l'Essaim · Dev</title>
+<!-- Fonts locales — aucun appel externe -->
+<style>
+    @font-face {
+        font-family: 'Inter';
+        src: url('./fonts/Inter/Inter-VariableFont_opsz,wght.ttf') format('truetype');
+        font-weight: 100 900;
+        font-style: normal;
+        font-display: swap;
+    }
+    @font-face {
+        font-family: 'JetBrains Mono';
+        src: url('./fonts/JetBrains Mono/JetBrainsMono-VariableFont_wght.ttf') format('truetype');
+        font-weight: 100 800;
+        font-style: normal;
+        font-display: swap;
+    }
+    @font-face {
+        font-family: 'JetBrains Mono';
+        src: url('./fonts/JetBrains Mono/JetBrainsMono-Italic-VariableFont_wght.ttf') format('truetype');
+        font-weight: 100 800;
+        font-style: italic;
+        font-display: swap;
+    }
+    @font-face {
+        font-family: 'Space Grotesk';
+        src: url('./fonts/Space_Grotesk/SpaceGrotesk-VariableFont_wght.ttf') format('truetype');
+        font-weight: 300 700;
+        font-style: normal;
+        font-display: swap;
+    }
+</style>
+<style>
+[data-theme="dark"]{
+  --bg:#03050a;--surface:#0a0e16;--card-bg:rgba(255,255,255,.035);--card-bdr:rgba(255,255,255,.07);
+  --text:#d4e8ff;--muted:#4d7090;--dim:#1e3048;--star-op:1;--nebula-op:1;--strip-bg:rgba(255,255,255,.025);
+  --c1:#00e5ff;--c2:#bf5aff;--c3:#00ff9d;--c4:#ff7c42;--code-bg:#0d1520;
+  --c1r:0,229,255;--c2r:191,90,255;--c3r:0,255,157;--c4r:255,124,66;
+}
+[data-theme="light"]{
+  --bg:#eef2f8;--surface:#fff;--card-bg:rgba(255,255,255,.92);--card-bdr:rgba(0,0,0,.08);
+  --text:#0a1624;--muted:#5a7090;--dim:#a0b8cc;--star-op:0;--nebula-op:0;--strip-bg:rgba(0,0,0,.03);
+  --c1:#0088aa;--c2:#7722bb;--c3:#009955;--c4:#c04400;--code-bg:#1a2030;
+  --c1r:0,136,170;--c2r:119,34,187;--c3r:0,153,85;--c4r:192,68,0;
+}
+
+*{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;min-height:100vh;background:var(--bg);color:var(--text);
+  font-family:'JetBrains Mono',monospace;overflow-x:hidden;transition:background .4s,color .4s;}
+
+.starfield{position:fixed;inset:0;z-index:0;pointer-events:none;opacity:var(--star-op);transition:opacity .4s;}
+.starfield::before{content:'';position:absolute;inset:0;background-image:
+  radial-gradient(1px 1px at 12% 14%,rgba(0,229,255,.5) 0%,transparent 100%),
+  radial-gradient(1px 1px at 28% 55%,rgba(255,255,255,.4) 0%,transparent 100%),
+  radial-gradient(1.5px 1.5px at 42% 8%,rgba(0,255,157,.6) 0%,transparent 100%),
+  radial-gradient(1px 1px at 65% 38%,rgba(255,255,255,.3) 0%,transparent 100%),
+  radial-gradient(1px 1px at 83% 72%,rgba(191,90,255,.5) 0%,transparent 100%),
+  radial-gradient(1.5px 1.5px at 7% 88%,rgba(255,255,255,.5) 0%,transparent 100%),
+  radial-gradient(1px 1px at 38% 22%,rgba(0,229,255,.4) 0%,transparent 100%);}
+.starfield::after{content:'';position:absolute;inset:0;animation:drift 80s linear infinite;background-image:
+  radial-gradient(1px 1px at 74% 27%,rgba(255,255,255,.5) 0%,transparent 100%),
+  radial-gradient(1px 1px at 62% 95%,rgba(0,255,157,.5) 0%,transparent 100%);}
+@keyframes drift{from{transform:translateY(0)}to{transform:translateY(-20px)}}
+.nebula{position:fixed;inset:0;z-index:0;pointer-events:none;opacity:var(--nebula-op);transition:opacity .4s;}
+.nebula::before{content:'';position:absolute;width:600px;height:600px;top:-150px;left:-150px;
+  background:radial-gradient(ellipse,rgba(0,229,255,.04) 0%,transparent 70%);animation:nb 18s ease-in-out infinite alternate;}
+.nebula::after{content:'';position:absolute;width:700px;height:500px;bottom:-150px;right:-150px;
+  background:radial-gradient(ellipse,rgba(0,255,157,.04) 0%,transparent 70%);animation:nb 24s ease-in-out infinite alternate-reverse;}
+@keyframes nb{from{transform:translate(0,0)}to{transform:translate(30px,-25px)}}
+[data-theme="light"] body::after{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
+  background:radial-gradient(ellipse at 15% 10%,rgba(0,160,200,.06),transparent 50%);}
+
+.theme-toggle{position:fixed;top:20px;right:20px;z-index:100;width:44px;height:44px;border-radius:50%;
+  border:1px solid var(--card-bdr);background:var(--card-bg);cursor:pointer;
+  display:flex;align-items:center;justify-content:center;font-size:1.2rem;transition:all .3s;backdrop-filter:blur(12px);}
+.audience-badge{position:fixed;top:20px;left:20px;z-index:100;
+  padding:8px 16px;border-radius:100px;border:1px solid rgba(var(--c3r),.3);background:rgba(var(--c3r),.07);
+  font-size:.73rem;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--c3);}
+
+.wrap{position:relative;z-index:1;max-width:1100px;margin:0 auto;padding:0 24px 80px;}
+
+/* HERO */
+.hero{text-align:center;padding:90px 0 44px;}
+.hero-orb{width:100px;height:100px;margin:0 auto 24px;position:relative;}
+.hero-orb-inner{width:100%;height:100%;border-radius:50%;
+  background:radial-gradient(circle at 35% 35%,rgba(0,255,157,.5),rgba(0,229,255,.3) 60%,transparent);
+  border:1px solid rgba(0,255,157,.3);display:flex;align-items:center;justify-content:center;
+  font-size:2.4rem;animation:orb 4s ease-in-out infinite;}
+@keyframes orb{0%,100%{box-shadow:0 0 30px rgba(0,255,157,.2);transform:scale(1)}
+  50%{box-shadow:0 0 60px rgba(0,255,157,.4);transform:scale(1.04)}}
+.hero-orb::before{content:'';position:absolute;inset:-16px;border:1px solid rgba(0,255,157,.15);
+  border-radius:50%;animation:rspin 10s linear infinite;}
+.hero-orb::after{content:'';position:absolute;inset:-32px;border:1px dashed rgba(0,229,255,.1);
+  border-radius:50%;animation:rspin 16s linear infinite reverse;}
+@keyframes rspin{from{transform:rotate(0deg) rotateX(75deg)}to{transform:rotate(360deg) rotateX(75deg)}}
+
+.hero h1{font-family:'Syne',sans-serif;font-size:clamp(1.6rem,4vw,2.8rem);
+  font-weight:800;letter-spacing:-1px;line-height:1.15;margin-bottom:12px;}
+[data-theme="dark"] .hero h1{background:linear-gradient(135deg,#d4e8ff 0%,var(--c3) 45%,var(--c1) 85%);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+[data-theme="light"] .hero h1{color:var(--text);}
+.hero p{font-size:.9rem;color:var(--muted);max-width:600px;margin:0 auto 20px;line-height:1.7;}
+
+/* STACK BADGE */
+.stack-badges{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin-bottom:24px;}
+.stk{padding:5px 12px;border-radius:6px;font-size:.72rem;font-weight:600;letter-spacing:.5px;
+  background:var(--card-bg);border:1px solid var(--card-bdr);color:var(--muted);}
+.stk.hi{border-color:rgba(var(--c3r),.35);color:var(--c3);}
+
+.rate-badge{display:inline-flex;align-items:center;gap:10px;padding:8px 18px;
+  border:1px solid rgba(var(--c1r),.2);border-radius:8px;background:rgba(var(--c1r),.05);
+  font-size:.82rem;color:var(--c1);}
+
+/* STATUS */
+.status-strip{display:flex;justify-content:center;margin:28px 0 40px;
+  background:var(--strip-bg);border:1px solid var(--card-bdr);border-radius:12px;overflow:hidden;}
+.status-item{flex:1;padding:14px 16px;text-align:center;border-right:1px solid var(--card-bdr);}
+.status-item:last-child{border-right:none;}
+.si-label{font-size:.62rem;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted);margin-bottom:4px;}
+.si-value{font-family:'JetBrains Mono',monospace;font-size:1rem;font-weight:700;color:var(--c3);}
+.si-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--c3);
+  box-shadow:0 0 6px var(--c3);margin-right:6px;animation:blink 2s infinite;}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+
+/* ARCH DIAGRAM */
+.arch-section{margin:0 0 40px;}
+.sec-title{font-size:.62rem;text-transform:uppercase;letter-spacing:4px;color:var(--muted);
+  margin-bottom:24px;display:flex;align-items:center;gap:10px;}
+.sec-title::after{content:'';flex:1;height:1px;background:var(--card-bdr);}
+
+.arch-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;}
+.arch-node{background:var(--card-bg);border:1px solid var(--card-bdr);border-radius:12px;
+  padding:18px 14px;text-align:center;position:relative;backdrop-filter:blur(12px);}
+.arch-node::after{content:attr(data-arrow);position:absolute;right:-18px;top:50%;transform:translateY(-50%);
+  color:var(--c3);font-size:.9rem;z-index:2;}
+.arch-node:last-child::after{display:none;}
+.arch-icon{font-size:1.6rem;margin-bottom:8px;display:block;}
+.arch-name{font-size:.68rem;letter-spacing:1px;text-transform:uppercase;color:var(--c3);margin-bottom:5px;}
+.arch-node:nth-child(2) .arch-name{color:var(--c1);}
+.arch-node:nth-child(3) .arch-name{color:var(--c2);}
+.arch-node:nth-child(4) .arch-name{color:var(--c4);}
+.arch-desc{font-size:.72rem;color:var(--muted);line-height:1.5;}
+.arch-detail{font-family:'JetBrains Mono',monospace;font-size:.62rem;color:var(--dim);margin-top:6px;}
+[data-theme="light"] .arch-detail{color:var(--muted);}
+
+/* CODE BLOCK */
+.code-block{background:var(--code-bg);border:1px solid rgba(var(--c3r),.15);border-radius:12px;
+  padding:20px 22px;margin:0 0 12px;overflow-x:auto;position:relative;}
+.code-block pre{font-family:'JetBrains Mono',monospace;font-size:.76rem;line-height:1.8;
+  color:#8ab8d8;white-space:pre;}
+.cb-label{position:absolute;top:10px;right:14px;font-size:.6rem;letter-spacing:1px;
+  text-transform:uppercase;color:var(--dim);}
+.kw{color:var(--c2);}
+.st{color:var(--c3);}
+.cm{color:var(--dim);}
+.nm{color:var(--c4);}
+.fn{color:var(--c1);}
+
+/* ADMIN KEYS SCHEMA */
+.keys-section{margin:0 0 40px;}
+.keys-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;}
+.key-card{background:var(--card-bg);border:1px solid var(--card-bdr);border-radius:14px;
+  padding:20px 16px;backdrop-filter:blur(12px);}
+.key-icon{font-size:1.4rem;margin-bottom:8px;display:block;}
+.key-name{font-size:.68rem;letter-spacing:2px;text-transform:uppercase;color:var(--c1);margin-bottom:6px;}
+.key-card:nth-child(2) .key-name{color:var(--c2);}
+.key-card:nth-child(3) .key-name{color:var(--c3);}
+.key-card:nth-child(4) .key-name{color:var(--c4);}
+.key-card:nth-child(5) .key-name{color:#ff66aa;}
+.key-card:nth-child(6) .key-name{color:#ffcc00;}
+.key-desc{font-size:.75rem;color:var(--muted);line-height:1.6;}
+.key-mono{font-family:'JetBrains Mono',monospace;font-size:.65rem;color:var(--dim);margin-top:8px;
+  background:rgba(0,0,0,.2);padding:4px 8px;border-radius:6px;}
+[data-theme="light"] .key-mono{background:rgba(0,0,0,.06);color:var(--muted);}
+
+/* CAROUSEL */
+.carousel-section{position:relative;padding:10px 0 46px;}
+.carousel-label{font-size:.62rem;text-transform:uppercase;letter-spacing:3px;color:var(--muted);
+  text-align:center;margin-bottom:40px;}
+.carousel-viewport{perspective:1400px;perspective-origin:50% 50%;height:490px;position:relative;overflow:visible;}
+.carousel-stage{width:100%;height:100%;transform-style:preserve-3d;position:relative;
+  transition:transform .7s cubic-bezier(.23,1,.32,1);}
+.tier-card{position:absolute;width:285px;height:445px;top:50%;left:50%;
+  margin-top:-222px;margin-left:-142px;border-radius:20px;cursor:pointer;
+  transform-style:preserve-3d;transition:all .7s cubic-bezier(.23,1,.32,1);backface-visibility:hidden;}
+.card-inner{width:100%;height:100%;border-radius:20px;border:1px solid var(--card-bdr);
+  background:var(--card-bg);backdrop-filter:blur(20px);display:flex;flex-direction:column;
+  overflow:hidden;position:relative;transition:border-color .4s,box-shadow .4s;}
+.tier-card.active .card-inner{border-color:var(--card-accent);
+  box-shadow:0 0 40px rgba(var(--card-rgb),.2),0 40px 80px rgba(0,0,0,.5);}
+.card-inner::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;
+  background:linear-gradient(90deg,transparent,var(--card-accent),transparent);}
+.tier-card.active .card-inner::after{content:'';position:absolute;inset:0;
+  background:linear-gradient(135deg,transparent,rgba(255,255,255,.03) 50%,transparent);
+  animation:shimmer 3s infinite;}
+@keyframes shimmer{0%,100%{opacity:0}50%{opacity:1}}
+
+.card-head{padding:24px 20px 14px;text-align:center;flex-shrink:0;}
+.card-emoji{font-size:2.4rem;display:block;margin-bottom:10px;
+  filter:drop-shadow(0 0 10px var(--card-accent));animation:fe 4s ease-in-out infinite;}
+.tier-card:nth-child(2) .card-emoji{animation-delay:-1s}
+.tier-card:nth-child(3) .card-emoji{animation-delay:-2s}
+.tier-card:nth-child(4) .card-emoji{animation-delay:-3s}
+@keyframes fe{0%,100%{transform:translateY(0)}50%{transform:translateY(-7px)}}
+.card-tier-name{font-family:'Syne',sans-serif;font-size:.65rem;letter-spacing:3px;
+  text-transform:uppercase;color:var(--card-accent);margin-bottom:4px;}
+.card-tagline{font-size:.76rem;color:var(--muted);line-height:1.4;}
+
+/* Dev-specific: token type + endpoint */
+.card-endpoint{font-family:'JetBrains Mono',monospace;font-size:.62rem;color:var(--dim);
+  margin-top:7px;background:rgba(0,0,0,.3);padding:3px 8px;border-radius:5px;display:inline-block;}
+[data-theme="light"] .card-endpoint{background:rgba(0,0,0,.06);color:var(--muted);}
+
+.card-price{margin:0 18px;padding:12px 15px;background:rgba(0,0,0,.25);border-radius:12px;
+  border:1px solid rgba(255,255,255,.05);text-align:center;flex-shrink:0;}
+[data-theme="light"] .card-price{background:rgba(0,0,0,.04);border-color:rgba(0,0,0,.06);}
+.price-big{font-family:'Syne',sans-serif;font-size:2rem;font-weight:800;color:var(--card-accent);line-height:1;margin-bottom:3px;}
+.price-period{font-size:.68rem;color:var(--muted);}
+.price-zen{margin-top:4px;font-size:.7rem;color:var(--dim);}
+[data-theme="light"] .price-zen{color:var(--muted);}
+
+.card-features{padding:13px 18px;flex-grow:1;}
+.feat{display:flex;align-items:flex-start;gap:8px;font-size:.74rem;color:var(--muted);padding:3px 0;line-height:1.4;}
+.feat-dot{width:4px;height:4px;border-radius:50%;background:var(--card-accent);flex-shrink:0;margin-top:5px;}
+
+.card-avail{padding:0 18px 11px;flex-shrink:0;}
+.avail-row{display:flex;justify-content:space-between;font-size:.62rem;color:var(--dim);margin-bottom:4px;}
+.avail-track{height:2px;background:rgba(255,255,255,.05);border-radius:2px;overflow:hidden;}
+[data-theme="light"] .avail-track{background:rgba(0,0,0,.08);}
+.avail-fill{height:100%;border-radius:2px;background:var(--card-accent);transition:width 1s;}
+
+.card-cta{margin:0 15px 17px;padding:11px;border-radius:10px;text-align:center;text-decoration:none;
+  font-family:'Syne',sans-serif;font-size:.7rem;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;
+  cursor:pointer;transition:all .3s;background:rgba(var(--card-rgb),.1);
+  border:1px solid rgba(var(--card-rgb),.3);color:var(--card-accent);display:block;flex-shrink:0;}
+.tier-card.active .card-cta{background:var(--card-accent);color:#03050a;border-color:var(--card-accent);
+  box-shadow:0 0 18px rgba(var(--card-rgb),.4);}
+.tier-card:nth-child(1){--card-accent:var(--c1);--card-rgb:var(--c1r);}
+.tier-card:nth-child(2){--card-accent:var(--c2);--card-rgb:var(--c2r);}
+.tier-card:nth-child(3){--card-accent:var(--c3);--card-rgb:var(--c3r);}
+.tier-card:nth-child(4){--card-accent:var(--c4);--card-rgb:var(--c4r);}
+.popular-badge{position:absolute;top:18px;right:-33px;background:var(--c2);color:#fff;
+  font-size:.52rem;font-family:'Syne',sans-serif;font-weight:700;letter-spacing:1.5px;
+  padding:5px 42px;transform:rotate(45deg);text-transform:uppercase;}
+
+.carousel-nav{display:flex;justify-content:center;align-items:center;gap:16px;margin-top:36px;}
+.nav-btn{width:42px;height:42px;border-radius:50%;border:1px solid var(--card-bdr);
+  background:var(--card-bg);color:var(--muted);font-size:1rem;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;transition:all .3s;}
+.nav-btn:hover{border-color:rgba(var(--c3r),.3);color:var(--c3);}
+.nav-dots{display:flex;gap:7px;}
+.nav-dot{width:7px;height:7px;border-radius:50%;background:var(--dim);cursor:pointer;transition:all .3s;}
+.nav-dot.active{background:var(--c3);box-shadow:0 0 8px var(--c3);width:22px;border-radius:4px;}
+
+/* N² TECHNICAL */
+.n2-tech{background:var(--card-bg);border:1px solid var(--card-bdr);border-radius:16px;
+  padding:24px;margin:0 0 40px;backdrop-filter:blur(12px);}
+.n2-tech h3{font-size:.62rem;letter-spacing:3px;text-transform:uppercase;color:var(--muted);margin-bottom:18px;}
+.n2-formula{font-family:'JetBrains Mono',monospace;font-size:1.8rem;font-weight:700;
+  color:var(--c3);text-align:center;margin:14px 0;}
+.n2-explain{font-size:.78rem;color:var(--muted);line-height:1.8;}
+.n2-explain code{background:rgba(var(--c3r),.1);color:var(--c3);padding:2px 6px;border-radius:4px;font-size:.75em;}
+
+/* DISTRIB */
+.distrib{background:var(--card-bg);border:1px solid var(--card-bdr);border-radius:14px;
+  padding:22px;margin:0 0 40px;backdrop-filter:blur(12px);}
+.distrib h3{font-size:.62rem;letter-spacing:3px;text-transform:uppercase;color:var(--muted);margin-bottom:18px;}
+.distrib-bar{height:20px;border-radius:10px;display:flex;overflow:hidden;margin-bottom:12px;}
+.distrib-seg{display:flex;align-items:center;justify-content:center;font-size:.65rem;font-weight:700;color:#fff;}
+.seg-usage{background:var(--c1);flex:33;}.seg-rnd{background:var(--c2);flex:33;}
+.seg-actif{background:var(--c3);flex:33;}.seg-cap{background:var(--c4);flex:1;}
+.distrib-legs{display:flex;gap:12px;flex-wrap:wrap;}
+.distrib-leg{display:flex;align-items:center;gap:6px;font-size:.75rem;color:var(--muted);}
+.leg-dot{width:8px;height:8px;border-radius:50%;}
+
+/* FAQ */
+.faq-section{margin:0 0 40px;}
+.faq-item{border-bottom:1px solid var(--card-bdr);}
+.faq-q{padding:16px 0;cursor:pointer;display:flex;justify-content:space-between;align-items:center;
+  font-size:.84rem;font-weight:400;color:var(--text);transition:color .2s;}
+.faq-q:hover{color:var(--c3);}
+.faq-arrow{width:24px;height:24px;border:1px solid var(--card-bdr);border-radius:50%;
+  display:flex;align-items:center;justify-content:center;font-size:.72rem;
+  color:var(--muted);transition:all .3s;flex-shrink:0;}
+.faq-item.open .faq-arrow{transform:rotate(180deg);border-color:rgba(var(--c3r),.3);color:var(--c3);}
+.faq-a{max-height:0;overflow:hidden;transition:max-height .4s,padding .4s;
+  font-size:.8rem;color:var(--muted);line-height:1.8;}
+.faq-item.open .faq-a{max-height:600px;padding-bottom:16px;}
+strong{color:var(--text);font-weight:600;}
+code{background:rgba(var(--c3r),.1);color:var(--c3);padding:2px 6px;border-radius:4px;font-size:.8em;}
+
+.footer{text-align:center;padding:30px 0 12px;border-top:1px solid var(--card-bdr);}
+.footer-links{display:flex;justify-content:center;flex-wrap:wrap;margin-bottom:10px;}
+.footer-links a{color:var(--muted);text-decoration:none;font-size:.78rem;
+  padding:3px 12px;border-right:1px solid var(--card-bdr);transition:color .2s;}
+.footer-links a:last-child{border-right:none;}
+.footer-links a:hover{color:var(--c3);}
+.footer-note{font-size:.68rem;color:var(--dim);}
+
+@media(max-width:900px){
+  .arch-grid{grid-template-columns:repeat(2,1fr);}
+  .keys-grid{grid-template-columns:repeat(2,1fr);}
+  .status-strip{flex-wrap:wrap;}
+  .status-item{flex:1 1 45%;border-right:none;border-bottom:1px solid var(--card-bdr);}
+}
+@media(max-width:600px){
+  .arch-grid{grid-template-columns:1fr;}
+  .keys-grid{grid-template-columns:1fr;}
+  .tier-card{width:265px;margin-left:-132px;}
+  .carousel-viewport{height:460px;}
+  .status-item{flex:1 1 100%;}
+}
+</style>
+</head>
+<body>
+<div class="starfield"></div>
+<div class="nebula"></div>
+<div class="audience-badge">⚙️ Dev / Intégrateur</div>
+<button class="theme-toggle" onclick="toggleTheme()" title="Changer le thème">☀️</button>
+
+<div class="wrap">
+  <div class="hero">
+    <div class="hero-orb"><div class="hero-orb-inner">⚙️</div></div>
+    <h1>UPlanet ẐEN — Architecture<br>& Intégration</h1>
+    <p>Stack décentralisée : Duniter/Ğ1 + IPFS + NOSTR + webhook OpenCollective. Comptabilité 3D on-chain avec double couche ẐEN/ẑen.</p>
+    <div class="stack-badges">
+      <span class="stk hi">Duniter v1/v2</span>
+      <span class="stk hi">IPFS / Astroport</span>
+      <span class="stk hi">NOSTR NIP-01</span>
+      <span class="stk hi">OpenCollective webhook</span>
+      <span class="stk">Bash/Python</span>
+      <span class="stk">kind 30800/30850</span>
+      <span class="stk">N² relay mesh</span>
+      <span class="stk">MULTIPASS / ZEN Card</span>
+    </div>
+    <div class="rate-badge">1 € → webhook OC → <span class="fn">oc2uplanet.sh</span> → 1 Ẑ on Duniter/Ğ1</div>
+  </div>
+
+  <!-- ARCH DIAGRAM -->
+  <div class="arch-section">
+    <div class="sec-title">🔀 Flux de données</div>
+    <div class="arch-grid">
+      <div class="arch-node" data-arrow="→">
+        <span class="arch-icon">💳</span>
+        <div class="arch-name">OpenCollective</div>
+        <div class="arch-desc">Paiement € SEPA/CB sécurisé</div>
+        <div class="arch-detail">POST /webhooks/OC</div>
+      </div>
+      <div class="arch-node" data-arrow="→">
+        <span class="arch-icon">🔧</span>
+        <div class="arch-name">oc2uplanet.sh</div>
+        <div class="arch-desc">Vérif HMAC · Parse tier · Route émission</div>
+        <div class="arch-detail">Bash script · cron mensuel</div>
+      </div>
+      <div class="arch-node" data-arrow="→">
+        <span class="arch-icon">⛓️</span>
+        <div class="arch-name">Duniter API</div>
+        <div class="arch-desc">Émission ẐEN/ẑen sur clé Ğ1 du contributeur</div>
+        <div class="arch-detail">POST /tx/process</div>
+      </div>
+      <div class="arch-node" data-arrow="">
+        <span class="arch-icon">📡</span>
+        <div class="arch-name">NOSTR kind 30850</div>
+        <div class="arch-desc">Broadcast économie station (slots, bilan)</div>
+        <div class="arch-detail">ECONOMY.broadcast.sh</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CODE BLOCKS -->
+  <div class="arch-section">
+    <div class="sec-title">📄 Schéma des clés administratives</div>
+    <div class="keys-grid">
+      <div class="key-card">
+        <span class="key-icon">🏛️</span>
+        <div class="key-name">CAPTAIN KEY</div>
+        <div class="key-desc">Clé principale de la station. Signe les événements NOSTR kind 30800 (config coopérative) et 30850 (économie).</div>
+        <div class="key-mono">G1pub: GCaptXXXX…</div>
+      </div>
+      <div class="key-card">
+        <span class="key-icon">⚓</span>
+        <div class="key-name">ARMATEUR KEY</div>
+        <div class="key-desc">Propriétaire de l'infrastructure physique. Reçoit 1% des ẐEN (prime de gestion). Signature multi-sig pour les transactions Capex.</div>
+        <div class="key-mono">G1pub: GArmXXXX…</div>
+      </div>
+      <div class="key-card">
+        <span class="key-icon">💳</span>
+        <div class="key-name">ZEN CARD KEY</div>
+        <div class="key-desc">Clé du Parrain Co-Bâtisseur. Reçoit les ẐEN majuscules (jeton de propriété Capex). Distribue automatiquement 33/33/33/1%.</div>
+        <div class="key-mono">G1pub: GZenCXXXX…</div>
+      </div>
+      <div class="key-card">
+        <span class="key-icon">🎫</span>
+        <div class="key-name">MULTIPASS KEY</div>
+        <div class="key-desc">Clé de l'usager. Reçoit les ẑen minuscules (jeton d'usage Opex). Utilisée pour payer les services cloud hebdomadairement.</div>
+        <div class="key-mono">G1pub: GMPassXXXX…</div>
+      </div>
+      <div class="key-card">
+        <span class="key-icon">🌐</span>
+        <div class="key-name">RELAY NOSTR KEY</div>
+        <div class="key-desc">Clé du nœud relai NOSTR de la station. Utilisée dans le protocole N² pour authentifier les événements de diffusion.</div>
+        <div class="key-mono">npub: npub1XXXX…</div>
+      </div>
+      <div class="key-card">
+        <span class="key-icon">🔒</span>
+        <div class="key-name">OC WEBHOOK SECRET</div>
+        <div class="key-desc">HMAC secret partagé avec OpenCollective. Valide l'authenticité des webhooks entrants avant toute émission de ẐEN.</div>
+        <div class="key-mono">env: OC_WEBHOOK_SECRET</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="arch-section">
+    <div class="sec-title">💻 Exemple webhook → émission ẐEN</div>
+    <div class="code-block">
+      <div class="cb-label">oc2uplanet.sh (extrait)</div>
+      <pre><span class="cm"># 1. Vérification HMAC OpenCollective</span>
+<span class="kw">verify_hmac</span>() {
+  <span class="kw">local</span> <span class="nm">sig</span>=<span class="st">"$(echo -n "$BODY" | openssl dgst -sha256 -hmac "$OC_SECRET")"</span>
+  [[ <span class="st">"$sig"</span> == <span class="st">"$OC_SIG"</span> ]] || <span class="kw">exit</span> 1
+}
+
+<span class="cm"># 2. Parse du tier et du montant</span>
+<span class="nm">TIER</span>=<span class="fn">$(jq -r '.data.order.tier.slug'</span> &lt;&lt;&lt; <span class="st">"$BODY"</span>)
+<span class="nm">AMOUNT</span>=<span class="fn">$(jq -r '.data.order.totalAmount.value'</span> &lt;&lt;&lt; <span class="st">"$BODY"</span>)
+<span class="nm">G1PUB</span>=<span class="fn">$(jq -r '.data.fromAccount.description'</span> &lt;&lt;&lt; <span class="st">"$BODY"</span>)
+
+<span class="cm"># 3. Émission ẐEN sur Duniter selon le tier</span>
+<span class="kw">case</span> <span class="st">"$TIER"</span> <span class="kw">in</span>
+  <span class="st">"love-box-le-claude"</span>)     <span class="fn">emit_zencard</span> <span class="st">"$G1PUB"</span> <span class="nm">50</span> ;;
+  <span class="st">"love-box-deluxe-gpu"</span>)    <span class="fn">emit_zencard</span> <span class="st">"$G1PUB"</span> <span class="nm">540</span> ;;
+  <span class="st">"cloud-usage"</span>)             <span class="fn">emit_multipass</span> <span class="st">"$G1PUB"</span> <span class="st">"$AMOUNT"</span> ;;
+  <span class="st">"membre-resident"</span>)         <span class="fn">queue_monthly_multipass</span> <span class="st">"$G1PUB"</span> <span class="st">"$AMOUNT"</span> ;;
+<span class="kw">esac</span>
+
+<span class="cm"># 4. Distribution ZEN Card : 33/33/33/1</span>
+<span class="fn">distribute_zencard</span>() {
+  <span class="fn">transfer</span> <span class="st">"$G1PUB_MULTIPASS"</span> <span class="fn">$(( AMOUNT * 33 / 100 ))</span>
+  <span class="fn">transfer</span> <span class="st">"$G1PUB_RND"</span>       <span class="fn">$(( AMOUNT * 33 / 100 ))</span>
+  <span class="fn">transfer</span> <span class="st">"$G1PUB_ACTIFS"</span>    <span class="fn">$(( AMOUNT * 33 / 100 ))</span>
+  <span class="fn">transfer</span> <span class="st">"$G1PUB_CAPTAIN"</span>   <span class="fn">$(( AMOUNT * 1  / 100 ))</span>
+}</pre>
+    </div>
+    <div class="code-block">
+      <div class="cb-label">NOSTR kind 30850 broadcast</div>
+      <pre><span class="cm"># Publié par ECONOMY.broadcast.sh — lu par contribute.html</span>
+{
+  <span class="st">"kind"</span>: <span class="nm">30850</span>,
+  <span class="st">"tags"</span>: [[<span class="st">"d"</span>, <span class="st">"station-economy"</span>]],
+  <span class="st">"content"</span>: {
+    <span class="st">"nostr_slots"</span>: <span class="nm">250</span>,   <span class="cm">// MULTIPASS capacity</span>
+    <span class="st">"nostr_count"</span>: <span class="nm">142</span>,   <span class="cm">// MULTIPASS used</span>
+    <span class="st">"zencard_slots"</span>: <span class="nm">24</span>,  <span class="cm">// ZEN Card capacity</span>
+    <span class="st">"zencard_count"</span>: <span class="nm">7</span>,   <span class="cm">// ZEN Card used</span>
+    <span class="st">"BILAN"</span>: <span class="nm">1247.5</span>,      <span class="cm">// Solde station en Ẑ</span>
+    <span class="st">"NCARD"</span>: <span class="nm">3</span>            <span class="cm">// ẑen/sem inclus membres</span>
+  }
+}</pre>
+    </div>
+  </div>
+
+  <!-- STATUS -->
+  <div class="status-strip">
+    <div class="status-item"><div class="si-label">Node ID</div>
+      <div class="si-value"><span class="si-dot"></span><span id="stat-station">…</span></div></div>
+    <div class="status-item"><div class="si-label">MULTIPASS slots</div><div class="si-value" id="stat-mp">—</div></div>
+    <div class="status-item"><div class="si-label">ZEN Card slots</div><div class="si-value" id="stat-zc">—</div></div>
+    <div class="status-item"><div class="si-label">Bilan Ẑ</div><div class="si-value" id="stat-bilan">—</div></div>
+  </div>
+
+  <!-- CAROUSEL -->
+  <div class="carousel-section">
+    <div class="carousel-label">Tiers de contribution — mapping technique</div>
+    <div class="carousel-viewport" id="viewport">
+      <div class="carousel-stage" id="stage">
+
+        <div class="tier-card" data-index="0">
+          <div class="card-inner">
+            <div class="card-head">
+              <span class="card-emoji">🛰️</span>
+              <div class="card-tier-name">♥BOX · Station</div>
+              <div class="card-tagline">Capex — émet ZEN Card (ẐEN majuscule)</div>
+              <div class="card-endpoint">tier: love-box-le-claude</div>
+            </div>
+            <div class="card-price">
+              <div class="price-big">50 €</div>
+              <div class="price-period">/an → 50 Ẑ Capex</div>
+              <div class="price-zen">webhook → emit_zencard(G1PUB, 50)</div>
+            </div>
+            <div class="card-features">
+              <div class="feat"><span class="feat-dot"></span>kind 30800: OC_URL_SATELLITE override</div>
+              <div class="feat"><span class="feat-dot"></span>Distribution 33/33/33/1 on-chain</div>
+              <div class="feat"><span class="feat-dot"></span>PRIMO TX 1Ğ1 → MULTIPASS init</div>
+              <div class="feat"><span class="feat-dot"></span>zencard_count++ dans kind 30850</div>
+            </div>
+            <div class="card-avail">
+              <div class="avail-row"><span>zencard_slots - zencard_count</span><span id="sat-slots">…</span></div>
+              <div class="avail-track"><div class="avail-fill" id="sat-bar" style="width:0%"></div></div>
+            </div>
+            <a id="sat-btn" href="https://opencollective.com/monnaie-libre/projects/coeurbox/contribute/love-box-le-claude-53061" target="_blank" class="card-cta">→ OC Contribute</a>
+          </div>
+        </div>
+
+        <div class="tier-card" data-index="1">
+          <div class="card-inner">
+            <div class="popular-badge">Populaire</div>
+            <div class="card-head">
+              <span class="card-emoji">🌟</span>
+              <div class="card-tier-name">♥BOX Deluxe · GPU</div>
+              <div class="card-tagline">Capex GPU — émet ZEN Card (ẐEN majuscule)</div>
+              <div class="card-endpoint">tier: love-box-deluxe-gpu</div>
+            </div>
+            <div class="card-price">
+              <div class="price-big">540 €</div>
+              <div class="price-period">/3ans → 540 Ẑ Capex</div>
+              <div class="price-zen">webhook → emit_zencard(G1PUB, 540)</div>
+            </div>
+            <div class="card-features">
+              <div class="feat"><span class="feat-dot"></span>kind 30800: OC_URL_CONSTELLATION override</div>
+              <div class="feat"><span class="feat-dot"></span>Hub GPU 24 Go VRAM — LLM inference</div>
+              <div class="feat"><span class="feat-dot"></span>Distribution 33/33/33/1 on-chain</div>
+              <div class="feat"><span class="feat-dot"></span>Accès API LLM local de l'essaim N²</div>
+            </div>
+            <div class="card-avail">
+              <div class="avail-row"><span>zencard_slots</span><span id="const-slots">…</span></div>
+              <div class="avail-track"><div class="avail-fill" id="const-bar" style="width:0%"></div></div>
+            </div>
+            <a id="const-btn" href="https://opencollective.com/monnaie-libre/projects/coeurbox/contribute/love-box-deluxe-gpu-49182" target="_blank" class="card-cta">→ OC Contribute</a>
+          </div>
+        </div>
+
+        <div class="tier-card" data-index="2">
+          <div class="card-inner">
+            <div class="card-head">
+              <span class="card-emoji">☁️</span>
+              <div class="card-tier-name">Cloud Usage · Opex</div>
+              <div class="card-tagline">Opex — émet ẑen minuscule sur MULTIPASS</div>
+              <div class="card-endpoint">tier: cloud-usage</div>
+            </div>
+            <div class="card-price">
+              <div class="price-big" style="font-size:1.7rem">Libre</div>
+              <div class="price-period">ponctuel</div>
+              <div class="price-zen">webhook → emit_multipass(G1PUB, amount)</div>
+            </div>
+            <div class="card-features">
+              <div class="feat"><span class="feat-dot"></span>Émission instantanée via webhook OC</div>
+              <div class="feat"><span class="feat-dot"></span>nostr_count++ dans kind 30850</div>
+              <div class="feat"><span class="feat-dot"></span>Services : IPFS gateway, NOSTR relay, LLM</div>
+              <div class="feat"><span class="feat-dot"></span>Fongible ẑen ↔ ẐEN via pont liquidité</div>
+            </div>
+            <div class="card-avail">
+              <div class="avail-row"><span>nostr_slots - nostr_count</span><span id="cloud-slots">…</span></div>
+              <div class="avail-track"><div class="avail-fill" id="cloud-bar" style="width:0%"></div></div>
+            </div>
+            <a id="cloud-btn" href="https://opencollective.com/monnaie-libre/projects/coeurbox/contribute/cotisation-services-cloud-usage-98388" target="_blank" class="card-cta">→ OC Contribute</a>
+          </div>
+        </div>
+
+        <div class="tier-card" data-index="3">
+          <div class="card-inner">
+            <div class="card-head">
+              <span class="card-emoji">🏠</span>
+              <div class="card-tier-name">Membre Résident</div>
+              <div class="card-tagline">Opex mensuel — ẑen cron cycle 4 sem</div>
+              <div class="card-endpoint">tier: membre-resident</div>
+            </div>
+            <div class="card-price">
+              <div class="price-big" style="font-size:1.7rem">Libre</div>
+              <div class="price-period" id="mp-period">mensuel</div>
+              <div class="price-zen">cron → queue_monthly_multipass()</div>
+            </div>
+            <div class="card-features">
+              <div class="feat"><span class="feat-dot"></span>Ajout à la queue mensuelle (pas webhook direct)</div>
+              <div class="feat"><span class="feat-dot"></span>Cycle : cron 0 0 * * 1 (chaque lundi)</div>
+              <div class="feat"><span class="feat-dot"></span>NCARD ẑen/sem inclus (lisible kind 30850)</div>
+              <div class="feat"><span class="feat-dot"></span>Résiliable : retrait de la queue OC</div>
+            </div>
+            <div class="card-avail">
+              <div class="avail-row"><span>nostr_slots</span><span id="mp-slots">…</span></div>
+              <div class="avail-track"><div class="avail-fill" id="mp-bar" style="width:0%"></div></div>
+            </div>
+            <a id="mp-btn" href="https://opencollective.com/monnaie-libre/projects/coeurbox/contribute/membre-resident-soutien-mensuel-98389" target="_blank" class="card-cta">→ OC Contribute</a>
+          </div>
+        </div>
+
+      </div>
+    </div>
+    <div class="carousel-nav">
+      <button class="nav-btn" onclick="rotate(-1)">←</button>
+      <div class="nav-dots" id="nav-dots">
+        <div class="nav-dot active" onclick="goTo(0)"></div>
+        <div class="nav-dot" onclick="goTo(1)"></div>
+        <div class="nav-dot" onclick="goTo(2)"></div>
+        <div class="nav-dot" onclick="goTo(3)"></div>
+      </div>
+      <button class="nav-btn" onclick="rotate(1)">→</button>
+    </div>
+  </div>
+
+  <!-- N² TECH -->
+  <div class="n2-tech">
+    <h3>📡 Protocole N² — Diffusion NOSTR</h3>
+    <div class="n2-formula">f(N) = N × N = N²</div>
+    <div class="n2-explain">
+      Chaque station Astroport agit comme relai <code>NOSTR NIP-01</code>. Lors d'une publication, l'utilisateur envoie vers ses <code>N</code> relais configurés (ses "amis"). Chaque relai propage à son tour vers ses <code>N</code> abonnés. Résultat : <code>N × N = N²</code> chemins de diffusion garantis pour atteindre les "amis des amis". Plus le réseau croît, plus la résilience est quadratique — sans serveur central. La configuration des relais voisins est stockée en <code>kind 3</code> (contact list) sur chaque nœud Astroport.
+    </div>
+  </div>
+
+  <div class="distrib">
+    <h3>Distribution automatique on-chain (ZEN Card)</h3>
+    <div class="distrib-bar">
+      <div class="distrib-seg seg-usage">33%</div>
+      <div class="distrib-seg seg-rnd">33%</div>
+      <div class="distrib-seg seg-actif">33%</div>
+      <div class="distrib-seg seg-cap">1%</div>
+    </div>
+    <div class="distrib-legs">
+      <div class="distrib-leg"><div class="leg-dot" style="background:var(--c1)"></div>33% → G1PUB_MULTIPASS (Opex circulaire)</div>
+      <div class="distrib-leg"><div class="leg-dot" style="background:var(--c2)"></div>33% → G1PUB_RND (Astroport.ONE R&D)</div>
+      <div class="distrib-leg"><div class="leg-dot" style="background:var(--c3)"></div>33% → G1PUB_ACTIFS (biens communs)</div>
+      <div class="distrib-leg"><div class="leg-dot" style="background:var(--c4)"></div>1% → G1PUB_CAPTAIN (prime station)</div>
+    </div>
+  </div>
+
+  <!-- FAQ DEV -->
+  <div class="faq-section">
+    <div class="sec-title">🛠️ Dev FAQ</div>
+    <div class="faq-item">
+      <div class="faq-q" onclick="toggleFaq(this)">Comment override les URLs OC depuis NOSTR kind 30800 ?<span class="faq-arrow">▾</span></div>
+      <div class="faq-a">La page lit le relai local (<code>getRelayUrl()</code>) et souscrit au kind <code>30800</code> avec le d-tag <code>cooperative-config</code>. Si le contenu (JSON dans <code>event.content</code>) contient les champs <code>OC_URL_SATELLITE</code>, <code>OC_URL_CONSTELLATION</code>, <code>OC_URL_CLOUD</code> ou <code>OC_URL_MEMBRE</code>, ils remplacent les URLs hardcodées par défaut. L'event est signé par la clé du Capitaine.</div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q" onclick="toggleFaq(this)">Comment déployer une station Astroport ?<span class="faq-arrow">▾</span></div>
+      <div class="faq-a">Le projet <strong>Astroport.ONE</strong> (<code>github.com/papiche/Astroport.ONE</code>) fournit les scripts d'installation. La stack comprend : un nœud IPFS local, un relai NOSTR Strfry ou Nostream, les scripts oc2uplanet.sh (webhook), ECONOMY.broadcast.sh (cron NOSTR), et une interface web UPlanet. La station nécessite une clé Ğ1 active (Capitaine) et un accès OpenCollective pour recevoir les webhooks.</div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q" onclick="toggleFaq(this)">La "comptabilité 3D" — qu'est-ce que ça veut dire concrètement ?<span class="faq-arrow">▾</span></div>
+      <div class="faq-a">Les 3 axes sont : <strong>1. Capex</strong> (ẐEN majuscules / ZEN Card — investissement infrastructure), <strong>2. Opex</strong> (ẑen minuscules / MULTIPASS — frais de fonctionnement), <strong>3. Communs</strong> (33% Actifs — biens durables). Chaque transaction on-chain Duniter encode l'axe via le commentaire de transaction. Le script <code>ECONOMY.broadcast.sh</code> agrège ces 3 vecteurs et les publie via kind 30850 — lisible par n'importe quel client sans base de données centralisée. C'est ce que Dolibarr ou Excel ne peuvent pas faire nativement.</div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q" onclick="toggleFaq(this)">Comment tester localement sans nœud Duniter ?<span class="faq-arrow">▾</span></div>
+      <div class="faq-a">Lancez un relai NOSTR local (<code>ws://127.0.0.1:7777</code>) — la page le détecte automatiquement. Pour simuler les données station, exposez un JSON compatible sur <code>localhost:54321</code> (champs : <code>myDAMAIN</code>, <code>IPFSNODEID</code>, <code>capacities.nostr_slots</code>, etc.). Pour le webhook, utilisez <code>ngrok</code> ou similaire et testez avec le payload OC via <code>curl -X POST</code> avec le header HMAC.</div>
+    </div>
+  </div>
+
+  <div class="footer">
+    <div class="footer-links">
+      <a href="./contribute-3D-curieux.html">🔭 Curieux</a>
+      <a href="./contribute-3D-G1.html">🌕 Ğ1</a>
+      <a href="./contribute-3D-coop.html">🤝 Coop</a>
+      <a href="https://github.com/papiche/Astroport.ONE" target="_blank">⚙️ GitHub</a>
+      <a id="oc-link" href="https://opencollective.com/monnaie-libre" target="_blank">🔗 OpenCollective</a>
+    </div>
+    <div class="footer-note">Stack : Duniter/Ğ1 + IPFS + NOSTR + OpenCollective webhook · open-source · auditable</div>
+  </div>
+</div>
+
+<script>
+function toggleTheme(){const h=document.documentElement;const n=h.dataset.theme==='dark'?'light':'dark';
+  h.dataset.theme=n;document.querySelector('.theme-toggle').textContent=n==='dark'?'☀️':'🌙';
+  localStorage.setItem('uplanet-theme',n);}
+(function(){const s=localStorage.getItem('uplanet-theme')||'dark';
+  document.documentElement.dataset.theme=s;
+  document.querySelector('.theme-toggle').textContent=s==='dark'?'☀️':'🌙';})();
+
+const cards=document.querySelectorAll('.tier-card');
+let current=0,autoTimer;
+function applyCarousel(){const vw=window.innerWidth;const r=vw<600?240:vw<900?300:380;
+  cards.forEach((c,i)=>{const off=((i-current)%4+4)%4;
+    const a=off===0?0:off===1?90:off===2?180:-90;
+    const x=Math.sin(a*Math.PI/180)*r;const z=Math.cos(a*Math.PI/180)*r-r;
+    c.style.transform=`translateX(${x}px) translateZ(${z}px) rotateY(${-a}deg)`;
+    c.style.opacity=off===2?.12:off===1||off===3?.45:1;
+    c.style.zIndex=off===0?10:off===2?1:5;
+    c.style.pointerEvents=off===0?'auto':'none';
+    c.classList.toggle('active',off===0);});
+  document.querySelectorAll('.nav-dot').forEach((d,i)=>d.classList.toggle('active',i===current));}
+function rotate(d){current=((current+d)%4+4)%4;applyCarousel();resetAuto();}
+function goTo(i){current=i;applyCarousel();resetAuto();}
+function resetAuto(){clearInterval(autoTimer);autoTimer=setInterval(()=>rotate(1),6000);}
+cards.forEach((c,i)=>c.addEventListener('click',()=>{if(i!==current)goTo(i);}));
+window.addEventListener('resize',applyCarousel);
+let tx=0;
+document.getElementById('viewport').addEventListener('touchstart',e=>{tx=e.touches[0].clientX;},{passive:true});
+document.getElementById('viewport').addEventListener('touchend',e=>{const d=tx-e.changedTouches[0].clientX;if(Math.abs(d)>50)rotate(d>0?1:-1);});
+applyCarousel();resetAuto();
+
+function toggleFaq(el){const it=el.parentElement,was=it.classList.contains('open');
+  document.querySelectorAll('.faq-item').forEach(f=>f.classList.remove('open'));if(!was)it.classList.add('open');}
+
+function getAPIUrl(){const u=new URL(window.location.href);let api=new URL(u.origin);
+  if(u.hostname.startsWith('ipfs.'))api.hostname=api.hostname.replace('ipfs.','u.');
+  if(u.port==='8080'||u.port!=='')api.port='54321';return api.toString().replace(/\/+$/,'');}
+function getRelayUrl(){if(window.DEFAULT_RELAYS?.length)return window.DEFAULT_RELAYS[0];
+  const h=window.location.hostname;
+  if(h==='localhost'||h==='127.0.0.1')return 'ws://127.0.0.1:7777';
+  if(h.startsWith('ipfs.')||h.startsWith('u.'))return`wss://relay.${h.replace(/^(ipfs\.|u\.)/,'')}`;
+  return 'wss://relay.copylaradio.com';}
+const OC_BASE='https://opencollective.com';let ocSlug='monnaie-libre';
+let ocUrls={satellite:'https://opencollective.com/monnaie-libre/projects/coeurbox/contribute/love-box-le-claude-53061',
+  constellation:'https://opencollective.com/monnaie-libre/projects/coeurbox/contribute/love-box-deluxe-gpu-49182',
+  cloud:'https://opencollective.com/monnaie-libre/projects/coeurbox/contribute/cotisation-services-cloud-usage-98388',
+  membre:'https://opencollective.com/monnaie-libre/projects/coeurbox/contribute/membre-resident-soutien-mensuel-98389'};
+async function loadStationData(){try{const api=getAPIUrl();
+  const res=await fetch(api,{signal:AbortSignal.timeout(8000)});const d=await res.json();
+  document.getElementById('stat-station').textContent=d.IPFSNODEID?.slice(-12)||d.myDAMAIN||'---';
+  if(d.IPFSNODEID){try{const g=api.replace(/u\./,'ipfs.').replace(':54321',':8080');
+    const r2=await fetch(`${g}/ipns/${d.IPFSNODEID}/12345.json`,{signal:AbortSignal.timeout(10000)});
+    Object.assign(d,await r2.json());}catch(e){}}
+  const mpT=d.capacities?.nostr_slots||250,mpU=d.capacities?.nostr_count||(d.NOSTR?.length||0);
+  const zcC=d.capacities?.zencard_slots||24,zcU=d.capacities?.zencard_count||(d.PLAYERs?.length||0);
+  const bil=parseFloat(d.BILAN)||0,nc=parseInt(d.NCARD)||1;
+  document.getElementById('stat-mp').textContent=`${mpT-mpU}/${mpT}`;
+  document.getElementById('stat-zc').textContent=`${zcC-zcU}/${zcC}`;
+  document.getElementById('stat-bilan').textContent=`${bil.toFixed(1)} Ẑ`;
+  document.getElementById('mp-period').textContent=`mensuel — NCARD:${nc}`;
+  const mpP=Math.round((mpU/mpT)*100),zcP=zcC>0?Math.round((zcU/zcC)*100):0;
+  ['cloud','mp'].forEach(id=>{document.getElementById(id+'-slots').textContent=`${mpT-mpU}/${mpT}`;
+    document.getElementById(id+'-bar').style.width=mpP+'%';});
+  ['sat','const'].forEach(id=>{document.getElementById(id+'-slots').textContent=`${zcC-zcU}/${zcC}`;
+    document.getElementById(id+'-bar').style.width=zcP+'%';});
+  if(d.OCSLUG)ocSlug=d.OCSLUG;updateButtons();
+}catch(e){document.getElementById('stat-station').textContent='OFFLINE';updateButtons();}}
+async function loadCoopConfig(){const relay=getRelayUrl();
+  return new Promise(resolve=>{let done=false;const t=setTimeout(()=>{if(!done){done=true;resolve();}},6000);
+    try{const ws=new WebSocket(relay);
+      ws.onopen=()=>ws.send(JSON.stringify(['REQ','cfg',{kinds:[30800],'#d':['cooperative-config'],limit:1}]));
+      ws.onmessage=ev=>{const m=JSON.parse(ev.data);if(m[0]==='EVENT'){try{const c=JSON.parse(m[2].content);
+        if(c.OCSLUG)ocSlug=c.OCSLUG;
+        if(c.OC_URL_SATELLITE)ocUrls.satellite=c.OC_URL_SATELLITE;
+        if(c.OC_URL_CONSTELLATION)ocUrls.constellation=c.OC_URL_CONSTELLATION;
+        if(c.OC_URL_CLOUD)ocUrls.cloud=c.OC_URL_CLOUD;
+        if(c.OC_URL_MEMBRE)ocUrls.membre=c.OC_URL_MEMBRE;}catch(e){}}
+        if(m[0]==='EOSE'){ws.close();if(!done){done=true;clearTimeout(t);resolve();}}};
+      ws.onerror=ws.onclose=()=>{if(!done){done=true;clearTimeout(t);resolve();}};
+    }catch(e){if(!done){done=true;clearTimeout(t);resolve();}}});}
+function updateButtons(){document.getElementById('sat-btn').href=ocUrls.satellite;
+  document.getElementById('const-btn').href=ocUrls.constellation;
+  document.getElementById('cloud-btn').href=ocUrls.cloud;
+  document.getElementById('mp-btn').href=ocUrls.membre;
+  document.getElementById('oc-link').href=`${OC_BASE}/${ocSlug}/projects/coeurbox`;}
+(async()=>{await Promise.allSettled([loadStationData(),loadCoopConfig()]);updateButtons();})();
+</script>
+</body>
+</html>

@@ -33,6 +33,11 @@
     // ========================================
     // Crypto (identical to cooperative_config.sh)
     // ========================================
+    function isKeySensitive(key) {
+        if (!key) return false;
+        const k = key.toUpperCase();
+        return k.includes('KEY') || k.includes('API') || k.includes('PASSWORD') || k.includes('PRIVATE') || k.includes('SECRET');
+    }
 
     function isEncrypted(val) {
         if (typeof val !== 'string') return false;
@@ -240,13 +245,14 @@
                 if (enc && decrypted && decrypted[k]) display = decrypted[k];
                 const label = LABELS[k] || k;
                 const canEdit = editable && !secReadonly && (!enc || (decrypted && decrypted[k]));
+                const isSecret = isKeySensitive(k); // On détecte par le nom de la clé
                 if (canEdit) {
-                    const isSecret = enc || k.includes('KEY') || k.includes('API') || k.includes('PASSWORD') || k.includes('PRIVATE');
                     html += '<div style="background:rgba(255,255,255,0.05);padding:4px 8px;border-radius:6px;">'
-                        + '<div style="color:#7f8c8d;font-size:0.75em;">' + label + (enc ? ' 🔐' : '') + '</div>'
-                        + '<input data-key="' + k + '"' + (enc ? ' data-encrypted="true"' : '') + ' value="' + display + '"'
-                        + ' type="' + (isSecret ? 'password' : 'text') + '"'
-                        + ' style="background:rgba(255,255,255,0.1);border:1px solid ' + (enc ? 'rgba(231,76,60,0.3)' : 'rgba(155,89,182,0.3)') + ';color:#eaf6ff;padding:2px 6px;border-radius:4px;width:90%;font-size:0.85em;">'
+                        + '<div style="color:#7f8c8d;font-size:0.75em;">' + label + (isSecret ? ' 🔐' : '') + '</div>'
+                        // On force data-encrypted="true" si c'est une clé sensible, même si elle a fuité en clair
+                        + '<input data-key="' + k + '"' + (isSecret ? ' data-encrypted="true"' : '') + ' value="' + display + '"'
+                        + ' type="' + (isSecret && (!enc || decrypted) ? 'password' : 'text') + '"'
+                        + ' style="background:rgba(255,255,255,0.1);border:1px solid ' + (isSecret ? 'rgba(231,76,60,0.3)' : 'rgba(155,89,182,0.3)') + ';color:#eaf6ff;padding:2px 6px;border-radius:4px;width:90%;font-size:0.85em;">'
                         + '</div>';
                 } else {
                     html += '<div style="background:rgba(255,255,255,0.05);padding:4px 8px;border-radius:6px;">'
@@ -305,23 +311,28 @@
 
         const inputs = document.querySelectorAll('#coop-config-content input[data-key]');
         const updated = { ...coopConfig };
-        const keyHex = await sha256hex(uplanetname);
-
+        const keyHex = uplanetname ? await sha256hex(uplanetname) : null;
+        
         for (const input of inputs) {
             const key = input.dataset.key;
             const newVal = input.value.trim();
             if (!newVal) continue;
 
-            if (isKeySensitive(key)) {
-                // --- SÉCURITÉ ---
-                if (!uplanetname) {
-                    alert(`SÉCURITÉ : La clé ${key} est sensible. Saisissez votre UPLANETNAME pour chiffrer avant de publier.`);
-                    statusEl.textContent = '❌ Annulé : chiffrement requis pour ' + key;
-                    return; // ON ARRÊTE TOUT ICI
+            // Si c'est une clé qui DOIT être chiffrée
+            if (isKeySensitive(key) || input.dataset.encrypted === 'true') {
+                if (!uplanetname || !keyHex) {
+                    alert(`SÉCURITÉ : Vous devez vous connecter avec UPLANETNAME pour chiffrer la clé ${key}.`);
+                    return; // Annulation totale de la publication
                 }
-                updated[key] = await aesEncrypt(newVal, keyHex);
+                
+                // Si la valeur affichée n'est pas déjà un format chiffré (cas où l'utilisateur a modifié ou corrigé la fuite)
+                if (!isEncrypted(newVal)) {
+                    updated[key] = await aesEncrypt(newVal, keyHex);
+                } else {
+                    updated[key] = newVal; // C'était déjà chiffré et non modifié
+                }
             } else {
-                updated[key] = newVal;
+                updated[key] = newVal; // Valeur normale en clair (TVA, etc.)
             }
         }
 

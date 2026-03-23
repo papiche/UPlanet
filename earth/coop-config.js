@@ -310,13 +310,28 @@
         for (const input of inputs) {
             const key = input.dataset.key;
             const newVal = input.value.trim();
-            if (!newVal) continue; // Skip empty fields (keep existing)
-            // Auto-encrypt sensitive keys (same logic as cooperative_config.sh)
-            const isSensitive = key.includes('TOKEN') || key.includes('SECRET') || key.includes('KEY') || key.includes('PASSWORD') || key.includes('API') || key.includes('PRIVATE');
-            if (isSensitive || input.dataset.encrypted === 'true') {
+            if (!newVal) continue;
+
+            if (isKeySensitive(key)) {
+                // --- SÉCURITÉ ---
+                if (!uplanetname) {
+                    alert(`SÉCURITÉ : La clé ${key} est sensible. Saisissez votre UPLANETNAME pour chiffrer avant de publier.`);
+                    statusEl.textContent = '❌ Annulé : chiffrement requis pour ' + key;
+                    return; // ON ARRÊTE TOUT ICI
+                }
                 updated[key] = await aesEncrypt(newVal, keyHex);
             } else {
                 updated[key] = newVal;
+            }
+        }
+
+        for (const [key, val] of Object.entries(updated)) {
+            if (isKeySensitive(key) && !isEncrypted(val)) {
+                const errorMsg = `CRITICAL : La clé ${key} n'est pas chiffrée ! Abandon.`;
+                console.error(errorMsg);
+                statusEl.textContent = '❌ Erreur fatale de sécurité.';
+                alert(errorMsg);
+                return; // BLOQUAGE ABSOLU DE LA PUBLICATION
             }
         }
 

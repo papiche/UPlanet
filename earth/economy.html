@@ -2911,6 +2911,12 @@
         // isNewConfig: true when no cooperative-config existed on NOSTR (first setup)
         let isNewConfig = false;
 
+        function isKeySensitive(key) {
+            if (!key) return false;
+            const k = key.toUpperCase();
+            return k.includes('KEY') || k.includes('API') || k.includes('PASSWORD') || k.includes('PRIVATE') || k.includes('SECRET') || k.includes('TOKEN');
+        }
+
         function renderCoopSection(config, decrypted, editable) {
             const container = document.getElementById('coop-config-content');
             if (!container) return;
@@ -3007,15 +3013,38 @@
             // Collect edited values, re-encrypt those that were encrypted
             const inputs = document.querySelectorAll('#coop-config-content input[data-key]');
             const updated = { ...coopConfig };
+            const keyHex = uplanetname ? await sha256hex(uplanetname) : null;
+
             for (const input of inputs) {
                 const key = input.dataset.key;
                 const newVal = input.value.trim();
-                if (input.dataset.encrypted === 'true' && uplanetname) {
-                    // Re-encrypt modified credential values
-                    const keyHex = await sha256hex(uplanetname);
-                    updated[key] = await aesEncrypt(newVal, keyHex);
+                
+                // Si c'est une clé qui DOIT être chiffrée (détectée par nom ou par attribut)
+                if (isKeySensitive(key) || input.dataset.encrypted === 'true') {
+                    if (!uplanetname || !keyHex) {
+                        alert(`SÉCURITÉ : Vous devez vous connecter avec UPLANETNAME pour chiffrer la clé ${key}.`);
+                        return;
+                    }
+                    
+                    // Si la valeur n'est pas déjà chiffrée
+                    if (!isEncrypted(newVal)) {
+                        updated[key] = await aesEncrypt(newVal, keyHex);
+                    } else {
+                        updated[key] = newVal;
+                    }
                 } else {
                     updated[key] = newVal;
+                }
+            }
+
+            // SECURITY CHECK: Final verification before publishing
+            for (const [key, val] of Object.entries(updated)) {
+                if (isKeySensitive(key) && !isEncrypted(val)) {
+                    const errorMsg = `CRITICAL SECURITY: La clé ${key} contient un secret non chiffré ! Abandon.`;
+                    console.error(errorMsg);
+                    alert(errorMsg);
+                    statusEl.textContent = '❌ Erreur fatale de sécurité.';
+                    return; // BLOCK PUBLICATION
                 }
             }
 

@@ -36,7 +36,7 @@
     function isKeySensitive(key) {
         if (!key) return false;
         const k = key.toUpperCase();
-        return k.includes('KEY') || k.includes('API') || k.includes('PASSWORD') || k.includes('PRIVATE') || k.includes('SECRET');
+        return k.includes('KEY') || k.includes('API') || k.includes('PASSWORD') || k.includes('PRIVATE') || k.includes('SECRET') || k.includes('TOKEN');
     }
 
     function isEncrypted(val) {

@@ -88,12 +88,16 @@
     }
 
     async function deriveNostrKeys(salt, pepper) {
+        console.log(`[coop-config] deriveNostrKeys: salt=${salt.substring(0, 8)}..., pepper=${pepper.substring(0, 8)}...`);
         const NostrLib = window.NostrTools || window.Nostr;
         if (!NostrLib) throw new Error('nostr.bundle.js required');
+        console.log(`[coop-config] scryptDerive en cours...`);
         const seed = await scryptDerive(pepper, salt);
+        console.log(`[coop-config] scryptDerive terminé, seed length=${seed.length}`);
         const privBuf = await crypto.subtle.digest('SHA-256', seed);
         const privHex = Array.from(new Uint8Array(privBuf)).map(b => b.toString(16).padStart(2, '0')).join('');
         const pubHex = NostrLib.getPublicKey(privHex);
+        console.log(`[coop-config] Clés dérivées: priv=${privHex.substring(0, 8)}..., pub=${pubHex.substring(0, 8)}...`);
         return { privHex, pubHex };
     }
 
@@ -116,18 +120,39 @@
     }
 
     function fetchCoopConfig(relay) {
+        console.log(`[coop-config] fetchCoopConfig: connexion à ${relay}`);
         return new Promise((resolve, reject) => {
             const ws = new WebSocket(relay);
             const subId = 'coop-' + Date.now();
             let result = null;
-            const timeout = setTimeout(() => { ws.close(); reject('timeout'); }, 8000);
-            ws.onopen = () => ws.send(JSON.stringify(['REQ', subId, { kinds: [COOP_KIND], '#d': [COOP_DTAG], limit: 10 }]));
+            const timeout = setTimeout(() => {
+                console.warn(`[coop-config] fetchCoopConfig timeout après 8s sur ${relay}`);
+                ws.close();
+                reject('timeout');
+            }, 8000);
+            ws.onopen = () => {
+                console.log(`[coop-config] WebSocket ouvert, envoi REQ pour kind ${COOP_KIND} d:${COOP_DTAG}`);
+                ws.send(JSON.stringify(['REQ', subId, { kinds: [COOP_KIND], '#d': [COOP_DTAG], limit: 10 }]));
+            };
             ws.onmessage = (e) => {
                 const msg = JSON.parse(e.data);
-                if (msg[0] === 'EVENT' && msg[2]) { const ev = msg[2]; if (!result || ev.created_at > result.created_at) result = ev; }
-                if (msg[0] === 'EOSE') { clearTimeout(timeout); ws.close(); resolve(result); }
+                if (msg[0] === 'EVENT' && msg[2]) {
+                    const ev = msg[2];
+                    console.log(`[coop-config] Événement reçu: ${ev.id.substring(0, 8)}... créé ${new Date(ev.created_at * 1000).toISOString()}`);
+                    if (!result || ev.created_at > result.created_at) result = ev;
+                }
+                if (msg[0] === 'EOSE') {
+                    console.log(`[coop-config] EOSE reçu, résultat ${result ? 'trouvé' : 'non trouvé'}`);
+                    clearTimeout(timeout);
+                    ws.close();
+                    resolve(result);
+                }
             };
-            ws.onerror = () => { clearTimeout(timeout); reject('ws error'); };
+            ws.onerror = (err) => {
+                console.error(`[coop-config] WebSocket error:`, err);
+                clearTimeout(timeout);
+                reject('ws error');
+            };
         });
     }
 
@@ -247,14 +272,25 @@
     }
 
     async function decryptAll(config, key) {
+        console.log(`[coop-config] decryptAll: clé=${key.substring(0, 8)}..., ${Object.keys(config).length} clés à examiner`);
         const keyHex = await sha256hex(key);
+        console.log(`[coop-config] decryptAll: keyHex=${keyHex.substring(0, 8)}...`);
         const result = {};
+        let encryptedCount = 0;
         for (const [k, v] of Object.entries(config)) {
             if (isEncrypted(v)) {
-                try { result[k] = await aesDecrypt(v.substring(0, 32), v.substring(33), keyHex); }
-                catch (e) { result[k] = '(erreur dechiffrement)'; }
+                encryptedCount++;
+                try {
+                    result[k] = await aesDecrypt(v.substring(0, 32), v.substring(33), keyHex);
+                    console.log(`[coop-config] decryptAll: ${k} déchiffré (${result[k].length} chars)`);
+                }
+                catch (e) {
+                    console.error(`[coop-config] decryptAll erreur pour ${k}:`, e);
+                    result[k] = '(erreur dechiffrement)';
+                }
             }
         }
+        console.log(`[coop-config] decryptAll: ${encryptedCount} valeurs chiffrées traitées`);
         return result;
     }
 
@@ -347,8 +383,12 @@
     // ========================================
 
     function initCoopConfig() {
+        console.log('[coop-config] Initialisation, recherche de #coop-config-root');
         const root = document.getElementById('coop-config-root');
-        if (!root) return;
+        if (!root) {
+            console.warn('[coop-config] #coop-config-root non trouvé, arrêt');
+            return;
+        }
 
         root.innerHTML = `
             <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;flex-wrap:wrap;
@@ -365,22 +405,28 @@
         `;
 
         relayUrl = detectRelay();
+        console.log('[coop-config] Relay détecté:', relayUrl);
         const statusEl = document.getElementById('coop-status');
 
         // Fetch config from relay
+        console.log('[coop-config] Récupération de la config depuis relay...');
         fetchCoopConfig(relayUrl).then(event => {
             if (!event) {
+                console.log('[coop-config] Aucun événement trouvé, nouvelle config nécessaire');
                 isNewConfig = true;
                 document.getElementById('coop-config-content').innerHTML = '<div style="color:#f39c12;">Aucune config cooperative trouvee. Authentifiez-vous pour creer la config initiale.</div>';
                 statusEl.textContent = relayUrl;
             } else {
+                console.log('[coop-config] Événement trouvé:', event.id, 'pubkey:', event.pubkey.substring(0, 8) + '...');
                 coopEvent = event;
                 coopConfig = JSON.parse(event.content);
                 window._coopConfigData = coopConfig;
+                console.log('[coop-config] Config parsée, clés:', Object.keys(coopConfig).length);
                 statusEl.textContent = 'Pubkey: ' + event.pubkey.substring(0, 16) + '... | ' + new Date(event.created_at * 1000).toLocaleString() + ' | ' + relayUrl;
                 renderCoopSection(coopConfig, null, false);
             }
         }).catch(e => {
+            console.error('[coop-config] Erreur fetchCoopConfig:', e);
             document.getElementById('coop-config-content').textContent = 'Erreur: ' + e;
         });
 

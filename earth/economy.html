@@ -1697,66 +1697,23 @@
                     <div class="simulation-results" id="simulation-results">
                         <!-- Results will be displayed here -->
                     </div>
-                    <!-- Tax Configuration Section -->
+                    <!-- Tax Configuration Display (Read-only from NOSTR) -->
                     <div style="margin-top: 16px; padding: 12px; background: rgba(52,152,219,0.1); border-radius: 8px; border-left: 3px solid #3498db;">
-                        <div style="font-size: 0.9em; color: #3498db; font-weight: 600; margin-bottom: 8px;">⚖️ Configuration Fiscale</div>
-                        <div style="display: flex; gap: 16px; align-items: center; flex-wrap: wrap; margin-bottom: 8px;">
-                            <div style="display: flex; align-items: center; gap: 6px;">
-                                <label style="font-size: 0.8em; color: #b8c6e0;">Structure:</label>
-                                <select id="legal-structure" style="padding: 2px 4px; font-size: 0.8em; border-radius: 4px; border: 1px solid #232733; background: #181c24; color: #eaf6ff;">
-                                    <option value="association">Association Loi 1901</option>
-                                    <option value="scic" selected>SCIC SAS ⭐ (Recommandé UPlanet)</option>
-                                    <option value="gie">GIE (Groupement d'Intérêt Économique)</option>
-                                    <option value="sas">SAS (Société par Actions Simplifiée)</option>
-                                    <option value="sarl">SARL (Société à Responsabilité Limitée)</option>
-                                    <option value="auto-entrepreneur">Auto-entrepreneur / Micro-entreprise</option>
-                                    <option value="sci">SCI (Société Civile Immobilière)</option>
-                                    <option value="federation">Fédération Commerciale</option>
-                                    <option value="startup">Startup (SAS + levée de fonds)</option>
-                                    <option value="cooperative">Coopérative (SCOP)</option>
-                                </select>
-                            </div>
-                        </div>
+                        <div style="font-size: 0.9em; color: #3498db; font-weight: 600; margin-bottom: 8px;">⚖️ Configuration Fiscale (Coopérative)</div>
                         <div style="display: flex; gap: 16px; align-items: center; flex-wrap: wrap;">
                             <div style="display: flex; align-items: center; gap: 6px;">
-                                <label style="font-size: 0.8em; color: #b8c6e0;">TVA Locations:</label>
-                                <input type="number" id="vat-rate" min="0" max="30" step="0.1" value="0.0" style="width: 50px; padding: 2px 4px; font-size: 0.8em; border-radius: 4px; border: 1px solid #232733; background: #181c24; color: #eaf6ff; text-align: center;">
+                                <span style="font-size: 0.8em; color: #b8c6e0;">TVA Locations:</span>
+                                <span id="display-vat-rate" style="font-size: 0.9em; color: #eaf6ff; font-weight: bold;">--</span>
                                 <span style="font-size: 0.8em; color: #b8c6e0;">%</span>
                             </div>
                             <div style="display: flex; align-items: center; gap: 6px;">
-                                <label style="font-size: 0.8em; color: #b8c6e0;">IS Bénéfices:</label>
-                                <input type="number" id="corporate-tax-rate" min="0" max="50" step="0.1" value="0.0" style="width: 50px; padding: 2px 4px; font-size: 0.8em; border-radius: 4px; border: 1px solid #232733; background: #181c24; color: #eaf6ff; text-align: center;">
+                                <span style="font-size: 0.8em; color: #b8c6e0;">IS Bénéfices:</span>
+                                <span id="display-corporate-tax-rate" style="font-size: 0.9em; color: #eaf6ff; font-weight: bold;">--</span>
                                 <span style="font-size: 0.8em; color: #b8c6e0;">%</span>
                             </div>
                         </div>
-                        <div id="tax-info" style="margin-top: 8px; font-size: 0.75em; color: #7f8c8d; line-height: 1.3;">
-                            <!-- Tax information will be displayed here -->
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Usage-based Advice Section -->
-                <div class="status-section" style="
-                    background: linear-gradient(145deg, #232733, #1e2a1e);
-                    border-left: 4px solid #2ecc71;
-                    transition: all 0.3s ease;
-                    padding: 12px;
-                    margin-top: 12px;
-                ">
-                    <div class="metric" style="display: flex; flex-direction: column; gap: 8px;">
-                        <div class="metric-title" style="
-                            font-size: 1.1em;
-                            color: #eaf6ff;
-                            display: flex;
-                            align-items: center;
-                            gap: 8px;
-                            margin-bottom: 8px;
-                        ">
-                            <span style="font-size: 1.2em;">💡</span>
-                            <span>Conseils selon votre Usage du ẐEN</span>
-                        </div>
-                        <div id="usage-advice" style="color: #b8c6e0; line-height: 1.4;">
-                            <!-- Usage advice will be populated here -->
+                        <div style="margin-top: 8px; font-size: 0.75em; color: #7f8c8d;">
+                            Paramètres définis par la configuration coopérative (kind 30800).
                         </div>
                     </div>
                 </div>
@@ -2005,9 +1962,16 @@
                 const newNostr = parseInt(newNostrInput.value) || nostrAboveZcard;
                 const newZen = parseInt(newZenInput.value) || playersAboveZcard;
                 
-                // Get tax rates from selectors
-                const vatRate = parseFloat(document.getElementById('vat-rate')?.value || 20.0) / 100;
-                const corporateTaxRate = parseFloat(document.getElementById('corporate-tax-rate')?.value || 25.0) / 100;
+                // Get tax rates from cooperative config
+                const cc = window._coopConfigData;
+                const vatRate = cc && cc.TVA_RATE ? parseFloat(cc.TVA_RATE) / 100 : 0.20;
+                const corporateTaxRate = cc && cc.IS_RATE_NORMAL ? parseFloat(cc.IS_RATE_NORMAL) / 100 : 0.25;
+
+                // Update display
+                const displayVat = document.getElementById('display-vat-rate');
+                const displayIs = document.getElementById('display-corporate-tax-rate');
+                if (displayVat) displayVat.textContent = (vatRate * 100).toFixed(1);
+                if (displayIs) displayIs.textContent = (corporateTaxRate * 100).toFixed(1);
                 
                 // Calculate weekly revenue (NCARD and ZCARD are per week)
                 const weeklyNostrRevenue = newNostr * ncard;
@@ -2125,25 +2089,9 @@
                 const assetsAmount = netSurplus * assetsPct;
                 const captainBonusAmount = netSurplus * captainBonusPct;
 
-                // Get legal structure for display
-                const legalStructure = document.getElementById('legal-structure')?.value || 'association';
-                const structureTitles = {
-                    'association': 'Association Loi 1901',
-                    'scic': 'SCIC SAS',
-                    'gie': 'GIE',
-                    'sas': 'SAS',
-                    'sarl': 'SARL',
-                    'auto-entrepreneur': 'Auto-entrepreneur',
-                    'sci': 'SCI',
-                    'federation': 'Fédération Commerciale',
-                    'startup': 'Startup',
-                    'cooperative': 'SCOP'
-                };
-                const structureTitle = structureTitles[legalStructure] || 'Association Loi 1901';
-
                 html += `
                 <div class="uplanet-distribution ${totalWeeklyRevenue > 0 ? 'active' : ''}" style="background:#232733;">
-                    <h3 style="color:#eaf6ff; text-shadow:0 2px 8px #181c24; letter-spacing:1px;">Distribution ${structureTitle}</h3>
+                    <h3 style="color:#eaf6ff; text-shadow:0 2px 8px #181c24; letter-spacing:1px;">Distribution Coopérative</h3>
                     ${totalWeeklyRevenue > 0 ? `
                     <div style="margin-bottom: 12px; padding: 8px; background: rgba(231,76,60,0.1); border-radius: 6px; border-left: 3px solid #e74c3c;">
                         <div style="font-size: 0.9em; color: #e74c3c; font-weight: 600;">📊 Provisions Fiscales Totales</div>
@@ -2209,440 +2157,8 @@
             newNostrInput.addEventListener('input', updateSimulation);
             newZenInput.addEventListener('input', updateSimulation);
             
-            // Add event listeners for tax rate changes
-            setTimeout(() => {
-                const vatRateInput = document.getElementById('vat-rate');
-                const corporateTaxRateInput = document.getElementById('corporate-tax-rate');
-                const legalStructureSelect = document.getElementById('legal-structure');
-                const taxInfoDiv = document.getElementById('tax-info');
-                
-                // Function to update tax rates based on legal structure
-                function updateTaxRatesForStructure() {
-                    const structure = legalStructureSelect.value;
-                    
-                    if (structure === 'association') {
-                        // Association Loi 1901 - Generally tax exempt
-                        vatRateInput.value = '0.0';
-                        corporateTaxRateInput.value = '0.0';
-                        taxInfoDiv.innerHTML = `
-                            <strong>Association Loi 1901 :</strong><br>
-                            • TVA : Exonérée si activité non lucrative (monnaie locale ẐEN)<br>
-                            • IS : Exonérée si gestion désintéressée<br>
-                            • Exception : 20% TVA + 24% IS si activité commerciale > 72k€
-                        `;
-                    } else if (structure === 'scic') {
-                        // SCIC SAS - Standard commercial rates
-                        vatRateInput.value = '20.0';
-                        corporateTaxRateInput.value = '25.0';
-                        taxInfoDiv.innerHTML = `
-                            <strong>SCIC SAS :</strong><br>
-                            • TVA : 20% sur prestations de location d'infrastructure<br>
-                            • IS : 15% (≤42.5k€) ou 25% (>42.5k€) sur bénéfices<br>
-                            • Répartition coopérative : 3x1/3 après provisions fiscales
-                        `;
-                    } else if (structure === 'gie') {
-                        // GIE - Tax transparency
-                        vatRateInput.value = '20.0';
-                        corporateTaxRateInput.value = '0.0';
-                        taxInfoDiv.innerHTML = `
-                            <strong>GIE (Groupement d'Intérêt Économique) ⭐ RECOMMANDÉ :</strong><br>
-                            • TVA : 20% sur prestations aux membres<br>
-                            • IS : 0% (transparence fiscale - imposé chez les membres)<br>
-                            • Bénéfices : Répartis selon quote-parts des membres<br>
-                            • Idéal pour fédération de commerçants (modèle Intermarché)
-                        `;
-                    } else if (structure === 'sas') {
-                        // SAS - Standard commercial rates
-                        vatRateInput.value = '20.0';
-                        corporateTaxRateInput.value = '25.0';
-                        taxInfoDiv.innerHTML = `
-                            <strong>SAS (Société par Actions Simplifiée) :</strong><br>
-                            • TVA : 20% sur toutes prestations<br>
-                            • IS : 15% (≤42.5k€) ou 25% (>42.5k€) sur bénéfices<br>
-                            • Gouvernance : Flexible, statuts sur mesure<br>
-                            • Responsabilité : Limitée au capital social
-                        `;
-                    } else if (structure === 'sarl') {
-                        // SARL - Traditional commercial structure
-                        vatRateInput.value = '20.0';
-                        corporateTaxRateInput.value = '25.0';
-                        taxInfoDiv.innerHTML = `
-                            <strong>SARL (Société à Responsabilité Limitée) :</strong><br>
-                            • TVA : 20% sur toutes prestations<br>
-                            • IS : 15% (≤42.5k€) ou 25% (>42.5k€) sur bénéfices<br>
-                            • Gouvernance : Gérance + assemblée des associés<br>
-                            • Capital minimum : 1€, responsabilité limitée aux apports
-                        `;
-                    } else if (structure === 'auto-entrepreneur') {
-                        // Auto-entrepreneur - Simplified regime
-                        vatRateInput.value = '0.0';
-                        corporateTaxRateInput.value = '22.0';
-                        taxInfoDiv.innerHTML = `
-                            <strong>Auto-entrepreneur / Micro-entreprise :</strong><br>
-                            • TVA : Exonérée si CA < 36.8k€ (services) ou 91.9k€ (vente)<br>
-                            • Cotisations sociales : 22% du CA (prestations de services)<br>
-                            • Simplicité : Déclaration mensuelle/trimestrielle<br>
-                            • Limité : Plafonds de CA, pas d'investisseurs
-                        `;
-                    } else if (structure === 'sci') {
-                        // SCI - Real estate focused
-                        vatRateInput.value = '0.0';
-                        corporateTaxRateInput.value = '0.0';
-                        taxInfoDiv.innerHTML = `
-                            <strong>SCI (Société Civile Immobilière) :</strong><br>
-                            • TVA : Généralement exonérée (activité civile)<br>
-                            • IS : Transparence fiscale (IR des associés)<br>
-                            • Usage : Gestion immobilière, pas adapté pour ẐEN commercial<br>
-                            • Note : Structure inadaptée pour monnaie numérique
-                        `;
-                    } else if (structure === 'startup') {
-                        // Startup - SAS optimized for fundraising
-                        vatRateInput.value = '20.0';
-                        corporateTaxRateInput.value = '25.0';
-                        taxInfoDiv.innerHTML = `
-                            <strong>Startup (SAS + levée de fonds) :</strong><br>
-                            • TVA : 20% sur prestations numériques<br>
-                            • IS : 15% (≤42.5k€) ou 25% (>42.5k€) + CIR possible<br>
-                            • Avantages : BSPCE, JEI, levées de fonds facilitées<br>
-                            • Idéal : Croissance rapide, innovation technologique ẐEN
-                        `;
-                    } else if (structure === 'cooperative') {
-                        // SCOP - Worker cooperative
-                        vatRateInput.value = '20.0';
-                        corporateTaxRateInput.value = '25.0';
-                        taxInfoDiv.innerHTML = `
-                            <strong>Coopérative (SCOP) :</strong><br>
-                            • TVA : 20% sur prestations<br>
-                            • IS : 25% mais réserves obligatoires (45% bénéfices)<br>
-                            • Gouvernance : 1 salarié = 1 voix, gestion démocratique<br>
-                            • Avantages : Participation salariés, exonérations fiscales
-                        `;
-                    } else if (structure === 'federation') {
-                        // Commercial Federation - Mixed model
-                        vatRateInput.value = '20.0';
-                        corporateTaxRateInput.value = '15.0';
-                        taxInfoDiv.innerHTML = `
-                            <strong>Fédération Commerciale (modèle "points fidélité") :</strong><br>
-                            • TVA : 20% sur prestations de gestion ẐEN<br>
-                            • IS : 15% (taux préférentiel fédération)<br>
-                            • Statut : GIE ou SAS selon gouvernance souhaitée<br>
-                            • Revenus : Commission sur transactions + cotisations membres
-                        `;
-                    }
-                    
-                    updateSimulation();
-                    updateUsageAdvice();
-                }
-
-                // Function to update usage advice based on legal structure
-                function updateUsageAdvice() {
-                    const structure = legalStructureSelect.value;
-                    const usageAdviceDiv = document.getElementById('usage-advice');
-                    
-                    if (!usageAdviceDiv) return;
-                    
-                    const adviceContent = {
-                        'association': `
-                            <h4 style="color: #2ecc71; margin: 0 0 8px 0;">🎯 Idéal pour : Monnaie Locale Citoyenne</h4>
-                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 12px;">
-                                <div>
-                                    <strong>✅ Cas d'usage recommandés :</strong>
-                                    <ul style="margin: 4px 0; padding-left: 16px;">
-                                        <li>Monnaie locale territoriale</li>
-                                        <li>Réseau d'échange local (SEL)</li>
-                                        <li>Communauté éco-responsable</li>
-                                        <li>Projet d'économie sociale</li>
-                                    </ul>
-                                </div>
-                                <div>
-                                    <strong>⚠️ Limites à considérer :</strong>
-                                    <ul style="margin: 4px 0; padding-left: 16px;">
-                                        <li>Pas de distribution de bénéfices</li>
-                                        <li>Gestion bénévole obligatoire</li>
-                                        <li>Risque fiscal si activité commerciale</li>
-                                    </ul>
-                                </div>
-                            </div>
-                        `,
-                        'gie': `
-                            <h4 style="color: #2ecc71; margin: 0 0 8px 0;">🎯 Idéal pour : Fédération de Commerçants</h4>
-                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 12px;">
-                                <div>
-                                    <strong>✅ Cas d'usage recommandés :</strong>
-                                    <ul style="margin: 4px 0; padding-left: 16px;">
-                                        <li>Points fidélité inter-enseignes</li>
-                                        <li>Réseau de restaurateurs</li>
-                                        <li>Centre commercial virtuel</li>
-                                        <li>Mutualisation des coûts IT</li>
-                                    </ul>
-                                </div>
-                                <div>
-                                    <strong>💰 Modèle économique :</strong>
-                                    <ul style="margin: 4px 0; padding-left: 16px;">
-                                        <li>Cotisation mensuelle : 50-200€</li>
-                                        <li>Commission : 0.5-2% par transaction</li>
-                                        <li>Services premium payants</li>
-                                    </ul>
-                                </div>
-                            </div>
-                        `,
-                        'sas': `
-                            <h4 style="color: #2ecc71; margin: 0 0 8px 0;">🎯 Idéal pour : Entreprise Innovante</h4>
-                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 12px;">
-                                <div>
-                                    <strong>✅ Cas d'usage recommandés :</strong>
-                                    <ul style="margin: 4px 0; padding-left: 16px;">
-                                        <li>Plateforme ẐEN B2B</li>
-                                        <li>Services financiers numériques</li>
-                                        <li>Marketplace avec ẐEN</li>
-                                        <li>Croissance rapide prévue</li>
-                                    </ul>
-                                </div>
-                                <div>
-                                    <strong>🚀 Avantages :</strong>
-                                    <ul style="margin: 4px 0; padding-left: 16px;">
-                                        <li>Gouvernance flexible</li>
-                                        <li>Entrée d'investisseurs facilitée</li>
-                                        <li>Responsabilité limitée</li>
-                                    </ul>
-                                </div>
-                            </div>
-                        `,
-                        'sarl': `
-                            <h4 style="color: #2ecc71; margin: 0 0 8px 0;">🎯 Idéal pour : PME Traditionnelle</h4>
-                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 12px;">
-                                <div>
-                                    <strong>✅ Cas d'usage recommandés :</strong>
-                                    <ul style="margin: 4px 0; padding-left: 16px;">
-                                        <li>Commerce intégrant le ẐEN</li>
-                                        <li>Prestataire de services ẐEN</li>
-                                        <li>Activité stable et locale</li>
-                                        <li>Associés familiaux/amis</li>
-                                    </ul>
-                                </div>
-                                <div>
-                                    <strong>📊 Caractéristiques :</strong>
-                                    <ul style="margin: 4px 0; padding-left: 16px;">
-                                        <li>Gouvernance encadrée par la loi</li>
-                                        <li>Cession de parts réglementée</li>
-                                        <li>Stabilité juridique</li>
-                                    </ul>
-                                </div>
-                            </div>
-                        `,
-                        'auto-entrepreneur': `
-                            <h4 style="color: #f39c12; margin: 0 0 8px 0;">🎯 Idéal pour : Démarrage ẐEN Individuel</h4>
-                            
-                            <div style="margin-bottom: 12px; padding: 8px; background: rgba(52,152,219,0.1); border-radius: 4px; border-left: 3px solid #3498db;">
-                                <strong>🌟 Usages ẐEN en Micro-Entreprise :</strong><br>
-                                • <strong>Capitaine débutant</strong> : Maintenance nœud RPi5 (rémunération 2xPAF)<br>
-                                • <strong>Créateur de contenu</strong> : Monétisation likes/partages en ẐEN<br>
-                                • <strong>Services ẐEN</strong> : Formations, consulting, développement<br>
-                                • <strong>Pont de liquidité</strong> : Conversion ẐEN → EUR occasionnelle
-                            </div>
-
-                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 12px;">
-                                <div>
-                                    <strong>✅ Avantages ẐEN :</strong>
-                                    <ul style="margin: 4px 0; padding-left: 16px;">
-                                        <li><strong>Simplicité fiscale :</strong> Déclaration uniquement sur EUR reçus</li>
-                                        <li><strong>Pas de TVA :</strong> Si < 36 800€ CA (franchise)</li>
-                                        <li><strong>Cotisations :</strong> 21.2% uniquement sur EUR encaissés</li>
-                                        <li><strong>Démarrage rapide :</strong> Création gratuite en ligne</li>
-                                    </ul>
-                                </div>
-                                <div>
-                                    <strong>⚠️ Limites importantes :</strong>
-                                    <ul style="margin: 4px 0; padding-left: 16px;">
-                                        <li><strong>CA limité :</strong> 77 700€ services (BNC)</li>
-                                        <li><strong>Pas d'associés :</strong> Activité strictement individuelle</li>
-                                        <li><strong>Pas de frais :</strong> Abattement forfaitaire 34% seulement</li>
-                                        <li><strong>Évolution :</strong> Passage SAS/SARL si croissance</li>
-                                    </ul>
-                                </div>
-                            </div>
-
-                            <div style="margin-top: 8px; padding: 8px; background: rgba(46,204,113,0.1); border-radius: 4px; border-left: 3px solid #2ecc71;">
-                                <strong>💡 Stratégie ẐEN recommandée :</strong><br>
-                                • <strong>Phase 1 :</strong> Accumuler ẐEN via services/contenu<br>
-                                • <strong>Phase 2 :</strong> Convertir partiellement selon besoins EUR<br>
-                                • <strong>Phase 3 :</strong> Réinvestir ẐEN en parts sociales coopérative<br>
-                                • <strong>Évolution :</strong> Devenir sociétaire puis Capitaine/Armateur
-                            </div>
-                        `,
-                        'sci': `
-                            <h4 style="color: #e74c3c; margin: 0 0 8px 0;">❌ Non Recommandé pour ẐEN</h4>
-                            <div style="background: rgba(231,76,60,0.1); padding: 12px; border-radius: 6px; border-left: 3px solid #e74c3c;">
-                                <strong>La SCI est inadaptée pour une monnaie numérique :</strong>
-                                <ul style="margin: 8px 0; padding-left: 16px;">
-                                    <li>Objet social limité à l'immobilier</li>
-                                    <li>Activité commerciale interdite</li>
-                                    <li>Pas de prestations de services</li>
-                                    <li>Réglementation stricte</li>
-                                </ul>
-                                <strong>Alternative :</strong> Choisissez SAS ou SARL pour activités ẐEN.
-                            </div>
-                        `,
-                        'startup': `
-                            <h4 style="color: #2ecc71; margin: 0 0 8px 0;">🎯 Idéal pour : Innovation ẐEN Disruptive</h4>
-                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 12px;">
-                                <div>
-                                    <strong>✅ Cas d'usage recommandés :</strong>
-                                    <ul style="margin: 4px 0; padding-left: 16px;">
-                                        <li>DeFi avec ẐEN</li>
-                                        <li>Plateforme d'échange ẐEN</li>
-                                        <li>Innovation blockchain</li>
-                                        <li>Croissance exponentielle visée</li>
-                                    </ul>
-                                </div>
-                                <div>
-                                    <strong>🚀 Avantages startup :</strong>
-                                    <ul style="margin: 4px 0; padding-left: 16px;">
-                                        <li>BSPCE pour équipes</li>
-                                        <li>Statut JEI possible</li>
-                                        <li>CIR/CII pour R&D</li>
-                                        <li>Levées de fonds facilitées</li>
-                                    </ul>
-                                </div>
-                            </div>
-                        `,
-                        'cooperative': `
-                            <h4 style="color: #2ecc71; margin: 0 0 8px 0;">🎯 Idéal pour : Économie Collaborative</h4>
-                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 12px;">
-                                <div>
-                                    <strong>✅ Cas d'usage recommandés :</strong>
-                                    <ul style="margin: 4px 0; padding-left: 16px;">
-                                        <li>Plateforme coopérative ẐEN</li>
-                                        <li>Services mutualisés</li>
-                                        <li>Économie sociale et solidaire</li>
-                                        <li>Participation salariés</li>
-                                    </ul>
-                                </div>
-                                <div>
-                                    <strong>🤝 Spécificités SCOP :</strong>
-                                    <ul style="margin: 4px 0; padding-left: 16px;">
-                                        <li>Salariés = associés majoritaires</li>
-                                        <li>Participation aux bénéfices</li>
-                                        <li>Réserves impartageables</li>
-                                    </ul>
-                                </div>
-                            </div>
-                        `,
-                        'scic': `
-                            <h4 style="color: #2ecc71; margin: 0 0 8px 0;">🎯 ⭐ PARFAIT pour : Écosystème ẐEN Coopératif</h4>
-                            
-                            <div style="margin-bottom: 12px; padding: 8px; background: rgba(52,152,219,0.1); border-radius: 4px; border-left: 3px solid #3498db;">
-                                <strong>🌟 Usages ẐEN optimaux en SCIC :</strong><br>
-                                • <strong>Infrastructure décentralisée</strong> : PC GAMER + 24 Satellites RPi5<br>
-                                • <strong>Monnaie territoriale</strong> : Circulation locale avec pont EUR<br>
-                                • <strong>Économie contributive</strong> : Récompenses création de contenu<br>
-                                • <strong>Coopérative de services</strong> : Cloud, IPFS, NOSTR, NextCloud
-                            </div>
-
-                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 12px;">
-                                <div>
-                                    <strong>✅ Modèle économique UPlanet :</strong>
-                                    <ul style="margin: 4px 0; padding-left: 16px;">
-                                        <li><strong>Location :</strong> 10Go MULTIPASS (1Ẑ/sem), 128Go ZEN Card (+ 4Ẑ/sem)</li>
-                                        <li><strong>Parts sociales :</strong> 50Ẑ → Exemption loyer + vote</li>
-                                        <li><strong>Rémunération :</strong> PAF Armateur + 2xPAF Capitaine</li>
-                                        <li><strong>Surplus :</strong> Répartition 3x1/3 automatique</li>
-                                    </ul>
-                                </div>
-                                <div>
-                                    <strong>🏛️ Multi-sociétariat légal :</strong>
-                                    <ul style="margin: 4px 0; padding-left: 16px;">
-                                        <li><strong>Locataires :</strong> Clients → Sociétaires (parcours naturel)</li>
-                                        <li><strong>Capitaines :</strong> Opérateurs techniques rémunérés</li>
-                                        <li><strong>Armateurs :</strong> Apporteurs matériel (capital)</li>
-                                        <li><strong>Collectivités :</strong> Partenaires institutionnels</li>
-                                    </ul>
-                                </div>
-                            </div>
-
-                            <div style="margin-top: 8px; padding: 8px; background: rgba(46,204,113,0.1); border-radius: 4px; border-left: 3px solid #2ecc71;">
-                                <strong>💡 Avantages juridiques ẐEN :</strong><br>
-                                • <strong>Monnaie interne</strong> : Légale en SCIC (pas de régulation bancaire)<br>
-                                • <strong>Pont de liquidité</strong> : Conversion ẐEN → EUR légale<br>
-                                • <strong>Fiscalité simple</strong> : Fait générateur = conversion EUR<br>
-                                • <strong>Agrément ESS</strong> : Reconnaissance utilité sociale possible
-                            </div>
-
-                            <div style="margin-top: 8px; padding: 8px; background: rgba(230,126,34,0.1); border-radius: 4px; border-left: 3px solid #e67e22;">
-                                <strong>⚠️ Contraintes SCIC à respecter :</strong><br>
-                                • <strong>Capital minimum</strong> : 18 500€ (ou 37 000€ si forme SAS)<br>
-                                • <strong>Lucrativité limitée</strong> : Pas de distribution libre des bénéfices<br>
-                                • <strong>Agrément préfectoral</strong> : Dossier d'utilité sociale obligatoire<br>
-                                • <strong>Reporting annuel</strong> : Bilan social et impact territorial
-                            </div>
-                        `,
-                        'federation': `
-                            <h4 style="color: #2ecc71; margin: 0 0 8px 0;">🎯 Idéal pour : Réseau Commercial ẐEN (Modèle "Intermarché Points")</h4>
-                            
-                            <div style="margin-bottom: 12px; padding: 8px; background: rgba(52,152,219,0.1); border-radius: 4px; border-left: 3px solid #3498db;">
-                                <strong>🌟 Usages ẐEN en Fédération Commerciale :</strong><br>
-                                • <strong>Carte fidélité inter-enseignes</strong> : 1€ d'achat = 1 ẐEN (10% cashback, précision 10cts)<br>
-                                • <strong>Cashback mutualisé</strong> : Dépenser ẐEN chez tous partenaires<br>
-                                • <strong>Marketing collaboratif</strong> : Campagnes communes financées en ẐEN<br>
-                                • <strong>Trésorerie partagée</strong> : Fonds de roulement collectif
-                            </div>
-
-                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 12px;">
-                                <div>
-                                    <strong>✅ Modèle économique ẐEN :</strong>
-                                    <ul style="margin: 4px 0; padding-left: 16px;">
-                                        <li><strong>Émission :</strong> 10€ achat = 1 ẐEN (10% cashback)</li>
-                                        <li><strong>Utilisation :</strong> 1 ẐEN = 1€ de réduction</li>
-                                        <li><strong>Cotisation :</strong> 0.5% CA pour alimenter fonds ẐEN</li>
-                                        <li><strong>Gouvernance :</strong> 1 commerce = 1 voix (égalitaire)</li>
-                                    </ul>
-                                </div>
-                                <div>
-                                    <strong>🏪 Secteurs optimaux :</strong>
-                                    <ul style="margin: 4px 0; padding-left: 16px;">
-                                        <li><strong>Restauration :</strong> Bars, restaurants, traiteurs</li>
-                                        <li><strong>Commerce :</strong> Épiceries, boulangeries, pharmacies</li>
-                                        <li><strong>Services :</strong> Coiffeurs, garages, pressing</li>
-                                        <li><strong>Artisanat :</strong> Menuisiers, électriciens, plombiers</li>
-                                    </ul>
-                                </div>
-                            </div>
-
-                            <div style="margin-top: 8px; padding: 8px; background: rgba(46,204,113,0.1); border-radius: 4px; border-left: 3px solid #2ecc71;">
-                                <strong>💡 Avantages ẐEN Fédération :</strong><br>
-                                • <strong>Fidélisation croisée</strong> : Clients partagés entre commerces<br>
-                                • <strong>Trésorerie optimisée</strong> : Délai de conversion ẐEN → EUR<br>
-                                • <strong>Marketing mutualisé</strong> : Coûts publicitaires partagés<br>
-                                • <strong>Données clients</strong> : Analytics comportementaux anonymisés
-                            </div>
-
-                            <div style="margin-top: 8px; padding: 8px; background: rgba(230,126,34,0.1); border-radius: 4px; border-left: 3px solid #e67e22;">
-                                <strong>⚠️ Points d'attention juridiques :</strong><br>
-                                • <strong>Statut GIE recommandé</strong> : Transparence fiscale + mutualisation<br>
-                                • <strong>Règles RGPD</strong> : Consentement clients pour données partagées<br>
-                                • <strong>Comptabilité séparée</strong> : ẐEN ≠ monnaie légale (jeton interne)<br>
-                                • <strong>Conversion EUR</strong> : Déclaration fiscale individuelle par commerce
-                            </div>
-                        `
-                    };
-                    
-                    usageAdviceDiv.innerHTML = adviceContent[structure] || adviceContent['association'];
-                }
-                
-                if (vatRateInput) {
-                    vatRateInput.addEventListener('input', updateSimulation);
-                }
-                if (corporateTaxRateInput) {
-                    corporateTaxRateInput.addEventListener('input', updateSimulation);
-                }
-                if (legalStructureSelect) {
-                    legalStructureSelect.addEventListener('change', updateTaxRatesForStructure);
-                    // Initialize with default values
-                    updateTaxRatesForStructure();
-                    // Initialize usage advice
-                    setTimeout(() => updateUsageAdvice(), 200);
-                }
-            }, 100);
+            // Initial simulation
+            updateSimulation();
 
             // Initial simulation
             updateSimulation();
@@ -2865,390 +2381,41 @@
     <script src="coop-config.js"></script>
     
     <script>
-    (function() {
-        const COOP_KIND = 30800;
-        const COOP_DTAG = 'cooperative-config';
-        let coopConfig = null;
-        let coopEvent = null;
-        let uplanetname = null;
-        let captainPrivHex = null;
-        let captainPubHex = null;
-        let relayUrl = null;
-        // Expose the section element so createEconomicDashboard can re-append it
-        window._coopConfigSection = null;
-        // Expose coop config data so the simulator can read it
-        window._coopConfigData = null;
-
-        // ── Crypto & relay — déléguées à coop-config.js (chargé en bas du body) ──
-        // Toutes ces fonctions sont appelées inside des event handlers → coop-config.js est chargé.
-        function detectRelay()            { return window.CoopConfig?.detectRelay()          ?? 'ws://127.0.0.1:7777'; }
-        function isEncrypted(v)           { return window.CoopConfig?.isEncrypted(v)         ?? false; }
-        function sha256hex(s)             { return window.CoopConfig?.sha256hex(s)            ?? Promise.resolve(''); }
-        function aesEncrypt(p, k)         { return window.CoopConfig?.aesEncrypt(p, k)        ?? Promise.resolve(p); }
-        function aesDecrypt(iv, ct, k)    { return window.CoopConfig?.aesDecrypt(iv, ct, k)   ?? Promise.resolve(''); }
-        function scryptDerive(p, s)       { return window.CoopConfig?.scryptDerive(p, s)      ?? Promise.reject('CoopConfig not loaded'); }
-        function deriveNostrKeys(s, p)    { return window.CoopConfig?.deriveNostrKeys(s, p)   ?? Promise.reject('CoopConfig not loaded'); }
-        function fetchCoopConfig(relay)   { return window.CoopConfig?.fetchCoopConfig(relay)  ?? Promise.reject('CoopConfig not loaded'); }
-        function publishEvent(relay, ev)  { return window.CoopConfig?.publishEvent(relay, ev) ?? Promise.resolve({ok: false, reason: 'CoopConfig not loaded'}); }
-
-        const LABELS = {
-            'COOPERATIVE_VERSION': 'Version', 'CREATED_AT': 'Créé le',
-            'TVA_RATE': 'TVA (%)', 'IS_RATE_REDUCED': 'IS réduit (%)', 'IS_RATE_NORMAL': 'IS normal (%)', 'IS_THRESHOLD': 'Seuil IS (€)',
-            'ZENCARD_SATELLITE': 'Part Satellite (Ẑ)', 'ZENCARD_CONSTELLATION': 'Part Constellation (Ẑ)',
-            'TREASURY_PERCENT': 'Trésorerie (%)', 'RND_PERCENT': 'R&D (%)', 'ASSETS_PERCENT': 'Actifs (%)', 'CAPTAIN_BONUS_PERCENT': 'Capitaine (%)',
-            'OCSLUG': 'OC Slug', 'OCAPIKEY': 'OC API Token',
-            'OC_URL_SATELLITE': 'URL Satellite', 'OC_URL_CONSTELLATION': 'URL Constellation',
-            'PLANTNET_API_KEY': 'PlantNet API Key',
-            'MJ_APIKEY_PUBLIC': 'MailJet Public', 'MJ_APIKEY_PRIVATE': 'MailJet Private', 'MJ_SENDER_EMAIL': 'Email expéditeur'
-        };
-
-        const SECTIONS = [
-            { title: '📊 Fiscalité', keys: ['TVA_RATE', 'IS_RATE_REDUCED', 'IS_RATE_NORMAL', 'IS_THRESHOLD'], readonly: true },
-            { title: '⭐ Parts coopératives', keys: ['ZENCARD_SATELLITE', 'ZENCARD_CONSTELLATION'] },
-            { title: '🤝 Règle 3x1/3 + 1%', keys: ['TREASURY_PERCENT', 'RND_PERCENT', 'ASSETS_PERCENT', 'CAPTAIN_BONUS_PERCENT'] },
-            { title: '🌐 OpenCollective', keys: ['OCSLUG', 'OCAPIKEY', 'OC_URL_SATELLITE', 'OC_URL_CONSTELLATION'] }
-        ];
-
-        const COMMENTS = ['_comment_fiscal', '_comment_shares', '_comment_3x13', '_comment_oc'];
-
-        // isNewConfig: true when no cooperative-config existed on NOSTR (first setup)
-        let isNewConfig = false;
-
-        function isKeySensitive(key) {
-            if (!key) return false;
-            const k = key.toUpperCase();
-            return k.includes('KEY') || k.includes('API') || k.includes('PASSWORD') || k.includes('PRIVATE') || k.includes('SECRET') || k.includes('TOKEN');
-        }
-
-        function renderCoopSection(config, decrypted, editable) {
-            const container = document.getElementById('coop-config-content');
-            if (!container) return;
-            let html = '';
-
-            for (const sec of SECTIONS) {
-                // Fiscal params: editable only on first setup (new UPlanet), locked after
-                const secReadonly = sec.readonly && !isNewConfig;
-                html += '<div style="margin-bottom:8px;"><span style="color:#eaf6ff;font-weight:600;">' + sec.title + '</span>';
-                if (secReadonly && editable) html += '<span style="color:#7f8c8d;font-size:0.7em;margin-left:6px;">🔒 non modifiable</span>';
-                if (sec.readonly && isNewConfig && editable) html += '<span style="color:#2ecc71;font-size:0.7em;margin-left:6px;">✏️ première configuration</span>';
-                html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:4px;margin-top:4px;">';
-                for (const k of sec.keys) {
-                    const v = config[k];
-                    if (v === undefined) continue;
-                    const enc = isEncrypted(v);
-                    let display = enc ? '🔒' : v;
-                    if (enc && decrypted && decrypted[k]) display = decrypted[k];
-                    const label = LABELS[k] || k;
-                    if (editable && !enc && !secReadonly) {
-                        html += '<div style="background:rgba(255,255,255,0.05);padding:4px 8px;border-radius:6px;">'
-                            + '<div style="color:#7f8c8d;font-size:0.75em;">' + label + '</div>'
-                            + '<input data-key="' + k + '" value="' + display + '" style="background:rgba(255,255,255,0.1);border:1px solid rgba(155,89,182,0.3);color:#eaf6ff;padding:2px 6px;border-radius:4px;width:90%;font-size:0.95em;">'
-                            + '</div>';
-                    } else {
-                        html += '<div style="background:rgba(255,255,255,0.05);padding:4px 8px;border-radius:6px;">'
-                            + '<div style="color:#7f8c8d;font-size:0.75em;">' + label + '</div>'
-                            + '<div style="color:#eaf6ff;font-size:1em;">' + display + '</div></div>';
-                    }
-                }
-                html += '</div></div>';
-            }
-
-            // Other keys (API keys, credentials — may be encrypted)
-            const shown = new Set(SECTIONS.flatMap(s => s.keys).concat(COMMENTS).concat(['COOPERATIVE_VERSION', 'CREATED_AT']));
-            const others = Object.keys(config).filter(k => !shown.has(k));
-            if (others.length) {
-                html += '<div style="margin-top:8px;"><span style="color:#eaf6ff;font-weight:600;">🔐 Credentials</span>';
-                html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:4px;margin-top:4px;">';
-                for (const k of others) {
-                    const v = config[k]; const enc = isEncrypted(v);
-                    let display = enc ? '🔒 chiffré' : v;
-                    if (enc && decrypted && decrypted[k]) display = decrypted[k];
-                    const canEdit = editable && (!enc || (decrypted && decrypted[k]));
-                    if (canEdit) {
-                        html += '<div style="background:rgba(255,255,255,0.05);padding:4px 8px;border-radius:6px;">'
-                            + '<div style="color:#7f8c8d;font-size:0.75em;">' + k + (enc ? ' 🔐' : '') + '</div>'
-                            + '<input data-key="' + k + '"' + (enc ? ' data-encrypted="true"' : '') + ' value="' + display + '" style="background:rgba(255,255,255,0.1);border:1px solid rgba(231,76,60,0.3);color:#eaf6ff;padding:2px 6px;border-radius:4px;width:90%;font-size:0.85em;">'
-                            + '</div>';
-                    } else {
-                        html += '<div style="background:rgba(255,255,255,0.05);padding:4px 8px;border-radius:6px;">'
-                            + '<div style="color:#7f8c8d;font-size:0.75em;">' + k + '</div>'
-                            + '<div style="color:#eaf6ff;font-size:0.9em;">' + display + '</div></div>';
-                    }
-                }
-                html += '</div></div>';
-            }
-
-            if (editable) {
-                html += '<div style="margin-top:10px;text-align:right;">'
-                    + '<button id="coop-save-btn" style="background:#2ecc71;color:white;border:none;padding:6px 16px;border-radius:6px;cursor:pointer;font-size:0.9em;">💾 Publier sur NOSTR</button>'
-                    + '</div>';
-            }
-
-            container.innerHTML = html;
-
-            if (editable) {
-                document.getElementById('coop-save-btn').addEventListener('click', saveCoopConfig);
-            }
-        }
-
-        async function decryptAll(config, key) {
-            const keyHex = await sha256hex(key);
-            const result = {};
-            for (const [k, v] of Object.entries(config)) {
-                if (isEncrypted(v)) {
-                    try { result[k] = await aesDecrypt(v.substring(0, 32), v.substring(33), keyHex); }
-                    catch (e) { result[k] = '❌ erreur'; }
-                }
-            }
-            return result;
-        }
-
-        async function saveCoopConfig() {
-            if (!captainPrivHex || !coopConfig) return;
-            const NostrLib = window.NostrTools || window.Nostr;
-            const statusEl = document.getElementById('coop-status');
-
-            // Warn if overwriting another captain's config
-            if (coopEvent && coopEvent.pubkey !== captainPubHex) {
-                if (!confirm('⚠️ Cette config a été publiée par un autre capitaine de la constellation.\nVoulez-vous la remplacer ?')) return;
-            }
-
-            // Collect edited values, re-encrypt those that were encrypted
-            const inputs = document.querySelectorAll('#coop-config-content input[data-key]');
-            const updated = { ...coopConfig };
-            const keyHex = uplanetname ? await sha256hex(uplanetname) : null;
-
-            for (const input of inputs) {
-                const key = input.dataset.key;
-                const newVal = input.value.trim();
-                
-                // Si c'est une clé qui DOIT être chiffrée (détectée par nom ou par attribut)
-                if (isKeySensitive(key) || input.dataset.encrypted === 'true') {
-                    if (!uplanetname || !keyHex) {
-                        alert(`SÉCURITÉ : Vous devez vous connecter avec UPLANETNAME pour chiffrer la clé ${key}.`);
-                        return;
-                    }
-                    
-                    // Si la valeur n'est pas déjà chiffrée
-                    if (!isEncrypted(newVal)) {
-                        updated[key] = await aesEncrypt(newVal, keyHex);
-                    } else {
-                        updated[key] = newVal;
-                    }
-                } else {
-                    updated[key] = newVal;
-                }
-            }
-
-            // SECURITY CHECK: Final verification before publishing
-            for (const [key, val] of Object.entries(updated)) {
-                if (isKeySensitive(key) && !isEncrypted(val)) {
-                    const errorMsg = `CRITICAL SECURITY: La clé ${key} contient un secret non chiffré ! Abandon.`;
-                    console.error(errorMsg);
-                    alert(errorMsg);
-                    statusEl.textContent = '❌ Erreur fatale de sécurité.';
-                    return; // BLOCK PUBLICATION
-                }
-            }
-
-            // Build and sign kind 30800 event
-            const event = {
-                kind: COOP_KIND,
-                created_at: Math.floor(Date.now() / 1000),
-                tags: [['d', COOP_DTAG], ['t', 'uplanet'], ['t', 'cooperative-config']],
-                content: JSON.stringify(updated),
-                pubkey: captainPubHex
-            };
-
-            // ── Signature moderne nostr-tools ──────────────────────────────
-            // getEventHash() calcule l'id, getSignature() retourne la sig
-            // signEvent() est DÉPRÉCIÉE → relays modernes refusent les events mal formés
-            event.id = NostrLib.getEventHash(event);
-            let signedEvent;
-            if (NostrLib.getSignature) {
-                event.sig = NostrLib.getSignature(event, captainPrivHex);
-                signedEvent = event;
-            } else if (NostrLib.finalizeEvent) {
-                const privBytes = Uint8Array.from(captainPrivHex.match(/.{2}/g).map(b => parseInt(b, 16)));
-                signedEvent = NostrLib.finalizeEvent(event, privBytes);
-            } else if (NostrLib.finalize) {
-                signedEvent = NostrLib.finalize(event, captainPrivHex);
-            } else {
-                signedEvent = NostrLib.signEvent(event, captainPrivHex); // legacy fallback
-            }
-
-            try {
-                statusEl.textContent = '📡 Publication en cours sur ' + relayUrl + '…';
-                const result = await publishEvent(relayUrl, signedEvent);
-                // Publication sur le relay global en parallèle si différent
-                if (relayUrl !== 'wss://relay.copylaradio.com') {
-                    publishEvent('wss://relay.copylaradio.com', signedEvent).catch(() => {});
-                }
-                coopConfig = updated;
-                window._coopConfigData = updated;
-                applyCoopConfigToSimulator(updated);
-                if (result.ok) {
-                    statusEl.textContent = '✅ Config publiée sur NOSTR (kind 30800)';
-                    statusEl.style.color = '#2ecc71';
-                } else {
-                    statusEl.textContent = '❌ Relay a refusé : ' + (result.reason || 'raison inconnue');
-                    statusEl.style.color = '#e74c3c';
-                    console.warn('[economy.html coop] Relay rejection:', relayUrl, result.reason);
-                }
-            } catch (e) {
-                statusEl.textContent = '❌ Erreur publication: ' + e;
-                statusEl.style.color = '#e74c3c';
-            }
-        }
-
-        // Apply cooperative config values to the simulator inputs
-        function applyCoopConfigToSimulator(config) {
-            if (!config) return;
-            const vatInput = document.getElementById('vat-rate');
-            const isInput = document.getElementById('corporate-tax-rate');
-            if (vatInput && config.TVA_RATE) {
-                vatInput.value = config.TVA_RATE;
-                vatInput.dispatchEvent(new Event('input'));
-            }
-            if (isInput && config.IS_RATE_NORMAL) {
-                isInput.value = config.IS_RATE_NORMAL;
-                isInput.dispatchEvent(new Event('input'));
-            }
-            // Select SCIC structure by default when coop config exists
-            const structureSelect = document.getElementById('legal-structure');
-            if (structureSelect) {
-                structureSelect.value = 'scic';
-            }
-        }
-
-        // Init
-        window.addEventListener('load', async () => {
+        // Intégration de coop-config.js dans le dashboard
+        window.addEventListener('load', () => {
             const dashboard = document.querySelector('.economic-dashboard');
             if (!dashboard) return;
 
+            // Créer le conteneur pour coop-config.js
             const section = document.createElement('div');
             section.className = 'status-section';
             section.style.cssText = 'background:linear-gradient(145deg,#1e2533,#232733);border:1px solid rgba(155,89,182,0.3);margin-top:12px;padding:12px;';
+            
+            // Titre et conteneur racine attendu par coop-config.js
             section.innerHTML = `
-                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:6px;">
-                    <div style="display:flex;align-items:center;gap:8px;">
-                        <span style="font-size:1.3em;">⚙️</span>
-                        <span style="color:#bb86fc;font-size:1.1em;font-weight:600;">Cooperative Config</span>
-                        <span style="color:#7f8c8d;font-size:0.8em;">(kind 30800)</span>
-                    </div>
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+                    <span style="font-size:1.3em;">⚙️</span>
+                    <span style="color:#bb86fc;font-size:1.1em;font-weight:600;">Cooperative Config</span>
+                    <span style="color:#7f8c8d;font-size:0.8em;">(kind 30800)</span>
                 </div>
-                <div id="coop-auth" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:8px;
-                    padding:8px;background:rgba(255,255,255,0.03);border-radius:8px;border:1px solid rgba(155,89,182,0.15);">
-                    <div style="display:flex;gap:4px;align-items:center;">
-                        <input id="coop-uplanetname" type="password" placeholder="UPLANETNAME"
-                            style="background:rgba(255,255,255,0.08);border:1px solid rgba(155,89,182,0.3);color:#eaf6ff;padding:4px 8px;border-radius:6px;font-size:0.85em;width:200px;">
-                        <button id="coop-login-btn" style="background:#9b59b6;color:white;border:none;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:0.85em;">🔑 Connexion</button>
-                    </div>
-                    <span id="coop-auth-status" style="color:#7f8c8d;font-size:0.8em;"></span>
-                </div>
-                <div id="coop-config-content" style="color:#7f8c8d;font-size:0.9em;">
-                    Chargement depuis NOSTR relay...
-                </div>
-                <div id="coop-status" style="color:#7f8c8d;font-size:0.75em;margin-top:6px;"></div>
+                <div id="coop-config-root"></div>
             `;
             dashboard.appendChild(section);
             window._coopConfigSection = section;
-
-            // Fetch config
-            relayUrl = detectRelay();
-            const statusEl = document.getElementById('coop-status');
-            try {
-                statusEl.textContent = 'Connexion à ' + relayUrl + '...';
-                coopEvent = await fetchCoopConfig(relayUrl);
-                if (!coopEvent) {
-                    isNewConfig = true;
-                    document.getElementById('coop-config-content').innerHTML = '<div style="color:#f39c12;">Aucune config coopérative trouvée.<br><span style="font-size:0.85em;color:#b8c6e0;">Authentifiez-vous pour créer la config initiale (paramètres fiscaux modifiables uniquement à la création).</span></div>';
-                    statusEl.textContent = relayUrl;
-                } else {
-                    coopConfig = JSON.parse(coopEvent.content);
-                    window._coopConfigData = coopConfig;
-                    statusEl.textContent = 'Pubkey: ' + coopEvent.pubkey.substring(0, 16) + '... | ' + new Date(coopEvent.created_at * 1000).toLocaleString() + ' | ' + relayUrl;
-                    renderCoopSection(coopConfig, null, false);
-
-                    // Apply coop config values to simulator inputs
-                    applyCoopConfigToSimulator(coopConfig);
-                }
-            } catch (e) {
-                document.getElementById('coop-config-content').textContent = 'Erreur: ' + e;
+            
+            // Initialiser coop-config.js (si pas déjà fait par DOMContentLoaded)
+            if (window.CoopConfig && window.CoopConfig.init) {
+                window.CoopConfig.init();
             }
-
-            // Single login: UPLANETNAME → derive keys (salt=pepper=UPLANETNAME) + decrypt
-            document.getElementById('coop-login-btn').addEventListener('click', async () => {
-                uplanetname = document.getElementById('coop-uplanetname').value.trim();
-                const authStatus = document.getElementById('coop-auth-status');
-                if (!uplanetname) { authStatus.textContent = '❌ UPLANETNAME requis'; return; }
-                try {
-                    authStatus.textContent = 'Dérivation scrypt...';
-                    // salt = pepper = UPLANETNAME.G1 (same as cooperative_config.sh keyfile derivation)
-                    const saltPepper = uplanetname + '.G1';
-                    const keys = await deriveNostrKeys(saltPepper, saltPepper);
-                    captainPrivHex = keys.privHex;
-                    captainPubHex = keys.pubHex;
-
-                    // If no config exists, initialize default (same as coop_config_init in cooperative_config.sh)
-                    if (!coopConfig) {
-                        coopConfig = {
-                            "COOPERATIVE_VERSION": "1.0",
-                            "CREATED_AT": new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'),
-                            "_comment_fiscal": "=== FISCAL PARAMETERS ===",
-                            "TVA_RATE": "20.0",
-                            "IS_RATE_REDUCED": "15.0",
-                            "IS_RATE_NORMAL": "25.0",
-                            "IS_THRESHOLD": "42500",
-                            "_comment_shares": "=== COOPERATIVE SHARES ===",
-                            "ZENCARD_SATELLITE": "50",
-                            "ZENCARD_CONSTELLATION": "540",
-                            "_comment_3x13": "=== 3x1/3 + 1% RULE ===",
-                            "TREASURY_PERCENT": "33",
-                            "RND_PERCENT": "33",
-                            "ASSETS_PERCENT": "33",
-                            "CAPTAIN_BONUS_PERCENT": "1",
-                            "_comment_oc": "=== OPENCOLLECTIVE ===",
-                            "OCSLUG": "monnaie-libre",
-                            "OCAPIKEY": "",
-                            "OC_URL_SATELLITE": "",
-                            "OC_URL_CONSTELLATION": "",
-                            "_comment_api": "=== API KEYS ===",
-                            "PLANTNET_API_KEY": "",
-                            "_comment_mj": "=== MAILJET ===",
-                            "MJ_APIKEY_PUBLIC": "",
-                            "MJ_APIKEY_PRIVATE": "",
-                            "MJ_SENDER_EMAIL": ""
-                        };
-                        authStatus.innerHTML = '✅ ' + captainPubHex.substring(0, 12) + '... <span style="color:#f39c12;">(nouvelle config)</span>';
-                        authStatus.style.color = '#2ecc71';
-                        statusEl.textContent = 'Config par défaut créée — modifiez puis cliquez 💾 Publier sur NOSTR';
-                        renderCoopSection(coopConfig, null, true);
-                    } else {
-                        // Check if this pubkey matches the event author
-                        const isAuthor = coopEvent && coopEvent.pubkey === captainPubHex;
-                        authStatus.innerHTML = '✅ ' + captainPubHex.substring(0, 12) + '...' + (isAuthor ? ' <span style="color:#2ecc71;">(auteur)</span>' : ' <span style="color:#f39c12;">(non-auteur)</span>');
-                        authStatus.style.color = '#2ecc71';
-
-                        // Decrypt all encrypted values with UPLANETNAME
-                        let decrypted = null;
-                        try {
-                            decrypted = await decryptAll(coopConfig, uplanetname);
-                        } catch (e) { /* ignore decrypt errors */ }
-
-                        // Enable editing + show decrypted values
-                        renderCoopSection(coopConfig, decrypted, true);
-                    }
-
-                    // Clear sensitive input
-                    document.getElementById('coop-uplanetname').value = '';
-                } catch (e) {
-                    authStatus.textContent = '❌ ' + (e.message || e);
-                    authStatus.style.color = '#e74c3c';
-                }
-            });
         });
-    })();
+
+        // Mettre à jour le simulateur quand la config est chargée
+        window.addEventListener('coop-config-loaded', (e) => {
+            const config = e.detail;
+            if (typeof updateSimulation === 'function') {
+                updateSimulation();
+            }
+        });
     </script>
 
 </body>

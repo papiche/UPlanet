@@ -386,6 +386,7 @@
 
             coopConfig = updated;
             window._coopConfigData = updated;
+            window.dispatchEvent(new CustomEvent('coop-config-loaded', { detail: updated }));
 
             if (result.ok) {
                 statusEl.textContent = '✅ Config publiee sur NOSTR (kind 30800)';
@@ -447,6 +448,7 @@
                 coopEvent = event;
                 coopConfig = JSON.parse(event.content);
                 window._coopConfigData = coopConfig;
+                window.dispatchEvent(new CustomEvent('coop-config-loaded', { detail: coopConfig }));
                 console.log('[coop-config] Config parsée, clés:', Object.keys(coopConfig).length);
                 statusEl.textContent = 'Pubkey: ' + event.pubkey.substring(0, 16) + '... | ' + new Date(event.created_at * 1000).toLocaleString() + ' | ' + relayUrl;
                 renderCoopSection(coopConfig, null, false);

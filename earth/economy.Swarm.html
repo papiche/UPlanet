@@ -303,34 +303,36 @@
         }
 
         .station-core.warning,
-        .station-core.growth_slowdown {
+        .station-core.assets_solidarity {
             background: radial-gradient(circle, rgba(255, 208, 0, 0.3), transparent);
             border-color: var(--accent-yellow);
             box-shadow: 0 0 20px rgba(255, 208, 0, 0.3);
         }
 
         .station-core.critical,
-        .station-core.innovation_slowdown {
-            background: radial-gradient(circle, rgba(255, 51, 102, 0.3), transparent);
-            border-color: var(--accent-red);
-            box-shadow: 0 0 20px rgba(255, 51, 102, 0.3);
-            animation: critical-pulse 1s ease-in-out infinite;
+        .station-core.rnd_solidarity {
+            background: radial-gradient(circle, rgba(255, 136, 0, 0.3), transparent);
+            border-color: var(--accent-orange);
+            box-shadow: 0 0 20px rgba(255, 136, 0, 0.3);
+            animation: rnd-pulse 2s ease-in-out infinite;
         }
 
-        .station-core.bankrupt {
-            background: radial-gradient(circle, rgba(255, 51, 102, 0.5), transparent);
-            border-color: var(--accent-red);
-            animation: bankrupt-flash 0.5s ease-in-out infinite;
+        /* Bénévolat Actif : battement de cœur doux (pas d'alerte rouge anxiogène) */
+        .station-core.volunteer {
+            background: radial-gradient(circle, rgba(153, 102, 255, 0.3), transparent);
+            border-color: var(--accent-purple);
+            box-shadow: 0 0 20px rgba(153, 102, 255, 0.3);
+            animation: love-pulse 3s ease-in-out infinite;
         }
 
-        @keyframes critical-pulse {
-            0%, 100% { box-shadow: 0 0 20px rgba(255, 51, 102, 0.3); }
-            50% { box-shadow: 0 0 40px rgba(255, 51, 102, 0.6); }
+        @keyframes rnd-pulse {
+            0%, 100% { box-shadow: 0 0 20px rgba(255, 136, 0, 0.3); }
+            50% { box-shadow: 0 0 40px rgba(255, 136, 0, 0.6); }
         }
 
-        @keyframes bankrupt-flash {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.3; }
+        @keyframes love-pulse {
+            0%, 100% { box-shadow: 0 0 15px rgba(153, 102, 255, 0.3); }
+            50% { box-shadow: 0 0 35px rgba(153, 102, 255, 0.7); }
         }
 
         .station-node.selected .station-core {
@@ -486,9 +488,11 @@
         }
 
         .station-hero-status.healthy { background: rgba(0, 255, 136, 0.2); color: var(--accent-green); }
-        .station-hero-status.warning, .station-hero-status.growth_slowdown { background: rgba(255, 208, 0, 0.2); color: var(--accent-yellow); }
-        .station-hero-status.critical, .station-hero-status.innovation_slowdown { background: rgba(255, 51, 102, 0.2); color: var(--accent-red); }
-        .station-hero-status.bankrupt { background: rgba(255, 51, 102, 0.4); color: var(--accent-red); }
+        .station-hero-status.warning,
+        .station-hero-status.assets_solidarity { background: rgba(255, 208, 0, 0.2); color: var(--accent-yellow); }
+        .station-hero-status.critical,
+        .station-hero-status.rnd_solidarity { background: rgba(255, 136, 0, 0.2); color: var(--accent-orange); }
+        .station-hero-status.volunteer { background: rgba(153, 102, 255, 0.2); color: var(--accent-purple); }
 
         .station-stats {
             display: grid;
@@ -615,9 +619,9 @@
         }
 
         .station-mini-status.healthy { background: var(--accent-green); }
-        .station-mini-status.warning, .station-mini-status.growth_slowdown { background: var(--accent-yellow); }
-        .station-mini-status.critical, .station-mini-status.innovation_slowdown { background: var(--accent-red); }
-        .station-mini-status.bankrupt { background: var(--accent-red); animation: bankrupt-flash 0.5s infinite; }
+        .station-mini-status.warning, .station-mini-status.assets_solidarity { background: var(--accent-yellow); }
+        .station-mini-status.critical, .station-mini-status.rnd_solidarity { background: var(--accent-orange); }
+        .station-mini-status.volunteer { background: var(--accent-purple); animation: love-pulse 3s infinite; }
 
         /* Aggregate Stats */
         .aggregate-panel {
@@ -1051,6 +1055,9 @@
                             </div>
                         </div>
                     </div>
+                    <!-- Love Ledger section (affiché si bénévolat > 0) -->
+                    <div id="detail-love-ledger" style="display:none; padding: 0 15px 0 15px;"></div>
+
                     <div class="nav-buttons">
                         <button class="nav-btn" id="btn-prev" onclick="navigateStation(-1)">◀ PREV</button>
                         <button class="nav-btn" id="btn-jump" onclick="jumpToStation()">🚀 JUMP</button>
@@ -1370,9 +1377,13 @@
                         zencardOwners: content.capacity?.zencard?.owners || parseInt(getTagValue(tags, 'capacity:zencard_owners') || 0),
                         zencardCapacity: content.capacity?.zencard?.capacity || parseInt(getTagValue(tags, 'capacity:zencard_capacity') || 24),
                         weeksRunway: content.health?.weeks_runway || parseInt(getTagValue(tags, 'health:weeks_runway') || 0),
+                        resilienceLevel: content.health?.resilience_level ?? parseInt(getTagValue(tags, 'health:resilience_level') || 0),
                         revenueTotal: content.revenue?.total_ht || parseFloat(getTagValue(tags, 'revenue:total') || 0),
                         revenueMultipass: content.revenue?.multipass?.total || parseFloat(getTagValue(tags, 'revenue:multipass') || 0),
                         revenueZencard: content.revenue?.zencard?.total || parseFloat(getTagValue(tags, 'revenue:zencard') || 0),
+                        // Love Ledger — bénévolat comptabilisé
+                        loveTotalZen: content.love_ledger?.total_donated_zen ?? parseFloat(getTagValue(tags, 'love_ledger:total_zen') || 0),
+                        loveWeeks: content.love_ledger?.weeks_on_volunteer ?? parseInt(getTagValue(tags, 'love_ledger:weeks') || 0),
                         // Station location for solar time sync
                         stationLat: parseFloat(getTagValue(tags, 'geo:lat') || 0),
                         stationLon: parseFloat(getTagValue(tags, 'geo:lon') || 0),
@@ -1461,20 +1472,23 @@
         function getStatusEmoji(status) {
             switch (status) {
                 case 'healthy': return '🛰️';
-                case 'warning': 
-                case 'growth_slowdown': return '⚠️';
-                case 'critical': 
-                case 'innovation_slowdown': return '🔴';
-                case 'bankrupt': return '💀';
+                case 'warning':
+                case 'assets_solidarity': return '🌿';
+                case 'critical':
+                case 'rnd_solidarity': return '🔬';
+                case 'volunteer': return '❤️';  // Bénévolat Actif — jamais 💀
                 default: return '🛰️';
             }
         }
-        
-        // Normalize health status for CSS class mapping
+
+        // Normalise le statut de santé vers une classe CSS connue
         function normalizeHealthStatus(status) {
             switch (status) {
-                case 'growth_slowdown': return 'warning';
-                case 'innovation_slowdown': return 'critical';
+                case 'growth_slowdown':
+                case 'assets_solidarity': return 'warning';
+                case 'innovation_slowdown':
+                case 'rnd_solidarity': return 'critical';
+                case 'volunteer': return 'volunteer';
                 default: return status;
             }
         }
@@ -1485,12 +1499,12 @@
             container.innerHTML = '';
 
             const stations = Array.from(stationsData.values()).sort((a, b) => {
-                // Sort by severity: most critical first
-                const order = { 
-                    'bankrupt': 0, 
-                    'critical': 1, 'innovation_slowdown': 1,
-                    'warning': 2, 'growth_slowdown': 2, 
-                    'healthy': 3 
+                // Tri par niveau de résilience (bénévolat en tête pour visibilité, pas d'anxiété)
+                const order = {
+                    'volunteer': 0,          // Bénévolat Actif — visible, remercier le Capitaine
+                    'rnd_solidarity': 1, 'critical': 1,
+                    'assets_solidarity': 2, 'warning': 2,
+                    'healthy': 3
                 };
                 return (order[a.healthStatus] ?? 3) - (order[b.healthStatus] ?? 3);
             });
@@ -1552,7 +1566,33 @@
             document.getElementById('detail-tva').textContent = station.provisionTva.toFixed(2);
             document.getElementById('detail-is').textContent = station.provisionIs.toFixed(2);
             document.getElementById('detail-capital').textContent = `${station.capitalBalance.toFixed(2)} Ẑ`;
-            
+
+            // Love Ledger — afficher seulement si bénévolat détecté
+            const loveSection = document.getElementById('detail-love-ledger');
+            if (loveSection) {
+                if (station.loveTotalZen > 0) {
+                    loveSection.style.display = 'block';
+                    loveSection.innerHTML = `
+                        <div style="background:rgba(153,102,255,0.1);border-left:3px solid var(--accent-purple);border-radius:4px;padding:10px 12px;margin:4px 0;">
+                            <div style="font-size:0.75rem;color:var(--accent-purple);font-weight:700;letter-spacing:1px;margin-bottom:6px;">❤️ LOVE LEDGER — BÉNÉVOLAT</div>
+                            <div style="display:flex;gap:16px;">
+                                <div style="text-align:center;">
+                                    <div style="font-family:'Share Tech Mono',monospace;font-size:1.1rem;color:var(--accent-purple);">${station.loveTotalZen.toFixed(1)} Ẑ</div>
+                                    <div style="font-size:0.65rem;color:var(--text-dim);letter-spacing:1px;">OFFERT AUX COMMUNS</div>
+                                </div>
+                                <div style="text-align:center;">
+                                    <div style="font-family:'Share Tech Mono',monospace;font-size:1.1rem;color:var(--accent-purple);">${station.loveWeeks}</div>
+                                    <div style="font-size:0.65rem;color:var(--text-dim);letter-spacing:1px;">SEMAINE(S)</div>
+                                </div>
+                            </div>
+                            <div style="margin-top:6px;font-size:0.68rem;color:var(--text-secondary);">🙏 Merci au Capitaine pour son engagement !</div>
+                        </div>
+                    `;
+                } else {
+                    loveSection.style.display = 'none';
+                }
+            }
+
             // PAF and pricing
             document.getElementById('detail-paf').textContent = `${station.costPaf.toFixed(0)} Ẑ`;
             document.getElementById('detail-prices').textContent = `MP:${station.priceMultipass}Ẑ ZC:${station.priceZencard}Ẑ`;

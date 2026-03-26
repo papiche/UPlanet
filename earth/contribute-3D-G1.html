@@ -120,6 +120,21 @@ html,body{width:100%;min-height:100vh;background:var(--bg);color:var(--text);
   font-size:.9rem;color:var(--c1);font-weight:600;}
 .rate-badge span{color:var(--muted);font-weight:400;}
 
+/* ── ZINKGO BANNER ── */
+.zinkgo-banner{margin:18px auto 0;max-width:640px;padding:13px 22px;
+  border-radius:14px;border:1px solid rgba(var(--c2r),.3);background:rgba(var(--c2r),.07);
+  font-size:.86rem;color:var(--muted);text-align:center;line-height:1.6;}
+.zinkgo-banner a{color:var(--c2);font-weight:700;text-decoration:none;border-bottom:1px dashed rgba(var(--c2r),.4);}
+.zinkgo-banner a:hover{border-bottom-style:solid;}
+[data-theme="light"] .zinkgo-banner{background:rgba(var(--c2r),.05);}
+
+/* ── AUDIENCE NAV ── */
+.audience-nav{display:flex;justify-content:center;gap:8px;flex-wrap:wrap;margin:20px 0 0;}
+.aud-link{padding:6px 14px;border-radius:100px;font-size:.68rem;font-weight:700;
+  letter-spacing:1px;text-transform:uppercase;text-decoration:none;cursor:pointer;transition:all .3s;
+  border:1px solid var(--card-bdr);color:var(--muted);background:var(--card-bg);}
+.aud-link:hover,.aud-link.current{border-color:rgba(var(--c2r),.4);color:var(--c2);background:rgba(var(--c2r),.07);}
+
 /* STATUS */
 .status-strip{display:flex;justify-content:center;margin:32px 0 44px;
   background:var(--strip-bg);border:1px solid var(--card-bdr);border-radius:16px;overflow:hidden;}
@@ -315,6 +330,17 @@ code{background:rgba(var(--c1r),.1);color:var(--c1);padding:2px 6px;border-radiu
       <strong>Pourquoi ne pas utiliser le DU directement ?</strong> 100 DU ≈ 3 mois de création monétaire individuelle (~30 000 DU sur une vie). Rémunérer des services en DU recrée une asymétrie d'accumulation. Le ẐEN isole les coûts réels (Capex/Opex) pour que le DU reste ce qu'il est : un jeton de co-décision souverain.
     </div>
     <div class="rate-badge">💱 <strong>1 € <=> 1 Ẑ = 0.1 Ğ1</strong> <span>— via OpenCollective → Duniter</span></div>
+    <div class="zinkgo-banner">
+      🔑 Créez votre <strong>MULTIPASS</strong> (clé Ğ1 + NOSTR) sur
+      <a href="https://zinkgo.copylaradio.com" target="_blank">zinkgo.copylaradio.com →</a>
+      &nbsp;·&nbsp; Puis contribuez via OpenCollective pour recevoir vos premiers ẐEN
+    </div>
+    <div class="audience-nav">
+      <a class="aud-link" href="./contribute-3D-curieux.html">🔭 Je découvre</a>
+      <span class="aud-link current">🌕 Je connais la Ğ1</span>
+      <a class="aud-link" href="./contribute-3D-dev.html">⚙️ Dev / Intégrateur</a>
+      <a class="aud-link" href="./contribute.html">📋 Tous les forfaits</a>
+    </div>
   </div>
 
   <!-- DU vs ZEN TABLE -->
@@ -553,9 +579,11 @@ code{background:rgba(var(--c1r),.1);color:var(--c1);padding:2px 6px;border-radiu
   <!-- FOOTER -->
   <div class="footer">
     <div class="footer-links">
+      <a href="./contribute.html">📋 Tous les forfaits</a>
+      <a href="./contribute-3D-curieux.html">🔭 Je découvre</a>
+      <a href="./contribute-3D-dev.html">⚙️ Dev / Intégrateur</a>
       <a href="./economy.html">♥️ Dashboard Station</a>
       <a href="./economy.Swarm.html">🌌 Vue Constellation</a>
-      <a href="./contribute-3D-curieux.html"> 🌟🌟🌟 CONTRIBUTION 🌟🌟🌟 </a>
       <a href="./index.html">🌍 UPlanet Home</a>
       <a id="oc-link" href="https://opencollective.com/monnaie-libre" target="_blank">🔗 OpenCollective G1FabLab</a>
     </div>
@@ -580,19 +608,27 @@ function applyCarousel(){const vw=window.innerWidth;const r=vw<600?245:vw<900?30
     c.style.transform=`translateX(${x}px) translateZ(${z}px) rotateY(${-a}deg)`;
     c.style.opacity=off===2?.12:off===1||off===3?.48:1;
     c.style.zIndex=off===0?10:off===2?1:5;
-    c.style.pointerEvents=off===0?'auto':'none';
+    c.style.pointerEvents='auto'; // toutes les cartes cliquables
     c.classList.toggle('active',off===0);});
   document.querySelectorAll('.nav-dot').forEach((d,i)=>d.classList.toggle('active',i===current));}
 function rotate(d){current=((current+d)%4+4)%4;applyCarousel();resetAuto();}
 function goTo(i){current=i;applyCarousel();resetAuto();}
 function resetAuto(){clearInterval(autoTimer);autoTimer=setInterval(()=>rotate(1),5500);}
-cards.forEach((c,i)=>c.addEventListener('click',()=>{if(i!==current)goTo(i);}));
-// Allow CTA links to open on active card without interference
+// Clic sur carte non-active → navigation ; carte active → ouvre son URL OC
+cards.forEach((c,i)=>c.addEventListener('click',()=>{
+  if(i!==current){goTo(i);}
+  else{const btn=c.querySelector('.card-cta');if(btn&&btn.href)window.open(btn.href,'_blank');}
+}));
+// Les boutons CTA gardent leur action propre
 document.querySelectorAll('.card-cta').forEach(btn=>{btn.addEventListener('click',e=>e.stopPropagation());});
+// Pause de la rotation au survol
+const vp=document.getElementById('viewport');
+vp.addEventListener('mouseenter',()=>clearInterval(autoTimer));
+vp.addEventListener('mouseleave',()=>resetAuto());
 window.addEventListener('resize',applyCarousel);
 let tx=0;
-document.getElementById('viewport').addEventListener('touchstart',e=>{tx=e.touches[0].clientX;},{passive:true});
-document.getElementById('viewport').addEventListener('touchend',e=>{const d=tx-e.changedTouches[0].clientX;if(Math.abs(d)>50)rotate(d>0?1:-1);});
+vp.addEventListener('touchstart',e=>{tx=e.touches[0].clientX;},{passive:true});
+vp.addEventListener('touchend',e=>{const d=tx-e.changedTouches[0].clientX;if(Math.abs(d)>50)rotate(d>0?1:-1);});
 applyCarousel();resetAuto();
 
 function toggleFaq(el){const it=el.parentElement,was=it.classList.contains('open');

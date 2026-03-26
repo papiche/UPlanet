@@ -985,7 +985,7 @@ function applyCarousel() {
     card.style.transform = `translateX(${x}px) translateZ(${z}px) rotateY(${-angle}deg)`;
     card.style.opacity   = isBack ? 0.1 : isSide ? 0.45 : 1;
     card.style.zIndex    = isActive ? 10 : isSide ? 5 : 1;
-    card.style.pointerEvents = isActive ? 'auto' : 'none';
+    card.style.pointerEvents = 'auto'; // toutes les cartes cliquables
     card.classList.toggle('active', isActive);
   });
   document.querySelectorAll('.nav-dot').forEach((dot, i) => {
@@ -1008,21 +1008,32 @@ function resetAuto() {
   autoTimer = setInterval(() => rotate(1), 5500);
 }
 
+// Clic sur carte non-active → navigation ; carte active → ouvre son URL OC
 cards.forEach((card, i) => {
-  card.addEventListener('click', () => { if (i !== current) goTo(i); });
+  card.addEventListener('click', () => {
+    if (i !== current) { goTo(i); }
+    else {
+      const btn = card.querySelector('.card-cta');
+      if (btn && btn.href) window.open(btn.href, '_blank');
+    }
+  });
 });
-// Allow CTA links to open on active card without interference
+// Les boutons CTA gardent leur action propre
 document.querySelectorAll('.card-cta').forEach(btn => {
   btn.addEventListener('click', e => e.stopPropagation());
 });
 
+// Pause de la rotation au survol
+const viewport = document.getElementById('viewport');
+viewport.addEventListener('mouseenter', () => clearInterval(autoTimer));
+viewport.addEventListener('mouseleave', () => resetAuto());
 window.addEventListener('resize', applyCarousel);
 
 let touchStartX = 0;
-document.getElementById('viewport').addEventListener('touchstart', e => {
+viewport.addEventListener('touchstart', e => {
   touchStartX = e.touches[0].clientX;
 }, { passive: true });
-document.getElementById('viewport').addEventListener('touchend', e => {
+viewport.addEventListener('touchend', e => {
   const diff = touchStartX - e.changedTouches[0].clientX;
   if (Math.abs(diff) > 50) rotate(diff > 0 ? 1 : -1);
 });

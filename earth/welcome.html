@@ -1096,40 +1096,51 @@
                 try {
                     const one = await fetch(myURL);
                     const doc = await one.text();
+
+                    // Legacy format: HTML meta-refresh redirect to IPFS (port 1234, now deprecated)
                     const regex = /url='([^']+)/i;
                     const match = doc.match(regex);
-                    
-                    if (!match || !match[1]) {
-                        throw new Error('No redirect URL found in response');
+
+                    if (match && match[1]) {
+                        const redirectURL = match[1];
+                        return new Promise(async (resolve, reject) => {
+                            let retry = 0;
+                            const fetchData = async () => {
+                                try {
+                                    const two = await fetch(redirectURL);
+                                    if (!two.ok) throw new Error(`HTTP ${two.status}: ${two.statusText}`);
+                                    const data = await two.json();
+                                    resolve(data);
+                                } catch (error) {
+                                    if (retry < retryCount) {
+                                        console.log(`🔄 Retry ${retry + 1}/${retryCount} after 4000ms...`);
+                                        retry++;
+                                        setTimeout(fetchData, 4000);
+                                    } else {
+                                        console.log('❌ Max retries reached. Fetch error:', error);
+                                        reject(error);
+                                    }
+                                }
+                            };
+                            setTimeout(fetchData, 3000);
+                        });
                     }
-                    
-                    const redirectURL = match[1];
 
-                    return new Promise(async (resolve, reject) => {
-                        let retry = 0;
+                    // Current format: direct JSON response from _12345.sh (port 12345 via socat)
+                    const data = JSON.parse(doc);
+                    if (Array.isArray(data)) return data;
 
-                        const fetchData = async () => {
-                            try {
-                                const two = await fetch(redirectURL);
-                                if (!two.ok) {
-                                    throw new Error(`HTTP ${two.status}: ${two.statusText}`);
-                                }
-                                const data = await two.json();
-                                resolve(data);
-                            } catch (error) {
-                                if (retry < retryCount) {
-                                    console.log(`🔄 Retry ${retry + 1}/${retryCount} after 4000ms...`);
-                                    retry++;
-                                    setTimeout(fetchData, 4000);
-                                } else {
-                                    console.log('❌ Max retries reached. Fetch error:', error);
-                                    reject(error);
-                                }
-                            }
-                        };
-
-                        setTimeout(fetchData, 3000);
-                    });
+                    // Single station object → normalize to DRAGONS array
+                    if (data.ipfsnodeid) {
+                        return [{
+                            lat: parseFloat(data.STATION_LAT) || 0,
+                            lon: parseFloat(data.STATION_LON) || 0,
+                            title: data.hostname || data.captain || data.ipfsnodeid.slice(0, 8),
+                            ipfsnodeid: data.ipfsnodeid,
+                            tags: data.dragon_services || ''
+                        }];
+                    }
+                    return [];
                 } catch (err) {
                     console.log('❌ Fetch error:', err);
                     return Promise.reject(err);

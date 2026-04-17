@@ -97,3 +97,4 @@ No formal test framework. Debug through:
 - The `.chain` file tracks the current IPFS hash of the published earth/ directory
 - common.js is the most critical file — it provides NOSTR, IPFS, and API integration to all pages
 - HTML files are self-contained with inline `<script>` blocks — this is intentional, not a code smell
+- DO NOT USE EXTERNAL RESSOURCES like google fonts, or javascript external vaults ()js or css). ALWAYS use local earth/ files (we are ipfs published : no data loading should leak ouside of our network !!!)

@@ -384,19 +384,71 @@
                 padding: 20px;
                 margin: 10px;
             }
-            
+
             .modal-title {
                 font-size: 2em;
             }
-            
+
             .comparison-grid {
                 grid-template-columns: 1fr;
             }
-            
+
             .law-grid {
                 grid-template-columns: 1fr;
             }
         }
+
+        /* ── Final screen redesign ── */
+        #final-screen { overflow-y: auto; justify-content: flex-start; padding-top: 3em; }
+
+        .final-subtitle {
+            font-size: 1.1em; opacity: 0.75; margin: 0.3em 0 1.8em 0;
+            max-width: 520px; line-height: 1.6;
+        }
+
+        .final-benefits {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 0.9em;
+            max-width: 580px;
+            width: 100%;
+            margin: 0 auto 2em auto;
+        }
+        @media (max-width: 520px) { .final-benefits { grid-template-columns: 1fr; } }
+
+        .benefit-card {
+            background: rgba(0, 212, 255, 0.04);
+            border: 1px solid rgba(0, 212, 255, 0.2);
+            border-radius: 12px; padding: 1em 0.8em;
+            display: flex; flex-direction: column; align-items: center; gap: 0.35em;
+            text-align: center; transition: all 0.3s ease;
+        }
+        .benefit-card:hover {
+            border-color: var(--primary-color);
+            background: rgba(0, 212, 255, 0.1);
+            transform: translateY(-3px);
+        }
+        .benefit-icon { font-size: 1.9em; }
+        .benefit-card strong { color: var(--primary-color); font-size: 0.88em; font-weight: 600; }
+        .benefit-card span { font-size: 0.78em; opacity: 0.65; line-height: 1.4; }
+
+        .trust-signal {
+            font-size: 0.8em; opacity: 0.45; margin: 0.6em 0 0.4em 0; letter-spacing: 0.02em;
+        }
+
+        /* ZEN pulse animation */
+        @keyframes zenPulse {
+            0%   { box-shadow: 0 0 0 0 rgba(255, 200, 50, 0.4); }
+            70%  { box-shadow: 0 0 0 16px rgba(255, 200, 50, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(255, 200, 50, 0); }
+        }
+        #zen-counter {
+            position: absolute; top: 1em; right: 1em;
+            font-size: 0.8em; color: #ffc832; opacity: 0;
+            background: rgba(0,0,0,0.5); border-radius: 8px; padding: 0.4em 0.8em;
+            pointer-events: none; transition: opacity 0.5s;
+        }
+        #zen-counter.visible { opacity: 1; }
     </style>
 </head>
 <body>
@@ -627,13 +679,40 @@
         </div>
         <div id="main-content">
             <div id="p5-canvas-container"></div>
+        <div id="zen-counter">⚡ <span id="zen-count">0</span> ẐEN</div>
         </div>
     </div>
     <div id="final-screen">
         <img src="/ipfs/QmagEQC8KJUsjuDXbcuWHxmA8vwRF9y9d6LGtc3iSEqZE2/uplanet.png" alt="Logo UPlanet" id="final-logo">
-        <h1>Découvrez la Sérénité Numérique</h1>
-        <a href="g1.html" class="cta-button">Créez un MULTIPASS</a>
-        <p id="final-text"></p>
+        <h1>Votre Constellation vous attend</h1>
+        <p class="final-subtitle">Vous avez compris le Protocole N². Rejoignez l'intelligence collective.</p>
+
+        <div class="final-benefits">
+            <div class="benefit-card">
+                <span class="benefit-icon">🛡️</span>
+                <strong>Bouclier N²</strong>
+                <span>Seuls vos amis et leurs amis voient vos données</span>
+            </div>
+            <div class="benefit-card">
+                <span class="benefit-icon">💰</span>
+                <strong>Économie ẐEN</strong>
+                <span>1 ẐEN = 1 € · Transactions coopératives libres</span>
+            </div>
+            <div class="benefit-card">
+                <span class="benefit-icon">🔑</span>
+                <strong>Identité Souveraine</strong>
+                <span>Vos clés cryptographiques, votre contrôle total</span>
+            </div>
+            <div class="benefit-card">
+                <span class="benefit-icon">🌐</span>
+                <strong>Réseau P2P</strong>
+                <span>IPFS + NOSTR · Décentralisé, sans censure</span>
+            </div>
+        </div>
+
+        <a href="g1.html?ref=bang" class="cta-button">✨ Créer mon MULTIPASS — Gratuit</a>
+        <p class="trust-signal">Open source · AGPL-3.0 · Coopératif · Non-marchand</p>
+        <p id="final-text" style="max-width:500px;opacity:0.65;font-size:0.88em;margin-top:1em;"></p>
     </div>
 
     <script>
@@ -653,13 +732,16 @@
         let colorIndex = 0, currentChapterIndex = 0;
         let speedMultiplier = 1;
         let web2ClickCount = 0;
+        let n2Count = 0, firstClickPos = null;
+        const zenCounter = document.getElementById('zen-counter');
+        const zenCountEl = document.getElementById('zen-count');
 
         const PLAYER_COLORS = ['#00ffdd', '#ff00ff', '#ffff00', '#ff9900', '#00d4ff', '#ff5733', '#c70039'];
         const chapters = [
             { title: "L'Étincelle Originelle", mode: 'INTRO', text: "Tout commence par une étincelle. Dans l'obscurité numérique, une première idée jaillit. Elle ne connaît ni frontières ni règles, mais elle cherche à se connecter selon les <strong>lois naturelles des réseaux sociaux</strong>. <strong>Vous êtes le détonateur.</strong> Observez comment, d'un simple geste, naît une constellation d'informations qui respecte la <strong>Fermeture Triadique</strong>." },
             { title: "Le Réseau Humain (N1)", mode: 'N1', text: "<strong>(~1500 - 1980)</strong> Avant les machines, le réseau, c'était nous. Les idées voyageaient de bouche à oreille, de cœur à cœur. Chaque transmission était un acte de confiance, une chaîne fragile mais authentique. Ici, chaque interaction est précieuse, chaque relais est un choix humain. C'est le <strong>niveau N1</strong> : vos amis directs, ceux en qui vous avez confiance." },
             { title: "L'Ère du Bruit (Web2)", mode: 'WEB2', text: "<strong>(~1980 - Aujourd'hui)</strong> Puis vint l'ère du haut-parleur. Les algorithmes exploitent l'<strong>Homophilie</strong> pour vous enfermer dans des bulles, et l'<strong>Attachement Préférentiel</strong> pour booster les contenus viraux. Le plus bruyant domine, le subtil s'efface. Dans ce tumulte, vos propres idées luttent pour exister. <strong>Saurez-vous faire entendre votre voix</strong> sans vous perdre dans le bruit algorithmique ?" },
-            { title: "L'Intelligence Collective (N²)", mode: 'WEB3', text: "<strong>(Demain avec UPlanet)</strong> La sérénité et le calme reviennent grâce au <strong>Protocole N²</strong>. Ici, chaque rencontre respecte la <strong>Fermeture Triadique</strong> (N1/N2), les idées fusionnent sans manipulation algorithmique. La diversité devient force, la synthèse, une nouvelle lumière. Vous n'êtes plus seul : chaque interaction <strong>construit une intelligence collective</strong> scientifiquement saine." },
+            { title: "L'Intelligence Collective (N²)", mode: 'WEB3', text: "<strong>(Demain avec UPlanet)</strong> Cliquez pour créer votre constellation. Chaque étincelle dorée est une transaction <strong>ẐEN</strong> — valeur coopérative circulant entre amis de confiance. Le <strong>bouclier N²</strong> se forme autour de vous : seuls vos amis et leurs amis voient vos données. Pas d'algorithme, pas de publicité : <strong>votre réseau vous appartient</strong>." },
             { title: "Devenir Souverain Numérique", mode: 'FINAL', text: "Vous avez traversé les âges du réseau et compris la science qui les régit. Maintenant, le futur vous appartient. Devenez souverain numérique : créez votre MULTIPASS sur UPlanet, invitez vos amis selon le <strong>Protocole N²</strong>, bâtissez votre constellation informative respectueuse des lois naturelles. Chaque invitation est une graine d'avenir, chaque conversation, une brique du monde à venir." }
         ];
 
@@ -684,6 +766,25 @@
             }
             p.background(12, 10, 20, 150);
             let dt = p.deltaTime / 1000 * speedMultiplier;
+
+            // ── Bouclier N² (mode WEB3 uniquement) ──
+            if (chapters[currentChapterIndex].mode === 'WEB3' && n2Count >= 3 && firstClickPos) {
+                let shield = p.min(n2Count, 20);
+                let pulse  = p.sin(p.frameCount * 0.06) * 10;
+                let alpha  = p.min(200, shield * 9);
+                p.noFill(); p.strokeWeight(1.5);
+                // Anneau intérieur (N1)
+                p.stroke(0, 212, 255, alpha * 0.55);
+                p.ellipse(firstClickPos.x, firstClickPos.y, (70 + pulse) * 2, (70 + pulse) * 2);
+                // Anneau extérieur (N2)
+                p.stroke(51, 255, 153, alpha * 0.25);
+                p.ellipse(firstClickPos.x, firstClickPos.y, (110 + pulse) * 2, (110 + pulse) * 2);
+                // Troisième anneau si constellation bien formée
+                if (n2Count >= 10) {
+                    p.stroke(0, 212, 255, alpha * 0.1);
+                    p.ellipse(firstClickPos.x, firstClickPos.y, (145 + pulse) * 2, (145 + pulse) * 2);
+                }
+            }
 
             vectors.forEach(v => {
                 v.update(dt, particles);
@@ -718,6 +819,8 @@
 
         function resetSimulation() {
             vectors = []; colorIndex = 0; web2ClickCount = 0;
+            n2Count = 0; firstClickPos = null;
+            if (zenCounter) zenCounter.classList.remove('visible');
             p.background(12, 10, 20);
             initParticles();
         }
@@ -756,7 +859,11 @@
                     }
                     web2ClickCount++;
                     break;
-                case 'WEB3': vectors.push(new Vector(p, p.mouseX, p.mouseY, 'WEB3', color)); colorIndex++; break;
+                case 'WEB3':
+                    vectors.push(new Vector(p, p.mouseX, p.mouseY, 'WEB3', color));
+                    colorIndex++;
+                    if (!firstClickPos) firstClickPos = p.createVector(p.mouseX, p.mouseY);
+                    break;
             }
         };
 
@@ -823,6 +930,8 @@
                     case 'influence': this.vel = p5.Vector.fromAngle(angle, p.random(300, 450)); this.maxInteractions = 7; this.life = 10; break;
                     case 'user_web2': this.vel = p5.Vector.fromAngle(angle, 250); this.maxInteractions = 2; this.life = 3; break;
                     case 'WEB3': this.vel = p5.Vector.fromAngle(angle, p.random(200, 250)); this.maxInteractions = 4; break;
+                    // ZEN: étincelle dorée courte vie, traversée visuelle uniquement
+                    case 'ZEN': this.vel = p5.Vector.fromAngle(angle, p.random(120, 200)); this.maxInteractions = 9999; this.life = 1.2; break;
                 }
                 this.interactions = 0; this.history = []; this.lastParticleHit = null;
             }
@@ -838,26 +947,48 @@
                 if (this.pos.x <= 0 || this.pos.x >= p.width) { this.vel.x *= -1; if(this.type === 'influence') this.interactions++;}
                 if (this.pos.y <= 0 || this.pos.y >= p.height) { this.vel.y *= -1; if(this.type === 'influence') this.interactions++;}
                 
+                // Les étincelles ZEN traversent sans interagir avec les particules
+                if (this.type !== 'ZEN') {
                 for (let particle of particles) {
                     if (particle !== this.lastParticleHit && this.p.dist(this.pos.x, this.pos.y, particle.pos.x, particle.pos.y) < 15) {
                         particle.applyColor(this);
                         this.lastParticleHit = particle;
                         if(this.type !== 'influence') this.interactions++;
-                        
+
+                        // N2 hop (2e interaction en mode WEB3) → étincelle ẐEN dorée
+                        if (this.type === 'WEB3' && this.interactions === 2 && p.random() < 0.3) {
+                            vectors.push(new Vector(this.p, particle.pos.x, particle.pos.y, 'ZEN', p.color(255, 200, 50)));
+                            n2Count++;
+                            if (zenCountEl) zenCountEl.textContent = n2Count;
+                            if (zenCounter && n2Count === 1) zenCounter.classList.add('visible');
+                        }
+
                         let deflect = p5.Vector.sub(this.pos, particle.pos);
                         this.vel.reflect(deflect); this.vel.rotate(p.random(-0.5, 0.5));
-                        
+
                         if (this.type === 'WEB3' || this.type === 'INTRO' || this.type === 'INTRO_RELAY') { this.color = p.lerpColor(this.color, particle.color, 0.5); }
                         return;
                     }
                 }
+                }
             }
 
             show() {
-                this.p.noFill(); this.p.stroke(this.color); this.p.strokeWeight(1.5);
+                this.p.noFill();
+                if (this.type === 'ZEN') {
+                    // Étincelle ẐEN : trait doré brillant avec glow
+                    this.p.drawingContext.shadowBlur = 12;
+                    this.p.drawingContext.shadowColor = 'rgba(255,200,50,0.9)';
+                    this.p.stroke(255, 200, 50, 200 * (this.life / 1.2));
+                    this.p.strokeWeight(2.5);
+                } else {
+                    this.p.stroke(this.color);
+                    this.p.strokeWeight(1.5);
+                }
                 this.p.beginShape();
                 for (let v of this.history) { this.p.vertex(v.x, v.y); }
                 this.p.endShape();
+                if (this.type === 'ZEN') this.p.drawingContext.shadowBlur = 0;
             }
         }
     };

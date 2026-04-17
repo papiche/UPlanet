@@ -1228,6 +1228,8 @@
         let stationsData = new Map();
         let selectedStationId = null;
         let stationOrder = [];
+        const connectedRelays = new Set();
+        let swarmRelaysLoaded = false;
 
         // Detect relay URL - uses common.js DEFAULT_RELAYS if available
         function detectRelayUrl() {
@@ -1254,6 +1256,7 @@
             await new Promise(r => setTimeout(r, 200));
             const relayUrl = new URLSearchParams(window.location.search).get('relay') || detectRelayUrl();
             document.getElementById('relay-url').textContent = relayUrl.replace(/^wss?:\/\//, '');
+            connectedRelays.add(relayUrl);
             await initializeRelay(relayUrl);
         });
 
@@ -1306,6 +1309,7 @@
                 hideLoading();
                 document.getElementById('main-container').style.display = 'block';
                 updateUI();
+                loadSwarmRelays();
             });
             setTimeout(() => {
                 if (stationsData.size === 0) { hideLoading(); document.getElementById('main-container').style.display = 'block'; }
@@ -1325,7 +1329,7 @@
         function handleWebSocketMessage(message) {
             const [type, ...data] = message;
             if      (type === 'EVENT')  processStationEvent(data[1]);
-            else if (type === 'EOSE')   { hideLoading(); document.getElementById('main-container').style.display = 'block'; updateUI(); }
+            else if (type === 'EOSE')   { hideLoading(); document.getElementById('main-container').style.display = 'block'; updateUI(); loadSwarmRelays(); }
             else if (type === 'NOTICE') console.log('📢 NOTICE:', data[0]);
         }
 
@@ -1401,6 +1405,57 @@
 
         function getTagValue(tags, name) {
             return tags.find(t => t[0] === name)?.[1] || null;
+        }
+
+        // Discover all swarm relays via UPassport API and subscribe to kind 30850
+        // Same discovery method as g1.html (fetches uspotUrl+'/' → root.SWARM[].myRELAY)
+        async function loadSwarmRelays() {
+            if (swarmRelaysLoaded) return;
+            swarmRelaysLoaded = true;
+
+            const uspotUrl = (window.upassportUrl || '').replace(/\/$/, '');
+            if (!uspotUrl) return;
+
+            try {
+                const r = await fetch(uspotUrl + '/');
+                if (!r.ok) return;
+                const root = await r.json();
+
+                const newRelays = new Set();
+                if (root['myRELAY']) newRelays.add(root['myRELAY']);
+                (root['SWARM'] || []).forEach(peer => {
+                    if (peer && peer['myRELAY']) newRelays.add(peer['myRELAY']);
+                });
+
+                let added = 0;
+                newRelays.forEach(relayUrl => {
+                    if (!connectedRelays.has(relayUrl)) {
+                        connectedRelays.add(relayUrl);
+                        subscribeSwarmRelay(relayUrl);
+                        added++;
+                    }
+                });
+                if (added > 0) console.log(`🔭 ${added} relay(s) swarm supplémentaire(s) connecté(s)`);
+            } catch (e) {
+                console.warn('⚠️ loadSwarmRelays:', e);
+            }
+        }
+
+        // Open a WebSocket to a peer relay and subscribe to kind 30850
+        function subscribeSwarmRelay(relayUrl) {
+            const since = Math.floor(Date.now() / 1000) - (30 * 24 * 60 * 60);
+            const ws = new WebSocket(relayUrl);
+            ws.onopen = () => {
+                ws.send(JSON.stringify(['REQ', 'swarm-' + Date.now(), { kinds: [EVENT_KIND_STATION], since, limit: 500 }]));
+            };
+            ws.onmessage = (event) => {
+                try {
+                    const [type, ...data] = JSON.parse(event.data);
+                    if (type === 'EVENT') processStationEvent(data[1]);
+                    else if (type === 'EOSE') updateUI();
+                } catch(e) {}
+            };
+            ws.onerror = () => console.warn(`⚠️ Relay swarm inaccessible: ${relayUrl}`);
         }
 
         // Update all UI elements

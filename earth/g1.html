@@ -3,314 +3,1175 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Créer mon MULTIPASS - UPlanet</title>
+    <title>Astroport — Choisir ma station</title>
+    <link rel="stylesheet" href="leaflet.css">
     <style>
-        :root {
-            --primary-color: #3498db;
-            --text-color: #333;
-            --bg-color: #f5f5f5;
-            --container-bg: white;
-        }
+/* ═══════════════════════════════════════════════════════════════════════
+   ASTROPORT — SALLE DES MACHINES  (steampunk / tuyauterie industrielle)
+   ═══════════════════════════════════════════════════════════════════════ */
 
-        [data-theme="dark"] {
-            --primary-color: #64b5f6;
-            --text-color: #e0e0e0;
-            --bg-color: #1a1a1a;
-            --container-bg: #2d2d2d;
-        }
+@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@500;700&display=swap');
 
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            margin: 0;
-            padding: 0;
-            background-color: var(--bg-color);
-            color: var(--text-color);
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            transition: background-color 0.3s, color 0.3s;
-        }
+:root {
+    --bg:       #0a0e12;
+    --panel:    #10181f;
+    --panel2:   #161f28;
+    --steel:    #1e2d3a;
+    --rust:     #2a1a10;
+    --brass:    #b5860d;
+    --copper:   #c87540;
+    --steel-hi: #4a6070;
+    --rivets:   #3a4a56;
+    --green:    #3dba7e;
+    --red:      #c0392b;
+    --orange:   #e67e22;
+    --ipfs-col: #9b59b6;
+    --text:     #c8d8e0;
+    --text-dim: #5a7080;
+    --text-mono:#b0c4cc;
+    --glow-g:   0 0 8px rgba(61,186,126,0.5);
+    --glow-b:   0 0 8px rgba(181,134,13,0.6);
+    --glow-r:   0 0 8px rgba(192,57,43,0.5);
+    --radius:   4px;
+}
 
-        .loader-container {
-            text-align: center;
-            padding: 40px;
-            background-color: var(--container-bg);
-            border-radius: 12px;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
-            max-width: 500px;
-            margin: 20px;
-        }
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-        .logo {
-            max-width: 150px;
-            margin-bottom: 20px;
-            animation: pulse 2s ease-in-out infinite;
-        }
+body {
+    font-family: 'Share Tech Mono', 'Courier New', monospace;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    background-image:
+        repeating-linear-gradient(0deg, transparent, transparent 39px,
+            rgba(255,255,255,0.018) 39px, rgba(255,255,255,0.018) 40px),
+        repeating-linear-gradient(90deg, transparent, transparent 39px,
+            rgba(255,255,255,0.018) 39px, rgba(255,255,255,0.018) 40px);
+}
 
-        @keyframes pulse {
-            0%, 100% {
-                opacity: 1;
-            }
-            50% {
-                opacity: 0.7;
-            }
-        }
+.machine-room {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 14px 14px 40px;
+}
 
-        h1 {
-            color: var(--primary-color);
-            margin-bottom: 20px;
-            font-size: 2em;
-        }
+/* ══ PIPE DIVIDER ═════════════════════════════════════════════════════════ */
+.pipe-h {
+    display: flex; align-items: center; gap: 0; margin: 12px 0;
+    height: 12px; position: relative;
+}
+.pipe-h::before, .pipe-h::after {
+    content: ''; flex: 1; height: 6px;
+    background: linear-gradient(180deg,
+        var(--steel-hi) 0%, var(--steel) 40%, #0d161e 60%, var(--steel) 100%);
+    border-radius: 3px;
+}
+.pipe-h .pipe-joint {
+    width: 14px; height: 14px; border-radius: 50%;
+    background: radial-gradient(circle at 35% 35%,
+        var(--brass) 0%, #7a5800 60%, #3a2a00 100%);
+    border: 2px solid #3a2a00;
+    box-shadow: 0 0 4px rgba(181,134,13,0.4);
+    flex-shrink: 0;
+}
 
-        .loader {
-            border: 4px solid rgba(52, 152, 219, 0.3);
-            border-top: 4px solid var(--primary-color);
-            border-radius: 50%;
-            width: 60px;
-            height: 60px;
-            animation: spin 1s linear infinite;
-            margin: 30px auto;
-        }
+/* ══ HEADER PLATE ════════════════════════════════════════════════════════ */
+.header-plate {
+    background: linear-gradient(180deg, #1c2830 0%, var(--panel) 100%);
+    border: 1px solid var(--steel-hi);
+    border-radius: 6px 6px 0 0;
+    padding: 14px 16px 10px;
+    display: flex; align-items: center; gap: 14px;
+    position: relative;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.06),
+                0 2px 8px rgba(0,0,0,0.5);
+}
+/* rivets on header */
+.header-plate::before, .header-plate::after {
+    content: '';
+    position: absolute; top: 50%; transform: translateY(-50%);
+    width: 8px; height: 8px; border-radius: 50%;
+    background: radial-gradient(circle at 35% 35%,
+        #6a8090 0%, var(--rivets) 100%);
+    border: 1px solid #1a2530;
+}
+.header-plate::before { left: 6px; }
+.header-plate::after  { right: 6px; }
 
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
+.header-plate img { width: 44px; height: 44px; object-fit: contain; opacity: .85; }
 
-        .message {
-            margin-top: 20px;
-            font-size: 1.1em;
-            line-height: 1.6;
-        }
+.header-text { flex: 1; }
+.header-text h1 {
+    font-family: 'Orbitron', monospace;
+    font-size: 1.1em; font-weight: 700;
+    color: var(--brass);
+    text-shadow: var(--glow-b);
+    letter-spacing: 0.04em;
+    line-height: 1.2;
+}
+.header-text p { font-size: 0.75em; color: var(--text-dim); margin-top: 3px; }
 
-        .info-box {
-            background: rgba(52, 152, 219, 0.1);
-            border-left: 4px solid var(--primary-color);
-            padding: 15px;
-            margin-top: 20px;
-            border-radius: 0 8px 8px 0;
-            text-align: left;
-        }
+.theme-btn {
+    background: var(--steel); border: 1px solid var(--rivets);
+    border-radius: 50%; width: 34px; height: 34px;
+    cursor: pointer; font-size: 15px; color: var(--text);
+    display: flex; align-items: center; justify-content: center;
+}
 
-        .info-box ul {
-            margin: 10px 0;
-            padding-left: 20px;
-        }
+/* ══ INSTRUMENT PANEL (status) ═══════════════════════════════════════════ */
+.instrument-panel {
+    background: var(--panel2);
+    border: 1px solid var(--steel-hi);
+    border-top: none;
+    padding: 10px 16px;
+    display: flex; align-items: center; gap: 10px;
+    font-size: 0.8em;
+    border-bottom: 2px solid var(--brass);
+}
+.gauge-light {
+    width: 12px; height: 12px; border-radius: 50%;
+    border: 2px solid rgba(0,0,0,0.5);
+    flex-shrink: 0;
+    animation: blink-gauge 2s infinite;
+}
+.gauge-light.on  { background: var(--green); box-shadow: var(--glow-g); }
+.gauge-light.run { background: var(--orange); box-shadow: 0 0 8px rgba(230,126,34,.5); }
+.gauge-light.ipfs{ background: var(--ipfs-col); box-shadow: 0 0 8px rgba(155,89,182,.5); }
+.gauge-light.err { background: var(--red); box-shadow: var(--glow-r); animation: none; }
+@keyframes blink-gauge { 0%,100%{opacity:1} 50%{opacity:.35} }
+#status-text { font-family: 'Share Tech Mono', monospace; color: var(--text-mono); }
 
-        .info-box li {
-            margin: 8px 0;
-        }
+/* ══ PORTHOLE MAP ════════════════════════════════════════════════════════ */
+.porthole-frame {
+    background: var(--panel);
+    border: 3px solid var(--steel-hi);
+    border-radius: 8px;
+    padding: 6px;
+    margin: 14px 0 12px;
+    position: relative;
+    box-shadow:
+        inset 0 0 20px rgba(0,0,0,0.6),
+        0 4px 16px rgba(0,0,0,0.7),
+        inset 0 2px 0 rgba(255,255,255,0.04);
+}
+.porthole-label {
+    position: absolute; top: -11px; left: 16px;
+    background: var(--panel);
+    padding: 0 8px;
+    font-size: 0.68em; font-family: 'Orbitron', monospace;
+    color: var(--brass); letter-spacing: 0.08em;
+    border: 1px solid var(--steel-hi);
+    border-radius: 3px;
+}
+/* bolt decorations on porthole corners */
+.porthole-frame .bolt {
+    position: absolute; width: 10px; height: 10px;
+    background: radial-gradient(circle at 35% 35%,
+        #6a8090 0%, var(--rivets) 100%);
+    border: 1px solid #1a2530; border-radius: 50%;
+}
+.porthole-frame .bolt.tl { top:  3px; left:  3px; }
+.porthole-frame .bolt.tr { top:  3px; right: 3px; }
+.porthole-frame .bolt.bl { bottom: 3px; left:  3px; }
+.porthole-frame .bolt.br { bottom: 3px; right: 3px; }
 
-        .fallback-link {
-            display: inline-block;
-            margin-top: 20px;
-            padding: 12px 24px;
-            background: var(--primary-color);
-            color: white;
-            text-decoration: none;
-            border-radius: 8px;
-            font-weight: 600;
-            transition: opacity 0.3s;
-        }
+#station-map {
+    width: 100%; height: 260px;
+    border-radius: 4px;
+    border: 1px solid #0d161e;
+    filter: sepia(15%) contrast(0.9);
+}
+/* Darken Leaflet tiles slightly */
+#station-map .leaflet-tile-pane { filter: brightness(0.7) saturate(0.8); }
 
-        .fallback-link:hover {
-            opacity: 0.9;
-        }
+/* ══ CONTROL BAR ════════════════════════════════════════════════════════ */
+.control-bar {
+    display: flex; gap: 8px; align-items: center;
+    flex-wrap: wrap; margin-bottom: 12px;
+}
+.valve-btn {
+    padding: 8px 16px; border-radius: 3px;
+    border: 1px solid var(--steel-hi);
+    cursor: pointer; font-family: 'Share Tech Mono', monospace;
+    font-size: 0.82em; font-weight: 600;
+    display: inline-flex; align-items: center; gap: 5px;
+    transition: all 0.15s;
+    background: linear-gradient(180deg, var(--steel) 0%, #0e1820 100%);
+    color: var(--text);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.05), 0 2px 4px rgba(0,0,0,0.4);
+}
+.valve-btn:hover:not(:disabled) {
+    border-color: var(--brass);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.05), 0 0 6px rgba(181,134,13,.3);
+    color: var(--brass);
+}
+.valve-btn:active { transform: scale(0.97); }
+.valve-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.valve-btn.primary-v {
+    background: linear-gradient(180deg, #1a3020 0%, #0e1a12 100%);
+    border-color: var(--green);
+    color: var(--green);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 0 8px rgba(61,186,126,.25);
+}
+.coord-display {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.76em; color: var(--text-dim);
+    background: #060c10; border: 1px solid var(--rivets);
+    border-radius: 3px; padding: 5px 10px;
+    display: flex; align-items: center; gap: 5px;
+}
+.coord-display.has-fix { color: var(--green); border-color: var(--green); }
 
-        .countdown {
-            font-size: 3em;
-            font-weight: bold;
-            color: var(--primary-color);
-            margin: 20px 0;
-            animation: countPulse 1s ease-in-out infinite;
-        }
+/* ══ SECTION HEADER ══════════════════════════════════════════════════════ */
+.section-header {
+    display: flex; align-items: center; gap: 8px;
+    margin-bottom: 9px; padding: 5px 0;
+    border-bottom: 1px solid var(--steel);
+}
+.section-label {
+    font-family: 'Orbitron', monospace; font-size: 0.72em;
+    color: var(--brass); letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+.count-badge {
+    font-size: 0.7em; padding: 1px 7px;
+    background: var(--steel); border: 1px solid var(--rivets);
+    border-radius: 3px; color: var(--text-mono);
+    font-family: 'Share Tech Mono', monospace;
+}
+.ipfs-badge {
+    font-size: 0.68em; padding: 1px 7px;
+    background: rgba(155,89,182,0.12);
+    border: 1px solid rgba(155,89,182,0.35);
+    border-radius: 3px; color: var(--ipfs-col);
+    font-family: 'Share Tech Mono', monospace;
+    display: none;
+}
 
-        @keyframes countPulse {
-            0%, 100% {
-                transform: scale(1);
-            }
-            50% {
-                transform: scale(1.1);
-            }
-        }
+/* ══ STATION CARDS (instrument panels) ══════════════════════════════════ */
+.stations-grid { display: flex; flex-direction: column; gap: 8px; }
 
-        .continue-button {
-            display: inline-block;
-            margin-top: 20px;
-            padding: 15px 30px;
-            background: var(--primary-color);
-            color: white;
-            text-decoration: none;
-            border-radius: 8px;
-            font-weight: 600;
-            font-size: 1.1em;
-            cursor: pointer;
-            border: none;
-            transition: all 0.3s;
-            box-shadow: 0 4px 12px rgba(52, 152, 219, 0.3);
-        }
+.station-card {
+    background: var(--panel2);
+    border: 1px solid var(--steel-hi);
+    border-radius: 4px;
+    padding: 11px 13px;
+    cursor: pointer;
+    transition: border-color 0.2s;
+    position: relative;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.03), 0 2px 6px rgba(0,0,0,0.4);
+}
+.station-card::before, .station-card::after {
+    content: ''; position: absolute;
+    width: 7px; height: 7px; border-radius: 50%;
+    background: radial-gradient(circle at 35% 35%,
+        #6a8090 0%, var(--rivets) 100%);
+    border: 1px solid #0d161e;
+    top: 5px;
+}
+.station-card::before { left:  5px; }
+.station-card::after  { right: 5px; }
 
-        .continue-button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 16px rgba(52, 152, 219, 0.4);
-        }
+.station-card:hover { border-color: var(--brass); }
+.station-card.selected {
+    border-color: var(--green);
+    box-shadow: inset 0 0 0 1px rgba(61,186,126,0.2),
+                0 0 12px rgba(61,186,126,0.15),
+                inset 0 1px 0 rgba(255,255,255,0.04);
+}
+.station-card.primary-station { border-color: var(--brass); }
+.station-card.from-ipfs { border-left: 3px solid var(--ipfs-col); }
+.station-card.no-slots  { opacity: 0.55; }
 
-        @media (max-width: 768px) {
-            .loader-container {
-                margin: 10px;
-                padding: 20px;
-            }
+.card-header { display: flex; align-items: flex-start; gap: 9px; margin-bottom: 8px; }
 
-            h1 {
-                font-size: 1.5em;
-            }
+.status-lamp {
+    width: 10px; height: 10px; border-radius: 50%;
+    flex-shrink: 0; margin-top: 4px;
+    border: 1px solid rgba(0,0,0,0.5);
+}
+.status-lamp.on  { background: var(--green); box-shadow: var(--glow-g); }
+.status-lamp.off { background: var(--orange); box-shadow: 0 0 5px rgba(230,126,34,.4); }
 
-            .countdown {
-                font-size: 2em;
-            }
-        }
+.card-title {
+    font-family: 'Orbitron', monospace;
+    font-size: 0.82em; font-weight: 700; color: var(--text);
+    letter-spacing: 0.02em; line-height: 1.3;
+}
+.card-subtitle { font-size: 0.72em; color: var(--text-dim); margin-top: 2px; }
+
+.card-badges {
+    margin-left: auto; display: flex;
+    flex-direction: column; align-items: flex-end; gap: 3px;
+}
+.badge {
+    font-size: 0.66em; padding: 2px 6px; border-radius: 2px;
+    font-family: 'Share Tech Mono', monospace;
+    white-space: nowrap; border: 1px solid;
+}
+.badge-ok   { color: var(--green);  border-color: rgba(61,186,126,.4);  background: rgba(61,186,126,.07); }
+.badge-none { color: var(--red);    border-color: rgba(192,57,43,.4);   background: rgba(192,57,43,.07); }
+.badge-star { color: var(--brass);  border-color: rgba(181,134,13,.4);  background: rgba(181,134,13,.07); }
+.badge-ipfs { color: var(--ipfs-col);border-color:rgba(155,89,182,.4); background: rgba(155,89,182,.07); }
+.bilan-pos  { color: var(--green); font-size: 0.66em; font-family: 'Share Tech Mono', monospace; }
+.bilan-neg  { color: var(--red);   font-size: 0.66em; font-family: 'Share Tech Mono', monospace; }
+
+/* Gauge row */
+.gauge-row {
+    display: flex; flex-wrap: wrap; gap: 6px 14px;
+    margin-bottom: 7px;
+}
+.gauge-item {
+    display: flex; flex-direction: column; align-items: center;
+    gap: 2px; min-width: 50px;
+}
+.gauge-label { font-size: 0.6em; color: var(--text-dim); letter-spacing: 0.05em; }
+.gauge-value {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.88em; color: var(--text-mono);
+}
+.gauge-value.hi { color: var(--green); }
+.gauge-value.lo { color: var(--red); }
+
+.relay-line {
+    font-size: 0.68em; color: var(--text-dim); margin-bottom: 7px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    border-left: 2px solid var(--steel-hi); padding-left: 6px;
+}
+
+/* IPFS data line */
+.card-ipfs-row {
+    display: none; flex-wrap: wrap; gap: 5px 10px;
+    border-top: 1px solid var(--steel); padding-top: 6px; margin-top: 4px;
+}
+.card-ipfs-row.visible { display: flex; }
+.ipfs-tube-link {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.68em; color: var(--ipfs-col);
+    text-decoration: none; display: flex; align-items: center; gap: 3px;
+    padding: 2px 6px; border: 1px solid rgba(155,89,182,.3);
+    border-radius: 2px; background: rgba(155,89,182,.05);
+}
+.ipfs-tube-link:hover { background: rgba(155,89,182,.12); }
+.ipfs-nodeid-short {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.65em; color: var(--text-dim);
+    padding: 2px 6px; border: 1px solid var(--rivets);
+    border-radius: 2px;
+}
+
+.card-footer {
+    display: flex; align-items: center; gap: 8px;
+    border-top: 1px solid var(--steel);
+    padding-top: 8px; margin-top: 5px;
+}
+.dist-display {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.72em; color: var(--text-dim); flex: 1;
+}
+
+/* Lever-style button */
+.lever-btn {
+    padding: 7px 14px;
+    border-radius: 3px;
+    border: 1px solid var(--steel-hi);
+    cursor: pointer;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.78em; font-weight: 600;
+    white-space: nowrap;
+    background: linear-gradient(180deg, #1a2a18 0%, #0e1a10 100%);
+    color: var(--green);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 2px 4px rgba(0,0,0,0.4);
+    transition: all 0.15s;
+}
+.lever-btn:hover:not(:disabled) {
+    border-color: var(--green);
+    box-shadow: 0 0 8px rgba(61,186,126,.3),
+                inset 0 1px 0 rgba(255,255,255,0.05);
+}
+.lever-btn.engaged {
+    background: linear-gradient(180deg, #1a3020 0%, #0e2018 100%);
+    border-color: var(--green);
+    box-shadow: 0 0 10px rgba(61,186,126,.35),
+                inset 0 0 6px rgba(61,186,126,.1);
+}
+.lever-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+/* ══ INSIDE-VIEW PANEL (IPFS) ════════════════════════════════════════════ */
+.inside-view {
+    background: var(--rust);
+    border: 1px solid var(--copper);
+    border-radius: 4px;
+    margin-bottom: 12px;
+    overflow: hidden;
+    display: none;
+}
+.inside-view.visible { display: block; }
+
+.inside-view-header {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 12px;
+    background: linear-gradient(90deg, #1a0e08 0%, var(--rust) 100%);
+    border-bottom: 1px solid rgba(200,117,64,.3);
+    cursor: pointer;
+    user-select: none;
+}
+.inside-view-header .iv-icon { font-size: 1.1em; }
+.inside-view-header .iv-title {
+    font-family: 'Orbitron', monospace;
+    font-size: 0.72em; color: var(--copper);
+    letter-spacing: 0.08em; flex: 1;
+}
+.inside-view-header .iv-chevron {
+    color: var(--copper); font-size: 0.9em;
+    transition: transform 0.2s;
+}
+.inside-view-header.collapsed .iv-chevron { transform: rotate(-90deg); }
+
+.inside-view-body { padding: 10px 12px; }
+.inside-view-body.hidden { display: none; }
+
+.tube-grid {
+    display: grid; grid-template-columns: auto 1fr;
+    gap: 5px 10px; font-size: 0.75em; margin-bottom: 8px;
+    align-items: center;
+}
+.tube-key {
+    color: var(--copper); white-space: nowrap;
+    font-family: 'Share Tech Mono', monospace;
+}
+.tube-val {
+    color: var(--text-mono); overflow: hidden;
+    text-overflow: ellipsis; white-space: nowrap;
+    font-family: 'Share Tech Mono', monospace;
+}
+.tube-val a {
+    color: var(--copper); text-decoration: none;
+    font-size: 0.9em;
+}
+.tube-val a:hover { text-decoration: underline; }
+
+.tube-section {
+    grid-column: 1 / -1;
+    color: var(--copper);
+    border-top: 1px dashed rgba(200,117,64,.3);
+    padding-top: 6px; margin-top: 2px;
+    font-size: 0.82em; letter-spacing: 0.1em;
+    font-family: 'Orbitron', monospace;
+}
+
+.pipe-discovery {
+    border-top: 1px dashed rgba(200,117,64,.3);
+    padding-top: 8px; margin-top: 6px;
+    font-size: 0.73em; color: var(--copper);
+    font-family: 'Share Tech Mono', monospace;
+    min-height: 20px;
+}
+
+/* ══ INFO CONSOLE ════════════════════════════════════════════════════════ */
+.console-box {
+    background: #060c10;
+    border: 1px solid var(--steel-hi);
+    border-left: 3px solid var(--brass);
+    border-radius: 0 4px 4px 0;
+    padding: 10px 12px;
+    margin-bottom: 12px;
+    font-size: 0.78em; line-height: 1.6;
+    color: var(--text-mono);
+}
+.console-box .con-head {
+    color: var(--brass); font-family: 'Orbitron', monospace;
+    font-size: 0.85em; margin-bottom: 4px;
+    letter-spacing: 0.06em;
+}
+.console-box ul { padding-left: 14px; }
+.console-box li { margin: 2px 0; color: var(--text-dim); }
+.console-box li::marker { color: var(--brass); }
+
+/* ══ SKELETONS ════════════════════════════════════════════════════════════ */
+.skel {
+    background: linear-gradient(90deg,
+        var(--panel2) 25%, var(--steel) 50%, var(--panel2) 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.4s infinite;
+    border-radius: 4px; margin-bottom: 8px;
+}
+@keyframes shimmer { 0%{background-position:200%} 100%{background-position:-200%} }
+.skel-card { height: 105px; }
+
+/* ══ EMPTY STATE ═════════════════════════════════════════════════════════ */
+.empty-state {
+    text-align: center; padding: 36px 20px;
+    color: var(--text-dim); font-size: 0.85em;
+}
+.empty-state .icon { font-size: 2.2em; margin-bottom: 8px; }
+
+/* ══ RESPONSIVE ═══════════════════════════════════════════════════════════ */
+@media (max-width: 500px) {
+    .machine-room { padding: 10px 10px 30px; }
+    #station-map  { height: 210px; }
+    .gauge-row    { gap: 5px 10px; }
+}
     </style>
 </head>
 <body>
-    <div class="loader-container">
-        <img src="/ipfs/QmfBK5h8R4LjS2qMtHKze3nnFrtdm85pCbUw3oPSirik5M/logo.uplanet.png" 
-             alt="UPlanet Logo" 
-             class="logo">
-        
-        <h1>🎫 Création de votre MULTIPASS</h1>
-        
-        <div class="countdown" id="countdown">5</div>
-        
-        <div class="message">
-            <p><strong>Redirection automatique dans <span id="countdown-text">5</span> secondes...</strong></p>
-            <p>Vous allez être redirigé vers la page de création de votre MULTIPASS.</p>
+<div class="machine-room">
+
+    <!-- ══ HEADER PLATE ══════════════════════════════════════════════════════ -->
+    <div class="header-plate">
+        <img src="/ipfs/QmfBK5h8R4LjS2qMtHKze3nnFrtdm85pCbUw3oPSirik5M/logo.uplanet.png"
+             alt="UPlanet" onerror="this.style.display='none'">
+        <div class="header-text">
+            <h1>ASTROPORT — SALLE DES MACHINES</h1>
+            <p>Sélectionnez la station qui hébergera votre MULTIPASS</p>
         </div>
-        
-        <button class="continue-button" id="continue-button" onclick="redirectNow()">
-            ▶️ Continuer maintenant
+        <button class="theme-btn" id="theme-btn" title="Thème">⚙</button>
+    </div>
+
+    <!-- ══ INSTRUMENT PANEL ══════════════════════════════════════════════════ -->
+    <div class="instrument-panel">
+        <span class="gauge-light run" id="status-dot"></span>
+        <span id="status-text">INITIALISATION...</span>
+    </div>
+
+    <div class="pipe-h"><span class="pipe-joint"></span></div>
+
+    <!-- ══ PORTHOLE MAP ══════════════════════════════════════════════════════ -->
+    <div class="porthole-frame">
+        <span class="porthole-label">CARTE DU SWARM</span>
+        <span class="bolt tl"></span>
+        <span class="bolt tr"></span>
+        <span class="bolt bl"></span>
+        <span class="bolt br"></span>
+        <div id="station-map"></div>
+    </div>
+
+    <!-- ══ CONTROL BAR ══════════════════════════════════════════════════════ -->
+    <div class="control-bar">
+        <button class="valve-btn primary-v" id="geo-btn" onclick="requestGeolocation()">
+            ◈ LOCALISER
         </button>
+        <span class="coord-display" id="geo-chip">GPS: —</span>
+        <button class="valve-btn" onclick="loadSwarmStations()" title="Actualiser">⟳ SCAN</button>
+    </div>
 
-        <div class="info-box">
-            <p><strong>💡 Rappel :</strong></p>
-            <ul>
-                <li>🎫 Le MULTIPASS est <strong>gratuit</strong></li>
-                <li>🔐 Votre identité est sécurisée par SSSS</li>
-                <li>💰 Gagnez 1 ẐEN par like automatiquement</li>
-                <li>🤖 Profitez de votre IA personnelle 24/7</li>
-            </ul>
+    <!-- ══ INSIDE-VIEW PANEL ═════════════════════════════════════════════════ -->
+    <div class="inside-view" id="ipfs-banner">
+        <div class="inside-view-header" id="ipfs-banner-title" onclick="toggleIpfsBanner()">
+            <span class="iv-icon">🔩</span>
+            <span class="iv-title">VUE INTÉRIEURE — REGISTRES IPFS ASTROPORT</span>
+            <span class="iv-chevron">▾</span>
         </div>
-
-        <div id="fallback-container" style="display: none;">
-            <p style="margin-top: 20px; color: #e74c3c;">
-                <strong>⚠️ Redirection automatique échouée</strong>
-            </p>
-            <a href="#" id="fallback-link" class="fallback-link">
-                Cliquez ici pour créer votre MULTIPASS →
-            </a>
+        <div class="inside-view-body" id="ipfs-links">
+            <div class="tube-grid">
+                <span class="tube-key">NODE_ID:</span>
+                <span class="tube-val" id="ipfs-nodeid">—</span>
+                <span class="tube-key">G1_STATION:</span>
+                <span class="tube-val">
+                    <a href="#" id="ipfs-g1station-link" target="_blank" rel="noopener">—</a>
+                </span>
+                <span class="tube-key">G1_SWARM:</span>
+                <span class="tube-val">
+                    <a href="#" id="ipfs-g1swarm-link" target="_blank" rel="noopener">—</a>
+                </span>
+                <span class="tube-section">⊕ NOMENCLATURE STATION</span>
+                <span class="tube-key">ASTROPORT:</span>
+                <span class="tube-val">
+                    <a href="#" id="url-astroport" target="_blank" rel="noopener">— :12345</a>
+                </span>
+                <span class="tube-key">IPFS_GW:</span>
+                <span class="tube-val">
+                    <a href="#" id="url-ipfs" target="_blank" rel="noopener">— :8080</a>
+                </span>
+                <span class="tube-key">RELAY:</span>
+                <span class="tube-val" id="url-relay">— :7777</span>
+                <span class="tube-key">UPASSPORT:</span>
+                <span class="tube-val">
+                    <a href="#" id="url-uspot" target="_blank" rel="noopener">— :54321</a>
+                </span>
+            </div>
+            <div class="pipe-discovery" id="ipfs-disc-status" style="display:none">
+                ▶ DÉCOUVERTE DU RÉSEAU EN COURS...
+            </div>
         </div>
     </div>
 
-    <!-- Import common.js for uSPOT detection -->
-    <script src="common.js"></script>
-    
-    <script>
-        let targetUrl = '';
-        let countdownValue = 5;
-        let countdownInterval = null;
+    <!-- ══ CONSOLE INFO ══════════════════════════════════════════════════════ -->
+    <div class="console-box">
+        <div class="con-head">▷ MULTIPASS — ACCÈS GRATUIT</div>
+        <ul>
+            <li>Identité souveraine NOSTR + chiffrement SSSS</li>
+            <li>1 ẐEN par like — crédité automatiquement</li>
+            <li>Choisissez la station la plus proche</li>
+            <li>IA personnelle dédiée 24h/24</li>
+        </ul>
+    </div>
 
-        // Wait for DOM and common.js to be loaded
-        document.addEventListener('DOMContentLoaded', function() {
-            // Ensure detectUSPOTAPI is called
-            if (typeof detectUSPOTAPI === 'function') {
-                detectUSPOTAPI();
-            }
+    <!-- ══ STATIONS GRID ════════════════════════════════════════════════════ -->
+    <div class="section-header">
+        <span class="section-label">STATIONS DU SWARM</span>
+        <span class="count-badge" id="stations-count">—</span>
+        <span class="ipfs-badge" id="ipfs-pill">IPFS+</span>
+    </div>
+    <div class="stations-grid" id="stations-grid">
+        <div class="skel skel-card"></div>
+        <div class="skel skel-card"></div>
+        <div class="skel skel-card"></div>
+    </div>
 
-            // Wait a bit to ensure upassportUrl is set
-            setTimeout(function() {
-                // Get the detected uSPOT URL
-                const uspotUrl = window.upassportUrl || 'https://u.copylaradio.com';
-                targetUrl = `${uspotUrl}/g1`;
+</div><!-- /machine-room -->
 
-                console.log('Will redirect to:', targetUrl);
+<script src="leaflet.js"></script>
+<script src="common.js"></script>
+<script>
+(function () {
+'use strict';
 
-                // Start countdown
-                startCountdown();
-            }, 500);
+// ── State ─────────────────────────────────────────────────────────────────────
+let stations      = [];
+let selectedUspot = '';
+let userLat       = null;
+let userLon       = null;
+let map           = null;
+let userMarker    = null;
+let ipfsGateway   = '';
+const stationMarkers = {};
+
+// ── Theme toggle (minimal — keep dark as default) ─────────────────────────────
+document.getElementById('theme-btn').addEventListener('click', function () {
+    // light mode: just reduce dark intensity
+    document.body.style.filter =
+        document.body.style.filter === 'invert(1) hue-rotate(180deg)'
+            ? '' : 'invert(1) hue-rotate(180deg)';
+});
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function esc(s) {
+    return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;')
+        .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function haversine(la1,lo1,la2,lo2) {
+    const R=6371,r=Math.PI/180;
+    const dLa=(la2-la1)*r, dLo=(lo2-lo1)*r;
+    const a=Math.sin(dLa/2)**2+Math.cos(la1*r)*Math.cos(la2*r)*Math.sin(dLo/2)**2;
+    return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+}
+function fmtDist(km) {
+    return km<10 ? km.toFixed(1)+' km' : km<100 ? Math.round(km)+' km'
+                 : Math.round(km/10)*10+' km';
+}
+
+// ── Parse station JSON ────────────────────────────────────────────────────────
+function parseStation(m, forcedActive) {
+    const uspot = m['uSPOT'] || '';
+    if (!uspot) return null;
+    const cap  = m['capacities'] || {};
+    const stor = (cap['storage_details']||{})['root'] || {};
+    const up   = (m['services']||{})['upassport'] || {};
+    const eco  = m['economy'] || {};
+    const host = m['hostname'] || '';
+    const city = m['IPCity']   || '';
+    return {
+        label    : [host,city].filter(Boolean).join(' — ') || uspot,
+        hostname : host, city, uspot,
+        myIpfs   : m['myIPFS'] || '',
+        relay    : m['myRELAY'] || '',
+        active   : forcedActive !== undefined ? forcedActive : (up['active']===true),
+        lat      : parseFloat(m['STATION_LAT']) || 0,
+        lon      : parseFloat(m['STATION_LON']) || 0,
+        nostrSlots: parseInt(cap['nostr_slots'])  || 0,
+        zcSlots  : parseInt(cap['zencard_slots']) || 0,
+        diskGb   : parseFloat(stor['available_gb']||cap['available_space_gb']) || 0,
+        ncard    : parseInt(m['NCARD']||eco['multipass_count']) || 0,
+        zcard    : parseInt(m['ZCARD']||eco['zencard_count'])   || 0,
+        paf      : parseInt(m['PAF']  ||eco['captain_remuneration']) || 0,
+        bilan    : m['BILAN'] || '0',
+        // IPFS fields (in 12345.json)
+        ipfsnodeid: m['ipfsnodeid'] || '',
+        g1station : m['g1station']  || '',
+        g1swarm   : m['g1swarm']    || '',
+        fromIpfs  : false,
+    };
+}
+
+function sortByDistance() {
+    if (userLat===null) return;
+    stations.sort((a,b)=>{
+        const aZ=a.lat===0&&a.lon===0, bZ=b.lat===0&&b.lon===0;
+        if(aZ&&bZ) return 0; if(aZ) return 1; if(bZ) return -1;
+        return haversine(userLat,userLon,a.lat,a.lon)
+              -haversine(userLat,userLon,b.lat,b.lon);
+    });
+    const n=stations.find(s=>s.active&&s.nostrSlots>0)||stations[0];
+    if(n) selectedUspot=n.uspot;
+}
+
+// ── Status ────────────────────────────────────────────────────────────────────
+function setStatus(state, msg) {
+    const states = { connected:'on', loading:'run', ipfs:'ipfs', error:'err' };
+    document.getElementById('status-dot').className =
+        'gauge-light ' + (states[state] || 'run');
+    document.getElementById('status-text').textContent = msg.toUpperCase();
+}
+
+// ── Leaflet map (dark industrial style) ──────────────────────────────────────
+function initMap() {
+    if (map) return;
+    map = L.map('station-map', { zoomControl: true });
+    // Dark tile layer via CartoDB dark matter
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_matter/{z}/{x}/{y}{r}.png', {
+        attribution: '© <a href="https://www.openstreetmap.org/copyright">OSM</a> © <a href="https://carto.com/">CARTO</a>',
+        subdomains: 'abcd', maxZoom: 18,
+    }).addTo(map);
+    map.setView([20, 0], 2);
+}
+
+function updateMapMarkers(primaryUspot) {
+    if (!map) return;
+    Object.values(stationMarkers).forEach(m=>m.remove());
+    Object.keys(stationMarkers).forEach(k=>delete stationMarkers[k]);
+    const valid = stations.filter(s=>s.lat||s.lon);
+    if (!valid.length) return;
+    const bounds = [];
+
+    valid.forEach(function(s) {
+        const isPrimary  = s.uspot===primaryUspot;
+        const isSelected = s.uspot===selectedUspot;
+        const color = !s.active    ? '#e67e22'
+                    : !s.nostrSlots ? '#c0392b'
+                    : isPrimary     ? '#b5860d'
+                    : s.fromIpfs    ? '#9b59b6'
+                    :                 '#3dba7e';
+        const radius = isPrimary ? 11 : isSelected ? 9 : 7;
+        const bilanInt = parseInt(s.bilan)||0;
+
+        const marker = L.circleMarker([s.lat,s.lon], {
+            radius, fillColor:color, color:'#0a0e12',
+            weight:2, fillOpacity:0.9,
         });
+        marker.bindPopup(`
+            <div style="min-width:190px;font-family:'Share Tech Mono',monospace;
+                        background:#10181f;color:#c8d8e0;padding:4px;font-size:.82em">
+                <b style="color:#b5860d">${esc(s.label)}</b>
+                ${isPrimary?'<span style="color:#b5860d"> ★</span>':''}
+                ${s.fromIpfs?'<span style="color:#9b59b6"> [IPFS]</span>':''}
+                <br><span style="color:#5a7080">${esc(s.relay||'—')}</span>
+                <hr style="margin:5px 0;border:none;border-top:1px solid #1e2d3a">
+                <div style="display:flex;gap:8px;flex-wrap:wrap">
+                    <span>MP: <b style="color:#3dba7e">${s.nostrSlots}</b></span>
+                    <span>ZC: ${s.zcSlots}</span>
+                    <span>PAF: ${s.paf}Ẑ</span>
+                    <span style="color:${bilanInt>=0?'#3dba7e':'#c0392b'}">
+                        ∆${bilanInt>0?'+':''}${s.bilan}Ẑ</span>
+                </div>
+                <button onclick="selectAndRedirect('${esc(s.uspot)}')"
+                    style="margin-top:7px;width:100%;padding:7px;
+                           background:#1a3020;color:#3dba7e;
+                           border:1px solid #3dba7e;border-radius:3px;
+                           cursor:pointer;font-family:'Share Tech Mono',monospace;
+                           font-size:.8em;font-weight:700">
+                    ▶ CRÉER MON MULTIPASS ICI
+                </button>
+            </div>
+        `);
+        marker.addTo(map);
+        stationMarkers[s.uspot] = marker;
+        bounds.push([s.lat,s.lon]);
+    });
 
-        function startCountdown() {
-            const countdownElement = document.getElementById('countdown');
-            const countdownTextElement = document.getElementById('countdown-text');
+    if (userLat!==null) bounds.push([userLat,userLon]);
+    if (bounds.length) {
+        try { map.fitBounds(bounds,{padding:[24,24],maxZoom:7}); }
+        catch(_){ map.setView([20,0],2); }
+    }
+}
 
-            countdownInterval = setInterval(function() {
-                countdownValue--;
-                
-                if (countdownElement) {
-                    countdownElement.textContent = countdownValue;
-                }
-                if (countdownTextElement) {
-                    countdownTextElement.textContent = countdownValue;
-                }
+function updateUserMarker() {
+    if (!map||userLat===null) return;
+    if (userMarker) userMarker.remove();
+    userMarker = L.circleMarker([userLat,userLon],{
+        radius:10, fillColor:'#9b59b6', color:'#0a0e12', weight:2.5, fillOpacity:.9,
+    });
+    userMarker.bindPopup('<b>◈ VOTRE POSITION</b>').addTo(map);
+}
 
-                if (countdownValue <= 0) {
-                    clearInterval(countdownInterval);
-                    redirectNow();
-                }
-            }, 1000);
+// ── Render station cards ──────────────────────────────────────────────────────
+function renderStations(primaryUspot) {
+    const grid    = document.getElementById('stations-grid');
+    const countEl = document.getElementById('stations-count');
+    const ipfsPill= document.getElementById('ipfs-pill');
+
+    if (!stations.length) {
+        grid.innerHTML = `
+            <div class="empty-state">
+                <div class="icon">⚙</div>
+                <p>AUCUNE STATION DÉTECTÉE<br>Vérifiez votre connexion</p>
+                <button class="valve-btn" style="margin-top:12px"
+                    onclick="loadSwarmStations()">⟳ RÉESSAYER</button>
+            </div>`;
+        countEl.textContent = '0';
+        return;
+    }
+
+    const ipfsCount = stations.filter(s=>s.fromIpfs).length;
+    countEl.textContent = String(stations.length);
+    if (ipfsCount>0) {
+        ipfsPill.textContent = '+'+ipfsCount+' IPFS';
+        ipfsPill.style.display = '';
+    }
+
+    grid.innerHTML='';
+    stations.forEach(function(s) {
+        const isPrimary  = s.uspot===primaryUspot;
+        const isSelected = s.uspot===selectedUspot;
+        const hasSlots   = s.nostrSlots>0;
+        const bilanInt   = parseInt(s.bilan)||0;
+        const bilanStr   = (bilanInt>0?'+':'')+s.bilan;
+
+        let distStr = 'GPS: UNKNOWN';
+        if (userLat!==null && (s.lat||s.lon)) {
+            distStr = 'DIST: '+fmtDist(haversine(userLat,userLon,s.lat,s.lon));
+        } else if (s.lat||s.lon) {
+            distStr = `GPS: ${s.lat.toFixed(2)}° ${s.lon.toFixed(2)}°`;
         }
 
-        function redirectNow() {
-            // Clear countdown if still running
-            if (countdownInterval) {
-                clearInterval(countdownInterval);
+        const hasIpfsData = !!(s.g1station||s.ipfsnodeid);
+        const ipfsRow = hasIpfsData ? `
+            <div class="card-ipfs-row visible">
+                ${s.g1station?`<a class="ipfs-tube-link"
+                    href="${esc(s.g1station)}" target="_blank" rel="noopener">
+                    🔩 G1_STATION</a>`:''}
+                ${s.g1swarm?`<a class="ipfs-tube-link"
+                    href="${esc(s.g1swarm)}" target="_blank" rel="noopener">
+                    🌐 G1_SWARM</a>`:''}
+                ${s.ipfsnodeid?`<span class="ipfs-nodeid-short"
+                    title="${esc(s.ipfsnodeid)}">
+                    ID:${s.ipfsnodeid.substring(0,12)}…</span>`:''}
+            </div>` : '';
+
+        const card = document.createElement('div');
+        card.className = [
+            'station-card',
+            isSelected  ? 'selected'        : '',
+            isPrimary   ? 'primary-station'  : '',
+            s.fromIpfs  ? 'from-ipfs'        : '',
+            !hasSlots   ? 'no-slots'          : '',
+        ].filter(Boolean).join(' ');
+        card.dataset.uspot = s.uspot;
+
+        card.innerHTML = `
+            <div class="card-header">
+                <span class="status-lamp ${s.active?'on':'off'}"></span>
+                <div style="flex:1;min-width:0">
+                    <div class="card-title">${esc(s.label)}</div>
+                    ${s.city&&s.city!==s.hostname
+                        ?`<div class="card-subtitle">◉ ${esc(s.city)}</div>`:''}
+                </div>
+                <div class="card-badges">
+                    ${isPrimary ?'<span class="badge badge-star">★ LOCAL</span>'  :''}
+                    ${s.fromIpfs?'<span class="badge badge-ipfs">⬡ IPFS</span>'   :''}
+                    <span class="badge ${hasSlots?'badge-ok':'badge-none'}">
+                        ${s.nostrSlots} MP</span>
+                    ${bilanInt!==0
+                        ?`<span class="${bilanInt>=0?'bilan-pos':'bilan-neg'}">∆${bilanStr}Ẑ</span>`
+                        :''}
+                </div>
+            </div>
+
+            <div class="gauge-row">
+                <div class="gauge-item">
+                    <span class="gauge-label">MP DISPO</span>
+                    <span class="gauge-value ${s.nostrSlots>50?'hi':s.nostrSlots===0?'lo':''}">${s.nostrSlots}</span>
+                </div>
+                <div class="gauge-item">
+                    <span class="gauge-label">ZENCARD</span>
+                    <span class="gauge-value">${s.zcSlots}</span>
+                </div>
+                <div class="gauge-item">
+                    <span class="gauge-label">PAF Ẑ/SEM</span>
+                    <span class="gauge-value">${s.paf}</span>
+                </div>
+                ${s.ncard?`<div class="gauge-item">
+                    <span class="gauge-label">ACTIFS</span>
+                    <span class="gauge-value">${s.ncard}</span>
+                </div>`:''}
+                ${s.diskGb?`<div class="gauge-item">
+                    <span class="gauge-label">DISQUE</span>
+                    <span class="gauge-value">${Math.round(s.diskGb)} Go</span>
+                </div>`:''}
+            </div>
+
+            ${s.relay?`<div class="relay-line">⊛ ${esc(s.relay)}</div>`:''}
+            ${ipfsRow}
+
+            <div class="card-footer">
+                <span class="dist-display">${distStr}</span>
+                <button class="lever-btn ${isSelected?'engaged':''}"
+                    ${!hasSlots?'disabled title="AUCUN SLOT"':''}
+                    onclick="selectAndRedirect('${esc(s.uspot)}')">
+                    ${isSelected?'▶ SÉLECTIONNÉ':'▶ CHOISIR'}
+                </button>
+            </div>
+        `;
+
+        card.addEventListener('click', function(e) {
+            if (e.target.tagName==='BUTTON'||e.target.tagName==='A') return;
+            if (hasSlots&&s.active) selectStation(s.uspot, false);
+        });
+        grid.appendChild(card);
+    });
+}
+
+function selectStation(uspot, andRedirect) {
+    selectedUspot = uspot;
+    document.querySelectorAll('.station-card').forEach(function(card) {
+        const sel = card.dataset.uspot===uspot;
+        card.classList.toggle('selected', sel);
+        const btn = card.querySelector('.lever-btn');
+        if (btn&&!btn.disabled) {
+            btn.textContent = sel ? '▶ SÉLECTIONNÉ' : '▶ CHOISIR';
+            btn.classList.toggle('engaged', sel);
+        }
+    });
+    if (andRedirect) {
+        setStatus('loading', `CONNEXION → ${uspot}...`);
+        window.location.href = uspot.replace(/\/$/,'')+'/g1';
+    }
+}
+window.selectAndRedirect = function(uspot) { selectStation(uspot, true); };
+
+// ── Geolocation ───────────────────────────────────────────────────────────────
+window.requestGeolocation = function() {
+    const btn = document.getElementById('geo-btn');
+    btn.disabled = true; btn.textContent = '◈ SIGNAL GPS...';
+    if (!navigator.geolocation) { reset(); return; }
+    navigator.geolocation.getCurrentPosition(
+        function(pos) {
+            userLat = Math.round(pos.coords.latitude  *100)/100;
+            userLon = Math.round(pos.coords.longitude *100)/100;
+            const chip = document.getElementById('geo-chip');
+            chip.textContent = `GPS: ${userLat.toFixed(2)}° ${userLon.toFixed(2)}°`;
+            chip.className = 'coord-display has-fix';
+            btn.disabled=false; btn.textContent='◈ RELOCALISER';
+            sortByDistance(); updateUserMarker();
+            updateMapMarkers(window._primaryUspot||'');
+            renderStations(window._primaryUspot||'');
+        },
+        function() { reset(); },
+        { enableHighAccuracy:false, timeout:10000 }
+    );
+    function reset() { btn.disabled=false; btn.textContent='◈ LOCALISER'; }
+};
+
+// ── Main SWARM load (via UPassport API) ───────────────────────────────────────
+window.loadSwarmStations = function() {
+    const uspotUrl = (window.upassportUrl||'').replace(/\/$/,'');
+    if (!uspotUrl) {
+        setStatus('error', 'ERREUR: URL STATION NON DÉTECTÉE');
+        return;
+    }
+    populateNomenclature(uspotUrl);
+    setStatus('loading', `SCAN DU SWARM → ${uspotUrl}...`);
+    document.getElementById('stations-grid').innerHTML =
+        '<div class="skel skel-card"></div>'.repeat(3);
+
+    fetch(uspotUrl+'/')
+        .then(r=>{ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
+        .then(function(root) {
+            const list=[];
+
+            // Primary station
+            const primary = parseStation(Object.assign({}, root, {
+                services: Object.assign({}, root.services||{}, {upassport:{active:true}})
+            }), true);
+            if (primary) {
+                list.push(primary);
+                window._primaryUspot = primary.uspot;
+                selectedUspot = primary.uspot;
             }
 
-            // Update UI
-            const countdownElement = document.getElementById('countdown');
-            const continueButton = document.getElementById('continue-button');
-            
-            if (countdownElement) {
-                countdownElement.textContent = '⏳';
-            }
-            if (continueButton) {
-                continueButton.disabled = true;
-                continueButton.textContent = '⏳ Redirection...';
+            // SWARM peers
+            (root['SWARM']||[]).forEach(function(raw) {
+                if (!raw||typeof raw!=='object') return;
+                const s=parseStation(raw);
+                if (s&&!list.some(e=>e.uspot===s.uspot)) list.push(s);
+            });
+
+            stations=list;
+            if (userLat!==null) sortByDistance();
+
+            const ac=list.filter(s=>s.active&&s.nostrSlots>0).length;
+            setStatus('connected', `${list.length} STATIONS · ${ac} AVEC SLOTS`);
+
+            initMap();
+            updateMapMarkers(window._primaryUspot||'');
+            updateUserMarker();
+            renderStations(window._primaryUspot||'');
+
+            // Secondary: IPFS inside-view
+            if (ipfsGateway) loadIpfsInsideView(ipfsGateway);
+        })
+        .catch(function(err) {
+            console.error('SWARM load error:', err);
+            setStatus('error', 'STATION INACCESSIBLE — VÉRIFIEZ LE RÉSEAU');
+            stations=[];
+            renderStations('');
+        });
+};
+
+// ── Nomenclature station (4 subdomains) ───────────────────────────────────────
+function populateNomenclature(uspotUrl) {
+    if (!uspotUrl) return;
+    const m = uspotUrl.match(/^(https?):\/\/u\.(.*)/);
+    if (!m) return;
+    const proto = m[1], base = m[2].replace(/\/$/,'');
+    const astropUrl = proto+'://astroport.'+base;
+    const ipfsUrl   = proto+'://ipfs.'+base;
+    const relayWss  = 'wss://relay.'+base;
+
+    const elAstro = document.getElementById('url-astroport');
+    const elIpfs  = document.getElementById('url-ipfs');
+    const elRelay = document.getElementById('url-relay');
+    const elUspot = document.getElementById('url-uspot');
+    if (elAstro) { elAstro.href=astropUrl; elAstro.textContent=astropUrl; }
+    if (elIpfs)  { elIpfs.href=ipfsUrl;    elIpfs.textContent=ipfsUrl+'/12345/'; }
+    if (elRelay) { elRelay.textContent=relayWss; }
+    if (elUspot) { elUspot.href=uspotUrl;   elUspot.textContent=uspotUrl; }
+
+    document.getElementById('ipfs-banner').classList.add('visible');
+}
+
+// ── IPFS inside-view : GET {gateway}/12345/ ───────────────────────────────────
+// Accessible via: https://ipfs.DOMAIN/12345/  (nginx location /12345/ → port 12345)
+function loadIpfsInsideView(gateway) {
+    const url = gateway.replace(/\/$/,'')+'/12345/';
+    setStatus('ipfs', `LECTURE REGISTRES IPFS → ${gateway.replace(/https?:\/\//,'')}...`);
+
+    fetch(url)
+        .then(r=>{ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
+        .then(function(data) {
+            // Fill inside-view panel
+            document.getElementById('ipfs-banner').classList.add('visible');
+            document.getElementById('ipfs-nodeid').textContent = data.ipfsnodeid||'—';
+
+            const g1sEl  = document.getElementById('ipfs-g1station-link');
+            const g1swEl = document.getElementById('ipfs-g1swarm-link');
+            if (data.g1station) { g1sEl.href=data.g1station; g1sEl.textContent=data.g1station; }
+            if (data.g1swarm)   { g1swEl.href=data.g1swarm;  g1swEl.textContent=data.g1swarm;  }
+
+            // Enrich primary station
+            const p = stations.find(s=>s.uspot===(window._primaryUspot||''));
+            if (p) {
+                p.ipfsnodeid = data.ipfsnodeid||'';
+                p.g1station  = data.g1station ||'';
+                p.g1swarm    = data.g1swarm   ||'';
             }
 
-            console.log('Redirecting to:', targetUrl);
+            const ac=stations.filter(s=>s.active&&s.nostrSlots>0).length;
+            setStatus('connected', `${stations.length} STATIONS · ${ac} AVEC SLOTS`);
+            renderStations(window._primaryUspot||'');
 
-            // Try automatic redirection
-            try {
-                window.location.href = targetUrl;
-            } catch (error) {
-                console.error('Redirection error:', error);
-                showFallback(targetUrl);
+            // Traverse SWARM via IPFS
+            if (data.g1swarm) discoverViaIpfsSwarm(data.g1swarm);
+        })
+        .catch(function(err) {
+            console.log('IPFS inside-view unavailable:', err);
+            const ac=stations.filter(s=>s.active&&s.nostrSlots>0).length;
+            setStatus('connected', `${stations.length} STATIONS · ${ac} AVEC SLOTS`);
+        });
+}
+
+// ── IPFS SWARM traversal ──────────────────────────────────────────────────────
+// g1swarmUrl = e.g. https://ipfs.copylaradio.com/ipns/CHAN_KEY
+function discoverViaIpfsSwarm(g1swarmUrl) {
+    const discEl = document.getElementById('ipfs-disc-status');
+    discEl.style.display='';
+    discEl.textContent='▶ TRAVERSÉE DU RÉSEAU SWARM IPFS...';
+
+    fetch(g1swarmUrl.replace(/\/$/,'')+'/', { headers:{'Accept':'application/json'} })
+        .then(r=>{ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
+        .then(function(dir) {
+            // Support old (Objects[].Links[]) and new (entries[]) IPFS formats
+            let entries = [];
+            if (Array.isArray(dir.Objects)&&dir.Objects[0]?.Links)
+                entries=dir.Objects[0].Links;
+            else if (Array.isArray(dir.entries))
+                entries=dir.entries;
+
+            const peerIds = entries
+                .map(e=>e.Name||e.name||'')
+                .filter(n=>n.startsWith('12D'));
+
+            if (!peerIds.length) {
+                discEl.textContent='▷ SWARM IPFS : AUCUN PEER DÉTECTÉ (LISTING INDISPONIBLE)';
+                return;
             }
+            discEl.textContent=`▶ ${peerIds.length} PEER(S) IPFS — RÉCUPÉRATION 12345.JSON...`;
 
-            // Fallback: show manual link after 3 seconds if still on page
-            setTimeout(function() {
-                if (window.location.href.includes('g1.html')) {
-                    showFallback(targetUrl);
+            const toFetch=peerIds.slice(0,30);
+            let found=0, done=0;
+
+            toFetch.forEach(function(peerId) {
+                const peerUrl = g1swarmUrl.replace(/\/$/,'')+'/'+peerId+'/12345.json';
+                const ctrl = typeof AbortSignal.timeout==='function'
+                    ? { signal: AbortSignal.timeout(8000) } : {};
+                fetch(peerUrl, ctrl)
+                    .then(r=>r.ok?r.json():null)
+                    .then(function(pd) {
+                        done++;
+                        if (pd&&pd.uSPOT&&!stations.some(e=>e.uspot===pd.uSPOT)) {
+                            const s=parseStation(pd);
+                            if (s) {
+                                s.fromIpfs=true;
+                                s.ipfsnodeid=pd.ipfsnodeid||peerId;
+                                s.g1station=pd.g1station||'';
+                                s.g1swarm=pd.g1swarm||'';
+                                stations.push(s);
+                                found++;
+                            }
+                        }
+                        if (done===toFetch.length) onDone();
+                    })
+                    .catch(()=>{ done++; if(done===toFetch.length) onDone(); });
+            });
+
+            function onDone() {
+                if (found>0) {
+                    if (userLat!==null) sortByDistance();
+                    updateMapMarkers(window._primaryUspot||'');
+                    renderStations(window._primaryUspot||'');
                 }
-            }, 3000);
-        }
+                discEl.textContent = found>0
+                    ? `▶ ${found} STATION(S) SUPPLÉMENTAIRE(S) VIA IPFS`
+                    : '▷ TOUTES LES STATIONS DÉJÀ CONNUES';
+            }
+        })
+        .catch(function(err) {
+            console.log('IPFS directory listing failed:', err);
+            discEl.textContent='▷ LISTING IPFS INDISPONIBLE (CORS / GATEWAY)';
+        });
+}
 
-        function showFallback(url) {
-            const fallbackContainer = document.getElementById('fallback-container');
-            const fallbackLink = document.getElementById('fallback-link');
-            const continueButton = document.getElementById('continue-button');
-            
-            if (fallbackContainer && fallbackLink) {
-                fallbackLink.href = url;
-                fallbackContainer.style.display = 'block';
-            }
-            
-            if (continueButton) {
-                continueButton.style.display = 'none';
-            }
-        }
-    </script>
+// ── Toggle IPFS inside-view ───────────────────────────────────────────────────
+window.toggleIpfsBanner = function() {
+    const title = document.getElementById('ipfs-banner-title');
+    const links = document.getElementById('ipfs-links');
+    title.classList.toggle('collapsed');
+    links.classList.toggle('hidden');
+};
+
+// ── Bootstrap ─────────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', function() {
+    initMap();
+    if (typeof detectUSPOTAPI==='function') detectUSPOTAPI();
+    setTimeout(function() {
+        if (!window.upassportUrl) window.upassportUrl='https://u.copylaradio.com';
+        ipfsGateway = window.IPFS_GATEWAY || '';
+        loadSwarmStations();
+    }, 400);
+});
+
+})();
+</script>
 </body>
 </html>
-

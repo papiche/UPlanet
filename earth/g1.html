@@ -13,9 +13,9 @@
 @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@500;700&display=swap');
 
 :root {
-    --bg:       #0a0e12;
-    --panel:    #10181f;
-    --panel2:   #161f28;
+    --bg:       #121820;
+    --panel:    #1a2430;
+    --panel2:   #1e2b3c;
     --steel:    #1e2d3a;
     --rust:     #2a1a10;
     --brass:    #b5860d;
@@ -26,8 +26,8 @@
     --red:      #c0392b;
     --orange:   #e67e22;
     --ipfs-col: #9b59b6;
-    --text:     #c8d8e0;
-    --text-dim: #5a7080;
+    --text:     #f0f6f8;
+    --text-dim: #8ba3b5;
     --text-mono:#b0c4cc;
     --glow-g:   0 0 8px rgba(61,186,126,0.5);
     --glow-b:   0 0 8px rgba(181,134,13,0.6);
@@ -179,10 +179,10 @@ body {
     width: 100%; height: 260px;
     border-radius: 4px;
     border: 1px solid #0d161e;
-    filter: sepia(15%) contrast(0.9);
+    filter: contrast(1.1);
 }
 /* Darken Leaflet tiles slightly */
-#station-map .leaflet-tile-pane { filter: brightness(0.7) saturate(0.8); }
+#station-map .leaflet-tile-pane { filter: invert(100%) hue-rotate(180deg) brightness(85%) contrast(110%); }
 
 /* ══ CONTROL BAR ════════════════════════════════════════════════════════ */
 .control-bar {
@@ -596,14 +596,40 @@ body {
         </div>
     </div>
 
+    <!-- ══ SOUNDSPOT JUKEBOX ═════════════════════════════════════════════════ -->
+    <div class="porthole-frame" id="soundspot-panel" style="margin-bottom: 12px; border-color: var(--ipfs-col);">
+        <span class="porthole-label" style="color: var(--ipfs-col);">📻 SOUNDSPOT — JUKEBOX DÉCENTRALISÉ</span>
+        <span class="bolt tl"></span><span class="bolt tr"></span><span class="bolt bl"></span><span class="bolt br"></span>
+        <div style="padding: 14px 8px 8px; display: flex; flex-direction: column; gap: 10px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px dashed var(--steel-hi); padding-bottom: 8px;">
+                <div style="font-size: 0.8em;">
+                    <span style="color: var(--text-dim);">ON AIR ⊛</span>
+                    <strong style="color: var(--green); font-family: 'Orbitron', monospace; letter-spacing: 1px; margin-left: 5px;">RADIO SWARM INACTIVE</strong>
+                </div>
+                <div style="font-family: 'Share Tech Mono', monospace; color: var(--text-mono); font-size: 0.9em;">00:00</div>
+            </div>
+            <div style="display: flex; gap: 6px;">
+                <input type="text" id="yt-search" placeholder="URL YouTube ou Mots-clés...">
+                <button class="valve-btn" id="btn-import" onclick="envoyerJukebox()">
+                    ▶ IMPORTER uDRIVE (10 Ẑ offert)
+                </button>
+                <span id="jukebox-status" style="font-size: 0.7em; color: var(--text-dim); margin-left: 10px;"></span>
+            </div>
+            <div style="display: flex; gap: 6px; margin-top: 4px;">
+                <button class="valve-btn" style="flex: 1; font-size: 0.7em;" onclick="alert('Vérification du solde Ẑen en cours...')">🎙️ RÉSERVER L'ANTENNE (100 Ẑ / Heure)</button>
+                <button class="valve-btn" style="flex: 1; font-size: 0.7em;">🎵 PLAYLIST NOSTR</button>
+            </div>
+        </div>
+    </div>
+
     <!-- ══ CONSOLE INFO ══════════════════════════════════════════════════════ -->
     <div class="console-box">
-        <div class="con-head">▷ MULTIPASS — ACCÈS GRATUIT</div>
+        <div class="con-head">▷ UPLANET — VECTEURS D'EXPLORATION</div>
         <ul>
-            <li>Identité souveraine NOSTR + chiffrement SSSS</li>
-            <li>1 ẐEN par like — crédité automatiquement</li>
-            <li>Choisissez la station la plus proche</li>
-            <li>IA personnelle dédiée 24h/24</li>
+            <li><b>SWARM</b> : Découverte p2p via registre IPFS (12345.json)</li>
+            <li><b>NOSTR</b> : Identité souveraine & communication des relais</li>
+            <li><b>uMAP</b> : Topologie géolocalisée des Astroports</li>
+            <li><b>PLAYER</b> : Accès distribué aux médias (Audio/Vidéo)</li>
         </ul>
     </div>
 
@@ -714,12 +740,70 @@ function setStatus(state, msg) {
     document.getElementById('status-text').textContent = msg.toUpperCase();
 }
 
+async function envoyerJukebox() {
+    const input = document.getElementById('yt-search');
+    const status = document.getElementById('jukebox-status');
+    const query = input.value.trim();
+
+    if (!query) return;
+
+    if (!window.nostr) {
+        status.style.color = "var(--orange)";
+        status.textContent = "⚠ MULTIPASS introuvable (Extension Nostr requise).";
+        return;
+    }
+
+    try {
+        status.style.color = "var(--ipfs-col)";
+        status.textContent = "Signature MULTIPASS en cours...";
+
+        // Déduction intelligente du Relai
+        let relayUrl = "wss://relay.copylaradio.com"; // Défaut
+        if (window.location.hostname.includes("ipfs.")) {
+            relayUrl = "wss://" + window.location.hostname.replace("ipfs.", "relay.");
+        } else if (window.location.hostname === "192.168.10.1" || window.location.hostname === "soundspot.local") {
+            relayUrl = "ws://" + window.location.hostname + ":9999"; // Relai tunnel de la station
+        }
+
+        // L'ordre pour l'IA
+        const event = {
+            kind: 1,
+            created_at: Math.floor(Date.now() / 1000),
+            tags: [["expiration", String(Math.floor(Date.now() / 1000) + 3600)], // S'efface dans 1h (NIP-40)
+                ["t", "jukebox"]
+            ],
+            content: `#BRO #youtube #mp3 ${query}`
+        };
+
+        const signedEvent = await window.nostr.signEvent(event);
+        const ws = new WebSocket(relayUrl);
+
+        ws.onopen = () => {
+            ws.send(JSON.stringify(["EVENT", signedEvent]));
+            status.style.color = "var(--green)";
+            status.textContent = "✔ Transmis à BRO ! Copie uDRIVE + Antenne en cours...";
+            input.value = '';
+            setTimeout(() => ws.close(), 2000);
+        };
+        
+        ws.onerror = () => {
+            status.style.color = "var(--red)";
+            status.textContent = "❌ Impossible de joindre le relai : " + relayUrl;
+        };
+
+    } catch (e) {
+        status.style.color = "var(--red)";
+        status.textContent = "Erreur : " + e.message;
+    }
+}
+
+
 // ── Leaflet map (dark industrial style) ──────────────────────────────────────
 function initMap() {
     if (map) return;
     map = L.map('station-map', { zoomControl: true });
     // Dark tile layer via CartoDB dark matter
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_matter/{z}/{x}/{y}{r}.png', {
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '© <a href="https://www.openstreetmap.org/copyright">OSM</a> © <a href="https://carto.com/">CARTO</a>',
         subdomains: 'abcd', maxZoom: 18,
     }).addTo(map);
@@ -730,7 +814,7 @@ function updateMapMarkers(primaryUspot) {
     if (!map) return;
     Object.values(stationMarkers).forEach(m=>m.remove());
     Object.keys(stationMarkers).forEach(k=>delete stationMarkers[k]);
-    const valid = stations.filter(s=>s.lat||s.lon);
+    const valid = stations.filter(s=>s.lat!==0 && s.lon!==0);
     if (!valid.length) return;
     const bounds = [];
 
@@ -758,8 +842,8 @@ function updateMapMarkers(primaryUspot) {
                 <br><span style="color:#5a7080">${esc(s.relay||'—')}</span>
                 <hr style="margin:5px 0;border:none;border-top:1px solid #1e2d3a">
                 <div style="display:flex;gap:8px;flex-wrap:wrap">
-                    <span>MP: <b style="color:#3dba7e">${s.nostrSlots}</b></span>
-                    <span>ZC: ${s.zcSlots}</span>
+                    <span>NCARD: <b style="color:#3dba7e">${s.nostrSlots}</b></span>
+                    <span>ZCARD: ${s.zcSlots}</span>
                     <span>PAF: ${s.paf}Ẑ</span>
                     <span style="color:${bilanInt>=0?'#3dba7e':'#c0392b'}">
                         ∆${bilanInt>0?'+':''}${s.bilan}Ẑ</span>
@@ -880,11 +964,11 @@ function renderStations(primaryUspot) {
 
             <div class="gauge-row">
                 <div class="gauge-item">
-                    <span class="gauge-label">MP DISPO</span>
+                    <span class="gauge-label">NCARD (Nostr/IPFS/uDRIVE)</span>
                     <span class="gauge-value ${s.nostrSlots>50?'hi':s.nostrSlots===0?'lo':''}">${s.nostrSlots}</span>
                 </div>
                 <div class="gauge-item">
-                    <span class="gauge-label">ZENCARD</span>
+                    <span class="gauge-label">ZCARD (NextCloud)</span>
                     <span class="gauge-value">${s.zcSlots}</span>
                 </div>
                 <div class="gauge-item">
@@ -1172,6 +1256,8 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 })();
+
 </script>
+
 </body>
 </html>

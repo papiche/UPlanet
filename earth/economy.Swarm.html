@@ -340,6 +340,17 @@
             border-width: 3px;
         }
 
+        /* Hardware tier — taille du nœud sur la carte */
+        .station-node.hw-brain .station-core {
+            width: 52px; height: 52px; font-size: 1.5rem;
+            box-shadow: 0 0 30px rgba(255, 136, 0, 0.5);
+        }
+        .station-node.hw-standard .station-core {
+            width: 44px; height: 44px; font-size: 1.3rem;
+        }
+        .station-node.hw-brain { margin: -6px; }
+        .station-node.hw-standard { margin: -2px; }
+
         .station-label {
             position: absolute;
             top: 100%;
@@ -1058,6 +1069,9 @@
                     <!-- Love Ledger section (affiché si bénévolat > 0) -->
                     <div id="detail-love-ledger" style="display:none; padding: 0 15px 0 15px;"></div>
 
+                    <!-- Hardware section -->
+                    <div id="detail-hardware" style="display:none; padding: 0 15px 10px 15px;"></div>
+
                     <div class="nav-buttons">
                         <button class="nav-btn" id="btn-prev" onclick="navigateStation(-1)">◀ PREV</button>
                         <button class="nav-btn" id="btn-jump" onclick="jumpToStation()">🚀 JUMP</button>
@@ -1188,6 +1202,10 @@
                 <div class="aggregate-item">
                     <div class="aggregate-value" id="agg-impot" style="color: var(--accent-red)">-- Ẑ</div>
                     <div class="aggregate-label">📊 PROVISIONS FISCALES</div>
+                </div>
+                <div class="aggregate-item">
+                    <div class="aggregate-value" id="agg-brain" style="color: var(--accent-orange)">--</div>
+                    <div class="aggregate-label">🔥 BRAIN NODES</div>
                 </div>
             </div>
         </div>
@@ -1392,6 +1410,15 @@
                         stationLat: parseFloat(getTagValue(tags, 'geo:lat') || 0),
                         stationLon: parseFloat(getTagValue(tags, 'geo:lon') || 0),
                         solarOffset: getTagValue(tags, 'sync:solar_offset') || '--:--',
+                        // Hardware capacity
+                        hwPowerScore: content.hardware?.power_score || parseInt(getTagValue(tags, 'hw:power_score') || 0),
+                        hwTier: content.hardware?.tier || getTagValue(tags, 'hw:tier') || 'light',
+                        hwDragonRank: content.hardware?.dragon_rank || getTagValue(tags, 'hw:dragon_rank') || 'light',
+                        hwProviderReady: (content.hardware?.provider_ready === true) || getTagValue(tags, 'hw:provider_ready') === 'true',
+                        hwStorageReady: (content.hardware?.storage_ready === true) || getTagValue(tags, 'hw:storage_ready') === 'true',
+                        hwCpuCores: content.hardware?.cpu_cores || parseInt(getTagValue(tags, 'hw:cpu_cores') || 1),
+                        hwRamGb: content.hardware?.ram_gb || parseFloat(getTagValue(tags, 'hw:ram_gb') || 0),
+                        hwGpuVram: content.hardware?.gpu_vram_gb || parseFloat(getTagValue(tags, 'hw:gpu_vram_gb') || 0),
                         created_at: event.created_at,
                         content
                     });
@@ -1491,7 +1518,8 @@
                 const y = centerY + Math.sin(angle) * radius * (0.7 + Math.random() * 0.3);
 
                 const node = document.createElement('div');
-                node.className = `station-node ${station.stationId === selectedStationId ? 'selected' : ''}`;
+                const hwClass = `hw-${station.hwTier || 'light'}`;
+                node.className = `station-node ${hwClass} ${station.stationId === selectedStationId ? 'selected' : ''}`;
                 node.style.left = `${x - 20}px`;
                 node.style.top = `${y - 20}px`;
                 node.onclick = () => selectStation(station.stationId);
@@ -1569,9 +1597,7 @@
                 row.className = `station-row ${station.stationId === selectedStationId ? 'selected' : ''}`;
                 row.onclick = () => selectStation(station.stationId);
 
-                // Format solar offset display
-                const solarDisplay = station.solarOffset || '--:--';
-                const hasGeo = station.stationLat && station.stationLon && station.stationLat !== 0;
+                const tierEmoji = station.hwTier === 'brain' ? '🔥' : station.hwTier === 'standard' ? '⚡' : '🌿';
 
                 row.innerHTML = `
                     <div class="station-name-cell">
@@ -1581,7 +1607,7 @@
                     <div>${station.healthStatus.replace('_', ' ').toUpperCase()}</div>
                     <div style="color: ${station.bilan >= 0 ? 'var(--accent-green)' : 'var(--accent-red)'}">${station.bilan.toFixed(1)} Ẑ</div>
                     <div style="color: var(--accent-yellow)">${station.revenueTotal.toFixed(0)} Ẑ</div>
-                    <div>MP:${station.multipassUsed} ZC:${station.zencardTotal}</div>
+                    <div title="${station.hwCpuCores}c ${station.hwRamGb.toFixed(0)}Go score:${station.hwPowerScore}">${tierEmoji} MP:${station.multipassUsed} ZC:${station.zencardTotal}</div>
                     <div>${station.weeksRunway}w</div>
                 `;
 
@@ -1646,6 +1672,49 @@
                 } else {
                     loveSection.style.display = 'none';
                 }
+            }
+
+            // Hardware section
+            const hwSection = document.getElementById('detail-hardware');
+            if (hwSection) {
+                const tierEmoji = station.hwTier === 'brain' ? '🔥' : station.hwTier === 'standard' ? '⚡' : '🌿';
+                const tierLabel = station.hwTier === 'brain' ? 'BRAIN' : station.hwTier === 'standard' ? 'STD' : 'LIGHT';
+                const rankLabels = {
+                    dragon_zen: '🐉 DRAGON ẐEN',
+                    dragon_compute: '🔥 DRAGON COMPUTE',
+                    dragon_origin: '⚡ DRAGON ORIGIN',
+                    light: '🌿 Nœud Léger'
+                };
+                const rankLabel = rankLabels[station.hwDragonRank] || station.hwDragonRank;
+                hwSection.style.display = 'block';
+                hwSection.innerHTML = `
+                    <div style="background:rgba(0,212,255,0.05);border-left:3px solid var(--accent-cyan);border-radius:4px;padding:10px 12px;margin:4px 0;">
+                        <div style="font-size:0.75rem;color:var(--accent-cyan);font-weight:700;letter-spacing:1px;margin-bottom:6px;">🖥️ HARDWARE — ${tierEmoji} ${tierLabel}</div>
+                        <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:6px;">
+                            <div style="text-align:center;">
+                                <div style="font-family:'Share Tech Mono',monospace;font-size:1.1rem;color:var(--accent-cyan);">${station.hwPowerScore}</div>
+                                <div style="font-size:0.65rem;color:var(--text-dim);letter-spacing:1px;">POWER SCORE</div>
+                            </div>
+                            <div style="text-align:center;">
+                                <div style="font-family:'Share Tech Mono',monospace;font-size:1.1rem;color:var(--text-primary);">${station.hwCpuCores}</div>
+                                <div style="font-size:0.65rem;color:var(--text-dim);letter-spacing:1px;">CPU CORES</div>
+                            </div>
+                            <div style="text-align:center;">
+                                <div style="font-family:'Share Tech Mono',monospace;font-size:1.1rem;color:var(--text-primary);">${station.hwRamGb.toFixed(0)} Go</div>
+                                <div style="font-size:0.65rem;color:var(--text-dim);letter-spacing:1px;">RAM</div>
+                            </div>
+                            ${station.hwGpuVram > 0 ? `<div style="text-align:center;">
+                                <div style="font-family:'Share Tech Mono',monospace;font-size:1.1rem;color:var(--accent-orange);">${station.hwGpuVram.toFixed(0)} Go</div>
+                                <div style="font-size:0.65rem;color:var(--text-dim);letter-spacing:1px;">VRAM GPU</div>
+                            </div>` : ''}
+                        </div>
+                        <div style="font-size:0.72rem;color:var(--text-secondary);margin-bottom:4px;">${rankLabel}</div>
+                        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                            ${station.hwProviderReady ? '<span style="font-size:0.65rem;color:var(--accent-green);background:rgba(0,255,136,0.1);border-radius:3px;padding:2px 6px;">☁️ PROVIDER</span>' : ''}
+                            ${station.hwStorageReady ? '<span style="font-size:0.65rem;color:var(--accent-purple);background:rgba(153,102,255,0.1);border-radius:3px;padding:2px 6px;">💾 STORAGE</span>' : ''}
+                        </div>
+                    </div>
+                `;
             }
 
             // PAF and pricing
@@ -1774,7 +1843,7 @@
             let totalRevenue = 0;
             let totalMultipass = 0, totalMultipassCap = 0;
             let totalZencardRenters = 0, totalZencardOwners = 0;
-            let healthyCount = 0;
+            let healthyCount = 0, brainCount = 0;
 
             stations.forEach(s => {
                 totalRevenue += s.revenueTotal;
@@ -1783,6 +1852,7 @@
                 totalZencardRenters += s.zencardRenters;
                 totalZencardOwners += s.zencardOwners;
                 if (s.healthStatus === 'healthy') healthyCount++;
+                if (s.hwTier === 'brain') brainCount++;
             });
 
             const healthPercent = Math.round((healthyCount / stations.length) * 100);
@@ -1796,6 +1866,8 @@
             document.getElementById('agg-zencard').textContent = `${totalZencardRenters}🏠+${totalZencardOwners}👑`;
             document.getElementById('agg-capital').textContent = `${totalCapital.toFixed(2)} Ẑ`;
             document.getElementById('agg-impot').textContent = `${totalImpot.toFixed(2)} Ẑ`;
+            const aggBrain = document.getElementById('agg-brain');
+            if (aggBrain) aggBrain.textContent = brainCount > 0 ? `${brainCount} / ${stations.length}` : `0 / ${stations.length}`;
 
             // Display SHARED wallet values (correctly not summed across stations)
             document.getElementById('total-cash').textContent = `${totalCash.toFixed(2)} Ẑ`;

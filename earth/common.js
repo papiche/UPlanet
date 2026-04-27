@@ -2602,7 +2602,24 @@ async function sendNIP42Auth(relayUrl, forceSend = false) {
         
         // Publish the event to the relay
         console.log('📤 Publishing NIP-42 event to relay...');
-        const publishPromise = NostrState.nostrRelay.publish(signedEvent);
+        const publishPromise = new Promise((resolve, reject) => {
+            try {
+                const pub = NostrState.nostrRelay.publish(signedEvent);
+                let isResolved = false;
+                pub.on('ok', () => {
+                    if (!isResolved) { isResolved = true; resolve(true); }
+                });
+                pub.on('failed', (reason) => {
+                    if (!isResolved) { isResolved = true; reject(new Error(reason)); }
+                });
+                // Fallback timeout in case relay doesn't send OK
+                setTimeout(() => {
+                    if (!isResolved) { isResolved = true; resolve(true); }
+                }, 2500);
+            } catch(e) {
+                reject(e);
+            }
+        });
         
         // Add timeout for publish
         const timeoutPromise = new Promise((_, reject) => {
@@ -2610,6 +2627,10 @@ async function sendNIP42Auth(relayUrl, forceSend = false) {
         });
         
         await Promise.race([publishPromise, timeoutPromise]);
+        
+        // CRITICAL: Give strfry's filter/22242.sh time to write the marker file to disk
+        await new Promise(r => setTimeout(r, 1500));
+        
         console.log('✅ NIP-42 event published to relay:', signedEvent.id);
         
         // Update last auth time

@@ -3174,7 +3174,15 @@ async function publishNote(content, additionalTags = [], kind = 1, options = {})
             }
 
             // Publication avec timeout
-            const publishPromise = nostrRelay.publish(signedEvent);
+            const publishPromise = new Promise((resolve, reject) => {
+                try {
+                    const pub = nostrRelay.publish(signedEvent);
+                    let isResolved = false;
+                    pub.on('ok', () => { if (!isResolved) { isResolved = true; resolve(true); } });
+                    pub.on('failed', (reason) => { if (!isResolved) { isResolved = true; reject(new Error(reason)); } });
+                    setTimeout(() => { if (!isResolved) { isResolved = true; resolve(true); } }, 2500);
+                } catch(e) { reject(e); }
+            });
             const timeoutPromise = new Promise((_, reject) => {
                 setTimeout(() => reject(new Error('Timeout de publication')), timeout);
             });

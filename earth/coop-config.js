@@ -190,6 +190,7 @@
         'OCSLUG': 'OC Slug', 'OCAPIKEY': 'OC API Token',
         'OC_URL_SATELLITE': 'URL Satellite', 'OC_URL_CONSTELLATION': 'URL Constellation',
         'PLANTNET_API_KEY': 'PlantNet API Key',
+        'GIT_HOST': 'Git Host (github.com ou gitlab)', 'GIT_TOKEN': 'Git Token (PAT)', 'GIT_OWNER': 'Git Owner (compte/org)',
         'MJ_APIKEY_PUBLIC': 'MailJet Public', 'MJ_APIKEY_PRIVATE': 'MailJet Private', 'MJ_SENDER_EMAIL': 'Email expediteur'
     };
 
@@ -198,7 +199,7 @@
         { title: 'Parts cooperatives', icon: '⭐', keys: ['ZENCARD_SATELLITE', 'ZENCARD_CONSTELLATION'] },
         { title: 'Regle 3x1/3 + 1%', icon: '🤝', keys: ['TREASURY_PERCENT', 'RND_PERCENT', 'ASSETS_PERCENT', 'CAPTAIN_BONUS_PERCENT'] },
         { title: 'OpenCollective', icon: '🌐', keys: ['OCSLUG', 'OCAPIKEY', 'OC_URL_SATELLITE', 'OC_URL_CONSTELLATION'] },
-        { title: 'API Keys', icon: '🔐', keys: ['PLANTNET_API_KEY', 'MJ_APIKEY_PUBLIC', 'MJ_APIKEY_PRIVATE', 'MJ_SENDER_EMAIL'] }
+        { title: 'API Keys', icon: '🔐', keys: ['PLANTNET_API_KEY', 'GIT_HOST', 'GIT_TOKEN', 'GIT_OWNER', 'MJ_APIKEY_PUBLIC', 'MJ_APIKEY_PRIVATE', 'MJ_SENDER_EMAIL'] }
     ];
 
     const COMMENTS = ['_comment_fiscal', '_comment_shares', '_comment_3x13', '_comment_oc', '_comment_api', '_comment_mj'];
@@ -218,6 +219,7 @@
         "OC_URL_CONSTELLATION": "https://opencollective.com/monnaie-libre/contribute/parrainage-infrastructure-module-gpu-1-24-98385",
         "_comment_api": "=== API KEYS ===",
         "PLANTNET_API_KEY": "",
+        "GIT_HOST": "https://github.com", "GIT_TOKEN": "", "GIT_OWNER": "papiche",
         "_comment_mj": "=== MAILJET ===",
         "MJ_APIKEY_PUBLIC": "", "MJ_APIKEY_PRIVATE": "", "MJ_SENDER_EMAIL": ""
     };

@@ -2022,10 +2022,19 @@ class VideoStats {
     }
 }
 
+// Session caches for video stats (TTL: 5 min)
+const _videoSharesCache = new Map();
+const _videoCommentsCache = new Map();
+const _STATS_CACHE_TTL = 300_000;
+
 /**
  * Fetch video shares (notes referencing this video)
  */
 async function fetchVideoShares(eventId, ipfsUrl) {
+    const cacheKey = eventId || ipfsUrl;
+    const cached = _videoSharesCache.get(cacheKey);
+    if (cached && (Date.now() - cached.ts) < _STATS_CACHE_TTL) return cached.data;
+
     if (!isNostrConnected) {
         await connectToRelay();
     }
@@ -2041,19 +2050,17 @@ async function fetchVideoShares(eventId, ipfsUrl) {
             limit: 100
         };
 
-        return new Promise((resolve) => {
+        const result = await new Promise((resolve) => {
             const sub = nostrRelay.sub([filter]);
             const shares = [];
-            
+
             const timeout = setTimeout(() => {
                 sub.unsub();
                 resolve(shares);
             }, 3000);
 
             sub.on('event', (event) => {
-                if (event.id !== eventId) { // Don't count the original video
-                    shares.push(event);
-                }
+                if (event.id !== eventId) shares.push(event);
             });
 
             sub.on('eose', () => {
@@ -2062,6 +2069,8 @@ async function fetchVideoShares(eventId, ipfsUrl) {
                 resolve(shares);
             });
         });
+        _videoSharesCache.set(cacheKey, { data: result, ts: Date.now() });
+        return result;
     } catch (error) {
         console.error('Error fetching video shares:', error);
         return [];
@@ -4562,6 +4571,9 @@ async function postVideoComment(content, videoEventId, ipfsUrl = null) {
  * @returns {Promise<Array>} Array of comment events
  */
 async function fetchVideoComments(videoEventId) {
+    const cached = _videoCommentsCache.get(videoEventId);
+    if (cached && (Date.now() - cached.ts) < _STATS_CACHE_TTL) return cached.data;
+
     if (!isNostrConnected) {
         console.log('🔌 Connexion au relay pour récupérer les commentaires...');
         try {
@@ -4617,28 +4629,25 @@ async function fetchVideoComments(videoEventId) {
         };
 
         const comments = [];
-        
-        return new Promise((resolve) => {
+
+        const result = await new Promise((resolve) => {
             const sub = nostrRelay.sub([filter]);
-            
-            // Timeout de 5 secondes pour la récupération
+
             const timeout = setTimeout(() => {
                 sub.unsub();
-                console.log(`✅ ${comments.length} commentaire(s) NIP-22 récupéré(s)`);
-                resolve(comments.sort((a, b) => a.created_at - b.created_at)); // Plus ancien en premier (chronologique)
+                resolve(comments.sort((a, b) => a.created_at - b.created_at));
             }, 5000);
 
-            sub.on('event', (event) => {
-                comments.push(event);
-            });
+            sub.on('event', (event) => { comments.push(event); });
 
             sub.on('eose', () => {
                 clearTimeout(timeout);
                 sub.unsub();
-                console.log(`✅ ${comments.length} commentaire(s) NIP-22 récupéré(s)`);
                 resolve(comments.sort((a, b) => a.created_at - b.created_at));
             });
         });
+        _videoCommentsCache.set(videoEventId, { data: result, ts: Date.now() });
+        return result;
     } catch (error) {
         console.error('❌ Erreur lors de la récupération des commentaires:', error);
         return [];

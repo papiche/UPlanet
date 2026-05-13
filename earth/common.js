@@ -503,8 +503,8 @@ if (typeof window !== 'undefined') {
  * Strfry and other relays limit concurrent REQs per connection
  */
 const SubscriptionQueue = {
-    MAX_CONCURRENT: 3,  // Maximum concurrent subscriptions
-    DELAY_BETWEEN: 100, // Delay between starting subscriptions (ms)
+    MAX_CONCURRENT: 2,  // Maximum concurrent subscriptions (conservative for strfry)
+    DELAY_BETWEEN: 300, // Delay between starting subscriptions (ms)
     activeCount: 0,
     queue: [],
     
@@ -678,11 +678,10 @@ function wrapRelayWithQueue(relay) {
 const originalExecuteSubscription = SubscriptionQueue.executeSubscription.bind(SubscriptionQueue);
 SubscriptionQueue.executeSubscription = async function(task) {
     this.activeCount++;
-    console.log(`[SubQueue] Starting (${this.activeCount}/${this.MAX_CONCURRENT} active, ${this.queue.length} queued)`);
-    
+
     const events = [];
     let resolved = false;
-    
+
     const cleanup = () => {
         if (!resolved) {
             resolved = true;
@@ -690,41 +689,41 @@ SubscriptionQueue.executeSubscription = async function(task) {
             setTimeout(() => this.processQueue(), this.DELAY_BETWEEN);
         }
     };
-    
+
     try {
-        // Get the actual relay sub function
-        let subFn;
-        if (task.relay._originalRelay && task.relay._originalRelay.sub) {
-            subFn = task.relay._originalRelay.sub;
-        } else if (task.relay.sub && !task.relay._queueWrapped) {
-            subFn = task.relay.sub.bind(task.relay);
-        } else if (task._originalSub) {
-            subFn = task._originalSub;
-        } else {
-            // Fallback: try to use the relay's sub
-            subFn = task.relay.sub ? task.relay.sub.bind(task.relay) : null;
+        // Resolve the actual (unwrapped) relay sub function
+        // task._originalSub is set by wrapRelayWithQueue when passing relay._originalRelay
+        let subFn = task._originalSub;
+        if (!subFn) {
+            const r = task.relay;
+            // Prefer the stored original sub; avoid calling the wrapped version recursively
+            subFn = (r._originalRelay && r._originalRelay.sub)
+                ? r._originalRelay.sub.bind(r._originalRelay)
+                : (!r._queueWrapped && r.sub)
+                    ? r.sub.bind(r)
+                    : null;
         }
-        
+
         if (!subFn) {
             console.error('[SubQueue] No sub function available');
             cleanup();
             task.resolve(events);
             return;
         }
-        
+
         const sub = subFn(task.filters);
-        
+
         const timeoutId = setTimeout(() => {
             try { sub.unsub(); } catch(e) {}
             cleanup();
             task.resolve(events);
         }, task.timeout);
-        
+
         sub.on('event', (event) => {
             events.push(event);
             if (task.onEvent) task.onEvent(event);
         });
-        
+
         sub.on('eose', () => {
             clearTimeout(timeoutId);
             try { sub.unsub(); } catch(e) {}
@@ -732,7 +731,17 @@ SubscriptionQueue.executeSubscription = async function(task) {
             if (task.onEose) task.onEose(events);
             task.resolve(events);
         });
-        
+
+        // Handle CLOSED (strfry rejects the REQ) — free slot immediately
+        if (typeof sub.on === 'function') {
+            sub.on('closed', () => {
+                clearTimeout(timeoutId);
+                try { sub.unsub(); } catch(e) {}
+                cleanup();
+                task.resolve(events);
+            });
+        }
+
     } catch (error) {
         cleanup();
         console.error('[SubQueue] Error:', error);
@@ -2606,13 +2615,16 @@ async function sendNIP42Auth(relayUrl, forceSend = false) {
             try {
                 const pub = NostrState.nostrRelay.publish(signedEvent);
                 let isResolved = false;
-                pub.on('ok', () => {
-                    if (!isResolved) { isResolved = true; resolve(true); }
-                });
-                pub.on('failed', (reason) => {
-                    if (!isResolved) { isResolved = true; reject(new Error(reason)); }
-                });
-                // Fallback timeout in case relay doesn't send OK
+                if (pub && typeof pub.then === 'function') {
+                    // nostr-tools v2+: publish() retourne une Promise
+                    pub.then(() => { if (!isResolved) { isResolved = true; resolve(true); } })
+                       .catch((r) => { if (!isResolved) { isResolved = true; reject(new Error(r)); } });
+                } else if (pub && typeof pub.on === 'function') {
+                    // nostr-tools v1: publish() retourne un objet avec .on()
+                    pub.on('ok', () => { if (!isResolved) { isResolved = true; resolve(true); } });
+                    pub.on('failed', (r) => { if (!isResolved) { isResolved = true; reject(new Error(r)); } });
+                }
+                // Fallback timeout (relay sans réponse OK, ou publish() retourne undefined)
                 setTimeout(() => {
                     if (!isResolved) { isResolved = true; resolve(true); }
                 }, 2500);
@@ -3094,8 +3106,13 @@ async function publishNote(content, additionalTags = [], kind = 1, options = {})
                         try {
                             const pub = relay.publish(signedEvent);
                             let isResolved = false;
-                            pub.on('ok', () => { if (!isResolved) { isResolved = true; resolve(true); } });
-                            pub.on('failed', (reason) => { if (!isResolved) { isResolved = true; reject(new Error(reason)); } });
+                            if (pub && typeof pub.then === 'function') {
+                                pub.then(() => { if (!isResolved) { isResolved = true; resolve(true); } })
+                                   .catch((r) => { if (!isResolved) { isResolved = true; reject(new Error(r)); } });
+                            } else if (pub && typeof pub.on === 'function') {
+                                pub.on('ok', () => { if (!isResolved) { isResolved = true; resolve(true); } });
+                                pub.on('failed', (reason) => { if (!isResolved) { isResolved = true; reject(new Error(reason)); } });
+                            }
                             setTimeout(() => { if (!isResolved) { isResolved = true; resolve(true); } }, 2500);
                         } catch(e) { reject(e); }
                     });
@@ -3178,8 +3195,13 @@ async function publishNote(content, additionalTags = [], kind = 1, options = {})
                 try {
                     const pub = nostrRelay.publish(signedEvent);
                     let isResolved = false;
-                    pub.on('ok', () => { if (!isResolved) { isResolved = true; resolve(true); } });
-                    pub.on('failed', (reason) => { if (!isResolved) { isResolved = true; reject(new Error(reason)); } });
+                    if (pub && typeof pub.then === 'function') {
+                        pub.then(() => { if (!isResolved) { isResolved = true; resolve(true); } })
+                           .catch((r) => { if (!isResolved) { isResolved = true; reject(new Error(r)); } });
+                    } else if (pub && typeof pub.on === 'function') {
+                        pub.on('ok', () => { if (!isResolved) { isResolved = true; resolve(true); } });
+                        pub.on('failed', (reason) => { if (!isResolved) { isResolved = true; reject(new Error(reason)); } });
+                    }
                     setTimeout(() => { if (!isResolved) { isResolved = true; resolve(true); } }, 2500);
                 } catch(e) { reject(e); }
             });
@@ -6076,6 +6098,10 @@ async function sendCustomReaction(eventId, authorPubkey, emoji) {
     return sendLike(eventId, authorPubkey, emoji);
 }
 
+// Session cache for reactions — avoids redundant REQs for the same event (TTL: 5 min)
+const _reactionsCache = new Map();
+const _REACTIONS_CACHE_TTL = 300_000;
+
 /**
  * Fetch reactions for a specific event
  * @param {string} eventId - ID of the event to get reactions for
@@ -6083,6 +6109,10 @@ async function sendCustomReaction(eventId, authorPubkey, emoji) {
  * @returns {Promise<Array>} Array of reaction events
  */
 async function fetchReactions(eventId, limit = 50) {
+    const cached = _reactionsCache.get(eventId);
+    if (cached && (Date.now() - cached.ts) < _REACTIONS_CACHE_TTL) {
+        return cached.data;
+    }
     // Ensure relay connection is ready (waits for connection to be fully established)
     const connected = await ensureRelayConnection({ silent: true, forceAuth: false });
     if (!connected || !NostrState.nostrRelay) {
@@ -6103,27 +6133,24 @@ async function fetchReactions(eventId, limit = 50) {
 
         const reactions = [];
         
-        return new Promise((resolve) => {
+        const result = await new Promise((resolve) => {
             const sub = nostrRelay.sub([filter]);
-            
-            // Timeout de 5 secondes pour la récupération
+
             const timeout = setTimeout(() => {
                 sub.unsub();
-                console.log(`✅ ${reactions.length} réaction(s) récupérée(s)`);
-                resolve(reactions.sort((a, b) => b.created_at - a.created_at)); // Plus récent en premier
+                resolve(reactions.sort((a, b) => b.created_at - a.created_at));
             }, 5000);
 
-            sub.on('event', (event) => {
-                reactions.push(event);
-            });
+            sub.on('event', (event) => { reactions.push(event); });
 
             sub.on('eose', () => {
                 clearTimeout(timeout);
                 sub.unsub();
-                console.log(`✅ ${reactions.length} réaction(s) récupérée(s)`);
                 resolve(reactions.sort((a, b) => b.created_at - a.created_at));
             });
         });
+        _reactionsCache.set(eventId, { data: result, ts: Date.now() });
+        return result;
     } catch (error) {
         console.error('❌ Erreur lors de la récupération des réactions:', error);
         return [];

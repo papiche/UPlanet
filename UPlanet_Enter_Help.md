@@ -1,92 +1,102 @@
-## **Votre Guide d'Entrée dans l'Univers UPlanet : Du Simple Clic à la Co-propriété**
+FR [EN](/s/UPlanet_Enter_Help.EN)
 
-Bonjour et bienvenue !
+> **🌐 À propos de notre collectif**
+> Nous bâtissons un réseau citoyen de stations autonomes. À la manière d'un opérateur indépendant, nous déployons des nœuds d'hébergement directement chez les particuliers raccordés à la fibre. Notre modèle économique équitable permet de rétribuer nos "armateurs" et "capitaines" en **ẑen**. Cet écosystème s'anime grâce à : **zelkova** (transferts de valeur), **coracle** (tissage de lien social), et **TrocZen** (émission de bons d'échange).
+> 
+> **🛠️ Stack technique & Version Alpha**
+> Le socle de notre infrastructure décentralisée s'appuie sur le trio *Astroport.ONE + UPassport + relais strfry*. En reprenant la pleine propriété de nos données (via le protocole *UPlanet_FILE_CONTRACT*), nous redevenons maîtres de nos applications. Ces dernières remplacent les outils traditionnels (Twitter, Facebook, YouTube...) dans un espace de confiance appelé "cadre relatif N²" (restreint à vos amis et aux amis de vos amis).
+> ⚠️ **Attention :** Tous nos développements sont au stade **Alpha** (en cours de finition). Vos tests et vos retours (*FEEDBACK_INTEGRATION*) sont vitaux pour nous aider à améliorer l'écosystème !
+> 
+> **⚖️ Un bien commun numérique**
+> Nos logiciels sont publiés sous licence libre **AGPL**. Ils n'appartiennent à aucune entreprise, mais bien à vous, leurs utilisateurs. 
+> 👉 **[Rejoindre le collectif et participer à l'aventure](https://opencollective.com/monnaie-libre)**
 
-Vous avez entendu parler d'UPlanet et vous êtes curieux ? Vous êtes au bon endroit. L'internet que nous connaissons est devenu un espace où nous sommes des locataires de services qui exploitent nos données. UPlanet est un projet ambitieux pour bâtir un monde numérique où nous sommes les **propriétaires**.
+# **UPlanet : Le Guide Détaillé - Du Virtuel au Vivant**
 
-Un monde où chaque action peut avoir un impact positif, non seulement en ligne, mais aussi dans le monde réel.
+## [Le Livre Blanc Astroport.ONE : De la Souveraineté Numérique à la Régénération Écologique](/s/Astroport.ONE.FR#)
 
-Ce guide est conçu pour vous aider à comprendre ce qu'est UPlanet et à choisir votre propre aventure, que vous soyez un simple explorateur ou un futur bâtisseur.
+**Et si chaque like, chaque conversation, chaque fichier que vous partagez en ligne contribuait à régénérer la planète ?**
+
+C'est la promesse fondamentale d'UPlanet. Ce document détaille l'architecture technique, économique et coopérative qui rend cette promesse possible. Il s'adresse à ceux qui, au-delà de la vision, veulent comprendre les rouages du moteur.
+
+Notre mission, portée par la **SCIC CopyLaRadio**, est de bâtir un **moteur économique à double impact** :
+1.  **Impact Numérique :** Vous offrir la souveraineté sur votre identité et vos données.
+2.  **Impact Écologique :** Utiliser les bénéfices générés pour acquérir des forêts et des terres afin de créer des biens communs physiques et résilients.
 
 ---
 
-### **1. UPlanet, Qu'est-ce que c'est Concrètement ?**
+### **L'Architecture du Cercle Vertueux**
 
-Imaginez un mélange entre **un réseau social, une carte du monde interactive, et une banque coopérative**.
+Notre modèle repose sur trois couches interdépendantes qui transforment l'activité numérique en action réelle.
 
-*   **Un Réseau Social Souverain :** Vous communiquez via un protocole (NOSTR) qui ne peut être ni censuré ni contrôlé par une autorité centrale.
-*   **Une Carte Interactive :** Vous pouvez poster des messages liés à des lieux précis dans le monde réel (#UMAP). Les messages les plus appréciés remontent et créent une sorte de "journal local" généré par la communauté.
-*   **Une Banque Coopérative :** L'écosystème possède sa propre économie interne (le Ẑen) qui récompense les contributions et finance son infrastructure, avec pour but ultime d'investir ses bénéfices dans des biens communs physiques, comme des forêts.
+#### **1. La Couche Numérique : L'Infrastructure de votre Souveraineté**
+C'est la base technique qui vous libère des GAFAM.
+*   **Le MULTIPASS :** C'est plus qu'un compte, c'est votre **passeport numérique souverain**. Techniquement, c'est un portefeuille de clés cryptographiques (Ğ1, NOSTR, etc.) que vous seul contrôlez. Il vous donne accès à tout l'écosystème. ([Voir un exemple](https://ipfs.copylaradio.com/ipfs/QmbBhz6FA68Xy5RY3WWtNiQryyggSV9R8WAa1vvsH3dgtu))
+*   **Le uDRIVE :** C'est votre **disque dur décentralisé**. Un service qui vous donne accès à 128 Go sur une instance NextCloud privée, distribuée sur le réseau des nœuds Astroport pour garantir sécurité et résilience. ([Voir un uDRIVE](https://ipfs.copylaradio.com/ipns/k51qzi5uqu5dhwr9cp52nhe7w13y9g58kg4l7m45ojka0tx92s72bise85sjn0/coucou@yopmail.com/APP/uDRIVE))
+*   **Les Protocoles :** Nous utilisons des technologies libres et robustes : **NOSTR** pour une communication incensurable, et **IPFS** pour un stockage distribué et pérenne.
 
-La clé qui ouvre la porte de cet univers est votre **MULTIPASS** : votre passeport numérique unique et souverain, qui vous appartient vraiment.
+#### **2. La Couche Économique : Le Ẑen, Carburant de l'Écosystème**
+C'est le système sanguin qui fait circuler la valeur.
+*   **Le Ẑen (Ẑ) :** C'est notre unité de compte interne, un "stablecoin coopératif" où **1 Ẑen = 1 €**. Il nous sert d'outil de comptabilité transparent, enregistré sur la blockchain Ğ1.
+*   **Création de Valeur :** Vous gagnez **+1 Ẑen pour chaque "like"** sur vos publications. C'est une rémunération directe pour la qualité de vos contributions.
+*   **Financement des Services :** Les abonnements aux services (MULTIPASS à 1 Ẑen/semaine, ZenCard à 4 Ẑen/semaine) constituent le **chiffre d'affaires** de la coopérative. Ce revenu paie l'infrastructure (la "PAF" des hébergeurs) et le travail de maintenance des "Capitaines".
+
+#### **3. La Couche Coopérative : La SCIC, Moteur de l'Impact Réel**
+C'est le cerveau et le cœur du projet.
+*   **La SCIC CopyLaRadio :** Une Société Coopérative d'Intérêt Collectif où les membres sont les co-propriétaires. Elle assure la gouvernance démocratique et la gestion des fonds. ([Voir les statuts](https://pad.p2p.legal/s/CopyLaRadio#))
+*   **Investissement dans le Réel :** C'est notre pacte fondateur. **L'intégralité des bénéfices nets** (ce qui reste après avoir payé l'infrastructure et la maintenance) est utilisée pour acheter des forêts et des terrains.
+*   **Le Capital à Double Impact :** Quand vous devenez sociétaire, votre apport ne fait pas que financer des serveurs. Il se transforme, via les bénéfices, en mètres carrés d'écosystèmes régénérés.
 
 ---
 
-### **2. Votre Aventure Commence Ici : Deux Portes, Deux Mondes**
+### **Vos Rôles dans l'Écosystème**
 
-Pour commencer, il n'y a pas un, mais **deux univers UPlanet**. Ils sont interconnectés mais répondent à des besoins différents. C'est à vous de choisir votre porte d'entrée.
+Il existe plusieurs façons de participer, chacune avec un impact croissant.
 
-| | **Porte A : 🧭 L'EXPLORATEUR (Monde "ORIGIN")** | ✅ **Porte B : 🛠️ LE BÂTISSEUR (Monde "Ẑen")** |
+| Votre Rôle | Votre Statut | Votre Contribution | Votre Impact |
+| :--- | :--- | :--- | :--- |
+| **Le Locataire** | Usager des services | Paie un "loyer" en Ẑen pour utiliser MULTIPASS/ZenCard. | Finance le fonctionnement courant de l'infrastructure et récompense les créateurs via les "likes". |
+| **Le Sociétaire** | Associé de la coopérative | Fait un apport au capital pour devenir co-propriétaire (ex: 50€/an). | Ne paie plus de loyer. Participe à la gouvernance. Son investissement finance directement l'expansion et l'acquisition d'actifs réels. |
+| **Le Capitaine** | Prestataire et Pilier du réseau | Gère un nœud Astroport, assure la maintenance technique et accompagne les utilisateurs. | Est rémunéré pour son travail (en Ẑen). Devient un point névralgique du réseau et un gardien de la mission. ([Voir la formation](https://ipfs.copylaradio.com/ipfs/QmPuTCooApPu3wFiUFdmxRNyFpf8KxdBv4sQ6i4qrdEb1e/captain.html)) |
+
+---
+
+### **Notre Vision Finale : Un Capital au Service du Vivant**
+
+L'investissement dans CopyLaRadio redéfinit la notion de rendement.
+
+| | **Investissement Traditionnel** | ✅ **Investir dans CopyLaRadio / Made In Zen** |
 | :--- | :--- | :--- |
-| **Pour qui ?**| **Pour les curieux.** Ceux qui veulent découvrir sans engagement, membres Ğ1 ou non. | **Pour ceux qui veulent agir.** Les membres de la Toile de Confiance Ğ1 prêts à s'investir. |
-| **Votre But** | Découvrir les outils, jouer avec l'IA, comprendre le potentiel, tester les services. | **Construire, investir, devenir co-propriétaire** de l'infrastructure et de la coopérative. |
-| **L'Économie**| Un "bac à sable" 100% Ğ1, où **1 Ẑen = 0.1 Ğ1**. Idéal pour expérimenter. | **L'économie réelle** de la coopérative, où **1 Ẑen = 1 €**. C'est le moteur qui finance le projet. |
-| **Engagement** | **Aucun.** Vous entrez avec une simple adresse e-mail. | **Devenir membre de la coopérative** en faisant un apport au capital. |
+| **Finalité** | Maximiser le profit financier pour les actionnaires. | **Créer des biens communs numériques ET écologiques.** |
+| **Rendement**| Dividendes, plus-value à la revente. | Dividendes, valorisation du capital **ET** un rendement écologique non-monétaire (biodiversité, résilience alimentaire, puits de carbone). |
+| **Impact** | Souvent neutre ou négatif sur le plan social et écologique. | **Impact positif direct et mesurable** sur la souveraineté numérique et la régénération des écosystèmes. |
 
 ---
 
-### **3. Guides Pratiques : Comment Entrer ?**
+### **Guide de Démarrage Pratique**
 
-#### **Guide de l'Explorateur (Porte A)**
-*(Moins de 2 minutes pour commencer)*
+Chaque jour passé sur les plateformes centralisées enrichit un système qui exploite vos données. Chaque jour sur UPlanet est un pas vers un monde où votre présence numérique a un impact tangible.
 
-1.  **Allez sur [https://qo-op.com](https://qo-op.com)**.
-2.  **Choisissez votre localisation** sur la carte du monde (votre "UMAP" de départ).
-3.  **Utilisez votre adresse EMAIL** pour finaliser la création.
-4.  **C'est fait !** Vous possédez un MULTIPASS et pouvez commencer à explorer, notamment en vous connectant avec à **[https://coracle.copylaradio.com](https://coracle.copylaradio.com)**.
+**Étape 1 : Explorez les Applications en cours de développement**
+*   **[Inscrivez-vous sur UPlanet ORIGIN](https://ipfs.copylaradio.com/ipns/copylaradio)** pour créer votre premier MULTIPASS et comprendre les mécanismes de base. C'est le "bac à sable" où 1 Ẑen = 0.1 Ğ1. Pour découvrir, expérimenter et dévolopper l'usage "Monnaie Libre"
 
-#### **Guide du Bâtisseur (Porte B)**
-*(Un parcours en 3 étapes qui scelle votre pacte de co-propriétaire)*
+**Étape 2 : Rejoignez-nous**
+*   **[Adhérez au G1FabLab](https://opencollective.com/monnaie-libre)** : C'est la porte d'entrée communautaire pour soutenir la R&D et échanger avec les autres bâtisseurs.
 
-Ce processus est plus qu'un simple login ; c'est votre entrée officielle dans la coopérative.
-
-**Étape 1 : Rejoindre la Communauté des Bâtisseurs**
-Le point de départ n'est pas un formulaire, mais une communauté. Rejoignez le **[G1FabLab sur OpenCollective](https://opencollective.com/monnaie-libre)**. C'est notre "chantier" public, l'espace d'entraide et de formation pour tous ceux qui construisent UPlanet.
-
-**Étape 2 : Devenir Co-Propriétaire (L'Apport au Capital)**
-C'est l'acte qui vous fait passer de visiteur à associé.
-*   Rendez-vous sur la page des sociétaires **[UPlanet Ẑen](https://opencollective.com/monnaie-libre)**.
-*   Choisissez votre niveau d'implication (ex: [Part "Satellite" à 50€/an](https://opencollective.com/monnaie-libre/contribute/parrainage-infrastructure-extension-128-go-98386)).
-*   **Important :** Utilisez le même email que celui que vous souhaitez pour votre MULTIPASS. Ce paiement vous donne accès à vos services **sans payer de "loyer" hebdomadaire**.
-
-**Étape 3 : Sceller le Pacte (La Preuve d'Humanité)**
-C'est l'étape la plus importante, qui lie votre identité à vos droits de propriété.
-*   Depuis **votre propre portefeuille Ğ1 certifié (TdC)**, envoyez **1 Ğ1** à l'adresse Ğ1 de votre nouveau **UPassport** (que vous recevrez après l'étape 2).
-*   Dans le **commentaire** de la transaction, indiquez l'**email** associé à votre compte.
-*   **Pourquoi ?** C'est l'acte cryptographique qui prouve à l'ensemble du réseau que le sociétaire de la coopérative et le membre de la Toile de Confiance sont bien la même personne.
+**Votre avenir numérique vous appartient. Avec UPlanet, son fruit appartient à la Terre.**
 
 ---
 
-### **4. Sous le Capot : Comprendre l'Économie et la Coopérative**
+### **Foire Aux Questions (FAQ)**
 
-Que vous soyez locataire ou propriétaire, vous participez à une économie. Voici comment elle fonctionne :
+*   **Q : Le Ẑen est-il une vraie monnaie ? Peut-on le convertir en euros ?**
+    **R :** Le Ẑen est une unité de compte interne. Pour les sociétaires, un mécanisme permet de convertir jusqu'à 1/3 de ses Ẑen par an en euros, sous réserve de la santé financière de la coopérative. Cependant, l'incitation principale est de les conserver pour détenir une part de nos biens communs (numériques et écologiques).
 
-*   **L'Économie du Ẑen :** Pensez-y comme le "budget de fonctionnement" du réseau. Les services ont un coût en Ẑen/semaine. Les "locataires" paient ce loyer, qui sert à rémunérer ceux qui hébergent et maintiennent l'infrastructure.
-*   **La PAF (Participation Aux Frais) :** C'est le coût réel (électricité, internet) pour l'**Armateur**, celui qui héberge physiquement la machine.
-*   **Le Capitaine :** C'est le "gardien" du nœud. Il assure la maintenance logicielle et est rémunéré pour son travail (généralement 2x la PAF).
-*   **La SCIC CopyLaRadio :** C'est la structure légale qui chapeaute le tout. Son rôle est de gérer les fonds, d'organiser la gouvernance entre les sociétaires et, surtout, d'utiliser les bénéfices pour **investir dans nos biens communs physiques (forêts, terrains)**.
+*   **Q : Qui décide quelles forêts ou quels terrains acheter ?**
+    **R :** C'est l'assemblée générale des sociétaires de CopyLaRadio qui décide de l'allocation des bénéfices, sur la base de propositions étudiées collectivement. Votre apport au capital vous donne un droit de vote sur ces décisions.
 
----
+*   **Q : Est-ce que j'ai besoin de compétences techniques pour participer ?**
+    **R :** Non. En tant que "Locataire" ou simple "Sociétaire", l'utilisation est conçue pour être intuitive. Seul le rôle de "Capitaine" demande des compétences techniques, et nous proposons des formations pour vous accompagner.
 
-### **Conclusion : Votre Aventure ne Fait que Commencer**
-
-En rejoignant UPlanet, vous ne choisissez pas seulement un service, vous adhérez à une vision.
-
-*   **En tant qu'Explorateur**, vous découvrez un monde de possibilités et participez à une économie 100% Monnaie Libre.
-*   **En tant que Bâtisseur**, vous investissez dans une infrastructure souveraine, vous obtenez un droit de vote dans une coopérative, et chaque euro que vous engagez a pour vocation de se transformer en un actif tangible pour la planète.
-
-Le Web3 n'est pas un produit à attendre, c'est un chantier à rejoindre. Nous sommes là pour vous accueillir.
-
-**Besoin d'aide ou de plus d'informations ?**
-*   **Le chantier principal :** [G1FabLab sur OpenCollective](https://opencollective.com/monnaie-libre)
-*   **Contact direct :** support@qo-op.com
+*   **Q : Que se passe-t-il si le projet s'arrête ?**
+    **R :** En tant que coopérative, si une dissolution devait avoir lieu, les actifs (numériques et physiques) seraient liquidés et répartis entre les sociétaires au prorata de leurs parts, après paiement des dettes. Notre structure décentralisée rend cependant le projet très résilient à une défaillance centrale.

@@ -8460,11 +8460,45 @@ async function displayUserBadges(containerId, pubkey, options = {}) {
     }
 }
 
+/**
+ * Wrapper fetch avec re-auth NIP-42 automatique + retry sur 401.
+ * À utiliser pour tous les endpoints UPassport protégés (NIP-42 TTL = 300s).
+ * Les fonctions WoTx2 (publishWoTx2Reaction, fetchWoTx2Reactions, etc.) sont dans wotx2.js.
+ * @param {string} url - URL complète de l'endpoint
+ * @param {object} [options={}] - Options fetch standard (method, headers, body...)
+ * @returns {Promise<object>} JSON parsé
+ */
+async function callAPIWithAuth(url, options = {}) {
+    await ensureNIP42AuthIfNeeded(true);
+
+    const fetchOptions = {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        ...options
+    };
+
+    let response = await fetch(url, fetchOptions);
+
+    if (response.status === 401) {
+        console.warn('[callAPIWithAuth] 401 NIP-42 expiré — re-auth et retry...');
+        if (typeof connectNostr === 'function') await connectNostr(true);
+        await ensureNIP42AuthIfNeeded(true);
+        response = await fetch(url, fetchOptions);
+    }
+
+    if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.detail || `Erreur HTTP ${response.status}`);
+    }
+    return response.json();
+}
+
 // Expose functions globally
 if (typeof window !== 'undefined') {
     // Core NOSTR functions
     window.connectNostr = connectNostr;
     window.connectToRelay = connectToRelay;
+    window.ensureRelayConnection = ensureRelayConnection;
     window.sendNIP42Auth = sendNIP42Auth;
     window.publishNote = publishNote;
     window.sendLike = sendLike;
@@ -8502,7 +8536,10 @@ if (typeof window !== 'undefined') {
     window.fetchUserBadges = fetchUserBadges;
     window.renderBadge = renderBadge;
     window.displayUserBadges = displayUserBadges;
-    
+
+    // API auth helper (NIP-42 auto-retry — wotx2.js and other pages)
+    window.callAPIWithAuth = callAPIWithAuth;
+
     // Clean up WebSocket connections when page unloads to prevent "too many concurrent REQs"
     window.addEventListener('beforeunload', function() {
         console.log('[Cleanup] Page unloading, closing relay connections...');

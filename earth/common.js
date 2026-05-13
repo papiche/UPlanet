@@ -516,8 +516,8 @@ const SubscriptionQueue = {
      * @returns {Promise<array>} Events received
      */
     async createSubscription(relay, filters, options = {}) {
-        const { onEvent, onEose, timeout = 8000 } = options;
-        
+        const { onEvent, onEose, timeout = 8000, _originalSub } = options;
+
         return new Promise((resolve, reject) => {
             const task = {
                 relay,
@@ -525,6 +525,7 @@ const SubscriptionQueue = {
                 onEvent,
                 onEose,
                 timeout,
+                _originalSub,
                 resolve,
                 reject
             };
@@ -733,13 +734,17 @@ SubscriptionQueue.executeSubscription = async function(task) {
         });
 
         // Handle CLOSED (strfry rejects the REQ) — free slot immediately
+        // Wrapped in try-catch: nostr.bundle.js only initialises 'event'/'eose'
+        // in subListeners and throws if 'closed' is unknown.
         if (typeof sub.on === 'function') {
-            sub.on('closed', () => {
-                clearTimeout(timeoutId);
-                try { sub.unsub(); } catch(e) {}
-                cleanup();
-                task.resolve(events);
-            });
+            try {
+                sub.on('closed', () => {
+                    clearTimeout(timeoutId);
+                    try { sub.unsub(); } catch(e) {}
+                    cleanup();
+                    task.resolve(events);
+                });
+            } catch(e) { /* relay impl does not support 'closed' event */ }
         }
 
     } catch (error) {

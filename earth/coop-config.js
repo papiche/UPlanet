@@ -253,7 +253,7 @@
                         + '<div style="color:#7f8c8d;font-size:0.75em;">' + label + (isSecret ? ' 🔐' : '') + '</div>'
                         // On force data-encrypted="true" si c'est une clé sensible, même si elle a fuité en clair
                         + '<input data-key="' + k + '"' + (isSecret ? ' data-encrypted="true"' : '') + ' value="' + display + '"'
-                        + ' type="' + (isSecret && (!enc || decrypted) ? 'password' : 'text') + '"'
+                        + ' type="' + (isSecret && !decrypted ? 'password' : 'text') + '"'
                         + ' style="background:rgba(255,255,255,0.1);border:1px solid ' + (isSecret ? 'rgba(231,76,60,0.3)' : 'rgba(155,89,182,0.3)') + ';color:#eaf6ff;padding:2px 6px;border-radius:4px;width:90%;font-size:0.85em;">'
                         + '</div>';
                 } else {
@@ -448,7 +448,8 @@
             } else {
                 console.log('[coop-config] Événement trouvé:', event.id, 'pubkey:', event.pubkey.substring(0, 8) + '...');
                 coopEvent = event;
-                coopConfig = JSON.parse(event.content);
+                // Merge with DEFAULT_CONFIG so keys added in newer versions always appear
+                coopConfig = { ...DEFAULT_CONFIG, ...JSON.parse(event.content) };
                 window._coopConfigData = coopConfig;
                 window.dispatchEvent(new CustomEvent('coop-config-loaded', { detail: coopConfig }));
                 console.log('[coop-config] Config parsée, clés:', Object.keys(coopConfig).length);

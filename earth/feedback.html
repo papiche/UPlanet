@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>UPlanet — Feedback & Bug Report</title>
+<link rel="icon" type="image/x-icon" href="favicon.ring.ico">
+<link rel="stylesheet" href="bootstrap.min.css">
+<style>
+* { box-sizing: border-box; }
+body {
+    margin: 0;
+    min-height: 100vh;
+    background: linear-gradient(135deg, #0a0a1a 0%, #1a1a2e 50%, #0d0d20 100%);
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 30px 15px 60px;
+    color: #e0e0e0;
+}
+
+.card {
+    width: 100%;
+    max-width: 580px;
+    background: linear-gradient(135deg, rgba(20,20,40,0.98), rgba(30,30,60,0.98));
+    border: 1px solid rgba(102,126,234,0.35);
+    border-radius: 18px;
+    overflow: hidden;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.7), 0 0 40px rgba(102,126,234,0.1);
+}
+
+.card-header {
+    background: linear-gradient(135deg, rgba(102,126,234,0.85), rgba(118,75,162,0.85));
+    padding: 18px 22px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+.card-header img { width: 36px; height: 36px; border-radius: 50%; flex-shrink: 0; }
+.card-header h1 { color: #fff; margin: 0; font-size: 19px; font-weight: 700; }
+.card-header .subtitle { color: rgba(255,255,255,0.72); font-size: 12px; margin: 3px 0 0; }
+.card-header .back-btn {
+    margin-left: auto;
+    background: rgba(255,255,255,0.12);
+    border: 1px solid rgba(255,255,255,0.25);
+    color: white;
+    border-radius: 20px;
+    padding: 5px 14px;
+    font-size: 13px;
+    text-decoration: none;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: background 0.2s;
+}
+.card-header .back-btn:hover { background: rgba(255,255,255,0.22); color: white; }
+
+.card-body { padding: 22px; }
+
+/* NOSTR connect */
+.nostr-box {
+    background: rgba(102,126,234,0.08);
+    border: 1px solid rgba(102,126,234,0.3);
+    border-radius: 12px;
+    padding: 14px 16px;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+.nostr-box .left { flex: 1; min-width: 200px; }
+.nostr-box h5 { color: #aab4ff; margin: 0 0 3px; font-size: 14px; font-weight: 600; }
+#nostr-status { font-size: 12px; color: #888; margin-top: 4px; }
+#nostr-display-name {
+    background: rgba(102,126,234,0.25);
+    border-radius: 12px;
+    padding: 2px 10px;
+    font-size: 12px;
+    color: #aef;
+    margin-left: 6px;
+    display: none;
+}
+.btn-nostr {
+    padding: 8px 16px;
+    background: linear-gradient(135deg, rgba(102,126,234,0.6), rgba(118,75,162,0.6));
+    border: 1px solid rgba(102,126,234,0.5);
+    border-radius: 20px;
+    color: white;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.25s;
+    white-space: nowrap;
+}
+.btn-nostr:hover:not(:disabled) { background: linear-gradient(135deg, rgba(102,126,234,0.9), rgba(118,75,162,0.9)); }
+.btn-nostr:disabled { opacity: 0.55; cursor: not-allowed; }
+
+/* Form fields */
+.form-group { margin-bottom: 16px; }
+label {
+    display: block;
+    font-size: 13px;
+    color: #aaa;
+    margin-bottom: 5px;
+    font-weight: 500;
+}
+label .req { color: #f77; margin-left: 2px; }
+input[type="text"], textarea, select {
+    width: 100%;
+    padding: 10px 14px;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(102,126,234,0.3);
+    border-radius: 9px;
+    color: #e0e0e0;
+    font-size: 14px;
+    outline: none;
+    transition: border-color 0.2s, background 0.2s;
+    font-family: inherit;
+}
+input[type="text"]:focus, textarea:focus, select:focus {
+    border-color: rgba(102,126,234,0.75);
+    background: rgba(255,255,255,0.09);
+}
+select option { background: #1a1a2e; color: #e0e0e0; }
+textarea { resize: vertical; min-height: 110px; }
+.hint { font-size: 11px; color: #666; margin-top: 4px; line-height: 1.4; }
+
+/* Source page */
+.source-label {
+    display: none;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 12px;
+    color: #888;
+    margin-bottom: 16px;
+    word-break: break-all;
+}
+.source-label strong { color: #aaa; }
+
+/* Console logs */
+.log-section {
+    display: none;
+    margin-bottom: 16px;
+}
+.log-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    padding: 9px 14px;
+    background: rgba(255,193,7,0.08);
+    border: 1px solid rgba(255,193,7,0.25);
+    border-radius: 9px 9px 0 0;
+    font-size: 13px;
+    color: #ffc107;
+    font-weight: 600;
+    user-select: none;
+}
+.log-header .chevron { margin-left: auto; transition: transform 0.25s; }
+.log-header.collapsed .chevron { transform: rotate(-90deg); }
+.log-body { border: 1px solid rgba(255,193,7,0.15); border-top: none; border-radius: 0 0 9px 9px; }
+.log-body textarea {
+    border-radius: 0 0 8px 8px;
+    border: none;
+    background: rgba(0,0,0,0.3);
+    font-family: monospace;
+    font-size: 11px;
+    color: #ccc;
+    min-height: 90px;
+    max-height: 200px;
+}
+.log-body textarea:focus { background: rgba(0,0,0,0.4); border-color: transparent; }
+.log-footer {
+    display: flex;
+    justify-content: flex-end;
+    padding: 5px 10px;
+    border: 1px solid rgba(255,193,7,0.15);
+    border-top: none;
+    border-radius: 0 0 9px 9px;
+    background: rgba(0,0,0,0.2);
+}
+.btn-clear-logs {
+    font-size: 11px;
+    color: #888;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 3px 8px;
+    border-radius: 6px;
+    transition: color 0.2s;
+}
+.btn-clear-logs:hover { color: #f77; }
+
+/* Errors */
+.alert-err {
+    background: rgba(220,53,69,0.12);
+    border: 1px solid rgba(220,53,69,0.35);
+    border-radius: 9px;
+    padding: 10px 14px;
+    color: #f88;
+    font-size: 13px;
+    margin-bottom: 14px;
+    display: none;
+}
+
+/* Send button */
+.btn-send {
+    width: 100%;
+    padding: 13px;
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    border: none;
+    border-radius: 10px;
+    color: white;
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.3s;
+    box-shadow: 0 4px 20px rgba(102,126,234,0.35);
+    margin-top: 4px;
+}
+.btn-send:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 8px 28px rgba(102,126,234,0.55); }
+.btn-send:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+
+/* Success */
+.success-box {
+    display: none;
+    text-align: center;
+    padding: 32px 20px;
+}
+.success-box .icon { font-size: 56px; margin-bottom: 14px; }
+.success-box h2 { color: #aef; font-size: 22px; margin-bottom: 8px; }
+.success-box p { color: #999; font-size: 14px; margin-bottom: 20px; }
+
+.stored-badge {
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 14px;
+    font-size: 12px;
+    margin-top: 8px;
+}
+.stored-git   { background: rgba(40,167,69,0.18);  border: 1px solid rgba(40,167,69,0.45);  color: #6fd17a; }
+.stored-email { background: rgba(23,162,184,0.18); border: 1px solid rgba(23,162,184,0.45); color: #5fd5e8; }
+.stored-local { background: rgba(108,117,125,0.18);border: 1px solid rgba(108,117,125,0.45);color: #aaa; }
+
+.issue-link {
+    display: inline-block;
+    margin-top: 14px;
+    padding: 9px 22px;
+    background: rgba(102,126,234,0.22);
+    border: 1px solid rgba(102,126,234,0.45);
+    border-radius: 20px;
+    color: #99aaff;
+    text-decoration: none;
+    font-size: 13px;
+    transition: background 0.2s;
+}
+.issue-link:hover { background: rgba(102,126,234,0.38); color: #aabeff; }
+
+@media (max-width: 480px) {
+    body { padding: 12px 8px 40px; }
+    .card-body { padding: 16px; }
+    .card-header { flex-wrap: wrap; }
+}
+</style>
+</head>
+<body>
+
+<div class="card">
+    <div class="card-header">
+        <img src="/ipfs/QmagEQC8KJUsjuDXbcuWHxmA8vwRF9y9d6LGtc3iSEqZE2/uplanet.png" alt="UPlanet">
+        <div>
+            <h1>🐛 Feedback & Bug Report</h1>
+            <div class="subtitle">Votre retour aide à améliorer UPlanet · Your feedback improves UPlanet</div>
+        </div>
+        <a href="index.html" class="back-btn">← UPlanet</a>
+    </div>
+
+    <div class="card-body">
+
+        <!-- Roaming indicator -->
+        <div id="roaming-box" style="background:rgba(0,0,0,0.25);border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:10px 14px;margin-bottom:16px;font-size:12px;color:#666;">
+            <span style="color:#555;">Station UPassport :</span>
+            <code id="roaming-url" style="color:#888;margin-left:6px;">détection…</code>
+            <span id="roaming-status" style="margin-left:8px;">⏳</span>
+            <button onclick="testRoaming()" style="float:right;background:none;border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:#666;font-size:11px;padding:2px 8px;cursor:pointer;">tester</button>
+        </div>
+
+        <!-- NOSTR connect -->
+        <div class="nostr-box">
+            <div class="left">
+                <h5>🔑 Identité NOSTR <span id="nostr-display-name"></span></h5>
+                <div id="nostr-status">Connectez votre extension NOSTR pour vous identifier.</div>
+            </div>
+            <button id="nostr-connect-btn" class="btn-nostr" onclick="connectNostr()">
+                🔑 Connecter NOSTR
+            </button>
+        </div>
+
+        <!-- Form -->
+        <div id="form-section">
+            <div class="alert-err" id="err-box"></div>
+
+            <!-- Source page (auto-filled by feedback.js) -->
+            <div class="source-label" id="fb-source-label">
+                <strong>Page source :</strong>
+                <input type="text" id="fb-source-page" readonly
+                       style="background:transparent;border:none;color:#888;font-size:12px;padding:0;width:100%;margin-top:2px;">
+            </div>
+
+            <div class="form-group">
+                <label for="fb-category">Catégorie / Category</label>
+                <select id="fb-category">
+                    <option value="bug">🐛 Bug — quelque chose ne fonctionne pas</option>
+                    <option value="feedback">💡 Suggestion — idée d'amélioration</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="fb-title">Titre <span class="req">*</span></label>
+                <input type="text" id="fb-title" maxlength="120"
+                       placeholder="Ex: La carte ne charge pas sur Firefox">
+            </div>
+
+            <div class="form-group">
+                <label for="fb-description">Description <span class="req">*</span></label>
+                <textarea id="fb-description" maxlength="3000"
+                          placeholder="Décrivez le problème, les étapes pour le reproduire, votre navigateur / OS...&#10;&#10;Describe the issue, steps to reproduce, your browser / OS..."></textarea>
+            </div>
+
+            <div class="form-group">
+                <label for="fb-pubkey">Clé publique NOSTR</label>
+                <input type="text" id="fb-pubkey" maxlength="128"
+                       placeholder="npub1… (rempli automatiquement si connecté)">
+                <div class="hint">Auto-rempli par "Connecter NOSTR" · Auto-filled by NOSTR connect</div>
+            </div>
+
+            <!-- Console logs (shown if logs captured by feedback.js) -->
+            <div class="log-section" id="fb-log-section">
+                <div class="log-header" id="log-toggle" onclick="toggleLogs()">
+                    ⚠️ Logs console de la page source
+                    <span id="fb-log-count" style="font-size:11px;font-weight:400;color:#bbb;margin-left:6px;"></span>
+                    <span class="chevron">▼</span>
+                </div>
+                <div class="log-body" id="log-body">
+                    <textarea id="fb-console-logs" readonly
+                              style="font-family:monospace;font-size:11px;"></textarea>
+                </div>
+                <div class="log-footer">
+                    <button class="btn-clear-logs" onclick="clearFeedbackLogs()">✕ Retirer les logs du rapport</button>
+                </div>
+            </div>
+
+            <div class="alert-err" id="err-box-bottom" style="display:none;"></div>
+
+            <button class="btn-send" id="send-btn" onclick="submitFeedback()">
+                Envoyer ✈️
+            </button>
+        </div>
+
+        <!-- Success state -->
+        <div class="success-box" id="success-section">
+            <div class="icon">✅</div>
+            <h2>Merci ! / Thank you!</h2>
+            <p>Votre retour a bien été reçu.<br>Your feedback has been received.</p>
+            <div id="stored-info"></div>
+            <br>
+            <a href="index.html" class="issue-link">← Retour à UPlanet</a>
+        </div>
+
+    </div>
+</div>
+
+<script>
+function toggleLogs() {
+    const header = document.getElementById('log-toggle');
+    const body   = document.getElementById('log-body');
+    const footer = body?.nextElementSibling;
+    const collapsed = header.classList.toggle('collapsed');
+    if (body)   body.style.display   = collapsed ? 'none' : 'block';
+    if (footer) footer.style.display = collapsed ? 'none' : 'flex';
+}
+
+async function testRoaming() {
+    const urlEl    = document.getElementById('roaming-url');
+    const statusEl = document.getElementById('roaming-status');
+    /* getUSPOTBase is defined in feedback.js — call it via the module's closure */
+    const url = (typeof window.upassportUrl === 'string' && window.upassportUrl)
+        ? window.upassportUrl
+        : (() => {
+            try {
+                const u = new URL(window.location.href);
+                if (u.hostname.startsWith('ipfs.')) u.hostname = u.hostname.replace('ipfs.', 'u.');
+                if (u.port) u.port = '54321';
+                u.pathname = '/'; u.search = ''; u.hash = '';
+                return u.toString().replace(/\/$/, '');
+            } catch(_) { return 'http://localhost:54321'; }
+        })();
+    if (urlEl) urlEl.textContent = url;
+    if (statusEl) statusEl.textContent = '⏳';
+    try {
+        const resp = await fetch(`${url}/health`, { mode: 'cors', cache: 'no-store', signal: AbortSignal.timeout(4000) });
+        if (statusEl) statusEl.textContent = resp.ok ? '✅' : `⚠️ ${resp.status}`;
+        if (urlEl) urlEl.style.color = resp.ok ? '#6fd17a' : '#f99';
+    } catch(e) {
+        if (statusEl) statusEl.textContent = '❌ injoignable';
+        if (urlEl) urlEl.style.color = '#f77';
+    }
+}
+
+/* Run roaming test on page load */
+document.addEventListener('DOMContentLoaded', testRoaming);
+
+/* Sync err-box-bottom with err-box */
+const _origShowErr = window.showErr;
+document.addEventListener('DOMContentLoaded', function () {
+    const errBox = document.getElementById('err-box');
+    if (!errBox) return;
+    const observer = new MutationObserver(() => {
+        const bottom = document.getElementById('err-box-bottom');
+        if (bottom) {
+            bottom.textContent = errBox.textContent;
+            bottom.style.display = errBox.style.display;
+        }
+    });
+    observer.observe(errBox, { attributes: true, childList: true, subtree: true });
+});
+</script>
+
+<script src="common.js"></script>
+<script src="feedback.js"></script>
+</body>
+</html>

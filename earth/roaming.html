@@ -1,0 +1,803 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>UPlanet — Test Roaming NIP-42</title>
+<link rel="icon" type="image/x-icon" href="favicon.ring.ico">
+<link rel="stylesheet" href="bootstrap.min.css">
+<style>
+* { box-sizing: border-box; }
+body {
+    margin: 0; min-height: 100vh;
+    background: linear-gradient(135deg, #0a0a1a 0%, #1a1a2e 50%, #0d0d20 100%);
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    color: #e0e0e0; padding: 24px 12px 100px;
+}
+.page-header {
+    max-width: 720px; margin: 0 auto 18px;
+    display: flex; align-items: center; gap: 14px;
+}
+.page-header img { width: 40px; height: 40px; border-radius: 50%; }
+.page-header h1 { margin: 0; font-size: 20px; font-weight: 700; color: #fff; }
+.page-header .sub { color: rgba(255,255,255,0.5); font-size: 12px; margin: 2px 0 0; }
+.page-header .back { margin-left: auto; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); color: #aaa; border-radius: 20px; padding: 5px 14px; font-size: 13px; text-decoration: none; flex-shrink: 0; }
+.page-header .back:hover { background: rgba(255,255,255,0.16); color: #fff; }
+
+.toolbar { max-width: 720px; margin: 0 auto 18px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.btn-run { padding: 10px 24px; background: linear-gradient(135deg, #667eea, #764ba2); border: none; border-radius: 22px; color: white; font-size: 14px; font-weight: 700; cursor: pointer; box-shadow: 0 4px 16px rgba(102,126,234,0.4); transition: all 0.25s; }
+.btn-run:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(102,126,234,0.55); }
+.btn-run:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-reset { padding: 10px 18px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); border-radius: 22px; color: #aaa; font-size: 13px; cursor: pointer; transition: all 0.2s; }
+.btn-reset:hover { background: rgba(255,255,255,0.12); color: #fff; }
+#global-status { font-size: 13px; color: #777; margin-left: auto; }
+
+.main-col { max-width: 720px; margin: 0 auto; }
+
+/* ── Step cards ── */
+.steps-container { display: flex; flex-direction: column; gap: 7px; margin-bottom: 32px; }
+.step-card { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.07); border-radius: 13px; overflow: hidden; transition: border-color 0.3s; }
+.step-card.running { border-color: rgba(102,126,234,0.5); }
+.step-card.ok      { border-color: rgba(40,167,69,0.35); }
+.step-card.warn    { border-color: rgba(255,193,7,0.35); }
+.step-card.error   { border-color: rgba(220,53,69,0.35); }
+.step-header { display: flex; align-items: center; gap: 11px; padding: 12px 15px; cursor: pointer; user-select: none; }
+.step-num { width: 26px; height: 26px; border-radius: 50%; background: rgba(255,255,255,0.07); display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: #777; flex-shrink: 0; }
+.step-icon { font-size: 18px; flex-shrink: 0; }
+.step-texts { flex: 1; min-width: 0; }
+.step-title { font-size: 14px; font-weight: 600; color: #ddd; }
+.step-desc  { font-size: 12px; color: #5a5a6a; margin-top: 1px; }
+.step-badge { font-size: 12px; padding: 3px 9px; border-radius: 11px; white-space: nowrap; flex-shrink: 0; background: rgba(255,255,255,0.06); color: #777; border: 1px solid rgba(255,255,255,0.09); }
+.step-badge.running { background: rgba(102,126,234,0.18); color: #99aaff; border-color: rgba(102,126,234,0.4); }
+.step-badge.ok      { background: rgba(40,167,69,0.18);  color: #6fd17a; border-color: rgba(40,167,69,0.35); }
+.step-badge.warn    { background: rgba(255,193,7,0.15);  color: #ffc107; border-color: rgba(255,193,7,0.35); }
+.step-badge.error   { background: rgba(220,53,69,0.15);  color: #f88;    border-color: rgba(220,53,69,0.35); }
+.step-body { padding: 0 15px 13px; border-top: 1px solid rgba(255,255,255,0.05); display: none; }
+.step-body.open { display: block; }
+.step-explain { background: rgba(102,126,234,0.06); border-left: 3px solid rgba(102,126,234,0.35); border-radius: 0 8px 8px 0; padding: 9px 13px; margin: 11px 0 8px; font-size: 12px; color: #888; line-height: 1.6; }
+.step-explain strong { color: #aaa; }
+.kv-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.kv-table td { padding: 5px 7px; vertical-align: top; border-bottom: 1px solid rgba(255,255,255,0.04); }
+.kv-table td:first-child { color: #777; width: 38%; white-space: nowrap; }
+.kv-table td:last-child  { color: #ccc; font-family: monospace; word-break: break-all; }
+.step-error { background: rgba(220,53,69,0.09); border: 1px solid rgba(220,53,69,0.25); border-radius: 8px; padding: 8px 12px; font-size: 12px; color: #f88; margin-top: 8px; }
+.step-warn-box { background: rgba(255,193,7,0.07); border: 1px solid rgba(255,193,7,0.22); border-radius: 8px; padding: 8px 12px; font-size: 12px; color: #ffc107; margin-top: 8px; }
+code { background: rgba(255,255,255,0.08); padding: 1px 5px; border-radius: 4px; font-size: 11px; color: #ccc; }
+
+/* ── Stations section ── */
+.section-title { font-size: 16px; font-weight: 700; color: #ccc; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+.section-title .count { font-size: 12px; font-weight: 400; color: #666; margin-left: 4px; }
+
+.station-list { display: flex; flex-direction: column; gap: 6px; }
+.station-row {
+    background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.07); border-radius: 11px;
+    padding: 11px 14px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+}
+.station-row.is-current { border-color: rgba(181,134,13,0.5); background: rgba(181,134,13,0.06); }
+.station-row.is-home    { border-color: rgba(102,126,234,0.4); background: rgba(102,126,234,0.06); }
+.station-row.is-pref    { border-color: rgba(255,193,7,0.4);   background: rgba(255,193,7,0.05); }
+.station-row.is-offline { opacity: 0.5; }
+
+.stat-lamp { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+.stat-lamp.on  { background: #3dba7e; box-shadow: 0 0 5px rgba(61,186,126,0.6); }
+.stat-lamp.off { background: #e67e22; }
+
+.station-info { flex: 1; min-width: 180px; }
+.station-name { font-size: 13px; font-weight: 600; color: #ddd; }
+.station-url  { font-size: 11px; color: #666; font-family: monospace; }
+
+.station-badges { display: flex; gap: 5px; flex-wrap: wrap; align-items: center; }
+.sbadge { font-size: 11px; padding: 2px 8px; border-radius: 10px; }
+.sbadge-local { background: rgba(181,134,13,0.2); border: 1px solid rgba(181,134,13,0.4); color: #e2b93f; }
+.sbadge-home  { background: rgba(102,126,234,0.2); border: 1px solid rgba(102,126,234,0.4); color: #99aaff; }
+.sbadge-pref  { background: rgba(255,193,7,0.2);  border: 1px solid rgba(255,193,7,0.4);  color: #ffc107; }
+.sbadge-me    { background: rgba(40,167,69,0.2);   border: 1px solid rgba(40,167,69,0.4);  color: #6fd17a; }
+.sbadge-roam  { background: rgba(118,75,162,0.2);  border: 1px solid rgba(118,75,162,0.4); color: #c39bd3; }
+
+.station-caps { font-size: 11px; color: #777; display: flex; gap: 10px; flex-wrap: wrap; }
+.station-caps span { white-space: nowrap; }
+
+.station-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.btn-station { padding: 5px 12px; border-radius: 16px; font-size: 12px; cursor: pointer; border: none; transition: all 0.2s; }
+.btn-join   { background: linear-gradient(135deg, rgba(102,126,234,0.7), rgba(118,75,162,0.7)); color: white; }
+.btn-join:hover { background: linear-gradient(135deg, rgba(102,126,234,0.9), rgba(118,75,162,0.9)); }
+.btn-setpref { background: rgba(255,193,7,0.12); border: 1px solid rgba(255,193,7,0.3); color: #ffc107; }
+.btn-setpref:hover { background: rgba(255,193,7,0.22); }
+
+.stations-loading { text-align: center; color: #555; font-size: 13px; padding: 20px; }
+.api-note { background: rgba(102,126,234,0.06); border: 1px solid rgba(102,126,234,0.2); border-radius: 9px; padding: 10px 14px; font-size: 12px; color: #888; margin-top: 12px; }
+.api-note strong { color: #aaa; }
+
+.btn-feedback-bottom { position: fixed; bottom: 20px; right: 20px; background: linear-gradient(135deg, rgba(220,53,69,0.8), rgba(180,30,50,0.8)); border: none; border-radius: 24px; color: white; padding: 10px 20px; font-size: 13px; font-weight: 600; cursor: pointer; box-shadow: 0 4px 16px rgba(220,53,69,0.35); z-index: 100; transition: all 0.25s; }
+.btn-feedback-bottom:hover { transform: translateY(-2px); box-shadow: 0 8px 22px rgba(220,53,69,0.5); }
+
+@media (max-width: 520px) {
+    .step-desc { display: none; }
+    .station-actions { width: 100%; justify-content: flex-end; }
+}
+</style>
+</head>
+<body>
+
+<div class="page-header">
+    <img src="/ipfs/QmagEQC8KJUsjuDXbcuWHxmA8vwRF9y9d6LGtc3iSEqZE2/uplanet.png" alt="UPlanet">
+    <div>
+        <h1>🌐 Test Roaming NIP-42</h1>
+        <div class="sub">Vérification complète du processus d'authentification inter-stations</div>
+    </div>
+    <a href="index.html" class="back">← UPlanet</a>
+</div>
+
+<div class="main-col">
+<div class="toolbar">
+    <button class="btn-run" id="btn-run" onclick="runAll()">▶ Lancer le test</button>
+    <button class="btn-reset" onclick="resetAll()">↺ Réinitialiser</button>
+    <span id="global-status">En attente…</span>
+</div>
+
+<div class="steps-container" id="steps-container"></div>
+
+<!-- Constellation stations section -->
+<div id="stations-section" style="display:none; margin-bottom: 32px;">
+    <div class="section-title">🌐 Stations de la constellation <span class="count" id="stations-count"></span></div>
+    <div class="station-list" id="station-list"><div class="stations-loading">Chargement…</div></div>
+    <div class="api-note" id="api-note" style="display:none;"></div>
+</div>
+
+</div><!-- .main-col -->
+
+<button class="btn-feedback-bottom" onclick="sendRoamingFeedback()">🐛 Signaler un problème</button>
+
+<script src="feedback.js"></script>
+<script>
+/* ═══════════════════════════════════════════════════════════════
+   State
+   ═══════════════════════════════════════════════════════════════ */
+const S = {
+    upassportUrl: '', relayUrl: '', stationJson: null,
+    swarmStations: [], nostrUsers: [],
+    pubkeyHex: '', npub: '', profile: null,
+    challenge: '', challengeTTL: 120,
+    signedEvent: null,
+    authOk: false, authReason: '',
+    verifyOk: false, verifyData: null,
+    sourceTag: '', homeStation: '', prefStation: '',
+};
+
+/* ═══════════════════════════════════════════════════════════════
+   URL helpers
+   ═══════════════════════════════════════════════════════════════ */
+function getURLInfo() {
+    const u = new URL(window.location.href);
+    return {
+        proto:   u.protocol.replace(':',''),
+        wsProto: u.protocol === 'https:' ? 'wss' : 'ws',
+        host:    u.hostname.replace(/^ipfs\./,'u.'),
+        port:    u.port,
+    };
+}
+function deriveUPassport() {
+    if (typeof window.upassportUrl === 'string' && window.upassportUrl) return window.upassportUrl;
+    const { proto, host, port } = getURLInfo();
+    return `${proto}://${host}${port ? ':54321' : ''}`;
+}
+function deriveRelay() {
+    const { wsProto, host, port } = getURLInfo();
+    return `${wsProto}://${host}${port ? ':7777' : ''}`;
+}
+function hexToNpub(hex) {
+    try {
+        const C='qpzry9x8gf2tvdw0s3jn54khce6mua7l',G=[0x3b6a57b2,0x26508e6d,0x1ea119fa,0x3d4233dd,0x2a1462b3];
+        function pm(v){let c=1;for(const b of v){const t=c>>25;c=((c&0x1ffffff)<<5)^b;for(let i=0;i<5;i++)if((t>>i)&1)c^=G[i];}return c;}
+        function he(h){const r=[];for(let i=0;i<h.length;i++)r.push(h.charCodeAt(i)>>5);r.push(0);for(let i=0;i<h.length;i++)r.push(h.charCodeAt(i)&31);return r;}
+        function cv(d,f,t,p){let a=0,b=0;const r=[],m=(1<<t)-1;for(const v of d){a=(a<<f)|v;b+=f;while(b>=t){b-=t;r.push((a>>b)&m);}}if(p&&b>0)r.push((a<<(t-b))&m);return r;}
+        const bytes=hex.match(/.{2}/g).map(b=>parseInt(b,16));
+        const words=cv(bytes,8,5,true);
+        const ck=pm(he('npub').concat(words).concat([0,0,0,0,0,0]))^1;
+        return 'npub1'+words.concat([(ck>>25)&31,(ck>>20)&31,(ck>>15)&31,(ck>>10)&31,(ck>>5)&31,ck&31]).map(w=>C[w]).join('');
+    } catch(_){ return hex.slice(0,16)+'…'; }
+}
+function shortKey(k) { return k.slice(0,12)+'…'+k.slice(-6); }
+
+/* ═══════════════════════════════════════════════════════════════
+   Step definitions
+   ═══════════════════════════════════════════════════════════════ */
+const STEPS = [
+    { id:'detect',    icon:'🔍', num:0, title:'Détection station & relay',
+      desc:'URLs UPassport (54321), relay NOSTR (7777), swarm JSON',
+      explain:`<strong>Ce que fait cette étape :</strong> Dérivation automatique des URLs depuis l'hostname courant
+      (<code>ipfs.domain</code> → <code>u.domain</code>). Le JSON UPassport (<code>GET /</code>) est récupéré —
+      il contient <code>SWARM[]</code> (stations de la constellation) et <code>NOSTR[]</code> (utilisateurs connus).
+      L'endpoint <code>/health</code> confirme la joignabilité.`, run: stepDetect },
+    { id:'nip07',     icon:'🔑', num:1, title:'Extension NOSTR (NIP-07)',
+      desc:'Détection de window.nostr dans le navigateur',
+      explain:`<strong>NIP-07</strong> permet à une extension navigateur (Alby, nos2x, NOSTR Connect…)
+      de signer des événements sans exposer la clé privée.
+      <code>window.nostr.getPublicKey()</code> et <code>window.nostr.signEvent()</code> sont requis.`, run: stepNip07 },
+    { id:'pubkey',    icon:'🪪', num:2, title:'Identité NOSTR',
+      desc:'Récupération pubkey hex → npub, profil kind 0',
+      explain:`<code>window.nostr.getPublicKey()</code> retourne la clé hex (64 chars), convertie en <code>npub1…</code>.
+      Le profil <strong>kind 0</strong> est récupéré depuis le relay local pour obtenir le nom et la station home
+      (champ <em>website</em>). La station home sera comparée à la station courante pour détecter le roaming.`, run: stepPubkey },
+    { id:'challenge', icon:'🎲', num:3, title:'Challenge NIP-42',
+      desc:'GET /api/nip42/challenge → nonce 64-hex (TTL 120s)',
+      explain:`L'API génère un nonce aléatoire (32 bytes = 64 hex) lié à la clé publique, TTL 120s.
+      Ce nonce doit figurer dans l'événement kind 22242 — sans lui, le relay rejette l'événement.`, run: stepChallenge },
+    { id:'sign',      icon:'✍️', num:4, title:'Signature événement kind 22242',
+      desc:'Construction et signature NIP-07 de l\'événement d\'auth',
+      explain:`Un événement <strong>kind 22242</strong> (éphémère, plage 20000-29999) est construit avec
+      <code>["relay", relayUrl]</code> et <code>["challenge", nonce]</code>. <code>window.nostr.signEvent()</code>
+      calcule le <em>id</em> (sha256) et la <em>sig</em> (Schnorr secp256k1). strfry ne stocke PAS
+      les événements éphémères mais son writePolicy les traite synchroniquement.`, run: stepSign },
+    { id:'auth',      icon:'📡', num:5, title:'Envoi EVENT au relay',
+      desc:'WebSocket ["EVENT", kind_22242] → filter/22242.sh',
+      explain:`L'événement est envoyé <code>["EVENT", event]</code> via WebSocket. Le plugin
+      <strong>filter/22242.sh</strong> s'exécute synchroniquement : vérifie l'autorisation
+      (local → swarm → amisOfAmis), crée le marker <code>.nip42_auth_&lt;pubkey&gt;</code>,
+      et si <code>SOURCE=swarm</code> déclenche en background la récupération des secrets IPNS.`, run: stepAuth },
+    { id:'verify',    icon:'✅', num:6, title:'Vérification du marker',
+      desc:'Appel endpoint protégé → API lit le marker (TTL 300s)',
+      explain:`<code>check_nip42_auth_local_marker</code> vérifie :
+      <br>A. Nom du fichier contient le pubkey hex (anti-confusion)
+      <br>B. Âge &lt; 300s (anti-replay)
+      <br>C. JSON interne contient le même pubkey (anti-falsification)
+      <br>L'endpoint <code>/api/myGPS</code> est utilisé comme test de l'accès protégé.`, run: stepVerify },
+    { id:'roaming',   icon:'🌍', num:7, title:'Détection roaming',
+      desc:'SOURCE : local / swarm / amisOfAmis — secrets IPNS si swarm',
+      explain:`<code>filter/22242.sh</code> classe l'utilisateur via <code>check_authorization</code> :
+      <br>🟢 <strong>local</strong> — clé dans <code>~/.zen/game/nostr/*/HEX</code>
+      <br>🔵 <strong>swarm</strong> — clé dans <code>~/.zen/tmp/swarm/*/TW/*/HEX</code> →
+      <em>roaming parfait</em> : téléchargement des secrets chiffrés IPNS, déchiffrement avec
+      <code>uplanet.dunikey</code>, import clé IPNS dans le keystore
+      <br>🟡 <strong>amisOfAmis</strong> — pubkey dans <code>amisOfAmis.txt</code>
+      <br>La liste <code>NOSTR[]</code> du JSON UPassport contient le champ <code>SOURCE</code> per-user.`, run: stepRoaming },
+    { id:'gps',       icon:'🗺️', num:8, title:'Station home & coordonnées GPS',
+      desc:'GET /api/myGPS → position UMAP + station d\'origine',
+      explain:`<code>GET /api/myGPS?npub=…</code> (endpoint protégé NIP-42) retourne les coordonnées UMAP
+      de l'utilisateur et permet d'identifier sa station home dans la grille 0.01°×0.01°.
+      <br><strong>À enrichir (TODO API)</strong> : ajouter les champs <code>source</code> (local/swarm),
+      <code>home_station_url</code> et <code>umap_key</code> à la réponse pour un roaming entièrement transparent.`, run: stepGPS },
+];
+
+/* ═══════════════════════════════════════════════════════════════
+   Render helpers
+   ═══════════════════════════════════════════════════════════════ */
+function kvRow(k, v) {
+    if (v === null || v === undefined || v === '') return '';
+    return `<tr><td>${k}</td><td>${v}</td></tr>`;
+}
+function kv(k,v){ return kvRow(k, `<code>${v}</code>`); }
+
+function setStep(id, status, badge, details, error) {
+    const card = document.getElementById('step-'+id);
+    if (!card) return;
+    card.className = 'step-card '+status;
+    const b = card.querySelector('.step-badge');
+    if (b) { b.className='step-badge '+status; b.textContent=badge; }
+    const body = card.querySelector('.step-body');
+    if (!body) return;
+    const explain = card.dataset.explain || '';
+    let html = `<div class="step-explain">${explain}</div>`;
+    if (details) html += `<table class="kv-table">${details}</table>`;
+    if (error)   html += `<div class="step-error">❌ ${error}</div>`;
+    body.innerHTML = html;
+    body.classList.add('open');
+}
+function toggleStep(id) {
+    document.getElementById('step-'+id)?.querySelector('.step-body')?.classList.toggle('open');
+}
+function buildStepsHTML() {
+    document.getElementById('steps-container').innerHTML = STEPS.map(s =>
+        `<div class="step-card" id="step-${s.id}" data-explain="${s.explain.replace(/"/g,'&quot;')}">
+            <div class="step-header" onclick="toggleStep('${s.id}')">
+                <span class="step-num">${s.num}</span>
+                <span class="step-icon">${s.icon}</span>
+                <div class="step-texts">
+                    <div class="step-title">${s.title}</div>
+                    <div class="step-desc">${s.desc}</div>
+                </div>
+                <span class="step-badge">⏳ En attente</span>
+            </div>
+            <div class="step-body"><div class="step-explain">${s.explain}</div></div>
+        </div>`
+    ).join('');
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Constellation stations
+   ═══════════════════════════════════════════════════════════════ */
+function loadPreferredStation() {
+    try { S.prefStation = localStorage.getItem('uplanet_preferred_station') || ''; } catch(_){}
+}
+
+function setPreferredStation(url) {
+    try { localStorage.setItem('uplanet_preferred_station', url); } catch(_){}
+    S.prefStation = url;
+    renderConstellationStations();
+}
+
+function renderConstellationStations() {
+    const list = document.getElementById('station-list');
+    const countEl = document.getElementById('stations-count');
+    if (!list) return;
+    const stations = S.swarmStations;
+    if (!stations.length) {
+        list.innerHTML = '<div class="stations-loading">Aucune station trouvée dans le swarm</div>';
+        return;
+    }
+    if (countEl) countEl.textContent = `(${stations.length})`;
+
+    /* Find if user is known to a specific station */
+    const userInNostr = S.pubkeyHex
+        ? S.nostrUsers.find(u => (u.HEX||'').toLowerCase() === S.pubkeyHex.toLowerCase())
+        : null;
+
+    list.innerHTML = stations.map(st => {
+        const isCurrent = st.isCurrent;
+        const isHome    = !!(S.homeStation && st.uspot && (() => { try { return new URL(S.homeStation).hostname === new URL(st.uspot).hostname; } catch(_){return false;} })());
+        const isPref    = !!(S.prefStation && st.uspot && (() => { try { return new URL(S.prefStation).hostname === new URL(st.uspot).hostname; } catch(_){return false;} })());
+        const isUserHere = !!(userInNostr && (isCurrent || isHome));
+
+        const rowClass = [
+            isCurrent ? 'is-current' : '',
+            isHome    ? 'is-home'    : '',
+            isPref    ? 'is-pref'    : '',
+            !st.active ? 'is-offline' : '',
+        ].filter(Boolean).join(' ');
+
+        const badges = [
+            isCurrent ? `<span class="sbadge sbadge-local">★ LOCAL</span>` : '',
+            isHome    ? `<span class="sbadge sbadge-home">🏠 HOME</span>` : '',
+            isPref    ? `<span class="sbadge sbadge-pref">⭐ PRÉFÉRÉ</span>` : '',
+            isUserHere? `<span class="sbadge sbadge-me">👤 VOUS</span>` : '',
+        ].filter(Boolean).join('');
+
+        const mp  = st.nostrSlots !== undefined ? st.nostrSlots : '?';
+        const zc  = st.zcSlots    !== undefined ? st.zcSlots    : '?';
+        const paf = st.paf        !== undefined ? st.paf+'Ẑ/sem' : '?';
+        const disk = st.diskGb    !== undefined ? st.diskGb+'Go' : '';
+        const relay = st.relay ? st.relay.replace(/^wss?:\/\//,'').replace(/:7777$/,'') : '';
+
+        const joinUrl = st.uspot ? st.uspot.replace(':54321','').replace(':8080','') + '/g1' : '#';
+
+        return `<div class="station-row ${rowClass}">
+            <span class="stat-lamp ${st.active ? 'on' : 'off'}"></span>
+            <div class="station-info">
+                <div class="station-name">${st.name}</div>
+                <div class="station-url">${st.uspot || '—'}</div>
+                ${relay ? `<div class="station-url" style="color:#555">⊛ ${relay}</div>` : ''}
+            </div>
+            <div class="station-badges">${badges}</div>
+            <div class="station-caps">
+                <span title="Slots MULTIPASS">MP: ${mp}</span>
+                <span title="Slots ZenCard">ZC: ${zc}</span>
+                <span title="PAF">PAF: ${paf}</span>
+                ${disk ? `<span title="Disque">💾 ${disk}</span>` : ''}
+            </div>
+            <div class="station-actions">
+                ${!isPref ? `<button class="btn-station btn-setpref" onclick="setPreferredStation('${st.uspot}')" title="Définir comme station préférée">⭐</button>` : ''}
+                <button class="btn-station btn-join" onclick="window.open('${joinUrl}','_blank')">Rejoindre →</button>
+            </div>
+        </div>`;
+    }).join('');
+
+    /* API enrichment note */
+    const noteEl = document.getElementById('api-note');
+    if (noteEl) {
+        noteEl.style.display = 'block';
+        noteEl.innerHTML = `<strong>À enrichir côté API :</strong>
+        L'endpoint <code>GET /api/myGPS?npub=…</code> devrait retourner un champ <code>source</code> (local/swarm/amisOfAmis)
+        et <code>home_station_url</code> pour identifier automatiquement la station home sans passer par le profil NOSTR.
+        Aussi <code>GET /</code> pourrait inclure pour chaque user NOSTR son <code>UMAP_KEY</code> courant.`;
+    }
+}
+
+function parseSwarmStations(data) {
+    const stations = [];
+    /* Current station */
+    if (data) {
+        stations.push({
+            isCurrent: true, active: true,
+            name:  data.hostname || data.UPLANETNAME || new URL(S.upassportUrl).hostname,
+            uspot: data.uSPOT   || S.upassportUrl,
+            relay: data.myRELAY || S.relayUrl,
+            nostrSlots: data.capacities?.nostr_slots  ?? data.capacities?.nostr_slots,
+            zcSlots:    data.capacities?.zencard_slots ?? undefined,
+            paf:        data.PAF,
+            diskGb:     data.capacities?.storage_details?.root?.available_gb
+                     ?? data.capacities?.available_space_gb,
+        });
+    }
+    /* Swarm stations */
+    for (const s of (data?.SWARM || [])) {
+        stations.push({
+            isCurrent: false,
+            active: !!(s.services?.upassport?.active ?? s.services?.astroport?.active ?? true),
+            name:   s.hostname || s.uSPOT || '?',
+            uspot:  s.uSPOT   || s.myAPI || '',
+            relay:  s.myRELAY || '',
+            nostrSlots: s.capacities?.nostr_slots,
+            zcSlots:    s.capacities?.zencard_slots,
+            paf:        s.PAF,
+            diskGb:     s.capacities?.storage_details?.root?.available_gb
+                     ?? s.capacities?.available_space_gb,
+        });
+    }
+    return stations;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Steps
+   ═══════════════════════════════════════════════════════════════ */
+async function stepDetect() {
+    setStep('detect','running','🔄 En cours…',null,null);
+    S.upassportUrl = deriveUPassport();
+    S.relayUrl     = deriveRelay();
+
+    /* Fetch full station JSON from UPassport / */
+    let upassportOk = false;
+    try {
+        const r = await fetch(S.upassportUrl+'/', { signal: AbortSignal.timeout(6000) });
+        upassportOk = r.ok;
+        if (r.ok) {
+            S.stationJson   = await r.json();
+            S.swarmStations = parseSwarmStations(S.stationJson);
+            S.nostrUsers    = S.stationJson.NOSTR || [];
+        }
+    } catch(_){}
+
+    /* Also test /health */
+    let healthOk = false;
+    try {
+        const r = await fetch(S.upassportUrl+'/health', { signal: AbortSignal.timeout(3000) });
+        healthOk = r.ok;
+    } catch(_){}
+
+    const swarmCount = S.stationJson?.SWARM?.length ?? 0;
+    const nostrCount = S.nostrUsers.length;
+    const j = S.stationJson;
+
+    const details = [
+        kv('UPassport URL', S.upassportUrl),
+        kv('Relay URL', S.relayUrl),
+        kv('/health', healthOk ? '✅ OK' : '❌ hors ligne'),
+        j ? kv('Station', j.hostname || '—') : '',
+        j ? kv('UPLANETNAME', j.UPLANETNAME || '—') : '',
+        j ? kv('Stations swarm', swarmCount) : '',
+        j ? kv('Utilisateurs NOSTR', nostrCount) : '',
+    ].join('');
+
+    /* Show stations section */
+    if (S.swarmStations.length) {
+        loadPreferredStation();
+        document.getElementById('stations-section').style.display = 'block';
+        renderConstellationStations();
+    }
+
+    if (upassportOk || healthOk) {
+        setStep('detect','ok','✅ OK', details, null);
+    } else {
+        setStep('detect','warn','⚠️ UPassport hors ligne', details,
+            `UPassport injoignable sur ${S.upassportUrl}. Service démarré sur le port 54321 ?`);
+    }
+    return upassportOk || healthOk;
+}
+
+async function stepNip07() {
+    setStep('nip07','running','🔄 Détection…',null,null);
+    await new Promise(r => setTimeout(r, 250));
+    const has = typeof window.nostr !== 'undefined';
+    const hasSign = has && typeof window.nostr.signEvent === 'function';
+    const details = [
+        kv('window.nostr',   has     ? '✅ présent' : '❌ absent'),
+        kv('signEvent()',    hasSign ? '✅ disponible' : '❌ absent'),
+    ].join('');
+    if (hasSign) { setStep('nip07','ok','✅ OK', details, null); return true; }
+    setStep('nip07','error','❌ Absent', details,
+        has ? 'window.nostr.signEvent() manquant (extension incompatible).'
+            : 'Aucune extension NIP-07. Installer <a href="https://addons.mozilla.org/fr/firefox/addon/nostr-connect/" target="_blank" style="color:#99aaff">NOSTR Connect</a> ou Alby.');
+    return false;
+}
+
+async function stepPubkey() {
+    setStep('pubkey','running','🔄 Demande pubkey…',null,null);
+    try {
+        S.pubkeyHex = await window.nostr.getPublicKey();
+        if (S.pubkeyHex.length !== 64) throw new Error('Clé hex invalide');
+        S.npub = hexToNpub(S.pubkeyHex);
+
+        /* Fetch kind 0 from relay */
+        await new Promise(resolve => {
+            let ws; try { ws = new WebSocket(S.relayUrl); } catch(_){ resolve(); return; }
+            const t = setTimeout(() => { ws.close(); resolve(); }, 5000);
+            const sub = 'k0_'+Date.now();
+            ws.onopen = () => ws.send(JSON.stringify(['REQ', sub, { kinds:[0], authors:[S.pubkeyHex], limit:1 }]));
+            ws.onmessage = e => {
+                try {
+                    const m = JSON.parse(e.data);
+                    if (m[0]==='EVENT' && m[2]?.kind===0) {
+                        S.profile = JSON.parse(m[2].content||'{}');
+                        S.homeStation = S.profile.website || '';
+                        clearTimeout(t); ws.close(); resolve();
+                    }
+                } catch(_){}
+            };
+            ws.onerror = () => { clearTimeout(t); resolve(); };
+        });
+
+        /* Re-render stations with home station info */
+        if (S.homeStation && S.swarmStations.length) renderConstellationStations();
+
+        const details = [
+            kv('pubkey hex', shortKey(S.pubkeyHex)),
+            kv('npub', shortKey(S.npub)),
+            S.profile ? kv('Nom', S.profile.display_name || S.profile.name || '—') : '',
+            S.homeStation ? kv('Station home (profil)', S.homeStation) : '',
+        ].join('');
+        setStep('pubkey','ok','✅ OK', details, null);
+        return true;
+    } catch(e) {
+        setStep('pubkey','error','❌ Échec',null,`getPublicKey() échoué : ${e.message}`); return false;
+    }
+}
+
+async function stepChallenge() {
+    setStep('challenge','running','🔄 Requête challenge…',null,null);
+    try {
+        const url = `${S.upassportUrl}/api/nip42/challenge?npub=${encodeURIComponent(S.npub)}`;
+        const r = await fetch(url, { signal: AbortSignal.timeout(6000) });
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        const data = await r.json();
+        S.challenge = data.challenge;
+        S.challengeTTL = data.expires_in || 120;
+        if (!S.challenge || S.challenge.length !== 64) throw new Error('Challenge invalide');
+        const details = [
+            kv('Challenge', shortKey(S.challenge)),
+            kv('TTL', S.challengeTTL+'s'),
+            kv('URL', url),
+        ].join('');
+        setStep('challenge','ok','✅ Reçu', details, null); return true;
+    } catch(e) {
+        setStep('challenge','error','❌ Échec',null,`Challenge impossible : ${e.message}`); return false;
+    }
+}
+
+async function stepSign() {
+    setStep('sign','running','🔄 Signature…',null,null);
+    try {
+        const unsigned = {
+            kind: 22242, pubkey: S.pubkeyHex,
+            created_at: Math.floor(Date.now()/1000),
+            tags: [['relay', S.relayUrl], ['challenge', S.challenge]],
+            content: '',
+        };
+        S.signedEvent = await window.nostr.signEvent(unsigned);
+        if (!S.signedEvent?.id || !S.signedEvent?.sig) throw new Error('Événement incomplet');
+        const details = [
+            kv('kind',       '22242 (éphémère NIP-42)'),
+            kv('event id',   shortKey(S.signedEvent.id)),
+            kv('sig',        shortKey(S.signedEvent.sig)),
+            kv('created_at', new Date(S.signedEvent.created_at*1000).toISOString()),
+        ].join('');
+        setStep('sign','ok','✅ Signé', details, null); return true;
+    } catch(e) {
+        setStep('sign','error','❌ Échec',null,`Signature échouée : ${e.message}`); return false;
+    }
+}
+
+async function stepAuth() {
+    setStep('auth','running','🔄 Connexion relay…',null,null);
+    const result = await new Promise(resolve => {
+        let ws;
+        try { ws = new WebSocket(S.relayUrl); } catch(e) { resolve({ok:false, reason:e.message}); return; }
+        const t = setTimeout(() => { ws.close(); resolve({ok:false, reason:'timeout (8s)'}); }, 8000);
+        ws.onopen  = () => ws.send(JSON.stringify(['EVENT', S.signedEvent]));
+        ws.onmessage = e => {
+            try {
+                const m = JSON.parse(e.data);
+                if (m[0]==='OK' && m[1]===S.signedEvent.id) {
+                    clearTimeout(t); ws.close(); resolve({ok: m[2]===true, reason: m[3]||''});
+                }
+            } catch(_){}
+        };
+        ws.onerror = () => { clearTimeout(t); ws.close(); resolve({ok:false, reason:'WebSocket error'}); };
+    });
+    S.authOk = result.ok; S.authReason = result.reason;
+    const details = [
+        kv('Relay', S.relayUrl),
+        kv('Réponse', result.ok ? '✅ accepté' : '❌ '+(result.reason||'rejeté')),
+        kv('event id', shortKey(S.signedEvent.id)),
+    ].join('');
+    if (result.ok) {
+        setStep('auth','ok','✅ Accepté', details, null);
+    } else {
+        setStep('auth','warn','⚠️ '+(result.reason||'Rejeté'), details,
+            result.reason.includes('timeout')||result.reason.includes('error')
+                ? `Relay injoignable sur ${S.relayUrl}. En HTTPS, strfry doit être en WSS. Vérifier que strfry est démarré.`
+                : `Relay a rejeté l'événement : "${result.reason}". Utilisateur non connu (ni local, ni swarm, ni amisOfAmis).`);
+    }
+    return result.ok;
+}
+
+async function stepVerify() {
+    setStep('verify','running','🔄 Vérification…',null,null);
+    await new Promise(r => setTimeout(r, 1200));
+    try {
+        const url = `${S.upassportUrl}/api/myGPS?npub=${encodeURIComponent(S.npub)}`;
+        const r = await fetch(url, { signal: AbortSignal.timeout(6000), headers: { Accept: 'application/json' } });
+        S.verifyOk   = r.ok;
+        S.verifyData = r.ok ? await r.json() : null;
+        const details = [
+            kv('Endpoint', '/api/myGPS'),
+            kv('Status', r.status+' '+r.statusText),
+            S.verifyData ? kv('Lat',  S.verifyData.lat??S.verifyData.latitude??'—') : '',
+            S.verifyData ? kv('Lon',  S.verifyData.lon??S.verifyData.longitude??'—') : '',
+            S.verifyData ? kv('Source (API)', S.verifyData.source||'—') : '',
+        ].join('');
+        if (r.ok) {
+            if (S.verifyData?.source) S.sourceTag = S.verifyData.source;
+            setStep('verify','ok','✅ Marker valide', details, null);
+        } else if (r.status===401||r.status===403) {
+            setStep('verify','error','❌ Non autorisé', kv('Status', r.status),
+                'Marker absent ou expiré (TTL 300s). Vérifier filter/22242.sh et que l\'utilisateur est connu de la station.');
+        } else {
+            setStep('verify','warn',`⚠️ HTTP ${r.status}`, details, null);
+        }
+        return r.ok;
+    } catch(e) {
+        setStep('verify','error','❌ Échec',null,`Erreur réseau : ${e.message}`); return false;
+    }
+}
+
+async function stepRoaming() {
+    setStep('roaming','running','🔄 Analyse…',null,null);
+    await new Promise(r => setTimeout(r, 300));
+
+    /* Priority 1: source from /api/myGPS response */
+    let source = S.sourceTag || '';
+
+    /* Priority 2: NOSTR[] list from station JSON */
+    if (!source && S.pubkeyHex && S.nostrUsers.length) {
+        const found = S.nostrUsers.find(u => (u.HEX||'').toLowerCase() === S.pubkeyHex.toLowerCase());
+        if (found) source = (found.SOURCE||'local').toLowerCase();
+    }
+
+    /* Priority 3: profile website comparison */
+    if (!source && S.homeStation) {
+        try {
+            const homeHost = new URL(S.homeStation).hostname;
+            const currHost = new URL(S.upassportUrl).hostname;
+            source = homeHost === currHost ? 'local' : 'swarm';
+        } catch(_){}
+    }
+    if (!source) source = S.authOk ? 'local' : 'unknown';
+    S.sourceTag = source;
+
+    const labelMap = { local:'🟢 Local (cette station)', swarm:'🔵 Swarm (roaming)', amisofamis:'🟡 AmisOfAmis', unknown:'⚪ Inconnu' };
+    const label = labelMap[source.toLowerCase()] || source;
+
+    let extra = '';
+    if (source === 'swarm') {
+        extra = `<div class="step-warn-box" style="margin-top:8px;">
+            🔵 <strong>Roaming parfait en cours (background)</strong><br>
+            filter/22242.sh télécharge les secrets chiffrés (<code>_secret.nostr.uplanet.enc</code>,
+            <code>_secret.dunikey.uplanet.enc</code>, <code>_secret.ipns.uplanet.enc</code>) depuis l'IPNS home,
+            les déchiffre avec <code>uplanet.dunikey</code> et importe la clé IPNS dans le keystore local
+            pour permettre la publication du manifest uDRIVE sur cette station.
+        </div>`;
+    }
+
+    const details = [
+        kvRow('Source', `<span class="sbadge ${source==='swarm'?'sbadge-roam':source==='local'?'sbadge-me':'sbadge-pref'}">${label}</span>`),
+        kv('Station courante', new URL(S.upassportUrl).hostname),
+        S.homeStation ? kv('Station home (profil)', S.homeStation) : '',
+        S.nostrUsers.find(u=>(u.HEX||'').toLowerCase()===S.pubkeyHex.toLowerCase())
+            ? kv('Trouvé dans NOSTR[]', '✅ oui') : kv('Trouvé dans NOSTR[]', '— pas encore (roaming récent ?)'),
+    ].join('') + extra;
+
+    const status = source==='unknown' ? 'warn' : 'ok';
+    setStep('roaming', status, status==='ok'?'✅ '+label:'⚠️ Indéterminé', details,
+        source==='unknown' ? 'Source non déterminée. Auth incomplète ou utilisateur inconnu de la station.' : null);
+
+    /* Update stations section to show user's position */
+    if (S.swarmStations.length) renderConstellationStations();
+    return source !== 'unknown';
+}
+
+async function stepGPS() {
+    setStep('gps','running','🔄 Récupération…',null,null);
+    if (!S.verifyData) {
+        setStep('gps','warn','⚠️ Ignoré',null,'Ignoré car /api/myGPS a échoué à l\'étape Vérification.');
+        return false;
+    }
+    const d = S.verifyData;
+    const lat = d.lat ?? d.latitude ?? d.southWestLat ?? '—';
+    const lon = d.lon ?? d.longitude ?? d.southWestLon ?? '—';
+    const mapUrl = (lat!=='—' && lon!=='—')
+        ? `map_render.html?southWestLat=${parseFloat(lat).toFixed(2)}&southWestLon=${parseFloat(lon).toFixed(2)}&deg=0.1`
+        : null;
+    const details = [
+        kv('Latitude',  lat),
+        kv('Longitude', lon),
+        d.umap_key  ? kv('UMAP key',  d.umap_key)  : '',
+        d.station   ? kv('Station',   d.station)   : '',
+        S.homeStation&&S.sourceTag==='swarm' ? kvRow('Station home', `<a href="${S.homeStation}" target="_blank" style="color:#99aaff">${S.homeStation}</a>`) : '',
+        mapUrl ? kvRow('Carte', `<a href="${mapUrl}" style="color:#99aaff">Voir sur UMAP →</a>`) : '',
+        kvRow('TODO API', '<span style="color:#888;font-size:11px">Ajouter <code>source</code>, <code>home_station_url</code>, <code>umap_key</code> à /api/myGPS</span>'),
+    ].join('');
+    setStep('gps','ok','✅ Localisé', details, null); return true;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Runner
+   ═══════════════════════════════════════════════════════════════ */
+let running = false;
+
+async function runAll() {
+    if (running) return;
+    running = true;
+    document.getElementById('btn-run').disabled = true;
+    document.getElementById('global-status').textContent = 'Test en cours…';
+    let passed = 0;
+    for (const step of STEPS) {
+        try {
+            const ok = await step.run();
+            if (ok) passed++;
+            if (!ok && (step.id==='nip07' || step.id==='sign')) break;
+        } catch(e) {
+            console.error('[ROAMING] step error:', step.id, e);
+            setStep(step.id,'error','❌ Exception',null,e.message);
+        }
+    }
+    const total = STEPS.length;
+    document.getElementById('global-status').textContent =
+        passed===total ? `✅ ${passed}/${total} étapes réussies`
+                       : `⚠️ ${passed}/${total} étapes réussies`;
+    document.getElementById('btn-run').disabled = false;
+    running = false;
+}
+
+function resetAll() {
+    Object.keys(S).forEach(k => {
+        if (Array.isArray(S[k])) S[k] = [];
+        else if (typeof S[k]==='object'&&S[k]!==null) S[k]=null;
+        else if (typeof S[k]==='boolean') S[k]=false;
+        else S[k]='';
+    });
+    buildStepsHTML();
+    document.getElementById('stations-section').style.display = 'none';
+    document.getElementById('global-status').textContent = 'En attente…';
+    document.getElementById('btn-run').disabled = false;
+    running = false;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Feedback with pre-fill
+   ═══════════════════════════════════════════════════════════════ */
+function sendRoamingFeedback() {
+    const stepResults = STEPS.map(s => {
+        const badge = document.getElementById('step-'+s.id)?.querySelector('.step-badge')?.textContent || '⏳';
+        return `[${badge}] ${s.num}. ${s.title}`;
+    }).join('\n');
+
+    const host = (() => { try { return new URL(S.upassportUrl||location.href).hostname; } catch(_){ return '?'; } })();
+    const prefill = {
+        title: `Roaming NIP-42 — ${S.sourceTag||'inconnu'} @ ${host}`,
+        description: `## Test Roaming NIP-42\n\n**Station :** ${S.upassportUrl||'?'}\n**Relay :** ${S.relayUrl||'?'}\n**npub :** ${S.npub||'?'}\n**Source détectée :** ${S.sourceTag||'?'}\n\n### Résultats par étape :\n${stepResults}\n\n---\n## Description du problème\n\n[Décrivez ce qui ne fonctionne pas ou ce que vous attendiez]`,
+        ts: Date.now(),
+    };
+    try {
+        localStorage.setItem('uplanet_feedback_prefill', JSON.stringify(prefill));
+        sessionStorage.setItem('uplanet_feedback_page', window.location.href);
+    } catch(_){}
+    window.open('feedback.html', '_blank');
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Init
+   ═══════════════════════════════════════════════════════════════ */
+buildStepsHTML();
+if (typeof detectUSPOTAPI === 'function') detectUSPOTAPI();
+</script>
+</body>
+</html>

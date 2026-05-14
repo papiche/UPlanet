@@ -206,6 +206,21 @@
     /* ── Form initialisation ─────────────────────────────────────── */
 
     function initForm() {
+        /* Pre-fill from localStorage (set by roaming.html or other pages) */
+        try {
+            const raw = localStorage.getItem('uplanet_feedback_prefill');
+            if (raw) {
+                const prefill = JSON.parse(raw);
+                if (Date.now() - (prefill.ts || 0) < 30000) {
+                    const titleEl = document.getElementById('fb-title');
+                    const descEl  = document.getElementById('fb-description');
+                    if (titleEl && prefill.title)       titleEl.value = prefill.title;
+                    if (descEl  && prefill.description) descEl.value  = prefill.description;
+                }
+                localStorage.removeItem('uplanet_feedback_prefill');
+            }
+        } catch (_) {}
+
         /* Source page */
         let sourcePage = '';
         try { sourcePage = sessionStorage.getItem(PAGE_KEY) || document.referrer || ''; } catch (_) {}

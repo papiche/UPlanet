@@ -1337,75 +1337,110 @@
             `;
             legalWalletsGrid.insertAdjacentHTML('beforeend', taxProvisionHTML);
 
-            // Fetch G1 Reserve balance separately (displayed above cooperative wallets)
+            // ── Setup clés de réserve & provision ────────────────────────────
             const g1ReservePubkey = data['UPLANETNAME_G1'];
             const g1ReserveBalanceElement = document.getElementById('g1-reserve-balance');
             const g1ReservePubkeyElement = document.getElementById('g1-reserve-pubkey');
-            
+            const taxProvisionPubkey = data['UPLANETNAME_IMPOT'];
+            const taxProvisionBalanceElement = document.getElementById('tax-provision-balance');
+            const taxProvisionLinkElement = document.getElementById('tax-provision-link');
+
+            // Afficher la clé publique G1 Reserve immédiatement (pas de réseau requis)
             if (g1ReservePubkey && g1ReservePubkey !== 'N/A') {
-                // Display public key (shortened format)
                 const shortPubkey = `${g1ReservePubkey.substring(0, 8)}...${g1ReservePubkey.substring(g1ReservePubkey.length - 4)}`;
                 g1ReservePubkeyElement.innerHTML = `
                     <span class="copyable-pubkey" title="📋 Cliquer pour copier: ${g1ReservePubkey}">${shortPubkey}</span>
                 `;
-                
-                // Add click event to copy to clipboard
                 const copyableElement = g1ReservePubkeyElement.querySelector('.copyable-pubkey');
                 if (copyableElement) {
                     copyableElement.addEventListener('click', (e) => {
                         copyToClipboard(g1ReservePubkey, e.target);
                     });
                 }
-                
-                try {
-                    const balanceData = await fetchWalletBalance(g1ReservePubkey, apiBaseUrl);
-                    
-                    // Display with Ẑ large and Ğ1 small
-                    g1ReserveBalanceElement.innerHTML = `
-                        <div style="display: flex; align-items: baseline; gap: 8px;">
-                            <span style="font-size: 1.5em; font-weight: bold; color: #9b59b6;">${balanceData.zen} Ẑ</span>
-                            <span style="font-size: 0.8em; color: #7f8c8d;">(${balanceData.balance} Ğ1)</span>
-                        </div>
-                    `;
-                } catch (error) {
-                    console.error('Error loading G1 Reserve balance:', error);
-                    g1ReserveBalanceElement.innerHTML = `
-                        <span style="color: #e74c3c; font-size: 0.9em;">❌ Erreur</span>
-                    `;
-                }
             } else {
-                g1ReserveBalanceElement.innerHTML = `
-                    <span style="color: #7f8c8d; font-size: 0.9em;">N/A</span>
-                `;
-                g1ReservePubkeyElement.innerHTML = `
-                    <span style="color: #7f8c8d;">N/A</span>
-                `;
+                g1ReserveBalanceElement.innerHTML = `<span style="color: #7f8c8d; font-size: 0.9em;">N/A</span>`;
+                g1ReservePubkeyElement.innerHTML = `<span style="color: #7f8c8d;">N/A</span>`;
             }
 
-            // Fetch Tax Provision balance separately
-            const taxProvisionPubkey = data['UPLANETNAME_IMPOT'];
-            const taxProvisionBalanceElement = document.getElementById('tax-provision-balance');
-            const taxProvisionLinkElement = document.getElementById('tax-provision-link');
-            
-            if (taxProvisionPubkey && taxProvisionPubkey !== 'N/A') {
-                try {
-                    // Get current balance
-                    const balanceData = await fetchWalletBalance(taxProvisionPubkey, apiBaseUrl);
-                    const currentBalance = parseFloat(balanceData.zen);
-                    
-                    // Get total provisions from check_impots API
-                    const cleanApiBaseUrl = apiBaseUrl.replace(/\/+$/, '');
-                    const impostsUrl = `${cleanApiBaseUrl}/check_impots`;
-                    
+            // ── Toutes les balances en parallèle ─────────────────────────────
+            const allWallets = walletGroups.flatMap(group => group.wallets);
+            const simpleWallets = allWallets.filter(w => !w.isRevenue && w.key !== 'UPLANETNAME_SOCIETY');
+            const specialWallets = allWallets.filter(w => w.isRevenue || w.key === 'UPLANETNAME_SOCIETY');
+
+            Promise.all([
+
+                // 1. Batch fetch pour les portefeuilles simples (TREASURY, RND, ASSETS)
+                //    → une seule requête GraphQL pour toutes les pubkeys
+                (async () => {
+                    const toFetch = simpleWallets
+                        .map(w => ({ wallet: w, pubkey: data[w.key] }))
+                        .filter(({ pubkey }) => pubkey && pubkey !== 'N/A');
+                    if (toFetch.length === 0) return;
+                    const pubkeysParam = toFetch.map(({ pubkey }) => pubkey).join(',');
                     try {
-                        const impostsResponse = await fetch(impostsUrl);
-                        const impostsData = await impostsResponse.json();
-                        
-                        if (impostsData && impostsData.total_provisions_zen !== undefined) {
-                            const totalProvisioned = parseFloat(impostsData.total_provisions_zen);
+                        const resp = await fetch(`${apiBaseUrl}/check_balances?g1pubs=${encodeURIComponent(pubkeysParam)}`);
+                        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+                        const batchData = await resp.json();
+                        const balances = batchData.balances || {};
+                        toFetch.forEach(({ wallet, pubkey }) => {
+                            const el = document.getElementById(`balance-${wallet.key}`);
+                            if (!el) return;
+                            const b = balances[pubkey];
+                            el.innerHTML = b
+                                ? `<div style="font-size: 1.3em; font-weight: bold;">${b.zen} Ẑ</div>`
+                                : `<div style="color: #7f8c8d; font-size: 0.9em;">N/A</div>`;
+                        });
+                    } catch (e) {
+                        console.warn('Batch balance failed, individual fallback:', e);
+                        await Promise.all(toFetch.map(async ({ wallet, pubkey }) => {
+                            const el = document.getElementById(`balance-${wallet.key}`);
+                            if (!el) return;
+                            try {
+                                const b = await fetchWalletBalance(pubkey, apiBaseUrl);
+                                el.innerHTML = `<div style="font-size: 1.3em; font-weight: bold;">${b.zen} Ẑ</div>`;
+                            } catch {
+                                el.innerHTML = `<div style="color: #e74c3c; font-size: 0.9em;">❌ Erreur</div>`;
+                            }
+                        }));
+                    }
+                })(),
+
+                // 2. Balance G1 Reserve (Réserve Ğ1)
+                (async () => {
+                    if (!g1ReservePubkey || g1ReservePubkey === 'N/A') return;
+                    try {
+                        const balanceData = await fetchWalletBalance(g1ReservePubkey, apiBaseUrl);
+                        g1ReserveBalanceElement.innerHTML = `
+                            <div style="display: flex; align-items: baseline; gap: 8px;">
+                                <span style="font-size: 1.5em; font-weight: bold; color: #9b59b6;">${balanceData.zen} Ẑ</span>
+                                <span style="font-size: 0.8em; color: #7f8c8d;">(${balanceData.balance} Ğ1)</span>
+                            </div>
+                        `;
+                    } catch (error) {
+                        console.error('Error loading G1 Reserve balance:', error);
+                        g1ReserveBalanceElement.innerHTML = `<span style="color: #e74c3c; font-size: 0.9em;">❌ Erreur</span>`;
+                    }
+                })(),
+
+                // 3. Provision fiscale : balance + check_impots en parallèle interne
+                (async () => {
+                    if (!taxProvisionPubkey || taxProvisionPubkey === 'N/A') {
+                        taxProvisionBalanceElement.innerHTML = `<span style="color: #7f8c8d; font-size: 0.9em;">N/A</span>`;
+                        return;
+                    }
+                    try {
+                        const cleanApiBaseUrl = apiBaseUrl.replace(/\/+$/, '');
+                        // Balance + historique des provisions en parallèle
+                        const [balanceData, impostsData] = await Promise.allSettled([
+                            fetchWalletBalance(taxProvisionPubkey, apiBaseUrl),
+                            fetch(`${cleanApiBaseUrl}/check_impots`).then(r => r.json())
+                        ]);
+                        const currentBalance = balanceData.status === 'fulfilled'
+                            ? parseFloat(balanceData.value.zen) : 0;
+                        if (impostsData.status === 'fulfilled' &&
+                            impostsData.value?.total_provisions_zen !== undefined) {
+                            const totalProvisioned = parseFloat(impostsData.value.total_provisions_zen);
                             const used = totalProvisioned - currentBalance;
-                            
-                            // Display both current balance and total provisioned with difference
                             taxProvisionBalanceElement.innerHTML = `
                                 <div style="display: flex; flex-direction: column; gap: 4px; align-items: flex-end;">
                                     <div style="display: flex; align-items: baseline; gap: 6px;">
@@ -1415,159 +1450,92 @@
                                     ${used > 0 ? `
                                     <div style="font-size: 0.7em; color: #b8c6e0;">
                                         ${totalProvisioned.toFixed(2)} Ẑ provisionné • ${used.toFixed(2)} Ẑ utilisé
-                                    </div>
-                                    ` : ''}
+                                    </div>` : ''}
                                 </div>
                             `;
                         } else {
-                            // Fallback: only display current balance
                             taxProvisionBalanceElement.innerHTML = `
                                 <span style="font-size: 1.5em; font-weight: bold; color: #e74c3c;">${currentBalance.toFixed(2)} Ẑ</span>
                             `;
                         }
-                    } catch (impostsError) {
-                        console.warn('Failed to fetch provisions history, showing balance only:', impostsError);
-                        // Fallback: only display current balance
-                        taxProvisionBalanceElement.innerHTML = `
-                            <span style="font-size: 1.5em; font-weight: bold; color: #e74c3c;">${currentBalance.toFixed(2)} Ẑ</span>
-                        `;
+                        if (taxProvisionLinkElement) {
+                            taxProvisionLinkElement.href = `${cleanApiBaseUrl}/check_impots?html=1`;
+                            taxProvisionLinkElement.target = '_blank';
+                        }
+                    } catch (error) {
+                        console.error('Error loading Tax Provision balance:', error);
+                        taxProvisionBalanceElement.innerHTML = `<span style="color: #e74c3c; font-size: 0.9em;">❌ Erreur</span>`;
                     }
-                    
-                    // Update link to point to check_impots with HTML output
-                    if (taxProvisionLinkElement) {
-                        const cleanApiBaseUrl = apiBaseUrl.replace(/\/+$/, '');
-                        taxProvisionLinkElement.href = `${cleanApiBaseUrl}/check_impots?html=1`;
-                        taxProvisionLinkElement.target = '_blank';
-                    }
-                } catch (error) {
-                    console.error('Error loading Tax Provision balance:', error);
-                    taxProvisionBalanceElement.innerHTML = `
-                        <span style="color: #e74c3c; font-size: 0.9em;">❌ Erreur</span>
-                    `;
-                }
-            } else {
-                taxProvisionBalanceElement.innerHTML = `
-                    <span style="color: #7f8c8d; font-size: 0.9em;">N/A</span>
-                `;
-            }
+                })(),
 
-            // Fetch balances for each wallet in the background
-            // Flatten all wallets from all groups
-            const allWallets = walletGroups.flatMap(group => group.wallets);
-            
-            allWallets.forEach(async (wallet) => {
-                const pubkey = data[wallet.key];
-                const balanceElement = document.getElementById(`balance-${wallet.key}`);
-                
-                if (pubkey && pubkey !== 'N/A') {
+                // 4. Portefeuilles spéciaux (CA/check_revenue + SOCIETY/check_society) en parallèle
+                ...specialWallets.map(async (wallet) => {
+                    const pubkey = data[wallet.key];
+                    const balanceElement = document.getElementById(`balance-${wallet.key}`);
+                    if (!balanceElement) return;
+                    if (!pubkey || pubkey === 'N/A') {
+                        balanceElement.innerHTML = `<div style="color: #7f8c8d; font-size: 0.9em;">N/A</div>`;
+                        return;
+                    }
+                    const cleanApiBaseUrl = apiBaseUrl.replace(/\/+$/, '');
                     try {
-                        // Special handling for CA wallet (UPLANETG1PUB) - show revenue history
                         if (wallet.key === 'UPLANETG1PUB' && wallet.isRevenue) {
-                            // Fetch revenue data to display total CA
-                            const cleanApiBaseUrl = apiBaseUrl.replace(/\/+$/, '');
-                            const revenueUrl = `${cleanApiBaseUrl}/check_revenue`;
-                            console.log('Fetching revenue data from:', revenueUrl);
-                            
                             try {
-                                const revenueResponse = await fetch(revenueUrl);
-                                const revenueData = await revenueResponse.json();
-                                
-                                if (revenueData && revenueData.total_revenue_zen !== undefined) {
-                                    // Display total revenue with button to view history
+                                const revenueData = await fetch(`${cleanApiBaseUrl}/check_revenue`).then(r => r.json());
+                                if (revenueData?.total_revenue_zen !== undefined) {
                                     balanceElement.innerHTML = `
                                         <div style="display: flex; flex-direction: column; gap: 4px;">
                                             <div style="font-size: 1.3em; font-weight: bold;">${revenueData.total_revenue_zen.toFixed(2)} Ẑ</div>
                                             <div style="font-size: 0.7em; color: #7f8c8d;">${revenueData.total_transactions} ventes ZENCOIN</div>
                                             <a href="${cleanApiBaseUrl}/check_revenue?html=1" target="_blank" style="
-                                                display: inline-block;
-                                                margin-top: 4px;
-                                                padding: 4px 8px;
-                                                background: #16a085;
-                                                color: white !important;
-                                                text-decoration: none;
-                                                border-radius: 4px;
-                                                font-size: 0.75em;
-                                                text-align: center;
-                                                transition: background 0.3s;
+                                                display: inline-block; margin-top: 4px; padding: 4px 8px;
+                                                background: #16a085; color: white !important;
+                                                text-decoration: none; border-radius: 4px;
+                                                font-size: 0.75em; text-align: center; transition: background 0.3s;
                                             " onmouseover="this.style.background='#138d75'" onmouseout="this.style.background='#16a085'">
                                                 💼 Historique CA
                                             </a>
                                         </div>
                                     `;
-                                } else {
-                                    throw new Error('Invalid revenue data');
-                                }
+                                } else { throw new Error('Invalid revenue data'); }
                             } catch (error) {
                                 console.warn('Failed to fetch revenue data, showing balance only:', error);
-                                // Fallback: just display current balance
                                 const balanceData = await fetchWalletBalance(pubkey, apiBaseUrl);
                                 balanceElement.innerHTML = `
                                     <div style="display: flex; flex-direction: column; gap: 4px;">
                                         <div style="font-size: 1.3em; font-weight: bold;">${balanceData.zen} Ẑ</div>
-                                        <div style="font-size: 0.7em; color: #16a085; margin-top: 2px;">
-                                            💼 Hub de distribution actif
-                                        </div>
+                                        <div style="font-size: 0.7em; color: #16a085; margin-top: 2px;">💼 Hub de distribution actif</div>
                                     </div>
                                 `;
                             }
-                        }
-                        // Special handling for SOCIETY wallet - show total outgoing transfers
-                        else if (wallet.key === 'UPLANETNAME_SOCIETY') {
-                            // Fetch society history (no g1pub parameter needed - read from environment)
-                            const cleanApiBaseUrl = apiBaseUrl.replace(/\/+$/, '');
-                            const societyUrl = `${cleanApiBaseUrl}/check_society`;
-                            console.log('Fetching society history from:', societyUrl);
-                            
-                            const response = await fetch(societyUrl);
-                            const societyData = await response.json();
-                            
-                            if (societyData && societyData.total_outgoing_zen !== undefined) {
-                                // Display total outgoing transfers with button to view history
+                        } else if (wallet.key === 'UPLANETNAME_SOCIETY') {
+                            const societyData = await fetch(`${cleanApiBaseUrl}/check_society`).then(r => r.json());
+                            if (societyData?.total_outgoing_zen !== undefined) {
                                 balanceElement.innerHTML = `
                                     <div style="display: flex; flex-direction: column; gap: 4px;">
                                         <div style="font-size: 1.3em; font-weight: bold;">${societyData.total_outgoing_zen.toFixed(2)} Ẑ</div>
                                         <div style="font-size: 0.7em; color: #7f8c8d;">${societyData.total_transfers} parts distribuées</div>
                                         <a href="${cleanApiBaseUrl}/check_society?html=1" target="_blank" style="
-                                            display: inline-block;
-                                            margin-top: 4px;
-                                            padding: 4px 8px;
-                                            background: #3498db;
-                                            color: white !important;
-                                            text-decoration: none;
-                                            border-radius: 4px;
-                                            font-size: 0.75em;
-                                            text-align: center;
-                                            transition: background 0.3s;
+                                            display: inline-block; margin-top: 4px; padding: 4px 8px;
+                                            background: #3498db; color: white !important;
+                                            text-decoration: none; border-radius: 4px;
+                                            font-size: 0.75em; text-align: center; transition: background 0.3s;
                                         " onmouseover="this.style.background='#217dbb'" onmouseout="this.style.background='#3498db'">
                                             📜 Historique
                                         </a>
                                     </div>
                                 `;
                             } else {
-                                balanceElement.innerHTML = `
-                                    <div style="color: #7f8c8d; font-size: 0.9em;">0.00 Ẑ</div>
-                                `;
+                                balanceElement.innerHTML = `<div style="color: #7f8c8d; font-size: 0.9em;">0.00 Ẑ</div>`;
                             }
-                        } else {
-                            // Normal balance display for other wallets (Ẑ only)
-                            const balanceData = await fetchWalletBalance(pubkey, apiBaseUrl);
-
-                            balanceElement.innerHTML = `
-                                <div style="font-size: 1.3em; font-weight: bold;">${balanceData.zen} Ẑ</div>
-                            `;
                         }
                     } catch (error) {
                         console.error(`Error loading data for ${wallet.key}:`, error);
-                        balanceElement.innerHTML = `
-                            <div style="color: #e74c3c; font-size: 0.9em;">❌ Erreur</div>
-                        `;
+                        balanceElement.innerHTML = `<div style="color: #e74c3c; font-size: 0.9em;">❌ Erreur</div>`;
                     }
-                } else {
-                    balanceElement.innerHTML = `
-                        <div style="color: #7f8c8d; font-size: 0.9em;">N/A</div>
-                    `;
-                }
-            });
+                })
+
+            ]).catch(e => console.error('Parallel balance fetch error:', e));
         }
 
         // Fonction pour créer le dashboard économique

@@ -4,6 +4,7 @@
  * À inclure dans n'importe quelle page pour :
  *   1. Capturer les logs console en sessionStorage
  *   2. Exposer window.openFeedbackPage()
+ *   3. Injecter automatiquement le badge AGPL et le bouton feedback
  *
  * À inclure dans feedback.html pour activer le formulaire + NOSTR.
  */
@@ -50,18 +51,7 @@
         pushLog('ERR', [`Unhandled rejection: ${e.reason}`]);
     });
 
-    /* ── Public helper (usable from any page) ────────────────────── */
-
-    window.openFeedbackPage = function (target) {
-        try { sessionStorage.setItem(PAGE_KEY, window.location.href); } catch (_) {}
-        window.open(target || 'feedback.html', '_blank');
-    };
-
-    /* ── Feedback page logic ─────────────────────────────────────── */
-
-    function isFeedbackPage() {
-        return /feedback\.html/.test(window.location.pathname);
-    }
+    /* ── URL helpers ─────────────────────────────────────────────── */
 
     function getUSPOTBase() {
         try {
@@ -80,7 +70,36 @@
         }
     }
 
-    /* Bech32 hex→npub (subset, no external lib needed) */
+    /* Dérive l'URL de feedback.html : /earth/feedback.html depuis UPassport,
+       ou feedback.html relatif si on est déjà sur une page earth/. */
+    function deriveFeedbackUrl() {
+        try {
+            const path = window.location.pathname;
+            /* Déjà sur une page earth/ → chemin relatif suffit */
+            if (/\/earth\/|\/ipns\/|ipfs\./.test(window.location.href) || path.endsWith('.html')) {
+                return 'feedback.html';
+            }
+            /* Sinon on est sur une route UPassport (/youtube, /chat, …) */
+            return '/earth/feedback.html';
+        } catch (_) {
+            return '/earth/feedback.html';
+        }
+    }
+
+    /* ── Public helpers (usable from any page) ───────────────────── */
+
+    window.openFeedbackPage = function (target) {
+        try { sessionStorage.setItem(PAGE_KEY, window.location.href); } catch (_) {}
+        window.open(target || deriveFeedbackUrl(), '_blank');
+    };
+
+    /* ── Feedback page detection ─────────────────────────────────── */
+
+    function isFeedbackPage() {
+        return /feedback\.html/.test(window.location.pathname);
+    }
+
+    /* ── Bech32 hex→npub (no external lib) ──────────────────────── */
     function hexToNpub(hex) {
         try {
             const CHARSET = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l';
@@ -116,13 +135,14 @@
             const bytes = hex.match(/.{1,2}/g).map(b => parseInt(b, 16));
             const words = convertbits(bytes, 8, 5, true);
             const hrp = 'npub';
-            const combined = hrpExpand(hrp).concat(words).concat([0,0,0,0,0,0]);
-            const checksum = polymod(hrpExpand(hrp).concat(words).concat([0,0,0,0,0,0])) ^ 1;
-            const ckWords = [
-                (checksum >> 25) & 31, (checksum >> 20) & 31,
-                (checksum >> 15) & 31, (checksum >> 10) & 31,
-                (checksum >>  5) & 31, checksum & 31,
-            ];
+            const ckWords = (() => {
+                const checksum = polymod(hrpExpand(hrp).concat(words).concat([0,0,0,0,0,0])) ^ 1;
+                return [
+                    (checksum >> 25) & 31, (checksum >> 20) & 31,
+                    (checksum >> 15) & 31, (checksum >> 10) & 31,
+                    (checksum >>  5) & 31, checksum & 31,
+                ];
+            })();
             return hrp + '1' + words.concat(ckWords).map(w => CHARSET[w]).join('');
         } catch (_) {
             return hex.slice(0, 16) + '…';
@@ -132,8 +152,8 @@
     /* ── NOSTR connection (NIP-07) ───────────────────────────────── */
 
     window.connectNostr = async function () {
-        const btn     = document.getElementById('nostr-connect-btn');
-        const status  = document.getElementById('nostr-status');
+        const btn      = document.getElementById('nostr-connect-btn');
+        const status   = document.getElementById('nostr-status');
         const pubkeyEl = document.getElementById('fb-pubkey');
 
         if (!window.nostr) {
@@ -161,7 +181,6 @@
             }
             if (btn) { btn.textContent = '🔑 Reconnect'; btn.disabled = false; }
 
-            /* Try to fetch profile for display */
             fetchNostrProfile(hex);
         } catch (e) {
             if (status) { status.textContent = `Erreur : ${e.message}`; status.style.color = '#f88'; }
@@ -206,7 +225,6 @@
     /* ── Form initialisation ─────────────────────────────────────── */
 
     function initForm() {
-        /* Pre-fill from localStorage (set by roaming.html or other pages) */
         try {
             const raw = localStorage.getItem('uplanet_feedback_prefill');
             if (raw) {
@@ -221,7 +239,6 @@
             }
         } catch (_) {}
 
-        /* Source page */
         let sourcePage = '';
         try { sourcePage = sessionStorage.getItem(PAGE_KEY) || document.referrer || ''; } catch (_) {}
         const sourceEl = document.getElementById('fb-source-page');
@@ -231,7 +248,6 @@
             if (labelEl) labelEl.style.display = 'block';
         }
 
-        /* Console logs */
         let logs = [];
         try { logs = JSON.parse(sessionStorage.getItem(LOG_KEY) || '[]'); } catch (_) {}
         const logsEl     = document.getElementById('fb-console-logs');
@@ -244,7 +260,6 @@
             if (logCount)   logCount.textContent = `${logs.length} entrée(s)`;
         }
 
-        /* Auto-connect NOSTR if already permitted */
         if (window.nostr) {
             window.nostr.getPublicKey().then(hex => {
                 if (hex) window.connectNostr();
@@ -323,13 +338,106 @@
         if (section) section.style.display = 'none';
     };
 
+    /* ── Auto-inject : badge AGPL + bouton feedback ──────────────── */
+
+    function autoInjectUI() {
+        if (isFeedbackPage()) return;
+        if (document.getElementById('uplanet-agpl-badge')) return; /* déjà injecté */
+
+        const feedbackUrl = deriveFeedbackUrl();
+
+        /* Badge AGPL — coin haut-droit */
+        /* Sélectionne le dépôt selon le contexte (UPassport vs earth/) */
+        const _isUPassportRoute = (() => {
+            try {
+                const u = new URL(window.location.href);
+                return u.port === '54321' || u.hostname.startsWith('u.');
+            } catch (_) { return false; }
+        })();
+        const _repoUrl = _isUPassportRoute
+            ? 'https://github.com/papiche/UPassport'
+            : 'https://github.com/papiche/UPlanet';
+
+        const badge = document.createElement('a');
+        badge.id    = 'uplanet-agpl-badge';
+        badge.href  = _repoUrl;
+        badge.target = '_blank';
+        badge.rel   = 'noopener noreferrer';
+        badge.title = 'Logiciel libre GNU AGPL v3 · Bien commun numérique\n📂 github.com/papiche/UPlanet\n📂 github.com/papiche/UPassport';
+        badge.innerHTML =
+            '<span style="font-size:14px;vertical-align:middle">©</span>' +
+            '<span style="margin-left:4px;vertical-align:middle">AGPL&nbsp;v3</span>' +
+            '<span style="display:block;font-size:9px;opacity:0.75;margin-top:1px;letter-spacing:0.03em">Bien Commun</span>';
+
+        const bs = badge.style;
+        bs.position       = 'fixed';
+        bs.top            = '6px';
+        bs.right          = '6px';
+        bs.zIndex         = '9990';
+        bs.background     = 'linear-gradient(135deg,rgba(102,126,234,0.82),rgba(118,75,162,0.82))';
+        bs.border         = '1px solid rgba(102,126,234,0.45)';
+        bs.borderRadius   = '9px';
+        bs.padding        = '4px 10px 4px 8px';
+        bs.color          = '#fff';
+        bs.fontSize       = '11px';
+        bs.fontWeight     = '600';
+        bs.lineHeight     = '1.35';
+        bs.textAlign      = 'center';
+        bs.textDecoration = 'none';
+        bs.boxShadow      = '0 2px 10px rgba(102,126,234,0.35)';
+        bs.backdropFilter = 'blur(6px)';
+        bs.fontFamily     = "system-ui,'Segoe UI',sans-serif";
+        bs.cursor         = 'pointer';
+        bs.opacity        = '0.82';
+        bs.transition     = 'opacity 0.2s,transform 0.2s';
+
+        badge.addEventListener('mouseenter', () => { badge.style.opacity = '1'; badge.style.transform = 'translateY(-1px)'; });
+        badge.addEventListener('mouseleave', () => { badge.style.opacity = '0.82'; badge.style.transform = ''; });
+
+        /* Bouton feedback — coin bas-droit (sauf si déjà présent dans le HTML) */
+        const existingFb = document.querySelector('.btn-feedback-bottom, #uplanet-feedback-btn');
+        if (!existingFb) {
+            const fbBtn = document.createElement('button');
+            fbBtn.id        = 'uplanet-feedback-btn';
+            fbBtn.innerHTML = '🐛 Feedback';
+            fbBtn.title     = 'Signaler un bug ou faire une suggestion (ouvre un nouvel onglet avec les logs de cette page)';
+
+            const fbs = fbBtn.style;
+            fbs.position     = 'fixed';
+            fbs.bottom       = '18px';
+            fbs.right        = '18px';
+            fbs.zIndex       = '9990';
+            fbs.background   = 'linear-gradient(135deg,rgba(220,53,69,0.82),rgba(180,30,50,0.82))';
+            fbs.border       = 'none';
+            fbs.borderRadius = '24px';
+            fbs.color        = '#fff';
+            fbs.padding      = '9px 18px';
+            fbs.fontSize     = '13px';
+            fbs.fontWeight   = '600';
+            fbs.cursor       = 'pointer';
+            fbs.boxShadow    = '0 4px 14px rgba(220,53,69,0.38)';
+            fbs.fontFamily   = "system-ui,'Segoe UI',sans-serif";
+            fbs.transition   = 'all 0.22s';
+
+            fbBtn.addEventListener('mouseenter', () => { fbBtn.style.transform = 'translateY(-2px)'; fbBtn.style.boxShadow = '0 8px 22px rgba(220,53,69,0.55)'; });
+            fbBtn.addEventListener('mouseleave', () => { fbBtn.style.transform = ''; fbBtn.style.boxShadow = '0 4px 14px rgba(220,53,69,0.38)'; });
+            fbBtn.addEventListener('click', () => window.openFeedbackPage(feedbackUrl));
+
+            document.body.appendChild(fbBtn);
+        }
+
+        document.body.appendChild(badge);
+    }
+
     /* ── Init ────────────────────────────────────────────────────── */
 
-    if (isFeedbackPage()) {
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', initForm);
-        } else {
-            initForm();
-        }
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', function () {
+            autoInjectUI();
+            if (isFeedbackPage()) initForm();
+        });
+    } else {
+        autoInjectUI();
+        if (isFeedbackPage()) initForm();
     }
 })();

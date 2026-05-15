@@ -165,7 +165,9 @@ code { background: rgba(255,255,255,0.08); padding: 1px 5px; border-radius: 4px;
 
 <!-- Upload uDrive section (shown when auth OK) -->
 <div id="udrive-upload-section" style="display:none;" class="upload-section">
-    <div class="upload-title">📤 Uploader un média dans votre uDrive</div>
+    <div class="upload-title">📤 Uploader un média dans votre uDrive
+        <a id="udrive-link" href="#" target="_blank" style="display:none;font-size:12px;font-weight:400;margin-left:12px;color:#99aaff;text-decoration:none;">📁 Voir uDrive →</a>
+    </div>
     <div class="upload-sub" id="upload-sub-text">Authentifié · Sélectionnez une image à déposer dans votre espace IPFS personnel.</div>
     <div class="upload-drop" id="drop-zone" onclick="document.getElementById('udrive-file-input').click()"
          ondragover="event.preventDefault();this.classList.add('drag-over')"
@@ -849,7 +851,12 @@ function showUploadSection() {
     const sub = document.getElementById('upload-sub-text');
     if (sub && S.npub) {
         const label = S.sourceTag === 'swarm' ? '🔵 Roaming' : '🟢 Local';
-        sub.textContent = `${label} · ${S.npub.slice(0,16)}… · Déposez une image dans votre espace IPFS personnel.`;
+        sub.textContent = `${label} · ${S.npub.slice(0,16)}… · Déposez un fichier dans votre espace IPFS personnel.`;
+    }
+    const driveLink = document.getElementById('udrive-link');
+    if (driveLink && S.homeStation) {
+        driveLink.href = S.homeStation;
+        driveLink.style.display = 'inline-block';
     }
 }
 
@@ -893,28 +900,47 @@ async function doUpload() {
     const form = new FormData();
     form.append('file', _uploadFile);
     if (S.npub) form.append('npub', S.npub);
-    form.append('type', 'media');
+
+    /* Derive IPFS gateway from upassportUrl (u.domain → ipfs.domain) */
+    const ipfsGateway = (() => {
+        try {
+            const u = new URL(S.upassportUrl);
+            return `${u.protocol}//${u.hostname.replace(/^u\./, 'ipfs.')}`;
+        } catch(_) { return 'https://ipfs.copylaradio.com'; }
+    })();
 
     try {
         if (barEl) barEl.style.width = '40%';
-        const r = await fetch(`${S.upassportUrl}/api/upload/image`, {
+        /* /api/upload : authentification NIP-42, sauvegarde dans uDRIVE, génère manifest.json */
+        const r = await fetch(`${S.upassportUrl}/api/upload`, {
             method: 'POST',
             body: form,
-            signal: AbortSignal.timeout(30000),
+            signal: AbortSignal.timeout(60000),
         });
         if (barEl) barEl.style.width = '90%';
         const data = await r.json();
         if (barEl) barEl.style.width = '100%';
 
-        if (r.ok && data.url) {
+        if (r.ok && data.success) {
+            /* data.info = CID du fichier seul ; data.new_cid = CID du uDRIVE régénéré */
+            const fileCid = data.info || data.new_cid;
+            const fileUrl = fileCid ? `${ipfsGateway}/ipfs/${fileCid}` : null;
+            const driveUrl = S.homeStation || null;
             resultEl.style.display = 'block';
-            resultEl.innerHTML = `✅ <strong>Média uploadé !</strong><br>
-                <a href="${data.url}" target="_blank">${data.url}</a><br>
-                ${data.ipfs_cid ? `CID: <code style="font-size:10px">${data.ipfs_cid}</code>` : ''}
-                ${data.storage ? `· Stockage: ${data.storage}` : ''}`;
+            resultEl.style.borderColor = '';
+            resultEl.style.background = '';
+            resultEl.innerHTML = `✅ <strong>Média ajouté au uDRIVE !</strong><br>
+                ${fileUrl ? `<a href="${fileUrl}" target="_blank" style="word-break:break-all">${fileUrl}</a><br>` : ''}
+                ${fileCid ? `CID: <code style="font-size:10px">${fileCid}</code>` : ''}
+                ${driveUrl ? `<br><a href="${driveUrl}" target="_blank" style="color:#99aaff;font-size:11px">📁 Voir le uDRIVE →</a>` : ''}`;
+            /* Mettre à jour le lien uDRIVE dans le titre si ce n'est pas déjà fait */
+            const driveLink = document.getElementById('udrive-link');
+            if (driveLink && driveUrl && driveLink.style.display === 'none') {
+                driveLink.href = driveUrl; driveLink.style.display = 'inline-block';
+            }
         } else {
             resultEl.style.display = 'block';
-            resultEl.innerHTML = `❌ Erreur ${r.status}: ${data.detail || data.error || 'Upload échoué'}`;
+            resultEl.innerHTML = `❌ Erreur ${r.status}: ${data.detail || data.message || 'Upload échoué'}`;
             resultEl.style.borderColor = 'rgba(220,53,69,0.3)';
             resultEl.style.background = 'rgba(220,53,69,0.08)';
         }

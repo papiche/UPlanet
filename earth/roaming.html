@@ -111,6 +111,25 @@ code { background: rgba(255,255,255,0.08); padding: 1px 5px; border-radius: 4px;
 .btn-feedback-bottom { position: fixed; bottom: 20px; right: 20px; background: linear-gradient(135deg, rgba(220,53,69,0.8), rgba(180,30,50,0.8)); border: none; border-radius: 24px; color: white; padding: 10px 20px; font-size: 13px; font-weight: 600; cursor: pointer; box-shadow: 0 4px 16px rgba(220,53,69,0.35); z-index: 100; transition: all 0.25s; }
 .btn-feedback-bottom:hover { transform: translateY(-2px); box-shadow: 0 8px 22px rgba(220,53,69,0.5); }
 
+/* Upload uDrive section */
+.upload-section { background: rgba(40,167,69,0.06); border: 1px solid rgba(40,167,69,0.3); border-radius: 13px; padding: 18px; margin-bottom: 32px; }
+.upload-title { font-size: 16px; font-weight: 700; color: #6fd17a; margin-bottom: 4px; }
+.upload-sub { font-size: 12px; color: #666; margin-bottom: 14px; }
+.upload-drop { border: 2px dashed rgba(40,167,69,0.35); border-radius: 10px; padding: 28px 20px; text-align: center; cursor: pointer; transition: all 0.2s; background: rgba(0,0,0,0.15); }
+.upload-drop:hover, .upload-drop.drag-over { border-color: rgba(40,167,69,0.7); background: rgba(40,167,69,0.08); }
+.upload-drop .drop-icon { font-size: 32px; margin-bottom: 8px; }
+.upload-drop p { margin: 0; font-size: 13px; color: #888; }
+.upload-drop input[type=file] { display: none; }
+.upload-preview { display: none; margin-top: 12px; border-radius: 8px; max-height: 180px; max-width: 100%; object-fit: contain; border: 1px solid rgba(255,255,255,0.08); }
+.btn-upload { margin-top: 12px; width: 100%; padding: 11px; background: linear-gradient(135deg, rgba(40,167,69,0.8), rgba(30,130,55,0.8)); border: none; border-radius: 9px; color: white; font-size: 14px; font-weight: 700; cursor: pointer; transition: all 0.25s; }
+.btn-upload:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(40,167,69,0.4); }
+.btn-upload:disabled { opacity: 0.55; cursor: not-allowed; }
+.upload-progress { display: none; margin-top: 10px; }
+.upload-bar-wrap { background: rgba(255,255,255,0.06); border-radius: 6px; height: 6px; overflow: hidden; }
+.upload-bar { height: 100%; background: linear-gradient(90deg, #3dba7e, #667eea); width: 0; transition: width 0.3s; border-radius: 6px; }
+.upload-result { display: none; margin-top: 12px; background: rgba(40,167,69,0.1); border: 1px solid rgba(40,167,69,0.3); border-radius: 8px; padding: 10px 14px; font-size: 12px; }
+.upload-result a { color: #6fd17a; word-break: break-all; }
+
 @media (max-width: 520px) {
     .step-desc { display: none; }
     .station-actions { width: 100%; justify-content: flex-end; }
@@ -144,6 +163,31 @@ code { background: rgba(255,255,255,0.08); padding: 1px 5px; border-radius: 4px;
     <div class="api-note" id="api-note" style="display:none;"></div>
 </div>
 
+<!-- Upload uDrive section (shown when auth OK) -->
+<div id="udrive-upload-section" style="display:none;" class="upload-section">
+    <div class="upload-title">📤 Uploader un média dans votre uDrive</div>
+    <div class="upload-sub" id="upload-sub-text">Authentifié · Sélectionnez une image à déposer dans votre espace IPFS personnel.</div>
+    <div class="upload-drop" id="drop-zone" onclick="document.getElementById('udrive-file-input').click()"
+         ondragover="event.preventDefault();this.classList.add('drag-over')"
+         ondragleave="this.classList.remove('drag-over')"
+         ondrop="handleDrop(event)">
+        <div class="drop-icon">🖼️</div>
+        <p>Cliquer ou déposer une image ici</p>
+        <p style="font-size:11px;margin-top:4px;color:#555;">JPG · PNG · GIF · WebP · max 5 Mo</p>
+        <input type="file" id="udrive-file-input" accept="image/*,video/*" onchange="previewFile(this.files[0])">
+    </div>
+    <img id="upload-preview" class="upload-preview" alt="aperçu">
+    <div id="upload-file-name" style="display:none;font-size:12px;color:#888;margin-top:8px;"></div>
+    <button class="btn-upload" id="btn-do-upload" onclick="doUpload()" disabled>
+        ⬆️ Envoyer vers uDrive
+    </button>
+    <div class="upload-progress" id="upload-progress">
+        <div style="font-size:11px;color:#888;margin-bottom:4px;" id="upload-progress-label">Envoi…</div>
+        <div class="upload-bar-wrap"><div class="upload-bar" id="upload-bar"></div></div>
+    </div>
+    <div class="upload-result" id="upload-result"></div>
+</div>
+
 </div><!-- .main-col -->
 
 <button class="btn-feedback-bottom" onclick="sendRoamingFeedback()">🐛 Signaler un problème</button>
@@ -165,26 +209,38 @@ const S = {
 };
 
 /* ═══════════════════════════════════════════════════════════════
-   URL helpers
+   URL helpers — même logique que detectUSPOTAPI() dans common.js
    ═══════════════════════════════════════════════════════════════ */
-function getURLInfo() {
-    const u = new URL(window.location.href);
-    return {
-        proto:   u.protocol.replace(':',''),
-        wsProto: u.protocol === 'https:' ? 'wss' : 'ws',
-        host:    u.hostname.replace(/^ipfs\./,'u.'),
-        port:    u.port,
-    };
+function detectURLs() {
+    if (typeof window.upassportUrl === 'string' && window.upassportUrl &&
+        typeof window.nostrRelay    === 'string' && window.nostrRelay) {
+        return { upassportUrl: window.upassportUrl, relayUrl: window.nostrRelay };
+    }
+    const u        = new URL(window.location.href);
+    const hostname = u.hostname;
+    const port     = u.port;
+    const proto    = u.protocol.replace(':', '');
+
+    if ((hostname === '127.0.0.1' || hostname === 'localhost') &&
+        (port === '8080' || port === '54321' || port === '7777')) {
+        return { upassportUrl: 'http://127.0.0.1:54321', relayUrl: 'ws://127.0.0.1:7777' };
+    }
+    if (hostname.startsWith('ipfs.')) {
+        const base = hostname.slice('ipfs.'.length);
+        return { upassportUrl: `${proto}://u.${base}`, relayUrl: `wss://relay.${base}` };
+    }
+    if (hostname.startsWith('u.')) {
+        const base = hostname.slice('u.'.length);
+        return { upassportUrl: `${proto}://u.${base}`, relayUrl: `wss://relay.${base}` };
+    }
+    if (hostname.startsWith('relay.')) {
+        const base = hostname.slice('relay.'.length);
+        return { upassportUrl: `${proto}://u.${base}`, relayUrl: `wss://relay.${base}` };
+    }
+    return { upassportUrl: 'https://u.copylaradio.com', relayUrl: 'wss://relay.copylaradio.com' };
 }
-function deriveUPassport() {
-    if (typeof window.upassportUrl === 'string' && window.upassportUrl) return window.upassportUrl;
-    const { proto, host, port } = getURLInfo();
-    return `${proto}://${host}${port ? ':54321' : ''}`;
-}
-function deriveRelay() {
-    const { wsProto, host, port } = getURLInfo();
-    return `${wsProto}://${host}${port ? ':7777' : ''}`;
-}
+function deriveUPassport() { return detectURLs().upassportUrl; }
+function deriveRelay()     { return detectURLs().relayUrl; }
 function hexToNpub(hex) {
     try {
         const C='qpzry9x8gf2tvdw0s3jn54khce6mua7l',G=[0x3b6a57b2,0x26508e6d,0x1ea119fa,0x3d4233dd,0x2a1462b3];
@@ -234,7 +290,8 @@ const STEPS = [
       explain:`L'événement est envoyé <code>["EVENT", event]</code> via WebSocket. Le plugin
       <strong>filter/22242.sh</strong> s'exécute synchroniquement : vérifie l'autorisation
       (local → swarm → amisOfAmis), crée le marker <code>.nip42_auth_&lt;pubkey&gt;</code>,
-      et si <code>SOURCE=swarm</code> déclenche en background la récupération des secrets IPNS.`, run: stepAuth },
+      et si <code>SOURCE=swarm</code> sauvegarde NOSTRNS + G1PUBNOSTR en background (pour le
+      routage DM de sync uDRIVE vers la home station).`, run: stepAuth },
     { id:'verify',    icon:'✅', num:6, title:'Vérification du marker',
       desc:'Appel endpoint protégé → API lit le marker (TTL 300s)',
       explain:`<code>check_nip42_auth_local_marker</code> vérifie :
@@ -243,14 +300,16 @@ const STEPS = [
       <br>C. JSON interne contient le même pubkey (anti-falsification)
       <br>L'endpoint <code>/api/myGPS</code> est utilisé comme test de l'accès protégé.`, run: stepVerify },
     { id:'roaming',   icon:'🌍', num:7, title:'Détection roaming',
-      desc:'SOURCE : local / swarm / amisOfAmis — secrets IPNS si swarm',
+      desc:'SOURCE : local / swarm / amisOfAmis — profil éphémère + DM sync si swarm',
       explain:`<code>filter/22242.sh</code> classe l'utilisateur via <code>check_authorization</code> :
       <br>🟢 <strong>local</strong> — clé dans <code>~/.zen/game/nostr/*/HEX</code>
       <br>🔵 <strong>swarm</strong> — clé dans <code>~/.zen/tmp/swarm/*/TW/*/HEX</code> →
-      <em>roaming parfait</em> : téléchargement des secrets chiffrés IPNS, déchiffrement avec
-      <code>uplanet.dunikey</code>, import clé IPNS dans le keystore
+      <em>roaming</em> : répertoire éphémère créé dans <code>~/.zen/game/nostr/EMAIL/</code> avec flag
+      <code>.roaming</code> + fichier <code>SOURCE=SWARM_ROAMING</code>.
+      <code>NOSTRNS</code> et <code>G1PUBNOSTR</code> sont sauvegardés pour que
+      <code>NOSTRCARD.refresh.sh</code> puisse router les DMs NIP-04 (kind 4) vers la home station.
       <br>🟡 <strong>amisOfAmis</strong> — pubkey dans <code>amisOfAmis.txt</code>
-      <br>La liste <code>NOSTR[]</code> du JSON UPassport contient le champ <code>SOURCE</code> per-user.`, run: stepRoaming },
+      <br>La source est lisible via <code>/api/myGPS?npub=…</code> (champ <code>source</code>).`, run: stepRoaming },
     { id:'gps',       icon:'🗺️', num:8, title:'Station home & coordonnées GPS',
       desc:'GET /api/myGPS → position UMAP + station d\'origine',
       explain:`<code>GET /api/myGPS?npub=…</code> (endpoint protégé NIP-42) retourne les coordonnées UMAP
@@ -630,12 +689,14 @@ async function stepVerify() {
         const details = [
             kv('Endpoint', '/api/myGPS'),
             kv('Status', r.status+' '+r.statusText),
-            S.verifyData ? kv('Lat',  S.verifyData.lat??S.verifyData.latitude??'—') : '',
-            S.verifyData ? kv('Lon',  S.verifyData.lon??S.verifyData.longitude??'—') : '',
-            S.verifyData ? kv('Source (API)', S.verifyData.source||'—') : '',
+            S.verifyData ? kv('Lat',  S.verifyData.coordinates?.lat??S.verifyData.lat??'—') : '',
+            S.verifyData ? kv('Lon',  S.verifyData.coordinates?.lon??S.verifyData.lon??'—') : '',
+            S.verifyData?.source ? kv('Source (API)', S.verifyData.source) : '',
+            S.verifyData?.home_station_url ? kvRow('Home station', `<a href="${S.verifyData.home_station_url}" target="_blank" style="color:#99aaff">${S.verifyData.home_station_url}</a>`) : '',
         ].join('');
         if (r.ok) {
             if (S.verifyData?.source) S.sourceTag = S.verifyData.source;
+            if (S.verifyData?.home_station_url && !S.homeStation) S.homeStation = S.verifyData.home_station_url;
             setStep('verify','ok','✅ Marker valide', details, null);
         } else if (r.status===401||r.status===403) {
             setStep('verify','error','❌ Non autorisé', kv('Status', r.status),
@@ -711,19 +772,19 @@ async function stepGPS() {
         return false;
     }
     const d = S.verifyData;
-    const lat = d.lat ?? d.latitude ?? d.southWestLat ?? '—';
-    const lon = d.lon ?? d.longitude ?? d.southWestLon ?? '—';
+    const lat = d.coordinates?.lat ?? d.lat ?? d.latitude ?? d.southWestLat ?? '—';
+    const lon = d.coordinates?.lon ?? d.lon ?? d.longitude ?? d.southWestLon ?? '—';
     const mapUrl = (lat!=='—' && lon!=='—')
         ? `map_render.html?southWestLat=${parseFloat(lat).toFixed(2)}&southWestLon=${parseFloat(lon).toFixed(2)}&deg=0.1`
         : null;
+    const homeUrl = d.home_station_url || S.homeStation || null;
     const details = [
         kv('Latitude',  lat),
         kv('Longitude', lon),
         d.umap_key  ? kv('UMAP key',  d.umap_key)  : '',
-        d.station   ? kv('Station',   d.station)   : '',
-        S.homeStation&&S.sourceTag==='swarm' ? kvRow('Station home', `<a href="${S.homeStation}" target="_blank" style="color:#99aaff">${S.homeStation}</a>`) : '',
+        d.source    ? kv('Source',    d.source)     : '',
+        homeUrl&&S.sourceTag==='swarm' ? kvRow('Station home', `<a href="${homeUrl}" target="_blank" style="color:#99aaff">${homeUrl}</a>`) : '',
         mapUrl ? kvRow('Carte', `<a href="${mapUrl}" style="color:#99aaff">Voir sur UMAP →</a>`) : '',
-        kvRow('TODO API', '<span style="color:#888;font-size:11px">Ajouter <code>source</code>, <code>home_station_url</code>, <code>umap_key</code> à /api/myGPS</span>'),
     ].join('');
     setStep('gps','ok','✅ Localisé', details, null); return true;
 }
@@ -755,6 +816,8 @@ async function runAll() {
                        : `⚠️ ${passed}/${total} étapes réussies`;
     document.getElementById('btn-run').disabled = false;
     running = false;
+    /* Afficher la section upload si l'auth NIP-42 est validée */
+    if (S.authOk && S.npub) showUploadSection();
 }
 
 function resetAll() {
@@ -766,9 +829,104 @@ function resetAll() {
     });
     buildStepsHTML();
     document.getElementById('stations-section').style.display = 'none';
+    const uploadSec = document.getElementById('udrive-upload-section');
+    if (uploadSec) uploadSec.style.display = 'none';
+    _uploadFile = null;
     document.getElementById('global-status').textContent = 'En attente…';
     document.getElementById('btn-run').disabled = false;
     running = false;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   uDrive upload
+   ═══════════════════════════════════════════════════════════════ */
+let _uploadFile = null;
+
+function showUploadSection() {
+    const sec = document.getElementById('udrive-upload-section');
+    if (!sec) return;
+    sec.style.display = 'block';
+    const sub = document.getElementById('upload-sub-text');
+    if (sub && S.npub) {
+        const label = S.sourceTag === 'swarm' ? '🔵 Roaming' : '🟢 Local';
+        sub.textContent = `${label} · ${S.npub.slice(0,16)}… · Déposez une image dans votre espace IPFS personnel.`;
+    }
+}
+
+function previewFile(file) {
+    if (!file) return;
+    _uploadFile = file;
+    const prev = document.getElementById('upload-preview');
+    const nameEl = document.getElementById('upload-file-name');
+    const btn = document.getElementById('btn-do-upload');
+    if (nameEl) { nameEl.textContent = `${file.name} (${(file.size/1024).toFixed(1)} Ko)`; nameEl.style.display='block'; }
+    if (prev && file.type.startsWith('image/')) {
+        prev.src = URL.createObjectURL(file);
+        prev.style.display = 'block';
+    }
+    if (btn) btn.disabled = false;
+    document.getElementById('upload-result').style.display = 'none';
+    document.getElementById('drop-zone').classList.remove('drag-over');
+}
+
+function handleDrop(e) {
+    e.preventDefault();
+    document.getElementById('drop-zone').classList.remove('drag-over');
+    const file = e.dataTransfer?.files?.[0];
+    if (file) previewFile(file);
+}
+
+async function doUpload() {
+    if (!_uploadFile) return;
+    const btn = document.getElementById('btn-do-upload');
+    const progressEl = document.getElementById('upload-progress');
+    const barEl = document.getElementById('upload-bar');
+    const progressLabel = document.getElementById('upload-progress-label');
+    const resultEl = document.getElementById('upload-result');
+
+    btn.disabled = true;
+    progressEl.style.display = 'block';
+    resultEl.style.display = 'none';
+    if (barEl) { barEl.style.width = '10%'; }
+    if (progressLabel) progressLabel.textContent = 'Envoi vers ' + new URL(S.upassportUrl).hostname + '…';
+
+    const form = new FormData();
+    form.append('file', _uploadFile);
+    if (S.npub) form.append('npub', S.npub);
+    form.append('type', 'media');
+
+    try {
+        if (barEl) barEl.style.width = '40%';
+        const r = await fetch(`${S.upassportUrl}/api/upload/image`, {
+            method: 'POST',
+            body: form,
+            signal: AbortSignal.timeout(30000),
+        });
+        if (barEl) barEl.style.width = '90%';
+        const data = await r.json();
+        if (barEl) barEl.style.width = '100%';
+
+        if (r.ok && data.url) {
+            resultEl.style.display = 'block';
+            resultEl.innerHTML = `✅ <strong>Média uploadé !</strong><br>
+                <a href="${data.url}" target="_blank">${data.url}</a><br>
+                ${data.ipfs_cid ? `CID: <code style="font-size:10px">${data.ipfs_cid}</code>` : ''}
+                ${data.storage ? `· Stockage: ${data.storage}` : ''}`;
+        } else {
+            resultEl.style.display = 'block';
+            resultEl.innerHTML = `❌ Erreur ${r.status}: ${data.detail || data.error || 'Upload échoué'}`;
+            resultEl.style.borderColor = 'rgba(220,53,69,0.3)';
+            resultEl.style.background = 'rgba(220,53,69,0.08)';
+        }
+    } catch(e) {
+        resultEl.style.display = 'block';
+        resultEl.innerHTML = `❌ Erreur réseau: ${e.message}`;
+        resultEl.style.borderColor = 'rgba(220,53,69,0.3)';
+        resultEl.style.background = 'rgba(220,53,69,0.08)';
+    } finally {
+        progressEl.style.display = 'none';
+        btn.disabled = false;
+    }
 }
 
 /* ═══════════════════════════════════════════════════════════════

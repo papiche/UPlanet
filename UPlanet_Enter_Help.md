@@ -41,9 +41,9 @@ C'est le système sanguin qui fait circuler la valeur.
 *   **Création de Valeur :** Vous gagnez **+1 Ẑen pour chaque "like"** sur vos publications. C'est une rémunération directe pour la qualité de vos contributions.
 *   **Financement des Services :** Les abonnements aux services (MULTIPASS à 1 Ẑen/semaine, ZenCard à 4 Ẑen/semaine) constituent le **chiffre d'affaires** de la coopérative. Ce revenu paie l'infrastructure (la "PAF" des hébergeurs) et le travail de maintenance des "Capitaines".
 
-#### **3. La Couche Coopérative : La SCIC, Moteur de l'Impact Réel**
+#### **3. La Couche Coopérative Hybrid€ : La SCIC, Moteur de l'Impact Réel**
 C'est le cerveau et le cœur du projet.
-*   **La SCIC CopyLaRadio :** Une Société Coopérative d'Intérêt Collectif où les membres sont les co-propriétaires. Elle assure la gouvernance démocratique et la gestion des fonds. ([Voir les statuts](https://pad.p2p.legal/s/CopyLaRadio#))
+*   **La SCIC CopyLaRadio :** Une Société Coopérative Hybrid€ d'Intérêt Collectif où les membres sont les co-propriétaires. Elle assure la gouvernance démocratique et la gestion des fonds. ([Voir les statuts](https://pad.p2p.legal/s/CopyLaRadio#))
 *   **Investissement dans le Réel :** C'est notre pacte fondateur. **L'intégralité des bénéfices nets** (ce qui reste après avoir payé l'infrastructure et la maintenance) est utilisée pour acheter des forêts et des terrains.
 *   **Le Capital à Double Impact :** Quand vous devenez sociétaire, votre apport ne fait pas que financer des serveurs. Il se transforme, via les bénéfices, en mètres carrés d'écosystèmes régénérés.
 

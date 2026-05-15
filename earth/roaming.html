@@ -160,7 +160,7 @@ code { background: rgba(255,255,255,0.08); padding: 1px 5px; border-radius: 4px;
 <div id="stations-section" style="display:none; margin-bottom: 32px;">
     <div class="section-title">🌐 Stations de la constellation <span class="count" id="stations-count"></span></div>
     <div class="station-list" id="station-list"><div class="stations-loading">Chargement…</div></div>
-    <div class="api-note" id="api-note" style="display:none;"></div>
+    <div id="api-note" style="display:none;"></div>
 </div>
 
 <!-- Upload uDrive section (shown when auth OK) -->
@@ -241,6 +241,15 @@ function detectURLs() {
 }
 function deriveUPassport() { return detectURLs().upassportUrl; }
 function deriveRelay()     { return detectURLs().relayUrl; }
+function extractStationBase(url) {
+    try {
+        const h = new URL(url).hostname;
+        for (const p of ['ipfs.', 'u.', 'relay.', 'astroport.']) {
+            if (h.startsWith(p)) return h.slice(p.length);
+        }
+        return h;
+    } catch(_) { return ''; }
+}
 function hexToNpub(hex) {
     try {
         const C='qpzry9x8gf2tvdw0s3jn54khce6mua7l',G=[0x3b6a57b2,0x26508e6d,0x1ea119fa,0x3d4233dd,0x2a1462b3];
@@ -298,7 +307,10 @@ const STEPS = [
       <br>A. Nom du fichier contient le pubkey hex (anti-confusion)
       <br>B. Âge &lt; 300s (anti-replay)
       <br>C. JSON interne contient le même pubkey (anti-falsification)
-      <br>L'endpoint <code>/api/myGPS</code> est utilisé comme test de l'accès protégé.`, run: stepVerify },
+      <br>L'endpoint <code>/api/myGPS</code> est utilisé comme test de l'accès protégé.
+      Retourne les coordonnées GPS de l'utilisateur (<code>0.00, 0.00</code> si non encore renseignées),
+      ainsi que les champs <code>source</code> (local/swarm) et <code>home_station_url</code>
+      pour le routage DM en cas de roaming.`, run: stepVerify },
     { id:'roaming',   icon:'🌍', num:7, title:'Détection roaming',
       desc:'SOURCE : local / swarm / amisOfAmis — profil éphémère + DM sync si swarm',
       explain:`<code>filter/22242.sh</code> classe l'utilisateur via <code>check_authorization</code> :
@@ -313,9 +325,10 @@ const STEPS = [
     { id:'gps',       icon:'🗺️', num:8, title:'Station home & coordonnées GPS',
       desc:'GET /api/myGPS → position UMAP + station d\'origine',
       explain:`<code>GET /api/myGPS?npub=…</code> (endpoint protégé NIP-42) retourne les coordonnées UMAP
-      de l'utilisateur et permet d'identifier sa station home dans la grille 0.01°×0.01°.
-      <br><strong>À enrichir (TODO API)</strong> : ajouter les champs <code>source</code> (local/swarm),
-      <code>home_station_url</code> et <code>umap_key</code> à la réponse pour un roaming entièrement transparent.`, run: stepGPS },
+      de l'utilisateur dans la grille 0.01°×0.01°.
+      Retourne <code>0.00, 0.00</code> si l'utilisateur n'a pas encore de GPS configuré.
+      Les champs <code>source</code> (local/swarm/amisOfAmis), <code>home_station_url</code>
+      et <code>umap_key</code> sont inclus pour un roaming entièrement transparent.`, run: stepGPS },
 ];
 
 /* ═══════════════════════════════════════════════════════════════
@@ -393,7 +406,7 @@ function renderConstellationStations() {
 
     list.innerHTML = stations.map(st => {
         const isCurrent = st.isCurrent;
-        const isHome    = !!(S.homeStation && st.uspot && (() => { try { return new URL(S.homeStation).hostname === new URL(st.uspot).hostname; } catch(_){return false;} })());
+        const isHome    = !!(S.homeStation && st.uspot && (() => { try { return extractStationBase(S.homeStation) === extractStationBase(st.uspot); } catch(_){return false;} })());
         const isPref    = !!(S.prefStation && st.uspot && (() => { try { return new URL(S.prefStation).hostname === new URL(st.uspot).hostname; } catch(_){return false;} })());
         const isUserHere = !!(userInNostr && (isCurrent || isHome));
 
@@ -411,10 +424,8 @@ function renderConstellationStations() {
             isUserHere? `<span class="sbadge sbadge-me">👤 VOUS</span>` : '',
         ].filter(Boolean).join('');
 
-        const mp  = st.nostrSlots !== undefined ? st.nostrSlots : '?';
-        const zc  = st.zcSlots    !== undefined ? st.zcSlots    : '?';
-        const paf = st.paf        !== undefined ? st.paf+'Ẑ/sem' : '?';
-        const disk = st.diskGb    !== undefined ? st.diskGb+'Go' : '';
+        const paf  = st.paf    ? st.paf+'Ẑ/sem' : '?';
+        const disk = st.diskGb ? Math.round(st.diskGb)+'Go' : '—';
         const relay = st.relay ? st.relay.replace(/^wss?:\/\//,'').replace(/:7777$/,'') : '';
 
         const joinUrl = st.uspot ? st.uspot.replace(':54321','').replace(':8080','') + '/g1' : '#';
@@ -428,10 +439,8 @@ function renderConstellationStations() {
             </div>
             <div class="station-badges">${badges}</div>
             <div class="station-caps">
-                <span title="Slots MULTIPASS">MP: ${mp}</span>
-                <span title="Slots ZenCard">ZC: ${zc}</span>
-                <span title="PAF">PAF: ${paf}</span>
-                ${disk ? `<span title="Disque">💾 ${disk}</span>` : ''}
+                <span title="PAF hebdomadaire">PAF: ${paf}</span>
+                <span title="Espace disque disponible">💾 ${disk}</span>
             </div>
             <div class="station-actions">
                 ${!isPref ? `<button class="btn-station btn-setpref" onclick="setPreferredStation('${st.uspot}')" title="Définir comme station préférée">⭐</button>` : ''}
@@ -440,15 +449,6 @@ function renderConstellationStations() {
         </div>`;
     }).join('');
 
-    /* API enrichment note */
-    const noteEl = document.getElementById('api-note');
-    if (noteEl) {
-        noteEl.style.display = 'block';
-        noteEl.innerHTML = `<strong>À enrichir côté API :</strong>
-        L'endpoint <code>GET /api/myGPS?npub=…</code> devrait retourner un champ <code>source</code> (local/swarm/amisOfAmis)
-        et <code>home_station_url</code> pour identifier automatiquement la station home sans passer par le profil NOSTR.
-        Aussi <code>GET /</code> pourrait inclure pour chaque user NOSTR son <code>UMAP_KEY</code> courant.`;
-    }
 }
 
 function parseSwarmStations(data) {
@@ -723,12 +723,12 @@ async function stepRoaming() {
         if (found) source = (found.SOURCE||'local').toLowerCase();
     }
 
-    /* Priority 3: profile website comparison */
+    /* Priority 3: profile website comparison (base domain, strips ipfs./u./relay. prefix) */
     if (!source && S.homeStation) {
         try {
-            const homeHost = new URL(S.homeStation).hostname;
-            const currHost = new URL(S.upassportUrl).hostname;
-            source = homeHost === currHost ? 'local' : 'swarm';
+            const homeBase = extractStationBase(S.homeStation);
+            const currBase = extractStationBase(S.upassportUrl);
+            if (homeBase && currBase) source = homeBase === currBase ? 'local' : 'swarm';
         } catch(_){}
     }
     if (!source) source = S.authOk ? 'local' : 'unknown';

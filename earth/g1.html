@@ -704,7 +704,7 @@ function sortByDistance() {
         return haversine(userLat,userLon,a.lat,a.lon)
               -haversine(userLat,userLon,b.lat,b.lon);
     });
-    const n=stations.find(s=>s.active&&s.nostrSlots>0)||stations[0];
+    const n=stations.find(s=>s.active)||stations[0];
     if(n) selectedUspot=n.uspot;
 }
 
@@ -797,9 +797,8 @@ function updateMapMarkers(primaryUspot) {
     valid.forEach(function(s) {
         const isPrimary  = s.uspot===primaryUspot;
         const isSelected = s.uspot===selectedUspot;
-        const color = !s.active    ? '#e67e22'
-                    : !s.nostrSlots ? '#c0392b'
-                    : isPrimary     ? '#b5860d'
+        const color = !s.active ? '#e67e22'
+                    : isPrimary ? '#b5860d'
                     : s.fromIpfs    ? '#9b59b6'
                     :                 '#3dba7e';
         const radius = isPrimary ? 11 : isSelected ? 9 : 7;
@@ -818,8 +817,8 @@ function updateMapMarkers(primaryUspot) {
                 <br><span style="color:#5a7080">${esc(s.relay||'—')}</span>
                 <hr style="margin:5px 0;border:none;border-top:1px solid #1e2d3a">
                 <div style="display:flex;gap:8px;flex-wrap:wrap">
-                    <span>NCARD: <b style="color:#3dba7e">${s.nostrSlots}</b></span>
-                    <span>ZCARD: ${s.zcSlots}</span>
+                    <span>MP: <b style="color:#3dba7e">${s.multipassCount}</b></span>
+                    <span>ZC: ${s.zencardCount}</span>
                     <span>PAF: ${s.paf}Ẑ</span>
                     <span style="color:${bilanInt>=0?'#3dba7e':'#c0392b'}">
                         ∆${bilanInt>0?'+':''}${s.bilan}Ẑ</span>
@@ -884,7 +883,7 @@ function renderStations(primaryUspot) {
     stations.forEach(function(s) {
         const isPrimary  = s.uspot===primaryUspot;
         const isSelected = s.uspot===selectedUspot;
-        const hasSlots   = s.nostrSlots>0;
+        const hasSlots   = s.active;
         const bilanInt   = parseInt(s.bilan)||0;
         const bilanStr   = (bilanInt>0?'+':'')+s.bilan;
 
@@ -931,7 +930,7 @@ function renderStations(primaryUspot) {
                     ${isPrimary ?'<span class="badge badge-star">★ LOCAL</span>'  :''}
                     ${s.fromIpfs?'<span class="badge badge-ipfs">⬡ IPFS</span>'   :''}
                     <span class="badge ${hasSlots?'badge-ok':'badge-none'}">
-                        ${s.nostrSlots} MP</span>
+                        ${s.multipassCount} MP</span>
                     ${bilanInt!==0
                         ?`<span class="${bilanInt>=0?'bilan-pos':'bilan-neg'}">∆${bilanStr}Ẑ</span>`
                         :''}
@@ -940,28 +939,20 @@ function renderStations(primaryUspot) {
 
             <div class="gauge-row">
                 <div class="gauge-item">
-                    <span class="gauge-label">NCARD (Nostr/IPFS/uDRIVE)</span>
-                    <span class="gauge-value ${s.nostrSlots>50?'hi':s.nostrSlots===0?'lo':''}">${s.nostrSlots}</span>
+                    <span class="gauge-label">MULTIPASS</span>
+                    <span class="gauge-value ${s.multipassCount>50?'hi':''}">${s.multipassCount}</span>
                 </div>
                 <div class="gauge-item">
-                    <span class="gauge-label">ZCARD (NextCloud)</span>
-                    <span class="gauge-value">${s.zcSlots}</span>
+                    <span class="gauge-label">ZENCARD</span>
+                    <span class="gauge-value">${s.zencardCount}</span>
                 </div>
                 <div class="gauge-item">
                     <span class="gauge-label">PAF Ẑ/SEM</span>
                     <span class="gauge-value">${s.paf}</span>
                 </div>
-                ${s.multipassCount?`<div class="gauge-item">
-                    <span class="gauge-label">ACTIFS MP</span>
-                    <span class="gauge-value">${s.multipassCount}</span>
-                </div>`:''}
-                ${s.zencardCount?`<div class="gauge-item">
-                    <span class="gauge-label">ACTIFS ZC</span>
-                    <span class="gauge-value">${s.zencardCount}</span>
-                </div>`:''}
                 ${s.diskGb?`<div class="gauge-item">
                     <span class="gauge-label">DISQUE</span>
-                    <span class="gauge-value">${Math.round(s.diskGb)} Go</span>
+                    <span class="gauge-value hi">${Math.round(s.diskGb)} Go</span>
                 </div>`:''}
             </div>
 
@@ -971,7 +962,7 @@ function renderStations(primaryUspot) {
             <div class="card-footer">
                 <span class="dist-display">${distStr}</span>
                 <button class="lever-btn ${isSelected?'engaged':''}"
-                    ${!hasSlots?'disabled title="AUCUN SLOT"':''}
+                    ${!hasSlots?'disabled title="STATION HORS LIGNE"':''}
                     onclick="selectAndRedirect('${esc(s.uspot)}')">
                     ${isSelected?'▶ SÉLECTIONNÉ':'▶ CHOISIR'}
                 </button>
@@ -1064,7 +1055,7 @@ window.loadSwarmStations = function() {
             stations=list;
             if (userLat!==null) sortByDistance();
 
-            const ac=list.filter(s=>s.active&&s.nostrSlots>0).length;
+            const ac=list.filter(s=>s.active).length;
             setStatus('connected', `${list.length} STATIONS · ${ac} AVEC SLOTS`);
 
             initMap();
@@ -1131,7 +1122,7 @@ function loadIpfsInsideView(gateway) {
                 p.g1swarm    = data.g1swarm   ||'';
             }
 
-            const ac=stations.filter(s=>s.active&&s.nostrSlots>0).length;
+            const ac=stations.filter(s=>s.active).length;
             setStatus('connected', `${stations.length} STATIONS · ${ac} AVEC SLOTS`);
             renderStations(window._primaryUspot||'');
 
@@ -1140,7 +1131,7 @@ function loadIpfsInsideView(gateway) {
         })
         .catch(function(err) {
             console.log('IPFS inside-view unavailable:', err);
-            const ac=stations.filter(s=>s.active&&s.nostrSlots>0).length;
+            const ac=stations.filter(s=>s.active).length;
             setStatus('connected', `${stations.length} STATIONS · ${ac} AVEC SLOTS`);
         });
 }

@@ -342,11 +342,11 @@
 
     function autoInjectUI() {
         if (isFeedbackPage()) return;
-        if (document.getElementById('uplanet-agpl-badge')) return; /* déjà injecté */
+        if (document.getElementById('uplanet-agpl-banner')) return; /* déjà injecté */
 
         const feedbackUrl = deriveFeedbackUrl();
 
-        /* Badge AGPL — coin haut-droit */
+        /* Bandeau AGPL — fin en haut de page, pleine largeur */
         /* Sélectionne le dépôt selon le contexte (UPassport vs earth/) */
         const _isUPassportRoute = (() => {
             try {
@@ -358,41 +358,40 @@
             ? 'https://github.com/papiche/UPassport'
             : 'https://github.com/papiche/UPlanet';
 
-        const badge = document.createElement('a');
-        badge.id    = 'uplanet-agpl-badge';
-        badge.href  = _repoUrl;
-        badge.target = '_blank';
-        badge.rel   = 'noopener noreferrer';
-        badge.title = 'Logiciel libre GNU AGPL v3 · Bien commun numérique\n📂 github.com/papiche/UPlanet\n📂 github.com/papiche/UPassport';
-        badge.innerHTML =
-            '<span style="font-size:14px;vertical-align:middle">©</span>' +
-            '<span style="margin-left:4px;vertical-align:middle">AGPL&nbsp;v3</span>' +
-            '<span style="display:block;font-size:9px;opacity:0.75;margin-top:1px;letter-spacing:0.03em">Bien Commun</span>';
+        const banner = document.createElement('div');
+        banner.id = 'uplanet-agpl-banner';
+        banner.innerHTML =
+            '<a href="' + _repoUrl + '" target="_blank" rel="noopener noreferrer" ' +
+            'title="Logiciel libre GNU AGPL v3 · Bien commun numérique\n📂 github.com/papiche/UPlanet\n📂 github.com/papiche/UPassport" ' +
+            'style="color:inherit;text-decoration:none;display:flex;align-items:center;gap:5px">' +
+            '<span style="font-size:10px">©</span>' +
+            '<span>AGPL&nbsp;v3</span>' +
+            '<span style="opacity:0.6">·</span>' +
+            '<span style="opacity:0.8;font-weight:400">Bien Commun Numérique</span>' +
+            '</a>';
 
-        const bs = badge.style;
-        bs.position       = 'fixed';
-        bs.top            = '6px';
-        bs.right          = '6px';
-        bs.zIndex         = '9990';
-        bs.background     = 'linear-gradient(135deg,rgba(102,126,234,0.82),rgba(118,75,162,0.82))';
-        bs.border         = '1px solid rgba(102,126,234,0.45)';
-        bs.borderRadius   = '9px';
-        bs.padding        = '4px 10px 4px 8px';
-        bs.color          = '#fff';
-        bs.fontSize       = '11px';
-        bs.fontWeight     = '600';
-        bs.lineHeight     = '1.35';
-        bs.textAlign      = 'center';
-        bs.textDecoration = 'none';
-        bs.boxShadow      = '0 2px 10px rgba(102,126,234,0.35)';
-        bs.backdropFilter = 'blur(6px)';
-        bs.fontFamily     = "system-ui,'Segoe UI',sans-serif";
-        bs.cursor         = 'pointer';
-        bs.opacity        = '0.82';
-        bs.transition     = 'opacity 0.2s,transform 0.2s';
+        const bs = banner.style;
+        bs.position        = 'fixed';
+        bs.top             = '0';
+        bs.left            = '0';
+        bs.right           = '0';
+        bs.height          = '22px';
+        bs.zIndex          = '9990';
+        bs.background      = 'linear-gradient(90deg,rgba(102,126,234,0.88),rgba(118,75,162,0.88))';
+        bs.borderBottom    = '1px solid rgba(102,126,234,0.35)';
+        bs.color           = '#fff';
+        bs.fontSize        = '10px';
+        bs.fontWeight      = '600';
+        bs.fontFamily      = "system-ui,'Segoe UI',sans-serif";
+        bs.display         = 'flex';
+        bs.alignItems      = 'center';
+        bs.justifyContent  = 'center';
+        bs.backdropFilter  = 'blur(6px)';
+        bs.letterSpacing   = '0.03em';
 
-        badge.addEventListener('mouseenter', () => { badge.style.opacity = '1'; badge.style.transform = 'translateY(-1px)'; });
-        badge.addEventListener('mouseleave', () => { badge.style.opacity = '0.82'; badge.style.transform = ''; });
+        /* Pousser le contenu sous le bandeau */
+        const currentPT = parseInt(window.getComputedStyle(document.body).paddingTop) || 0;
+        document.body.style.paddingTop = (currentPT + 22) + 'px';
 
         /* Bouton feedback — coin bas-droit (sauf si déjà présent dans le HTML) */
         const existingFb = document.querySelector('.btn-feedback-bottom, #uplanet-feedback-btn');
@@ -426,7 +425,7 @@
             document.body.appendChild(fbBtn);
         }
 
-        document.body.appendChild(badge);
+        document.body.insertBefore(banner, document.body.firstChild);
     }
 
     /* ── Init ────────────────────────────────────────────────────── */

@@ -1,0 +1,3006 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WoTx2 — Tableau de bord compétences</title>
+<link rel="icon" type="image/x-icon" href="favicon.ring.ico">
+<link rel="stylesheet" href="bootstrap.min.css">
+<link rel="stylesheet" href="fonts/bootstrap-icons.css">
+<link rel="stylesheet" href="minelife.css">
+<style>
+:root {
+    --accent: #059669;
+    --accent-light: #10b981;
+    --accent-dark: #047857;
+    --water-blue: #0ea5e9;
+    --water-dark: #0284c7;
+    --bg-main: linear-gradient(135deg, #0a1628 0%, #0d2b1e 40%, #0a1a2e 100%);
+    --card-bg: rgba(10, 30, 20, 0.92);
+    --card-border: rgba(5, 150, 105, 0.28);
+    --text-muted: #8ba098;
+    --input-bg: rgba(255,255,255,0.05);
+    --input-border: rgba(5,150,105,0.35);
+}
+
+* { box-sizing: border-box; }
+
+body {
+    margin: 0;
+    min-height: 100vh;
+    background: var(--bg-main);
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    color: #d1fae5;
+}
+
+/* ── TOP BAR ── */
+.topbar {
+    background: linear-gradient(90deg, rgba(5,150,105,0.25), rgba(14,165,233,0.15));
+    border-bottom: 1px solid var(--card-border);
+    padding: 10px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    backdrop-filter: blur(10px);
+}
+.topbar-title { font-weight: 700; font-size: 17px; color: var(--accent-light); flex: 1; min-width: 160px; }
+.topbar-title small { display: block; font-size: 10px; color: var(--text-muted); font-weight: 400; }
+#conn-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    border: 1px solid transparent;
+}
+#conn-badge.connected { background: rgba(5,150,105,0.2); border-color: var(--accent); color: #6ee7b7; }
+#conn-badge.disconnected { background: rgba(239,68,68,0.15); border-color: #ef4444; color: #fca5a5; }
+#btn-connect {
+    padding: 6px 14px;
+    background: linear-gradient(135deg, var(--accent), var(--water-blue));
+    border: none;
+    border-radius: 20px;
+    color: white;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.2s;
+}
+#btn-connect:hover { opacity: 0.85; }
+#user-name-badge {
+    font-size: 11px;
+    color: #6ee7b7;
+    background: rgba(5,150,105,0.15);
+    border-radius: 12px;
+    padding: 3px 10px;
+    display: none;
+}
+
+/* ── TABS ── */
+.nav-tabs {
+    border-bottom: 1px solid var(--card-border) !important;
+    padding: 0 12px;
+    background: rgba(0,0,0,0.25);
+}
+.nav-tabs .nav-link {
+    color: var(--text-muted);
+    border: none;
+    border-bottom: 2px solid transparent;
+    padding: 10px 14px;
+    font-size: 13px;
+    font-weight: 500;
+    background: none;
+    border-radius: 0;
+    transition: color 0.2s, border-color 0.2s;
+}
+.nav-tabs .nav-link:hover { color: var(--accent-light); }
+.nav-tabs .nav-link.active {
+    color: var(--accent-light) !important;
+    border-bottom-color: var(--accent) !important;
+    background: none !important;
+}
+.tab-content { padding: 16px 12px 40px; max-width: 860px; margin: 0 auto; }
+
+/* ── CARDS ── */
+.wcard {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 14px;
+    padding: 16px;
+    margin-bottom: 14px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+}
+.wcard-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--accent-light);
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+/* ── SKILL BADGES ── */
+.skill-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 0;
+    border-bottom: 1px solid rgba(5,150,105,0.1);
+    flex-wrap: wrap;
+}
+.skill-row:last-child { border-bottom: none; }
+.skill-name { font-size: 14px; font-weight: 600; flex: 1; min-width: 120px; color: #a7f3d0; }
+.level-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+}
+.level-x1 { background: rgba(5,150,105,0.2); border: 1px solid var(--accent); color: #6ee7b7; }
+.level-x2 { background: rgba(14,165,233,0.2); border: 1px solid var(--water-blue); color: #7dd3fc; }
+.level-x3 { background: rgba(168,85,247,0.2); border: 1px solid #a855f7; color: #d8b4fe; }
+.level-high { background: rgba(245,158,11,0.2); border: 1px solid #f59e0b; color: #fde68a; }
+
+.progress-bar-wrap { flex-basis: 100%; margin-top: 4px; }
+.progress { height: 4px; border-radius: 2px; background: rgba(255,255,255,0.07); }
+.progress-bar { background: linear-gradient(90deg, var(--accent), var(--water-blue)); }
+.skill-label { font-size: 10px; color: var(--text-muted); }
+.skill-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+
+/* ── BUTTONS ── */
+.btn-accent {
+    padding: 5px 12px;
+    background: linear-gradient(135deg, var(--accent-dark), var(--accent));
+    border: 1px solid var(--accent);
+    border-radius: 8px;
+    color: white;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+}
+.btn-accent:hover:not(:disabled) { background: linear-gradient(135deg, var(--accent), var(--accent-light)); box-shadow: 0 2px 8px rgba(5,150,105,0.4); }
+.btn-accent:disabled { opacity: 0.45; cursor: not-allowed; }
+.btn-blue {
+    padding: 5px 12px;
+    background: linear-gradient(135deg, var(--water-dark), var(--water-blue));
+    border: 1px solid var(--water-blue);
+    border-radius: 8px;
+    color: white;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.btn-blue:hover:not(:disabled) { opacity: 0.85; }
+.btn-blue:disabled { opacity: 0.45; cursor: not-allowed; }
+.btn-like {
+    padding: 4px 10px;
+    background: rgba(5,150,105,0.12);
+    border: 1px solid rgba(5,150,105,0.4);
+    border-radius: 20px;
+    color: #6ee7b7;
+    font-size: 12px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+.btn-like:hover { background: rgba(5,150,105,0.3); }
+
+/* ── CRAFTING GRID ── */
+.ingredients-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 12px 0;
+}
+.ingredient-card {
+    width: 82px;
+    height: 82px;
+    border-radius: 10px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    font-size: 10px;
+    text-align: center;
+    padding: 6px;
+    border: 1px solid;
+    transition: all 0.25s;
+    position: relative;
+    overflow: hidden;
+}
+.ingredient-card.ok {
+    background: rgba(5,150,105,0.18);
+    border-color: var(--accent);
+    color: #6ee7b7;
+}
+.ingredient-card.missing {
+    background: rgba(255,255,255,0.04);
+    border-color: rgba(255,255,255,0.12);
+    color: #6b7280;
+}
+.ingredient-card .ing-icon { font-size: 20px; line-height: 1; }
+.ingredient-card .ing-name { font-weight: 600; word-break: break-word; line-height: 1.2; }
+.ingredient-card .ing-lvl { font-size: 9px; opacity: 0.75; }
+
+@keyframes spark {
+    0% { transform: scale(1); }
+    30% { transform: scale(1.08); }
+    60% { transform: scale(0.96); }
+    100% { transform: scale(1); }
+}
+.spark-anim { animation: spark 0.45s ease; }
+
+@keyframes synthesize-glow {
+    0% { box-shadow: 0 0 0 rgba(5,150,105,0); }
+    50% { box-shadow: 0 0 24px rgba(5,150,105,0.7), 0 0 48px rgba(14,165,233,0.4); }
+    100% { box-shadow: 0 0 0 rgba(5,150,105,0); }
+}
+.synthesize-glow { animation: synthesize-glow 0.8s ease; }
+
+.btn-synth {
+    padding: 8px 20px;
+    background: linear-gradient(135deg, var(--accent), var(--water-blue));
+    border: none;
+    border-radius: 20px;
+    color: white;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.25s;
+    box-shadow: 0 2px 12px rgba(5,150,105,0.4);
+}
+.btn-synth:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 4px 20px rgba(5,150,105,0.6); }
+.btn-synth:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+.btn-synth.eligible { background: linear-gradient(135deg, #059669, #0ea5e9); animation: pulse-green 2s infinite; }
+
+@keyframes pulse-green {
+    0%, 100% { box-shadow: 0 2px 12px rgba(5,150,105,0.5); }
+    50% { box-shadow: 0 4px 24px rgba(5,150,105,0.9), 0 0 16px rgba(14,165,233,0.5); }
+}
+
+/* ── QR / SHARE ── */
+.qr-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    padding: 20px;
+    background: rgba(255,255,255,0.03);
+    border-radius: 12px;
+    border: 1px solid var(--card-border);
+}
+#qr-canvas {
+    border-radius: 8px;
+    background: white;
+    padding: 8px;
+}
+.qr-data-preview {
+    font-family: monospace;
+    font-size: 10px;
+    color: var(--text-muted);
+    word-break: break-all;
+    max-width: 100%;
+    text-align: center;
+}
+
+/* ── MODAL ── */
+.wmodal-backdrop {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.75);
+    z-index: 500;
+    align-items: center;
+    justify-content: center;
+}
+.wmodal-backdrop.show { display: flex; }
+.wmodal {
+    background: linear-gradient(135deg, #0d1f18, #0d1a2e);
+    border: 1px solid var(--card-border);
+    border-radius: 16px;
+    padding: 22px;
+    width: 100%;
+    max-width: 460px;
+    margin: 16px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.8);
+}
+.wmodal h5 { color: var(--accent-light); margin-bottom: 16px; font-weight: 700; }
+.wmodal label { font-size: 12px; color: var(--text-muted); display: block; margin-bottom: 4px; margin-top: 10px; }
+.wmodal input, .wmodal textarea {
+    width: 100%;
+    background: var(--input-bg);
+    border: 1px solid var(--input-border);
+    border-radius: 8px;
+    color: #d1fae5;
+    padding: 8px 12px;
+    font-size: 13px;
+    outline: none;
+    font-family: inherit;
+    resize: vertical;
+}
+.wmodal input:focus, .wmodal textarea:focus { border-color: var(--accent); }
+.wmodal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
+.btn-ghost {
+    padding: 7px 16px;
+    background: none;
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 8px;
+    color: #aaa;
+    font-size: 13px;
+    cursor: pointer;
+    transition: border-color 0.2s;
+}
+.btn-ghost:hover { border-color: rgba(255,255,255,0.35); }
+
+/* ── NOTIFICATION ── */
+.notif {
+    position: fixed;
+    bottom: 24px;
+    right: 16px;
+    padding: 10px 16px;
+    border-radius: 10px;
+    font-size: 13px;
+    font-weight: 600;
+    z-index: 9999;
+    transform: translateY(60px);
+    opacity: 0;
+    transition: all 0.3s;
+    max-width: 320px;
+    pointer-events: none;
+}
+.notif.show { transform: translateY(0); opacity: 1; }
+.notif.success { background: rgba(5,150,105,0.92); color: white; border: 1px solid var(--accent-light); }
+.notif.error { background: rgba(239,68,68,0.9); color: white; border: 1px solid #f87171; }
+.notif.warning { background: rgba(245,158,11,0.9); color: white; border: 1px solid #fcd34d; }
+.notif.info { background: rgba(14,165,233,0.9); color: white; border: 1px solid #7dd3fc; }
+
+/* ── MISC ── */
+.empty-state {
+    text-align: center;
+    padding: 40px 16px;
+    color: var(--text-muted);
+}
+.empty-state i { font-size: 36px; opacity: 0.35; display: block; margin-bottom: 10px; }
+.section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+.section-header h6 { color: var(--accent-light); margin: 0; font-size: 15px; font-weight: 700; }
+.loader-inline {
+    display: inline-block;
+    width: 14px; height: 14px;
+    border: 2px solid rgba(5,150,105,0.3);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    vertical-align: middle;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.peer-card {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid var(--card-border);
+    border-radius: 10px;
+    padding: 12px;
+    margin-bottom: 10px;
+}
+.peer-pubkey { font-family: monospace; font-size: 10px; color: var(--text-muted); word-break: break-all; }
+
+textarea.scan-input {
+    width: 100%;
+    min-height: 80px;
+    background: var(--input-bg);
+    border: 1px solid var(--input-border);
+    border-radius: 8px;
+    color: #d1fae5;
+    padding: 10px 12px;
+    font-size: 12px;
+    font-family: monospace;
+    outline: none;
+    resize: vertical;
+}
+textarea.scan-input:focus { border-color: var(--accent); }
+
+/* ── MINECRAFT ATELIER ────────────────────────────────────────────────── */
+:root {
+    --mc-marron: hsl(350, 20%, 22%);
+    --mc-wood: #6b4c11;
+    --mc-green: hsl(100, 70%, 88%);
+    --mc-slot-bg: rgba(12, 12, 12, 0.88);
+    --mc-yellow: #ffffa5;
+}
+.mc-panel {
+    background: linear-gradient(180deg, #3a3a3a 0%, #282828 100%);
+    border: 3px solid;
+    border-color: #aaa #555 #555 #aaa;
+    padding: 14px 16px 16px;
+    margin-bottom: 16px;
+    position: relative;
+}
+.mc-title {
+    font-family: 'Courier New', Courier, monospace;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--mc-yellow);
+    font-size: 13px;
+    text-shadow: 2px 2px 0 #333;
+    margin-bottom: 14px;
+    border-bottom: 2px solid #555;
+    padding-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.mc-badge-eligible {
+    margin-left: auto;
+    background: rgba(80,255,80,0.15);
+    border: 1px solid #5a5;
+    color: #8f8;
+    font-size: 10px;
+    padding: 2px 8px;
+    letter-spacing: 0.5px;
+}
+.mc-desc {
+    font-size: 11px;
+    color: #aaa;
+    margin-bottom: 12px;
+    font-family: 'Courier New', monospace;
+    border-left: 2px solid #555;
+    padding-left: 8px;
+}
+.mc-crafting-layout {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+.mc-grid {
+    display: grid;
+    gap: 2px;
+    background: #111;
+    border: 3px solid;
+    border-color: #555 #999 #999 #555;
+    padding: 4px;
+}
+.mc-grid.grid-2 { grid-template-columns: repeat(2, 64px); }
+.mc-grid.grid-3 { grid-template-columns: repeat(3, 64px); }
+.mc-grid.grid-4 { grid-template-columns: repeat(4, 64px); }
+.mc-slot {
+    width: 64px; height: 64px;
+    background: var(--mc-slot-bg);
+    border: 2px solid;
+    border-color: #555 #aaa #aaa #555;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    text-align: center;
+    padding: 4px;
+    cursor: default;
+    position: relative;
+    transition: border-color 0.15s, background 0.15s;
+}
+.mc-slot.ok    { border-color: #5a5 #393 #393 #5a5; background: rgba(0,80,0,0.35); }
+.mc-slot.miss  { border-color: #a55 #533 #533 #a55; background: rgba(60,0,0,0.28); }
+.mc-slot-icon  { font-size: 22px; line-height: 1; }
+.mc-slot-label { font-size: 8.5px; color: #ccc; margin-top: 2px; font-family: monospace; line-height: 1.1; }
+.mc-slot-badge {
+    position: absolute; bottom: 2px; right: 3px;
+    font-size: 8px; color: #aaa; font-family: monospace;
+    background: rgba(0,0,0,0.6); padding: 0 2px; border-radius: 2px;
+}
+.mc-slot.ok .mc-slot-badge   { color: #6f6; }
+.mc-slot.miss .mc-slot-badge { color: #f66; }
+.mc-arrow {
+    font-size: 28px; color: #888;
+    text-shadow: 2px 2px 0 #222;
+    padding: 0 4px; flex-shrink: 0;
+}
+.mc-result-slot {
+    width: 80px; height: 80px;
+    background: var(--mc-slot-bg);
+    border: 2px solid;
+    border-color: #555 #aaa #aaa #555;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    text-align: center;
+    padding: 6px;
+    position: relative;
+}
+.mc-result-slot.eligible {
+    border-color: #7b7 #5a5 #5a5 #7b7;
+    background: rgba(0,100,0,0.38);
+    animation: mc-glow 2s ease-in-out infinite;
+}
+@keyframes mc-glow {
+    0%, 100% { box-shadow: none; }
+    50% { box-shadow: 0 0 14px 4px rgba(80,255,80,0.3); }
+}
+.mc-result-icon  { font-size: 34px; line-height: 1; }
+.mc-result-label { font-size: 9px; color: var(--mc-yellow); margin-top: 4px; font-family: monospace; }
+.mc-synth-btn {
+    display: block;
+    margin: 12px auto 0;
+    padding: 7px 22px;
+    background: linear-gradient(180deg, #5a5 0%, #383 100%);
+    border: 2px solid;
+    border-color: #8e8 #353 #353 #8e8;
+    color: #fff;
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    cursor: pointer;
+    text-shadow: 1px 1px 0 #333;
+    transition: filter 0.15s;
+}
+.mc-synth-btn:hover:not(:disabled) { filter: brightness(1.2); }
+.mc-synth-btn:disabled {
+    background: linear-gradient(180deg, #666 0%, #444 100%);
+    border-color: #888 #333 #333 #888;
+    color: #888; cursor: not-allowed;
+}
+.mc-synth-btn.eligible { animation: mc-btn-pulse 2s ease-in-out infinite; }
+@keyframes mc-btn-pulse {
+    0%, 100% { text-shadow: 1px 1px 0 #333; }
+    50% { text-shadow: 1px 1px 0 #333, 0 0 10px var(--mc-green); }
+}
+
+/* ── TRAINING DOCS ─────────────────────────────────────────────────────── */
+.mc-docs-section {
+    margin-top: 12px;
+    border-top: 1px solid #444;
+    padding-top: 10px;
+}
+.mc-docs-label {
+    font-family: monospace; font-size: 10px; color: #888;
+    text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px;
+}
+.training-docs-list { display: flex; flex-direction: column; gap: 6px; }
+.doc-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 7px 10px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(5,150,105,0.18);
+    border-radius: 6px;
+    text-decoration: none; color: #a7f3d0;
+    font-size: 12px; transition: background 0.2s;
+}
+.doc-item:hover { background: rgba(5,150,105,0.12); color: #6ee7b7; }
+.doc-item-icon { font-size: 18px; flex-shrink: 0; }
+.doc-item-info { flex: 1; min-width: 0; }
+.doc-item-name  { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.doc-item-meta  { font-size: 10px; color: var(--text-muted); }
+.btn-add-doc {
+    padding: 4px 10px;
+    background: rgba(14,165,233,0.1);
+    border: 1px solid rgba(14,165,233,0.3);
+    border-radius: 6px; color: var(--water-blue);
+    font-size: 11px; cursor: pointer; transition: background 0.2s;
+}
+.btn-add-doc:hover { background: rgba(14,165,233,0.22); }
+
+/* ── BRO CHAT WIDGET ──────────────────────────────────────────────────── */
+.bro-widget {
+    background: linear-gradient(180deg, rgba(20,15,40,0.97) 0%, rgba(10,8,25,0.97) 100%);
+    border: 1px solid rgba(139,92,246,0.35);
+    border-radius: 10px;
+    overflow: hidden;
+    margin-top: 10px;
+}
+.bro-header {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 12px;
+    background: rgba(139,92,246,0.15);
+    border-bottom: 1px solid rgba(139,92,246,0.2);
+    font-size: 12px; font-weight: 700; color: #c4b5fd;
+    cursor: pointer;
+}
+.bro-header .bro-status {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: #6b7280; flex-shrink: 0;
+}
+.bro-header .bro-status.online { background: #10b981; box-shadow: 0 0 6px #10b981; }
+.bro-messages {
+    max-height: 220px; overflow-y: auto;
+    padding: 10px 12px;
+    display: flex; flex-direction: column; gap: 8px;
+}
+.bro-msg {
+    max-width: 85%; padding: 7px 11px;
+    border-radius: 10px; font-size: 12px; line-height: 1.5;
+    word-break: break-word;
+}
+.bro-msg.user {
+    align-self: flex-end;
+    background: rgba(5,150,105,0.22); border: 1px solid rgba(5,150,105,0.3);
+    color: #a7f3d0;
+}
+.bro-msg.node {
+    align-self: flex-start;
+    background: rgba(139,92,246,0.18); border: 1px solid rgba(139,92,246,0.3);
+    color: #e9d5ff;
+}
+.bro-msg.system { align-self: center; font-size: 10px; color: var(--text-muted); font-style: italic; }
+.bro-input-row {
+    display: flex; gap: 6px; padding: 8px 10px;
+    border-top: 1px solid rgba(139,92,246,0.15);
+    background: rgba(0,0,0,0.2);
+}
+.bro-input {
+    flex: 1; padding: 6px 10px;
+    background: rgba(255,255,255,0.05); border: 1px solid rgba(139,92,246,0.25);
+    border-radius: 8px; color: #e9d5ff; font-size: 12px; outline: none;
+}
+.bro-input:focus { border-color: rgba(139,92,246,0.6); }
+.bro-send {
+    padding: 6px 12px;
+    background: linear-gradient(135deg, #7c3aed, #6d28d9);
+    border: 1px solid #7c3aed; border-radius: 8px;
+    color: white; font-size: 12px; cursor: pointer; transition: filter 0.15s;
+}
+.bro-send:hover:not(:disabled) { filter: brightness(1.15); }
+.bro-send:disabled { opacity: 0.4; cursor: not-allowed; }
+.bro-quick-btns { display: flex; flex-wrap: wrap; gap: 5px; padding: 0 10px 8px; }
+.bro-quick {
+    padding: 3px 9px; font-size: 10px;
+    background: rgba(139,92,246,0.1); border: 1px solid rgba(139,92,246,0.25);
+    border-radius: 12px; color: #c4b5fd; cursor: pointer; transition: background 0.15s;
+}
+.bro-quick:hover { background: rgba(139,92,246,0.25); }
+
+/* ── FORMATION TAB ─────────────────────────────────────────────────────── */
+.formation-skill-card {
+    background: var(--card-bg); border: 1px solid var(--card-border);
+    border-radius: 12px; padding: 14px; margin-bottom: 12px;
+}
+.formation-skill-header {
+    display: flex; align-items: center; gap: 10px;
+    margin-bottom: 10px; cursor: pointer;
+}
+.formation-skill-emoji { font-size: 26px; }
+.formation-skill-name { font-size: 14px; font-weight: 700; color: var(--accent-light); flex: 1; }
+.formation-skill-toggle { font-size: 12px; color: var(--text-muted); }
+.formation-skill-body { display: none; }
+.formation-skill-body.open { display: block; }
+.add-doc-form {
+    display: flex; gap: 8px; flex-wrap: wrap;
+    margin-top: 10px; padding-top: 10px;
+    border-top: 1px solid rgba(5,150,105,0.12);
+}
+.add-doc-form input {
+    flex: 1; min-width: 160px;
+    padding: 5px 10px;
+    background: var(--input-bg); border: 1px solid var(--input-border);
+    border-radius: 6px; color: #d1fae5;
+    font-size: 12px; outline: none;
+}
+.add-doc-form input:focus { border-color: var(--accent); }
+
+/* ── MEDIA BROWSER ──────────────────────────────────────────────────────── */
+.media-browser-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 12px;
+    background: rgba(255,255,255,0.04); border-radius: 8px;
+    border: 1px solid rgba(255,255,255,0.07);
+    cursor: pointer; transition: background 0.15s;
+}
+.media-browser-item:hover { background: rgba(99,102,241,0.15); border-color: rgba(99,102,241,0.4); }
+.media-browser-icon { font-size: 26px; flex-shrink: 0; }
+.media-browser-info { flex: 1; min-width: 0; }
+.media-browser-title { font-size: 13px; font-weight: 600; color: #d1fae5; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.media-browser-meta { font-size: 11px; color: var(--text-muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.media-browser-pick {
+    flex-shrink: 0; width: 28px; height: 28px;
+    background: rgba(5,150,105,0.2); border: 1px solid rgba(5,150,105,0.4);
+    border-radius: 50%; color: #6ee7b7; font-size: 16px; font-weight: 700;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    transition: background 0.15s;
+}
+.media-browser-item:hover .media-browser-pick { background: rgba(5,150,105,0.45); }
+
+/* ── WYSIWYG CRAFT EDITOR ───────────────────────────────────────────────── */
+.wy-layout {
+    display: flex; min-height: 320px; flex: 1; overflow: hidden;
+}
+.wy-palette {
+    width: 185px; flex-shrink: 0; padding: 12px 10px; overflow-y: auto;
+    border-right: 1px solid var(--input-border); background: rgba(0,0,0,0.18);
+    display: flex; flex-direction: column; gap: 4px;
+}
+.wy-palette::-webkit-scrollbar { width: 4px; background: transparent; }
+.wy-palette::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
+.wy-palette-label {
+    font-size: 10px; font-weight: 700; color: var(--accent-light);
+    text-transform: uppercase; letter-spacing: 0.8px;
+    margin: 6px 0 4px;
+}
+.wy-palette-label:first-child { margin-top: 0; }
+.wy-chip {
+    display: flex; align-items: center; gap: 6px; padding: 5px 8px;
+    background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 6px; font-size: 12px; color: #d1fae5;
+    cursor: grab; user-select: none; transition: background 0.1s, border-color 0.1s;
+}
+.wy-chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wy-chip:hover { background: rgba(5,150,105,0.15); border-color: rgba(5,150,105,0.4); }
+.wy-chip:active { cursor: grabbing; opacity: 0.7; }
+.wy-chip-media { color: #a5b4fc; border-color: rgba(99,102,241,0.2); }
+.wy-chip-media:hover { background: rgba(99,102,241,0.15); border-color: rgba(99,102,241,0.4); }
+
+.wy-craft-center {
+    flex: 1; padding: 14px 16px;
+    display: flex; flex-direction: column; align-items: center;
+    justify-content: center; gap: 10px;
+}
+.wy-grid-row { display: flex; align-items: center; gap: 14px; }
+.wy-grid {
+    display: grid; grid-template-columns: repeat(3, 64px); gap: 3px;
+    background: #1a1008; padding: 3px;
+    border: 2px solid; border-color: #1a1008 #c8aa6e #c8aa6e #1a1008;
+}
+.wy-slot {
+    width: 64px; height: 64px; position: relative;
+    background: #2c2416; border: 2px solid;
+    border-color: #1a1008 #7a6240 #7a6240 #1a1008;
+    display: flex; flex-direction: column; align-items: center;
+    justify-content: center; overflow: hidden;
+    transition: background 0.1s, border-color 0.1s;
+}
+.wy-slot.filled { cursor: grab; border-color: #2a5a2a #5a9a5a #5a9a5a #2a5a2a; background: rgba(0,60,0,0.3); }
+.wy-slot.filled:active { cursor: grabbing; }
+.wy-slot.wy-over { background: rgba(200,170,110,0.25) !important; border-color: #c8aa6e !important; }
+.wy-slot-level {
+    position: absolute; top: 2px; right: 3px;
+    font-size: 9px; font-weight: 700; color: #f0c040;
+    font-family: 'Courier New', monospace;
+}
+.wy-slot-name {
+    font-size: 9px; color: #9afa9a; white-space: nowrap;
+    overflow: hidden; max-width: 60px; text-align: center;
+    font-family: 'Courier New', monospace;
+}
+.wy-slot-controls {
+    position: absolute; bottom: 2px; right: 2px;
+    display: none; gap: 2px;
+}
+.wy-slot.filled:hover .wy-slot-controls { display: flex; }
+.wy-slot-btn {
+    background: rgba(0,0,0,0.7); border: none; border-radius: 2px;
+    color: #f87171; font-size: 9px; padding: 1px 3px; cursor: pointer; line-height: 1;
+}
+.wy-level-btn {
+    background: rgba(0,0,0,0.7); border: none; border-radius: 2px;
+    color: #f0c040; font-size: 9px; padding: 1px 3px; cursor: pointer; line-height: 1;
+}
+.wy-arrow {
+    font-size: 28px; color: #c8aa6e;
+    text-shadow: 0 0 8px rgba(200,170,110,0.5); font-weight: 700; flex-shrink: 0;
+}
+.wy-result-preview {
+    width: 80px; height: 80px; flex-shrink: 0;
+    background: #2c2416; border: 3px solid;
+    border-color: #1a1008 #c8aa6e #c8aa6e #1a1008;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+}
+.wy-hint { font-size: 10px; color: var(--text-muted); text-align: center; }
+
+.wy-res-panel {
+    width: 220px; flex-shrink: 0; padding: 12px 10px;
+    border-left: 1px solid var(--input-border); background: rgba(0,0,0,0.18);
+    display: flex; flex-direction: column; gap: 5px; overflow-y: auto;
+}
+.wy-res-item {
+    display: flex; align-items: center; gap: 5px; padding: 5px 7px;
+    background: rgba(255,255,255,0.04); border-radius: 6px; font-size: 11px; color: #d1fae5;
+}
+.wy-res-zone {
+    border: 2px dashed rgba(5,150,105,0.35); border-radius: 8px;
+    padding: 14px 8px; text-align: center; font-size: 11px; color: var(--text-muted);
+    transition: background 0.15s, border-color 0.15s; cursor: default;
+    min-height: 56px; display: flex; align-items: center; justify-content: center;
+}
+.wy-res-zone.wy-over { background: rgba(5,150,105,0.12); border-color: var(--accent); color: var(--accent-light); }
+</style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div class="topbar">
+    <div class="topbar-title">
+        <span><i class="bi bi-hammer"></i> MineLife</span>
+        <small>WoTx2 — Compétences décentralisées</small>
+    </div>
+    <span id="user-name-badge"></span>
+    <span id="conn-badge" class="disconnected"><i class="bi bi-circle-fill" style="font-size:7px"></i> Déconnecté</span>
+    <button id="btn-edit-toggle" class="btn-ghost" onclick="toggleEditMode()" title="Mode édition des crafts" style="font-size:12px;padding:5px 12px;border:1px solid rgba(255,255,255,0.15)">
+        <i class="bi bi-pencil-square"></i> Éditer
+    </button>
+    <button id="btn-connect" onclick="handleConnect()"><i class="bi bi-plug-fill"></i> Connecter</button>
+    <a href="index.html" class="btn-ghost" style="font-size:12px; text-decoration:none; padding:5px 12px;">
+        <i class="bi bi-house"></i>
+    </a>
+</div>
+
+<!-- TABS -->
+<ul class="nav nav-tabs" id="mainTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="tab-skills-btn" data-bs-toggle="tab" data-bs-target="#tab-skills" type="button" role="tab">
+            <i class="bi bi-person-badge"></i> Mes Compétences
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="tab-craft-btn" data-bs-toggle="tab" data-bs-target="#tab-craft" type="button" role="tab" onclick="loadCraftingTab()">
+            <i class="bi bi-wrench-adjustable-circle"></i> Atelier
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="tab-share-btn" data-bs-toggle="tab" data-bs-target="#tab-share" type="button" role="tab" onclick="loadShareTab()">
+            <i class="bi bi-qr-code"></i> Partager
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="tab-explore-btn" data-bs-toggle="tab" data-bs-target="#tab-explore" type="button" role="tab" onclick="loadExploreTab()">
+            <i class="bi bi-compass"></i> Explorer
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="tab-formation-btn" data-bs-toggle="tab" data-bs-target="#tab-formation" type="button" role="tab" onclick="loadFormationTab()">
+            <i class="bi bi-book-half"></i> Formation
+        </button>
+    </li>
+</ul>
+
+<div class="tab-content">
+
+    <!-- TAB: MES COMPÉTENCES -->
+    <div class="tab-pane fade show active" id="tab-skills" role="tabpanel">
+        <div class="section-header">
+            <h6><i class="bi bi-person-badge-fill"></i> Mes Compétences WoTx2</h6>
+            <button class="btn-accent" onclick="loadMySkills()"><i class="bi bi-arrow-clockwise"></i> Actualiser</button>
+        </div>
+        <div id="skills-list">
+            <div class="empty-state">
+                <i class="bi bi-person-lock"></i>
+                <div>Connectez votre MULTIPASS NOSTR pour voir vos compétences.</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- TAB: ATELIER -->
+    <div class="tab-pane fade" id="tab-craft" role="tabpanel">
+        <div class="section-header">
+            <h6><i class="bi bi-boxes"></i> Atelier de Synthèse</h6>
+            <button class="btn-accent" onclick="loadCraftingTab(true)"><i class="bi bi-arrow-clockwise"></i> Actualiser</button>
+        </div>
+        <div id="crafting-list">
+            <div class="empty-state">
+                <i class="bi bi-box-seam"></i>
+                <div>Chargement des recettes composites…</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- TAB: PARTAGER -->
+    <div class="tab-pane fade" id="tab-share" role="tabpanel">
+        <h6 class="mb-3" style="color:var(--accent-light)"><i class="bi bi-share-fill"></i> Partager mon profil WoTx2</h6>
+
+        <div class="wcard">
+            <div class="wcard-title"><i class="bi bi-qr-code-scan"></i> Mon QR de compétences</div>
+            <div class="qr-container">
+                <canvas id="qr-canvas" width="200" height="200"></canvas>
+                <div class="qr-data-preview" id="qr-preview">—</div>
+                <button class="btn-accent" onclick="generateMyQR()"><i class="bi bi-arrow-clockwise"></i> Générer / Rafraîchir</button>
+            </div>
+        </div>
+
+        <div class="wcard">
+            <div class="wcard-title"><i class="bi bi-camera2"></i> Scanner un pair</div>
+            <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:6px">
+                Collez ici le JSON scanné depuis le QR d'un pair :
+            </label>
+            <textarea class="scan-input" id="scan-input" placeholder='{"type":"skill_swap","npub":"...","name":"...","skills":[...]}'></textarea>
+            <div style="display:flex;gap:8px;margin-top:8px;">
+                <button class="btn-accent" onclick="parsePeerQR()"><i class="bi bi-search"></i> Voir ce pair</button>
+                <button class="btn-ghost" onclick="document.getElementById('scan-input').value=''"><i class="bi bi-x"></i> Effacer</button>
+            </div>
+            <div id="peer-profile" style="margin-top:14px"></div>
+        </div>
+    </div>
+
+    <!-- TAB: EXPLORER -->
+    <div class="tab-pane fade" id="tab-explore" role="tabpanel">
+        <div class="section-header">
+            <h6><i class="bi bi-grid-3x3-gap-fill"></i> Permits disponibles</h6>
+            <button class="btn-accent" onclick="loadExploreTab(true)"><i class="bi bi-arrow-clockwise"></i> Actualiser</button>
+        </div>
+        <div id="explore-list">
+            <div class="empty-state">
+                <i class="bi bi-compass"></i>
+                <div>Chargement des permits NOSTR…</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- TAB: FORMATION -->
+    <div class="tab-pane fade" id="tab-formation" role="tabpanel">
+        <div class="section-header">
+            <h6><i class="bi bi-mortarboard-fill"></i> Ressources de Formation</h6>
+            <button class="btn-accent" onclick="loadFormationTab(true)"><i class="bi bi-arrow-clockwise"></i> Actualiser</button>
+        </div>
+        <div class="wcard" style="margin-bottom:14px;font-size:12px;color:var(--text-muted);line-height:1.6">
+            <i class="bi bi-info-circle" style="color:var(--water-blue)"></i>
+            Associez des ressources pédagogiques (IPFS, vidéos, PDF, liens) à chaque compétence.
+            Ces liens sont stockés dans les événements NOSTR Kind 30500 (<code>r</code> tags) et Kind 30504 (ressources de formation dédiées).
+        </div>
+        <div id="formation-list">
+            <div class="empty-state"><span class="loader-inline"></span> Chargement…</div>
+        </div>
+    </div>
+
+</div>
+
+<!-- MODAL: Éditeur de craft WYSIWYG (Kind 30500) -->
+<div id="modal-craft-editor" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.82);z-index:9100;align-items:flex-start;justify-content:center;overflow-y:auto;padding:12px 0">
+    <div style="background:var(--card-bg);border:1px solid var(--card-border);border-radius:14px;width:min(99vw,920px);display:flex;flex-direction:column;overflow:hidden;margin:auto;max-height:92vh">
+        <!-- Header -->
+        <div style="padding:11px 16px;border-bottom:1px solid var(--input-border);display:flex;align-items:center;gap:10px;background:rgba(0,0,0,0.3);flex-shrink:0">
+            <i class="bi bi-hammer" style="color:var(--accent-light);font-size:17px"></i>
+            <span id="craft-editor-title" style="font-weight:700;flex:1;font-size:14px">Nouveau craft</span>
+            <button class="btn-ghost" style="padding:3px 9px;font-size:13px" onclick="closeCraftEditor()"><i class="bi bi-x-lg"></i></button>
+        </div>
+        <!-- Identity row -->
+        <div style="padding:10px 14px;display:flex;gap:10px;align-items:center;border-bottom:1px solid rgba(255,255,255,0.05);flex-shrink:0">
+            <input type="hidden" id="ce-permit-id">
+            <input id="ce-icon" type="text" oninput="wyUpdateResult()" maxlength="4"
+                style="width:58px;text-align:center;font-size:26px;padding:3px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:8px;color:#fff;outline:none;flex-shrink:0"
+                placeholder="🔷" title="Icône">
+            <input id="ce-name" type="text" oninput="wyUpdateResult()"
+                style="flex:1;padding:7px 11px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:8px;color:#d1fae5;font-size:14px;outline:none;min-width:0"
+                placeholder="Nom du skill / permit">
+            <input id="ce-desc" type="text"
+                style="flex:1.2;padding:7px 11px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:8px;color:#a0aec0;font-size:12px;outline:none;min-width:0"
+                placeholder="Description (optionnelle)">
+        </div>
+        <!-- WYSIWYG main -->
+        <div class="wy-layout" style="overflow-y:auto;flex:1">
+            <!-- Left: Palette skills + médias -->
+            <div class="wy-palette">
+                <div class="wy-palette-label">Skills relay <span style="font-weight:400;opacity:0.6">(glisser →)</span></div>
+                <div id="wy-skill-chips"></div>
+                <div class="wy-palette-label" style="margin-top:10px">Mes médias</div>
+                <div id="wy-media-chips"></div>
+            </div>
+            <!-- Center: Craft grid -->
+            <div class="wy-craft-center">
+                <div class="wy-hint">Ingrédients — glisser depuis la palette</div>
+                <div class="wy-grid-row">
+                    <div class="wy-grid" id="wy-grid"></div>
+                    <div class="wy-arrow">⇒</div>
+                    <div class="wy-result-preview" id="wy-result" title="Résultat du craft">
+                        <div style="font-size:34px">🔷</div>
+                        <div style="font-size:10px;color:#d1fae5;text-align:center;margin-top:3px;max-width:70px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Skill</div>
+                    </div>
+                </div>
+                <div class="wy-hint">Double-clic sur un slot pour le vider · Hover pour changer le niveau</div>
+            </div>
+            <!-- Right: Resources -->
+            <div class="wy-res-panel">
+                <div class="wy-palette-label">Formations <span style="font-weight:400;opacity:0.6">(glisser ↓)</span></div>
+                <div id="wy-res-list"></div>
+                <div class="wy-res-zone" id="wy-res-zone"
+                     ondragover="wyDragOver(event)"
+                     ondragleave="wyDragLeave(event)"
+                     ondrop="wyResDrop(event)">
+                    📚 Déposez des médias ici
+                </div>
+                <button class="btn-ghost" style="font-size:11px;padding:4px 8px;margin-top:6px;width:100%;text-align:center"
+                    onclick="wyOpenMediaBrowserForEditor()">
+                    <i class="bi bi-collection-play"></i> Parcourir mes médias
+                </button>
+                <div style="font-size:10px;color:var(--text-muted);margin-top:6px;line-height:1.4">
+                    Tags <code>r</code> du Kind 30500. Visibles dans l'onglet Formation.
+                </div>
+            </div>
+        </div>
+        <!-- Actions -->
+        <div style="padding:10px 16px;display:flex;gap:10px;justify-content:flex-end;border-top:1px solid var(--input-border);flex-shrink:0;background:rgba(0,0,0,0.15)">
+            <button class="btn-ghost" onclick="closeCraftEditor()">Annuler</button>
+            <button class="btn-accent" onclick="saveCraftEditor()"><i class="bi bi-cloud-upload"></i> Publier sur relay</button>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL: Navigateur de médias publiés -->
+<div id="modal-media-browser" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9000;align-items:center;justify-content:center">
+    <div style="background:var(--card-bg);border:1px solid var(--input-border);border-radius:12px;width:min(96vw,640px);max-height:85vh;display:flex;flex-direction:column;overflow:hidden">
+        <div style="padding:14px 18px;border-bottom:1px solid var(--input-border);display:flex;align-items:center;gap:10px">
+            <i class="bi bi-collection-play" style="color:var(--accent-light);font-size:18px"></i>
+            <span style="font-weight:700;flex:1">Mes médias — <span id="media-browser-skill" style="color:var(--water-blue)"></span></span>
+            <button class="btn-ghost" style="padding:4px 10px;font-size:12px" onclick="closeMediaBrowser()"><i class="bi bi-x-lg"></i></button>
+        </div>
+        <div style="padding:10px 14px;font-size:11px;color:var(--text-muted);border-bottom:1px solid rgba(255,255,255,0.05)">
+            Cliquez sur un média pour le lier à la compétence comme ressource de formation (Kind 30504).
+            Sources : <code>webcam.html</code>, <code>ajouter_media.sh</code>, VOCALS.
+        </div>
+        <div id="media-browser-list" style="overflow-y:auto;flex:1;padding:10px 14px;display:flex;flex-direction:column;gap:6px"></div>
+    </div>
+</div>
+
+<!-- MODAL: Demande d'attestation (30501) -->
+<div class="wmodal-backdrop" id="modal-request">
+    <div class="wmodal">
+        <h5><i class="bi bi-send-plus"></i> Demande d'attestation</h5>
+        <input type="hidden" id="req-permit-id">
+        <input type="hidden" id="req-skill-tag">
+        <label>Permit</label>
+        <input type="text" id="req-permit-label" readonly style="opacity:0.6">
+        <label>Compétence</label>
+        <input type="text" id="req-skill-display" readonly style="opacity:0.6">
+        <label>Déclaration <span style="color:#f77">*</span></label>
+        <textarea id="req-statement" placeholder="Décrivez pourquoi vous méritez cette attestation…" rows="4"></textarea>
+        <label>Compétence demandée</label>
+        <input type="text" id="req-competency" placeholder="ex: installation Linux avancée">
+        <div class="wmodal-actions">
+            <button class="btn-ghost" onclick="closeModal('modal-request')">Annuler</button>
+            <button class="btn-accent" onclick="submitRequest()"><i class="bi bi-send"></i> Envoyer</button>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL: Attester un pair (30502) -->
+<div class="wmodal-backdrop" id="modal-attest">
+    <div class="wmodal">
+        <h5><i class="bi bi-patch-check"></i> Attester ce pair</h5>
+        <input type="hidden" id="attest-req-event-id">
+        <input type="hidden" id="attest-requester-npub">
+        <input type="hidden" id="attest-skill">
+        <label>Pair</label>
+        <input type="text" id="attest-peer-name" readonly style="opacity:0.6">
+        <label>Compétence attestée</label>
+        <input type="text" id="attest-skill-display" readonly style="opacity:0.6">
+        <div class="wmodal-actions">
+            <button class="btn-ghost" onclick="closeModal('modal-attest')">Annuler</button>
+            <button class="btn-accent" onclick="submitAttestation()"><i class="bi bi-patch-check-fill"></i> Attester</button>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL PORTEURS / DM ASPIRATION -->
+<div class="wmodal-backdrop" id="modal-holders">
+    <div class="wmodal" style="max-width:520px">
+        <h5>📩 Porteurs du skill — <span id="holders-skill-label"></span></h5>
+        <p style="font-size:12px;opacity:0.7;margin:-4px 0 12px">Contactez les porteurs pour organiser une session de craft.</p>
+        <div id="holders-list" style="max-height:300px;overflow-y:auto;display:flex;flex-direction:column;gap:8px"></div>
+        <div id="dm-compose" style="display:none;margin-top:12px">
+            <textarea id="dm-message" rows="3" placeholder="Votre message…"
+                style="width:100%;resize:vertical;background:rgba(255,255,255,0.05);border:1px solid var(--border);border-radius:6px;color:inherit;padding:8px;font-size:13px"></textarea>
+            <div class="wmodal-actions" style="margin-top:8px">
+                <button class="btn-ghost" onclick="document.getElementById('dm-compose').style.display='none'">Annuler</button>
+                <button class="btn-accent" id="dm-send-btn" onclick="sendPendingDM()"><i class="bi bi-send"></i> Envoyer</button>
+            </div>
+        </div>
+        <div class="wmodal-actions" style="margin-top:12px">
+            <button class="btn-ghost" onclick="closeModal('modal-holders')">Fermer</button>
+        </div>
+    </div>
+</div>
+
+<!-- BRO ASSISTANT FLOTTANT -->
+<div id="bro-float" style="
+    position:fixed;bottom:20px;right:18px;z-index:999;
+    width:340px;display:none;flex-direction:column;
+    box-shadow:0 8px 40px rgba(0,0,0,0.6);">
+    <div class="bro-widget" style="margin-top:0">
+        <div class="bro-header" onclick="toggleBroFloat()">
+            <div class="bro-status" id="bro-status-float"></div>
+            <span>🤖 BRO — Assistant NODE</span>
+            <span style="margin-left:auto;opacity:0.6;font-size:10px">✕ fermer</span>
+        </div>
+        <div class="bro-messages" id="bro-msgs-float">
+            <div class="bro-msg system">Connectez votre MULTIPASS pour chatter avec BRO.</div>
+        </div>
+        <div class="bro-quick-btns" id="bro-quick-float"></div>
+        <div class="bro-input-row">
+            <input class="bro-input" id="bro-input-float" placeholder="Posez une question…" onkeydown="if(event.key==='Enter')sendBroMsg('float')">
+            <button class="bro-send" id="bro-send-float" onclick="sendBroMsg('float')"><i class="bi bi-send-fill"></i></button>
+        </div>
+    </div>
+</div>
+<!-- bouton flottant pour ouvrir BRO -->
+<button id="bro-fab" onclick="toggleBroFloat()" style="
+    position:fixed;bottom:20px;right:18px;z-index:998;
+    width:52px;height:52px;border-radius:50%;
+    background:linear-gradient(135deg,#7c3aed,#6d28d9);
+    border:2px solid #9d5fff;color:white;font-size:20px;
+    box-shadow:0 4px 20px rgba(124,58,237,0.5);cursor:pointer;">
+    🤖
+</button>
+
+<!-- NOTIFICATION -->
+<div class="notif" id="notif"></div>
+
+<script src="nostr-tools.bundle.js"></script>
+<script src="bootstrap.bundle.min.js"></script>
+<script src="common.js"></script>
+<script src="minelife.js"></script>
+<script src="feedback.js"></script>
+<script>
+'use strict';
+
+// ── STATE ──────────────────────────────────────────────────────────────────
+
+const STATE = {
+    mySkills: {},       // { normalizedTag: { level, events:[], label } }
+    allPermits: [],     // Kind 30500 events
+    composites: [],     // subset of allPermits where tag t=composite
+    craftLoaded: false,
+    exploreLoaded: false,
+    shareLoaded: false,
+};
+
+// ── NOTIFICATIONS ──────────────────────────────────────────────────────────
+
+function notify(msg, type = 'info', duration = 3500) {
+    const el = document.getElementById('notif');
+    el.textContent = msg;
+    el.className = `notif show ${type}`;
+    clearTimeout(el._t);
+    el._t = setTimeout(() => { el.className = 'notif'; }, duration);
+}
+
+// ── CONNEXION ──────────────────────────────────────────────────────────────
+
+function updateConnectionUI() {
+    const badge = document.getElementById('conn-badge');
+    const btn = document.getElementById('btn-connect');
+    const nameBadge = document.getElementById('user-name-badge');
+    const connected = window.isNostrConnected && window.userPubkey;
+    badge.className = `${connected ? 'connected' : 'disconnected'}`;
+    badge.innerHTML = connected
+        ? '<i class="bi bi-circle-fill" style="font-size:7px"></i> Connecté'
+        : '<i class="bi bi-circle-fill" style="font-size:7px"></i> Déconnecté';
+    btn.style.display = connected ? 'none' : '';
+    if (connected) {
+        const hex = window.userPubkey;
+        const short = hex.slice(0, 8) + '…' + hex.slice(-4);
+        nameBadge.textContent = short;
+        nameBadge.style.display = '';
+        if (window.fetchUserMetadata) {
+            window.fetchUserMetadata(hex).then(meta => {
+                if (meta && meta.name) nameBadge.textContent = meta.name;
+            }).catch(() => {});
+        }
+    } else {
+        nameBadge.style.display = 'none';
+    }
+}
+
+async function handleConnect() {
+    if (typeof window.connectNostr === 'function') {
+        await window.connectNostr(false);
+        updateConnectionUI();
+        if (window.isNostrConnected && window.userPubkey) {
+            loadMySkills();
+        }
+    } else {
+        notify('common.js non chargé correctement.', 'error');
+    }
+}
+
+// ── HELPERS RELAY ──────────────────────────────────────────────────────────
+
+function fetchEvents(filter, timeout = 8000) {
+    return new Promise((resolve) => {
+        const relay = window.nostrRelay;
+        if (!relay) { resolve([]); return; }
+        const events = [];
+        let sub;
+        const done = () => { try { sub && sub.unsub && sub.unsub(); } catch(e) {} resolve(events); };
+        const timer = setTimeout(done, timeout);
+        try {
+            sub = relay.sub([filter]);
+            sub.on('event', e => events.push(e));
+            sub.on('eose', () => { clearTimeout(timer); done(); });
+        } catch(e) {
+            clearTimeout(timer);
+            resolve(events);
+        }
+    });
+}
+
+function getTagValue(event, tagName, index = 1) {
+    const t = event.tags.find(t => t[0] === tagName);
+    return t ? t[index] : null;
+}
+
+function getTagValues(event, tagName, index = 1) {
+    return event.tags.filter(t => t[0] === tagName).map(t => t[index] || '');
+}
+
+function normalizeSkill(tag) {
+    return (tag || '').normalize('NFD').replace(/[̀-ͯ]/g, '')
+        .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+}
+
+function levelLabel(n) {
+    if (n <= 1) return 'Débutant';
+    if (n === 2) return 'Confirmé';
+    if (n === 3) return 'Expert';
+    if (n === 4) return 'Maître';
+    return `Niveau ${n}`;
+}
+
+function levelBadgeClass(n) {
+    if (n === 1) return 'level-x1';
+    if (n === 2) return 'level-x2';
+    if (n === 3) return 'level-x3';
+    return 'level-high';
+}
+
+function progressPct(n) {
+    return Math.min(100, (n / 5) * 100);
+}
+
+// ── PARSER 30503 (agnostique format) ──────────────────────────────────────
+
+function parseAchievement(event) {
+    let skill = '', level = 1, holder_npub = '', is_composite = false, source_events = [];
+
+    const dTag = getTagValue(event, 'd');
+    const lTag = event.tags.find(t => t[0] === 'l' && t[2] === 'permit_type');
+    const levelTag = getTagValue(event, 'level');
+    const tTags = getTagValues(event, 't');
+
+    // holder: p tag (oracle) or pubkey (p2p/folk)
+    const pTag = getTagValue(event, 'p');
+    holder_npub = pTag || event.pubkey;
+
+    // skill tag
+    if (dTag) {
+        const m = dTag.match(/PERMIT_([A-Z0-9_]+?)_X\d+$/i);
+        if (m) skill = normalizeSkill(m[1].toLowerCase().replace(/_/g, '-'));
+        else skill = normalizeSkill(dTag);
+    } else if (lTag) {
+        const m = lTag[1].match(/PERMIT_([A-Z0-9_]+?)_X\d+$/i);
+        if (m) skill = normalizeSkill(m[1].toLowerCase().replace(/_/g, '-'));
+        else skill = normalizeSkill(lTag[1]);
+    } else if (tTags.length > 0) {
+        skill = tTags.find(t => t !== 'composite' && t !== 'wotx-review') || '';
+    }
+
+    // level
+    if (levelTag) {
+        level = parseInt(levelTag, 10) || 1;
+    } else if (dTag) {
+        const m = dTag.match(/_X(\d+)$/i);
+        if (m) level = parseInt(m[1], 10) || 1;
+    } else if (lTag && lTag[1]) {
+        const m = lTag[1].match(/_X(\d+)$/i);
+        if (m) level = parseInt(m[1], 10) || 1;
+    }
+
+    is_composite = tTags.includes('composite');
+    source_events = getTagValues(event, 'e');
+
+    return { skill, level, holder_npub, is_composite, source_events, event };
+}
+
+// ── VÉRIFICATION ÉLIGIBILITÉ COMPOSITE ────────────────────────────────────
+
+function checkCompositeEligibility(recipe, mySkills) {
+    const missing = [];
+    let eligible = true;
+    for (const ing of recipe) {
+        const norm = normalizeSkill(ing.skill);
+        const myLevel = (mySkills[norm] && mySkills[norm].level) || 0;
+        if (myLevel < (ing.min_level || 1)) {
+            eligible = false;
+            missing.push({ skill: norm, required: ing.min_level || 1, have: myLevel });
+        }
+    }
+    return { eligible, missing };
+}
+
+// ── CHARGER MES COMPÉTENCES (tab 1) ───────────────────────────────────────
+
+async function loadMySkills() {
+    const container = document.getElementById('skills-list');
+    if (!window.isNostrConnected || !window.userPubkey) {
+        container.innerHTML = `<div class="empty-state"><i class="bi bi-person-lock"></i><div>Connectez votre MULTIPASS NOSTR pour voir vos compétences.</div></div>`;
+        return;
+    }
+    container.innerHTML = `<div class="empty-state"><span class="loader-inline"></span> Chargement…</div>`;
+
+    const userHex = window.userPubkey;
+    let events = [];
+    try {
+        events = await fetchEvents({ authors: [userHex], kinds: [30503], limit: 200 });
+    } catch(e) {
+        container.innerHTML = `<div class="empty-state"><i class="bi bi-exclamation-triangle"></i><div>Erreur relay : ${e.message}</div></div>`;
+        return;
+    }
+
+    // Regrouper par skill, garder niveau max
+    const bySkill = {};
+    for (const ev of events) {
+        const parsed = parseAchievement(ev);
+        if (!parsed.skill) continue;
+        if (!bySkill[parsed.skill]) bySkill[parsed.skill] = { level: 0, events: [] };
+        bySkill[parsed.skill].events.push(parsed);
+        if (parsed.level > bySkill[parsed.skill].level) bySkill[parsed.skill].level = parsed.level;
+    }
+    STATE.mySkills = bySkill;
+
+    if (Object.keys(bySkill).length === 0) {
+        container.innerHTML = `<div class="empty-state"><i class="bi bi-award"></i><div>Aucune compétence trouvée.<br><small>Demandez votre première attestation via l'onglet Explorer.</small></div></div>`;
+        return;
+    }
+
+    const rows = Object.entries(bySkill).map(([skill, data]) => {
+        const lvl = data.level;
+        const badgeClass = levelBadgeClass(lvl);
+        const pct = progressPct(lvl);
+        const best = data.events.reduce((a, b) => (a.level >= b.level ? a : b), data.events[0]);
+        const bestId = best && best.event ? best.event.id : '';
+        const revokeBtn = bestId ? `
+            <button class="btn-ghost" style="color:#f44;border-color:rgba(255,68,68,0.35);font-size:10px;padding:3px 8px"
+                onclick="revokeSkill(${JSON.stringify(bestId)}, ${JSON.stringify(skill)})">
+                <i class="bi bi-x-circle"></i> Révoquer
+            </button>` : '';
+        return `
+        <div class="skill-row">
+            <div class="skill-name"><i class="bi bi-tag-fill" style="color:var(--accent)"></i> ${skill}</div>
+            <span class="level-badge ${badgeClass}">X${lvl} — ${levelLabel(lvl)}</span>
+            <div class="skill-actions">
+                <button class="btn-accent" onclick="openRequestModal('',${JSON.stringify(skill)},'')">
+                    <i class="bi bi-send-plus"></i> Demander attestation
+                </button>
+                <button class="btn-like" onclick="openLikeModal(${JSON.stringify(skill)})">
+                    <i class="bi bi-hand-thumbs-up"></i> +1 pair
+                </button>
+                ${revokeBtn}
+            </div>
+            <div class="progress-bar-wrap">
+                <div class="d-flex justify-content-between mb-1">
+                    <span class="skill-label">Progression : ${lvl}/5+</span>
+                    <span class="skill-label">${pct.toFixed(0)}%</span>
+                </div>
+                <div class="progress"><div class="progress-bar" style="width:${pct}%"></div></div>
+            </div>
+        </div>`;
+    }).join('');
+
+    container.innerHTML = `<div class="wcard">${rows}</div>`;
+}
+
+// ── ONGLET ATELIER (CRAFTING) ─────────────────────────────────────────────
+
+async function loadCraftingTab(force = false) {
+    if (STATE.craftLoaded && !force) return;
+    STATE.craftLoaded = true;
+    const container = document.getElementById('crafting-list');
+    container.innerHTML = `<div class="empty-state"><span class="loader-inline"></span> Chargement des recettes…</div>`;
+
+    if (!window.nostrRelay) {
+        container.innerHTML = `<div class="empty-state"><i class="bi bi-wifi-off"></i><div>Relay NOSTR non connecté.</div></div>`;
+        return;
+    }
+
+    let composites = [];
+    try {
+        const all = await fetchEvents({ kinds: [30500], '#t': ['composite'], limit: 100 });
+        composites = all;
+    } catch(e) {
+        container.innerHTML = `<div class="empty-state"><i class="bi bi-exclamation-triangle"></i><div>Erreur : ${e.message}</div></div>`;
+        return;
+    }
+
+    STATE.composites = composites;
+    // Alimenter le cache permit pour l'éditeur
+    composites.forEach(ev => { const d = getTagValue(ev, 'd'); if (d) _permitCache[d] = ev; });
+
+    const editBtn = _editMode
+        ? `<button class="btn-accent" style="margin-bottom:14px;width:100%" onclick="openCraftEditor()">
+            <i class="bi bi-plus-circle"></i> Nouveau craft
+           </button>` : '';
+
+    if (composites.length === 0) {
+        container.innerHTML = editBtn + `<div class="empty-state"><i class="bi bi-box-seam"></i><div>Aucune recette composite disponible sur ce relay.</div></div>`;
+        return;
+    }
+
+    container.innerHTML = editBtn + composites.map(ev => renderCraftCard(ev)).join('');
+}
+
+// ── SKILL EMOJIS ────────────────────────────────────────────────────────────
+
+const SKILL_ICONS = {
+    astroport:'🌐', linux:'🐧', bash:'⚡', python:'🐍',
+    docker:'🐳', dart:'🎯', flutter:'📱', nostr:'🔗',
+    ipfs:'🌀', git:'🌿', devops:'⚙️', mobile:'📲',
+    web3:'⛓️', music:'🎵', art:'🎨', video:'🎬',
+    photo:'📷', radio:'📻', rust:'🦀', golang:'🐹',
+    kubernetes:'☸️', ansible:'📋', yoga:'🧘', cuisine:'🍳',
+    'maitre-nageur':'🏊', 'astroport-operator':'🛸',
+    'mobile-web3':'📡', 'web3-captain':'🚀',
+};
+
+function getSkillEmoji(skill) {
+    if (!skill) return '🔷';
+    const k = skill.toLowerCase().replace(/ /g, '-');
+    if (SKILL_ICONS[k]) return SKILL_ICONS[k];
+    // Partial match
+    for (const [key, val] of Object.entries(SKILL_ICONS)) {
+        if (k.includes(key) || key.includes(k.split('-')[0])) return val;
+    }
+    return '🔷';
+}
+
+// ── DOC TYPE HELPER ──────────────────────────────────────────────────────────
+
+function docTypeIcon(type) {
+    if (!type) return '🔗';
+    const t = type.toLowerCase();
+    if (t.includes('video') || t.includes('mp4')) return '🎬';
+    if (t.includes('audio') || t.includes('mp3')) return '🎵';
+    if (t.includes('pdf') || t.includes('doc')) return '📄';
+    if (t.includes('image') || t.includes('img')) return '🖼️';
+    if (t.includes('ipfs')) return '🌀';
+    return '🔗';
+}
+
+function renderDocItem(url, type) {
+    const icon = docTypeIcon(type);
+    const label = url.length > 50 ? url.slice(0, 47) + '…' : url;
+    const typelabel = type || 'lien';
+    return `<a class="doc-item" href="${url}" target="_blank" rel="noopener">
+        <span class="doc-item-icon">${icon}</span>
+        <span class="doc-item-info">
+            <span class="doc-item-name">${label}</span>
+            <span class="doc-item-meta">${typelabel}</span>
+        </span>
+        <i class="bi bi-box-arrow-up-right" style="font-size:11px;opacity:0.6"></i>
+    </a>`;
+}
+
+// ── PARSE RECIPE ─────────────────────────────────────────────────────────────
+// Priorité : 1) metadata.recipe (legacy) 2) tags 'requires' (niveau explicite)
+//            3) tags 't' (fallback, niveau 1 supposé)
+// Convention de tag :
+//   ["requires", "linux", "1"]  → ingrédient formel avec niveau minimum
+//   ["t", "linux"]              → filtrage relay + classification (also added alongside 'requires')
+//   ["t", "permit"], ["t", "auto_proclaimed"], ...  → meta, exclus des ingrédients
+
+const _META_T = new Set(['permit', 'auto_proclaimed', 'composite', 'formation', 'training']);
+
+function parseRecipeFromPermit(ev) {
+    try {
+        const parsed = JSON.parse(ev.content || '{}');
+        if (parsed.metadata && Array.isArray(parsed.metadata.recipe) && parsed.metadata.recipe.length > 0) {
+            return parsed.metadata.recipe.map(r => ({ skill: normalizeSkill(r.skill), min_level: r.min_level || 1 }));
+        }
+    } catch(e) {}
+
+    const reqTags = (ev.tags || []).filter(t => t[0] === 'requires' && t[1]);
+    if (reqTags.length > 0) {
+        return reqTags.map(r => ({ skill: normalizeSkill(r[1]), min_level: parseInt(r[2], 10) || 1 }));
+    }
+
+    return (ev.tags || [])
+        .filter(t => t[0] === 't' && t[1] && !_META_T.has(t[1]))
+        .map(t => ({ skill: normalizeSkill(t[1]), min_level: 1 }));
+}
+
+// ── MINECRAFT CRAFT CARD ─────────────────────────────────────────────────────
+
+function renderCraftCard(ev) {
+    const dTag = getTagValue(ev, 'd') || ev.id.slice(0, 16);
+    let name = dTag, description = '';
+    try {
+        const c = JSON.parse(ev.content || '{}');
+        if (c.name) name = c.name;
+        if (c.description) description = c.description;
+    } catch(e) {}
+
+    const recipe = parseRecipeFromPermit(ev);
+    const { eligible, missing } = checkCompositeEligibility(recipe, STATE.mySkills);
+
+    // Résultat : skill tag from d-tag
+    const m = dTag.match(/PERMIT_([A-Z0-9_]+?)_X\d+$/i);
+    const resultSkill = m ? m[1].toLowerCase().replace(/_/g, '-') : dTag.toLowerCase().replace(/_/g, '-');
+
+    // Grille : max 3 colonnes sauf si >9 ingrédients
+    const cols = recipe.length <= 4 ? 2 : recipe.length <= 9 ? 3 : 4;
+
+    const slots = recipe.map(ing => {
+        const ok = !missing.find(mm => mm.skill === ing.skill);
+        const have = (STATE.mySkills[ing.skill] && STATE.mySkills[ing.skill].level) || 0;
+        return `<div class="mc-slot ${ok ? 'ok' : 'miss'}"
+                     title="${ing.skill} — requis X${ing.min_level}${ok ? ' ✓' : ' (manquant)'}">
+            <div class="mc-slot-icon">${getSkillEmoji(ing.skill)}</div>
+            <div class="mc-slot-label">${ing.skill}</div>
+            <div class="mc-slot-badge">${have}/${ing.min_level}</div>
+        </div>`;
+    }).join('');
+
+    // Training docs r-tags
+    const rTags = (ev.tags || []).filter(t => t[0] === 'r' && t[1]);
+    const docsHtml = rTags.length > 0 ? `
+        <div class="mc-docs-section">
+            <div class="mc-docs-label">📚 Formations liées</div>
+            <div class="training-docs-list">
+                ${rTags.map(t => renderDocItem(t[1], t[2])).join('')}
+            </div>
+        </div>` : '';
+
+    const synthId = 'synth-' + ev.id.slice(0, 12);
+    const cardId  = 'card-'  + ev.id.slice(0, 12);
+
+    const editActions = _editMode ? `
+        <div style="display:flex;gap:6px;margin-top:8px">
+            <button class="btn-ghost" style="font-size:11px;padding:4px 10px;color:#f0c040;border-color:rgba(240,192,64,0.4)"
+                onclick="openCraftEditor(${JSON.stringify(dTag)})">
+                <i class="bi bi-pencil"></i> Modifier
+            </button>
+            <button class="btn-ghost" style="font-size:11px;padding:4px 10px"
+                onclick="openBroForSkill(${JSON.stringify(resultSkill)})">
+                🤖 Aide BRO
+            </button>
+        </div>` : `
+        <button class="btn-ghost" style="font-size:10px;padding:3px 8px;margin-top:6px;opacity:0.6"
+            onclick="openBroForSkill(${JSON.stringify(resultSkill)})">🤖 BRO</button>`;
+
+    return `
+    <div class="mc-panel" id="${cardId}">
+        <div class="mc-title">
+            ${getSkillEmoji(resultSkill)} ${name}
+            ${eligible ? '<span class="mc-badge-eligible">★ ÉLIGIBLE</span>' : ''}
+        </div>
+        ${description ? `<div class="mc-desc">${description}</div>` : ''}
+        <div class="mc-crafting-layout">
+            <div class="mc-grid grid-${cols}" id="ing-${ev.id.slice(0,12)}">${slots}</div>
+            <div class="mc-arrow">⇒</div>
+            <div class="mc-result-slot ${eligible ? 'eligible' : ''}">
+                <div class="mc-result-icon">${getSkillEmoji(resultSkill)}</div>
+                <div class="mc-result-label">${name.slice(0,14)}</div>
+            </div>
+        </div>
+        <button id="${synthId}" class="mc-synth-btn ${eligible ? 'eligible' : ''}" ${eligible ? '' : 'disabled'}
+            onclick="synthesizeComposite(this,${JSON.stringify(ev.id)},${JSON.stringify(dTag)},${JSON.stringify(name)})">
+            ${eligible ? '▶ SYNTHÉTISER' : '✗ Ingrédients manquants'}
+        </button>
+        ${docsHtml}
+        ${editActions}
+    </div>`;
+}
+
+// ── SYNTHÈSE COMPOSITE ─────────────────────────────────────────────────────
+
+async function synthesizeComposite(btn, permitEventId, permitId, permitName) {
+    if (!window.isNostrConnected || !window.userPubkey) {
+        notify('Connectez votre MULTIPASS NOSTR.', 'error'); return;
+    }
+    btn.disabled = true;
+    btn.innerHTML = '<span class="loader-inline"></span> Synthèse…';
+
+    const permit = STATE.composites.find(e => e.id === permitEventId);
+    if (!permit) { notify('Permit introuvable.', 'error'); btn.disabled = false; return; }
+
+    const recipe = parseRecipeFromPermit(permit);
+    const { eligible } = checkCompositeEligibility(recipe, STATE.mySkills);
+    if (!eligible) { notify('Ingrédients insuffisants.', 'warning'); btn.disabled = false; return; }
+
+    // Collecter les IDs des 30503 source pour les e tags
+    const ingredientEventIds = [];
+    for (const ing of recipe) {
+        const skillData = STATE.mySkills[ing.skill];
+        if (skillData && skillData.events.length > 0) {
+            const best = skillData.events.reduce((a, b) => a.level >= b.level ? a : b, skillData.events[0]);
+            if (best.event && best.event.id) ingredientEventIds.push(best.event.id);
+        }
+    }
+
+    try {
+        const signed = await publishComposite(permit, permitId, ingredientEventIds);
+        if (signed) {
+            notify(`Composite "${permitName}" publié avec succès !`, 'success', 5000);
+            const cardId = 'card-' + permitEventId.slice(0,12);
+            const card = document.getElementById(cardId);
+            if (card) card.classList.add('synthesize-glow');
+            const ingGrid = document.getElementById('ing-' + permitEventId.slice(0,12));
+            if (ingGrid) {
+                ingGrid.querySelectorAll('.ingredient-card').forEach(c => c.classList.add('spark-anim'));
+            }
+            setTimeout(() => loadMySkills(), 2000);
+        }
+    } catch(e) {
+        notify('Erreur synthèse : ' + e.message, 'error');
+    }
+
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-stars"></i> Synthétiser !';
+}
+
+// ── ONGLET PARTAGER ────────────────────────────────────────────────────────
+
+async function loadShareTab() {
+    if (STATE.shareLoaded) return;
+    STATE.shareLoaded = true;
+    if (window.isNostrConnected && window.userPubkey) {
+        generateMyQR();
+    }
+}
+
+async function generateMyQR() {
+    const canvas = document.getElementById('qr-canvas');
+    const preview = document.getElementById('qr-preview');
+
+    if (!window.isNostrConnected || !window.userPubkey) {
+        notify('Connectez votre MULTIPASS pour générer le QR.', 'warning');
+        return;
+    }
+
+    const hex = window.userPubkey;
+    let npub = hex;
+    if (window.hexToNpub) { try { npub = window.hexToNpub(hex); } catch(e) {} }
+    else if (window.NostrTools && window.NostrTools.nip19) {
+        try { npub = window.NostrTools.nip19.npubEncode(hex); } catch(e) {}
+    }
+
+    let name = npub.slice(0, 16) + '…';
+    if (window.fetchUserMetadata) {
+        try { const m = await window.fetchUserMetadata(hex); if (m && m.name) name = m.name; } catch(e) {}
+    }
+
+    const skills = Object.entries(STATE.mySkills).map(([s, d]) => ({ skill: s, level: d.level }));
+    const data = JSON.stringify({ type: 'skill_swap', npub, name, skills });
+
+    preview.textContent = data.length > 80 ? data.slice(0, 80) + '…' : data;
+
+    drawQR(canvas, data);
+}
+
+function drawQR(canvas, text) {
+    const size = 200, ctx = canvas.getContext('2d');
+    ctx.fillStyle = 'white';
+    ctx.fillRect(0, 0, size, size);
+
+    // Simple QR visuel (matrice de modules) via NostrTools ou fallback texte
+    if (window.NostrTools && window.NostrTools.generateSecretKey) {
+        // nostr-tools ne fournit pas de QR, on utilise un fallback dessin hash visuel
+    }
+    // Fallback : afficher le texte encodé visuellement (QR simplifié non scannable)
+    // Pour un vrai QR, une lib QR serait nécessaire — on dessine un placeholder lisible
+    ctx.fillStyle = '#1a1a2e';
+    ctx.fillRect(8, 8, size-16, size-16);
+
+    // Indicateur visuel : blocs basés sur hash
+    const hash = simpleHash(text);
+    const modules = 10;
+    const cellSize = (size - 16) / modules;
+    ctx.fillStyle = '#059669';
+    for (let r = 0; r < modules; r++) {
+        for (let c = 0; c < modules; c++) {
+            if ((hash[(r * modules + c) % hash.length]) > 127) {
+                ctx.fillRect(8 + c * cellSize, 8 + r * cellSize, cellSize - 1, cellSize - 1);
+            }
+        }
+    }
+    // Coins QR
+    [[0,0],[0,7],[7,0]].forEach(([r,c]) => {
+        ctx.fillStyle = '#059669';
+        ctx.fillRect(8 + c * cellSize - 1, 8 + r * cellSize - 1, cellSize * 3 + 2, cellSize * 3 + 2);
+        ctx.fillStyle = '#0d2b1e';
+        ctx.fillRect(8 + c * cellSize + 2, 8 + r * cellSize + 2, cellSize * 3 - 4, cellSize * 3 - 4);
+        ctx.fillStyle = '#059669';
+        ctx.fillRect(8 + c * cellSize + 5, 8 + r * cellSize + 5, cellSize * 3 - 10, cellSize * 3 - 10);
+    });
+
+    ctx.fillStyle = '#6ee7b7';
+    ctx.font = '8px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('WoTx2 QR', size / 2, size - 4);
+}
+
+function simpleHash(str) {
+    const arr = [];
+    for (let i = 0; i < str.length; i++) arr.push(str.charCodeAt(i));
+    const out = new Uint8Array(64);
+    for (let i = 0; i < arr.length; i++) out[i % 64] ^= arr[i] * (i + 1);
+    return out;
+}
+
+function parsePeerQR() {
+    const raw = document.getElementById('scan-input').value.trim();
+    if (!raw) { notify('Collez d\'abord le JSON du pair.', 'warning'); return; }
+    let data;
+    try { data = JSON.parse(raw); } catch(e) { notify('JSON invalide.', 'error'); return; }
+    if (data.type !== 'skill_swap' || !data.npub) { notify('Format QR non reconnu.', 'error'); return; }
+
+    const skills = (data.skills || []).map(s =>
+        `<div class="skill-row"><div class="skill-name"><i class="bi bi-tag"></i> ${s.skill}</div>
+         <span class="level-badge ${levelBadgeClass(s.level)}">X${s.level} — ${levelLabel(s.level)}</span>
+         <div class="skill-actions">
+           <button class="btn-blue" onclick="openAttestModal('',${JSON.stringify(data.npub)},${JSON.stringify(s.skill)},${JSON.stringify(data.name||data.npub)})">
+             <i class="bi bi-patch-check"></i> Attester
+           </button>
+           <button class="btn-like" onclick="sendLikePeer(${JSON.stringify(data.npub)},${JSON.stringify(s.skill)})">
+             <i class="bi bi-hand-thumbs-up"></i> +1
+           </button>
+         </div></div>`
+    ).join('');
+
+    document.getElementById('peer-profile').innerHTML = `
+    <div class="peer-card">
+        <div style="font-weight:700;color:var(--accent-light);margin-bottom:6px">
+            <i class="bi bi-person-circle"></i> ${data.name || 'Pair'}
+        </div>
+        <div class="peer-pubkey">${data.npub}</div>
+        <div style="margin-top:10px">${skills || '<div style="color:var(--text-muted);font-size:13px">Aucune compétence déclarée.</div>'}</div>
+    </div>`;
+}
+
+// ── ONGLET EXPLORER ────────────────────────────────────────────────────────
+
+async function loadExploreTab(force = false) {
+    if (STATE.exploreLoaded && !force) return;
+    STATE.exploreLoaded = true;
+    const container = document.getElementById('explore-list');
+    container.innerHTML = `<div class="empty-state"><span class="loader-inline"></span> Chargement…</div>`;
+
+    if (!window.nostrRelay) {
+        container.innerHTML = `<div class="empty-state"><i class="bi bi-wifi-off"></i><div>Relay non connecté.</div></div>`;
+        return;
+    }
+
+    let permits = [];
+    try {
+        permits = await fetchEvents({ kinds: [30500], limit: 150 });
+        STATE.allPermits = permits;
+    } catch(e) {
+        container.innerHTML = `<div class="empty-state"><i class="bi bi-exclamation-triangle"></i><div>Erreur : ${e.message}</div></div>`;
+        return;
+    }
+
+    if (permits.length === 0) {
+        container.innerHTML = `<div class="empty-state"><i class="bi bi-inbox"></i><div>Aucun permit Kind 30500 trouvé sur ce relay.</div></div>`;
+        return;
+    }
+
+    // Optionnel : fetch depuis l'API UPassport
+    if (window.NostrState && window.NostrState.upassportUrl) {
+        try {
+            const resp = await fetch(window.NostrState.upassportUrl + '/api/permit/definitions', { signal: AbortSignal.timeout(4000) });
+            if (resp.ok) {
+                const apiPermits = await resp.json();
+                if (Array.isArray(apiPermits) && apiPermits.length > 0) {
+                    // Fusionner (priorité NOSTR, compléter avec API)
+                    for (const p of apiPermits) {
+                        if (!permits.find(e => getTagValue(e,'d') === p.id)) {
+                            permits.push({ id: p.id, tags: [['d',p.id],['t',p.skill||'']].concat(p.composite?[['t','composite']]:[]), content: JSON.stringify(p), pubkey: '', created_at: 0, _api: true });
+                        }
+                    }
+                }
+            }
+        } catch(e) {}
+    }
+
+    container.innerHTML = permits.map(ev => renderExploreCard(ev)).join('');
+}
+
+function renderExploreCard(ev) {
+    const dTag = getTagValue(ev, 'd') || (ev.id && ev.id.slice(0,16)) || '';
+    const tTags = getTagValues(ev, 't');
+    const isComposite = tTags.includes('composite');
+    let name = dTag, description = '';
+    try {
+        const c = JSON.parse(ev.content || '{}');
+        if (c.name) name = c.name;
+        if (c.description) description = c.description;
+    } catch(e) {}
+
+    const skills = tTags.filter(t => t && t !== 'composite').map(t =>
+        `<span class="level-badge level-x1" style="margin:2px">${t}</span>`
+    ).join('');
+
+    return `
+    <div class="wcard">
+        <div class="wcard-title">
+            <i class="bi bi-${isComposite ? 'puzzle-fill' : 'award-fill'}"></i> ${name}
+            ${isComposite ? '<span class="level-badge level-x2" style="margin-left:auto">Composite</span>' : ''}
+        </div>
+        ${description ? `<div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">${description}</div>` : ''}
+        ${skills ? `<div style="margin-bottom:10px">${skills}</div>` : ''}
+        <div style="text-align:right">
+            <button class="btn-accent" onclick="openRequestModal(${JSON.stringify(dTag)}, ${JSON.stringify(tTags[0]||dTag)}, ${JSON.stringify(name)})">
+                <i class="bi bi-send-plus"></i> Demander attestation
+            </button>
+        </div>
+    </div>`;
+}
+
+// ── MODAL DEMANDE (30501) ──────────────────────────────────────────────────
+
+function openRequestModal(permitId, skillTag, permitName) {
+    document.getElementById('req-permit-id').value = permitId || '';
+    document.getElementById('req-skill-tag').value = skillTag || '';
+    document.getElementById('req-permit-label').value = permitName || permitId || '';
+    document.getElementById('req-skill-display').value = skillTag || '';
+    document.getElementById('req-statement').value = '';
+    document.getElementById('req-competency').value = '';
+    document.getElementById('modal-request').classList.add('show');
+}
+
+async function submitRequest() {
+    const permitId = document.getElementById('req-permit-id').value;
+    const skillTag = document.getElementById('req-skill-tag').value;
+    const statement = document.getElementById('req-statement').value.trim();
+    const competency = document.getElementById('req-competency').value.trim();
+
+    if (!statement) { notify('La déclaration est obligatoire.', 'warning'); return; }
+
+    closeModal('modal-request');
+    try {
+        await publishRequest(permitId, skillTag, statement, competency);
+        notify('Aspiration X1 publiée ! Vous pouvez contacter les porteurs.', 'success');
+        // Proposer de contacter les porteurs du skill (N² discovery)
+        showHoldersModal(skillTag);
+    } catch(e) {
+        notify('Erreur : ' + e.message, 'error');
+    }
+}
+
+// ── MODAL ATTEST (30502) ───────────────────────────────────────────────────
+
+function openAttestModal(reqEventId, requesterNpub, skill, peerName) {
+    document.getElementById('attest-req-event-id').value = reqEventId || '';
+    document.getElementById('attest-requester-npub').value = requesterNpub || '';
+    document.getElementById('attest-skill').value = skill || '';
+    document.getElementById('attest-peer-name').value = peerName || requesterNpub || '';
+    document.getElementById('attest-skill-display').value = skill || '';
+    document.getElementById('modal-attest').classList.add('show');
+}
+
+async function submitAttestation() {
+    const reqEventId = document.getElementById('attest-req-event-id').value;
+    const requesterNpub = document.getElementById('attest-requester-npub').value;
+    const skill = document.getElementById('attest-skill').value;
+
+    if (!requesterNpub) { notify('Pair non défini.', 'warning'); return; }
+    closeModal('modal-attest');
+
+    try {
+        await publishAttestation(reqEventId, requesterNpub, skill);
+        notify('Attestation publiée !', 'success');
+    } catch(e) {
+        notify('Erreur : ' + e.message, 'error');
+    }
+}
+
+function openLikeModal(skill) {
+    const peer = prompt('Pubkey hex du pair à liker pour "' + skill + '" :');
+    if (!peer || !peer.trim()) return;
+    sendLikePeer(peer.trim(), skill);
+}
+
+async function sendLikePeer(targetNpub, skill) {
+    try {
+        await publishLike('', targetNpub, skill);
+        notify('+1 envoyé pour ' + skill, 'success');
+    } catch(e) {
+        notify('Erreur : ' + e.message, 'error');
+    }
+}
+
+function closeModal(id) {
+    document.getElementById(id).classList.remove('show');
+}
+document.querySelectorAll('.wmodal-backdrop').forEach(el => {
+    el.addEventListener('click', e => { if (e.target === el) el.classList.remove('show'); });
+});
+
+// ── PORTEURS / DM (Aspiration X1 → N² discovery) ──────────────────────────
+
+let _dmTarget = null;
+
+async function showHoldersModal(skillTag) {
+    const label = document.getElementById('holders-skill-label');
+    const list = document.getElementById('holders-list');
+    const compose = document.getElementById('dm-compose');
+    label.textContent = skillTag;
+    list.innerHTML = '<span class="loader-inline"></span> Recherche des porteurs…';
+    compose.style.display = 'none';
+    _dmTarget = null;
+    document.getElementById('modal-holders').classList.add('show');
+
+    try {
+        const holders = await fetchEvents({ kinds: [30503], '#t': [normalizeSkill(skillTag)], limit: 80 });
+        const others = holders.filter(e => e.pubkey !== window.userPubkey);
+        if (others.length === 0) {
+            list.innerHTML = '<div class="empty-state" style="font-size:12px;padding:12px 0">Aucun porteur de ce skill sur ce relay.</div>';
+            return;
+        }
+        const byPubkey = {};
+        for (const ev of others) {
+            const parsed = parseAchievement(ev);
+            if (!byPubkey[ev.pubkey] || parsed.level > byPubkey[ev.pubkey].level) {
+                byPubkey[ev.pubkey] = { ...parsed, pubkey: ev.pubkey };
+            }
+        }
+        list.innerHTML = Object.values(byPubkey).map(h => {
+            const shortKey = h.pubkey.slice(0, 8) + '…' + h.pubkey.slice(-4);
+            return `<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:rgba(255,255,255,0.05);border-radius:6px">
+                <div style="flex:1">
+                    <div style="font-size:13px;font-weight:600">${getSkillEmoji(h.skill || skillTag)} ${h.skill || skillTag}</div>
+                    <div style="font-size:10px;opacity:0.5;font-family:monospace">${shortKey}</div>
+                    <span class="level-badge ${levelBadgeClass(h.level)}" style="font-size:10px">X${h.level}</span>
+                </div>
+                <button class="btn-accent" style="font-size:11px;padding:5px 12px;white-space:nowrap"
+                    onclick="prepareDM(${JSON.stringify(h.pubkey)}, ${JSON.stringify(skillTag)})">
+                    📩 DM
+                </button>
+            </div>`;
+        }).join('');
+    } catch(e) {
+        list.innerHTML = `<div class="empty-state" style="font-size:12px">Erreur : ${e.message}</div>`;
+    }
+}
+
+function prepareDM(targetHex, skill) {
+    _dmTarget = targetHex;
+    const ta = document.getElementById('dm-message');
+    ta.value = `Bonjour ! Je viens de déclarer mon aspiration pour le skill "${skill}". Seriez-vous disponible pour organiser une session de craft ?`;
+    document.getElementById('dm-compose').style.display = 'block';
+    ta.focus();
+}
+
+async function sendPendingDM() {
+    if (!_dmTarget) return;
+    const msg = document.getElementById('dm-message').value.trim();
+    if (!msg) { notify('Message vide.', 'warning'); return; }
+    if (!window.nostr || !window.nostr.nip04) {
+        notify('Extension NIP-04 requise pour les DMs chiffrés.', 'warning');
+        return;
+    }
+    const btn = document.getElementById('dm-send-btn');
+    btn.disabled = true;
+    try {
+        const cipher = await window.nostr.nip04.encrypt(_dmTarget, msg);
+        await requireSigned({ kind: 4, tags: [['p', _dmTarget]], content: cipher });
+        notify('Message envoyé !', 'success');
+        document.getElementById('dm-compose').style.display = 'none';
+        _dmTarget = null;
+    } catch(e) {
+        notify('Erreur DM : ' + e.message, 'error');
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+// ── RÉVOCATION (NIP-09 Kind 5) ─────────────────────────────────────────────
+
+async function revokeSkill(eventId, skillName) {
+    if (!confirm(`Révoquer le certificat "${skillName}" ?\n\nCette action est irréversible (Kind 5 NIP-09).`)) return;
+    try {
+        await requireSigned({ kind: 5, tags: [['e', eventId]], content: '' });
+        notify(`Certificat "${skillName}" révoqué.`, 'success');
+        setTimeout(() => loadMySkills(), 1500);
+    } catch(e) {
+        notify('Erreur révocation : ' + e.message, 'error');
+    }
+}
+
+// ── PUBLICATIONS NOSTR ─────────────────────────────────────────────────────
+
+async function requireSigned(event) {
+    if (!window.isNostrConnected || !window.userPubkey) throw new Error('Non connecté à NOSTR.');
+    const relay = window.nostrRelay;
+    if (!relay) throw new Error('Relay non disponible.');
+
+    event.pubkey = window.userPubkey;
+    event.created_at = Math.floor(Date.now() / 1000);
+
+    let signed;
+    if (typeof window.safeNostrSignEvent === 'function') {
+        signed = await window.safeNostrSignEvent(event);
+    } else if (window.nostr && typeof window.nostr.signEvent === 'function') {
+        signed = await window.nostr.signEvent(event);
+    } else {
+        throw new Error('Extension NIP-07 requise pour signer.');
+    }
+
+    const pub = relay.publish(signed);
+    const timeout = new Promise((_, rej) => setTimeout(() => rej(new Error('Timeout publish')), 8000));
+    try { await Promise.race([pub, timeout]); } catch(e) { if (e.message !== 'Timeout publish') throw e; }
+    return signed;
+}
+
+async function publishComposite(compositePermit, permitId, ingredientEventIds) {
+    const dTag = getTagValue(compositePermit, 'd') || permitId;
+    const tTags = getTagValues(compositePermit, 't');
+    const userHex = window.userPubkey;
+    let npub = userHex;
+    if (window.hexToNpub) { try { npub = window.hexToNpub(userHex); } catch(e) {} }
+
+    const tags = [
+        ['d', dTag],
+        ['t', tTags.find(t => t !== 'composite') || 'composite'],
+        ['t', 'composite'],
+        ['level', '1'],
+        ['p', npub],
+        ['expiration', String(Math.floor(Date.now() / 1000) + 3 * 365 * 24 * 3600)],
+    ];
+    ingredientEventIds.forEach(id => tags.push(['e', id]));
+
+    let name = dTag;
+    try { const c = JSON.parse(compositePermit.content || '{}'); if (c.name) name = c.name; } catch(e) {}
+
+    return requireSigned({
+        kind: 30503,
+        tags,
+        content: JSON.stringify({ id: dTag, name, composite: true, synthesized_at: new Date().toISOString() })
+    });
+}
+
+async function publishLike(targetEventId, targetNpub, skillTag) {
+    if (!window.userPubkey) throw new Error('Non connecté.');
+    if (targetNpub === window.userPubkey) throw new Error('Vous ne pouvez pas vous liker vous-même.');
+    const normalizedSkill = normalizeSkill(skillTag);
+    const tags = [
+        ['p', targetNpub],
+        ['t', 'wotx-review'],
+        ['t', normalizedSkill],
+        ['k', '30500'],
+    ];
+    if (targetEventId) tags.unshift(['e', targetEventId]);
+    return requireSigned({ kind: 7, tags, content: '+' });
+}
+
+async function publishRequest(permitId, skillTag, statement, requestedCompetency) {
+    const tags = [
+        ['t', normalizeSkill(skillTag)],
+    ];
+    if (permitId) {
+        tags.push(['l', permitId, 'permit_type']);
+        tags.push(['t', skillTag]);
+    }
+    return requireSigned({
+        kind: 30501,
+        tags,
+        content: JSON.stringify({
+            permit_definition_id: permitId,
+            statement,
+            requested_competency: requestedCompetency || skillTag
+        })
+    });
+}
+
+async function publishAttestation(requestEventId, requesterNpub, skillTag) {
+    const normSkill = normalizeSkill(skillTag);
+    const tags = [
+        ['p', requesterNpub],
+        ['t', normSkill],
+    ];
+    if (requestEventId) tags.unshift(['e', requestEventId]);
+    // Inclure le permit du pair attestateur (Règle B : credential auto-vérifiable)
+    const mySkillData = STATE && STATE.mySkills && STATE.mySkills[normSkill];
+    if (mySkillData && mySkillData.events.length > 0) {
+        const best = mySkillData.events.reduce((a, b) => (a.level >= b.level ? a : b), mySkillData.events[0]);
+        if (best && best.event) {
+            const pId = getTagValue(best.event, 'd') ||
+                ('PERMIT_' + normSkill.toUpperCase().replace(/-/g, '_') + '_X1');
+            tags.push(['l', pId, 'permit_type']);
+        }
+    }
+    return requireSigned({
+        kind: 30502,
+        tags,
+        content: JSON.stringify({ attested_skill: skillTag, attested_at: new Date().toISOString() })
+    });
+}
+
+// ── FORMATION TAB ───────────────────────────────────────────────────────────
+// Kind 30504 : ressource de formation
+// Tags : ["d","<id>"], ["t","<skill>"], ["r","<url>","<type>"], ["title","<titre>"]
+
+const _formationLoaded = { done: false };
+
+async function loadFormationTab(force = false) {
+    if (_formationLoaded.done && !force) return;
+    _formationLoaded.done = true;
+
+    const container = document.getElementById('formation-list');
+    container.innerHTML = `<div class="empty-state"><span class="loader-inline"></span> Chargement…</div>`;
+
+    if (!window.nostrRelay) {
+        container.innerHTML = `<div class="empty-state"><i class="bi bi-wifi-off"></i><div>Relay NOSTR non connecté.</div></div>`;
+        return;
+    }
+
+    // Fetch Kind 30500 (permit defs) + Kind 30504 (training resources)
+    let permits = [], trainings = [];
+    try {
+        [permits, trainings] = await Promise.all([
+            fetchEvents({ kinds: [30500], limit: 200 }),
+            fetchEvents({ kinds: [30504], limit: 300 }),
+        ]);
+    } catch(e) {
+        container.innerHTML = `<div class="empty-state"><i class="bi bi-exclamation-triangle"></i><div>Erreur : ${e.message}</div></div>`;
+        return;
+    }
+
+    // Regrouper par skill tag
+    const bySkill = {};
+
+    for (const ev of permits) {
+        const dTag = getTagValue(ev, 'd') || '';
+        const tTags = getTagValues(ev, 't').filter(t => t !== 'composite' && t !== 'permit' && t !== 'auto_proclaimed');
+        const rTags = (ev.tags || []).filter(t => t[0] === 'r' && t[1]);
+        const skill = tTags[0] || normalizeSkill(dTag.replace(/^PERMIT_/, '').replace(/_X\d+$/, '').toLowerCase().replace(/_/g, '-'));
+        if (!skill) continue;
+        if (!bySkill[skill]) bySkill[skill] = { permit: null, resources: [] };
+        if (!bySkill[skill].permit) bySkill[skill].permit = ev;
+        rTags.forEach(t => bySkill[skill].resources.push({ url: t[1], type: t[2] || 'lien', source: 'permit' }));
+    }
+
+    for (const ev of trainings) {
+        const tTags = getTagValues(ev, 't').filter(t => t !== 'training' && t !== 'formation');
+        const rTags = (ev.tags || []).filter(t => t[0] === 'r' && t[1]);
+        const titleTag = getTagValue(ev, 'title') || '';
+        let contentDesc = '';
+        try { contentDesc = JSON.parse(ev.content || '{}').description || titleTag || ''; } catch(e) {}
+        for (const skill of tTags) {
+            const norm = normalizeSkill(skill);
+            if (!bySkill[norm]) bySkill[norm] = { permit: null, resources: [] };
+            rTags.forEach(t => bySkill[norm].resources.push({
+                url: t[1], type: t[2] || 'lien', title: contentDesc, source: '30504', evId: ev.id
+            }));
+        }
+    }
+
+    const skills = Object.keys(bySkill).sort();
+    if (skills.length === 0) {
+        container.innerHTML = `<div class="empty-state"><i class="bi bi-mortarboard"></i><div>Aucun permit trouvé sur ce relay.</div></div>`;
+        return;
+    }
+
+    container.innerHTML = skills.map(skill => renderFormationCard(skill, bySkill[skill])).join('');
+}
+
+function renderFormationCard(skill, data) {
+    const emoji = getSkillEmoji(skill);
+    const id = 'fcard-' + skill.replace(/[^a-z0-9]/g, '');
+    const resources = data.resources;
+    const docList = resources.length > 0
+        ? `<div class="training-docs-list">${resources.map(r => renderDocItem(r.url, r.type)).join('')}</div>`
+        : `<div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">Aucune ressource liée à cette compétence.</div>`;
+
+    const connected = !!(window.isNostrConnected && window.userPubkey);
+    const addForm = connected ? `
+        <div class="add-doc-form">
+            <input type="url" id="doc-url-${id}" placeholder="https:// ou /ipfs/…" />
+            <select id="doc-type-${id}" style="padding:5px 8px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:6px;color:#d1fae5;font-size:12px;outline:none">
+                <option value="lien">Lien</option>
+                <option value="document">Document / PDF</option>
+                <option value="video">Vidéo</option>
+                <option value="audio">Audio</option>
+                <option value="image">Image</option>
+                <option value="cours">Cours / Tuto</option>
+            </select>
+            <button class="btn-add-doc" onclick="submitTrainingDoc('${skill}','${id}')">
+                <i class="bi bi-plus-circle"></i> Lier
+            </button>
+            <button class="btn-add-doc" style="background:rgba(99,102,241,0.25);border-color:rgba(99,102,241,0.5)"
+                onclick="openMediaBrowser('${skill}','${id}')" title="Choisir parmi vos médias publiés">
+                <i class="bi bi-collection-play"></i> Mes médias
+            </button>
+        </div>` : `<div style="font-size:11px;color:var(--text-muted);margin-top:6px">
+            <i class="bi bi-lock"></i> Connectez votre MULTIPASS pour ajouter des ressources.
+        </div>`;
+
+    return `
+    <div class="formation-skill-card">
+        <div class="formation-skill-header" onclick="toggleFormationCard('${id}')">
+            <span class="formation-skill-emoji">${emoji}</span>
+            <span class="formation-skill-name">${skill}</span>
+            <span style="font-size:11px;color:var(--text-muted)">${resources.length} ressource${resources.length !== 1 ? 's' : ''}</span>
+            <span class="formation-skill-toggle" id="toggle-${id}"><i class="bi bi-chevron-down"></i></span>
+        </div>
+        <div class="formation-skill-body" id="${id}">
+            ${docList}
+            <div class="mc-docs-label" style="margin-top:10px">Ajouter une ressource :</div>
+            ${addForm}
+        </div>
+    </div>`;
+}
+
+function toggleFormationCard(id) {
+    const body   = document.getElementById(id);
+    const toggle = document.getElementById('toggle-' + id);
+    if (!body) return;
+    const isOpen = body.classList.toggle('open');
+    if (toggle) toggle.innerHTML = isOpen
+        ? '<i class="bi bi-chevron-up"></i>'
+        : '<i class="bi bi-chevron-down"></i>';
+}
+
+async function submitTrainingDoc(skill, cardId) {
+    if (!window.isNostrConnected || !window.userPubkey) {
+        notify('Connectez votre MULTIPASS NOSTR.', 'error'); return;
+    }
+    const urlEl  = document.getElementById('doc-url-' + cardId);
+    const typeEl = document.getElementById('doc-type-' + cardId);
+    const url  = (urlEl && urlEl.value.trim()) || '';
+    const type = (typeEl && typeEl.value) || 'lien';
+    if (!url) { notify('URL requise.', 'warning'); return; }
+
+    const reqId = 'training_' + skill + '_' + Date.now();
+    const tags = [
+        ['d', reqId],
+        ['t', skill],
+        ['t', 'formation'],
+        ['r', url, type],
+    ];
+    const content = JSON.stringify({ description: 'Ressource formation ' + skill, skill, resource_url: url, resource_type: type });
+
+    try {
+        await requireSigned({ kind: 30504, tags, content });
+        notify('Ressource publiée sur le relay !', 'success');
+        if (urlEl) urlEl.value = '';
+        // Rafraîchir
+        _formationLoaded.done = false;
+        setTimeout(() => loadFormationTab(), 800);
+    } catch(e) {
+        notify('Erreur : ' + e.message, 'error');
+    }
+}
+
+// ── MODE ÉDITION ────────────────────────────────────────────────────────────
+// Permet de créer / modifier des crafts (Kind 30500) directement depuis le
+// navigateur, avec ingrédients et ressources multimédia en tags 'r'.
+
+let _editMode = false;
+
+function toggleEditMode() {
+    if (!window.isNostrConnected || !window.userPubkey) {
+        notify('Connectez votre MULTIPASS pour éditer.', 'warning'); return;
+    }
+    _editMode = !_editMode;
+    const btn = document.getElementById('btn-edit-toggle');
+    if (btn) {
+        btn.innerHTML = _editMode
+            ? '<i class="bi bi-eye"></i> Voir'
+            : '<i class="bi bi-pencil-square"></i> Éditer';
+        btn.style.color        = _editMode ? '#f0c040' : '';
+        btn.style.borderColor  = _editMode ? '#f0c040' : '';
+    }
+    document.body.classList.toggle('edit-mode', _editMode);
+    // Rafraîchir les onglets actifs
+    _atelierLoaded = false;
+    loadAtelierTab();
+    _formationLoaded.done = false;
+    loadFormationTab();
+    notify(_editMode ? '✏️ Mode édition activé — modifiez les crafts.' : '👁 Mode lecture.', 'info');
+}
+
+// ── WYSIWYG CRAFT EDITOR (Kind 30500) ───────────────────────────────────────
+// État WYSIWYG — slots 3×3 + resources + palette chargée depuis relay
+
+const WY = {
+    permitId:    '',
+    slots:       new Array(9).fill(null), // null | { skill, icon, level }
+    resources:   [],                      // { url, type }
+    skillPool:   [],                      // { skill, icon } chargé depuis relay
+    mediaPool:   [],                      // { url, type, label, icon }
+    dragPayload: null,                    // payload courant du drag
+};
+
+async function openCraftEditor(permitId) {
+    WY.permitId  = permitId || '';
+    WY.slots     = new Array(9).fill(null);
+    WY.resources = [];
+
+    if (permitId && _permitCache[permitId]) {
+        const ev   = _permitCache[permitId];
+        const tags = ev.tags || [];
+        let meta = {};
+        try { meta = JSON.parse(ev.content || '{}'); } catch(e) {}
+
+        const dVal = (tags.find(t => t[0] === 'd') || [])[1] || '';
+        const humanName = meta.name || dVal.replace(/^PERMIT_/, '').replace(/_X\d+$/, '').replace(/_/g, ' ');
+        document.getElementById('ce-icon').value = meta.icon || getSkillEmoji(humanName.toLowerCase().replace(/\s+/g,'-')) || '🔷';
+        document.getElementById('ce-name').value = humanName;
+        document.getElementById('ce-desc').value = meta.description || '';
+        document.getElementById('craft-editor-title').textContent = 'Modifier : ' + humanName;
+
+        parseRecipeFromPermit(ev).forEach((ing, i) => {
+            if (i < 9) WY.slots[i] = { skill: ing.skill, icon: getSkillEmoji(ing.skill), level: ing.min_level };
+        });
+        tags.filter(t => t[0] === 'r' && t[1]).forEach(t => WY.resources.push({ url: t[1], type: t[2] || 'lien' }));
+    } else {
+        document.getElementById('ce-icon').value = '🔷';
+        document.getElementById('ce-name').value = '';
+        document.getElementById('ce-desc').value = '';
+        document.getElementById('craft-editor-title').textContent = 'Nouveau craft';
+    }
+    document.getElementById('ce-permit-id').value = WY.permitId;
+
+    wyRenderGrid();
+    wyRenderResources();
+    wyUpdateResult();
+    document.getElementById('modal-craft-editor').style.display = 'flex';
+    wyLoadPalette(); // async, non-bloquant
+}
+
+// ── Rendu grille ──
+
+function wyRenderGrid() {
+    const grid = document.getElementById('wy-grid');
+    if (!grid) return;
+    grid.innerHTML = WY.slots.map((slot, i) => {
+        if (!slot) return `
+            <div class="wy-slot empty" id="wy-slot-${i}"
+                 ondragover="wyDragOver(event)"
+                 ondragleave="wyDragLeave(event)"
+                 ondrop="wySlotDrop(event,${i})"></div>`;
+        const esc = (s) => String(s).replace(/'/g, '&#39;').replace(/"/g, '&quot;');
+        return `
+            <div class="wy-slot filled" id="wy-slot-${i}"
+                 draggable="true"
+                 ondragstart="wySlotDragStart(event,${i})"
+                 ondragover="wyDragOver(event)"
+                 ondragleave="wyDragLeave(event)"
+                 ondrop="wySlotDrop(event,${i})"
+                 ondblclick="wySlotClear(${i})"
+                 title="${esc(slot.skill)} X${slot.level} — double-clic pour retirer">
+                <div style="font-size:25px;line-height:1">${slot.icon}</div>
+                <div class="wy-slot-name">${slot.skill}</div>
+                ${slot.level > 1 ? `<div class="wy-slot-level">X${slot.level}</div>` : ''}
+                <div class="wy-slot-controls">
+                    <button class="wy-level-btn" onclick="event.stopPropagation();wySlotLevel(${i},-1)" title="Niveau -">−</button>
+                    <button class="wy-level-btn" onclick="event.stopPropagation();wySlotLevel(${i},1)" title="Niveau +">+</button>
+                    <button class="wy-slot-btn"  onclick="event.stopPropagation();wySlotClear(${i})" title="Retirer">✕</button>
+                </div>
+            </div>`;
+    }).join('');
+}
+
+function wySlotClear(i) { WY.slots[i] = null; wyRenderGrid(); }
+
+function wySlotLevel(i, delta) {
+    if (!WY.slots[i]) return;
+    WY.slots[i].level = Math.max(1, (WY.slots[i].level || 1) + delta);
+    wyRenderGrid();
+}
+
+function wyUpdateResult() {
+    const icon = (document.getElementById('ce-icon').value || '🔷').trim();
+    const name = (document.getElementById('ce-name').value || 'Skill').trim();
+    const el   = document.getElementById('wy-result');
+    if (el) el.innerHTML = `<div style="font-size:34px;line-height:1">${icon}</div>
+        <div style="font-size:10px;color:#d1fae5;text-align:center;margin-top:4px;max-width:72px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${name}</div>`;
+}
+
+// ── Rendu ressources ──
+
+function wyRenderResources() {
+    const list = document.getElementById('wy-res-list');
+    if (!list) return;
+    list.innerHTML = WY.resources.map((r, i) => {
+        const icon  = docTypeIcon(r.type);
+        const label = r.url.length > 34 ? r.url.slice(0, 31) + '…' : r.url;
+        return `<div class="wy-res-item">
+            <span>${icon}</span>
+            <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.url}">${label}</span>
+            <span style="font-size:9px;color:var(--text-muted);flex-shrink:0">${r.type}</span>
+            <button class="btn-ghost" style="padding:1px 5px;font-size:10px;color:#f87171;flex-shrink:0" onclick="wyResRemove(${i})">✕</button>
+        </div>`;
+    }).join('');
+}
+
+function wyResAdd(url, type) {
+    if (!url || WY.resources.find(r => r.url === url)) return;
+    WY.resources.push({ url, type: type || 'lien' });
+    wyRenderResources();
+}
+
+function wyResRemove(i) { WY.resources.splice(i, 1); wyRenderResources(); }
+
+// ── Chargement palette depuis relay ──
+
+async function wyLoadPalette() {
+    const skillEl = document.getElementById('wy-skill-chips');
+    const mediaEl = document.getElementById('wy-media-chips');
+    if (!skillEl) return;
+
+    skillEl.innerHTML = '<div style="font-size:10px;color:var(--text-muted)">Chargement…</div>';
+    if (mediaEl) mediaEl.innerHTML = '<div style="font-size:10px;color:var(--text-muted)">Chargement…</div>';
+
+    if (!window.nostrRelay) {
+        skillEl.innerHTML = '<div style="font-size:10px;color:var(--text-muted)">Relay non connecté</div>';
+        return;
+    }
+
+    const [permits, certs] = await Promise.all([
+        fetchEvents({ kinds: [30500], limit: 200 }).catch(() => []),
+        window.userPubkey ? fetchEvents({ kinds: [30503], authors: [window.userPubkey], limit: 100 }).catch(() => []) : Promise.resolve([]),
+    ]);
+
+    const skillMap = new Map();
+    const addSkill = (s) => { const k = normalizeSkill(s); if (k && !_META_T.has(k)) skillMap.set(k, getSkillEmoji(k)); };
+    permits.forEach(ev => (ev.tags || []).filter(t => t[0] === 't' && t[1]).forEach(t => addSkill(t[1])));
+    permits.forEach(ev => (ev.tags || []).filter(t => t[0] === 'requires' && t[1]).forEach(t => addSkill(t[1])));
+    certs.forEach(ev => (ev.tags || []).filter(t => t[0] === 't' && t[1]).forEach(t => addSkill(t[1])));
+
+    WY.skillPool = Array.from(skillMap.entries()).sort((a,b) => a[0].localeCompare(b[0])).map(([skill, icon]) => ({ skill, icon }));
+
+    skillEl.innerHTML = WY.skillPool.length === 0
+        ? '<div style="font-size:10px;color:var(--text-muted)">Aucun skill</div>'
+        : WY.skillPool.map(s => {
+            const esc = s.skill.replace(/'/g,"&#39;").replace(/"/g,'&quot;');
+            const ico = s.icon.replace(/'/g,"&#39;");
+            return `<div class="wy-chip" draggable="true"
+                ondragstart="wySkillDragStart(event,'${esc}','${ico}')" title="${esc}">
+                ${s.icon} <span>${s.skill}</span></div>`;
+        }).join('');
+
+    // Médias
+    if (!window.userPubkey || !mediaEl) return;
+    const evs = await fetchEvents({ kinds: [21, 22, 1063, 1222, 30023], authors: [window.userPubkey], limit: 60 }).catch(() => []);
+    WY.mediaPool = evs.map(ev => {
+        const info = MEDIA_KINDS[ev.kind] || { label: 'Kind ' + ev.kind, icon: '📎', type: 'lien' };
+        const urlTag   = (ev.tags || []).find(t => t[0] === 'url' && t[1]);
+        const imetaTag = (ev.tags || []).find(t => t[0] === 'imeta');
+        let url = urlTag ? urlTag[1] : '';
+        if (!url && imetaTag) { const p = imetaTag.slice(1).find(p => p.startsWith('url ')); if (p) url = p.replace('url ','').trim(); }
+        const titleTag = (ev.tags || []).find(t => t[0] === 'title' || t[0] === 'subject');
+        let label = titleTag ? titleTag[1] : '';
+        if (!label) { try { const c = JSON.parse(ev.content||'{}'); label = c.title || c.description || ''; } catch(e){} }
+        return { url, type: info.type, label: label || info.label, icon: info.icon };
+    }).filter(m => m.url);
+
+    mediaEl.innerHTML = WY.mediaPool.length === 0
+        ? '<div style="font-size:10px;color:var(--text-muted)">Aucun média</div>'
+        : WY.mediaPool.map((m, i) => `
+            <div class="wy-chip wy-chip-media" draggable="true"
+                 ondragstart="wyMediaDragStart(event,${i})" title="${m.label}">
+                ${m.icon} <span>${m.label.slice(0, 22)}</span>
+            </div>`).join('');
+}
+
+// ── Drag & Drop ──
+
+function wyDragOver(ev) {
+    ev.preventDefault();
+    ev.dataTransfer.dropEffect = 'copy';
+    ev.currentTarget.classList.add('wy-over');
+}
+
+function wyDragLeave(ev) { ev.currentTarget.classList.remove('wy-over'); }
+
+function wySkillDragStart(ev, skill, icon) {
+    WY.dragPayload = { kind: 'skill', skill, icon };
+    ev.dataTransfer.setData('text/plain', skill);
+    ev.dataTransfer.effectAllowed = 'copy';
+}
+
+function wyMediaDragStart(ev, idx) {
+    const m = WY.mediaPool[idx];
+    if (!m) return;
+    WY.dragPayload = { kind: 'resource', url: m.url, type: m.type };
+    ev.dataTransfer.setData('text/plain', m.url);
+    ev.dataTransfer.effectAllowed = 'copy';
+}
+
+function wySlotDragStart(ev, i) {
+    const s = WY.slots[i];
+    if (!s) { ev.preventDefault(); return; }
+    WY.dragPayload = { kind: 'slot', skill: s.skill, icon: s.icon, level: s.level, fromSlot: i };
+    ev.dataTransfer.setData('text/plain', s.skill);
+    ev.dataTransfer.effectAllowed = 'move';
+}
+
+function wySlotDrop(ev, i) {
+    ev.preventDefault();
+    ev.currentTarget.classList.remove('wy-over');
+    const p = WY.dragPayload;
+    if (!p) return;
+
+    if (p.kind === 'skill') {
+        WY.slots[i] = { skill: p.skill, icon: p.icon, level: 1 };
+    } else if (p.kind === 'slot') {
+        if (p.fromSlot !== i) {
+            WY.slots[i] = { skill: p.skill, icon: p.icon, level: p.level };
+            WY.slots[p.fromSlot] = null;
+        }
+    } else if (p.kind === 'resource') {
+        wyResAdd(p.url, p.type); // ressource déposée sur slot → ajout aux formations
+    }
+    WY.dragPayload = null;
+    wyRenderGrid();
+}
+
+function wyResDrop(ev) {
+    ev.preventDefault();
+    ev.currentTarget.classList.remove('wy-over');
+    const p = WY.dragPayload;
+    if (p && p.kind === 'resource') wyResAdd(p.url, p.type);
+    WY.dragPayload = null;
+}
+
+// Ouvrir le navigateur de médias depuis l'éditeur
+function wyOpenMediaBrowserForEditor() {
+    _mediaBrowserSkill  = '__craft_editor__';
+    _mediaBrowserCardId = null;
+    const modal = document.getElementById('modal-media-browser');
+    const list  = document.getElementById('media-browser-list');
+    if (!modal) return;
+    document.getElementById('media-browser-skill').textContent = document.getElementById('ce-name').value || 'craft';
+    modal.style.display = 'flex';
+    list.innerHTML = `<div class="empty-state"><span class="loader-inline"></span></div>`;
+    if (!window.userPubkey || !window.nostrRelay) {
+        list.innerHTML = `<div class="empty-state">Connectez votre MULTIPASS.</div>`; return;
+    }
+    fetchEvents({ kinds: [21, 22, 1063, 1222, 30023], authors: [window.userPubkey], limit: 80 })
+        .then(evs => { list.innerHTML = evs.length === 0 ? `<div class="empty-state">Aucun média trouvé.</div>` : evs.map(ev => renderMediaBrowserItem(ev)).join(''); })
+        .catch(e  => { list.innerHTML = `<div class="empty-state">Erreur : ${e.message}</div>`; });
+}
+
+// renderMediaBrowserItem est la version standard (définie dans la section NAVIGATEUR MÉDIAS).
+// Elle appelle selectMediaItem() qui détecte le contexte via _mediaBrowserSkill.
+
+function closeCraftEditor() {
+    const m = document.getElementById('modal-craft-editor');
+    if (m) m.style.display = 'none';
+    WY.dragPayload = null;
+}
+
+async function saveCraftEditor() {
+    if (!window.isNostrConnected || !window.userPubkey) {
+        notify('Connectez votre MULTIPASS.', 'error'); return;
+    }
+    const icon = (document.getElementById('ce-icon').value || '🔷').trim();
+    const name = (document.getElementById('ce-name').value || '').trim();
+    const desc = (document.getElementById('ce-desc').value || '').trim();
+    if (!name) { notify('Le nom du skill est requis.', 'warning'); return; }
+
+    const normName = name.toUpperCase().replace(/[^A-Z0-9]/g, '_');
+    const dTag     = WY.permitId || 'PERMIT_' + normName + '_X1';
+    const skillTag = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+
+    const tags = [
+        ['d', dTag],
+        ['t', 'permit'],
+        ['t', 'auto_proclaimed'],
+        ['t', skillTag],
+    ];
+
+    // Ingrédients : 'requires' (niveau explicite) + 't' (filtrage relay)
+    WY.slots.filter(Boolean).forEach(s => {
+        const norm = s.skill.toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-|-$/g, '');
+        if (!norm) return;
+        tags.push(['requires', norm, String(s.level || 1)]);
+        if (!tags.find(t => t[0] === 't' && t[1] === norm))
+            tags.push(['t', norm]);
+    });
+
+    // Ressources formation
+    WY.resources.forEach(r => { if (r.url) tags.push(['r', r.url, r.type || 'lien']); });
+
+    const content = JSON.stringify({ id: dTag, name, icon, description: desc, skill_tag: skillTag, auto_proclaimed: true });
+
+    try {
+        await requireSigned({ kind: 30500, tags, content });
+        notify('Craft publié !', 'success');
+        closeCraftEditor();
+        _atelierLoaded = false;
+        setTimeout(() => loadAtelierTab(), 600);
+        _formationLoaded.done = false;
+        setTimeout(() => loadFormationTab(), 700);
+    } catch(e) {
+        notify('Erreur : ' + e.message, 'error');
+    }
+}
+
+// Cache des permits pour l'éditeur
+let _permitCache = {};
+
+// ── NAVIGATEUR MÉDIAS MULTIPASS ─────────────────────────────────────────────
+// Charge les médias publiés par l'utilisateur (Kind 21/22 vidéo, 1222 audio,
+// 1063 fichiers) depuis le relay NOSTR pour les lier comme briques de formation.
+
+const MEDIA_KINDS = {
+    21:    { label: 'Vidéo (streaming)', icon: '🎬', type: 'video' },
+    22:    { label: 'Vidéo courte',      icon: '📹', type: 'video' },
+    1063:  { label: 'Fichier / Image',  icon: '📄', type: 'document' },
+    1222:  { label: 'Message vocal',    icon: '🎙️', type: 'audio' },
+    30023: { label: 'Article Markdown', icon: '📝', type: 'cours' },
+};
+
+let _mediaBrowserSkill = null;
+let _mediaBrowserCardId = null;
+
+async function openMediaBrowser(skill, cardId) {
+    _mediaBrowserSkill = skill;
+    _mediaBrowserCardId = cardId;
+    const modal = document.getElementById('modal-media-browser');
+    const list  = document.getElementById('media-browser-list');
+    if (!modal || !list) return;
+    modal.style.display = 'flex';
+    list.innerHTML = `<div class="empty-state"><span class="loader-inline"></span> Chargement…</div>`;
+    document.getElementById('media-browser-skill').textContent = skill;
+
+    if (!window.userPubkey || !window.nostrRelay) {
+        list.innerHTML = `<div class="empty-state">Connectez votre MULTIPASS.</div>`; return;
+    }
+
+    try {
+        const evs = await fetchEvents({
+            kinds: [21, 22, 1063, 1222, 30023],
+            authors: [window.userPubkey],
+            limit: 80,
+        });
+        if (evs.length === 0) {
+            list.innerHTML = `<div class="empty-state">Aucun média publié trouvé.<br><small>Utilisez webcam.html, ajouter_media.sh ou le système VOCALS.</small></div>`;
+            return;
+        }
+        list.innerHTML = evs.map(ev => renderMediaBrowserItem(ev)).join('');
+    } catch(e) {
+        list.innerHTML = `<div class="empty-state">Erreur : ${e.message}</div>`;
+    }
+}
+
+function renderMediaBrowserItem(ev) {
+    const info = MEDIA_KINDS[ev.kind] || { label: 'Kind ' + ev.kind, icon: '📎', type: 'lien' };
+    // Extraire URL depuis tags (NIP-94 url, NIP-71 imeta url, ou content)
+    const urlTag = (ev.tags || []).find(t => t[0] === 'url' && t[1]);
+    const imetaTag = (ev.tags || []).find(t => t[0] === 'imeta');
+    let url = urlTag ? urlTag[1] : '';
+    if (!url && imetaTag) {
+        const urlPart = imetaTag.slice(1).find(p => p.startsWith('url '));
+        if (urlPart) url = urlPart.replace('url ', '').trim();
+    }
+    if (!url) {
+        // Kind 30023: l'URL est dans le tag 'd' sous forme IPNS/IPFS, ou dans content
+        const dTag = (ev.tags || []).find(t => t[0] === 'd');
+        url = dTag ? dTag[1] : '';
+    }
+    const titleTag = (ev.tags || []).find(t => t[0] === 'title' || t[0] === 'subject');
+    let title = titleTag ? titleTag[1] : '';
+    if (!title) {
+        try { const c = JSON.parse(ev.content || '{}'); title = c.title || c.description || ''; } catch(e) {}
+    }
+    if (!title) title = info.label + ' — ' + new Date(ev.created_at * 1000).toLocaleDateString('fr-FR');
+
+    const safeUrl = url.replace(/"/g, '&quot;');
+    const safeTitle = (title || url).replace(/</g, '&lt;');
+
+    return `<div class="media-browser-item" onclick="selectMediaItem('${safeUrl}','${info.type}')">
+        <span class="media-browser-icon">${info.icon}</span>
+        <div class="media-browser-info">
+            <div class="media-browser-title">${safeTitle}</div>
+            <div class="media-browser-meta">${info.label} · ${url ? url.slice(0, 50) + (url.length > 50 ? '…' : '') : 'pas d\'URL'}</div>
+        </div>
+        <button class="media-browser-pick" title="Lier à la formation">＋</button>
+    </div>`;
+}
+
+async function selectMediaItem(url, type) {
+    if (!url) { notify('Pas d\'URL pour ce média.', 'warning'); return; }
+    if (!_mediaBrowserSkill || !_mediaBrowserCardId) return;
+
+    const skill = _mediaBrowserSkill;
+    const cardId = _mediaBrowserCardId;
+    closeMediaBrowser();
+
+    const reqId = 'training_' + skill + '_' + Date.now();
+    const tags = [
+        ['d', reqId],
+        ['t', skill],
+        ['t', 'formation'],
+        ['r', url, type],
+    ];
+    const content = JSON.stringify({ description: 'Ressource formation ' + skill, skill, resource_url: url, resource_type: type });
+    try {
+        await requireSigned({ kind: 30504, tags, content });
+        notify('Média lié à la formation ' + skill + ' !', 'success');
+        _formationLoaded.done = false;
+        setTimeout(() => loadFormationTab(), 800);
+    } catch(e) {
+        notify('Erreur : ' + e.message, 'error');
+    }
+}
+
+function closeMediaBrowser() {
+    const modal = document.getElementById('modal-media-browser');
+    if (modal) modal.style.display = 'none';
+    _mediaBrowserSkill = null;
+    _mediaBrowserCardId = null;
+}
+
+// ── BRO DM ASSISTANT ────────────────────────────────────────────────────────
+// Envoie des DMs Kind 4 chiffrés (NIP-04) au NODE Astroport local.
+// BRO répond via DM : questions libres, #badge <skill>, #rec/#mem mémoire.
+
+const BRO = {
+    nodeNpub: null,   // hex pubkey du NODE (champ home_station du MULTIPASS)
+    nodeNpubBech32: null,
+    listening: false,
+    msgHistory: [],   // { role:'user'|'node', text, ts }
+    sub: null,
+    disabled: false,  // true si pas de station dans le MULTIPASS
+};
+
+async function broInit() {
+    if (BRO.nodeNpub) return;
+
+    if (!window.nostrRelay || !window.userPubkey) return;
+
+    try {
+        const myProfiles = await fetchEvents({ kinds: [0], authors: [window.userPubkey], limit: 1 });
+        if (myProfiles.length === 0) { _broDisable('Profil MULTIPASS introuvable.'); return; }
+
+        const ev = myProfiles[0];
+        const meta = JSON.parse(ev.content || '{}');
+
+        // home_station format (nostr_setup_profile.py): "IPFSNODEID:NODE_HEX_64"
+        const extractHexFromHomeStation = (val) => {
+            if (!val) return null;
+            const parts = val.split(':');
+            return parts.slice().reverse().find(p => /^[0-9a-f]{64}$/i.test(p)) || null;
+        };
+
+        // home_station = "IPFSNODEID:NODE_HEX" (nostr_setup_profile.py)
+        // Le NODE_HEX est le dernier segment de 64 chars hex
+        const hex = extractHexFromHomeStation(meta.home_station);
+        if (hex) { _setBroNode(hex.toLowerCase()); return; }
+
+        // Profil MULTIPASS sans home_station : pas de station associée
+        _broDisable('Compte NOSTR sans home_station — BRO indisponible.');
+    } catch(e) {
+        _broDisable('Erreur lecture profil.');
+    }
+}
+
+function _broDisable(reason) {
+    BRO.disabled = true;
+    const fab = document.getElementById('bro-fab');
+    if (fab) {
+        fab.title = reason || 'BRO indisponible';
+        fab.style.opacity = '0.35';
+        fab.style.cursor = 'not-allowed';
+    }
+}
+
+
+function _setBroNode(hex) {
+    BRO.nodeNpub = hex.toLowerCase();
+    if (window.NostrTools && window.NostrTools.nip19) {
+        try { BRO.nodeNpubBech32 = window.NostrTools.nip19.npubEncode(BRO.nodeNpub); } catch(e) {}
+    }
+    document.querySelectorAll('.bro-status').forEach(el => el.classList.add('online'));
+    _log && _log('BRO node trouvé : ' + BRO.nodeNpub.slice(0, 16) + '…');
+}
+
+function buildBroQuickBtns(skill) {
+    // Boutons de raccourcis contextuels selon le skill courant
+    const base = [
+        { label: '📚 Formations ' + (skill || ''), msg: `Quelles ressources pour apprendre ${skill || 'cette compétence'} ?` },
+        { label: '🔍 Expliquer', msg: `Explique-moi la compétence ${skill || 'WoTx2'} en quelques phrases.` },
+    ];
+    if (skill) {
+        base.push({ label: '🎨 #badge', msg: `#badge ${skill}` });
+    }
+    base.push({ label: '❓ Aide BRO', msg: 'Quelles commandes BRO puis-je utiliser ?' });
+    return base;
+}
+
+function renderBroBtns(containerId, skill) {
+    const el = document.getElementById(containerId);
+    if (!el) return;
+    el.innerHTML = buildBroQuickBtns(skill).map(b =>
+        `<button class="bro-quick" onclick="broQuick('float',${JSON.stringify(b.msg)})">${b.label}</button>`
+    ).join('');
+}
+
+function broQuick(panel, msg) {
+    const inp = document.getElementById('bro-input-' + panel);
+    if (inp) { inp.value = msg; }
+    sendBroMsg(panel);
+}
+
+function broAddMsg(panel, role, text) {
+    const container = document.getElementById('bro-msgs-' + panel);
+    if (!container) return;
+    const div = document.createElement('div');
+    div.className = 'bro-msg ' + role;
+    div.textContent = text;
+    container.appendChild(div);
+    container.scrollTop = container.scrollHeight;
+    BRO.msgHistory.push({ role, text, ts: Date.now() });
+}
+
+async function sendBroMsg(panel) {
+    if (!window.isNostrConnected || !window.userPubkey) {
+        notify('Connectez votre MULTIPASS pour chatter avec BRO.', 'warning'); return;
+    }
+    if (!BRO.nodeNpub) {
+        notify('BRO indisponible — aucune station UPlanet associée à ce compte.', 'warning'); return;
+    }
+    const inp = document.getElementById('bro-input-' + panel);
+    const sendBtn = document.getElementById('bro-send-' + panel);
+    const text = (inp && inp.value.trim()) || '';
+    if (!text) return;
+    if (inp) inp.value = '';
+    if (sendBtn) sendBtn.disabled = true;
+
+    broAddMsg(panel, 'user', text);
+
+    try {
+        // Chiffrement NIP-04 (supporté par toutes les extensions MULTIPASS)
+        let ciphertext;
+        if (window.nostr && window.nostr.nip04 && window.nostr.nip04.encrypt) {
+            ciphertext = await window.nostr.nip04.encrypt(BRO.nodeNpub, text);
+        } else if (window.nostr && window.nostr.nip44 && window.nostr.nip44.encrypt) {
+            ciphertext = await window.nostr.nip44.encrypt(BRO.nodeNpub, text);
+        } else {
+            throw new Error('Extension NOSTR ne supporte pas nip04/nip44');
+        }
+
+        const ev = await requireSigned({
+            kind: 4,
+            tags: [['p', BRO.nodeNpub]],
+            content: ciphertext,
+        });
+
+        broAddMsg(panel, 'system', '✓ Message envoyé — en attente de réponse…');
+        if (!BRO.listening) broListenDMs(panel);
+    } catch(e) {
+        broAddMsg(panel, 'system', '⚠️ Erreur envoi : ' + e.message);
+    }
+
+    if (sendBtn) sendBtn.disabled = false;
+}
+
+function broListenDMs(panel) {
+    if (!window.nostrRelay || BRO.listening) return;
+    BRO.listening = true;
+
+    const userHex = window.userPubkey;
+    const sub = window.nostrRelay.subscribe([{
+        kinds: [4],
+        authors: [BRO.nodeNpub],
+        '#p': [userHex],
+        since: Math.floor(Date.now() / 1000) - 5,
+        limit: 20,
+    }]);
+
+    sub.on('event', async (event) => {
+        // Déchiffrer la réponse BRO
+        try {
+            let plaintext;
+            if (window.nostr && window.nostr.nip04 && window.nostr.nip04.decrypt) {
+                plaintext = await window.nostr.nip04.decrypt(BRO.nodeNpub, event.content);
+            } else if (window.nostr && window.nostr.nip44 && window.nostr.nip44.decrypt) {
+                plaintext = await window.nostr.nip44.decrypt(BRO.nodeNpub, event.content);
+            } else {
+                plaintext = '[Chiffrement non supporté — installez une extension NOSTR]';
+            }
+            broAddMsg(panel, 'node', plaintext);
+
+            // Si la réponse contient une URL IPFS (badge généré), afficher comme image
+            const ipfsMatch = plaintext.match(/(https?:\/\/\S+\/ipfs\/\S+\.(?:png|jpg|webp))/i);
+            if (ipfsMatch) {
+                const container = document.getElementById('bro-msgs-' + panel);
+                if (container) {
+                    const img = document.createElement('img');
+                    img.src = ipfsMatch[1];
+                    img.style.cssText = 'max-width:200px;border-radius:8px;margin-top:4px;align-self:flex-start';
+                    img.className = 'bro-msg node';
+                    container.appendChild(img);
+                    container.scrollTop = container.scrollHeight;
+                }
+            }
+        } catch(e) {
+            broAddMsg(panel, 'system', '[Erreur déchiffrement]');
+        }
+    });
+
+    BRO.sub = sub;
+}
+
+function toggleBroFloat() {
+    if (BRO.disabled) {
+        notify('BRO indisponible — ce compte NOSTR n\'est pas associé à une station UPlanet.', 'warning');
+        return;
+    }
+    const panel = document.getElementById('bro-float');
+    const fab   = document.getElementById('bro-fab');
+    if (!panel || !fab) return;
+    const isOpen = panel.style.display === 'flex';
+    panel.style.display = isOpen ? 'none' : 'flex';
+    fab.style.display    = isOpen ? '' : 'none';
+    if (!isOpen) {
+        renderBroBtns('bro-quick-float', null);
+        if (!BRO.listening && window.isNostrConnected) broListenDMs('float');
+    }
+}
+
+// Ouvrir BRO avec un contexte skill prérempli
+function openBroForSkill(skill) {
+    const panel = document.getElementById('bro-float');
+    const fab   = document.getElementById('bro-fab');
+    if (panel) { panel.style.display = 'flex'; }
+    if (fab)   { fab.style.display = 'none'; }
+    renderBroBtns('bro-quick-float', skill);
+    const inp = document.getElementById('bro-input-float');
+    if (inp) inp.focus();
+    if (!BRO.listening && window.isNostrConnected) broListenDMs('float');
+}
+
+// ── INITIALISATION ─────────────────────────────────────────────────────────
+
+function waitForConnection(callback, maxWait = 12000) {
+    const start = Date.now();
+    const check = () => {
+        if (window.isNostrConnected && window.userPubkey) {
+            callback();
+        } else if (Date.now() - start < maxWait) {
+            setTimeout(check, 400);
+        } else {
+            updateConnectionUI();
+        }
+    };
+    check();
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    updateConnectionUI();
+
+    if (typeof window.detectUSPOTAPI === 'function') window.detectUSPOTAPI();
+
+    // Initialiser BRO (NODE npub depuis champ home_station du profil MULTIPASS)
+    broInit();
+
+    waitForConnection(() => {
+        updateConnectionUI();
+        loadMySkills();
+        broInit(); // re-essayer après connexion NOSTR
+    });
+
+    // Actualiser UI si connexion change (relay events)
+    setInterval(() => {
+        const wasConnected = document.getElementById('conn-badge').classList.contains('connected');
+        const isNow = !!(window.isNostrConnected && window.userPubkey);
+        if (wasConnected !== isNow) {
+            updateConnectionUI();
+            if (isNow) loadMySkills();
+        }
+    }, 2000);
+});
+</script>
+</body>
+</html>

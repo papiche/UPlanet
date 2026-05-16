@@ -13,6 +13,7 @@
 
     const LOG_KEY  = 'uplanet_feedback_logs';
     const PAGE_KEY = 'uplanet_feedback_page';
+    const SNAP_KEY = 'uplanet_feedback_log_source';
     const MAX_LOGS = 80;
 
     /* ── Console capture ─────────────────────────────────────────── */
@@ -89,7 +90,11 @@
     /* ── Public helpers (usable from any page) ───────────────────── */
 
     window.openFeedbackPage = function (target) {
-        try { sessionStorage.setItem(PAGE_KEY, window.location.href); } catch (_) {}
+        try {
+            sessionStorage.setItem(PAGE_KEY, window.location.href);
+            /* Snapshot des logs au moment du clic, avant que feedback.html ajoute les siens */
+            sessionStorage.setItem(SNAP_KEY, sessionStorage.getItem(LOG_KEY) || '[]');
+        } catch (_) {}
         window.open(target || deriveFeedbackUrl(), '_blank');
     };
 
@@ -149,48 +154,22 @@
         }
     }
 
-    /* ── NOSTR connection (NIP-07) ───────────────────────────────── */
+    /* ── NOSTR connection (NIP-07) — uniquement sur la page feedback ── */
+    /* Ne pas écraser window.connectNostr de common.js sur les autres pages */
 
-    window.connectNostr = async function () {
-        const btn      = document.getElementById('nostr-connect-btn');
-        const status   = document.getElementById('nostr-status');
-        const pubkeyEl = document.getElementById('fb-pubkey');
-
-        if (!window.nostr) {
-            if (status) {
-                status.innerHTML =
-                    '⚠️ Aucune extension NOSTR détectée.<br>' +
-                    '<a href="https://addons.mozilla.org/fr/firefox/addon/nostr-connect/" ' +
-                    'target="_blank" style="color:#99aaff">Installer NOSTR Connect →</a>';
-                status.style.color = '#f99';
-            }
-            return;
-        }
-
+    function deriveRelayUrl() {
         try {
-            if (btn) { btn.disabled = true; btn.textContent = 'Connexion…'; }
-            const hex   = await window.nostr.getPublicKey();
-            const npub  = hexToNpub(hex);
-            const short = npub.slice(0, 12) + '…' + npub.slice(-6);
-
-            if (pubkeyEl) pubkeyEl.value = npub;
-
-            if (status) {
-                status.innerHTML = `✅ Connecté : <code style="font-size:12px">${short}</code>`;
-                status.style.color = '#6fd17a';
-            }
-            if (btn) { btn.textContent = '🔑 Reconnect'; btn.disabled = false; }
-
-            fetchNostrProfile(hex);
-        } catch (e) {
-            if (status) { status.textContent = `Erreur : ${e.message}`; status.style.color = '#f88'; }
-            if (btn) { btn.disabled = false; btn.textContent = '🔑 Connecter NOSTR'; }
+            const host = new URL(window.location.href).hostname
+                .replace(/^(u|ipfs)\./, 'relay.');
+            return `wss://${host}`;
+        } catch (_) {
+            return 'wss://relay.copylaradio.com';
         }
-    };
+    }
 
     async function fetchNostrProfile(hex) {
         try {
-            const relays = ['wss://relay.damus.io', 'wss://nos.lol'];
+            const relays = [deriveRelayUrl()];
             for (const url of relays) {
                 const ws = new WebSocket(url);
                 const sub = `sub_${Date.now()}`;
@@ -222,6 +201,45 @@
         } catch (_) {}
     }
 
+    if (isFeedbackPage()) {
+        window.connectNostr = async function () {
+            const btn      = document.getElementById('nostr-connect-btn');
+            const status   = document.getElementById('nostr-status');
+            const pubkeyEl = document.getElementById('fb-pubkey');
+
+            if (!window.nostr) {
+                if (status) {
+                    status.innerHTML =
+                        '⚠️ Aucune extension NOSTR détectée.<br>' +
+                        '<a href="https://addons.mozilla.org/fr/firefox/addon/nostr-connect/" ' +
+                        'target="_blank" style="color:#99aaff">Installer NOSTR Connect →</a>';
+                    status.style.color = '#f99';
+                }
+                return;
+            }
+
+            try {
+                if (btn) { btn.disabled = true; btn.textContent = 'Connexion…'; }
+                const hex   = await window.nostr.getPublicKey();
+                const npub  = hexToNpub(hex);
+                const short = npub.slice(0, 12) + '…' + npub.slice(-6);
+
+                if (pubkeyEl) pubkeyEl.value = npub;
+
+                if (status) {
+                    status.innerHTML = `✅ Connecté : <code style="font-size:12px">${short}</code>`;
+                    status.style.color = '#6fd17a';
+                }
+                if (btn) { btn.textContent = '🔑 Reconnect'; btn.disabled = false; }
+
+                fetchNostrProfile(hex);
+            } catch (e) {
+                if (status) { status.textContent = `Erreur : ${e.message}`; status.style.color = '#f88'; }
+                if (btn) { btn.disabled = false; btn.textContent = '🔑 Connecter NOSTR'; }
+            }
+        };
+    }
+
     /* ── Form initialisation ─────────────────────────────────────── */
 
     function initForm() {
@@ -249,7 +267,16 @@
         }
 
         let logs = [];
-        try { logs = JSON.parse(sessionStorage.getItem(LOG_KEY) || '[]'); } catch (_) {}
+        try {
+            /* Préférer le snapshot (logs de la page source uniquement, sans ceux de feedback.html) */
+            const snap = sessionStorage.getItem(SNAP_KEY);
+            if (snap) {
+                logs = JSON.parse(snap);
+                sessionStorage.removeItem(SNAP_KEY);
+            } else {
+                logs = JSON.parse(sessionStorage.getItem(LOG_KEY) || '[]');
+            }
+        } catch (_) {}
         const logsEl     = document.getElementById('fb-console-logs');
         const logSection = document.getElementById('fb-log-section');
         const logCount   = document.getElementById('fb-log-count');

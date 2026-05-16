@@ -55,20 +55,18 @@
     /* ── URL helpers ─────────────────────────────────────────────── */
 
     function getUSPOTBase() {
+        /* Priorité : common.js (déjà calculé + mis en cache) */
+        if (typeof window.upassportUrl === 'string' && window.upassportUrl) return window.upassportUrl;
+        if (typeof window.getAPIBaseUrl === 'function') { const u = window.getAPIBaseUrl(); if (u) return u; }
         try {
-            if (typeof window.upassportUrl === 'string' && window.upassportUrl) {
-                return window.upassportUrl;
-            }
             const u = new URL(window.location.href);
+            /* u.domain → même base ; ipfs.domain → u.domain */
             if (u.hostname.startsWith('ipfs.')) u.hostname = u.hostname.replace('ipfs.', 'u.');
-            if (u.port) u.port = '54321';
-            u.pathname = '/';
-            u.search = '';
-            u.hash = '';
+            /* port explicite → port UPassport */
+            if (u.port && u.port !== '443' && u.port !== '80') u.port = '54321';
+            u.pathname = '/'; u.search = ''; u.hash = '';
             return u.toString().replace(/\/$/, '');
-        } catch (_) {
-            return 'http://localhost:54321';
-        }
+        } catch (_) { return 'http://localhost:54321'; }
     }
 
     /* Dérive l'URL de feedback.html : /earth/feedback.html depuis UPassport,
@@ -104,54 +102,26 @@
         return /feedback\.html/.test(window.location.pathname);
     }
 
-    /* ── Bech32 hex→npub (no external lib) ──────────────────────── */
+    /* ── Bech32 hex→npub : délègue à common.js si disponible ───────── */
     function hexToNpub(hex) {
+        if (typeof window.hexToNpub === 'function') return window.hexToNpub(hex);
+        /* Fallback Bech32 minimal (feedback.js chargé sans common.js) */
         try {
-            const CHARSET = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l';
-            const GENERATOR = [0x3b6a57b2, 0x26508e6d, 0x1ea119fa, 0x3d4233dd, 0x2a1462b3];
-            function polymod(values) {
-                let chk = 1;
-                for (const v of values) {
-                    const top = chk >> 25;
-                    chk = ((chk & 0x1ffffff) << 5) ^ v;
-                    for (let i = 0; i < 5; i++) if ((top >> i) & 1) chk ^= GENERATOR[i];
-                }
-                return chk;
+            const CS = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l';
+            const GEN = [0x3b6a57b2, 0x26508e6d, 0x1ea119fa, 0x3d4233dd, 0x2a1462b3];
+            function polymod(v) {
+                let c = 1;
+                for (const x of v) { const t = c >> 25; c = ((c & 0x1ffffff) << 5) ^ x; for (let i = 0; i < 5; i++) if ((t >> i) & 1) c ^= GEN[i]; }
+                return c;
             }
-            function hrpExpand(hrp) {
-                const ret = [];
-                for (let i = 0; i < hrp.length; i++) ret.push(hrp.charCodeAt(i) >> 5);
-                ret.push(0);
-                for (let i = 0; i < hrp.length; i++) ret.push(hrp.charCodeAt(i) & 31);
-                return ret;
-            }
-            function convertbits(data, frombits, tobits, pad) {
-                let acc = 0, bits = 0;
-                const ret = [];
-                const maxv = (1 << tobits) - 1;
-                for (const value of data) {
-                    acc = (acc << frombits) | value;
-                    bits += frombits;
-                    while (bits >= tobits) { bits -= tobits; ret.push((acc >> bits) & maxv); }
-                }
-                if (pad && bits > 0) ret.push((acc << (tobits - bits)) & maxv);
-                return ret;
-            }
+            function hrpX(h) { const r = []; for (let i = 0; i < h.length; i++) r.push(h.charCodeAt(i) >> 5); r.push(0); for (let i = 0; i < h.length; i++) r.push(h.charCodeAt(i) & 31); return r; }
+            function cvt(data, f, t, p) { let a = 0, b = 0; const r = [], m = (1 << t) - 1; for (const x of data) { a = (a << f) | x; b += f; while (b >= t) { b -= t; r.push((a >> b) & m); } } if (p && b > 0) r.push((a << (t - b)) & m); return r; }
             const bytes = hex.match(/.{1,2}/g).map(b => parseInt(b, 16));
-            const words = convertbits(bytes, 8, 5, true);
-            const hrp = 'npub';
-            const ckWords = (() => {
-                const checksum = polymod(hrpExpand(hrp).concat(words).concat([0,0,0,0,0,0])) ^ 1;
-                return [
-                    (checksum >> 25) & 31, (checksum >> 20) & 31,
-                    (checksum >> 15) & 31, (checksum >> 10) & 31,
-                    (checksum >>  5) & 31, checksum & 31,
-                ];
-            })();
-            return hrp + '1' + words.concat(ckWords).map(w => CHARSET[w]).join('');
-        } catch (_) {
-            return hex.slice(0, 16) + '…';
-        }
+            const words = cvt(bytes, 8, 5, true);
+            const ck = polymod(hrpX('npub').concat(words).concat([0,0,0,0,0,0])) ^ 1;
+            const ckW = [25,20,15,10,5,0].map(s => (ck >> s) & 31);
+            return 'npub1' + words.concat(ckW).map(w => CS[w]).join('');
+        } catch (_) { return hex.slice(0, 16) + '…'; }
     }
 
     /* ── NOSTR connection (NIP-07) — uniquement sur la page feedback ── */
@@ -287,7 +257,17 @@
             if (logCount)   logCount.textContent = `${logs.length} entrée(s)`;
         }
 
-        if (window.nostr) {
+        /* Connexion NOSTR : réutilise l'état existant (common.js ou parent modal)
+           avant de re-solliciter l'extension. */
+        const _existingPubkey = (typeof window.getUserPubkey === 'function' ? window.getUserPubkey() : null)
+            || window.userPubkey
+            || (window.NostrState && window.NostrState.userPubkey)
+            || null;
+
+        if (_existingPubkey && window.connectNostr) {
+            /* Déjà connecté via common.js — juste mettre à jour l'UI */
+            window.connectNostr();
+        } else if (window.nostr) {
             window.nostr.getPublicKey().then(hex => {
                 if (hex) window.connectNostr();
             }).catch(() => {});

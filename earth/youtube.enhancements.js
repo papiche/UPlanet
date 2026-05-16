@@ -22,11 +22,7 @@ if (typeof window.YOUTUBE_ENHANCEMENTS_VERSION === 'undefined') {
  * This function is also defined in youtube.html, but we define it here too
  * for use in theater-modal.html and other standalone pages
  */
-let IPFS_GATEWAY_FALLBACK = '';
-// Don't redeclare IPFS_GATEWAY if it already exists
-if (typeof IPFS_GATEWAY === 'undefined') {
-    window.IPFS_GATEWAY = '';
-}
+if (!window.IPFS_GATEWAY) window.IPFS_GATEWAY = '';
 
 /**
  * Create a clickable profile link element
@@ -83,121 +79,58 @@ async function createProfileLink(options = {}) {
     return link;
 }
 
-function detectIPFSGatewayGlobal() {
-    const currentURL = new URL(window.location.href);
-    const hostname = currentURL.hostname;
-    const port = currentURL.port;
-    const protocol = currentURL.protocol.split(":")[0];
-    
-    // Localhost detection (127.0.0.1 or localhost) - IPFS gateway is always on port 8080
-    if (hostname === "127.0.0.1" || hostname === "localhost") {
-        IPFS_GATEWAY_FALLBACK = `http://127.0.0.1:8080`;
-    } else if (hostname.startsWith("ipfs.")) {
-        // Already on IPFS gateway subdomain
-        const baseDomain = hostname.substring("ipfs.".length);
-        IPFS_GATEWAY_FALLBACK = `${protocol}://ipfs.${baseDomain}`;
-    } else if (hostname.startsWith("u.")) {
-        // On UPassport subdomain, use IPFS gateway subdomain
-        const baseDomain = hostname.substring("u.".length);
-        IPFS_GATEWAY_FALLBACK = `${protocol === 'http' ? 'http' : 'https'}://ipfs.${baseDomain}`;
-    } else {
-        // Fallback to default IPFS gateway
-        IPFS_GATEWAY_FALLBACK = `https://ipfs.copylaradio.com`;
-    }
-    
-    // Use window.IPFS_GATEWAY if available, otherwise use fallback
-    if (typeof window !== 'undefined') {
-        if (!window.IPFS_GATEWAY || window.IPFS_GATEWAY === '') {
-            window.IPFS_GATEWAY = IPFS_GATEWAY_FALLBACK;
-        }
-    }
-    
-    const finalGateway = (typeof window !== 'undefined' && window.IPFS_GATEWAY) ? window.IPFS_GATEWAY : IPFS_GATEWAY_FALLBACK;
-    
-    console.log(`IPFS Gateway detected (global): ${finalGateway} (from ${hostname}${port ? ':' + port : ''})`);
-    return finalGateway;
-}
-
-/**
- * Convert IPFS URL to use correct gateway
- * This function is also defined in youtube.html, but we define it here too
- * for use in theater-modal.html and other standalone pages
- */
-function convertIPFSUrlGlobal(url) {
-    if (!url) return '';
-    
-    // Ensure gateway is detected (use window.IPFS_GATEWAY if available)
-    let currentGateway = (typeof window !== 'undefined' && window.IPFS_GATEWAY) ? window.IPFS_GATEWAY : '';
-    if (!currentGateway || currentGateway === '') {
-        detectIPFSGatewayGlobal();
-        currentGateway = (typeof window !== 'undefined' && window.IPFS_GATEWAY) ? window.IPFS_GATEWAY : '';
-    }
-    
-    // Handle naked CIDs (no /ipfs/ prefix, no ipfs://, no http://)
-    let ipfsPath = url;
-    if (!url.startsWith('/ipfs/') && !url.startsWith('ipfs://') && !url.startsWith('http')) {
-        // Check if it looks like a CID (starts with Qm or bafy)
-        if (url.match(/^(Qm[1-9A-HJ-NP-Za-km-z]{44}|bafy[a-z0-9]{50,})/)) {
-            ipfsPath = `/ipfs/${url}`;
+if (typeof window.detectIPFSGateway !== 'function') {
+    let _IPFS_GW_FALLBACK = '';
+    window.detectIPFSGateway = function detectIPFSGatewayGlobal() {
+        const currentURL = new URL(window.location.href);
+        const hostname = currentURL.hostname;
+        const port = currentURL.port;
+        const protocol = currentURL.protocol.split(':')[0];
+        if (hostname === '127.0.0.1' || hostname === 'localhost') {
+            _IPFS_GW_FALLBACK = 'http://127.0.0.1:8080';
+        } else if (hostname.startsWith('ipfs.')) {
+            _IPFS_GW_FALLBACK = `${protocol}://ipfs.${hostname.substring('ipfs.'.length)}`;
+        } else if (hostname.startsWith('u.')) {
+            _IPFS_GW_FALLBACK = `${protocol === 'http' ? 'http' : 'https'}://ipfs.${hostname.substring('u.'.length)}`;
         } else {
-            // Not an IPFS URL, return as is
-            return url;
+            _IPFS_GW_FALLBACK = 'https://ipfs.copylaradio.com';
         }
-    }
-    
-    // If URL is already a full URL with wrong domain, extract the /ipfs/ path
-    if (ipfsPath.includes('/ipfs/')) {
-        const match = ipfsPath.match(/\/ipfs\/[^?"#]+/);
-        if (match) {
-            ipfsPath = match[0];
-        } else if (ipfsPath.startsWith('http')) {
-            // Full URL but no /ipfs/ match (shouldn't happen, but handle it)
-            return url;
-        }
-    }
-    
-    // Use currentGateway variable
-    const gateway = currentGateway;
-    
-    let fullUrl = ipfsPath;
-    if (ipfsPath.startsWith('/ipfs/')) {
-        fullUrl = `${gateway}${ipfsPath}`;
-    } else if (ipfsPath.startsWith('ipfs://')) {
-        fullUrl = ipfsPath.replace('ipfs://', `${gateway}/ipfs/`);
-    } else {
-        // Not an IPFS URL, return as is
-        return url;
-    }
-    
-    // Decode URL first if already encoded (to avoid double-encoding)
-    // Then re-encode to handle spaces and special characters properly
-    // The browser will handle the encoding when making the request
-    const urlParts = fullUrl.split('/');
-    const encodedParts = urlParts.map((part, index) => {
-        // Don't encode protocol, domain, or empty parts
-        if (index <= 2 || part === '' || part.includes(':')) {
-            return part;
-        }
-        // Decode first (if already encoded), then re-encode
-        try {
-            const decoded = decodeURIComponent(part);
-            return encodeURIComponent(decoded);
-        } catch (e) {
-            // If decoding fails (part wasn't encoded), just encode it
-            return encodeURIComponent(part);
-        }
-    });
-    
-    return encodedParts.join('/');
+        if (!window.IPFS_GATEWAY) window.IPFS_GATEWAY = _IPFS_GW_FALLBACK;
+        console.log(`IPFS Gateway detected (global): ${window.IPFS_GATEWAY} (from ${hostname}${port ? ':' + port : ''})`);
+        return window.IPFS_GATEWAY;
+    };
 }
 
-// Make functions globally available (use existing ones if available)
-if (typeof detectIPFSGateway === 'undefined') {
-    window.detectIPFSGateway = detectIPFSGatewayGlobal;
+if (typeof window.convertIPFSUrl !== 'function') {
+    window.convertIPFSUrl = function convertIPFSUrlGlobal(url) {
+        if (!url) return '';
+        if (!window.IPFS_GATEWAY) window.detectIPFSGateway();
+        const gateway = window.IPFS_GATEWAY;
+        let ipfsPath = url;
+        if (!url.startsWith('/ipfs/') && !url.startsWith('ipfs://') && !url.startsWith('http')) {
+            if (url.match(/^(Qm[1-9A-HJ-NP-Za-km-z]{44}|bafy[a-z0-9]{50,})/)) {
+                ipfsPath = `/ipfs/${url}`;
+            } else { return url; }
+        }
+        if (ipfsPath.includes('/ipfs/')) {
+            const match = ipfsPath.match(/\/ipfs\/[^?"#]+/);
+            if (match) { ipfsPath = match[0]; }
+            else if (ipfsPath.startsWith('http')) { return url; }
+        }
+        let fullUrl;
+        if (ipfsPath.startsWith('/ipfs/')) { fullUrl = `${gateway}${ipfsPath}`; }
+        else if (ipfsPath.startsWith('ipfs://')) { fullUrl = ipfsPath.replace('ipfs://', `${gateway}/ipfs/`); }
+        else { return url; }
+        return fullUrl.split('/').map((part, i) => {
+            if (i <= 2 || part === '' || part.includes(':')) return part;
+            try { return encodeURIComponent(decodeURIComponent(part)); } catch (_) { return encodeURIComponent(part); }
+        }).join('/');
+    };
 }
-if (typeof convertIPFSUrl === 'undefined') {
-    window.convertIPFSUrl = convertIPFSUrlGlobal;
-}
+
+// Aliases locaux pour les appels internes à ce fichier
+const detectIPFSGatewayGlobal = window.detectIPFSGateway;
+const convertIPFSUrlGlobal = window.convertIPFSUrl;
 
 // Auto-detect on load
 if (typeof document !== 'undefined') {

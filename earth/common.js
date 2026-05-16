@@ -2239,6 +2239,27 @@ async function ensureNIP42AuthIfNeeded(force = false) {
     }
 }
 
+/* ── NIP-42 cache helpers (localStorage) ──────────────────────────────────
+   Centralise read/write pour éviter la répétition du pattern clé+timestamp.
+   TTL par défaut : 5 minutes (300 000 ms).
+ ──────────────────────────────────────────────────────────────────────────── */
+function _nip42CacheKey(pubkey, relayUrl) {
+    return `nip42_auth_cache_${pubkey}_${relayUrl}`;
+}
+function _nip42CacheSet(pubkey, relayUrl, value) {
+    const k = _nip42CacheKey(pubkey, relayUrl);
+    try { localStorage.setItem(k, value ? 'true' : 'false'); localStorage.setItem(`${k}_time`, Date.now().toString()); } catch (_) {}
+}
+function _nip42CacheGet(pubkey, relayUrl, maxAgeMs = 300000) {
+    const k = _nip42CacheKey(pubkey, relayUrl);
+    try {
+        const val  = localStorage.getItem(k);
+        const time = localStorage.getItem(`${k}_time`);
+        if (val !== null && time !== null && Date.now() - parseInt(time) < maxAgeMs) return val === 'true';
+    } catch (_) {}
+    return null; // cache miss
+}
+
 /**
  * Check if a recent NIP-42 authentication event (kind 22242) exists on the relay
  * Uses localStorage cache to avoid network requests if we recently checked
@@ -2250,20 +2271,14 @@ async function checkRecentNIP42Auth(relayUrl, maxAgeHours = 24) {
     if (!nostrRelay || !isNostrConnected || !userPubkey) {
         return false;
     }
-    
+
     // Check localStorage cache first (avoid unnecessary network requests)
-    const cacheKey = `nip42_auth_cache_${userPubkey}_${relayUrl}`;
-    const cacheTimeKey = `${cacheKey}_time`;
-    const cached = localStorage.getItem(cacheKey);
-    const cacheTime = localStorage.getItem(cacheTimeKey);
-    
+    const cached = _nip42CacheGet(userPubkey, relayUrl);
+
     // If we have a recent cache (within last 5 minutes), use it
-    if (cached !== null && cacheTime !== null) {
-        const cacheAge = Date.now() - parseInt(cacheTime);
-        if (cacheAge < 300000) { // 5 minutes cache
-            console.log(`✅ Using cached NIP-42 auth check result: ${cached === 'true'}`);
-            return cached === 'true';
-        }
+    if (cached !== null) {
+        console.log(`✅ Using cached NIP-42 auth check result: ${cached}`);
+        return cached;
     }
     
     try {
@@ -2284,12 +2299,10 @@ async function checkRecentNIP42Auth(relayUrl, maxAgeHours = 24) {
             let foundRecentAuth = false;
             const timeout = setTimeout(() => {
                 sub.unsub();
-                // Cache the result (even if false, to avoid repeated checks)
-                localStorage.setItem(cacheKey, foundRecentAuth ? 'true' : 'false');
-                localStorage.setItem(cacheTimeKey, Date.now().toString());
+                _nip42CacheSet(userPubkey, relayUrl, foundRecentAuth);
                 resolve(foundRecentAuth);
             }, 2000); // Reduced timeout from 3s to 2s for faster response
-            
+
             sub.on('event', (event) => {
                 // Verify this is a valid auth event for this relay
                 const relayTag = event.tags.find(tag => tag[0] === 'relay');
@@ -2305,18 +2318,14 @@ async function checkRecentNIP42Auth(relayUrl, maxAgeHours = 24) {
                 }
                 clearTimeout(timeout);
                 sub.unsub();
-                // Cache the result
-                localStorage.setItem(cacheKey, 'true');
-                localStorage.setItem(cacheTimeKey, Date.now().toString());
+                _nip42CacheSet(userPubkey, relayUrl, true);
                 resolve(true);
             });
-            
+
             sub.on('eose', () => {
                 clearTimeout(timeout);
                 sub.unsub();
-                // Cache the result
-                localStorage.setItem(cacheKey, foundRecentAuth ? 'true' : 'false');
-                localStorage.setItem(cacheTimeKey, Date.now().toString());
+                _nip42CacheSet(userPubkey, relayUrl, foundRecentAuth);
                 resolve(foundRecentAuth);
             });
         });
@@ -2367,10 +2376,7 @@ async function verifyAuthenticationWithAPI(pubkey = null) {
         // Update cache based on result
         if (result.auth_verified) {
             const relayUrl = result.relay_url || getNostrRelay();
-            const cacheKey = `nip42_auth_cache_${keyToCheck}_${relayUrl}`;
-            const cacheTimeKey = `${cacheKey}_time`;
-            localStorage.setItem(cacheKey, 'true');
-            localStorage.setItem(cacheTimeKey, Date.now().toString());
+            _nip42CacheSet(keyToCheck, relayUrl, true);
             console.log('✅ Authentication verified via API');
         } else {
             console.warn('⚠️ Authentication not verified:', result.message);
@@ -2420,19 +2426,10 @@ async function ensureAuthentication(options = {}) {
     
     // Quick cache check if not forcing
     if (!forceCheck) {
-        const relayUrl = getNostrRelay();
-        const cacheKey = `nip42_auth_cache_${userPubkey}_${relayUrl}`;
-        const cacheTime = localStorage.getItem(`${cacheKey}_time`);
-        
-        if (cacheTime) {
-            const cacheAge = Date.now() - parseInt(cacheTime);
-            if (cacheAge < 300000) { // 5 minutes
-                const cached = localStorage.getItem(cacheKey);
-                if (cached === 'true') {
-                    console.log('✅ Using cached authentication status (valid)');
-                    return true;
-                }
-            }
+        const cached = _nip42CacheGet(userPubkey, getNostrRelay());
+        if (cached === true) {
+            console.log('✅ Using cached authentication status (valid)');
+            return true;
         }
     }
     
@@ -2654,10 +2651,7 @@ async function sendNIP42Auth(relayUrl, forceSend = false) {
         NostrState.lastNIP42AuthTime = Date.now();
         
         // Update cache to reflect we just sent an auth event
-        const cacheKey = `nip42_auth_cache_${NostrState.userPubkey}_${relayUrl}`;
-        const cacheTimeKey = `${cacheKey}_time`;
-        localStorage.setItem(cacheKey, 'true');
-        localStorage.setItem(cacheTimeKey, Date.now().toString());
+        _nip42CacheSet(NostrState.userPubkey, relayUrl, true);
         
         // Also send AUTH message for immediate authentication
         try {

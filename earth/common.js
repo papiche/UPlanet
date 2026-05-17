@@ -187,6 +187,23 @@ if (typeof window.UPLANET_COMMON_VERSION === 'undefined') {
     }
     
     function createNostrProxy() {
+        // Try to access parent/top window.nostr directly first (same-origin optimization)
+        // This avoids the postMessage proxy entirely when pages are embedded same-origin
+        try {
+            const candidates = [];
+            if (window.parent && window.parent !== window) candidates.push({ w: window.parent, label: 'parent' });
+            if (window.top && window.top !== window && window.top !== window.parent) candidates.push({ w: window.top, label: 'top' });
+            for (const { w, label } of candidates) {
+                if (typeof w.nostr !== 'undefined' && typeof w.nostr.getPublicKey === 'function') {
+                    Object.defineProperty(window, 'nostr', { value: w.nostr, writable: true, configurable: true });
+                    console.log(`✅ NOSTR: using ${label} window.nostr directly (same-origin)`);
+                    return;
+                }
+            }
+        } catch (e) {
+            console.warn('⚠️ NOSTR: cross-origin parent/top, falling back to postMessage proxy:', e.message);
+        }
+
         // Create a proxy for window.nostr that communicates with parent
         const nostrProxy = {
             getPublicKey: async function() {
@@ -341,6 +358,35 @@ if (typeof window.UPLANET_COMMON_VERSION === 'undefined') {
             window.createNostrProxy = createNostrProxy;
         }
     }
+})();
+
+// NOSTR IFRAME BRIDGE — parent-side handler
+// Pages acting as parent of an iframe relay nostr-request messages to window.nostr
+// and respond with nostr-response so the iframe proxy doesn't time out.
+(function() {
+    if (window.self !== window.top) return; // only run in top/parent context
+    window.addEventListener('message', async function(event) {
+        if (!event.data || event.data.type !== 'nostr-request') return;
+        const { requestId, method, params } = event.data;
+        const nostr = window.nostr;
+        if (!nostr) {
+            event.source.postMessage({ type: 'nostr-response', requestId, success: false, error: 'window.nostr not available in parent' }, event.origin || '*');
+            return;
+        }
+        try {
+            let result;
+            if (method === 'getPublicKey') result = await nostr.getPublicKey();
+            else if (method === 'signEvent') result = await nostr.signEvent(params[0]);
+            else if (method === 'nip44.encrypt') result = await nostr.nip44.encrypt(params[0], params[1]);
+            else if (method === 'nip44.decrypt') result = await nostr.nip44.decrypt(params[0], params[1]);
+            else if (method === 'nip04.encrypt') result = await nostr.nip04.encrypt(params[0], params[1]);
+            else if (method === 'nip04.decrypt') result = await nostr.nip04.decrypt(params[0], params[1]);
+            else throw new Error('Unknown NOSTR method: ' + method);
+            event.source.postMessage({ type: 'nostr-response', requestId, success: true, data: result }, event.origin || '*');
+        } catch (e) {
+            event.source.postMessage({ type: 'nostr-response', requestId, success: false, error: e.message }, event.origin || '*');
+        }
+    });
 })();
 
 // ========================================

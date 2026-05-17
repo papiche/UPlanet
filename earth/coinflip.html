@@ -503,7 +503,9 @@
     }
   </style>
   <script src="../nostr.bundle.js"></script>
+  <script src="../marked.min.js"></script>
   <script src="../common.js"></script>
+  <script src="../feedback.js"></script>
 </head>
 <body>
 
@@ -549,10 +551,14 @@
     </div>
 
 
+    <div class="card" style="margin-top:16px">
+      <button id="docToggle" class="btn" onclick="toggleDocViewer()" style="width:100%;text-align:left">📖 Règles du jeu — Paradoxe de Saint-Pétersbourg (COINFLIP.md)</button>
+      <div id="docViewer" style="display:none;margin-top:12px;padding:12px;border-top:1px solid var(--border);line-height:1.6;font-size:14px"></div>
+    </div>
   </div>
 
 
- 
+
 
   <script>
     // État NOSTR géré par common.js — window.nostrRelay, window.isNostrConnected, window.userPubkey
@@ -564,6 +570,10 @@
         () => {}
       );
     }
+
+    // État du jeu (session server-side)
+    let gameSession = null;  // { token, sid, exp } obtenu après zen_send
+    let gameActive = false;  // true quand une partie live est en cours
 
 
     // Function to fetch CAPTAIN data from ASTROPORT station
@@ -596,27 +606,23 @@
           return null;
         }
         
-        // Try to get CAPTAIN's first message from relay
-        const firstMessage = await getCaptainFirstMessage(captainHex);
-        
         // Fetch CAPTAIN balances
         const captainBalances = await fetchCaptainBalances(captainG1pub, captainZencardG1pub);
-        
+
         // Try to get CAPTAIN profile from relay
         const captainProfile = await getCaptainProfile(captainHex);
-        
+
         // Display CAPTAIN balances in the UI
-        displayCaptainBalances(captainBalances, firstMessage, captainProfile);
-        
+        displayCaptainBalances(captainBalances, captainProfile);
+
         // Store CAPTAIN data globally for use in game
-        window.captainData = { 
-          captainHex, 
-          firstMessage, 
-          captainG1pub, 
-          captainZencardG1pub, 
+        window.captainData = {
+          captainHex,
+          captainG1pub,
+          captainZencardG1pub,
           captainBalances,
           captainProfile,
-          sruUrl 
+          sruUrl
         };
         
         return window.captainData;
@@ -750,186 +756,6 @@
       }
     }
     
-    // Function to get CAPTAIN's first message from relay
-    async function getCaptainFirstMessage(captainHex) {
-      try {
-        const relayUrl = window.DEFAULT_RELAYS[0];
-        console.log('[CAPTAIN] Fetching first message from relay:', relayUrl);
-        
-        return new Promise((resolve) => {
-          const ws = new WebSocket(relayUrl);
-          let timeout;
-          
-          ws.onopen = () => {
-            // Request CAPTAIN's first message (kind 1 - text note)
-            const subId = `captain_${Date.now()}`;
-            const req = JSON.stringify(['REQ', subId, { 
-              kinds: [1], 
-              authors: [captainHex], 
-              limit: 1,
-              until: Math.floor(Date.now() / 1000) + 3600 // Last hour
-            }]);
-            ws.send(req);
-            console.log('[CAPTAIN] Sent REQ for first message');
-          };
-          
-          ws.onmessage = (event) => {
-            try {
-              const data = JSON.parse(event.data);
-              if (data[0] === 'EVENT' && data[2]?.kind === 1) {
-                const messageId = data[2].id;
-                const messageContent = data[2].content;
-                const messageCreated = data[2].created_at;
-                console.log('[CAPTAIN] Found first message:', messageId, 'Content:', messageContent);
-                ws.close();
-                clearTimeout(timeout);
-                resolve({
-                  id: messageId,
-                  content: messageContent,
-                  created_at: messageCreated
-                });
-              } else if (data[0] === 'EOSE') {
-                console.log('[CAPTAIN] No messages found, using captainHEX as fallback');
-                ws.close();
-                clearTimeout(timeout);
-                resolve({
-                  id: captainHex,
-                  content: 'CAPTAIN profile',
-                  created_at: Math.floor(Date.now() / 1000)
-                });
-              }
-            } catch (e) {
-              console.warn('[CAPTAIN] Message parse error:', e);
-            }
-          };
-          
-          ws.onerror = () => {
-            console.warn('[CAPTAIN] WebSocket error, using captainHEX as fallback');
-            clearTimeout(timeout);
-            resolve({
-              id: captainHex,
-              content: 'CAPTAIN profile',
-              created_at: Math.floor(Date.now() / 1000)
-            });
-          };
-          
-          timeout = setTimeout(() => {
-            console.warn('[CAPTAIN] Timeout, using captainHEX as fallback');
-            ws.close();
-            resolve({
-              id: captainHex,
-              content: 'CAPTAIN profile',
-              created_at: Math.floor(Date.now() / 1000)
-            });
-          }, 5000);
-        });
-      } catch (error) {
-        console.error('[CAPTAIN] Error getting first message:', error);
-        return {
-          id: captainHex,
-          content: 'CAPTAIN profile',
-          created_at: Math.floor(Date.now() / 1000)
-        };
-      }
-    }
-
-    // Function to send like to CAPTAIN (triggers 1 Ẑen payment FROM player TO captain via relay 7.sh)
-    async function sendLikeToCaptain() {
-      try {
-        console.log('[LIKE] Starting like send to CAPTAIN');
-        console.log('[LIKE] User pubkey:', window.userPubkey ? window.userPubkey.substring(0, 8) + '...' : 'none');
-        console.log('[LIKE] User profile:', window.userProfile);
-        
-        const captainData = await fetchCaptainData();
-        if (!captainData) {
-          console.warn('[LIKE] Cannot send like - no captain data');
-          return false;
-        }
-        
-        const { captainHex, firstMessage, captainBalances } = captainData;
-        console.log('[LIKE] Captain data:', {
-          captainHex: captainHex.substring(0, 8) + '...',
-          messageId: firstMessage.id.substring(0, 8) + '...',
-          messageContent: firstMessage.content.substring(0, 100) + '...',
-          balances: captainBalances
-        });
-        
-        // Create a like event (kind 7) to the CAPTAIN's first message
-        // This will trigger the 7.sh script on the relay to send 1 Ẑen
-        const likeEvent = {
-          kind: 7,
-          created_at: Math.floor(Date.now() / 1000),
-          tags: [
-            ['e', firstMessage.id],
-            ['p', captainHex],
-            ['k', '1'],
-            ...(userLat && userLon ? [['g', `${userLat},${userLon}`]] : []),
-          ],
-          content: '+',
-          pubkey: window.userPubkey
-        };
-        
-        console.log('[LIKE] Created like event:', {
-          kind: likeEvent.kind,
-          created_at: likeEvent.created_at,
-          tags: likeEvent.tags,
-          content: likeEvent.content,
-          pubkey: likeEvent.pubkey.substring(0, 8) + '...'
-        });
-        
-        // Sign the event
-        let signedLikeEvent = null;
-        if (window.nostr && typeof window.nostr.signEvent === 'function') {
-          console.log('[LIKE] Signing event with Nostr extension');
-          signedLikeEvent = await window.nostr.signEvent(likeEvent);
-        }
-        
-        if (!signedLikeEvent) {
-          console.warn('[LIKE] Failed to sign like event');
-          return false;
-        }
-        
-        console.log('[LIKE] Event signed successfully, ID:', signedLikeEvent.id.substring(0, 8) + '...');
-        
-        // Send via relay
-        if (nostrRelay && typeof nostrRelay.publish === 'function') {
-          console.log('[LIKE] Publishing via Nostr relay');
-          await nostrRelay.publish(signedLikeEvent);
-          console.log('[LIKE] Like sent via relay, should trigger 1 Ẑen payment');
-          return true;
-        } else {
-          // Fallback: direct WebSocket
-          const relayUrl = window.DEFAULT_RELAYS[0];
-          console.log('[LIKE] Using fallback WebSocket to:', relayUrl);
-          const ws = new WebSocket(relayUrl);
-          
-          return new Promise((resolve) => {
-            ws.onopen = () => {
-              const eventMsg = JSON.stringify(['EVENT', signedLikeEvent]);
-              ws.send(eventMsg);
-              console.log('[LIKE] Like sent via direct WebSocket');
-              ws.close();
-              resolve(true);
-            };
-            
-            ws.onerror = () => {
-              console.error('[LIKE] WebSocket error sending like');
-              resolve(false);
-            };
-            
-            setTimeout(() => {
-              ws.close();
-              resolve(false);
-            }, 5000);
-          });
-        }
-      } catch (error) {
-        console.error('[LIKE] Error sending like:', error);
-        console.error('[LIKE] Error stack:', error.stack);
-        return false;
-      }
-    }
-
     // Function to toggle CAPTAIN accordion
     function toggleCaptainAccordion() {
       const accordion = document.getElementById('captainBalance');
@@ -948,7 +774,7 @@
     }
 
     // Function to display CAPTAIN balances and message in the UI
-    function displayCaptainBalances(captainBalances, captainMessage = null, captainProfile = null) {
+    function displayCaptainBalances(captainBalances, captainProfile = null) {
       if (!captainBalances) return;
       
       // Create or update CAPTAIN balance display
@@ -995,27 +821,9 @@
         balanceHTML += '<div class="balance-item">Balance unavailable</div>';
       }
       
-      // Add CAPTAIN message if available
-      if (captainMessage && captainMessage.content && captainMessage.content !== 'CAPTAIN profile') {
-        const messageDate = new Date(captainMessage.created_at * 1000).toLocaleDateString();
-        
-        // Process the message content directly with IPFS media link processing
-        const processedContent = processIPFSMediaLinks(captainMessage.content);
-        
-        balanceHTML += `<div class="captain-message">
-          <div class="message-label">📝 ${captainName} Message:</div>
-          <div class="message-content">"${processedContent}"</div>
-          <div class="message-date">${messageDate}</div>
-        </div>`;
-      }
+
       
-      // Add info about likes and payments
-      const isLiveMode = window.isPaid && window.userPubkey;
-      if (isLiveMode) {
-        balanceHTML += '<div class="balance-info">💡 Mode réel : FACE déclenche un vrai paiement de 1 ẐEN du joueur au CAPITAINE</div>';
-      } else {
-        balanceHTML += '<div class="balance-info">💡 Mode entraînement : Paiement FACE simulé, pas de vrais paiements</div>';
-      }
+      balanceHTML += '<div class="balance-info">💡 Mode réel : 1 ẐEN mise d\'entrée • mise × 2ⁿ en cas de victoire</div>';
       
       balanceHTML += '</div>'; // Close accordion content
       
@@ -1024,87 +832,71 @@
       // Content is already processed with IPFS media links, no additional processing needed
     }
 
-    // Function to handle cashing out gains
+    // Encaissement : live → /coinflip/payout, practice → simulé
     async function cashoutGains(amount) {
       const messageEl = document.getElementById('message');
       if (!messageEl) return;
-      
-      if (window.userPubkey && window.userProfile && window.userProfile.g1pub) {
-        // Live mode: process real payment
+
+      if (!gameSession) {
+        // Practice mode
         messageEl.innerHTML = `<div class="win-display">
           <div class="win-label">💰 ENCAISSÉ ! 💰</div>
           <div class="win-amount">${amount}</div>
-          <div class="win-currency">ZEN</div>
-          <div class="win-status">Traitement du paiement...</div>
+          <div class="win-currency">ẐEN (simulé)</div>
         </div>`;
-        
-        // Process winning payment
-        const success = await processWinningPayment(amount, window.userPubkey);
-        if (success) {
-          messageEl.innerHTML = `<div class="win-display">
-            <div class="win-label">💰 ENCAISSÉ ! 💰</div>
-            <div class="win-amount">${amount}</div>
-            <div class="win-currency">ZEN</div>
-            <div class="win-status success">✓ Paiement envoyé !</div>
-          </div>`;
-        } else {
-          messageEl.innerHTML = `<div class="win-display">
-            <div class="win-label">💰 ENCAISSÉ ! 💰</div>
-            <div class="win-amount">${amount}</div>
-            <div class="win-currency">ZEN</div>
-            <div class="win-status error">⚠ Paiement échoué</div>
-          </div>`;
-        }
       } else {
-        // Practice mode: show simulated cashout
-        messageEl.innerHTML = `<div class="win-display">
-          <div class="win-label">💰 ENCAISSÉ ! 💰</div>
-          <div class="win-amount">${amount}</div>
-          <div class="win-currency">Ẑen</div>
-          <div class="win-status">Simulé</div>
-        </div>`;
+        // Live mode — paiement server-side via /coinflip/payout
+        messageEl.innerHTML = `<div class="win-display"><div class="win-status">⏳ Paiement en cours...</div></div>`;
+        try {
+          const apiBase = window.NostrState?.upassportUrl || window.__UPASSPORT_API__;
+          const resp = await fetch(`${apiBase}/coinflip/payout`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token: gameSession.token, player_id: window.userProfile?.g1pub || '' })
+          });
+          const data = await resp.json();
+          if (data.ok) {
+            messageEl.innerHTML = `<div class="win-display">
+              <div class="win-label">💰 ENCAISSÉ ! 💰</div>
+              <div class="win-amount">${data.zen}</div>
+              <div class="win-currency">ẐEN</div>
+              <div class="win-status success">✓ Paiement envoyé !</div>
+            </div>`;
+          } else {
+            messageEl.innerHTML = `<div class="win-display">
+              <div class="win-status error">⚠ Paiement échoué — contactez le CAPITAINE</div>
+            </div>`;
+          }
+        } catch (e) {
+          console.error('[CASHOUT] Error:', e);
+          messageEl.innerHTML = `<div class="win-display"><div class="win-status error">⚠ Erreur réseau</div></div>`;
+        }
       }
-      
-      // Reset game state
+
+      gameSession = null;
+      gameActive = false;
       consecutiveHeads = 0;
-      isFirstClick = true; // Reset to first click after cashout
-      window.gameResetForLiveMode = false; // Allow game reset on next mode update
-      updateModeBadge();
-      
-      // Reset coin image
+      window.gameResetForLiveMode = false;
       const coinEl = document.getElementById('coin');
-      if (coinEl) {
-        coinEl.src = '/ipfs/QmeZhZ6yR6YHhiZ9qfBUCA1RKUP83dZL6MtU4PCBrdzjWn';
-      }
-      
-      // Reset flipping state
-      isFlipping = false;
+      if (coinEl) coinEl.src = '/ipfs/QmeZhZ6yR6YHhiZ9qfBUCA1RKUP83dZL6MtU4PCBrdzjWn';
+      updateModeBadge();
     }
 
     function updateModeBadge() {
       const badge = document.getElementById('modeBadge');
-      console.log('[MODE] Updating mode badge');
-      console.log('[MODE] User pubkey:', window.userPubkey ? window.userPubkey.substring(0, 8) + '...' : 'none');
-      console.log('[MODE] User profile:', window.userProfile);
-      console.log('[MODE] Has G1PUB:', window.userProfile?.g1pub ? 'yes' : 'no');
-      console.log('[MODE] Balance:', window.userProfile?.balance);
-      console.log('[MODE] G1 Balance:', window.userProfile?.g1Balance);
-      
       if (window.userPubkey && window.userProfile && window.userProfile.g1pub) {
-        badge.className = 'status ready';
+        badge.className = 'status live';
         if (window.userProfile.balance !== undefined) {
-          badge.textContent = `Prêt à jouer • Solde : ${window.userProfile.balance} ẐEN • FACE → envoyer 1 ẐEN au CAPITAINE`;
-          console.log('[MODE] Set to READY mode with balance:', window.userProfile.balance);
+          badge.textContent = `Mode réel • Solde : ${window.userProfile.balance} ẐEN • Mise : 1 ẐEN/partie`;
         } else {
-          badge.textContent = 'Prêt à jouer • MULTIPASS vérifié • FACE → envoyer 1 ẐEN au CAPITAINE';
-          console.log('[MODE] Set to READY mode without balance');
+          badge.textContent = 'Mode réel • MULTIPASS vérifié • Mise : 1 ẐEN/partie';
         }
         
         // Reset game state for live mode when user has MULTIPASS
         if (!window.gameResetForLiveMode) {
-          console.log('[GAME] Resetting game state for live mode with MULTIPASS');
           consecutiveHeads = 0;
-          isFirstClick = true;
+          gameSession = null;
+          gameActive = false;
           window.gameResetForLiveMode = true;
           
           // Update initial message for live mode
@@ -1121,20 +913,90 @@
         }
       } else if (window.userPubkey) {
         badge.className = 'status practice';
-        badge.textContent = 'Mode entraînement • MULTIPASS requis • Paiement FACE simulé';
-        console.log('[MODE] Set to PRACTICE mode - no MULTIPASS');
-        // Reset game state for practice mode
+        badge.textContent = 'Mode entraînement • MULTIPASS requis pour jouer en réel';
         window.gameResetForLiveMode = false;
       } else {
         badge.className = 'status practice';
-        badge.textContent = 'Mode entraînement • se connecter pour jouer • Paiement FACE simulé';
-        console.log('[MODE] Set to PRACTICE mode - not connected');
-        // Reset game state for practice mode
+        badge.textContent = 'Mode entraînement • connectez-vous pour jouer en réel';
         window.gameResetForLiveMode = false;
       }
     }
 
-    // Calcule l'URL de la station Astroport (port 12345) — common.js gère upassportUrl et relay
+    // Démarre une partie live : paye 1 ẐEN (mise) via /zen_send → obtient session token
+    async function startLiveGame() {
+      const apiBase = window.NostrState?.upassportUrl || window.__UPASSPORT_API__;
+      if (!apiBase || !window.userPubkey || !window.captainData?.captainG1pub) return null;
+      const form = new FormData();
+      form.append('npub', window.userPubkey);
+      form.append('g1dest', window.captainData.captainG1pub);
+      form.append('zen', '1');
+      try {
+        const resp = await fetch(`${apiBase}/zen_send`, { method: 'POST', body: form, mode: 'cors' });
+        if (!resp.ok) return null;
+        const data = await resp.json();
+        if (data.ok && data.token) {
+          console.log('[GAME] Session créée sid=', data.sid);
+          return { token: data.token, sid: data.sid, exp: data.exp };
+        }
+        const msgEl = document.getElementById('message');
+        if (msgEl) {
+          if (data.type === 'daily_limit') {
+            msgEl.innerHTML = '<p style="color:#e53e3e;font-weight:600">⏳ Une partie par jour autorisée. Revenez demain !</p>';
+          } else {
+            msgEl.innerHTML = `<p style="color:#e53e3e">⚠ Mise refusée : ${data.error || 'Solde insuffisant ou erreur réseau'}</p>`;
+          }
+        }
+        return null;
+      } catch(e) {
+        console.error('[GAME] startLiveGame error:', e);
+        return null;
+      }
+    }
+
+    // Lance un coin flip server-side (cryptographiquement aléatoire)
+    async function doServerFlip(token) {
+      const apiBase = window.NostrState?.upassportUrl || window.__UPASSPORT_API__;
+      try {
+        const resp = await fetch(`${apiBase}/coinflip/flip`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token })
+        });
+        if (!resp.ok) return null;
+        return await resp.json(); // { ok, sid, result, consecutive }
+      } catch(e) {
+        console.error('[GAME] flip error:', e);
+        return null;
+      }
+    }
+
+    // Viewer COINFLIP.md avec marked.js
+    async function toggleDocViewer() {
+      const viewer = document.getElementById('docViewer');
+      const btn = document.getElementById('docToggle');
+      if (!viewer) return;
+      if (viewer.style.display === 'none') {
+        viewer.style.display = 'block';
+        if (btn) btn.textContent = '📖 Fermer les règles';
+        if (!viewer.dataset.loaded) {
+          try {
+            const resp = await fetch('./COINFLIP.md');
+            const md = await resp.text();
+            viewer.innerHTML = typeof marked !== 'undefined'
+              ? marked.parse(md)
+              : '<pre>' + md.replace(/</g, '&lt;') + '</pre>';
+            viewer.dataset.loaded = '1';
+          } catch (e) {
+            viewer.innerHTML = '<p style="color:#e53e3e">Impossible de charger COINFLIP.md</p>';
+          }
+        }
+      } else {
+        viewer.style.display = 'none';
+        if (btn) btn.textContent = '📖 Règles du jeu — Paradoxe de Saint-Pétersbourg (COINFLIP.md)';
+      }
+    }
+
+        // Calcule l'URL de la station Astroport (port 12345) — common.js gère upassportUrl et relay
     function computeAstroURL() {
       const { hostname, port, protocol } = new URL(window.location.href);
       const sruHost = hostname.replace(/^(ipfs|u)\./, 'astroport.');
@@ -1191,7 +1053,6 @@
         let zencardFromProfile = '';
         try {
           // Hybrid approach: use direct WebSocket for reliable communication
-          console.log('[Profile] Using direct WebSocket for profile fetch');
           
           const parseAndAssign = (ev) => {
             try { 
@@ -1204,19 +1065,14 @@
             } catch {}
             try {
               if (Array.isArray(ev.tags)) {
-                console.log('[Profile] Parsing tags:', ev.tags);
                 for (const t of ev.tags) {
                   if (Array.isArray(t) && t[0] === 'i' && typeof t[1] === 'string') {
-                    console.log('[Profile] Processing tag:', t[0], t[1]);
                     if (t[1].startsWith('g1pub:')) { 
                       g1pubFromProfile = t[1].slice('g1pub:'.length); 
-                      console.log('[Profile] Found g1pub:', g1pubFromProfile);
                     } else if (t[1].startsWith('g1pubv2:') && !g1pubFromProfile) { 
                       g1pubFromProfile = t[1].slice('g1pubv2:'.length); 
-                      console.log('[Profile] Found g1pubv2:', g1pubFromProfile);
                     } else if (t[1].startsWith('zencard:')) { 
                       zencardFromProfile = t[1].slice('zencard:'.length); 
-                      console.log('[Profile] Found zencard:', zencardFromProfile);
                     }
                   }
                 }
@@ -1226,13 +1082,11 @@
 
           // Create a dedicated WebSocket for profile fetching
           const relayUrl = window.DEFAULT_RELAYS[0];
-          console.log('[Profile] Creating dedicated WebSocket to:', relayUrl);
           
           await new Promise((resolve) => {
             let done = false;
             const timeout = setTimeout(() => { 
               if (!done) {
-                console.log('[Profile] WebSocket timeout, resolving');
                 resolve(); 
               }
             }, 8000);
@@ -1240,23 +1094,18 @@
             const ws = new WebSocket(relayUrl);
             
             ws.onopen = () => {
-              console.log('[Profile] WebSocket connected, sending REQ');
               const subId = `profile_${Date.now()}`;
               const req = JSON.stringify(['REQ', subId, { kinds: [0], authors: [hexPubkey], limit: 1 }]);
               ws.send(req);
-              console.log('[Profile] Sent REQ:', req);
             };
             
             ws.onmessage = (event) => {
               try {
                 const data = JSON.parse(event.data);
-                console.log('[Profile] Received:', data[0], data[1]);
                 
                 if (data[0] === 'EVENT' && data[2]?.kind === 0) {
-                  console.log('[Profile] Parsing profile event:', data[2]);
                   parseAndAssign(data[2]);
                 } else if (data[0] === 'EOSE') {
-                  console.log('[Profile] EOSE received');
                   done = true;
                   clearTimeout(timeout);
                   ws.close();
@@ -1272,7 +1121,6 @@
             };
             
             ws.onclose = () => {
-              console.log('[Profile] WebSocket closed');
               if (!done) {
                 clearTimeout(timeout);
                 resolve();
@@ -1290,15 +1138,7 @@
         // Filter out "None" values from zencard
         const hasZencard = zencardFromProfile && zencardFromProfile.length > 0 && zencardFromProfile !== 'None';
         const hasG1pub = g1pubFromProfile && g1pubFromProfile.length > 0;
-        
-        console.log('[Profile] Final values:', {
-          name,
-          hasZencard,
-          zencardFromProfile,
-          hasG1pub,
-          g1pubFromProfile
-        });
-        
+
         pName.innerHTML = `${name} <span class="muted">(${short})</span>${hasG1pub ? ' • <span style="color:#22c55e">MULTIPASS</span>' : ' • <span style="color:#ef4444">Pas de MULTIPASS</span>'}${hasZencard ? ' • <span style="color:#f59e0b">ZENCARD</span>' : ''}`;
         pAbout.textContent = about || '';
         pFields.innerHTML = '';
@@ -1341,23 +1181,15 @@
         let userBalance = 0;
         let userG1Balance = 0;
         
-        console.log('[BALANCE] Starting balance fetch for user with MULTIPASS');
-        console.log('[BALANCE] API Base URL:', apiBase);
-        console.log('[BALANCE] G1PUB from profile:', g1pubFromProfile);
-        console.log('[BALANCE] Has G1PUB:', hasG1pub);
         
         if (hasG1pub) {
           try {
             const balanceUrl = `${apiBase}/check_balance?g1pub=${encodeURIComponent(g1pubFromProfile)}`;
-            console.log('[BALANCE] Fetching from URL:', balanceUrl);
             
             const r = await fetch(balanceUrl);
-            console.log('[BALANCE] API Response status:', r.status, r.statusText);
-            console.log('[BALANCE] API Response headers:', Object.fromEntries(r.headers.entries()));
             
             if (r.ok) {
               const js = await r.json();
-              console.log('[BALANCE] API Response JSON:', js);
               
               // Try different possible field names for balance
               const g1 = Number(js.balance || js.g1_balance || js.total || js.ud_value || 0);
@@ -1366,20 +1198,12 @@
               // Calculate ZEN: (G1 - 1) * 10, minimum 0
               const zen = Math.max(0, Math.floor((g1 - 1) * 10));
               userBalance = zen;
-              
-              console.log('[BALANCE] Calculated balance:', { 
-                g1, 
-                zen, 
-                formula: `(${g1} - 1) * 10 = ${zen}`,
-                rawResponse: js
-              });
-              
+
               const chip = document.createElement('span');
               chip.className = 'p-chip';
               chip.textContent = `ẐEN: ${zen} (${g1} Ğ1)`;
               pFields.appendChild(chip);
               
-              console.log('[BALANCE] Balance chip added to UI:', chip.textContent);
             } else {
               console.warn('[BALANCE] API error response:', r.status, r.statusText);
               const errorText = await r.text();
@@ -1400,7 +1224,6 @@
             pFields.appendChild(chip);
           }
         } else {
-          console.log('[BALANCE] No G1PUB found in profile, skipping balance fetch');
         }
         
         // Store profile information for later use (balance info for MULTIPASS users)
@@ -1413,15 +1236,9 @@
             balance: userBalance,
             g1Balance: userG1Balance
           };
-          console.log('[Profile] MULTIPASS detected - balance info stored:', {
-            g1pub: g1pubFromProfile,
-            g1Balance: userG1Balance,
-            zenBalance: userBalance
-          });
         } else {
           // Clear profile information for non-MULTIPASS users
           window.userProfile = null;
-          console.log('[Profile] No MULTIPASS detected');
           
           // Add help message for getting MULTIPASS
           const helpChip = document.createElement('div');
@@ -1446,86 +1263,6 @@
       }
     }
 
-    // Function to process winning payments
-    async function processWinningPayment(amount, userPubkey) {
-      // upassportUrl géré par common.js
-      
-      console.log('[Payment] Processing winning payment:', amount, 'ZEN from CAPTAIN to', window.userPubkey);
-      console.log('[Payment] CAPTAIN data:', window.captainData);
-      console.log('[Payment] User profile:', window.userProfile);
-      
-      try {
-        const form = new FormData();
-        form.append('zen', amount.toString());
-        form.append('g1dest', window.userPubkey); // Send winnings TO the winner (player)
-        form.append('npub', window.userPubkey); // Destination Nostr pubkey (player)
-        
-        // Use CAPTAIN's data as the SOURCE of payment
-        if (window.captainData?.captainG1pub) {
-          form.append('g1source', window.captainData.captainG1pub);
-          console.log('[Payment] Using CAPTAIN G1PUB as source:', window.captainData.captainG1pub);
-        }
-        
-        // Use CAPTAIN's Nostr pubkey as sender
-        if (window.captainData?.captainHex) {
-          form.append('npub_sender', window.captainData.captainHex);
-          console.log('[Payment] Using CAPTAIN Nostr pubkey as sender:', window.captainData.captainHex);
-        }
-        
-        // Use CAPTAIN's ZENCARD if available
-        if (window.captainData?.captainZencardG1pub && window.captainData.captainZencardG1pub !== 'None') {
-          form.append('zencard', window.captainData.captainZencardG1pub);
-          console.log('[Payment] Using CAPTAIN ZENCARD:', window.captainData.captainZencardG1pub);
-        } else {
-          console.log('[Payment] No CAPTAIN ZENCARD available, using main wallet');
-        }
-        
-        // Include player's G1PUB for destination identification
-        if (window.userProfile?.g1pub) {
-          form.append('g1pub', window.userProfile.g1pub);
-          console.log('[Payment] Including player G1PUB for destination:', window.userProfile.g1pub);
-        }
-        
-        console.log('[Payment] Form data prepared:', {
-          zen: amount,
-          g1dest: window.userPubkey,
-          npub: window.userPubkey,
-          g1source: window.captainData?.captainG1pub || 'none',
-          npub_sender: window.captainData?.captainHex || 'none',
-          zencard: window.captainData?.captainZencardG1pub || 'none',
-          g1pub: window.userProfile?.g1pub || 'none'
-        });
-        
-        console.log('[Payment] Sending winning payment request to:', `${window.NostrState?.upassportUrl || window.__UPASSPORT_API__}/zen_send`);
-        const resp = await fetch(`${window.NostrState?.upassportUrl || window.__UPASSPORT_API__}/zen_send`, { method: 'POST', body: form, mode: 'cors' });
-        
-        console.log('[Payment] Response status:', resp.status, resp.statusText);
-        console.log('[Payment] Response headers:', Object.fromEntries(resp.headers.entries()));
-        
-        if (!resp.ok) {
-          console.error('[Payment] HTTP error:', resp.status, resp.statusText);
-          const errorText = await resp.text();
-          console.error('[Payment] Error response body:', errorText);
-          return false;
-        }
-        
-        const result = await resp.json();
-        console.log('[Payment] API response:', result);
-        
-        if (result.ok && result.zen_send_result?.success) {
-          console.log('[Payment] Payment successful:', result.zen_send_result.message);
-          return true;
-        } else {
-          console.error('[Payment] Payment failed:', result.error || result.zen_send_result?.error || 'Unknown error');
-          return false;
-        }
-      } catch (e) {
-        console.error('[Payment] Payment error:', e);
-        console.error('[Payment] Error stack:', e.stack);
-        return false;
-      }
-    }
-
     // Function to extract URL parameters
     function getUrlParameter(name) {
       name = name.replace(/[\[]/, '\\[').replace(/[\]]/, '\\]');
@@ -1539,236 +1276,128 @@
     const G1PUB = getUrlParameter('g1pub') || "";
 
     let isFlipping = false;
-    let consecutiveHeads = 0; // 2⁰ = 1, 2¹ = 2, 2² = 4, 2³ = 8...
-    let isFirstClick = true; // Track if this is the first click
+    let consecutiveHeads = 0; // nombre de PILES consécutifs (sync avec sess.consecutive - 1)
 
-    // Add event listener only if coin element exists
+    // Coin click handler — flux server-side
     const coinElement = document.getElementById('coin');
     if (coinElement) {
-      coinElement.addEventListener('click', (event) => {
-        // Check if user is on the correct Astroport for their MULTIPASS
-        if (window.userPubkey && window.userProfile && window.userProfile.g1pub) {
-          const currentHostname = window.location.hostname;
-          // Allow Astroport domains and their IPFS gateways
-          const isOnAstroport = currentHostname.includes('astroport.') || 
-                                currentHostname.includes('127.0.0.1') || 
-                                currentHostname.includes('localhost') ||
-                                currentHostname.includes('copylaradio.com') || // Allow all copylaradio.com subdomains
-                                currentHostname.includes('ipfs.') && currentHostname.includes('.com'); // Allow IPFS gateways
-          
-          console.log('[GAME] Astroport check:', {
-            hostname: currentHostname,
-            isOnAstroport: isOnAstroport,
-            checks: {
-              astroport: currentHostname.includes('astroport.'),
-              localhost: currentHostname.includes('127.0.0.1') || currentHostname.includes('localhost'),
-              copylaradio: currentHostname.includes('copylaradio.com'),
-              ipfs: currentHostname.includes('ipfs.') && currentHostname.includes('.com')
-            }
-          });
-          
-          if (!isOnAstroport) {
-            console.warn('[GAME] User with MULTIPASS trying to play outside Astroport');
-            const messageEl = document.getElementById('message');
-            if (messageEl) {
-              messageEl.innerHTML = `<div class="win-display">
-                <div class="win-label">⚠️ Astroport Requis</div>
-                <div class="win-amount">MULTIPASS</div>
-                <div class="win-currency">Seulement</div>
-                <div class="win-status">Ce jeu ne peut être joué que sur l'Astroport où votre MULTIPASS est enregistré</div>
-              </div>`;
-            }
+      coinElement.addEventListener('click', async (event) => {
+        // Vérification roaming : jeu réservé à l'Astroport du MULTIPASS
+        if (window.userPubkey && window.userProfile?.g1pub) {
+          const h = window.location.hostname;
+          const ok = h.includes('astroport.') || h.includes('127.0.0.1') ||
+                     h.includes('localhost') || h.includes('copylaradio.com') ||
+                     (h.includes('ipfs.') && h.includes('.com'));
+          if (!ok) {
+            const msgEl = document.getElementById('message');
+            if (msgEl) msgEl.innerHTML = `<div class="win-display" style="background:linear-gradient(135deg,#fecaca,#fca5a5);border-color:#ef4444">
+              <div class="win-label">⚠️ Astroport requis</div>
+              <div class="win-status">Le jeu nécessite d'être sur l'Astroport où votre MULTIPASS est enregistré</div>
+            </div>`;
             return;
           }
         }
-        
-        if (!isFlipping) {
 
-          isFlipping = true;
-          
-          // Note: Like to CAPTAIN will be sent only if TAILS (game loss) occurs
-          console.log('[GAME] Coin flip initiated - like will be sent to CAPTAIN only if TAILS (loss)');
-          
-          // Show flipping message
-          const messageEl = document.getElementById('message');
-          const coinEl = document.getElementById('coin');
-          
-          if (!messageEl || !coinEl) {
-            console.error('Required DOM elements not found');
+        if (isFlipping) return;
+        isFlipping = true;
+
+        const msgEl = document.getElementById('message');
+        const coinEl = document.getElementById('coin');
+        if (!msgEl || !coinEl) { isFlipping = false; return; }
+
+        msgEl.innerHTML = '<div class="flipping-display"><div class="flipping-icon">🪙</div><div class="flipping-text">Lancement...</div></div>';
+        coinEl.style.transform = 'rotateY(360deg)';
+
+        const isLive = !!(window.userPubkey && window.userProfile?.g1pub);
+
+        // Démarrer une nouvelle partie live (paiement de la mise)
+        if (isLive && !gameActive) {
+          msgEl.innerHTML = '<div class="flipping-display"><div class="flipping-text">Paiement de la mise (1 ẐEN)...</div></div>';
+          const session = await startLiveGame();
+          if (!session) {
+            isFlipping = false;
+            coinEl.style.transform = 'rotateY(0deg)';
             return;
           }
-          
-          messageEl.innerHTML = '<div class="flipping-display"><div class="flipping-icon">🪙</div><div class="flipping-text">Lancement de la pièce...</div></div>';
-          coinEl.style.transform = 'rotateY(360deg)';
-        setTimeout(() => {
-          // Use cryptographically strong randomness instead of Math.random()
+          gameSession = session;
+          gameActive = true;
+          msgEl.innerHTML = '<div class="flipping-display"><div class="flipping-icon">🪙</div><div class="flipping-text">Lancement...</div></div>';
+        }
+
+        await new Promise(r => setTimeout(r, 600)); // animation
+
+        let result, consecutive;
+
+        if (gameActive && gameSession) {
+          // Flip server-side
+          const flip = await doServerFlip(gameSession.token);
+          if (!flip) {
+            msgEl.innerHTML = '<p style="color:#e53e3e">⚠ Erreur de connexion au serveur</p>';
+            isFlipping = false;
+            coinEl.style.transform = 'rotateY(0deg)';
+            return;
+          }
+          result = flip.result;       // 'Heads' | 'Tails'
+          consecutive = flip.consecutive; // compteur server
+        } else {
+          // Practice mode — flip client-side
           const buf = new Uint32Array(1);
           (window.crypto || window.msCrypto).getRandomValues(buf);
-          const result = (buf[0] & 1) === 0 ? 'Heads' : 'Tails';
-          
-          // Mark that this is no longer the first click
-          isFirstClick = false;
-          
-            if (result === 'Heads') {
-              consecutiveHeads++;
-              if (coinEl) {
-                coinEl.src = '/ipfs/QmZ6jrZGTWo4eimrGxu7BfKjYfRLqknb18WhmekNxppFg9';
-              }
-              
-              // Calculate potential gain: 2⁰ = 1, 2¹ = 2, 2² = 4, 2³ = 8...
-              // consecutiveHeads starts at 0, so first head = 2⁰ = 1, second head = 2¹ = 2, etc.
-              let potentialGain = Math.pow(2, consecutiveHeads);
-              
-              console.log('[GAME] Heads result - consecutiveHeads:', consecutiveHeads, 'gain:', potentialGain, 'formula: 2^' + consecutiveHeads + ' = ' + potentialGain);
-              
-              const msgEl1 = document.getElementById('message');
-              if (msgEl1) { 
-                if (window.userPubkey && window.userProfile && window.userProfile.g1pub) {
-                  msgEl1.innerHTML = `<div class="gain-display">
-                    <div class="gain-amount">${potentialGain}</div>
-                    <div class="gain-currency">ZEN</div>
-                    <div class="gain-streak">Série : ${consecutiveHeads} PILE</div>
-                    <div class="gain-next">Prochain PILE : ${Math.pow(2, consecutiveHeads + 1)} ZEN • FACE : tout perdre + envoyer 1 ẐEN au CAPITAINE</div>
-                    <button class="cashout-btn" onclick="cashoutGains(${potentialGain})">💰 ENCAISSER</button>
-                    <div class="practice-info">💡 Mode réel : Continuez pour doubler ou encaissez maintenant !</div>
-                  </div>`;
-                } else {
-                  msgEl1.innerHTML = `<div class="gain-display">
-                    <div class="gain-amount">${potentialGain}</div>
-                    <div class="gain-currency">Ẑen</div>
-                    <div class="gain-streak">Série : ${consecutiveHeads} PILE</div>
-                    <div class="gain-next">Prochain PILE : ${Math.pow(2, consecutiveHeads + 1)} Ẑen • FACE : tout perdre + envoyer 1 Ẑen au CAPITAINE</div>
-                    <button class="cashout-btn" onclick="cashoutGains(${potentialGain})">💰 ENCAISSER</button>
-                    <div class="practice-info">💡 Mode entraînement : Continuez pour doubler ou encaissez maintenant !</div>
-                  </div>`;
-                }
-              }
-
-            } else {
-             // St. Petersburg paradox: When TAILS appears, player loses everything and sends 1 ZEN to CAPTAIN
-             // Send like to CAPTAIN (triggers 1 Ẑen payment FROM player TO captain)
-             console.log('[GAME] Tails result - game ends, player loses cagnotte and sends 1 ZEN to CAPTAIN');
-             
-             // Send like to CAPTAIN (player pays 1 ZEN to captain)
-             console.log('[GAME] TAILS - checking conditions for like sending:');
-             console.log('[GAME] - window.userPubkey:', window.userPubkey ? window.userPubkey.substring(0, 8) + '...' : 'none');
-             console.log('[GAME] - window.userProfile:', window.userProfile);
-             console.log('[GAME] - window.captainData:', window.captainData);
-             
-             if (window.userPubkey && window.userProfile && window.userProfile.g1pub) {
-               console.log('[GAME] Live mode: Sending like to CAPTAIN for TAILS (player pays 1 Ẑen to captain)');
-               sendLikeToCaptain().then(success => {
-                 if (success) {
-                   console.log('[GAME] Like sent successfully, player paid 1 Ẑen to CAPTAIN');
-                 } else {
-                   console.warn('[GAME] Failed to send like to CAPTAIN');
-                 }
-               }).catch(error => {
-                 console.error('[GAME] Error sending like to CAPTAIN:', error);
-               });
-             } else {
-               console.log('[GAME] Practice mode: Like would be sent to CAPTAIN (player would pay 1 Ẑen to captain)');
-               console.log('[GAME] Conditions not met for live mode like sending');
-             }
-
-                // STOP CLIC
-                event.stopPropagation();
-                event.preventDefault();
-
-                        var info = document.getElementById("ainfo");
-            if (window.userPubkey && window.userProfile && window.userProfile.g1pub) {
-              // TAILS = Loss but with 1 ZEN compensation
-              const msgEl2 = document.getElementById('message');
-              if (msgEl2) { 
-                msgEl2.innerHTML = `<div class="win-display" style="background: linear-gradient(135deg, #fecaca, #fca5a5); border-color: #ef4444;">
-                  <div class="win-label">💔 FACE - JEU TERMINÉ 💔</div>
-                  <div class="win-amount">1</div>
-                  <div class="win-currency">ZEN</div>
-                  <div class="win-status">Envoi du paiement au CAPITAINE...</div>
-                  <div class="practice-info">Cagnotte perdue : ${Math.pow(2, consecutiveHeads)} ZEN • Paiement au CAPITAINE : 1 ZEN</div>
-                </div>`; 
-              }
-              
-              // No winning payment - just the 1 ZEN compensation from like
-              setTimeout(() => {
-                  if (msgEl2) {
-                  msgEl2.innerHTML = `<div class="win-display" style="background: linear-gradient(135deg, #fecaca, #fca5a5); border-color: #ef4444;">
-                    <div class="win-label">💔 TAILS - GAME OVER 💔</div>
-                    <div class="win-amount">1</div>
-                      <div class="win-currency">ZEN</div>
-                    <div class="win-status success">✓ Paiement envoyé au CAPITAINE !</div>
-                    <div class="practice-info">Cagnotte perdue : ${Math.pow(2, consecutiveHeads)} ZEN • Paiement au CAPITAINE : 1 ZEN</div>
-                    </div>`;
-                  }
-              }, 2000);
-                } else {
-                // Practice mode: show simulated loss with compensation
-                const msgEl3 = document.getElementById('message');
-                if (msgEl3) { 
-                  msgEl3.innerHTML = `<div class="win-display" style="background: linear-gradient(135deg, #fecaca, #fca5a5); border-color: #ef4444;">
-                    <div class="win-label">💔 FACE - JEU TERMINÉ 💔</div>
-                    <div class="win-amount">1</div>
-                    <div class="win-currency">Ẑen</div>
-                    <div class="win-status">Paiement (simulé)</div>
-                    <div class="practice-info">Cagnotte perdue : ${Math.pow(2, consecutiveHeads)} Ẑen • Paiement au CAPITAINE : 1 Ẑen</div>
-                  </div>`; 
-                }
-              }
-
-                                                // Reset game state; game can continue immediately
-                consecutiveHeads = 0;
-                isFirstClick = true; // Reset to first click after game ends
-                window.gameResetForLiveMode = false; // Allow game reset on next mode update
-                updateModeBadge();
-                
-                // Reset message to initial state
-                if (messageEl) {
-                  messageEl.innerHTML = '<p>Cliquez sur la pièce pour la lancer.<br><small>💡 PILE = doubler la cagnotte, FACE = perdre la cagnotte et envoyer 1 ẐEN au CAPITAINE</small></p>';
-                }
-              if (coinEl) {
-                coinEl.src = '/ipfs/QmeZhZ6yR6YHhiZ9qfBUCA1RKUP83dZL6MtU4PCBrdzjWn'; // Coin Pile Icon
-              }
-
-            }
-          isFlipping = false;
-          if (coinEl) {
-            coinEl.style.transform = 'rotateY(0deg)';
-          }
-        }, 600); // Delay must match the transition time in CSS
+          result = (buf[0] & 1) === 0 ? 'Heads' : 'Tails';
+          consecutive = consecutiveHeads + 2; // simule la valeur server
         }
+
+        if (result === 'Heads') {
+          consecutiveHeads = consecutive - 1; // sync avec serveur
+          const potentialGain = Math.pow(2, consecutiveHeads);
+          coinEl.src = '/ipfs/QmZ6jrZGTWo4eimrGxu7BfKjYfRLqknb18WhmekNxppFg9';
+          msgEl.innerHTML = `<div class="gain-display">
+            <div class="gain-amount">${potentialGain}</div>
+            <div class="gain-currency">${isLive ? 'ẐEN' : 'ẐEN (simulé)'}</div>
+            <div class="gain-streak">Série : ${consecutiveHeads} PILE${consecutiveHeads > 1 ? 'S' : ''}</div>
+            <div class="gain-next">Prochain PILE : ${potentialGain * 2} ẐEN • FACE = mise perdue</div>
+            <button class="cashout-btn" onclick="cashoutGains(${potentialGain})">💰 ENCAISSER ${potentialGain} ẐEN</button>
+          </div>`;
+        } else {
+          // FACE — partie terminée, mise perdue
+          consecutiveHeads = 0;
+          gameSession = null;
+          gameActive = false;
+          coinEl.src = '/ipfs/QmeZhZ6yR6YHhiZ9qfBUCA1RKUP83dZL6MtU4PCBrdzjWn';
+          msgEl.innerHTML = `<div class="win-display" style="background:linear-gradient(135deg,#fecaca,#fca5a5);border-color:#ef4444">
+            <div class="win-label">💔 FACE — JEU TERMINÉ</div>
+            <div class="win-status">${isLive ? '1 ẐEN de mise perdu' : 'Simulé'}</div>
+          </div>`;
+          setTimeout(() => {
+            msgEl.innerHTML = '<p>Cliquez sur la pièce pour jouer.<br><small>💡 PILE = cagnotte double • FACE = mise perdue</small></p>';
+            coinEl.src = '/ipfs/QmYCKyYnYDGq6U7WuMmUoF7v5okvzoEThgYyKj9AzJPeP2';
+            window.gameResetForLiveMode = false;
+            updateModeBadge();
+          }, 2500);
+        }
+
+        isFlipping = false;
+        coinEl.style.transform = 'rotateY(0deg)';
+        event.stopPropagation();
       });
     }
 
-    // Wire up auth UI
+    // Initialisation de la page
     document.addEventListener('DOMContentLoaded', () => {
-      console.log('[INIT] Page loaded, starting initialization sequence');
       detectUSPOTAPI(); computeAstroURL();
       const loginBtn = document.getElementById('loginBtn');
-      
-      // Set initial message
       const messageEl = document.getElementById('message');
       if (messageEl) {
-        messageEl.innerHTML = '<p>Cliquez sur la pièce pour la lancer.<br><small>💡 PILE = doubler la cagnotte, FACE = perdre la cagnotte et envoyer 1 ẐEN au CAPITAINE</small></p>';
+        messageEl.innerHTML = '<p>Cliquez sur la pièce pour jouer.<br><small>💡 PILE = cagnotte double • FACE = mise perdue • 1 partie/jour en mode réel</small></p>';
       }
-      
-      // Fetch CAPTAIN data ONCE at page load (not related to user login)
-      console.log('[INIT] Fetching CAPTAIN data once at page load');
+      // Récupérer les données CAPITAINE au chargement
       setTimeout(() => {
         if (!window.captainDataFetched) {
-          fetchCaptainData().then(captainData => {
-            if (captainData) {
-              console.log('[CAPTAIN] Initial data fetched for display:', captainData);
-              window.captainDataFetched = true;
-            }
-          }).catch(err => {
-            console.warn('[CAPTAIN] Failed to fetch initial data:', err);
-          });
-        } else {
-          console.log('[CAPTAIN] Data already fetched, skipping');
+          fetchCaptainData()
+            .then(d => { if (d) window.captainDataFetched = true; })
+            .catch(err => console.warn('[CAPTAIN] Fetch failed:', err));
         }
-      }, 1000); // Small delay to ensure API detection is complete
-      
-      // Check Nostr extension quickly
+      }, 800);
       setTimeout(() => {
         if (!window.nostr || typeof window.nostr.getPublicKey !== 'function') {
           loginBtn.disabled = true;
@@ -1778,11 +1407,9 @@
       loginBtn.addEventListener('click', handleLogin);
     });
     
-        // Function to process IPFS media links in text content
+        // Convertit les liens IPFS en éléments médias embarqués
     function processIPFSMediaLinks(text) {
       if (!text) return text;
-      
-      console.log('[IPFS] Processing text for media links:', text.substring(0, 100) + '...');
       
       // Replace line breaks with <br> tags to preserve formatting
       let processedText = text.replace(/\n/g, '<br>');
@@ -1795,7 +1422,6 @@
         baseUrl += `:${url.port}`;
       }
       
-      console.log('[IPFS] Base URL for gateway replacement:', baseUrl);
       
       // Use a single regex to match all IPFS links and process them in order of specificity
       
@@ -1813,7 +1439,6 @@
         });
       }
       
-      console.log('[IPFS] Found IPFS links:', ipfsLinks.length);
       
       // Sort links by specificity (media files first, then regular links)
       ipfsLinks.sort((a, b) => {
@@ -1830,16 +1455,13 @@
       
       for (const link of ipfsLinks) {
         if (processedUrls.has(link.url)) {
-          console.log('[IPFS] URL already processed, skipping:', link.url);
           continue;
         }
         
-        console.log('[IPFS] Processing link:', link.url);
         processedUrls.add(link.url);
         
         // Convert gateway
         const newUrl = link.url.replace(/(https?:\/\/)[^\/]+(\/ipfs\/)/, `${baseUrl}/ipfs/`);
-        console.log('[IPFS] Converted to:', newUrl);
         
         // Determine replacement based on file type
         let replacement;
@@ -1849,28 +1471,22 @@
             <source src="${newUrl}" type="video/${ext}">
             Your browser does not support the video tag.
           </video>`;
-          console.log('[IPFS] Replaced with video element');
         } else if (/\.(mp3|wav|ogg|flac|aac|m4a)$/i.test(link.url)) {
           const ext = link.url.split('.').pop().toLowerCase();
           replacement = `<audio controls style="max-width: 150px; margin: 4px;" preload="metadata">
             <source src="${newUrl}" type="audio/${ext}">
             Your browser does not support the audio tag.
           </audio>`;
-          console.log('[IPFS] Replaced with audio element');
         } else if (/\.(jpg|jpeg|png|gif|webp|svg|bmp|ico)$/i.test(link.url)) {
           replacement = `<img src="${newUrl}" alt="Image" style="max-width: 150px; max-height: 150px; border-radius: 8px; margin: 4px; cursor: pointer;" onclick="openImageModal('${newUrl}')" title="Click to enlarge">`;
-          console.log('[IPFS] Replaced with image element');
         } else {
           replacement = `<a href="${newUrl}" target="_blank" rel="noopener noreferrer" style="color: #0ea5e9; text-decoration: none;">${newUrl}</a>`;
-          console.log('[IPFS] Replaced with link element');
         }
         
         // Replace in text
         processedText = processedText.replace(link.fullMatch, replacement);
       }
       
-      console.log('[IPFS] Final processed text:', processedText.substring(0, 200) + '...');
-      console.log('[IPFS] Processed URLs count:', processedUrls.size);
       return processedText;
     }
     

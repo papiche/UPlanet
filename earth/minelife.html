@@ -3433,6 +3433,7 @@ const BRO = {
     nodeNpubBech32: null,
     listening: false,
     msgHistory: [],   // { role:'user'|'node', text, ts }
+    seenIds: new Set(), // déduplication des events reçus
     sub: null,
     disabled: false,  // true si pas de station dans le MULTIPASS
 };
@@ -3543,14 +3544,14 @@ async function sendBroMsg(panel) {
     broAddMsg(panel, 'user', text);
 
     try {
-        // Chiffrement NIP-04 (supporté par toutes les extensions MULTIPASS)
+        // Chiffrement NIP-44 (ChaCha20-Poly1305) — même protocole que le daemon
         let ciphertext;
-        if (window.nostr && window.nostr.nip04 && window.nostr.nip04.encrypt) {
-            ciphertext = await window.nostr.nip04.encrypt(BRO.nodeNpub, text);
-        } else if (window.nostr && window.nostr.nip44 && window.nostr.nip44.encrypt) {
+        if (window.nostr?.nip44?.encrypt) {
             ciphertext = await window.nostr.nip44.encrypt(BRO.nodeNpub, text);
+        } else if (window.nostr?.nip04?.encrypt) {
+            ciphertext = await window.nostr.nip04.encrypt(BRO.nodeNpub, text);
         } else {
-            throw new Error('Extension NOSTR ne supporte pas nip04/nip44');
+            throw new Error('Extension NOSTR ne supporte pas NIP-44 — mettez à jour votre extension');
         }
 
         const ev = await requireSigned({
@@ -3582,15 +3583,26 @@ function broListenDMs(panel) {
     }]);
 
     sub.on('event', async (event) => {
-        // Déchiffrer la réponse BRO
+        // Déduplication : ignorer les events déjà affichés
+        if (BRO.seenIds.has(event.id)) return;
+        BRO.seenIds.add(event.id);
+
+        // Déchiffrer la réponse BRO — NIP-44 en priorité, NIP-04 en fallback
+        // pour les messages anciens chiffrés avant la migration NIP-44.
         try {
             let plaintext;
-            if (window.nostr && window.nostr.nip04 && window.nostr.nip04.decrypt) {
+            if (window.nostr?.nip44?.decrypt) {
+                try {
+                    plaintext = await window.nostr.nip44.decrypt(BRO.nodeNpub, event.content);
+                } catch (_) {
+                    if (window.nostr?.nip04?.decrypt) {
+                        plaintext = await window.nostr.nip04.decrypt(BRO.nodeNpub, event.content);
+                    } else { throw _; }
+                }
+            } else if (window.nostr?.nip04?.decrypt) {
                 plaintext = await window.nostr.nip04.decrypt(BRO.nodeNpub, event.content);
-            } else if (window.nostr && window.nostr.nip44 && window.nostr.nip44.decrypt) {
-                plaintext = await window.nostr.nip44.decrypt(BRO.nodeNpub, event.content);
             } else {
-                plaintext = '[Chiffrement non supporté — installez une extension NOSTR]';
+                plaintext = '[NIP-44 non supporté — mettez à jour votre extension NOSTR]';
             }
             broAddMsg(panel, 'node', plaintext);
 
@@ -3706,7 +3718,14 @@ document.addEventListener('DOMContentLoaded', () => {
         const isNow = !!(window.isNostrConnected && window.userPubkey);
         if (wasConnected !== isNow) {
             updateConnectionUI();
-            if (isNow) loadMySkills();
+            if (isNow) {
+                loadMySkills();
+                broInit();
+            } else {
+                // Relay déconnecté : libérer la subscription pour permettre la re-souscription
+                BRO.listening = false;
+                if (BRO.sub) { try { BRO.sub.close(); } catch(_) {} BRO.sub = null; }
+            }
         }
     }, 2000);
 });

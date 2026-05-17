@@ -401,36 +401,50 @@
         const currentPT = parseInt(window.getComputedStyle(document.body).paddingTop) || 0;
         document.body.style.paddingTop = (currentPT + 22) + 'px';
 
-        /* Bouton feedback — coin bas-droit (sauf si déjà présent dans le HTML) */
+        /* Bandeau feedback — bas de page pleine largeur (sauf si déjà présent dans le HTML) */
         const existingFb = document.querySelector('.btn-feedback-bottom, #uplanet-feedback-btn');
         if (!existingFb) {
-            const fbBtn = document.createElement('button');
-            fbBtn.id        = 'uplanet-feedback-btn';
-            fbBtn.innerHTML = '🐛 Feedback';
-            fbBtn.title     = 'Signaler un bug ou faire une suggestion (ouvre un nouvel onglet avec les logs de cette page)';
+            const fbBanner = document.createElement('div');
+            fbBanner.id = 'uplanet-feedback-btn';
+            fbBanner.title = 'Signaler un bug ou faire une suggestion (ouvre un nouvel onglet avec les logs de cette page)';
+            fbBanner.innerHTML =
+                '<span style="opacity:0.6;font-size:10px">AGPL&nbsp;v3&nbsp;·</span>&nbsp;' +
+                '<a href="#" onclick="event.preventDefault();window.openFeedbackPage(\'' + feedbackUrl + '\')" ' +
+                'style="color:inherit;text-decoration:none;display:inline-flex;align-items:center;gap:5px">' +
+                '<span>🐛</span><span>Signaler un bug / Suggestion</span>' +
+                '</a>';
 
-            const fbs = fbBtn.style;
-            fbs.position     = 'fixed';
-            fbs.bottom       = '18px';
-            fbs.right        = '18px';
-            fbs.zIndex       = '9990';
-            fbs.background   = 'linear-gradient(135deg,rgba(220,53,69,0.82),rgba(180,30,50,0.82))';
-            fbs.border       = 'none';
-            fbs.borderRadius = '24px';
-            fbs.color        = '#fff';
-            fbs.padding      = '9px 18px';
-            fbs.fontSize     = '13px';
-            fbs.fontWeight   = '600';
-            fbs.cursor       = 'pointer';
-            fbs.boxShadow    = '0 4px 14px rgba(220,53,69,0.38)';
-            fbs.fontFamily   = "system-ui,'Segoe UI',sans-serif";
-            fbs.transition   = 'all 0.22s';
+            const fbs = fbBanner.style;
+            fbs.position       = 'fixed';
+            fbs.bottom         = '0';
+            fbs.left           = '0';
+            fbs.right          = '0';
+            fbs.height         = '24px';
+            fbs.zIndex         = '9990';
+            fbs.background     = 'linear-gradient(90deg,rgba(180,30,50,0.88),rgba(220,53,69,0.88))';
+            fbs.borderTop      = '1px solid rgba(220,53,69,0.4)';
+            fbs.color          = '#fff';
+            fbs.fontSize       = '11px';
+            fbs.fontWeight     = '600';
+            fbs.fontFamily     = "system-ui,'Segoe UI',sans-serif";
+            fbs.display        = 'flex';
+            fbs.alignItems     = 'center';
+            fbs.justifyContent = 'center';
+            fbs.gap            = '8px';
+            fbs.backdropFilter = 'blur(6px)';
+            fbs.letterSpacing  = '0.02em';
+            fbs.cursor         = 'pointer';
+            fbs.transition     = 'opacity 0.22s';
 
-            fbBtn.addEventListener('mouseenter', () => { fbBtn.style.transform = 'translateY(-2px)'; fbBtn.style.boxShadow = '0 8px 22px rgba(220,53,69,0.55)'; });
-            fbBtn.addEventListener('mouseleave', () => { fbBtn.style.transform = ''; fbBtn.style.boxShadow = '0 4px 14px rgba(220,53,69,0.38)'; });
-            fbBtn.addEventListener('click', () => window.openFeedbackPage(feedbackUrl));
+            fbBanner.addEventListener('mouseenter', () => { fbBanner.style.opacity = '0.85'; });
+            fbBanner.addEventListener('mouseleave', () => { fbBanner.style.opacity = '1'; });
+            fbBanner.addEventListener('click', () => window.openFeedbackPage(feedbackUrl));
 
-            document.body.appendChild(fbBtn);
+            /* Pousser le contenu au-dessus du bandeau */
+            const currentPB = parseInt(window.getComputedStyle(document.body).paddingBottom) || 0;
+            document.body.style.paddingBottom = (currentPB + 24) + 'px';
+
+            document.body.appendChild(fbBanner);
         }
 
         document.body.insertBefore(banner, document.body.firstChild);

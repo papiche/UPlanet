@@ -3,8 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Cyber Cochon 🐷 - Nœud UPlanet</title>
+  <title>🐷 - Bienvenue sur UPlanet ORIGIN un Cyber Espace 100% Libre... AGPL only? rejoins nous !</title>
   <script type="module" src="model-viewer.min.js"></script>
+  <!-- Nostr Library -->
+  <script src="nostr.bundle.js"></script>
+  <!-- Common JavaScript (NOSTR, IPFS, API) -->
+  <script src="common.js"></script>
+  <!-- Feedback module -->
+  <script src="feedback.js"></script>
   <style>
     :root {
       --bg: #090a0f; 
@@ -33,10 +39,43 @@
     /* --- PANNEAU GAUCHE --- */
     .info-section {
       width: 45%; padding: 60px 40px 40px; box-sizing: border-box; display: flex;
-      flex-direction: column; justify-content: center; z-index: 10;
+      flex-direction: column; justify-content: flex-start; z-index: 10;
       background: linear-gradient(90deg, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.4) 100%);
       border-right: 2px solid rgba(255, 51, 153, 0.3);
+      overflow-y: auto;
     }
+
+    .btn-entrance {
+      background: transparent; color: var(--accent); font-size: 1rem; font-weight: bold;
+      padding: 12px 15px; border: 1px dashed var(--accent); border-radius: 8px; cursor: pointer;
+      text-decoration: none; display: flex; align-items: center; justify-content: center; gap: 8px;
+      transition: 0.2s;
+    }
+    .btn-entrance:hover { background: rgba(0,255,204,0.1); color: #fff; }
+
+    /* Section commentaires Nostr */
+    #nostr-comments {
+      margin-top: 30px;
+      border-top: 1px solid rgba(255, 51, 153, 0.25);
+      padding-top: 20px;
+    }
+    #nostr-comments h4 { color: var(--accent); margin: 0 0 12px 0; font-family: monospace; font-size: .95rem; }
+    .nostr-comment-input { width: 100%; background: rgba(255,255,255,0.05); border: 1px solid rgba(0,255,204,0.3);
+      border-radius: 6px; color: var(--text); padding: 10px; box-sizing: border-box; resize: vertical;
+      font-family: var(--font); font-size: .9rem; }
+    .nostr-comment-input:focus { outline: none; border-color: var(--accent); }
+    .btn-nostr-connect {
+      background: transparent; color: var(--pink); font-size: .9rem; font-weight: bold;
+      padding: 10px 14px; border: 1px solid var(--pink); border-radius: 6px; cursor: pointer;
+      transition: 0.2s; margin-top: 8px; width: 100%;
+    }
+    .btn-nostr-connect:hover { background: var(--pink); color: #000; }
+    .btn-nostr-send {
+      background: var(--accent); color: #000; font-size: .9rem; font-weight: bold;
+      padding: 10px 14px; border: none; border-radius: 6px; cursor: pointer;
+      transition: 0.2s; margin-top: 8px; width: 100%;
+    }
+    .btn-nostr-send:hover { opacity: 0.85; }
     h1 { color: var(--pink); font-size: 3.5rem; margin: 0; text-transform: uppercase; text-shadow: 0 0 15px var(--pink), 2px 2px 0px var(--yellow); line-height: 1; }
     h2 { color: var(--accent); font-family: monospace; font-size: 1.2rem; margin-top: 10px; }
     p { font-size: 1.1rem; line-height: 1.6; color: #ccc; }
@@ -151,6 +190,23 @@
       <button class="btn-print" onclick="printTicket()">
         🖨️ Récupérez un MULTIPASS (UPlanet)
       </button>
+      <a href="entrance.html" class="btn-entrance">🌍 En savoir plus sur UPlanet ẐEN</a>
+    </div>
+
+    <!-- Section commentaires Nostr -->
+    <div id="nostr-comments">
+      <h4>📡 Laisser un commentaire Nostr</h4>
+      <div id="cochon-nostr-status" style="font-size:.85rem; color:var(--muted,#8ab); margin-bottom:8px; display:none;"></div>
+      <div id="cochon-logged-out">
+        <p style="color:#8ab; font-size:.9rem; margin:0 0 8px 0;">Connectez-vous avec votre extension Nostr pour commenter.</p>
+        <button class="btn-nostr-connect" id="cochon-login-btn" onclick="cochonHandleLogin()">🔑 Connexion Nostr</button>
+      </div>
+      <div id="cochon-logged-in" style="display:none;">
+        <div id="cochon-user-label" style="font-size:.8rem; color:#8ab; margin-bottom:6px;"></div>
+        <textarea class="nostr-comment-input" id="cochon-message" rows="3" placeholder="Votre commentaire sur le Cyber Cochon..."></textarea>
+        <button class="btn-nostr-send" id="cochon-send-btn" onclick="cochonSendComment()">Envoyer ✈️</button>
+      </div>
+      <div id="cochon-comments-list" style="margin-top:16px;"></div>
     </div>
   </div>
 
@@ -431,6 +487,92 @@
     }
 
     loadHomer().then(buildNebula);
+
+    // ─── NOSTR COMMENTAIRES ───────────────────────────────────────────────────
+    const cochonLoginBtn   = document.getElementById('cochon-login-btn');
+    const cochonLoggedOut  = document.getElementById('cochon-logged-out');
+    const cochonLoggedIn   = document.getElementById('cochon-logged-in');
+    const cochonUserLabel  = document.getElementById('cochon-user-label');
+    const cochonStatus     = document.getElementById('cochon-nostr-status');
+
+    function cochonSetStatus(msg, color) {
+      cochonStatus.textContent = msg;
+      cochonStatus.style.color = color || '#8ab';
+      cochonStatus.style.display = msg ? 'block' : 'none';
+    }
+
+    async function cochonHandleLogin() {
+      cochonLoginBtn.disabled = true;
+      cochonLoginBtn.textContent = 'Connexion…';
+      const pubkey = typeof ensureNostrConnection === 'function'
+        ? await ensureNostrConnection()
+        : null;
+      if (pubkey) {
+        const name = typeof getUserDisplayName === 'function'
+          ? await getUserDisplayName(pubkey)
+          : pubkey.slice(0, 10) + '…';
+        cochonUserLabel.textContent = '🔑 Connecté : ' + name;
+        cochonLoggedOut.style.display = 'none';
+        cochonLoggedIn.style.display  = 'block';
+        cochonLoadComments();
+      } else {
+        cochonLoginBtn.disabled = false;
+        cochonLoginBtn.textContent = '🔑 Connexion Nostr';
+        cochonSetStatus('Extension Nostr introuvable ou refusée.', '#f88');
+      }
+    }
+
+    async function cochonSendComment() {
+      const textarea = document.getElementById('cochon-message');
+      const sendBtn  = document.getElementById('cochon-send-btn');
+      const text     = textarea.value.trim();
+      if (!text) return;
+      sendBtn.disabled = true;
+      sendBtn.textContent = 'Envoi…';
+      try {
+        const pubkey = typeof ensureNostrConnection === 'function'
+          ? await ensureNostrConnection() : null;
+        if (!pubkey) throw new Error('Non connecté');
+        // Tag la page actuelle
+        const tags = [['r', window.location.href]];
+        const ok = typeof publishNote === 'function'
+          ? await publishNote(text, tags)
+          : false;
+        if (ok) {
+          textarea.value = '';
+          cochonSetStatus('✅ Commentaire publié !', '#6fd17a');
+          setTimeout(() => cochonSetStatus(''), 4000);
+          cochonLoadComments();
+        } else {
+          cochonSetStatus('Erreur lors de la publication.', '#f88');
+        }
+      } catch (e) {
+        cochonSetStatus('Erreur : ' + e.message, '#f88');
+      } finally {
+        sendBtn.disabled = false;
+        sendBtn.textContent = 'Envoyer ✈️';
+      }
+    }
+
+    async function cochonLoadComments() {
+      const list = document.getElementById('cochon-comments-list');
+      if (!list) return;
+      if (typeof displayComments === 'function') {
+        displayComments('cochon-comments-list');
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      // Vérifier si extension Nostr disponible
+      setTimeout(() => {
+        if (typeof window.nostr === 'undefined' || typeof window.nostr.getPublicKey !== 'function') {
+          cochonLoginBtn.disabled = true;
+          cochonLoginBtn.textContent = 'Extension Nostr requise';
+        }
+      }, 500);
+      // Charger les commentaires existants sans connexion
+      cochonLoadComments();
+    });
   </script>
 </body>
 </html>

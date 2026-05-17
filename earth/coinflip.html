@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta http-equiv="content-type" content="text/html; charset=UTF-8">
-  <link rel="icon" type="image/x-icon" href="./favicon.ico">
+  <link rel="icon" type="image/x-icon" href="./favicon.coinflip.ico">
   <title>Jeu de Pile ou Face</title>
   <style>
     :root {
@@ -502,8 +502,8 @@
       }
     }
   </style>
-  <script src="../astro.js"></script>
   <script src="../nostr.bundle.js"></script>
+  <script src="../common.js"></script>
 </head>
 <body>
 
@@ -555,16 +555,15 @@
  
 
   <script>
-    // Nostr and uSPOT integration (NIP-42 auth + uSPOT API detection)
-    let upassportUrl = '';
-    let DEFAULT_RELAYS = [ 'wss://relay.copylaradio.com', 'ws://127.0.0.1:7777', 'wss://relay.damus.io', 'wss://nos.lol' ];
-    let NOSTRws = '';
-    let nostrRelay = null;
-    let isNostrConnected = false;
-    let authCompleted = false;
-    let userPubkey = null;
-    let authEventPublished = false;
-    const DEFAULT_PROFILE_RELAYS = ['wss://relay.copylaradio.com'];
+    // État NOSTR géré par common.js — window.nostrRelay, window.isNostrConnected, window.userPubkey
+    // GPS utilisateur
+    let userLat = null, userLon = null;
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        pos => { userLat = pos.coords.latitude.toFixed(2); userLon = pos.coords.longitude.toFixed(2); },
+        () => {}
+      );
+    }
 
 
     // Function to fetch CAPTAIN data from ASTROPORT station
@@ -630,7 +629,7 @@
     // Function to get CAPTAIN profile from relay
     async function getCaptainProfile(captainHex) {
       try {
-        const relayUrl = sanitizeRelayUrl(NOSTRws || DEFAULT_RELAYS[0]);
+        const relayUrl = window.DEFAULT_RELAYS[0];
         console.log('[CAPTAIN] Fetching profile from relay:', relayUrl);
         
         return new Promise((resolve) => {
@@ -704,7 +703,7 @@
     // Function to fetch CAPTAIN balances from uSPOT API
     async function fetchCaptainBalances(captainG1pub, captainZencardG1pub) {
       try {
-        const apiBase = window.__UPASSPORT_API__ || upassportUrl;
+        const apiBase = window.NostrState?.upassportUrl || window.__UPASSPORT_API__;
         if (!apiBase) {
           console.warn('[CAPTAIN] uSPOT API not available for balance check');
           return null;
@@ -754,7 +753,7 @@
     // Function to get CAPTAIN's first message from relay
     async function getCaptainFirstMessage(captainHex) {
       try {
-        const relayUrl = sanitizeRelayUrl(NOSTRws || DEFAULT_RELAYS[0]);
+        const relayUrl = window.DEFAULT_RELAYS[0];
         console.log('[CAPTAIN] Fetching first message from relay:', relayUrl);
         
         return new Promise((resolve) => {
@@ -838,7 +837,7 @@
     async function sendLikeToCaptain() {
       try {
         console.log('[LIKE] Starting like send to CAPTAIN');
-        console.log('[LIKE] User pubkey:', userPubkey ? userPubkey.substring(0, 8) + '...' : 'none');
+        console.log('[LIKE] User pubkey:', window.userPubkey ? window.userPubkey.substring(0, 8) + '...' : 'none');
         console.log('[LIKE] User profile:', window.userProfile);
         
         const captainData = await fetchCaptainData();
@@ -861,12 +860,13 @@
           kind: 7,
           created_at: Math.floor(Date.now() / 1000),
           tags: [
-            ['e', firstMessage.id], // React to CAPTAIN's first message
-            ['p', captainHex],      // CAPTAIN's pubkey
-            ['k', '1']              // Kind 1 (text note)
+            ['e', firstMessage.id],
+            ['p', captainHex],
+            ['k', '1'],
+            ...(userLat && userLon ? [['g', `${userLat},${userLon}`]] : []),
           ],
-          content: '+', // Simple like
-          pubkey: userPubkey
+          content: '+',
+          pubkey: window.userPubkey
         };
         
         console.log('[LIKE] Created like event:', {
@@ -899,7 +899,7 @@
           return true;
         } else {
           // Fallback: direct WebSocket
-          const relayUrl = sanitizeRelayUrl(NOSTRws || DEFAULT_RELAYS[0]);
+          const relayUrl = window.DEFAULT_RELAYS[0];
           console.log('[LIKE] Using fallback WebSocket to:', relayUrl);
           const ws = new WebSocket(relayUrl);
           
@@ -1010,7 +1010,7 @@
       }
       
       // Add info about likes and payments
-      const isLiveMode = window.isPaid && userPubkey;
+      const isLiveMode = window.isPaid && window.userPubkey;
       if (isLiveMode) {
         balanceHTML += '<div class="balance-info">💡 Mode réel : FACE déclenche un vrai paiement de 1 ẐEN du joueur au CAPITAINE</div>';
       } else {
@@ -1029,7 +1029,7 @@
       const messageEl = document.getElementById('message');
       if (!messageEl) return;
       
-      if (userPubkey && window.userProfile && window.userProfile.g1pub) {
+      if (window.userPubkey && window.userProfile && window.userProfile.g1pub) {
         // Live mode: process real payment
         messageEl.innerHTML = `<div class="win-display">
           <div class="win-label">💰 ENCAISSÉ ! 💰</div>
@@ -1039,7 +1039,7 @@
         </div>`;
         
         // Process winning payment
-        const success = await processWinningPayment(amount, userPubkey);
+        const success = await processWinningPayment(amount, window.userPubkey);
         if (success) {
           messageEl.innerHTML = `<div class="win-display">
             <div class="win-label">💰 ENCAISSÉ ! 💰</div>
@@ -1084,13 +1084,13 @@
     function updateModeBadge() {
       const badge = document.getElementById('modeBadge');
       console.log('[MODE] Updating mode badge');
-      console.log('[MODE] User pubkey:', userPubkey ? userPubkey.substring(0, 8) + '...' : 'none');
+      console.log('[MODE] User pubkey:', window.userPubkey ? window.userPubkey.substring(0, 8) + '...' : 'none');
       console.log('[MODE] User profile:', window.userProfile);
       console.log('[MODE] Has G1PUB:', window.userProfile?.g1pub ? 'yes' : 'no');
       console.log('[MODE] Balance:', window.userProfile?.balance);
       console.log('[MODE] G1 Balance:', window.userProfile?.g1Balance);
       
-      if (userPubkey && window.userProfile && window.userProfile.g1pub) {
+      if (window.userPubkey && window.userProfile && window.userProfile.g1pub) {
         badge.className = 'status ready';
         if (window.userProfile.balance !== undefined) {
           badge.textContent = `Prêt à jouer • Solde : ${window.userProfile.balance} ẐEN • FACE → envoyer 1 ẐEN au CAPITAINE`;
@@ -1119,7 +1119,7 @@
             coinEl.src = '/ipfs/QmeZhZ6yR6YHhiZ9qfBUCA1RKUP83dZL6MtU4PCBrdzjWn';
           }
         }
-      } else if (userPubkey) {
+      } else if (window.userPubkey) {
         badge.className = 'status practice';
         badge.textContent = 'Mode entraînement • MULTIPASS requis • Paiement FACE simulé';
         console.log('[MODE] Set to PRACTICE mode - no MULTIPASS');
@@ -1134,60 +1134,17 @@
       }
     }
 
-    function detectUSPOTAPI() {
-      const currentURL = new URL(window.location.href);
-      const hostname = currentURL.hostname;
-      const port = currentURL.port;
-      const protocol = currentURL.protocol.split(":")[0];
-
-      console.log('[API] Detecting uSPOT API configuration');
-      console.log('[API] Current URL:', window.location.href);
-      console.log('[API] Hostname:', hostname);
-      console.log('[API] Port:', port);
-      console.log('[API] Protocol:', protocol);
-
-      // Compute uPassport base URL
-      let uPort = port;
-      if (uPort === '8080') uPort = '54321';
-      const uHost = hostname.replace(/^ipfs\./, 'u.');
-      upassportUrl = `${protocol}://${uHost}${uPort ? `:${uPort}` : ''}`;
-      // Expose API base also for profile/balance fetches
-      window.__UPASSPORT_API__ = upassportUrl;
-
-      // Compute relay websocket URL robustly
-      let rPort = port;
-      if (rPort === '8080') rPort = '7777';
-      const rHost = hostname.replace(/^ipfs\./, 'relay.').replace(/^127\.0\.0\.1$/, '127.0.0.1');
-      const wsProtocol = protocol === 'https' ? 'wss' : 'ws';
-      NOSTRws = `${wsProtocol}://${(hostname === '127.0.0.1' || hostname === 'localhost') && port === '8080' ? '127.0.0.1' : rHost}${rPort ? `:${rPort}` : ''}`;
-      NOSTRws = sanitizeRelayUrl(NOSTRws);
-
-      // Fall back to defaults if detection failed
-      if (!NOSTRws || NOSTRws.includes('//:')) {
-        NOSTRws = 'wss://relay.copylaradio.com';
-      }
-
-      // Compute ASTROPORT station URL for CAPTAIN data
-      let sruPort = '12345'; // Always use port 12345 for astroport
-      const sruHost = hostname.replace(/^ipfs\./, 'astroport.'); // Replace ipfs. with astroport.
-      const sruUrl = (hostname === '127.0.0.1' || hostname === 'localhost') && port === '8080'
-        ? `${protocol}://127.0.0.1:12345` // Local development case
-        : `${protocol}://${sruHost}/12345`; // Production case with astroport subdomain
-      window.__ASTROPORT_STATION_URL__ = sruUrl;
-
-      DEFAULT_RELAYS = [NOSTRws, 'wss://relay.damus.io', 'wss://nos.lol']; // Non-Astroport fallback relays (yet)
-      console.log(`[API] uSPOT API: ${upassportUrl} | Relay: ${NOSTRws} | ASTROPORT Station: ${sruUrl}`);
-      console.log(`[API] Final API base stored in window.__UPASSPORT_API__:`, window.__UPASSPORT_API__);
+    // Calcule l'URL de la station Astroport (port 12345) — common.js gère upassportUrl et relay
+    function computeAstroURL() {
+      const { hostname, port, protocol } = new URL(window.location.href);
+      const sruHost = hostname.replace(/^(ipfs|u)\./, 'astroport.');
+      window.__ASTROPORT_STATION_URL__ = (hostname === '127.0.0.1' || hostname === 'localhost') && port === '8080'
+        ? `${protocol}://127.0.0.1:12345`
+        : `${protocol}://${sruHost}/12345`;
+      console.log('[ASTRO] Station URL:', window.__ASTROPORT_STATION_URL__);
     }
 
-    // Ensure relay URLs contain no hidden/control characters and normalized scheme
-    function sanitizeRelayUrl(url) {
-      if (!url || typeof url !== 'string') return url;
-      const cleaned = url.replace(/[\u200B-\u200D\uFEFF\u2060\uFE0F\uFFFC\u0000-\u001F\u007F]/g, '');
-      return cleaned.replace(/^(wss?):\/*/, (m, p1) => `${p1}://`);
-    }
-
-        async function handleLogin() {
+    async function handleLogin() {
       const loginBtn = document.getElementById('loginBtn');
       const authStatus = document.getElementById('authStatus');
       if (!window.nostr || typeof window.nostr.getPublicKey !== 'function') {
@@ -1195,26 +1152,17 @@
         return;
       }
       try {
-        console.log('[LOGIN] Starting login sequence');
         loginBtn.disabled = true;
-        authStatus.textContent = 'Demande de clé publique...';
-        const pubkey = await window.nostr.getPublicKey();
-        if (!pubkey) throw new Error('Aucune clé publique retournée');
-        userPubkey = pubkey;
-        console.log('[LOGIN] Got public key:', pubkey.substring(0, 8) + '...');
-        
-        loginBtn.textContent = 'Autorisation...';
-        authStatus.textContent = 'Connexion au relais Nostr...';
-        console.log('[LOGIN] Connecting to relay...');
-        await connectToRelay();
-        
-        console.log('[LOGIN] Relay connected, profile will be fetched automatically');
-        // Profile will be fetched after relay connection is established
-        // UI will be updated after NIP-42 completes or timeout
-        
-        // CAPTAIN data is already fetched once at page load, no need to fetch again
+        authStatus.textContent = 'Connexion NIP-42…';
+        const pubkey = await connectNostr(true);
+        if (!pubkey) throw new Error('Clé publique non obtenue');
+        const short = `${pubkey.substring(0,6)}...${pubkey.substring(pubkey.length-4)}`;
+        loginBtn.textContent = `Connecté: ${short}`;
+        authStatus.textContent = 'NIP-42 autorisé. Récupération du profil…';
+        await fetchAndDisplayProfile(pubkey);
+        authStatus.textContent = 'Prêt à jouer.';
       } catch (e) {
-        console.error('[LOGIN] Login failed:', e);
+        console.error('[LOGIN] Failed:', e);
         alert('Connexion échouée. Veuillez autoriser dans votre extension Nostr.');
         loginBtn.disabled = false;
         authStatus.textContent = '';
@@ -1277,7 +1225,7 @@
           };
 
           // Create a dedicated WebSocket for profile fetching
-          const relayUrl = sanitizeRelayUrl(NOSTRws || DEFAULT_RELAYS[0] || DEFAULT_PROFILE_RELAYS[0]);
+          const relayUrl = window.DEFAULT_RELAYS[0];
           console.log('[Profile] Creating dedicated WebSocket to:', relayUrl);
           
           await new Promise((resolve) => {
@@ -1389,7 +1337,7 @@
         }
 
         // Balance fetch only if member (g1pub present in profile tags)
-        const apiBase = window.__UPASSPORT_API__ || upassportUrl;
+        const apiBase = window.NostrState?.upassportUrl || window.__UPASSPORT_API__;
         let userBalance = 0;
         let userG1Balance = 0;
         
@@ -1498,211 +1446,19 @@
       }
     }
 
-    async function connectToRelay() {
-      const relayUrl = sanitizeRelayUrl(NOSTRws || DEFAULT_RELAYS[0]);
-      try {
-        nostrRelay = NostrTools.relayInit(relayUrl);
-        nostrRelay.on('connect', () => {
-          isNostrConnected = true;
-          console.log('[NIP-42] Connected to relay', relayUrl);
-          // Proactively publish a 22242 EVENT to be discoverable by backend
-          if (!authEventPublished) {
-            console.log('[NIP-42] Proactive 22242 EVENT publish starting');
-            sendProactiveAuth(relayUrl).catch(err => console.warn('[NIP-42] Proactive EVENT publish failed:', err));
-          }
-        });
-        nostrRelay.on('error', (err) => { isNostrConnected = false; console.error('Relay error', err); });
-        nostrRelay.on('auth', async (challenge) => {
-          // Respond with NIP-42 signed AUTH (not EVENT)
-          try {
-            console.log('[NIP-42] Relay challenged with', challenge);
-            const authEvent = {
-              kind: 22242,
-              created_at: Math.floor(Date.now() / 1000),
-              tags: [ ['relay', sanitizeRelayUrl(relayUrl) ], ['challenge', challenge] ],
-              content: '',
-              pubkey: userPubkey
-            };
-            console.log('[NIP-42] Building 22242 for challenge', authEvent);
-            let signedAuthEvent = null;
-            if (window.nostr && typeof window.nostr.signEvent === 'function') {
-              signedAuthEvent = await window.nostr.signEvent(authEvent);
-              console.log('[NIP-42] Signed 22242 (challenge) id:', signedAuthEvent?.id, 'sig len:', signedAuthEvent?.sig?.length);
-            }
-            if (signedAuthEvent) {
-              // Publish as EVENT so writePolicy 22242.sh can log it if allowed
-              try {
-                if (typeof nostrRelay.publish === 'function') {
-                  console.log('[NIP-42] Publishing 22242 as EVENT (challenge)');
-                  await nostrRelay.publish(signedAuthEvent);
-                } else {
-                  // Create dedicated WebSocket for challenge response
-                  console.log('[NIP-42] Creating dedicated WebSocket for challenge EVENT');
-                  const ws = new WebSocket(relayUrl);
-                  
-                  ws.onopen = () => {
-                    console.log('[NIP-42] Challenge WebSocket connected, sending EVENT');
-                    const eventMsg = JSON.stringify(['EVENT', signedAuthEvent]);
-                    ws.send(eventMsg);
-                    console.log('[NIP-42] Sent challenge EVENT via dedicated WebSocket');
-                    ws.close();
-                  };
-                  
-                  ws.onerror = (error) => {
-                    console.error('[NIP-42] Challenge WebSocket error:', error);
-                  };
-                  
-                  ws.onclose = () => {
-                    console.log('[NIP-42] Challenge WebSocket closed');
-                  };
-                }
-                 // Event already sent via dedicated WebSocket above
-              } catch (e) { console.warn('[NIP-42] EVENT publish (challenge) failed', e); }
-              authCompleted = true;
-              authEventPublished = true;
-              const loginBtn = document.getElementById('loginBtn');
-              const authStatus = document.getElementById('authStatus');
-              loginBtn.textContent = `Connecté: ${userPubkey.substring(0,6)}...${userPubkey.substring(userPubkey.length-4)}`;
-              authStatus.textContent = 'NIP-42 autorisé. Prêt à jouer.';
-              updateModeBadge();
-              // Fetch profile now that we're fully connected
-              fetchAndDisplayProfile(userPubkey).catch(console.warn);
-              // Update mode badge after profile fetch
-              setTimeout(() => updateModeBadge(), 1000);
-            }
-          } catch (e) {
-            console.error('NIP-42 AUTH failed', e);
-          }
-        });
-        await nostrRelay.connect();
-        // Fallback: if relay does not require auth, enable UI after short delay
-        setTimeout(() => {
-          if (!authCompleted) {
-            console.log('[NIP-42] No relay challenge; proactive AUTH/EVENT was attempted earlier');
-            const loginBtn = document.getElementById('loginBtn');
-            const authStatus = document.getElementById('authStatus');
-            loginBtn.textContent = `Connecté: ${userPubkey.substring(0,6)}...${userPubkey.substring(userPubkey.length-4)}`;
-            authStatus.textContent = 'Le relais n\'a pas demandé NIP-42. Prêt à jouer.';
-            // Fetch profile now that we're fully connected
-            fetchAndDisplayProfile(userPubkey).catch(console.warn);
-            // No need to update mode badge again, it will be done in fetchAndDisplayProfile
-          }
-        }, 1500);
-      } catch (e) {
-        console.error('Failed to connect to relay', e);
-      }
-    }
-
-    async function sendProactiveAuth(relayUrl) {
-      try {
-        if (!userPubkey || !nostrRelay || authEventPublished) return;
-        const challenge = `client-init-${Date.now()}`;
-        const authEvent = {
-          kind: 22242,
-          created_at: Math.floor(Date.now() / 1000),
-          tags: [ ['relay', sanitizeRelayUrl(relayUrl) ], ['challenge', challenge] ],
-          content: '',
-          pubkey: userPubkey
-        };
-        console.log('[NIP-42] Proactive 22242 authEvent:', authEvent);
-        let signedAuthEvent = null;
-        if (window.nostr && typeof window.nostr.signEvent === 'function') {
-          signedAuthEvent = await window.nostr.signEvent(authEvent);
-        }
-        if (!signedAuthEvent) { console.warn('[NIP-42] Proactive signEvent returned null'); return; }
-        console.log('[NIP-42] Proactive signed id:', signedAuthEvent?.id, 'sig len:', signedAuthEvent?.sig?.length);
-        // Publish as EVENT so server-side filter/22242.sh logs it
-        try {
-          if (typeof nostrRelay.publish === 'function') {
-            console.log('[NIP-42] Proactive EVENT publish via relay.publish');
-            await nostrRelay.publish(signedAuthEvent);
-          }
-          // Create dedicated WebSocket for NIP-42 event publishing
-          console.log('[NIP-42] Creating dedicated WebSocket for event publishing');
-          const ws = new WebSocket(relayUrl);
-          
-          ws.onopen = () => {
-            console.log('[NIP-42] WebSocket connected, sending EVENT');
-            const eventMsg = JSON.stringify(['EVENT', signedAuthEvent]);
-            ws.send(eventMsg);
-            console.log('[NIP-42] Sent EVENT via dedicated WebSocket');
-            ws.close();
-          };
-          
-          ws.onerror = (error) => {
-            console.error('[NIP-42] WebSocket error:', error);
-          };
-          
-          ws.onclose = () => {
-            console.log('[NIP-42] Dedicated WebSocket closed');
-          };
-                      authCompleted = true;
-            authEventPublished = true;
-            const loginBtn = document.getElementById('loginBtn');
-            const authStatus = document.getElementById('authStatus');
-          loginBtn.textContent = `Connecté: ${userPubkey.substring(0,6)}...${userPubkey.substring(userPubkey.length-4)}`;
-          authStatus.textContent = 'Événement NIP-42 envoyé. Récupération du profil...';
-          // Fetch profile now that we're connected
-          fetchAndDisplayProfile(userPubkey).catch(console.warn);
-          // Update mode badge after profile fetch
-          setTimeout(() => updateModeBadge(), 1000);
-        } catch (e) { console.warn('EVENT 22242 publish failed', e); }
-      } catch (e) { console.warn('sendProactiveAuth error', e); }
-    }
-
-    // Direct WebSocket fallback - create dedicated connection
-    function tryDirectWebSocketSend(signedAuthEvent, kind = 'EVENT') {
-      try {
-        const relayUrl = sanitizeRelayUrl(NOSTRws || DEFAULT_RELAYS[0]);
-        console.log('[NIP-42] Creating fallback WebSocket to:', relayUrl);
-        
-        const ws = new WebSocket(relayUrl);
-        
-        ws.onopen = () => {
-          console.log('[NIP-42] Fallback WebSocket connected, sending', kind);
-          const msg = JSON.stringify([kind === 'AUTH' ? 'AUTH' : 'EVENT', signedAuthEvent]);
-          ws.send(msg);
-          console.log('[NIP-42] Sent via fallback WebSocket:', msg.substring(0, 120) + '...');
-          ws.close();
-        };
-        
-        ws.onerror = (error) => {
-          console.error('[NIP-42] Fallback WebSocket error:', error);
-        };
-        
-        ws.onclose = () => {
-          console.log('[NIP-42] Fallback WebSocket closed');
-        };
-      } catch (e) {
-        console.error('tryDirectWebSocketSend failed', e);
-      }
-    }
-
-    function sendViaWebSocket(ws, event, kind) {
-      if (!ws || ws.readyState !== WebSocket.OPEN) {
-        console.error('WebSocket not open for send');
-        return;
-      }
-      const msg = JSON.stringify([kind === 'AUTH' ? 'AUTH' : 'EVENT', event]);
-      ws.send(msg);
-      console.log('Sent via direct WebSocket:', msg.substring(0, 120) + '...');
-    }
-
-
-
     // Function to process winning payments
     async function processWinningPayment(amount, userPubkey) {
-      if (!upassportUrl) detectUSPOTAPI();
+      // upassportUrl géré par common.js
       
-      console.log('[Payment] Processing winning payment:', amount, 'ZEN from CAPTAIN to', userPubkey);
+      console.log('[Payment] Processing winning payment:', amount, 'ZEN from CAPTAIN to', window.userPubkey);
       console.log('[Payment] CAPTAIN data:', window.captainData);
       console.log('[Payment] User profile:', window.userProfile);
       
       try {
         const form = new FormData();
         form.append('zen', amount.toString());
-        form.append('g1dest', userPubkey); // Send winnings TO the winner (player)
-        form.append('npub', userPubkey); // Destination Nostr pubkey (player)
+        form.append('g1dest', window.userPubkey); // Send winnings TO the winner (player)
+        form.append('npub', window.userPubkey); // Destination Nostr pubkey (player)
         
         // Use CAPTAIN's data as the SOURCE of payment
         if (window.captainData?.captainG1pub) {
@@ -1732,16 +1488,16 @@
         
         console.log('[Payment] Form data prepared:', {
           zen: amount,
-          g1dest: userPubkey,
-          npub: userPubkey,
+          g1dest: window.userPubkey,
+          npub: window.userPubkey,
           g1source: window.captainData?.captainG1pub || 'none',
           npub_sender: window.captainData?.captainHex || 'none',
           zencard: window.captainData?.captainZencardG1pub || 'none',
           g1pub: window.userProfile?.g1pub || 'none'
         });
         
-        console.log('[Payment] Sending winning payment request to:', `${upassportUrl}/zen_send`);
-        const resp = await fetch(`${upassportUrl}/zen_send`, { method: 'POST', body: form, mode: 'cors' });
+        console.log('[Payment] Sending winning payment request to:', `${window.NostrState?.upassportUrl || window.__UPASSPORT_API__}/zen_send`);
+        const resp = await fetch(`${window.NostrState?.upassportUrl || window.__UPASSPORT_API__}/zen_send`, { method: 'POST', body: form, mode: 'cors' });
         
         console.log('[Payment] Response status:', resp.status, resp.statusText);
         console.log('[Payment] Response headers:', Object.fromEntries(resp.headers.entries()));
@@ -1791,7 +1547,7 @@
     if (coinElement) {
       coinElement.addEventListener('click', (event) => {
         // Check if user is on the correct Astroport for their MULTIPASS
-        if (userPubkey && window.userProfile && window.userProfile.g1pub) {
+        if (window.userPubkey && window.userProfile && window.userProfile.g1pub) {
           const currentHostname = window.location.hostname;
           // Allow Astroport domains and their IPFS gateways
           const isOnAstroport = currentHostname.includes('astroport.') || 
@@ -1867,7 +1623,7 @@
               
               const msgEl1 = document.getElementById('message');
               if (msgEl1) { 
-                if (userPubkey && window.userProfile && window.userProfile.g1pub) {
+                if (window.userPubkey && window.userProfile && window.userProfile.g1pub) {
                   msgEl1.innerHTML = `<div class="gain-display">
                     <div class="gain-amount">${potentialGain}</div>
                     <div class="gain-currency">ZEN</div>
@@ -1895,11 +1651,11 @@
              
              // Send like to CAPTAIN (player pays 1 ZEN to captain)
              console.log('[GAME] TAILS - checking conditions for like sending:');
-             console.log('[GAME] - userPubkey:', userPubkey ? userPubkey.substring(0, 8) + '...' : 'none');
+             console.log('[GAME] - window.userPubkey:', window.userPubkey ? window.userPubkey.substring(0, 8) + '...' : 'none');
              console.log('[GAME] - window.userProfile:', window.userProfile);
              console.log('[GAME] - window.captainData:', window.captainData);
              
-             if (userPubkey && window.userProfile && window.userProfile.g1pub) {
+             if (window.userPubkey && window.userProfile && window.userProfile.g1pub) {
                console.log('[GAME] Live mode: Sending like to CAPTAIN for TAILS (player pays 1 Ẑen to captain)');
                sendLikeToCaptain().then(success => {
                  if (success) {
@@ -1920,7 +1676,7 @@
                 event.preventDefault();
 
                         var info = document.getElementById("ainfo");
-            if (userPubkey && window.userProfile && window.userProfile.g1pub) {
+            if (window.userPubkey && window.userProfile && window.userProfile.g1pub) {
               // TAILS = Loss but with 1 ZEN compensation
               const msgEl2 = document.getElementById('message');
               if (msgEl2) { 
@@ -1986,7 +1742,7 @@
     // Wire up auth UI
     document.addEventListener('DOMContentLoaded', () => {
       console.log('[INIT] Page loaded, starting initialization sequence');
-      detectUSPOTAPI();
+      detectUSPOTAPI(); computeAstroURL();
       const loginBtn = document.getElementById('loginBtn');
       
       // Set initial message

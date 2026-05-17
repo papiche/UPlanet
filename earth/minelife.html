@@ -1394,6 +1394,9 @@ textarea.scan-input:focus { border-color: var(--accent); }
             <span>🤖 BRO — Assistant NODE</span>
             <span style="margin-left:auto;opacity:0.6;font-size:10px">✕ fermer</span>
         </div>
+        <div id="bro-skill-badge" style="display:none;margin:4px 10px 0;padding:3px 10px;
+            background:#3b1d8a;border-radius:12px;font-size:11px;color:#c4b5fd;
+            font-weight:600;letter-spacing:0.03em;"></div>
         <div class="bro-messages" id="bro-msgs-float">
             <div class="bro-msg system">Connectez votre MULTIPASS pour chatter avec BRO.</div>
         </div>
@@ -2415,13 +2418,19 @@ async function loadExploreTab(force = false) {
     let permits = [];
     try {
         const cached = _permitsFromCache();
-        if (cached) {
+        if (cached && cached.length > 0) {
             permits = cached;
             const since = _permitCacheSince();
             fetchEvents({ kinds: [30500], limit: 80, since }).then(fresh => {
                 if (fresh.length) {
                     const merged = [...cached.filter(e => !fresh.find(f => f.id===e.id)), ...fresh];
                     _permitsToCache(merged);
+                    STATE.allPermits = merged;
+                    // Mettre à jour l'UI si elle affiche encore l'état vide
+                    const cont = document.getElementById('explore-list');
+                    if (cont && cont.querySelector('.empty-state')) {
+                        cont.innerHTML = merged.map(ev => renderExploreCard(ev)).join('');
+                    }
                 }
             }).catch(() => {});
         } else {
@@ -3429,14 +3438,38 @@ function closeMediaBrowser() {
 // BRO répond via DM : questions libres, #badge <skill>, #rec/#mem mémoire.
 
 const BRO = {
-    nodeNpub: null,   // hex pubkey du NODE (champ home_station du MULTIPASS)
+    nodeNpub: null,      // hex pubkey du NODE (champ home_station du MULTIPASS)
     nodeNpubBech32: null,
     listening: false,
-    msgHistory: [],   // { role:'user'|'node', text, ts }
-    seenIds: new Set(), // déduplication des events reçus
+    msgHistory: [],      // { role:'user'|'node', text, ts }
+    seenIds: new Set(),  // déduplication des events reçus
     sub: null,
-    disabled: false,  // true si pas de station dans le MULTIPASS
+    disabled: false,     // true si pas de station dans le MULTIPASS
+    currentSkill: null,  // skill actif ([ctx:<skill>:<level>] injecté dans chaque message)
+    currentLevel: 0,
 };
+
+// ── Activer le contexte skill dans BRO ─────────────────────────────────────
+// Appelé depuis une card skill ou depuis l'onglet Explorer.
+function broSetSkill(skill, level = 0) {
+    BRO.currentSkill = skill || null;
+    BRO.currentLevel = level || 0;
+    const badge = document.getElementById('bro-skill-badge');
+    const inp   = document.querySelector('.bro-input');
+    if (badge) {
+        if (skill) {
+            badge.textContent  = `🎯 ${skill} niv.${level||'?'}`;
+            badge.style.display = 'inline-block';
+        } else {
+            badge.style.display = 'none';
+        }
+    }
+    if (inp) {
+        inp.placeholder = skill
+            ? `Question sur '${skill}'… (#rec:${skill} <note> / #mem:${skill})`
+            : 'Posez une question…';
+    }
+}
 
 async function broInit() {
     if (BRO.nodeNpub) return;
@@ -3543,13 +3576,18 @@ async function sendBroMsg(panel) {
 
     broAddMsg(panel, 'user', text);
 
+    // Préfixer le skill actif pour le daemon — le daemon l'extrait et enrichit le contexte
+    const msgToSend = (BRO.currentSkill && !text.startsWith('#'))
+        ? `[ctx:${BRO.currentSkill}:${BRO.currentLevel}] ${text}`
+        : text;
+
     try {
         // Chiffrement NIP-44 (ChaCha20-Poly1305) — même protocole que le daemon
         let ciphertext;
         if (window.nostr?.nip44?.encrypt) {
-            ciphertext = await window.nostr.nip44.encrypt(BRO.nodeNpub, text);
+            ciphertext = await window.nostr.nip44.encrypt(BRO.nodeNpub, msgToSend);
         } else if (window.nostr?.nip04?.encrypt) {
-            ciphertext = await window.nostr.nip04.encrypt(BRO.nodeNpub, text);
+            ciphertext = await window.nostr.nip04.encrypt(BRO.nodeNpub, msgToSend);
         } else {
             throw new Error('Extension NOSTR ne supporte pas NIP-44 — mettez à jour votre extension');
         }
@@ -3574,7 +3612,7 @@ function broListenDMs(panel) {
     BRO.listening = true;
 
     const userHex = window.userPubkey;
-    const sub = window.nostrRelay.subscribe([{
+    const sub = window.nostrRelay.sub([{
         kinds: [4],
         authors: [BRO.nodeNpub],
         '#p': [userHex],
@@ -3645,11 +3683,12 @@ function toggleBroFloat() {
 }
 
 // Ouvrir BRO avec un contexte skill prérempli
-function openBroForSkill(skill) {
+function openBroForSkill(skill, level = 0) {
     const panel = document.getElementById('bro-float');
     const fab   = document.getElementById('bro-fab');
     if (panel) { panel.style.display = 'flex'; }
     if (fab)   { fab.style.display = 'none'; }
+    broSetSkill(skill, level);
     renderBroBtns('bro-quick-float', skill);
     const inp = document.getElementById('bro-input-float');
     if (inp) inp.focus();
@@ -3706,10 +3745,19 @@ document.addEventListener('DOMContentLoaded', () => {
     // Initialiser BRO (NODE npub depuis champ home_station du profil MULTIPASS)
     broInit();
 
+    // Charger le tab actif sur connexion + chargement automatique sur changement de tab
+    const _tabExploreBtn    = document.getElementById('tab-explore-btn');
+    const _tabFormationBtn  = document.getElementById('tab-formation-btn');
+    if (_tabExploreBtn)   _tabExploreBtn.addEventListener('shown.bs.tab',   () => loadExploreTab());
+    if (_tabFormationBtn) _tabFormationBtn.addEventListener('shown.bs.tab', () => loadFormationTab());
+
     waitForConnection(() => {
         updateConnectionUI();
         loadMySkills();
         broInit(); // re-essayer après connexion NOSTR
+        // Si le tab Explorer/Formation est déjà actif au moment de la connexion, le charger
+        if (_tabExploreBtn   && _tabExploreBtn.classList.contains('active'))   loadExploreTab();
+        if (_tabFormationBtn && _tabFormationBtn.classList.contains('active')) loadFormationTab();
     });
 
     // Actualiser UI si connexion change (relay events)

@@ -2477,206 +2477,145 @@ async function ensureAuthentication(options = {}) {
  */
 async function sendNIP42Auth(relayUrl, forceSend = false) {
     if (!window.nostr || !NostrState.userPubkey) {
-        console.warn('Cannot send NIP-42 auth: missing nostr extension or pubkey');
-        return;
+        console.warn('[NIP42] Manque extension NOSTR ou pubkey');
+        return false;
     }
-    
-    // Ensure relayUrl is a string (not a relay object)
-    if (typeof relayUrl === 'object' && relayUrl !== null) {
-        if (relayUrl.url) {
-            relayUrl = relayUrl.url;
-        } else {
-            console.warn('Cannot send NIP-42 auth: invalid relay object');
-            return;
-        }
+
+    // Normalise relayUrl en string
+    if (typeof relayUrl === 'object' && relayUrl !== null) relayUrl = relayUrl.url || '';
+    if (typeof relayUrl !== 'string' || !relayUrl) {
+        relayUrl = RelayManager.getPrimaryRelay() || NostrState.DEFAULT_RELAYS[0];
     }
-    
-    if (typeof relayUrl !== 'string') {
-        console.warn('Cannot send NIP-42 auth: relayUrl is not a string');
-        return;
-    }
-    
-    if (!NostrState.nostrRelay || !NostrState.isNostrConnected) {
-        console.warn('Cannot send NIP-42 auth: relay not connected');
-        return;
-    }
-    
-    // Check if we're already sending an auth event (prevent duplicates)
-    if (NostrState.pendingNIP42Auth) {
-        console.log('⏳ NIP-42 auth event already pending, skipping duplicate');
-        return;
-    }
-    
-    // Check cooldown period - even forced sends must respect a minimum 5-second cooldown
+
+    // Cooldowns
     const now = Date.now();
-    const timeSinceLastAuth = now - NostrState.lastNIP42AuthTime;
-    const MIN_COOLDOWN = 5000; // 5 seconds minimum even for forced sends
-    
-    if (timeSinceLastAuth < MIN_COOLDOWN) {
-        console.log(`⏳ NIP-42 auth sent ${Math.floor(timeSinceLastAuth/1000)}s ago, waiting min cooldown (5s)`);
-        return;
+    const elapsed = now - NostrState.lastNIP42AuthTime;
+    if (elapsed < 5000) {
+        console.log(`[NIP42] Cooldown min (${Math.floor(elapsed/1000)}s)`);
+        return false;
     }
-    
-    if (!forceSend && timeSinceLastAuth < NostrState.NIP42_AUTH_COOLDOWN) {
-        console.log(`⏳ NIP-42 auth sent recently (${Math.floor(timeSinceLastAuth/1000)}s ago), skipping to avoid spam`);
-        return;
+    if (!forceSend && elapsed < NostrState.NIP42_AUTH_COOLDOWN) {
+        console.log(`[NIP42] Cooldown actif (${Math.floor(elapsed/1000)}s) — utilisez forceSend=true pour forcer`);
+        return false;
     }
-    
+    if (NostrState.pendingNIP42Auth) {
+        console.log('[NIP42] Auth déjà en cours, ignoré');
+        return false;
+    }
+
+    NostrState.pendingNIP42Auth = true;
+    syncLegacyVariables();
+
     try {
-        NostrState.pendingNIP42Auth = true;
-        syncLegacyVariables();
-        
-        // If forceSend is false, check if we should skip sending (simplified logic)
-        if (!forceSend) {
-            // Only check recent auth if we haven't sent one recently (avoid slow network check)
-            const now = Date.now();
-            const timeSinceLastAuth = now - lastNIP42AuthTime;
-            
-            // If we sent an auth very recently (within last 5 minutes), skip the network check
-            if (timeSinceLastAuth < 300000) { // 5 minutes
-                console.log(`⏳ NIP-42 auth sent ${Math.floor(timeSinceLastAuth/1000)}s ago, skipping to avoid duplicate`);
-                pendingNIP42Auth = false;
-                return;
-            }
-            
-            // Otherwise, do a quick cached check (uses localStorage cache for speed)
-            console.log('🔍 Checking for recent NIP-42 authentication (cached)...');
-            const hasRecentAuth = await checkRecentNIP42Auth(relayUrl, 24);
-            
-            if (hasRecentAuth) {
-                console.log('✅ Recent NIP-42 authentication found on relay, skipping new auth event');
-                NostrState.pendingNIP42Auth = false;
-                // Update last auth time to avoid repeated checks
-                NostrState.lastNIP42AuthTime = now;
-                syncLegacyVariables();
-                return;
-            }
-            
-            console.log('📝 No recent NIP-42 auth found, sending new authentication event...');
-        } else {
-            console.log('📝 Force sending NIP-42 authentication event (user initiated connection)...');
-        }
-        
-        // ── Fetch a dynamic server-issued challenge (nonce) ─────────────────
-        // The API stores the nonce per pubkey (TTL 120s) and the relay write-policy
-        // plugin (filter/22242.sh) writes it into the marker so the API can verify
-        // that the client signed the correct server-issued nonce, preventing
-        // replay attacks with previously-seen kind-22242 events.
-        let nip42Challenge = 'auth-' + Date.now(); // fallback if API unreachable
+        // ── 1. Challenge serveur (obligatoire : 22242.sh vérifie le nonce) ──
+        if (!NostrState.upassportUrl) detectUSPOTAPI();
+        const upassportBase = NostrState.upassportUrl || window.upassportUrl || '';
+
+        let npub = NostrState.userPubkey;
         try {
-            const upassportBase = NostrState.upassportUrl || window.upassportUrl || '';
-            const challengeUrl = `${upassportBase}/api/nip42/challenge?npub=${encodeURIComponent(NostrState.userPubkey)}`;
-            const challengeRes = await fetch(challengeUrl, { method: 'GET', signal: AbortSignal.timeout(3000) });
-            if (challengeRes.ok) {
-                const challengeData = await challengeRes.json();
-                if (challengeData.challenge && typeof challengeData.challenge === 'string' && challengeData.challenge.length === 64) {
-                    nip42Challenge = challengeData.challenge;
-                    console.log('🔑 Dynamic NIP-42 challenge from API:', nip42Challenge.substring(0, 16) + '…');
-                }
-            }
-        } catch (challengeFetchErr) {
-            // Non-fatal: fall back to timestamp-based nonce (weaker but functional)
-            console.warn('⚠️ Could not fetch dynamic NIP-42 challenge, using local nonce:', challengeFetchErr.message);
+            if (typeof window.NostrTools?.nip19?.npubEncode === 'function')
+                npub = window.NostrTools.nip19.npubEncode(NostrState.userPubkey);
+        } catch(_) {}
+
+        let challenge;
+        try {
+            const r = await fetch(
+                `${upassportBase}/api/nip42/challenge?npub=${encodeURIComponent(npub)}`,
+                { signal: AbortSignal.timeout(5000) }
+            );
+            if (!r.ok) throw new Error(`HTTP ${r.status}`);
+            const data = await r.json();
+            if (!data.challenge || data.challenge.length !== 64) throw new Error('challenge invalide');
+            challenge = data.challenge;
+            console.log(`[NIP42] ✅ Challenge : ${challenge.slice(0,8)}…`);
+        } catch (e) {
+            console.error('[NIP42] ❌ Challenge API inaccessible:', e.message,
+                '— Auth annulée (le nonce local serait rejeté par 22242.sh)');
+            return false;
         }
 
-        // Create NIP-42 authentication event (kind 22242)
-        const authEvent = {
-            kind: 22242,
-            created_at: Math.floor(Date.now() / 1000),
-            tags: [
-                ['relay', relayUrl],
-                ['challenge', nip42Challenge]
-            ],
-            content: '',
-            pubkey: NostrState.userPubkey
-        };
-        
-        // Sign the event using ExtensionWrapper
+        // ── 2. Signature kind 22242 ──────────────────────────────────────────
         let signedEvent;
         try {
-            signedEvent = await ExtensionWrapper.signEvent(authEvent);
-        } catch (signError) {
-            console.error('❌ Failed to sign NIP-42 event:', signError);
-            NostrState.pendingNIP42Auth = false;
-            syncLegacyVariables();
-            return;
+            signedEvent = await ExtensionWrapper.signEvent({
+                kind: 22242,
+                pubkey: NostrState.userPubkey,
+                created_at: Math.floor(Date.now() / 1000),
+                tags: [['relay', relayUrl], ['challenge', challenge]],
+                content: '',
+            });
+            if (!signedEvent?.id || !signedEvent?.sig) throw new Error('événement incomplet');
+            console.log(`[NIP42] ✅ Signé : ${signedEvent.id.slice(0,8)}…`);
+        } catch (e) {
+            console.error('[NIP42] ❌ Signature échouée:', e.message);
+            return false;
         }
-        
-        if (!signedEvent || !signedEvent.id) {
-            console.error('❌ Failed to sign NIP-42 event: signed event is invalid');
-            NostrState.pendingNIP42Auth = false;
-            syncLegacyVariables();
-            return;
-        }
-        
-        console.log('✅ NIP-42 event signed:', signedEvent.id);
-        
-        // Publish the event to the relay
-        console.log('📤 Publishing NIP-42 event to relay...');
-        const publishPromise = new Promise((resolve, reject) => {
-            try {
-                const pub = NostrState.nostrRelay.publish(signedEvent);
-                let isResolved = false;
-                if (pub && typeof pub.then === 'function') {
-                    // nostr-tools v2+: publish() retourne une Promise
-                    pub.then(() => { if (!isResolved) { isResolved = true; resolve(true); } })
-                       .catch((r) => { if (!isResolved) { isResolved = true; reject(new Error(r)); } });
-                } else if (pub && typeof pub.on === 'function') {
-                    // nostr-tools v1: publish() retourne un objet avec .on()
-                    pub.on('ok', () => { if (!isResolved) { isResolved = true; resolve(true); } });
-                    pub.on('failed', (r) => { if (!isResolved) { isResolved = true; reject(new Error(r)); } });
-                }
-                // Fallback timeout (relay sans réponse OK, ou publish() retourne undefined)
-                setTimeout(() => {
-                    if (!isResolved) { isResolved = true; resolve(true); }
-                }, 2500);
-            } catch(e) {
-                reject(e);
-            }
+
+        // ── 3. WebSocket direct → EVENT → attente OK ────────────────────────
+        // Envoi via WebSocket dédié (pas relay.publish qui est fire-and-forget)
+        // strfry traite les éphémères 22242 synchroniquement dans le writePolicy.
+        console.log(`[NIP42] 📡 Envoi EVENT vers ${relayUrl}…`);
+        const wsOk = await new Promise(resolve => {
+            let ws;
+            try { ws = new WebSocket(relayUrl); } catch(e) { resolve(false); return; }
+            const t = setTimeout(() => { try { ws.close(); } catch(_){} resolve(false); }, 9000);
+            ws.onopen    = () => ws.send(JSON.stringify(['EVENT', signedEvent]));
+            ws.onmessage = e => {
+                try {
+                    const m = JSON.parse(e.data);
+                    if (m[0] === 'OK' && m[1] === signedEvent.id) {
+                        clearTimeout(t);
+                        try { ws.close(); } catch(_){}
+                        const accepted = m[2] === true;
+                        if (!accepted) console.warn('[NIP42] Relay a rejeté:', m[3]);
+                        resolve(accepted);
+                    }
+                } catch(_) {}
+            };
+            ws.onerror = () => { clearTimeout(t); resolve(false); };
         });
-        
-        // Add timeout for publish
-        const timeoutPromise = new Promise((_, reject) => {
-            setTimeout(() => reject(new Error('NIP-42 publish timeout')), 10000);
-        });
-        
-        await Promise.race([publishPromise, timeoutPromise]);
-        
-        // CRITICAL: Give strfry's filter/22242.sh time to write the marker file to disk
-        await new Promise(r => setTimeout(r, 1500));
-        
-        console.log('✅ NIP-42 event published to relay:', signedEvent.id);
-        
-        // Update last auth time
-        NostrState.lastNIP42AuthTime = Date.now();
-        
-        // Update cache to reflect we just sent an auth event
-        _nip42CacheSet(NostrState.userPubkey, relayUrl, true);
-        
-        // Also send AUTH message for immediate authentication
-        try {
-            const ws = NostrState.nostrRelay._ws || NostrState.nostrRelay.ws || NostrState.nostrRelay.socket;
-            
-            if (ws && ws.readyState === WebSocket.OPEN) {
-                const authMessage = JSON.stringify(['AUTH', signedEvent]);
-                ws.send(authMessage);
-                console.log('✅ NIP-42 AUTH message sent via relay WebSocket:', signedEvent.id);
-            }
-        } catch (authError) {
-            console.warn('⚠️ Could not send AUTH message, but event was published:', authError);
+
+        console.log(`[NIP42] Relay : ${wsOk ? '✅ accepté — marker créé' : '⚠️ rejeté'}`);
+
+        if (wsOk) {
+            NostrState.lastNIP42AuthTime = Date.now();
+            _nip42CacheSet(NostrState.userPubkey, relayUrl, true);
+            syncLegacyVariables();
         }
-        
-    } catch (error) {
-        console.error('❌ Failed to send NIP-42 auth:', error);
+
+        return wsOk;
+
+    } catch (e) {
+        console.error('[NIP42] ❌ Erreur inattendue:', e);
+        return false;
     } finally {
         NostrState.pendingNIP42Auth = false;
         syncLegacyVariables();
     }
 }
 
-// Make sendNIP42Auth globally accessible
+// ── Exports window ───────────────────────────────────────────────────────────
 if (typeof window !== 'undefined') {
     window.sendNIP42Auth = sendNIP42Auth;
+
+    // window.doNip42Auth(pubkeyHex?) — API unifiée pour toutes les pages
+    // Flux autonome : challenge → sign → WebSocket relay → retourne bool
+    // Ne dépend pas de connectToRelay(). Compatible dev.html, roaming.html, etc.
+    window.doNip42Auth = async function(pubkeyHex) {
+        if (!pubkeyHex && window.nostr) {
+            try { pubkeyHex = await window.nostr.getPublicKey(); } catch(_) {}
+        }
+        if (!pubkeyHex) { console.warn('[doNip42Auth] Pas de pubkey'); return false; }
+
+        if (!NostrState.userPubkey) {
+            NostrState.userPubkey = pubkeyHex;
+            syncLegacyVariables();
+        }
+        if (!NostrState.upassportUrl) detectUSPOTAPI();
+
+        const relayUrl = RelayManager.getPrimaryRelay() || NostrState.DEFAULT_RELAYS[0];
+        return sendNIP42Auth(relayUrl, true);
+    };
 }
 
 /**
@@ -3575,7 +3514,10 @@ function hexToNpub(hex) {
             return window.NostrTools.nip19.npubEncode(hex);
         }
         
-        console.warn('⚠️ NostrTools.nip19.npubEncode not available');
+        // nostr.bundle.js doit être chargé AVANT common.js — c'est une erreur de configuration
+        const msg = '❌ DEV ERROR: NostrTools (nostr.bundle.js) must be loaded before common.js. Add <script src="nostr.bundle.js"></script> before common.js in this page.';
+        console.error(msg);
+        if (typeof alert === 'function') alert(msg);
         return null;
     } catch (error) {
         console.error('❌ Error converting hex to npub:', error);
@@ -8526,6 +8468,7 @@ if (typeof window !== 'undefined') {
     window.connectToRelay = connectToRelay;
     window.ensureRelayConnection = ensureRelayConnection;
     window.sendNIP42Auth = sendNIP42Auth;
+    window.doNip42Auth = window.doNip42Auth || (async (hex) => sendNIP42Auth(RelayManager.getPrimaryRelay() || DEFAULT_RELAYS[0], true));
     window.publishNote = publishNote;
     window.sendLike = sendLike;
     window.sendDislike = sendDislike;

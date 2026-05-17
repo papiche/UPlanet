@@ -597,13 +597,15 @@ async function fetchNostrProfile(hex, nostrRelayUrl) {
                     profileData = JSON.parse(event.content);
                     if (event.tags && Array.isArray(event.tags)) {
                         event.tags.forEach(function (tag) {
-                            if (tag.length >= 3 && tag[0] === 'i') {
-                                const v = tag[1];
-                                if (v.startsWith('g1pub:'))    profileData.g1pub    = v.substring(6);
-                                if (v.startsWith('website:'))  profileData.website  = v.substring(8);
-                                if (v.startsWith('mastodon:')) profileData.mastodon = v.substring(9);
-                                if (v.startsWith('zencard:'))  profileData.zencard  = v.substring(8);
-                                if (v.startsWith('email:'))    profileData.email    = v.substring(6);
+                            if (tag.length >= 2 && tag[0] === 'i') {
+                                // Sépare la clé de la valeur au premier ':' 
+                                const colonIndex = tag[1].indexOf(':');
+                                if (colonIndex > 0) {
+                                    const key = tag[1].substring(0, colonIndex);
+                                    // La valeur contient tout le reste (incluant un éventuel 2e ':')
+                                    const value = tag[1].substring(colonIndex + 1);
+                                    profileData[key] = value;
+                                }
                             }
                         });
                     }
@@ -911,30 +913,93 @@ async function displayNostrData() {
         profileHTML += `<h3>${(profileData.name || profileData.display_name || 'N/A').replace(/</g, '&lt;')}</h3>`;
         profileHTML += `<p>${makeLinksClickable((profileData.about || 'No description.').replace(/</g, '&lt;').replace(/>/g, '&gt;'))}</p>`;
 
-        // Additional fields
-        const additionalFields = [];
-        if (profileData.website)
-            additionalFields.push(`<span class="profile-field"><strong>🌐 uDRIVE:</strong> <a href="${profileData.website}" target="_blank" rel="noopener noreferrer">${profileData.website}</a></span>`);
-        if (profileData.mastodon)
-            additionalFields.push(`<span class="profile-field"><strong>🐘 Mastodon:</strong> <a href="${profileData.mastodon}" target="_blank" rel="noopener noreferrer">${profileData.mastodon}</a></span>`);
-
+        // Check Balances
         const balanceResults = await checkAllZenBalances(profileData);
+        const ipfsGw = window.IPFS_GATEWAY || 'https://ipfs.copylaradio.com';
 
+        // Helper pour créer un lien simple
+        const makeLink = (val, isUrl = false) => {
+            if (!val) return '';
+            if (isUrl || val.startsWith('http')) return `<a href="${val}" target="_blank" rel="noopener noreferrer">${val.length > 35 ? val.substring(0,35)+'...' : val}</a>`;
+            return val.replace(/</g, '&lt;');
+        };
+
+        // Construction des catégories
+        let categoriesHTML = `<div class="profile-groups-container">`;
+
+        // --- 1. SOCIAL & LIENS ---
+        let socialFields = '';
+        if (profileData.website)  socialFields += `<div class="profile-field"><strong>🌐 Web:</strong> ${makeLink(profileData.website, true)}</div>`;
+        if (profileData.nip05)    socialFields += `<div class="profile-field"><strong>✅ NIP-05:</strong> ${profileData.nip05.replace(/</g, '&lt;')}</div>`;
+        if (profileData.email)    socialFields += `<div class="profile-field"><strong>✉️ Email:</strong> <a href="mailto:${profileData.email}">${profileData.email}</a></div>`;
+        if (profileData.github)   socialFields += `<div class="profile-field"><strong>🐙 GitHub:</strong> ${makeLink(profileData.github, true)}</div>`;
+        if (profileData.twitter)  socialFields += `<div class="profile-field"><strong>🐦 Twitter:</strong> ${makeLink(profileData.twitter, true)}</div>`;
+        if (profileData.mastodon) socialFields += `<div class="profile-field"><strong>🐘 Mastodon:</strong> ${makeLink(profileData.mastodon, true)}</div>`;
+        if (profileData.telegram) socialFields += `<div class="profile-field"><strong>✈️ Telegram:</strong> ${makeLink(profileData.telegram, true)}</div>`;
+        if (profileData.bot === true || profileData.bot === "true") socialFields += `<div class="profile-field"><strong>🤖 Bot:</strong> Oui</div>`;
+        
+        if (socialFields) categoriesHTML += `<div class="profile-group"><h4>Réseaux & Contacts</h4>${socialFields}</div>`;
+
+        // --- 2. CRYPTO & G1 ---
+        let cryptoFields = '';
         if (profileData.g1pub) {
             let balInfo = '';
             if (balanceResults.multipass) balInfo = ` <span class="balance-info">${balanceResults.multipass.zenBalance} ẐEN</span>`;
             else if (balanceResults.g1pub) balInfo = ` <span class="balance-info">${balanceResults.g1pub.zenBalance} ẐEN</span>`;
-            else balInfo = ` <a href="${getApiServerUrl()}/check_zencard?email=${profileData.email || 'unknown'}" target="_blank" class="balance-info na">Check ZEN Card</a>`;
+            else balInfo = ` <a href="${getApiServerUrl()}/check_zencard?email=${profileData.email || 'unknown'}" target="_blank" class="balance-info na">Check</a>`;
             const txt = profileData.g1pub.includes(':') ? profileData.g1pub.split(':').join(' • ') : profileData.g1pub;
-            additionalFields.push(`<span class="profile-field"><strong>🔑 MULTIPASS:</strong> ${txt.substring(0,6)}...${txt.substring(txt.length-6)} ${balInfo}</span>`);
+            cryptoFields += `<div class="profile-field" title="${profileData.g1pub}"><strong>🔑 MULTIPASS:</strong> ${txt.substring(0,6)}...${txt.substring(txt.length-4)} ${balInfo}</div>`;
         }
-        if (profileData.zencard && profileData.zencard !== 'None' && profileData.zencard.trim()) {
-            let balInfo = '';
-            if (balanceResults.zencard) balInfo = ` <a href="${getApiServerUrl()}/check_zencard?email=${profileData.email || 'unknown'}" target="_blank" class="balance-info na">ZEN Card</a>`;
-            additionalFields.push(`<span class="profile-field"><strong>💳 ZenCard:</strong> ${profileData.zencard.substring(0,6)}...${profileData.zencard.substring(profileData.zencard.length-6)} ${balInfo}</span>`);
+        if (profileData.zencard && profileData.zencard !== 'None') {
+            let balInfo = balanceResults.zencard ? ` <a href="${getApiServerUrl()}/check_zencard?email=${profileData.email || 'unknown'}" target="_blank" class="balance-info na">ZEN Card</a>` : '';
+            cryptoFields += `<div class="profile-field" title="${profileData.zencard}"><strong>💳 ZenCard v1:</strong> ${profileData.zencard.substring(0,6)}...${profileData.zencard.substring(profileData.zencard.length-4)} ${balInfo}</div>`;
+        }
+        if (profileData.g1v2) cryptoFields += `<div class="profile-field" title="${profileData.g1v2}"><strong>⛓️ G1 v2 (SS58):</strong> ${profileData.g1v2.substring(0,8)}...${profileData.g1v2.substring(profileData.g1v2.length-6)}</div>`;
+        if (profileData.g1member) cryptoFields += `<div class="profile-field" title="${profileData.g1member}"><strong>🏛️ G1 Member:</strong> ${profileData.g1member.substring(0,8)}...</div>`;
+        if (profileData.zencard_v2) cryptoFields += `<div class="profile-field" title="${profileData.zencard_v2}"><strong>💳 ZenCard v2:</strong> ${profileData.zencard_v2.substring(0,8)}...</div>`;
+        
+        if (cryptoFields) categoriesHTML += `<div class="profile-group"><h4>Crypto & Économie</h4>${cryptoFields}</div>`;
+
+        // --- 3. LOCALISATION & CARTES (UMAP) ---
+        let mapFields = '';
+        if (profileData.city) mapFields += `<div class="profile-field"><strong>🏙️ Ville:</strong> ${profileData.city.replace(/</g, '&lt;')}</div>`;
+        if (profileData.umap_updated) mapFields += `<div class="profile-field"><strong>📅 MàJ Cartes:</strong> ${profileData.umap_updated.replace(/</g, '&lt;')}</div>`;
+        if (profileData.umaproot) mapFields += `<div class="profile-field"><strong>📁 UMAP Root:</strong> <a href="${ipfsGw}/ipfs/${profileData.umaproot}" target="_blank">Ouvrir le dossier</a></div>`;
+        if (profileData.umap_cid) mapFields += `<div class="profile-field"><strong>🗺️ Carte (Zoom):</strong> <a href="${ipfsGw}/ipfs/${profileData.umap_cid}" target="_blank">zUmap.jpg</a></div>`;
+        if (profileData.usat_cid) mapFields += `<div class="profile-field"><strong>🛰️ Satellite (Zoom):</strong> <a href="${ipfsGw}/ipfs/${profileData.usat_cid}" target="_blank">Usat.jpg</a></div>`;
+        if (profileData.umap_full_cid) mapFields += `<div class="profile-field"><strong>🗺️ Carte (Large):</strong> <a href="${ipfsGw}/ipfs/${profileData.umap_full_cid}" target="_blank">Umap_full.jpg</a></div>`;
+        if (profileData.usat_full_cid) mapFields += `<div class="profile-field"><strong>🛰️ Satellite (Large):</strong> <a href="${ipfsGw}/ipfs/${profileData.usat_full_cid}" target="_blank">Usat_full.jpg</a></div>`;
+
+        if (mapFields) categoriesHTML += `<div class="profile-group"><h4>Localisation & UMAP</h4>${mapFields}</div>`;
+
+        // --- 4. SYSTÈME & IDENTITÉS ---
+        let sysFields = '';
+        
+        // Gestion spéciale pour Home Station (Roaming)
+        if (profileData.home_station) {
+            const parts = profileData.home_station.split(':');
+            const ipfsNodeId = parts[0];
+            const nodeHex = parts.length > 1 ? parts[1] : '';
+            const shortId = ipfsNodeId.length > 12 ? ipfsNodeId.substring(0, 10) + '...' : ipfsNodeId;
+            
+            sysFields += `<div class="profile-field" title="Node: ${profileData.home_station}">
+                <strong>📡 Home Station:</strong> 
+                <a href="${ipfsGw}/ipns/${ipfsNodeId}" target="_blank">🌍 Roaming OK (${shortId})</a>
+            </div>`;
         }
 
-        if (additionalFields.length > 0) profileHTML += `<div class="profile-additional-fields">${additionalFields.join('')}</div>`;
+        if (profileData.ipfs_gw) sysFields += `<div class="profile-field"><strong>🌍 IPFS Gateway:</strong> ${makeLink(profileData.ipfs_gw, true)}</div>`;
+        if (profileData.ipns_vault) sysFields += `<div class="profile-field"><strong>🔐 IPNS Vault:</strong> <a href="${ipfsGw}/ipns/${profileData.ipns_vault}" target="_blank" title="${profileData.ipns_vault}">${profileData.ipns_vault.substring(0,12)}...</a></div>`;
+        if (profileData.tw_feed) sysFields += `<div class="profile-field"><strong>📰 TW Feed (IPNS):</strong> <a href="${ipfsGw}/ipns/${profileData.tw_feed}" target="_blank" title="${profileData.tw_feed}">${profileData.tw_feed.substring(0,12)}...</a></div>`;
+        
+        if (sysFields) categoriesHTML += `<div class="profile-group"><h4>Système uSPOT</h4>${sysFields}</div>`;
+
+        categoriesHTML += `</div>`; // Fermeture profile-groups-container
+        
+        // Affichage final s'il y a des infos
+        if (socialFields || cryptoFields || mapFields || sysFields) {
+            profileHTML += categoriesHTML;
+        }
 
         // DID document
         const didDoc = await fetchDidDocument(hexKey, relayUrl);

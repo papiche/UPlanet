@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cyber Cochon 🐷 - Nœud UPlanet</title>
+  <script type="module" src="model-viewer.min.js"></script>
+  <style>
+    :root {
+      --bg: #090a0f; 
+      --panel: rgba(15, 12, 20, 0.85); 
+      --pink: #ff3399; 
+      --yellow: #ffd700; 
+      --text: #e0e2e6; 
+      --accent: #00ffcc; 
+      --font: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+    body {
+      margin: 0; padding: 0; background: radial-gradient(circle at center, #2a0a18 0%, var(--bg) 100%);
+      color: var(--text); font-family: var(--font); height: 100vh; overflow: hidden;
+      display: flex; flex-direction: row;
+    }
+
+    /* --- TICKER --- */
+    .ticker-wrap {
+      position: absolute; top: 0; width: 100%; height: 30px; background: var(--pink); color: #000;
+      overflow: hidden; z-index: 100; display: flex; align-items: center; font-family: monospace; font-weight: bold;
+      box-shadow: 0 0 15px var(--pink);
+    }
+    .ticker { white-space: nowrap; animation: ticker 25s linear infinite; }
+    @keyframes ticker { 0% { transform: translateX(100vw); } 100% { transform: translateX(-100%); } }
+
+    /* --- PANNEAU GAUCHE --- */
+    .info-section {
+      width: 45%; padding: 60px 40px 40px; box-sizing: border-box; display: flex;
+      flex-direction: column; justify-content: center; z-index: 10;
+      background: linear-gradient(90deg, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.4) 100%);
+      border-right: 2px solid rgba(255, 51, 153, 0.3);
+    }
+    h1 { color: var(--pink); font-size: 3.5rem; margin: 0; text-transform: uppercase; text-shadow: 0 0 15px var(--pink), 2px 2px 0px var(--yellow); line-height: 1; }
+    h2 { color: var(--accent); font-family: monospace; font-size: 1.2rem; margin-top: 10px; }
+    p { font-size: 1.1rem; line-height: 1.6; color: #ccc; }
+    .highlight { color: var(--yellow); font-weight: bold; }
+    .cyber-link { color: var(--accent); text-decoration: none; border-bottom: 1px dashed var(--accent); transition: 0.3s; font-weight: bold; }
+    .cyber-link:hover { color: #fff; border-bottom: 1px solid #fff; text-shadow: 0 0 8px var(--accent); }
+
+    /* --- BOUTONS --- */
+    .action-group { margin-top: 30px; display: flex; flex-direction: column; gap: 15px; }
+    .btn-donate {
+      background: var(--yellow); color: #000; font-size: 1.4rem; font-weight: 900;
+      padding: 20px; border: none; border-radius: 8px; cursor: pointer; text-transform: uppercase; 
+      box-shadow: 0 0 20px rgba(255, 215, 0, 0.5); transition: 0.2s; animation: pulse-yellow 2s infinite;
+    }
+    .btn-print {
+      background: transparent; color: var(--pink); font-size: 1.2rem; font-weight: bold;
+      padding: 15px; border: 2px solid var(--pink); border-radius: 8px; cursor: pointer; text-transform: uppercase; 
+      transition: 0.2s; display: flex; align-items: center; justify-content: center; gap: 10px;
+    }
+    .btn-print:hover { background: var(--pink); color: #000; box-shadow: 0 0 20px var(--pink); }
+
+    /* --- 3D SECTION --- */
+    .model-section { width: 55%; height: 100vh; position: relative; }
+    model-viewer { width: 100%; height: 100%; --poster-color: transparent; outline: none; }
+    .hotspot {
+      width: 24px; height: 24px; border-radius: 50%; background: rgba(255, 51, 153, 0.8); border: 2px solid #fff;
+      box-shadow: 0 0 15px var(--pink); cursor: pointer; transition: 0.3s; animation: hotspot-pulse 1.5s infinite alternate;
+    }
+    .hotspot:hover { transform: scale(1.5); background: var(--accent); box-shadow: 0 0 20px var(--accent); border-color: #000; }
+    @keyframes hotspot-pulse { from { box-shadow: 0 0 5px var(--pink); } to { box-shadow: 0 0 20px var(--pink); } }
+
+    #info-panel {
+      position: absolute; top: 50%; right: 30px; transform: translateY(-50%) scale(0.9);
+      width: 320px; background: var(--panel); border: 2px solid var(--pink); border-radius: 12px;
+      padding: 20px; backdrop-filter: blur(10px); z-index: 10; opacity: 0; pointer-events: none; transition: 0.3s;
+    }
+    #info-panel.visible { opacity: 1; transform: translateY(-50%) scale(1); pointer-events: auto; }
+    .tech-specs { background: rgba(0,0,0,0.6); padding: 10px; border-radius: 6px; font-family: monospace; color: var(--yellow); font-size: 0.85rem; border-left: 3px solid var(--accent); margin-top: 10px; }
+
+    /* --- MODAL QR CODE --- */
+    #qr-modal {
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0,0,0,0.9); backdrop-filter: blur(10px);
+      display: none; justify-content: center; align-items: center; z-index: 2000;
+    }
+    #qr-modal.active { display: flex; }
+    .modal-content {
+      background: var(--panel); border: 3px solid var(--pink); padding: 30px;
+      text-align: center; border-radius: 20px; box-shadow: 0 0 50px var(--pink); position: relative;
+    }
+    .modal-content img { background: white; padding: 10px; border-radius: 10px; margin: 15px 0; }
+    .close-modal { position: absolute; top: 10px; right: 15px; font-size: 2rem; color: var(--pink); cursor: pointer; }
+
+    #toast {
+      position: fixed; bottom: 30px; left: 50%; transform: translate(-50%, 100px);
+      background: var(--accent); color: #000; padding: 15px 30px; border-radius: 50px;
+      font-weight: 900; opacity: 0; transition: 0.4s; z-index: 1000;
+    }
+    #toast.show { transform: translate(-50%, 0); opacity: 1; }
+
+    @keyframes pulse-yellow { 0%, 100% { box-shadow: 0 0 10px rgba(255, 215, 0, 0.5); } 50% { box-shadow: 0 0 25px rgba(255, 215, 0, 0.8); } }
+    @media (max-width: 900px) {
+      body { flex-direction: column; height: auto; min-height: 100vh; overflow: visible; }
+      .ticker-wrap { position: fixed; top: 0; }
+      .model-section { height: 55vh; width: 100%; flex-shrink: 0; }
+      .info-section { width: 100%; padding: 50px 20px 60px; flex-shrink: 0; }
+      #info-panel { top: 20px; right: 20px; left: 20px; transform: none; width: auto; }
+    }
+
+    /* --- NÉBULEUSE DE SERVICES --- */
+    .nebula-overlay { position:absolute; inset:0; pointer-events:none; z-index:6; overflow:hidden; }
+    .nebula-dot { position:absolute; pointer-events:auto; cursor:pointer; transform:translate(-50%,-50%); }
+    .dot-core { border-radius:50%; display:flex; align-items:center; justify-content:center;
+      font-size:.88rem; transition:transform .25s ease, filter .25s ease; }
+    .nebula-dot:hover .dot-core { transform:scale(1.85); filter:brightness(1.5); }
+    .nebula-dot:active .dot-core { transform:scale(2.3); }
+    .dot-label { position:absolute; bottom:calc(100% + 10px); left:50%; transform:translateX(-50%);
+      background:rgba(8,6,16,.95); border-radius:8px; padding:7px 13px;
+      opacity:0; pointer-events:none; transition:opacity .2s ease;
+      text-align:center; min-width:130px; max-width:195px; z-index:20; }
+    .nebula-dot:hover .dot-label { opacity:1; }
+    .dot-label.pos-below { bottom:auto; top:calc(100% + 10px); }
+    .dot-label.pos-right { left:calc(100% + 10px); bottom:auto; top:50%; transform:translateY(-50%); }
+    .dot-label.pos-left  { right:calc(100% + 10px); left:auto; bottom:auto; top:50%; transform:translateY(-50%); }
+    .svc-name { font-weight:700; font-size:.77rem; font-family:monospace; display:block; margin-top:3px; }
+    .svc-desc { font-size:.66rem; color:#8ab; line-height:1.35; display:block; margin-top:3px; }
+    .nebula-svg-lines { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; overflow:visible; }
+    @keyframes pp { 0%,100%{box-shadow:0 0 5px 1px rgba(255,51,153,.35)} 50%{box-shadow:0 0 16px 6px rgba(255,51,153,.9)} }
+    @keyframes cc { 0%,100%{box-shadow:0 0 5px 1px rgba(0,255,204,.35)} 50%{box-shadow:0 0 16px 6px rgba(0,255,204,.9)} }
+    @keyframes yy { 0%,100%{box-shadow:0 0 5px 1px rgba(255,215,0,.3)}  50%{box-shadow:0 0 16px 6px rgba(255,215,0,.85)} }
+    @keyframes twinkle { 0%,100%{opacity:.12} 50%{opacity:.65} }
+  </style>
+</head>
+<body>
+
+  <div class="ticker-wrap">
+    <div class="ticker">
+      🐷 D'OH! CONNEXION UPLANET ÉTABLIE 🍩 BIENVENUE SUR LE CYBER COCHON 🍩 AUDIT EN COURS : CACHEZ LES BIÈRES 🍩 LA SOUVERAINETÉ NUMÉRIQUE C'EST COMME UN DONUT : TOUT EST DANS LE TROU 🍩 LAISSEZ UN POURBOIRE AU G1FABLAB 🍩 
+    </div>
+  </div>
+
+  <div class="info-section">
+    <h1>Cyber<br>Cochon</h1>
+    <h2>Nœud Autonome // UPlanet ẐEN</h2>
+    <p>La souveraineté numérique, c'est savoir <span class="highlight">où se trouvent nos données</span>. Marre de M. Burns ?</p>
+    <p>Ici, les logiciels sont des <b>Biens Communs</b>. Le <a href="https://opencollective.com/monnaie-libre" target="_blank" class="cyber-link">G1FabLab</a> bâtit notre indépendance matérielle.</p>
+    
+    <div class="action-group">
+      <button class="btn-donate" onclick="window.open('https://opencollective.com/monnaie-libre/contribute', '_blank')">
+        🍩 Rejoindre le collectif (Dons)
+      </button>
+      <button class="btn-print" onclick="printTicket()">
+        🖨️ Récupérez un MULTIPASS (UPlanet)
+      </button>
+    </div>
+  </div>
+
+  <div class="model-section">
+    <model-viewer src="cochon.glb" 
+                  camera-controls auto-rotate 
+                  camera-target="0m 0.2m 0m" 
+                  camera-orbit="45deg 70deg 1.2m"
+                  shadow-intensity="1">
+      
+      <!-- TOUS LES HOTSPOTS RESTAURÉS -->
+      <button class="hotspot" slot="hotspot-ventre" data-position="0 0.15 0.1" data-normal="0 0 1" onclick="showInfo('ventre')"></button>
+      <button class="hotspot" slot="hotspot-bouche" data-position="0 0.28 0.12" data-normal="0 1 1" onclick="showInfo('bouche')"></button>
+      <button class="hotspot" slot="hotspot-bras" data-position="0.15 0.2 0" data-normal="1 0 0" onclick="showInfo('bras')"></button>
+      <button class="hotspot" slot="hotspot-dos" data-position="0 0.2 -0.15" data-normal="0 0 -1" onclick="showInfo('dos')"></button>
+    </model-viewer>
+
+    <!-- NÉBULEUSE : points constellation UPlanet / MULTIPASS -->
+    <div class="nebula-overlay" id="nebula-overlay">
+      <svg class="nebula-svg-lines" id="nebula-svg" xmlns="http://www.w3.org/2000/svg"></svg>
+    </div>
+
+    <div id="info-panel">
+      <h2 id="info-title" style="color: var(--accent); margin:0;">Titre</h2>
+      <div id="info-desc" style="margin: 10px 0;">Description</div>
+      <div id="info-specs" class="tech-specs">Specs</div>
+    </div>
+  </div>
+
+  <!-- MODAL QR CODE -->
+  <div id="qr-modal">
+    <div class="modal-content">
+      <span class="close-modal" onclick="closeModal()">&times;</span>
+      <h3 style="color: var(--accent); margin: 0; text-transform: uppercase;">Ticket Qo-Op</h3>
+      <div id="qr-container"></div>
+      <p style="color: var(--yellow); font-family: monospace; margin: 10px 0;">https://qo-op.com</p>
+    </div>
+  </div>
+
+  <div id="toast">Bzzzz... Génération du ticket ! 🖨️</div>
+  <audio id="homer-audio" preload="none"></audio>
+
+  <script>
+    // TOUTES LES DONNÉES RESTAURÉES
+    const equipmentData = {
+      'ventre': {
+        title: "Raspberry Pi 4",
+        desc: "L'estomac de la bête ! Il digère les données du réseau IPFS et gère le mixage audio.",
+        specs: "CPU: Quad-Core ARM<br>RAM: 4GB LPDDR4<br>Rôle: Nœud PicoPort UPlanet"
+      },
+      'bouche': {
+        title: "L'Œil d'Homer",
+        desc: "Avec mon module caméra caché sous le groin, je peux repérer les donuts et déclencher des réactions.",
+        specs: "Module: Pi Camera V3<br>FOV: 75°<br>Tech: OpenCV"
+      },
+      'bras': {
+        title: "Antenne Réseau",
+        desc: "C'est avec ça que je fourni le Wi-Fi ZICMAMA pour rejoindre la Toile de Confiance.",
+        specs: "Mode: Point d'Accès (uap0)<br>Fréq: 2.4 / 5 GHz<br>Protocol: Mesh/P2P"
+      },
+      'dos': {
+        title: "Sac à Dos Tech",
+        desc: "Contient un SSD rempli de musique et vidéos, et potentiellement un micro-projecteur.",
+        specs: "Stockage: SSD USB 3.0<br>Réseau: Alfa Network<br>Audio: Jack 3.5mm"
+      }
+    };
+
+    function showInfo(partId) {
+      const panel = document.getElementById('info-panel');
+      const data = equipmentData[partId];
+      document.getElementById('info-title').innerHTML = '🐷 ' + data.title;
+      document.getElementById('info-desc').innerHTML = data.desc;
+      document.getElementById('info-specs').innerHTML = data.specs;
+      panel.classList.add('visible');
+    }
+
+    async function printTicket() {
+      const toast = document.getElementById('toast');
+      const modal = document.getElementById('qr-modal');
+      const qrContainer = document.getElementById('qr-container');
+
+      toast.classList.add('show');
+      setTimeout(() => toast.classList.remove('show'), 3000);
+
+      // URL MULTIPASS : dériver depuis le hostname actuel → u.DOMAIN/qr
+      const h = location.hostname;
+      const domain = h.replace(/^(ipfs|astroport|soundspot|192\.168\.[0-9]+)\./,'') || 'copylaradio.com';
+      const upassportQr = `https://u.${domain}/qr?data=${encodeURIComponent('https://qo-op.com')}`;
+      const fallbackUrl = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent('https://qo-op.com')}&color=ff3399`;
+
+      let imgSrc = null;
+      try {
+        const r = await fetch(upassportQr, { signal: AbortSignal.timeout(4000) });
+        if (r.ok) {
+          const j = await r.json();
+          imgSrc = j.dataUrl || (j.fallback ? j.fallback : null);
+        }
+      } catch (_) {}
+
+      imgSrc = imgSrc || fallbackUrl;
+      qrContainer.innerHTML = `<a href="https://qo-op.com" target="qo-op"><img src="${imgSrc}" alt="QR" style="max-width:180px;border-radius:10px;"></a>`;
+      setTimeout(() => modal.classList.add('active'), 500);
+    }
+
+    function closeModal() { document.getElementById('qr-modal').classList.remove('active'); }
+
+    // Fermeture du panneau 3D au clic ailleurs
+    document.querySelector('model-viewer').addEventListener('mousedown', (e) => {
+      if(e.target.tagName === 'MODEL-VIEWER') document.getElementById('info-panel').classList.remove('visible');
+    });
+
+    // ─── NÉBULEUSE DE SERVICES UPLANET ────────────────────────────────────────
+    // Résoudre les URLs de service depuis le hostname du portail
+    const _domain = (() => {
+      const h = location.hostname;
+      return h.replace(/^(ipfs|astroport|soundspot|192\.168\.[0-9.]+)\./i, '') || 'copylaradio.com';
+    })();
+    function resolveUrl(tmpl) {
+      return tmpl
+        .replace('{u}',     `https://u.${_domain}`)
+        .replace('{earth}', `https://ipfs.${_domain}/ipns/copylaradio.com`)
+        .replace('{g1fablab}', `https://opencollective.com/monnaie-libre`)
+        .replace('{zicmama}', `https://ipfs.${_domain}/ipfs/QmSTcJURUCzX4vCPXEy1tqBgdLbAdh5ENvSu3HznaNzcLp/`)
+        .replace('{astroport}', `https://astroport.${_domain}`)
+        .replace('{astroport_site}', `https://ipfs.${_domain}/ipns/astroport.one`)
+        .replace('{coracle}', `https://coracle.${_domain}`)
+        .replace('{zelkova}', `https://zinkgo.${_domain}`)
+        .replace('{troczen}', `https://zen.${_domain}`);
+      }
+
+    const SVCS = [
+      {e:'🪪', n:'Multipass Web3',       d:'Votre identité souveraine\nNostr • Ğ1 • IPFS',               c:'p', x:14, y:13, l:'{earth}/contribute-3D-curieux.html'},
+      {e:'🌐', n:'Globe UPlanet',         d:'Explorez la planète en 3D\nSélectionnez votre territoire',  c:'c', x:48, y:7,  l:'{earth}/'},
+      {e:'🎬', n:'Nostr Tube',           d:'Alternative vidéo libre\nZéro pub, zéro algorithme',        c:'c', x:85, y:16, l:'{u}/youtube?html=1'},
+      {e:'📡', n:'Relais Nostr',         d:'Messagerie incorruptible\nRésistante à la censure',         c:'c', x:7,  y:40, l:'{earth}/nostr_console.html'},
+      {e:'🧠', n:'IA ZicMama',           d:'Intelligence distribuée\nSouveraine & collaborative',       c:'p', x:82, y:33, l:'{zicmama}/'},
+      {e:'💻', n:'Terminal #BRO',        d:'Console des Communs\nChat IA & financement participatif',   c:'p', x:20, y:62, l:'{u}/nostr'},
+      {e:'📻', n:'Radio P2P',            d:'Streaming audio coopératif\nVoix & Musique sur WiFi libre', c:'y', x:88, y:55, l:'{u}/vocals-read'},
+      {e:'📍', n:'Cadastre UPlanet',     d:'Votre zone 0.01°×0.01°\nAgissez sur le territoire local',   c:'c', x:13, y:80, l:'{earth}/welcome.html'},
+      {e:'✨', n:'Constellation',        d:'Maillage de nœuds Astroport\nStations autonomes locales',   c:'p', x:90, y:72, l:'{earth}/Unation.html'},
+      {e:'⚖️', n:'Économie ẐEN',         d:'Monnaie libre et échanges\nVotre tableau de bord',          c:'y', x:60, y:90, l:'{earth}/economy.html'},
+      {e:'🤝', n:'G1FabLab Coop',        d:'Financement collectif\nSoutenez l\'infrastructure libre',   c:'y', x:34, y:20, l:'{g1fablab}/'},
+      {e:'🕸️', n:'Toile de Confiance',   d:'Certification humaine Ğ1\nSécurisez le réseau Duniter',     c:'y', x:68, y:10, l:'{earth}/contribute-3D-G1.html'},
+      {e:'🛠️', n:'Savoirs MineLife',     d:'Échange de compétences\nFormation de pair à pair',          c:'c', x:5,  y:67, l:'{earth}/minelife.html'},
+      {e:'🎟️', n:'TrocZen Marchés',      d:'Bons d\'échanges locaux\nFidélisez votre clientèle',        c:'y', x:44, y:92, l:'{troczen}'},
+      {e:'🏛️', n:'Carte Sociétaire',     d:'Gouvernance collective\nVotez pour vos biens communs',      c:'p', x:76, y:84, l:'{earth}/contribute-3D-coop.html'},
+      {e:'🛰️', n:'Station Astroport',    d:'Accès balise 12345.json\nDonnées de votre station',         c:'c', x:50, y:45, l:'{astroport}/12345.json'},
+      {e:'🚀', n:'Astroport.one',        d:'Code source ouvert\nLe réseau spatial décentralisé',        c:'p', x:40, y:55, l:'{astroport_site}'},
+      {e:'💬', n:'Coracle Social',       d:'Messagerie Nostr souveraine\nCommunauté décentralisée',      c:'c', x:25, y:35, l:'{coracle}'},
+      {e:'💰', n:'Zelkova Wallet',       d:'Portefeuille ẐEN mobile\nPayez & recevez librement',          c:'y', x:70, y:60, l:'{zelkova}'},
+      {e:'🏴', n:'Devenir Capitaine',    d:'Gérez votre station\nRejoignez la constellation',             c:'p', x:55, y:25, l:'{earth}/contribute-3D-dev.html'},
+    ];
+
+    const COL = {
+      p:{bg:'rgba(255,51,153,.2)',  bd:'#ff3399', an:'pp', lb:'#ff3399'},
+      c:{bg:'rgba(0,255,204,.2)',   bd:'#00ffcc', an:'cc', lb:'#00ffcc'},
+      y:{bg:'rgba(255,215,0,.15)', bd:'#ffd700', an:'yy', lb:'#ffd700'},
+    };
+    const LINES = [[0,10],[10,1],[1,11],[11,2],[3,5],[5,12],[4,6],[6,8],[8,9],[9,13],[9,14],[0,5],[17,3],[18,9],[19,8],[0,17],[17,19]];
+    let homerTracks = [];
+
+    async function loadHomer() {
+      try {
+        const r = await fetch('homer/homer.json');
+        if (r.ok) homerTracks = await r.json();
+      } catch(_) {}
+      if (!homerTracks.length) {
+        for (let i = 1; i <= 19; i++)
+          homerTracks.push({url:`homer/message_${String(i).padStart(2,'0')}.mp3`});
+      }
+    }
+
+    function playHomer() {
+      if (!homerTracks.length) return;
+      const t = homerTracks[Math.floor(Math.random() * homerTracks.length)];
+      const a = document.getElementById('homer-audio');
+      a.pause(); a.src = t.url; a.play().catch(()=>{});
+    }
+
+    function dotFlash(el, color) {
+      el.style.filter = `drop-shadow(0 0 14px ${color})`;
+      setTimeout(() => el.style.filter = '', 700);
+    }
+
+    function buildNebula() {
+      const overlay = document.getElementById('nebula-overlay');
+      const svg     = document.getElementById('nebula-svg');
+
+      SVCS.forEach((svc, index) => {
+        let isValid = false;
+        let attempts = 0;
+        let nx, ny;
+        
+        // On essaie de trouver une place libre (jusqu'à 100 tentatives par point)
+        while (!isValid && attempts < 100) {
+          // Coordonnées aléatoires entre 8% et 92% pour ne pas déborder de l'écran
+          nx = 8 + Math.random() * 84; 
+          ny = 8 + Math.random() * 84;
+          
+          isValid = true;
+          // Vérification de la distance avec les points déjà placés
+          for (let i = 0; i < index; i++) {
+            let dx = SVCS[i].x - nx;
+            let dy = SVCS[i].y - ny;
+            // Si la distance est inférieure à 12%, on recommence
+            if (Math.sqrt(dx*dx + dy*dy) < 12) { 
+              isValid = false;
+              break;
+            }
+          }
+          attempts++;
+        }
+        
+        // On met à jour les coordonnées du point
+        svc.x = nx;
+        svc.y = ny;
+      });
+
+      // Micro-étoiles de fond
+      for (let i = 0; i < 45; i++) {
+        const s = document.createElement('div');
+        const sz = 1 + Math.random() * 2.2;
+        s.style.cssText = `position:absolute;left:${(Math.random()*100).toFixed(1)}%;top:${(Math.random()*100).toFixed(1)}%;
+          width:${sz}px;height:${sz}px;border-radius:50%;pointer-events:none;
+          background:rgba(255,255,255,${(.12+Math.random()*.32).toFixed(2)});
+          animation:twinkle ${(2+Math.random()*3.5).toFixed(1)}s ${(Math.random()*4).toFixed(1)}s infinite`;
+        overlay.appendChild(s);
+      }
+
+      // Points de service
+      SVCS.forEach((svc, i) => {
+        const col = COL[svc.c];
+        const sz  = 26 + Math.floor(Math.random() * 10);
+        const dot = document.createElement('div');
+        dot.className = 'nebula-dot';
+        dot.style.left = svc.x + '%';
+        dot.style.top  = svc.y + '%';
+
+        let lp = '';
+        if      (svc.y < 18)   lp = ' pos-below';
+        else if (svc.x < 15)   lp = ' pos-right';
+        else if (svc.x > 82)   lp = ' pos-left';
+
+        dot.innerHTML = `
+          <div class="dot-core" style="width:${sz}px;height:${sz}px;
+            background:${col.bg};border:2px solid ${col.bd};
+            animation:${col.an} ${(1.4+Math.random()*2).toFixed(1)}s ${(Math.random()*2).toFixed(1)}s infinite alternate">${svc.e}</div>
+          <div class="dot-label${lp}" style="border:1px solid ${col.bd}22;box-shadow:0 0 10px ${col.bd}30">
+            <span style="font-size:1.15rem">${svc.e}</span>
+            <span class="svc-name" style="color:${col.lb}">${svc.n}</span>
+            <span class="svc-desc">${svc.d.replace(/\n/g,'<br>')}</span>
+          </div>`;
+
+        dot.addEventListener('click', e => {
+          e.stopPropagation();
+          playHomer();
+          dotFlash(dot, col.bd);
+          window.open(resolveUrl(svc.l), '_blank');
+        });
+        overlay.appendChild(dot);
+      });
+
+      // Lignes de constellation (après layout)
+      requestAnimationFrame(() => {
+        const W = overlay.offsetWidth, H = overlay.offsetHeight;
+        LINES.forEach(([a, b]) => {
+          const sa = SVCS[a], sb = SVCS[b];
+          const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+          line.setAttribute('x1', (sa.x * W / 100).toFixed(1));
+          line.setAttribute('y1', (sa.y * H / 100).toFixed(1));
+          line.setAttribute('x2', (sb.x * W / 100).toFixed(1));
+          line.setAttribute('y2', (sb.y * H / 100).toFixed(1));
+          line.setAttribute('stroke', 'rgba(110,160,230,0.17)');
+          line.setAttribute('stroke-width', '1');
+          svg.appendChild(line);
+        });
+      });
+    }
+
+    loadHomer().then(buildNebula);
+  </script>
+</body>
+</html>

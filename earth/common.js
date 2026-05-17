@@ -2547,7 +2547,17 @@ async function sendNIP42Auth(relayUrl, forceSend = false) {
             if (!signedEvent?.id || !signedEvent?.sig) throw new Error('événement incomplet');
             console.log(`[NIP42] ✅ Signé : ${signedEvent.id.slice(0,8)}…`);
         } catch (e) {
-            console.error('[NIP42] ❌ Signature échouée:', e.message);
+            if (e.message && e.message.includes('_call')) {
+                console.error('[NIP42] ❌ Extension NOSTR verrouillée (', e.message, ') — déverrouillez votre wallet Alby/Nos2x');
+                // Afficher un message visible si une fonction d'alerte UI est disponible
+                if (typeof window.showToast === 'function') {
+                    window.showToast('🔐 Déverrouillez votre extension NOSTR (Alby/Nos2x) pour publier', 'warning');
+                } else if (typeof window.showNotification === 'function') {
+                    window.showNotification('🔐 Déverrouillez votre extension NOSTR pour publier', 'warning');
+                }
+            } else {
+                console.error('[NIP42] ❌ Signature échouée:', e.message);
+            }
             return false;
         }
 

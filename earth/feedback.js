@@ -192,6 +192,7 @@
                 if (btn) { btn.disabled = true; btn.textContent = 'Connexion…'; }
                 const hex   = await window.nostr.getPublicKey();
                 const npub  = hexToNpub(hex);
+                if (!npub) throw new Error(`Impossible de convertir la clé publique: ${hex?.slice(0,8)}…`);
                 const short = npub.slice(0, 12) + '…' + npub.slice(-6);
 
                 if (pubkeyEl) pubkeyEl.value = npub;

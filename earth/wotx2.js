@@ -151,24 +151,80 @@ async function fetchWoTx2Reactions(targetNpub, skillTag, limit = 100) {
 }
 
 /**
- * Vérifie si Règle A est atteinte (3 pubkeys distinctes avec un like).
- * @param {string} npub - Pubkey hex
+ * Filtre les likes en ne gardant que les likers qui possèdent eux-mêmes la compétence
+ * (anti-Sybil Règle A : l'Oracle vérifie que les validateurs sont eux-mêmes qualifiés).
+ * Effectue une seule souscription relay pour tous les likers en lot.
+ * @param {object[]} likes - Events Kind 7 dédupliqués par pubkey
+ * @param {string} skillTag - Compétence à vérifier
+ * @returns {Promise<{qualified: object[], unqualified: object[]}>}
+ */
+async function getQualifiedLikes(likes, skillTag) {
+    const nostrRelay = window.nostrRelay;
+    if (!nostrRelay || likes.length === 0) return { qualified: [], unqualified: [] };
+
+    const normalizedSkill = normalizeSkillTag(skillTag);
+    const likerPubkeys = likes.map(e => e.pubkey);
+    const qualifiedPubkeys = new Set();
+
+    await new Promise((resolve) => {
+        const sub = nostrRelay.sub([{
+            kinds: [30503],
+            authors: likerPubkeys,
+            '#t': [normalizedSkill],
+            limit: likerPubkeys.length * 5
+        }]);
+        const done = () => { try { sub.unsub(); } catch (e) {} resolve(); };
+        const timeout = setTimeout(done, 4000);
+        sub.on('event', (ev) => qualifiedPubkeys.add(ev.pubkey));
+        sub.on('eose', () => { clearTimeout(timeout); done(); });
+    });
+
+    const qualified = [], unqualified = [];
+    for (const like of likes) {
+        (qualifiedPubkeys.has(like.pubkey) ? qualified : unqualified).push(like);
+    }
+    return { qualified, unqualified };
+}
+
+/**
+ * Vérifie si Règle A est atteinte : 3 pairs QUALIFIÉS (possédant eux-mêmes la compétence)
+ * ont liké. Les likes de pairs non qualifiés sont comptés mais ignorés pour la montée.
+ * @param {string} npub - Pubkey hex de l'utilisateur évalué
  * @param {string} skillTag - Compétence
  * @param {number} [currentLevel=0]
- * @returns {Promise<{canUpgrade: boolean, rule: string, count: number, needed: number, likes: object[]}>}
+ * @returns {Promise<{canUpgrade: boolean, rule: string, count: number, needed: number, likes: object[], qualified: object[], unqualified: object[]}>}
  */
 async function checkWoTx2LevelUpgrade(npub, skillTag, currentLevel = 0) {
     const { likes } = await fetchWoTx2Reactions(npub, skillTag);
-    const distinctLikers = new Set(likes.map(e => e.pubkey));
-    distinctLikers.delete(npub);
-    const count = distinctLikers.size;
-    return { canUpgrade: count >= 3, rule: 'A', count, needed: 3, likes };
+
+    // Dédupliquer par pubkey, exclure auto-like
+    const seen = new Set();
+    const distinctLikes = likes.filter(e => {
+        if (e.pubkey === npub || seen.has(e.pubkey)) return false;
+        seen.add(e.pubkey);
+        return true;
+    });
+
+    // Filtrer : seuls les pairs qui ont eux-mêmes la compétence comptent (anti-Sybil)
+    const { qualified, unqualified } = await getQualifiedLikes(distinctLikes, skillTag);
+    const count = qualified.length;
+
+    return {
+        canUpgrade: count >= 3,
+        rule: 'A',
+        count,
+        needed: 3,
+        likes: qualified,
+        qualified,
+        unqualified
+    };
 }
 
 // Exports globaux
 if (typeof window !== 'undefined') {
-    window.normalizeSkillTag       = normalizeSkillTag;
-    window.publishWoTx2Reaction    = publishWoTx2Reaction;
-    window.fetchWoTx2Reactions     = fetchWoTx2Reactions;
-    window.checkWoTx2LevelUpgrade  = checkWoTx2LevelUpgrade;
+    window.normalizeSkillTag        = normalizeSkillTag;
+    window.publishWoTx2Reaction     = publishWoTx2Reaction;
+    window.fetchWoTx2Reactions      = fetchWoTx2Reactions;
+    window.getQualifiedLikes        = getQualifiedLikes;
+    window.checkWoTx2LevelUpgrade   = checkWoTx2LevelUpgrade;
 }

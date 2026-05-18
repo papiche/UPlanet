@@ -626,10 +626,11 @@ async function stepChallenge() {
 async function stepSign() {
     setStep('sign','running','🔄 Signature…',null,null);
     try {
+        const normalizedRelayUrl = S.relayUrl.replace(/\/$/, '');
         const unsigned = {
             kind: 22242, pubkey: S.pubkeyHex,
             created_at: Math.floor(Date.now()/1000),
-            tags: [['relay', S.relayUrl], ['challenge', S.challenge]],
+            tags: [['relay', normalizedRelayUrl], ['challenge', S.challenge]],
             content: '',
         };
         S.signedEvent = await window.nostr.signEvent(unsigned);
@@ -818,6 +819,23 @@ async function runAll() {
                        : `⚠️ ${passed}/${total} étapes réussies`;
     document.getElementById('btn-run').disabled = false;
     running = false;
+
+    /* Écrire le diagnostic NIP-42 en sessionStorage — lu par feedback.js (DIAG_KEY) */
+    try {
+        sessionStorage.setItem('uplanet_nip42_diagnostic', JSON.stringify({
+            timestamp:    new Date().toISOString(),
+            relay:        S.relayUrl,
+            auth_ok:      S.authOk,
+            auth_reason:  S.authReason || null,
+            verify_ok:    S.verifyOk,
+            source:       S.sourceTag || null,
+            home_station: S.homeStation || null,
+            npub_short:   S.npub ? S.npub.slice(0, 12) + '…' : null,
+            steps_passed: passed,
+            steps_total:  total,
+        }));
+    } catch (_) {}
+
     /* Afficher la section upload si l'auth NIP-42 est validée */
     if (S.authOk && S.npub) showUploadSection();
 }

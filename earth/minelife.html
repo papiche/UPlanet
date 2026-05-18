@@ -1479,6 +1479,21 @@ textarea.scan-input:focus { border-color: var(--accent); }
                 style="flex:1.2;padding:7px 11px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:8px;color:#a0aec0;font-size:12px;outline:none;min-width:0"
                 placeholder="Description (optionnelle)">
         </div>
+        <!-- Import URL → IA craft decompose -->
+        <div style="padding:7px 14px;border-bottom:1px solid rgba(255,255,255,0.05);display:flex;gap:7px;align-items:center;flex-shrink:0">
+            <i class="bi bi-link-45deg" style="color:var(--text-muted);font-size:14px;flex-shrink:0" title="Import URL"></i>
+            <input id="ce-import-url" type="url"
+                style="flex:1;padding:5px 9px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:7px;color:#d1fae5;font-size:11px;outline:none;min-width:0"
+                placeholder="https://instructables.com/… — Importer comme ressource ou demander à BRO de décomposer en ingrédients">
+            <button class="btn-ghost" style="font-size:11px;padding:3px 8px;flex-shrink:0;white-space:nowrap"
+                onclick="wyCraftAddResource()" title="Ajouter l'URL comme ressource de formation (tag r)">
+                📄 Ressource
+            </button>
+            <button id="ce-btn-decompose" class="btn-ghost" style="font-size:11px;padding:3px 8px;flex-shrink:0;white-space:nowrap;color:var(--accent-light);border-color:var(--accent-light)"
+                onclick="wyCraftDecompose()" title="Demander à BRO (IA) d'analyser le tutoriel et pré-remplir le craft">
+                🤖 IA
+            </button>
+        </div>
         <!-- WYSIWYG main -->
         <div class="wy-layout" style="overflow-y:auto;flex:1">
             <!-- Left: Palette skills + médias -->
@@ -4429,6 +4444,7 @@ const BRO = {
     disabled: false,     // true si pas de station dans le MULTIPASS
     currentSkill: null,  // skill actif ([ctx:<skill>:<level>] injecté dans chaque message)
     currentLevel: 0,
+    _pendingCraft: false, // true quand on attend une réponse JSON #craft
 };
 
 // ── Activer le contexte skill dans BRO ─────────────────────────────────────
@@ -4590,6 +4606,81 @@ async function sendBroMsg(panel) {
     if (sendBtn) sendBtn.disabled = false;
 }
 
+// ── Import URL depuis l'éditeur de craft ───────────────────────────────────
+
+function wyCraftAddResource() {
+    const urlEl = document.getElementById('ce-import-url');
+    const url = urlEl && urlEl.value.trim();
+    if (!url) { notify('URL requise.', 'warning'); return; }
+    if (WY.resources.find(r => r.url === url)) { notify('Ressource déjà présente.', 'info'); return; }
+    WY.resources.push({ url, type: 'lien' });
+    wyRenderResources();
+    notify('Ressource ajoutée au craft.', 'success');
+}
+
+async function broSendText(text) {
+    if (!window.isNostrConnected || !window.userPubkey || !BRO.nodeNpub) return false;
+    try {
+        let ciphertext;
+        if (window.nostr?.nip44?.encrypt) {
+            ciphertext = await window.nostr.nip44.encrypt(BRO.nodeNpub, text);
+        } else if (window.nostr?.nip04?.encrypt) {
+            ciphertext = await window.nostr.nip04.encrypt(BRO.nodeNpub, text);
+        } else { return false; }
+        await requireSigned({ kind: 4, tags: [['p', BRO.nodeNpub]], content: ciphertext });
+        if (!BRO.listening) broListenDMs('craft');
+        return true;
+    } catch(e) { return false; }
+}
+
+async function wyCraftDecompose() {
+    const urlEl = document.getElementById('ce-import-url');
+    const url = urlEl && urlEl.value.trim();
+    if (!url) { notify('URL requise pour l\'analyse IA.', 'warning'); return; }
+    if (!BRO.nodeNpub || !window.userPubkey) {
+        notify('Connectez votre MULTIPASS — station BRO requise.', 'warning'); return;
+    }
+    const btn = document.getElementById('ce-btn-decompose');
+    if (btn) { btn.disabled = true; btn.textContent = '⏳'; }
+    notify('⏳ Analyse IA en cours… (peut prendre 15-30s)', 'info');
+    BRO._pendingCraft = true;
+    const ok = await broSendText('#craft ' + url);
+    if (!ok) {
+        BRO._pendingCraft = false;
+        notify('BRO indisponible — station non configurée.', 'error');
+    }
+    if (btn) { btn.disabled = false; btn.textContent = '🤖 IA'; }
+}
+
+function wyApplyCraftJson(jsonStr) {
+    let d;
+    try { d = typeof jsonStr === 'string' ? JSON.parse(jsonStr) : jsonStr; } catch(e) {
+        notify('Réponse IA non parseable. Réessayez.', 'warning'); return;
+    }
+    if (d.error) { notify('BRO : ' + d.error, 'warning'); return; }
+    if (d.name)        document.getElementById('ce-name').value = d.name;
+    if (d.icon)        document.getElementById('ce-icon').value = d.icon;
+    if (d.description) document.getElementById('ce-desc').value = d.description;
+    if (Array.isArray(d.ingredients)) {
+        WY.slots = new Array(9).fill(null);
+        d.ingredients.forEach((ing, i) => {
+            if (i < 9 && ing.skill) WY.slots[i] = {
+                skill: ing.skill,
+                icon: getSkillEmoji(ing.skill) || '🔷',
+                level: ing.level || 1
+            };
+        });
+        wyRenderGrid();
+    }
+    wyUpdateResult();
+    const url = document.getElementById('ce-import-url')?.value?.trim();
+    if (url && !WY.resources.find(r => r.url === url)) {
+        WY.resources.push({ url, type: d.resource_type || 'lien' });
+        wyRenderResources();
+    }
+    notify('✅ Craft pré-rempli par BRO IA !', 'success');
+}
+
 function broListenDMs(panel) {
     if (!window.nostrRelay || BRO.listening) return;
     BRO.listening = true;
@@ -4626,6 +4717,15 @@ function broListenDMs(panel) {
                 plaintext = '[NIP-44 non supporté — mettez à jour votre extension NOSTR]';
             }
             broAddMsg(panel, 'node', plaintext);
+
+            // Détecter une réponse JSON d'un #craft → pré-remplir l'éditeur de craft
+            if (BRO._pendingCraft) {
+                const trimmed = plaintext.trim();
+                if (trimmed.startsWith('{') && trimmed.includes('ingredients')) {
+                    BRO._pendingCraft = false;
+                    wyApplyCraftJson(trimmed);
+                }
+            }
 
             // Si la réponse contient une URL IPFS (badge généré), afficher comme image
             const ipfsMatch = plaintext.match(/(https?:\/\/\S+\/ipfs\/\S+\.(?:png|jpg|webp))/i);

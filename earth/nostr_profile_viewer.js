@@ -929,8 +929,8 @@ async function displayNostrData() {
 
         // --- 1. SOCIAL & LIENS ---
         let socialFields = '';
-        if (profileData.website)  socialFields += `<div class="profile-field"><strong>🌐 Web:</strong> ${makeLink(profileData.website, true)}</div>`;
-        if (profileData.nip05)    socialFields += `<div class="profile-field"><strong>✅ NIP-05:</strong> ${profileData.nip05.replace(/</g, '&lt;')}</div>`;
+        if (profileData.website)  socialFields += `<div class="profile-field"><strong>🌐 uDRIVE:</strong> ${makeLink(profileData.website, true)}</div>`;
+        // if (profileData.nip05)    socialFields += `<div class="profile-field"><strong>✅ NIP-05:</strong> ${profileData.nip05.replace(/</g, '&lt;')}</div>`;
         if (profileData.email)    socialFields += `<div class="profile-field"><strong>✉️ Email:</strong> <a href="mailto:${profileData.email}">${profileData.email}</a></div>`;
         if (profileData.github)   socialFields += `<div class="profile-field"><strong>🐙 GitHub:</strong> ${makeLink(profileData.github, true)}</div>`;
         if (profileData.twitter)  socialFields += `<div class="profile-field"><strong>🐦 Twitter:</strong> ${makeLink(profileData.twitter, true)}</div>`;
@@ -989,7 +989,7 @@ async function displayNostrData() {
         }
 
         if (profileData.ipfs_gw) sysFields += `<div class="profile-field"><strong>🌍 IPFS Gateway:</strong> ${makeLink(profileData.ipfs_gw, true)}</div>`;
-        if (profileData.ipns_vault) sysFields += `<div class="profile-field"><strong>🔐 IPNS Vault:</strong> <a href="${ipfsGw}/ipns/${profileData.ipns_vault}" target="_blank" title="${profileData.ipns_vault}">${profileData.ipns_vault.substring(0,12)}...</a></div>`;
+        if (profileData.ipns_vault) sysFields += `<div class="profile-field"><strong>🔐 IPNS Vault:</strong> <a href="${ipfsGw}${profileData.ipns_vault}" target="_blank" title="${profileData.ipns_vault}">${profileData.ipns_vault.substring(0,12)}...</a></div>`;
         if (profileData.tw_feed) sysFields += `<div class="profile-field"><strong>📰 TW Feed (IPNS):</strong> <a href="${ipfsGw}/ipns/${profileData.tw_feed}" target="_blank" title="${profileData.tw_feed}">${profileData.tw_feed.substring(0,12)}...</a></div>`;
         
         if (sysFields) categoriesHTML += `<div class="profile-group"><h4>Système uSPOT</h4>${sysFields}</div>`;

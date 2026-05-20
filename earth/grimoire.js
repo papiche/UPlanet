@@ -198,8 +198,8 @@
         const segs = [];
         let idx = 0;
 
-        for (const [skill, data] of entries) {
-            const badgeUrl = await _findBadgeForSkill(skill, data);
+        for (const [skill] of entries) {
+            const badgeUrl = await _findBadgeForSkill(skill);
             if (!badgeUrl) continue;
 
             const resp = await fetch(badgeUrl).catch(() => null);
@@ -284,9 +284,14 @@
         }
 
         const json    = await resp.json();
-        const cid     = json.new_cid || json.cid;
-        const gateway = window.IPFS_GATEWAY || 'https://ipfs.copylaradio.com';
-        const url     = cid ? `${gateway}/ipfs/${cid}/${filename || 'grimoire.mp4'}` : '';
+        // cidirect = CID du fichier seul (accès direct, sans sous-chemin)
+        // new_cid  = CID du répertoire uDRIVE (contient Videos/, Music/…) — inutilisable sans chemin exact
+        const cidirect = json.cidirect;
+        const cid      = cidirect || json.new_cid || json.cid;
+        const gateway  = window.IPFS_GATEWAY || 'https://ipfs.copylaradio.com';
+        const url      = cidirect
+            ? `${gateway}/ipfs/${cidirect}`
+            : (cid ? `${gateway}/ipfs/${cid}/${filename || 'grimoire.mp4'}` : '');
         return { cid, url, raw: json };
     }
 
@@ -295,7 +300,7 @@
     async function _publishVideoEvent(opts) {
         const { ipfsCid, videoUrl, thumbUrl, skillName, permitId, duration } = opts;
         const gateway = window.IPFS_GATEWAY || 'https://ipfs.copylaradio.com';
-        const url     = videoUrl || (ipfsCid ? `${gateway}/ipfs/${ipfsCid}/grimoire.mp4` : '');
+        const url     = videoUrl || (ipfsCid ? `${gateway}/ipfs/${ipfsCid}` : '');
         if (!url) throw new Error('Pas d\'URL vidéo pour le Kind 22.');
 
         const tags = [

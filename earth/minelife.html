@@ -1782,6 +1782,7 @@ textarea.scan-input:focus { border-color: var(--accent); }
 <script src="common.js"></script>
 <script src="minelife.js"></script>
 <script src="feedback.js"></script>
+<script src="app_switch.js"></script>
 <script src="marked.min.js"></script>
 <script src="grimoire.js"></script>
 <script>
@@ -4254,9 +4255,13 @@ async function _handleVideoUploadToFormation(file) {
         const result = await window.uploadPhotoToIPFS(file);
         if (!result || !result.success) throw new Error(result && result.message ? result.message : 'Échec upload IPFS');
 
-        const cid      = result.new_cid || result.cid;
+        // cidirect = CID du fichier seul → URL directe sans sous-chemin
+        const cidirect = result.cidirect;
+        const cid      = cidirect || result.new_cid || result.cid;
         const gateway  = window.IPFS_GATEWAY || 'https://ipfs.copylaradio.com';
-        const videoUrl = `${gateway}/ipfs/${cid}/${file.name}`;
+        const videoUrl = cidirect
+            ? `${gateway}/ipfs/${cidirect}`
+            : `${gateway}/ipfs/${cid}/${file.name}`;
         const skill    = _mediaBrowserSkill;
         const reqId    = 'training_' + skill + '_' + Date.now();
 
@@ -4295,7 +4300,7 @@ async function generateCVVideoReel() {
     }
     const ok = await window.Grimoire.init();
     if (!ok) {
-        notify('FFmpeg WASM indisponible. Build le fork papiche/ffmpeg.wasm et copie les dist dans earth/ffmpeg/.', 'warning', 7000); return;
+        notify('FFmpeg WASM indisponible (SharedArrayBuffer requis — vérifiez les headers COEP/COOP du serveur).', 'warning', 7000); return;
     }
     if (!STATE.mySkills || Object.keys(STATE.mySkills).length === 0) {
         notify('Aucune compétence — actualisez l\'onglet Mes Compétences.', 'warning'); return;
@@ -4882,9 +4887,18 @@ function _liveRoomId(skill) {
 }
 
 function _liveVdoUrl(role, skill) {
-    const room = _liveRoomId(skill);
-    if (role === 'view') return `https://vdo.copylaradio.com/?room=${room}&view`;
-    return `https://vdo.copylaradio.com/?room=${room}&effects&record`;
+    const room  = _liveRoomId(skill);
+    const label = encodeURIComponent(
+        (window.userProfile && window.userProfile.display_name)
+            ? window.userProfile.display_name.slice(0, 30)
+            : (window.userPubkey || 'player').slice(0, 10)
+    );
+    if (role === 'view') {
+        /* Spectateur : vue room, lecture seule, sans caméra */
+        return `https://vdo.copylaradio.com/?room=${room}&view&cleanoutput`;
+    }
+    /* Studio : webcam + effets visuels + enregistrement local */
+    return `https://vdo.copylaradio.com/?room=${room}&webcam&effects&record&label=${label}&autostart`;
 }
 
 /* Retourne le nom du skill actif dans l'Atelier si le tab craft est ouvert,

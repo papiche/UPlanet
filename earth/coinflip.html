@@ -535,16 +535,17 @@
   <script src="marked.min.js"></script>
   <script src="common.js"></script>
   <script src="feedback.js"></script>
+  <script src="app_switch.js"></script>
 </head>
 <body>
 
   <div class="container">
     <header>
       <div>
-        <div class="title">Pile ou Face</div>
-        <div class="subtitle">Paradoxe de Saint-Pétersbourg — lancez jusqu'à obtenir face. Les gains doublent à chaque pile. Quand vous obtenez FACE (défaite), vous envoyez 1 ẐEN au CAPITAINE via like. Voir les soldes du CAPITAINE ci-dessous !</div>
+        <div class="title">🪙 Pile ou Face ẐEN</div>
+        <div class="subtitle">PILE = vos ẐEN doublent à chaque lancer · FACE = vous offrez 1 ẐEN au Capitaine. Encaissez quand vous voulez — ou tentez votre chance jusqu'au bout !</div>
       </div>
-      <div id="modeBadge" class="status practice">Mode entraînement • pas de gains</div>
+      <div id="modeBadge" class="status practice">Entraînement gratuit — connectez-vous pour jouer en réel</div>
     </header>
     <div id="arena" class="card">
       <div>
@@ -556,17 +557,17 @@
         </div>
       </div>
       <div class="panel">
-        <h3>État du jeu</h3>
+        <h3>La partie</h3>
         <div id="walletBar" style="display:none"></div>
         <div id="ainfo" style="margin-top:8px">
-          <div id="message"><p>Cliquez sur la pièce pour la lancer.</p></div>
+          <div id="message"><p>Appuyez sur la pièce pour jouer !<br><small>🟡 PILE = vos ẐEN doublent &nbsp;·&nbsp; 🔴 FACE = 1 ẐEN offert au Capitaine</small></p></div>
         </div>
       </div>
     </div>
     
     <div class="card" id="auth">
       <div class="actions">
-        <button id="loginBtn" class="btn primary">Se connecter avec Nostr</button>
+        <button id="loginBtn" class="btn primary">Connexion NOSTR</button>
         <span id="authStatus" class="muted"></span>
       </div>
       <div id="profileCard" class="p-card" style="display:none">
@@ -585,7 +586,7 @@
 
 
     <div class="card" style="margin-top:16px">
-      <button id="docToggle" class="btn" onclick="toggleDocViewer()" style="width:100%;text-align:left">📖 Règles du jeu — Paradoxe de Saint-Pétersbourg (COINFLIP.md)</button>
+      <button id="docToggle" class="btn" onclick="toggleDocViewer()" style="width:100%;text-align:left">📖 Comment fonctionne ce jeu ?</button>
       <div id="docViewer" style="display:none;margin-top:12px;padding:12px;border-top:1px solid var(--border);line-height:1.6;font-size:14px;color:var(--text)"></div>
     </div>
   </div>
@@ -964,9 +965,9 @@
       if (window.userPubkey && window.userProfile && window.userProfile.g1pub) {
         badge.className = 'status live';
         if (window.userProfile.balance !== undefined) {
-          badge.textContent = `Mode réel • Solde : ${window.userProfile.balance} ẐEN • Mise : 1 ẐEN/partie`;
+          badge.textContent = `🟢 Jeu réel · ${window.userProfile.balance} ẐEN · Mise : 1 ẐEN/partie`;
         } else {
-          badge.textContent = 'Mode réel • MULTIPASS vérifié • Mise : 1 ẐEN/partie';
+          badge.textContent = '🟢 Jeu réel · MULTIPASS vérifié · Mise : 1 ẐEN/partie';
         }
         
         // Reset game state for live mode when user has MULTIPASS
@@ -979,7 +980,7 @@
           // Update initial message for live mode
           const messageEl = document.getElementById('message');
           if (messageEl) {
-            messageEl.innerHTML = '<p>Cliquez sur la pièce pour la lancer.<br><small>💡 Mode réel : PILE = doubler la cagnotte, FACE = perdre la cagnotte et envoyer 1 ẐEN au CAPITAINE</small></p>';
+            messageEl.innerHTML = '<p>Appuyez sur la pièce pour jouer !<br><small>🟡 PILE = vos ẐEN doublent &nbsp;·&nbsp; 🔴 FACE = 1 ẐEN offert au Capitaine</small></p>';
           }
           
           // Reset coin image for live mode
@@ -988,11 +989,11 @@
         }
       } else if (window.userPubkey) {
         badge.className = 'status practice';
-        badge.textContent = 'Mode entraînement • MULTIPASS requis pour jouer en réel';
+        badge.textContent = 'Entraînement — obtenez un MULTIPASS pour jouer en réel';
         window.gameResetForLiveMode = false;
       } else {
         badge.className = 'status practice';
-        badge.textContent = 'Mode entraînement • connectez-vous pour jouer en réel';
+        badge.textContent = 'Entraînement gratuit — connectez-vous pour jouer en réel';
         window.gameResetForLiveMode = false;
       }
     }
@@ -1067,17 +1068,24 @@
         }
       } else {
         viewer.style.display = 'none';
-        if (btn) btn.textContent = '📖 Règles du jeu — Paradoxe de Saint-Pétersbourg (COINFLIP.md)';
+        if (btn) btn.textContent = '📖 Comment fonctionne ce jeu ?';
       }
     }
 
-        // Calcule l'URL de la station Astroport (port 12345) — common.js gère upassportUrl et relay
+    // Calcule l'URL de la station Astroport via le proxy /12345 de uSPOT
     function computeAstroURL() {
       const { hostname, port, protocol } = new URL(window.location.href);
-      const sruHost = hostname.replace(/^(ipfs|u)\./, 'astroport.');
-      window.__ASTROPORT_STATION_URL__ = (hostname === '127.0.0.1' || hostname === 'localhost') && port === '8080'
-        ? `${protocol}://127.0.0.1:12345`
-        : `${protocol}://${sruHost}/12345`;
+      const proto = protocol.replace(/:$/, ''); // "https:" → "https"
+      if ((hostname === '127.0.0.1' || hostname === 'localhost') && port === '8080') {
+        window.__ASTROPORT_STATION_URL__ = `${proto}://127.0.0.1:12345`;
+      } else if (window.upassportUrl) {
+        // uSPOT /12345 proxie directement vers 127.0.0.1:12345
+        window.__ASTROPORT_STATION_URL__ = `${window.upassportUrl}/12345`;
+      } else {
+        // Fallback : dérive u.domain depuis le hostname courant
+        const uHost = hostname.replace(/^(astroport|ipfs)\./, 'u.');
+        window.__ASTROPORT_STATION_URL__ = `${proto}://${uHost}/12345`;
+      }
       console.log('[ASTRO] Station URL:', window.__ASTROPORT_STATION_URL__);
     }
 
@@ -1090,12 +1098,12 @@
       }
       try {
         loginBtn.disabled = true;
-        authStatus.textContent = 'Connexion NIP-42…';
+        authStatus.textContent = 'Connexion en cours…';
         const pubkey = await connectNostr(true);
         if (!pubkey) throw new Error('Clé publique non obtenue');
         const short = `${pubkey.substring(0,6)}...${pubkey.substring(pubkey.length-4)}`;
         loginBtn.textContent = `Connecté: ${short}`;
-        authStatus.textContent = 'NIP-42 autorisé. Récupération du profil…';
+        authStatus.textContent = 'Connexion autorisée. Récupération du profil…';
         await fetchAndDisplayProfile(pubkey);
         authStatus.textContent = 'Prêt à jouer.';
       } catch (e) {
@@ -1214,7 +1222,7 @@
         const hasZencard = zencardFromProfile && zencardFromProfile.length > 0 && zencardFromProfile !== 'None';
         const hasG1pub = g1pubFromProfile && g1pubFromProfile.length > 0;
 
-        pName.innerHTML = `${name} <span class="muted">(${short})</span>${hasG1pub ? ' • <span style="color:#22c55e">MULTIPASS</span>' : ' • <span style="color:#ef4444">Pas de MULTIPASS</span>'}${hasZencard ? ' • <span style="color:#f59e0b">ZENCARD</span>' : ''}`;
+        pName.innerHTML = `${name} <span class="muted">(${short})</span>${hasG1pub ? ' · <span style="color:#22c55e">✓ MULTIPASS</span>' : ' · <span style="color:#ef4444">Sans MULTIPASS</span>'}${hasZencard ? ' · <span style="color:#f59e0b">ZENCARD</span>' : ''}`;
         pAbout.textContent = about || '';
         pFields.innerHTML = '';
         
@@ -1404,7 +1412,7 @@
 
         // Démarrer une nouvelle partie live (paiement de la mise)
         if (isLive && !gameActive) {
-          msgEl.innerHTML = '<div class="flipping-display"><div class="flipping-text">Paiement de la mise (1 ẐEN)...</div></div>';
+          msgEl.innerHTML = '<div class="flipping-display"><div class="flipping-text">Mise de 1 ẐEN en cours…</div></div>';
           const session = await startLiveGame();
           if (!session) {
             isFlipping = false;
@@ -1448,7 +1456,7 @@
             <div class="gain-amount">${potentialGain}</div>
             <div class="gain-currency">${isLive ? 'ẐEN' : 'ẐEN (simulé)'}</div>
             <div class="gain-streak">Série : ${consecutiveHeads} PILE${consecutiveHeads > 1 ? 'S' : ''}</div>
-            <div class="gain-next">Prochain PILE : ${potentialGain * 2} ẐEN • FACE = mise perdue</div>
+            <div class="gain-next">Prochain PILE : ${potentialGain * 2} ẐEN · ou encaissez maintenant !</div>
             <button class="cashout-btn" onclick="cashoutGains(${potentialGain})">💰 ENCAISSER ${potentialGain} ẐEN</button>
           </div>`;
         } else {
@@ -1459,11 +1467,11 @@
           coinEl.style.transition = 'transform 0.3s ease-out';
           coinEl.style.transform = 'rotateY(1620deg)';
           msgEl.innerHTML = `<div class="win-display" style="background:linear-gradient(135deg,#fecaca,#fca5a5);border-color:#ef4444">
-            <div class="win-label">💔 FACE — JEU TERMINÉ</div>
-            <div class="win-status">${isLive ? '1 ẐEN de mise perdu' : 'Simulé'}</div>
+            <div class="win-label">💔 FACE — partie terminée</div>
+            <div class="win-status">${isLive ? '1 ẐEN offert au Capitaine' : 'Partie simulée — sans enjeu réel'}</div>
           </div>`;
           setTimeout(() => {
-            msgEl.innerHTML = '<p>Cliquez sur la pièce pour jouer.<br><small>💡 PILE = cagnotte double • FACE = mise perdue</small></p>';
+            msgEl.innerHTML = '<p>Appuyez sur la pièce pour rejouer !<br><small>🟡 PILE = vos ẐEN doublent &nbsp;·&nbsp; 🔴 FACE = 1 ẐEN offert au Capitaine</small></p>';
             coinEl.style.transition = 'none';
             coinEl.style.transform = 'rotateY(0deg)';
             window.gameResetForLiveMode = false;
@@ -1482,7 +1490,7 @@
       const loginBtn = document.getElementById('loginBtn');
       const messageEl = document.getElementById('message');
       if (messageEl) {
-        messageEl.innerHTML = '<p>Cliquez sur la pièce pour jouer.<br><small>💡 PILE = cagnotte double • FACE = mise perdue • 1 partie/jour en mode réel</small></p>';
+        messageEl.innerHTML = '<p>Appuyez sur la pièce pour jouer !<br><small>🟡 PILE = vos ẐEN doublent &nbsp;·&nbsp; 🔴 FACE = 1 ẐEN offert au Capitaine</small></p>';
       }
       // Récupérer les données CAPITAINE au chargement
       setTimeout(() => {
@@ -1495,7 +1503,7 @@
       setTimeout(() => {
         if (!window.nostr || typeof window.nostr.getPublicKey !== 'function') {
           loginBtn.disabled = true;
-          loginBtn.textContent = 'Extension Nostr Requise';
+          loginBtn.textContent = 'Extension NOSTR requise';
         }
       }, 400);
       loginBtn.addEventListener('click', handleLogin);

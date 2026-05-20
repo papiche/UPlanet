@@ -298,6 +298,22 @@
       }
     }
     
+    /* Wallet bar — portefeuilles affichés dans l'arène */
+    .wallet-bar { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+    .wallet-card { flex: 1; min-width: 120px; border-radius: 10px; padding: 8px 10px; }
+    .wallet-card.captain { border: 1px solid rgba(251,191,36,0.5); background: linear-gradient(135deg, #1e293b, #334155); color: white; }
+    .wallet-card.player { border: 1px solid rgba(34,197,94,0.4); background: linear-gradient(135deg, #f0fdf4, #dcfce7); }
+    .wallet-card.player-empty { border: 1px dashed var(--border); background: #f8fafc; opacity: 0.6; }
+    .wallet-role { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px; }
+    .wallet-card.captain .wallet-role { color: #fbbf24; }
+    .wallet-card.player .wallet-role { color: #16a34a; }
+    .wallet-card.player-empty .wallet-role { color: var(--muted); }
+    .wallet-zen { font-size: 22px; font-weight: 900; line-height: 1.1; }
+    .wallet-card.captain .wallet-zen { color: #fbbf24; text-shadow: 0 1px 4px rgba(0,0,0,0.4); }
+    .wallet-card.player .wallet-zen { color: #15803d; }
+    .wallet-card.player-empty .wallet-zen { color: var(--muted); }
+    .wallet-g1 { font-size: 11px; margin-top: 2px; opacity: 0.75; }
+    .wallet-loading { font-size: 12px; color: var(--muted); font-style: italic; }
     .practice-info {
       font-size: 0.85em;
       color: #6b7280;
@@ -460,32 +476,18 @@
     
     /* Responsive design improvements */
     @media (max-width: 768px) {
-      .gain-amount {
-        font-size: 36px;
-      }
-      
-      .gain-currency {
-        font-size: 20px;
-      }
-      
-      .win-amount {
-        font-size: 42px;
-      }
-      
-      .win-currency {
-        font-size: 24px;
-      }
-      
-      .gain-display,
-      .win-display {
-        padding: 16px;
-        margin: 8px;
-      }
-      
-      .cashout-btn {
-        padding: 10px 20px;
-        font-size: 14px;
-      }
+      .gain-amount { font-size: 36px; }
+      .gain-currency { font-size: 20px; }
+      .win-amount { font-size: 42px; }
+      .win-currency { font-size: 24px; }
+      .gain-display, .win-display { padding: 16px; margin: 8px; }
+      .cashout-btn { padding: 10px 20px; font-size: 14px; }
+
+      /* Wallet bar mobile : cartes côte à côte mais plus compactes */
+      .wallet-bar { gap: 6px; margin-bottom: 10px; }
+      .wallet-card { padding: 7px 9px; min-width: 100px; }
+      .wallet-zen { font-size: 18px; }
+      .wallet-role { font-size: 10px; }
       
       .captain-balance-accordion {
         margin: 12px;
@@ -555,6 +557,7 @@
       </div>
       <div class="panel">
         <h3>État du jeu</h3>
+        <div id="walletBar" style="display:none"></div>
         <div id="ainfo" style="margin-top:8px">
           <div id="message"><p>Cliquez sur la pièce pour la lancer.</p></div>
         </div>
@@ -860,8 +863,50 @@
       balanceHTML += '</div>'; // Close accordion content
       
       captainBalanceEl.innerHTML = balanceHTML;
-      
-      // Content is already processed with IPFS media links, no additional processing needed
+      updateWalletBar();
+    }
+
+    // Affiche les soldes captain + joueur dans l'arène
+    function updateWalletBar() {
+      const bar = document.getElementById('walletBar');
+      if (!bar) return;
+      const cap = window.captainData;
+      const player = window.userProfile;
+      if (!cap && !player) { bar.style.display = 'none'; return; }
+
+      let html = '<div class="wallet-bar">';
+
+      if (cap?.captainBalances) {
+        const capName = cap.captainProfile?.name || 'CAPITAINE';
+        const mainZen = cap.captainBalances.main?.zen ?? '—';
+        const mainG1  = cap.captainBalances.main?.g1  ?? '—';
+        const cardZen = cap.captainBalances.zencard?.zen;
+        html += `<div class="wallet-card captain">
+          <div class="wallet-role">🏴‍☠️ ${capName}</div>
+          <div class="wallet-zen">${mainZen} ẐEN</div>
+          <div class="wallet-g1">${mainG1} Ğ1${cardZen !== undefined ? ` · ZENCARD: ${cardZen} ẐEN` : ''}</div>
+        </div>`;
+      } else if (cap === null && !player) {
+        bar.style.display = 'none'; return;
+      }
+
+      if (player) {
+        html += `<div class="wallet-card player">
+          <div class="wallet-role">👤 ${player.name || 'Joueur'}</div>
+          <div class="wallet-zen">${player.balance ?? '—'} ẐEN</div>
+          <div class="wallet-g1">${player.g1Balance ?? '—'} Ğ1</div>
+        </div>`;
+      } else {
+        html += `<div class="wallet-card player-empty">
+          <div class="wallet-role">👤 Joueur</div>
+          <div class="wallet-zen">—</div>
+          <div class="wallet-g1">Connectez-vous</div>
+        </div>`;
+      }
+
+      html += '</div>';
+      bar.innerHTML = html;
+      bar.style.display = 'block';
     }
 
     // Encaissement : live → /coinflip/payout, practice → simulé
@@ -1268,25 +1313,37 @@
             g1Balance: userG1Balance
           };
         } else {
-          // Clear profile information for non-MULTIPASS users
           window.userProfile = null;
-          
-          // Add help message for getting MULTIPASS
-          const helpChip = document.createElement('div');
-          helpChip.className = 'p-chip';
-          helpChip.style.backgroundColor = '#fef3c7';
-          helpChip.style.color = '#92400e';
-          helpChip.style.cursor = 'pointer';
-          helpChip.textContent = '💡 Comment obtenir un MULTIPASS ?';
-          helpChip.onclick = () => {
-            alert('Pour obtenir un MULTIPASS :\n\n1. Ajoutez un tag "i" avec "g1pub:VOTRE_CLE_G1" dans votre profil NOSTR\n2. Ou visitez votre Astroport local pour créer un MULTIPASS\n3. Le MULTIPASS vous permet de jouer en mode réel avec de vrais paiements ZEN');
-          };
-          pFields.appendChild(helpChip);
+
+          // Bannière d'appel à l'action MULTIPASS — visible et engageante sur mobile
+          const mpBanner = document.createElement('div');
+          mpBanner.style.cssText = `
+            margin: 10px 0 4px;
+            padding: 14px 16px;
+            background: linear-gradient(135deg, #fef3c7, #fde68a);
+            border: 2px solid #f59e0b;
+            border-radius: 14px;
+            text-align: center;
+            cursor: pointer;
+            animation: gainPulse 0.5s ease-out;
+          `;
+          const astroHost = window.__ASTROPORT_STATION_URL__
+            ? window.__ASTROPORT_STATION_URL__.replace('/12345','')
+            : '#';
+          mpBanner.innerHTML = `
+            <div style="font-size:28px;margin-bottom:6px">🎫</div>
+            <div style="font-weight:800;font-size:15px;color:#92400e;margin-bottom:4px">Obtenez votre MULTIPASS</div>
+            <div style="font-size:13px;color:#b45309;margin-bottom:10px">Pour jouer en réel et gagner de vrais ẐEN</div>
+            <a href="${astroHost}" target="_blank" rel="noopener noreferrer"
+               style="display:inline-block;background:linear-gradient(135deg,#f59e0b,#d97706);color:white;font-weight:700;font-size:14px;padding:8px 20px;border-radius:999px;text-decoration:none;box-shadow:0 4px 12px rgba(245,158,11,0.4)">
+              Créer mon MULTIPASS →
+            </a>
+          `;
+          pFields.appendChild(mpBanner);
         }
         
-        // Update mode badge to reflect current state (only once after profile is complete)
         updateModeBadge();
-        
+        updateWalletBar();
         // CAPTAIN data is already fetched once at page load, no need to fetch again
         
       } catch (e) {

@@ -243,6 +243,190 @@
         return blob;
     }
 
+    /* ── Studio : découpe et publication ───────────────────────────────── */
+
+    /**
+     * Découpe une vidéo via FFmpeg WASM.
+     * WebM (vdo.ninja) → MP4 avec re-encodage ; MP4 → MP4 avec stream copy (rapide).
+     *
+     * @param {File}   videoFile   Fichier vidéo (WebM ou MP4)
+     * @param {number} startSec    Point de départ (secondes)
+     * @param {number} endSec      Point de fin (secondes)
+     * @returns {Promise<Blob>}
+     */
+    async function _trimVideo(videoFile, startSec, endSec) {
+        const ok = await _init();
+        if (!ok) throw new Error('FFmpeg WASM non disponible.');
+
+        const ext    = (videoFile.name.split('.').pop() || 'webm').toLowerCase();
+        const inName = `studio_in.${ext}`;
+        const outName = 'studio_out.mp4';
+
+        await _ff.writeFile(inName, new Uint8Array(await videoFile.arrayBuffer()));
+
+        const needsReencode = ext === 'webm';
+        const cmd = needsReencode
+            ? ['-ss', String(startSec), '-to', String(endSec), '-i', inName,
+               '-c:v', 'libx264', '-c:a', 'aac', '-pix_fmt', 'yuv420p', outName]
+            : ['-ss', String(startSec), '-to', String(endSec), '-i', inName,
+               '-c', 'copy', outName];
+
+        await _ff.exec(cmd);
+
+        const out  = await _ff.readFile(outName);
+        const blob = new Blob([out.buffer], { type: 'video/mp4' });
+
+        try { await _ff.deleteFile(inName);  } catch (_) {}
+        try { await _ff.deleteFile(outName); } catch (_) {}
+
+        return blob;
+    }
+
+    /**
+     * Découpe, upload et publie une vidéo Studio sur NOSTR (Kind 21 ou 22).
+     * Appel public depuis minelife.html.
+     *
+     * @param {Object} opts
+     * @param {File}    opts.file       Fichier vidéo source
+     * @param {number}  opts.startSec   Point de départ (s)
+     * @param {number}  opts.endSec     Point de fin (s)
+     * @param {string}  [opts.title]    Titre de la vidéo
+     * @param {string}  [opts.skillTag] Tag skill à associer (Kind 30504 futur)
+     * @returns {Promise<{blob, cid, url, event}|null>}
+     */
+    async function trimAndPublish({ file, startSec = 0, endSec, title, skillTag }) {
+        const ok = await _init();
+        if (!ok) {
+            _notify('⚠️ FFmpeg WASM non chargé — Studio indisponible.', 'warning', 5000);
+            return null;
+        }
+
+        const clampedEnd = endSec || file.duration || 60;
+        const duration   = Math.max(1, clampedEnd - startSec);
+
+        _notify('✂️ Découpe en cours…', 'info', 10000);
+        let blob;
+        try {
+            blob = await _trimVideo(file, startSec, clampedEnd);
+        } catch (e) {
+            _notify(`⚠️ Découpe échouée : ${e.message}`, 'warning', 5000);
+            return null;
+        }
+
+        _notify('☁️ Upload IPFS en cours…', 'info', 10000);
+        const safeName = (title || 'studio').replace(/[^a-z0-9]+/gi, '_').toLowerCase();
+        const fname    = `${safeName}_${Date.now()}.mp4`;
+        let cid, url;
+        try {
+            ({ cid, url } = await _uploadVideoToIPFS(blob, fname));
+        } catch (e) {
+            _notify(`⚠️ Upload échoué : ${e.message}`, 'warning', 5000);
+            return null;
+        }
+
+        const kind = duration <= 60 ? 22 : 21;
+        const ts   = String(Math.floor(Date.now() / 1000));
+        const tags = [
+            ['title', title || 'Studio MineLife'],
+            ['url',   url],
+            ['m',     'video/mp4'],
+            ['duration', String(Math.round(duration))],
+            ['t',     'MineLife'],
+            ['t',     'Studio'],
+            ['published_at', ts],
+        ];
+        if (skillTag) {
+            tags.push(['t', skillTag]);
+            tags.push(['d', `${skillTag}_${ts}`]);
+        }
+        const imeta = ['imeta', `url ${url}`, 'm video/mp4', `duration ${Math.round(duration)}`];
+        tags.push(imeta);
+
+        let event;
+        try {
+            event = await requireSigned({
+                kind,
+                tags,
+                content: title || 'Studio MineLife — #MineLife #Studio',
+            });
+        } catch (e) {
+            _notify(`⚠️ Publication NOSTR échouée : ${e.message}`, 'warning', 5000);
+            return null;
+        }
+
+        _notify(`✨ Vidéo publiée (Kind ${kind} — ${Math.round(duration)}s) !`, 'success', 6000);
+        return { blob, cid, url, event };
+    }
+
+    /* ── Concat multi-segments (VideoEditor) ───────────────────────────── */
+
+    /**
+     * Découpe et concatène une liste de segments issus de un ou plusieurs fichiers.
+     * Chaque fichier source n'est écrit dans le FS FFmpeg qu'une seule fois.
+     *
+     * @param {Array<{file: File, from: number, to: number}>} segments
+     * @returns {Promise<Blob>}  MP4 final
+     */
+    async function concatSegments(segments) {
+        if (!segments || !segments.length) throw new Error('Aucun segment à encoder.');
+        const ok = await _init();
+        if (!ok) throw new Error('FFmpeg WASM non disponible.');
+
+        /* Écriture unique de chaque source dans le FS virtuel */
+        const fileMap = new Map();
+        let srcIdx = 0;
+        for (const seg of segments) {
+            if (!fileMap.has(seg.file)) {
+                const ext    = (seg.file.name.split('.').pop() || 'webm').toLowerCase();
+                const fsName = `cs_src_${srcIdx++}.${ext}`;
+                await _ff.writeFile(fsName, new Uint8Array(await seg.file.arrayBuffer()));
+                fileMap.set(seg.file, { fsName, ext });
+            }
+        }
+
+        /* Découpe de chaque segment → MP4 individuel */
+        const outFiles = [];
+        for (let i = 0; i < segments.length; i++) {
+            const { file, from, to } = segments[i];
+            const { fsName, ext }    = fileMap.get(file);
+            const outName            = `cs_seg_${i}.mp4`;
+            const reenc              = ext === 'webm';
+            await _ff.exec(reenc
+                ? ['-ss', String(from), '-to', String(to), '-i', fsName,
+                   '-c:v', 'libx264', '-c:a', 'aac', '-pix_fmt', 'yuv420p', outName]
+                : ['-ss', String(from), '-to', String(to), '-i', fsName, '-c', 'copy', outName]
+            );
+            outFiles.push(outName);
+        }
+
+        /* Libérer les sources */
+        for (const { fsName } of fileMap.values()) {
+            try { await _ff.deleteFile(fsName); } catch (_) {}
+        }
+
+        /* Cas trivial : un seul segment */
+        if (outFiles.length === 1) {
+            const data = await _ff.readFile(outFiles[0]);
+            const blob = new Blob([data.buffer], { type: 'video/mp4' });
+            try { await _ff.deleteFile(outFiles[0]); } catch (_) {}
+            return blob;
+        }
+
+        /* Concat via demuxer */
+        const list = outFiles.map(f => `file '${f}'`).join('\n');
+        await _ff.writeFile('cs_concat.txt', new TextEncoder().encode(list));
+        await _ff.exec(['-f', 'concat', '-safe', '0', '-i', 'cs_concat.txt', '-c', 'copy', 'cs_final.mp4']);
+
+        const data = await _ff.readFile('cs_final.mp4');
+        const blob = new Blob([data.buffer], { type: 'video/mp4' });
+
+        for (const f of outFiles)               { try { await _ff.deleteFile(f); } catch (_) {} }
+        try { await _ff.deleteFile('cs_concat.txt'); } catch (_) {}
+        try { await _ff.deleteFile('cs_final.mp4');  } catch (_) {}
+
+        return blob;
+    }
+
     /* ── Recherche badge par skill ─────────────────────────────────────── */
 
     async function _findBadgeForSkill(skill) {
@@ -312,7 +496,7 @@
             ['t',     skillName.toLowerCase().replace(/[^a-z0-9]+/g, '-')],
             ['published_at', String(Math.floor(Date.now() / 1000))],
         ];
-        if (thumbUrl)  tags.push(['thumbnail_ipfs', thumbUrl]);
+        if (thumbUrl)  tags.push(['thumb', thumbUrl]);
         if (duration)  tags.push(['duration', String(Math.round(duration))]);
         if (permitId)  tags.push(['l', permitId, 'permit_type']);
 
@@ -397,6 +581,9 @@
         generateSkillVideo,
         generateCVReel,
         triggerSkillShowcase,
+        trimAndPublish,
+        concatSegments,
+        _trimVideo,
         _uploadVideoToIPFS,
         _publishVideoEvent,
     };

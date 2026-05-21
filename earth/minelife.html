@@ -1307,6 +1307,19 @@ textarea.scan-input:focus { border-color: var(--accent); }
     margin-top: 4px;
     opacity: 0.7;
 }
+#umap-badge {
+    font-size: 11px;
+    color: #67e8f9;
+    background: rgba(14,165,233,0.15);
+    border: 1px solid rgba(14,165,233,0.3);
+    border-radius: 12px;
+    padding: 3px 10px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.2s;
+}
+#umap-badge:hover { background: rgba(14,165,233,0.28); }
+#umap-badge.geo-unknown { color: var(--text-muted); background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.1); }
 </style>
 </head>
 <body>
@@ -1318,6 +1331,9 @@ textarea.scan-input:focus { border-color: var(--accent); }
         <small>WoTx2 · Forge &amp; certifie tes savoir-faire en constellation</small>
     </div>
     <span id="user-name-badge"></span>
+    <span id="umap-badge" class="geo-unknown" title="Zone UMAP — cliquer pour actualiser la géolocalisation" onclick="fetchUserGeo(true)">
+        <i class="bi bi-geo-alt"></i> 0.00,0.00
+    </span>
     <span id="conn-badge" class="disconnected"><i class="bi bi-circle-fill" style="font-size:7px"></i> Déconnecté</span>
     <button id="btn-edit-toggle" class="btn-ghost" onclick="toggleEditMode()" title="Mode édition des crafts" style="font-size:12px;padding:5px 12px;border:1px solid rgba(255,255,255,0.15)">
         <i class="bi bi-pencil-square"></i> Éditer
@@ -2117,7 +2133,39 @@ const STATE = {
     craftLoaded: false,
     exploreLoaded: false,
     shareLoaded: false,
+    geo: { lat: '0.00', lon: '0.00' },  // Zone UMAP active (0.00 = non géolocalisé)
 };
+
+// Retourne les tags NOSTR de géolocalisation pour la zone UMAP courante.
+// Retourne [] si aucune géoloc disponible (0.00,0.00).
+function geoTags() {
+    const { lat, lon } = STATE.geo;
+    if (lat === '0.00' && lon === '0.00') return [];
+    return [['g', `${lat},${lon}`]];
+}
+
+async function fetchUserGeo(force = false) {
+    if (!force && STATE.geo.lat !== '0.00') return;
+    const badge = document.getElementById('umap-badge');
+    try {
+        const baseUrl = (window.NostrState && window.NostrState.upassportUrl)
+            || (typeof getUSPOTUrl === 'function' ? getUSPOTUrl() : null);
+        if (!baseUrl) return;
+        const resp = await fetch(baseUrl + '/api/myGPS', { signal: AbortSignal.timeout(5000) });
+        if (!resp.ok) return;
+        const data = await resp.json();
+        if (data.success && data.coordinates) {
+            const lat = parseFloat(data.coordinates.lat).toFixed(2);
+            const lon = parseFloat(data.coordinates.lon).toFixed(2);
+            STATE.geo = { lat, lon };
+            if (badge) {
+                badge.innerHTML = `<i class="bi bi-geo-alt-fill"></i> ${lat},${lon}`;
+                badge.classList.remove('geo-unknown');
+                badge.title = `UMAP ${lat},${lon} — Zone géographique active (cliquer pour actualiser)`;
+            }
+        }
+    } catch(_) {}
+}
 
 // ── NOTIFICATIONS ──────────────────────────────────────────────────────────
 
@@ -3813,6 +3861,7 @@ async function publishComposite(compositePermit, permitId, ingredientEventIds) {
         ['level', '1'],
         ['p', npub],
         ['expiration', String(Math.floor(Date.now() / 1000) + 3 * 365 * 24 * 3600)],
+        ...geoTags(),
     ];
     ingredientEventIds.forEach(id => tags.push(['e', id]));
 
@@ -3841,6 +3890,7 @@ async function publishCompositeValidationRequest(compositePermit, permitId, ingr
         ['t', normalizedSkill],
         ['t', 'composite-validation'],
         ['l', permitId, 'permit_type'],
+        ...geoTags(),
     ];
     ingredientEventIds.forEach(id => tags.push(['e', id]));
 
@@ -3876,6 +3926,7 @@ async function publishLike(targetEventId, targetNpub, skillTag, zenAmount) {
 async function publishRequest(permitId, skillTag, statement, requestedCompetency) {
     const tags = [
         ['t', normalizeSkill(skillTag)],
+        ...geoTags(),
     ];
     if (permitId) {
         tags.push(['l', permitId, 'permit_type']);
@@ -3897,6 +3948,7 @@ async function publishAttestation(requestEventId, requesterNpub, skillTag) {
     const tags = [
         ['p', requesterNpub],
         ['t', normSkill],
+        ...geoTags(),
     ];
     if (requestEventId) tags.unshift(['e', requestEventId]);
     // Inclure le permit du pair attestateur (Règle B : credential auto-vérifiable)
@@ -4435,6 +4487,7 @@ async function saveCraftEditor() {
         ['t', 'permit'],
         ['t', 'auto_proclaimed'],
         ['t', skillTag],
+        ...geoTags(),
     ];
 
     // Ingrédients : 'requires' (niveau explicite) + 't' (filtrage relay)
@@ -5339,6 +5392,7 @@ document.addEventListener('DOMContentLoaded', () => {
     updateConnectionUI();
 
     if (typeof window.detectUSPOTAPI === 'function') window.detectUSPOTAPI();
+    fetchUserGeo();
 
     // Onboarding : afficher au premier passage (sauf si localStorage le dit)
     let seen = false;
@@ -5358,6 +5412,7 @@ document.addEventListener('DOMContentLoaded', () => {
         updateConnectionUI();
         loadMySkills();
         broInit(); // re-essayer après connexion NOSTR
+        fetchUserGeo(); // actualiser la zone UMAP avec auth disponible
         // Si le tab Explorer/Formation est déjà actif au moment de la connexion, le charger
         if (_tabExploreBtn   && _tabExploreBtn.classList.contains('active'))   loadExploreTab();
         if (_tabFormationBtn && _tabFormationBtn.classList.contains('active')) loadFormationTab();

@@ -522,13 +522,17 @@
 
         const bs = banner.style;
         bs.position        = 'fixed';
-        bs.top             = '0';
-        bs.bottom          = '0';
+        bs.top             = '50%';            // Centrage vertical
         bs.left            = '0';
+        bs.transform       = 'translateY(-50%)'; // Ajustement parfait du centre
         bs.width           = '22px';
+        bs.height          = 'auto';           // Taille auto selon le texte
+        bs.padding         = '15px 0';         // Espacement haut/bas
         bs.zIndex          = '9990';
-        bs.background      = 'linear-gradient(180deg,rgba(102,126,234,0.88),rgba(118,75,162,0.88))';
-        bs.borderRight     = '1px solid rgba(102,126,234,0.35)';
+        bs.background      = 'linear-gradient(180deg,rgba(102,126,234,0.95),rgba(118,75,162,0.95))';
+        bs.border          = '1px solid rgba(102,126,234,0.35)';
+        bs.borderLeft      = 'none';
+        bs.borderRadius    = '0 8px 8px 0';    // Arrondi sur les coins droits
         bs.color           = '#fff';
         bs.fontSize        = '10px';
         bs.fontWeight      = '600';
@@ -537,10 +541,7 @@
         bs.alignItems      = 'center';
         bs.justifyContent  = 'center';
         bs.backdropFilter  = 'blur(6px)';
-        bs.letterSpacing   = '0.03em';
-
-        const currentPL = parseInt(window.getComputedStyle(document.body).paddingLeft) || 0;
-        document.body.style.paddingLeft = (currentPL + 22) + 'px';
+        bs.boxShadow       = '2px 0 10px rgba(0,0,0,0.2)'; // Ombre pour l'effet bouton
 
         // Bande verticale droite — bouton feedback (texte descendant)
         const existingFb = document.querySelector('.btn-feedback-bottom, #uplanet-feedback-btn');
@@ -556,13 +557,17 @@
 
             const fbs = fbBanner.style;
             fbs.position       = 'fixed';
-            fbs.top            = '0';
-            fbs.bottom         = '0';
+            fbs.top            = '50%';            // Centrage vertical
             fbs.right          = '0';
-            fbs.width          = '24px';
+            fbs.transform      = 'translateY(-50%)'; // Ajustement parfait du centre
+            fbs.width          = '26px';
+            fbs.height         = 'auto';           // Taille auto selon le texte
+            fbs.padding        = '15px 0';         // Espacement haut/bas
             fbs.zIndex         = '9990';
-            fbs.background     = 'linear-gradient(180deg,rgba(180,30,50,0.88),rgba(220,53,69,0.88))';
-            fbs.borderLeft     = '1px solid rgba(220,53,69,0.4)';
+            fbs.background     = 'linear-gradient(180deg,rgba(180,30,50,0.95),rgba(220,53,69,0.95))';
+            fbs.border         = '1px solid rgba(220,53,69,0.4)';
+            fbs.borderRight    = 'none';
+            fbs.borderRadius   = '8px 0 0 8px';    // Arrondi sur les coins gauches
             fbs.color          = '#fff';
             fbs.fontSize       = '11px';
             fbs.fontWeight     = '600';
@@ -571,16 +576,13 @@
             fbs.alignItems     = 'center';
             fbs.justifyContent = 'center';
             fbs.backdropFilter = 'blur(6px)';
-            fbs.letterSpacing  = '0.02em';
             fbs.cursor         = 'pointer';
-            fbs.transition     = 'opacity 0.22s';
+            fbs.boxShadow      = '-2px 0 10px rgba(0,0,0,0.2)'; // Ombre
+            fbs.transition     = 'all 0.22s';
 
             fbBanner.addEventListener('mouseenter', () => { fbBanner.style.opacity = '0.85'; });
             fbBanner.addEventListener('mouseleave', () => { fbBanner.style.opacity = '1'; });
             fbBanner.addEventListener('click', () => window.openFeedbackPage(feedbackUrl));
-
-            const currentPR = parseInt(window.getComputedStyle(document.body).paddingRight) || 0;
-            document.body.style.paddingRight = (currentPR + 24) + 'px';
 
             document.body.appendChild(fbBanner);
         }

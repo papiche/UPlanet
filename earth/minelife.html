@@ -2136,8 +2136,8 @@ const STATE = {
     geo: { lat: '0.00', lon: '0.00' },  // Zone UMAP active (0.00 = non géolocalisé)
 };
 
-// Retourne les tags NOSTR de géolocalisation pour la zone UMAP courante.
-// Retourne [] si aucune géoloc disponible (0.00,0.00).
+// ── GÉOLOCALISATION UMAP ───────────────────────────────────────────────────
+
 function geoTags() {
     const { lat, lon } = STATE.geo;
     if (lat === '0.00' && lon === '0.00') return [];
@@ -2145,13 +2145,19 @@ function geoTags() {
 }
 
 async function fetchUserGeo(force = false) {
-    if (!force && STATE.geo.lat !== '0.00') return;
+    if (!force && (STATE.geo.lat !== '0.00' || STATE.geo.lon !== '0.00')) return;
+    const pubkeyHex = window.userPubkey;
+    if (!pubkeyHex) return;
+    const baseUrl = window.NostrState && window.NostrState.upassportUrl;
+    if (!baseUrl) return;
     const badge = document.getElementById('umap-badge');
     try {
-        const baseUrl = (window.NostrState && window.NostrState.upassportUrl)
-            || (typeof getUSPOTUrl === 'function' ? getUSPOTUrl() : null);
-        if (!baseUrl) return;
-        const resp = await fetch(baseUrl + '/api/myGPS', { signal: AbortSignal.timeout(5000) });
+        let npub = pubkeyHex;
+        if (window.hexToNpub) { try { npub = window.hexToNpub(pubkeyHex); } catch(_) {} }
+        const resp = await fetch(
+            `${baseUrl}/api/myGPS?npub=${encodeURIComponent(npub)}`,
+            { signal: AbortSignal.timeout(5000) }
+        );
         if (!resp.ok) return;
         const data = await resp.json();
         if (data.success && data.coordinates) {
@@ -5392,7 +5398,6 @@ document.addEventListener('DOMContentLoaded', () => {
     updateConnectionUI();
 
     if (typeof window.detectUSPOTAPI === 'function') window.detectUSPOTAPI();
-    fetchUserGeo();
 
     // Onboarding : afficher au premier passage (sauf si localStorage le dit)
     let seen = false;

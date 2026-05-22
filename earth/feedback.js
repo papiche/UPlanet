@@ -57,7 +57,7 @@
             const buf = JSON.parse(sessionStorage.getItem(LOG_KEY) || '[]');
             const msg = scrub(Array.from(args).map(a => {
                 if (a instanceof Error) return `${a.name}: ${a.message}\n${a.stack || ''}`;
-                try { return typeof a === 'object' ? JSON.stringify(a) : String(a); }
+                try { return typeof a === 'object' ? JSON.stringify(a, (key, value) => typeof value === "bigint" ? value.toString() : value) : String(a); }
                 catch (_) { return '[object]'; }
             }).join(' ').slice(0, 500));
             buf.push({ t: new Date().toISOString().slice(11, 23), l: level, m: msg });
@@ -507,12 +507,13 @@
             ? 'https://github.com/papiche/UPassport'
             : 'https://github.com/papiche/UPlanet';
 
+        // Bande verticale gauche — licence AGPL (texte ascendant)
         const banner = document.createElement('div');
         banner.id = 'uplanet-agpl-banner';
         banner.innerHTML =
             '<a href="' + _repoUrl + '" target="_blank" rel="noopener noreferrer" ' +
             'title="Logiciel libre GNU AGPL v3 · Bien commun numérique\n📂 github.com/papiche/UPlanet\n📂 github.com/papiche/UPassport" ' +
-            'style="color:inherit;text-decoration:none;display:flex;align-items:center;gap:5px">' +
+            'style="color:inherit;text-decoration:none;display:flex;align-items:center;gap:5px;writing-mode:vertical-rl;transform:rotate(180deg)">' +
             '<span style="font-size:10px">©</span>' +
             '<span>AGPL&nbsp;v3</span>' +
             '<span style="opacity:0.6">·</span>' +
@@ -522,12 +523,12 @@
         const bs = banner.style;
         bs.position        = 'fixed';
         bs.top             = '0';
+        bs.bottom          = '0';
         bs.left            = '0';
-        bs.right           = '0';
-        bs.height          = '22px';
+        bs.width           = '22px';
         bs.zIndex          = '9990';
-        bs.background      = 'linear-gradient(90deg,rgba(102,126,234,0.88),rgba(118,75,162,0.88))';
-        bs.borderBottom    = '1px solid rgba(102,126,234,0.35)';
+        bs.background      = 'linear-gradient(180deg,rgba(102,126,234,0.88),rgba(118,75,162,0.88))';
+        bs.borderRight     = '1px solid rgba(102,126,234,0.35)';
         bs.color           = '#fff';
         bs.fontSize        = '10px';
         bs.fontWeight      = '600';
@@ -538,30 +539,30 @@
         bs.backdropFilter  = 'blur(6px)';
         bs.letterSpacing   = '0.03em';
 
-        const currentPT = parseInt(window.getComputedStyle(document.body).paddingTop) || 0;
-        document.body.style.paddingTop = (currentPT + 22) + 'px';
+        const currentPL = parseInt(window.getComputedStyle(document.body).paddingLeft) || 0;
+        document.body.style.paddingLeft = (currentPL + 22) + 'px';
 
+        // Bande verticale droite — bouton feedback (texte descendant)
         const existingFb = document.querySelector('.btn-feedback-bottom, #uplanet-feedback-btn');
         if (!existingFb) {
             const fbBanner = document.createElement('div');
             fbBanner.id    = 'uplanet-feedback-btn';
             fbBanner.title = 'Signaler un bug ou faire une suggestion (ouvre un nouvel onglet avec les logs de cette page)';
             fbBanner.innerHTML =
-                '<span style="opacity:0.6;font-size:10px">AGPL&nbsp;v3&nbsp;·</span>&nbsp;' +
                 '<a href="#" onclick="event.preventDefault();window.openFeedbackPage(\'' + feedbackUrl + '\')" ' +
-                'style="color:inherit;text-decoration:none;display:inline-flex;align-items:center;gap:5px">' +
-                '<span>🐛</span><span>Signaler un bug / Suggestion</span>' +
+                'style="color:inherit;text-decoration:none;display:flex;align-items:center;gap:5px;writing-mode:vertical-rl">' +
+                '<span>🐛</span><span>Signaler un bug</span>' +
                 '</a>';
 
             const fbs = fbBanner.style;
             fbs.position       = 'fixed';
+            fbs.top            = '0';
             fbs.bottom         = '0';
-            fbs.left           = '0';
             fbs.right          = '0';
-            fbs.height         = '24px';
+            fbs.width          = '24px';
             fbs.zIndex         = '9990';
-            fbs.background     = 'linear-gradient(90deg,rgba(180,30,50,0.88),rgba(220,53,69,0.88))';
-            fbs.borderTop      = '1px solid rgba(220,53,69,0.4)';
+            fbs.background     = 'linear-gradient(180deg,rgba(180,30,50,0.88),rgba(220,53,69,0.88))';
+            fbs.borderLeft     = '1px solid rgba(220,53,69,0.4)';
             fbs.color          = '#fff';
             fbs.fontSize       = '11px';
             fbs.fontWeight     = '600';
@@ -569,7 +570,6 @@
             fbs.display        = 'flex';
             fbs.alignItems     = 'center';
             fbs.justifyContent = 'center';
-            fbs.gap            = '8px';
             fbs.backdropFilter = 'blur(6px)';
             fbs.letterSpacing  = '0.02em';
             fbs.cursor         = 'pointer';
@@ -579,8 +579,8 @@
             fbBanner.addEventListener('mouseleave', () => { fbBanner.style.opacity = '1'; });
             fbBanner.addEventListener('click', () => window.openFeedbackPage(feedbackUrl));
 
-            const currentPB = parseInt(window.getComputedStyle(document.body).paddingBottom) || 0;
-            document.body.style.paddingBottom = (currentPB + 24) + 'px';
+            const currentPR = parseInt(window.getComputedStyle(document.body).paddingRight) || 0;
+            document.body.style.paddingRight = (currentPR + 24) + 'px';
 
             document.body.appendChild(fbBanner);
         }

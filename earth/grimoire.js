@@ -254,7 +254,8 @@
      * @param {number} endSec      Point de fin (secondes)
      * @returns {Promise<Blob>}
      */
-    async function _trimVideo(videoFile, startSec, endSec) {
+    async function _trimVideo(videoFile, startSec, endSec, { muteAudio = false, volumeDb = 0 } = {}) {
+        _log(`_trimVideo start — file:${videoFile.name} size:${videoFile.size} start:${startSec}s end:${endSec}s mute:${muteAudio} vol:${volumeDb}dB`);
         const ok = await _init();
         if (!ok) throw new Error('FFmpeg WASM non disponible.');
 
@@ -262,19 +263,28 @@
         const inName = `studio_in.${ext}`;
         const outName = 'studio_out.mp4';
 
+        _log(`_trimVideo write FS → ${inName}`);
         await _ff.writeFile(inName, new Uint8Array(await videoFile.arrayBuffer()));
 
-        const needsReencode = ext === 'webm';
-        const cmd = needsReencode
-            ? ['-ss', String(startSec), '-to', String(endSec), '-i', inName,
-               '-c:v', 'libx264', '-c:a', 'aac', '-pix_fmt', 'yuv420p', outName]
-            : ['-ss', String(startSec), '-to', String(endSec), '-i', inName,
-               '-c', 'copy', outName];
+        const needsReencode = ext === 'webm' || muteAudio || volumeDb !== 0;
+        let cmd;
+        if (needsReencode) {
+            const audioArgs = muteAudio
+                ? ['-an']
+                : ['-c:a', 'aac', ...(volumeDb !== 0 ? ['-af', `volume=${volumeDb}dB`] : [])];
+            cmd = ['-ss', String(startSec), '-to', String(endSec), '-i', inName,
+                   '-c:v', 'libx264', ...audioArgs, '-pix_fmt', 'yuv420p', outName];
+        } else {
+            cmd = ['-ss', String(startSec), '-to', String(endSec), '-i', inName,
+                   '-c', 'copy', outName];
+        }
 
+        _log(`_trimVideo ffmpeg cmd: ffmpeg ${cmd.join(' ')}`);
         await _ff.exec(cmd);
 
         const out  = await _ff.readFile(outName);
         const blob = new Blob([out.buffer], { type: 'video/mp4' });
+        _log(`_trimVideo done — output blob ${(blob.size/1024).toFixed(1)} KB`);
 
         try { await _ff.deleteFile(inName);  } catch (_) {}
         try { await _ff.deleteFile(outName); } catch (_) {}
@@ -294,7 +304,8 @@
      * @param {string}  [opts.skillTag] Tag skill à associer (Kind 30504 futur)
      * @returns {Promise<{blob, cid, url, event}|null>}
      */
-    async function trimAndPublish({ file, startSec = 0, endSec, title, skillTag }) {
+    async function trimAndPublish({ file, startSec = 0, endSec, title, skillTag, muteAudio = false, volumeDb = 0 }) {
+        _log(`trimAndPublish — file:${file?.name} start:${startSec} end:${endSec} title:"${title}" skill:"${skillTag}" mute:${muteAudio} vol:${volumeDb}dB`);
         const ok = await _init();
         if (!ok) {
             _notify('⚠️ FFmpeg WASM non chargé — Studio indisponible.', 'warning', 5000);
@@ -303,26 +314,32 @@
 
         const clampedEnd = endSec || file.duration || 60;
         const duration   = Math.max(1, clampedEnd - startSec);
+        _log(`trimAndPublish segment ${startSec}s → ${clampedEnd}s (${duration.toFixed(1)}s)`);
 
         _notify('✂️ Découpe en cours…', 'info', 10000);
         let blob;
         try {
-            blob = await _trimVideo(file, startSec, clampedEnd);
+            blob = await _trimVideo(file, startSec, clampedEnd, { muteAudio, volumeDb });
         } catch (e) {
+            _log(`trimAndPublish _trimVideo ERROR: ${e.message}`);
             _notify(`⚠️ Découpe échouée : ${e.message}`, 'warning', 5000);
             return null;
         }
+        _log(`trimAndPublish trim OK — blob ${(blob.size/1024).toFixed(1)} KB`);
 
         _notify('☁️ Upload IPFS en cours…', 'info', 10000);
         const safeName = (title || 'studio').replace(/[^a-z0-9]+/gi, '_').toLowerCase();
         const fname    = `${safeName}_${Date.now()}.mp4`;
+        _log(`trimAndPublish upload → ${fname}`);
         let cid, url;
         try {
             ({ cid, url } = await _uploadVideoToIPFS(blob, fname));
         } catch (e) {
+            _log(`trimAndPublish upload ERROR: ${e.message}`);
             _notify(`⚠️ Upload échoué : ${e.message}`, 'warning', 5000);
             return null;
         }
+        _log(`trimAndPublish upload OK — cid:${cid} url:${url}`);
 
         const kind = duration <= 60 ? 22 : 21;
         const ts   = String(Math.floor(Date.now() / 1000));

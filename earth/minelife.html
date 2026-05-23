@@ -571,6 +571,48 @@ body {
     font-size: 11px;
 }
 
+/* ── DEMO ACCOUNTS ── */
+.demo-account-card {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 8px;
+    font-size: 12px;
+}
+.demo-account-card .demo-name {
+    font-weight: 700;
+    color: #6ee7b7;
+    width: 52px;
+    flex-shrink: 0;
+}
+.demo-account-card .demo-role {
+    color: var(--text-muted);
+    font-size: 11px;
+    flex: 1;
+}
+.demo-account-card .demo-skills {
+    font-size: 10px;
+    color: #7dd3fc;
+    opacity: 0.8;
+}
+.demo-account-card .demo-login-btn {
+    padding: 3px 10px;
+    border-radius: 5px;
+    border: 1px solid rgba(14,165,233,0.4);
+    background: rgba(14,165,233,0.08);
+    color: #7dd3fc;
+    font-size: 11px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.2s;
+}
+.demo-account-card .demo-login-btn:hover {
+    background: rgba(14,165,233,0.22);
+}
+
 /* ── NOTIFICATION ── */
 .notif {
     position: fixed;
@@ -1464,8 +1506,23 @@ textarea.scan-input:focus { border-color: var(--accent); }
                 🎬 CV Vidéo
             </button>
         </div>
+        <!-- Panel démo — visible hors connexion, caché quand connecté -->
+        <div id="demo-accounts-panel" style="margin-bottom:12px;padding:12px;background:rgba(14,165,233,0.06);border:1px solid rgba(14,165,233,0.2);border-radius:10px">
+            <div style="font-size:12px;font-weight:700;color:#7dd3fc;margin-bottom:8px">
+                <i class="bi bi-person-video3"></i> Comptes de démonstration WoTx2
+                <span style="font-weight:400;color:var(--text-muted);margin-left:6px">— cliquez pour vous connecter directement</span>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:6px">
+                <div class="demo-account-card" data-nsec="nsec14yvfr9excvh4a34cd2jc9amxy5dzxr8p59eg7vp5pkc4gevd6jcqwlmnc8" data-name="coucou" data-role="Astronaute Fondateur" data-skills="linux · bash · devops"></div>
+                <div class="demo-account-card" data-nsec="nsec1npyez07znm90h23ey2d3h6c20a6n36nf7mhvepu4c7wuqpj3chwq09xpj9" data-name="toto" data-role="Validateur WoTx2" data-skills="python · docker"></div>
+                <div class="demo-account-card" data-nsec="nsec16dt3460asgh6ky8adcjrgjk0ntf3tln48dz8my2yzr3m3c45v5tqz0dr3t" data-name="jean" data-role="Maître de Forge" data-skills="rust · bash"></div>
+            </div>
+            <div style="font-size:10px;color:var(--text-muted);margin-top:8px;line-height:1.5">
+                💡 Connexion directe — aucune extension requise. Idéal pour explorer les crafts, la WoTx2 et la formation.
+            </div>
+        </div>
         <div id="skills-list">
-            <div class="empty-state">
+            <div class="empty-state" id="skills-connect-hint">
                 <i class="bi bi-person-lock"></i>
                 <div>Connectez votre MULTIPASS NOSTR pour voir vos compétences.</div>
             </div>
@@ -2059,6 +2116,52 @@ textarea.scan-input:focus { border-color: var(--accent); }
             <div id="studio-duration-info" style="font-size:10px;color:var(--text-muted);text-align:right;margin-top:4px"></div>
         </div>
 
+        <!-- Contrôles audio -->
+        <div style="padding:10px 16px;border-bottom:1px solid rgba(255,255,255,0.06)">
+            <div style="font-size:12px;color:var(--text-muted);margin-bottom:6px">
+                <i class="bi bi-music-note-beamed"></i> Piste audio
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+                <button id="studio-mute-btn" onclick="studioToggleMute()"
+                        style="padding:4px 10px;border-radius:6px;border:1px solid rgba(14,165,233,0.4);
+                               background:rgba(14,165,233,0.08);color:#7dd3fc;font-size:12px;cursor:pointer;
+                               white-space:nowrap;transition:all 0.2s">
+                    <i class="bi bi-volume-up-fill"></i> Son actif
+                </button>
+                <div style="flex:1;display:flex;align-items:center;gap:6px;min-width:120px">
+                    <label style="font-size:11px;color:var(--text-muted);flex-shrink:0">Volume</label>
+                    <input type="range" id="studio-volume" min="-20" max="10" step="1" value="0"
+                           style="flex:1" oninput="studioSyncVolume()">
+                    <span id="studio-volume-label" style="font-size:11px;color:var(--text-muted);width:36px;text-align:right">0 dB</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Zoom timeline -->
+        <div style="padding:10px 16px;border-bottom:1px solid rgba(255,255,255,0.06)">
+            <div style="font-size:12px;color:var(--text-muted);margin-bottom:6px">
+                <i class="bi bi-zoom-in"></i> Zoom timeline
+                <button onclick="studioResetZoom()" style="margin-left:8px;padding:2px 8px;font-size:10px;
+                        border:1px solid rgba(255,255,255,0.2);border-radius:4px;background:transparent;
+                        color:var(--text-muted);cursor:pointer">Vue complète</button>
+                <button onclick="studioZoomToSelection()" style="margin-left:4px;padding:2px 8px;font-size:10px;
+                        border:1px solid rgba(14,165,233,0.3);border-radius:4px;background:rgba(14,165,233,0.06);
+                        color:#7dd3fc;cursor:pointer">Centrer sélection</button>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px">
+                <label style="font-size:11px;color:#7dd3fc;width:42px;flex-shrink:0">Zoom</label>
+                <input type="range" id="studio-zoom" min="1" max="20" step="0.5" value="1"
+                       style="flex:1" oninput="studioApplyZoom()">
+                <span id="studio-zoom-label" style="font-size:11px;color:var(--text-muted);width:32px;text-align:right">1×</span>
+            </div>
+            <div id="studio-offset-row" style="display:flex;align-items:center;gap:8px;margin-top:6px">
+                <label style="font-size:11px;color:var(--text-muted);width:42px;flex-shrink:0">Offset</label>
+                <input type="range" id="studio-offset" min="0" max="100" step="0.1" value="0"
+                       style="flex:1" oninput="studioApplyZoom()">
+                <span id="studio-offset-label" style="font-size:11px;color:var(--text-muted);width:44px;text-align:right">0:00</span>
+            </div>
+        </div>
+
         <!-- Métadonnées -->
         <div style="padding:12px 16px;border-bottom:1px solid rgba(255,255,255,0.06);display:flex;flex-direction:column;gap:8px">
             <div style="display:flex;gap:8px;align-items:center">
@@ -2389,11 +2492,15 @@ function checkCompositeEligibility(recipe, mySkills) {
 // ── CHARGER MES COMPÉTENCES (tab 1) ───────────────────────────────────────
 
 async function loadMySkills() {
-    const container = document.getElementById('skills-list');
+    const container   = document.getElementById('skills-list');
+    const demoPanel   = document.getElementById('demo-accounts-panel');
     if (!window.isNostrConnected || !window.userPubkey) {
-        container.innerHTML = `<div class="empty-state"><i class="bi bi-person-lock"></i><div>Connectez votre MULTIPASS NOSTR pour voir vos compétences.</div></div>`;
+        if (demoPanel) demoPanel.style.display = '';
+        container.innerHTML = `<div class="empty-state" id="skills-connect-hint"><i class="bi bi-person-lock"></i><div>Connectez votre MULTIPASS NOSTR pour voir vos compétences.</div></div>`;
         return;
     }
+    // Connected: hide demo panel
+    if (demoPanel) demoPanel.style.display = 'none';
     container.innerHTML = `<div class="empty-state"><span class="loader-inline"></span> Chargement…</div>`;
 
     const userHex = window.userPubkey;
@@ -5281,14 +5388,28 @@ function openStudioPanel() {
 
 function closeStudioPanel() {
     document.getElementById('modal-studio').style.display = 'none';
-    // Réinitialiser
     _studioFile = null;
+    _studioTotalDur = 0;
     const vid = document.getElementById('studio-video');
     vid.src = '';
+    vid.muted = false;
     document.getElementById('studio-controls').style.display = 'none';
     document.getElementById('studio-drop-zone').style.display = 'block';
     document.getElementById('studio-progress').style.display = 'none';
     document.getElementById('studio-publish-btn').disabled = false;
+    // Reset audio controls
+    const muteBtn = document.getElementById('studio-mute-btn');
+    muteBtn.dataset.muted = '0';
+    muteBtn.innerHTML = '<i class="bi bi-volume-up-fill"></i> Son actif';
+    muteBtn.style.cssText = '';
+    document.getElementById('studio-volume').value = 0;
+    document.getElementById('studio-volume').disabled = false;
+    document.getElementById('studio-volume-label').textContent = '0 dB';
+    // Reset zoom
+    document.getElementById('studio-zoom').value = 1;
+    document.getElementById('studio-offset').value = 0;
+    document.getElementById('studio-offset-row').style.display = 'none';
+    document.getElementById('studio-zoom-label').textContent = '1×';
 }
 
 function studioHandleDrop(event) {
@@ -5297,6 +5418,7 @@ function studioHandleDrop(event) {
 }
 
 function studioLoadFile(file) {
+    console.log('[Studio] loadFile:', file.name, `${(file.size/1024).toFixed(1)} KB`, file.type);
     _studioFile = file;
     const vid  = document.getElementById('studio-video');
     vid.src    = URL.createObjectURL(file);
@@ -5304,12 +5426,19 @@ function studioLoadFile(file) {
 
     vid.onloadedmetadata = () => {
         const dur = vid.duration || 60;
+        _studioTotalDur = dur;
+        console.log('[Studio] metadata loaded — duration:', dur.toFixed(2), 's');
         const startSlider = document.getElementById('studio-start');
         const endSlider   = document.getElementById('studio-end');
-        startSlider.max   = dur;
-        endSlider.max     = dur;
+        startSlider.min = 0; startSlider.max = dur;
+        endSlider.min   = 0; endSlider.max   = dur;
         startSlider.value = 0;
         endSlider.value   = dur;
+        // Reset zoom
+        document.getElementById('studio-zoom').value   = 1;
+        document.getElementById('studio-offset').value = 0;
+        document.getElementById('studio-offset-row').style.display = 'none';
+        document.getElementById('studio-zoom-label').textContent = '1×';
         studioUpdateLabels(0, dur, dur);
 
         document.getElementById('studio-controls').style.display = 'flex';
@@ -5364,6 +5493,10 @@ async function studioPublish() {
     const endSec    = parseFloat(document.getElementById('studio-end').value);
     const title     = document.getElementById('studio-title').value.trim() || 'Studio MineLife';
     const skillTag  = document.getElementById('studio-skill-tag').value.trim().toLowerCase().replace(/\s+/g,'-') || '';
+    const muteAudio = document.getElementById('studio-mute-btn').dataset.muted === '1';
+    const volumeDb  = parseInt(document.getElementById('studio-volume').value, 10) || 0;
+
+    console.log('[Studio] publish →', { file: _studioFile.name, startSec, endSec, title, skillTag, muteAudio, volumeDb });
 
     const prog = document.getElementById('studio-progress');
     prog.textContent = '⏳ Initialisation FFmpeg WASM…';
@@ -5376,14 +5509,149 @@ async function studioPublish() {
         endSec,
         title,
         skillTag: skillTag || undefined,
+        muteAudio,
+        volumeDb: muteAudio ? 0 : volumeDb,
     });
 
     if (result) {
+        console.log('[Studio] publish result:', result);
         prog.textContent = `✅ Publié — CID ${result.cid ? result.cid.slice(0,16) + '…' : '?'}`;
         setTimeout(() => closeStudioPanel(), 2500);
     } else {
+        console.warn('[Studio] publish returned null — see Grimoire logs above');
         prog.textContent = '⚠️ Échec — voir la console.';
         document.getElementById('studio-publish-btn').disabled = false;
+    }
+}
+
+// ── STUDIO AUDIO ──────────────────────────────────────────────────────────
+
+function studioToggleMute() {
+    const btn = document.getElementById('studio-mute-btn');
+    const vid = document.getElementById('studio-video');
+    const muted = btn.dataset.muted === '1';
+    const newMuted = !muted;
+    btn.dataset.muted = newMuted ? '1' : '0';
+    btn.innerHTML = newMuted
+        ? '<i class="bi bi-volume-mute-fill"></i> Son coupé'
+        : '<i class="bi bi-volume-up-fill"></i> Son actif';
+    btn.style.borderColor = newMuted ? 'rgba(239,68,68,0.4)' : 'rgba(14,165,233,0.4)';
+    btn.style.background  = newMuted ? 'rgba(239,68,68,0.08)' : 'rgba(14,165,233,0.08)';
+    btn.style.color       = newMuted ? '#f87171' : '#7dd3fc';
+    if (vid.src) vid.muted = newMuted;
+    document.getElementById('studio-volume').disabled = newMuted;
+}
+
+function studioSyncVolume() {
+    const val = document.getElementById('studio-volume').value;
+    document.getElementById('studio-volume-label').textContent = `${val} dB`;
+    const vid = document.getElementById('studio-video');
+    if (vid.src) {
+        const linear = Math.pow(10, parseInt(val, 10) / 20);
+        vid.volume = Math.min(1, Math.max(0, linear));
+    }
+}
+
+// ── STUDIO ZOOM TIMELINE ──────────────────────────────────────────────────
+
+let _studioTotalDur = 0;
+
+function studioApplyZoom() {
+    const dur    = _studioTotalDur || 60;
+    const zoom   = parseFloat(document.getElementById('studio-zoom').value) || 1;
+    const winDur = dur / zoom;
+
+    const offsetSlider = document.getElementById('studio-offset');
+    offsetSlider.max   = Math.max(0, dur - winDur);
+    const offset = Math.min(parseFloat(offsetSlider.value), parseFloat(offsetSlider.max));
+    offsetSlider.value = offset;
+
+    const winStart = offset;
+    const winEnd   = offset + winDur;
+
+    const startSlider = document.getElementById('studio-start');
+    const endSlider   = document.getElementById('studio-end');
+    startSlider.min = winStart; startSlider.max = winEnd;
+    endSlider.min   = winStart; endSlider.max   = winEnd;
+    if (parseFloat(startSlider.value) < winStart) startSlider.value = winStart;
+    if (parseFloat(endSlider.value)   > winEnd)   endSlider.value   = winEnd;
+
+    const fmt = s => { const m = Math.floor(s/60), sec = Math.floor(s%60); return `${m}:${String(sec).padStart(2,'0')}`; };
+    document.getElementById('studio-zoom-label').textContent   = `${zoom.toFixed(1)}×`;
+    document.getElementById('studio-offset-label').textContent = fmt(offset);
+    document.getElementById('studio-offset-row').style.display = zoom > 1 ? 'flex' : 'none';
+
+    studioUpdateLabels(parseFloat(startSlider.value), parseFloat(endSlider.value), dur);
+}
+
+function studioResetZoom() {
+    document.getElementById('studio-zoom').value   = 1;
+    document.getElementById('studio-offset').value = 0;
+    studioApplyZoom();
+}
+
+function studioZoomToSelection() {
+    const dur   = _studioTotalDur || 60;
+    const start = parseFloat(document.getElementById('studio-start').value);
+    const end   = parseFloat(document.getElementById('studio-end').value);
+    const sel   = Math.max(1, end - start);
+    const margin = sel * 0.15;
+    const winDur = sel + margin * 2;
+    const zoom   = Math.min(20, Math.max(1, dur / winDur));
+    const offset = Math.max(0, start - margin);
+    document.getElementById('studio-zoom').value   = zoom;
+    document.getElementById('studio-offset').value = offset;
+    studioApplyZoom();
+}
+
+// ── DEMO ACCOUNTS ─────────────────────────────────────────────────────────
+
+function initDemoAccounts() {
+    document.querySelectorAll('.demo-account-card').forEach(card => {
+        const nsec   = card.dataset.nsec;
+        const name   = card.dataset.name;
+        const role   = card.dataset.role;
+        const skills = card.dataset.skills;
+        card.innerHTML = `
+            <span class="demo-name">👤 ${name}</span>
+            <span class="demo-role">${role}<br><span class="demo-skills">${skills}</span></span>
+            <button class="demo-login-btn" onclick="switchToDemoAccount(${JSON.stringify(nsec)}, this)">
+                <i class="bi bi-box-arrow-in-right"></i> Se connecter
+            </button>
+        `;
+    });
+}
+
+function switchToDemoAccount(nsec, btn) {
+    const orig = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Connexion…';
+
+    try {
+        const { data: privKeyBytes } = NostrTools.nip19.decode(nsec);
+        const privKeyHex = Array.from(privKeyBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+        const pubKeyHex  = NostrTools.getPublicKey(privKeyHex);
+
+        // Injecter un signer logiciel NIP-07 — pas d'extension requise
+        window.nostr = {
+            async getPublicKey() { return pubKeyHex; },
+            async signEvent(event) {
+                return NostrTools.finishEvent({ ...event, pubkey: pubKeyHex }, privKeyHex);
+            }
+        };
+
+        handleConnect().then(() => {
+            btn.disabled = false;
+            btn.innerHTML = orig;
+        }).catch(err => {
+            btn.disabled = false;
+            btn.innerHTML = orig;
+            notify('Connexion échouée : ' + err.message, 'error');
+        });
+    } catch(e) {
+        btn.disabled = false;
+        btn.innerHTML = orig;
+        notify('Erreur décodage nsec : ' + e.message, 'error');
     }
 }
 
@@ -5396,6 +5664,7 @@ document.getElementById('modal-studio').addEventListener('click', function(e) {
 
 document.addEventListener('DOMContentLoaded', () => {
     updateConnectionUI();
+    initDemoAccounts();
 
     if (typeof window.detectUSPOTAPI === 'function') window.detectUSPOTAPI();
 

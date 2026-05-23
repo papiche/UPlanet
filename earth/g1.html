@@ -181,8 +181,7 @@ body {
     border: 1px solid #0d161e;
     filter: contrast(1.1);
 }
-/* Darken Leaflet tiles slightly */
-#station-map .leaflet-tile-pane { filter: invert(100%) hue-rotate(180deg) brightness(85%) contrast(110%); }
+/* Tuiles sombres natives — CartoDB Dark Matter (pas de filtre CSS) */
 
 /* ══ CONTROL BAR ════════════════════════════════════════════════════════ */
 .control-bar {
@@ -333,6 +332,51 @@ body {
 }
 .gauge-value.hi { color: var(--green); }
 .gauge-value.lo { color: var(--red); }
+
+/* ══ COMPACT CARD METRICS ════════════════════════════════════════════════ */
+.card-compact-row, .card-hw-row {
+    display: flex; flex-wrap: wrap; gap: 2px 10px;
+    font-size: 0.7em; font-family: 'Share Tech Mono', monospace;
+    color: var(--text-mono); margin-bottom: 4px;
+}
+.card-compact-row b { color: var(--green); }
+.card-hw-row {
+    color: var(--text-dim); margin-bottom: 5px;
+    padding-top: 4px; border-top: 1px solid var(--steel);
+}
+.card-hw-row .ps-hi { color: var(--green); }
+
+.card-capacity-row {
+    margin: 4px 0 6px;
+    display: flex; flex-direction: column; gap: 4px;
+}
+.cap-bar-label {
+    display: flex; justify-content: space-between; align-items: center;
+    font-size: 0.68em; font-family: 'Share Tech Mono', monospace;
+    color: var(--text-mono); margin-bottom: 2px;
+}
+.cap-bar-track {
+    height: 5px; background: var(--steel); border-radius: 3px; overflow: hidden;
+}
+.cap-bar-fill {
+    height: 100%; border-radius: 3px; transition: width 0.4s;
+}
+.cap-bar-fill.ok   { background: var(--green); }
+.cap-bar-fill.warn { background: var(--orange); }
+.cap-bar-fill.full { background: var(--red); }
+.card-cta {
+    margin-top: 6px; padding: 6px 8px; border-radius: 3px;
+    background: rgba(192,57,43,.12); border-left: 3px solid var(--red);
+    font-size: 0.66em; font-family: 'Share Tech Mono', monospace;
+    color: var(--text-dim); line-height: 1.5;
+}
+.card-cta a { color: var(--copper); text-decoration: none; }
+.card-cta a:hover { text-decoration: underline; }
+.card-cta code {
+    display: block; margin-top: 4px; padding: 3px 6px;
+    background: var(--bg); border-radius: 2px; color: var(--green);
+    font-size: 0.95em; user-select: all; cursor: text;
+}
 
 .relay-line {
     font-size: 0.68em; color: var(--text-dim); margin-bottom: 7px;
@@ -662,6 +706,38 @@ function fmtDist(km) {
     return km<10 ? km.toFixed(1)+' km' : km<100 ? Math.round(km)+' km'
                  : Math.round(km/10)*10+' km';
 }
+function fmtUptime(s) {
+    if (!s) return '';
+    const m = String(s).match(/(\d+)\s*day[s,]*\s*[,]?\s*(\d+):(\d+)/i);
+    if (m) return `${m[1]}j ${m[2]}h`;
+    const m2 = String(s).match(/^(\d+):(\d+):\d+$/);
+    if (m2) return parseInt(m2[1])>0 ? `${m2[1]}h${m2[2]}` : `${m2[2]}min`;
+    return String(s).slice(0, 12);
+}
+function computeBootStats(boots) {
+    if (!Array.isArray(boots) || !boots.length) return null;
+    const now = Date.now() / 1000;
+    const parseTs = s => {
+        if (typeof s === 'number') return s;
+        if (!s) return 0;
+        return (new Date(String(s).replace(' ', 'T'))).getTime() / 1000 || 0;
+    };
+    const firstStart = parseTs(boots[0].start);
+    if (!firstStart) return null;
+    const windowSec = now - firstStart;
+    if (windowSec < 600) return null;
+    let totalOn = 0;
+    for (const b of boots) {
+        if (b.running) {
+            const st = parseTs(b.start);
+            if (st > 0) totalOn += now - st;
+        } else {
+            totalOn += typeof b.duration === 'number' ? b.duration : 0;
+        }
+    }
+    const avail = Math.min(100, Math.round(totalOn / windowSec * 100));
+    return { count: boots.length, reboots: boots.length - 1, avail };
+}
 
 // ── Parse station JSON ────────────────────────────────────────────────────────
 function parseStation(m, forcedActive) {
@@ -696,6 +772,10 @@ function parseStation(m, forcedActive) {
         zencardCount  : parseInt(eco['zencard_count'])   || 0,
         bilan    : m['BILAN'] || '0',
         powerScore, gpuVram, hwTier,
+        cpuCores : parseInt(cap['cpu_cores']) || 0,
+        ramGb    : parseFloat(cap['ram_gb'])  || 0,
+        uptime   : m['uptime'] || '',
+        boots    : Array.isArray(m['boots']) ? m['boots'] : [],
         ipfsnodeid: m['ipfsnodeid'] || '',
         g1station : m['g1station']  || '',
         g1swarm   : m['g1swarm']    || '',
@@ -785,12 +865,13 @@ async function envoyerJukebox() {
 function initMap() {
     if (map) return;
     map = L.map('station-map', { zoomControl: true });
-    // Dark tile layer via CartoDB dark matter
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    // Tuiles sombres nativement (même approche que map_render.html dark)
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
         attribution: '© <a href="https://www.openstreetmap.org/copyright">OSM</a> © <a href="https://carto.com/">CARTO</a>',
-        subdomains: 'abcd', maxZoom: 18,
+        subdomains: 'abcd', maxZoom: 19,
     }).addTo(map);
     map.setView([20, 0], 2);
+    console.debug('[G1] Carte Leaflet initialisée — CartoDB dark');
 }
 
 function updateMapMarkers(primaryUspot) {
@@ -915,6 +996,19 @@ function renderStations(primaryUspot) {
                     ID:${s.ipfsnodeid.substring(0,12)}…</span>`:''}
             </div>` : '';
 
+        const bootStats = computeBootStats(s.boots);
+
+        // Capacité MULTIPASS (10 Go/slot IPFS) et ZenCard (128 Go/slot NextCloud)
+        const mpTotal  = s.nostrSlots || 0;
+        const mpUsed   = s.multipassCount || 0;
+        const zcTotal  = s.zcSlots || 0;
+        const zcUsed   = s.zencardCount || 0;
+        const mpPct    = mpTotal > 0 ? Math.min(100, Math.round(mpUsed / mpTotal * 100)) : (mpUsed > 0 ? 100 : -1);
+        const zcPct    = zcTotal > 0 ? Math.min(100, Math.round(zcUsed / zcTotal * 100)) : (zcUsed > 0 ? 100 : -1);
+        const mpClass  = mpPct < 0 ? 'ok' : mpPct >= 90 ? 'full' : mpPct >= 70 ? 'warn' : 'ok';
+        const zcClass  = zcPct < 0 ? 'ok' : zcPct >= 90 ? 'full' : zcPct >= 70 ? 'warn' : 'ok';
+        const saturated = (mpPct >= 90 && mpTotal > 0) || (zcPct >= 90 && zcTotal > 0);
+
         const card = document.createElement('div');
         card.className = [
             'station-card',
@@ -946,29 +1040,60 @@ function renderStations(primaryUspot) {
                 </div>
             </div>
 
-            <div class="gauge-row">
-                <div class="gauge-item">
-                    <span class="gauge-label">MULTIPASS</span>
-                    <span class="gauge-value ${s.multipassCount>50?'hi':''}">${s.multipassCount}</span>
-                </div>
-                <div class="gauge-item">
-                    <span class="gauge-label">ZENCARD</span>
-                    <span class="gauge-value">${s.zencardCount}</span>
-                </div>
-                <div class="gauge-item" title="Prix MULTIPASS par semaine">
-                    <span class="gauge-label">NCARD Ẑ/SEM</span>
-                    <span class="gauge-value">${s.ncardPrice||'?'}</span>
-                </div>
-                <div class="gauge-item" title="Prix ZenCard par semaine">
-                    <span class="gauge-label">ZCARD Ẑ/SEM</span>
-                    <span class="gauge-value">${s.zcardPrice||'?'}</span>
-                </div>
-                ${s.diskGb?`<div class="gauge-item">
-                    <span class="gauge-label">DISQUE</span>
-                    <span class="gauge-value hi">${Math.round(s.diskGb)} Go</span>
-                </div>`:''}
+            <div class="card-compact-row">
+                <span>MP&nbsp;<b>${s.multipassCount}</b></span>
+                <span>ZC&nbsp;<b>${s.zencardCount}</b></span>
+                <span>PAF&nbsp;<b>${s.paf||'?'}Ẑ</b></span>
+                ${s.ncardPrice?`<span title="MULTIPASS/sem">NC&nbsp;${s.ncardPrice}Ẑ</span>`:''}
+                ${s.zcardPrice?`<span title="ZenCard/sem">ZC&nbsp;${s.zcardPrice}Ẑ</span>`:''}
+                ${s.diskGb?`<span>💾&nbsp;${Math.round(s.diskGb)}Go</span>`:''}
             </div>
+            ${(mpTotal > 0 || zcTotal > 0 || mpUsed > 0 || zcUsed > 0) ? `
+            <div class="card-capacity-row">
+                ${mpTotal > 0 || mpUsed > 0 ? `
+                <div>
+                    <div class="cap-bar-label">
+                        <span>🪪 MULTIPASS <b>${mpUsed}/${mpTotal > 0 ? mpTotal : '?'}</b> × 10 Go</span>
+                        <span>${mpPct >= 0 ? mpPct+'%' : ''}</span>
+                    </div>
+                    <div class="cap-bar-track">
+                        <div class="cap-bar-fill ${mpClass}" style="width:${mpPct >= 0 ? mpPct : 0}%"></div>
+                    </div>
+                </div>` : ''}
+                ${zcTotal > 0 || zcUsed > 0 ? `
+                <div>
+                    <div class="cap-bar-label">
+                        <span>☁️ ZenCard <b>${zcUsed}/${zcTotal > 0 ? zcTotal : '?'}</b> × 128 Go</span>
+                        <span>${zcPct >= 0 ? zcPct+'%' : ''}</span>
+                    </div>
+                    <div class="cap-bar-track">
+                        <div class="cap-bar-fill ${zcClass}" style="width:${zcPct >= 0 ? zcPct : 0}%"></div>
+                    </div>
+                </div>` : ''}
+            </div>` : ''}
+            ${saturated ? `
+            <div class="card-cta">
+                ⚠ Capacité proche du maximum — besoin d'un nouvel armateur !<br>
+                <a href="https://opencollective.com/monnaie-libre" target="_blank" rel="noopener">
+                    ❤ Parrainer une station sur OpenCollective
+                </a>
+                <code>bash &lt;(curl -sL https://install.astroport.com)</code>
+            </div>` : ''}
+            ${(s.powerScore||s.uptime||s.cpuCores)?`
+            <div class="card-hw-row">
+                ${s.powerScore?`<span class="${s.hwTier==='brain'?'ps-hi':''}">⚡${s.powerScore}pts</span>`:''}
+                ${s.cpuCores?`<span>CPU×${s.cpuCores}</span>`:''}
+                ${s.ramGb?`<span>RAM&nbsp;${s.ramGb}Go</span>`:''}
+                ${s.gpuVram?`<span>🎮&nbsp;${s.gpuVram}Go</span>`:''}
+                ${s.uptime?`<span title="${esc(s.uptime)}">⏱&nbsp;${fmtUptime(s.uptime)}</span>`:''}
+            </div>`:''}
 
+
+            ${bootStats ? `
+            <div class="card-hw-row" style="color:${bootStats.avail>=95?'var(--green)':bootStats.avail>=80?'var(--orange)':'var(--red)'}">
+                <span title="${bootStats.count} sessions de boot">🔄 ${bootStats.reboots} reboot${bootStats.reboots!==1?'s':''}</span>
+                <span>📶 ${bootStats.avail}% dispo</span>
+            </div>` : ''}
             ${s.relay?`<div class="relay-line">⊛ ${esc(s.relay)}</div>`:''}
             ${ipfsRow}
 
@@ -991,6 +1116,7 @@ function renderStations(primaryUspot) {
 }
 
 function selectStation(uspot, andRedirect) {
+    console.debug('[G1] selectStation:', uspot, andRedirect ? '→ redirect' : '→ highlight only');
     selectedUspot = uspot;
     document.querySelectorAll('.station-card').forEach(function(card) {
         const sel = card.dataset.uspot===uspot;
@@ -1034,6 +1160,7 @@ window.requestGeolocation = function() {
 // ── Main SWARM load (via UPassport API) ───────────────────────────────────────
 window.loadSwarmStations = function() {
     const uspotUrl = (window.upassportUrl||'').replace(/\/$/,'');
+    console.debug('[G1] loadSwarmStations — uspotUrl:', uspotUrl);
     if (!uspotUrl) {
         setStatus('error', 'ERREUR: URL STATION NON DÉTECTÉE');
         return;
@@ -1076,6 +1203,8 @@ window.loadSwarmStations = function() {
 
             const ac=list.filter(s=>s.active).length;
             const filteredNote = filteredLocalhost>0 ? ` · ${filteredLocalhost} LOCAL IGNORÉE${filteredLocalhost>1?'S':''}` : '';
+            console.debug('[G1] Stations chargées:', list.length, 'total,', ac, 'actives,', filteredLocalhost, 'locales filtrées');
+            list.forEach(s => console.debug('[G1]  station:', s.hostname||s.uspot, '| score:', s.powerScore, '| uptime:', s.uptime||'—', '| CPU:', s.cpuCores, '| RAM:', s.ramGb, 'Go'));
             setStatus('connected', `${list.length} STATIONS · ${ac} AVEC SLOTS${filteredNote}`);
 
             initMap();

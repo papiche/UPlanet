@@ -31,6 +31,43 @@
     const LS_POS_KEY  = 'app_switch_pos';
     const LS_OPEN_KEY = 'app_switch_open';
 
+    /* ── Config responsive ──────────────────────────────────────────────── */
+
+    function _getConfig() {
+        const W = window.innerWidth;
+        if (W < 400) return { item: 32, radius: 60 };
+        if (W < 600) return { item: 36, radius: 74 };
+        return { item: ITEM_SIZE, radius: RADIUS };
+    }
+
+    /* ── Positionnement menu adaptatif (évite les bords) ────────────────── */
+
+    function _computeItemPositions() {
+        const cfg    = _getConfig();
+        const W      = window.innerWidth;
+        const H      = window.innerHeight;
+        const rect   = _wrap.getBoundingClientRect();
+        const fabCX  = rect.left + FAB_SIZE / 2;
+        const fabCY  = rect.top  + FAB_SIZE / 2;
+
+        // Angle vers le centre de l'écran = zone avec le plus d'espace libre
+        const baseAngle = Math.atan2(H/2 - fabCY, W/2 - fabCX);
+
+        const items  = _menu.querySelectorAll('.asw-item');
+        const total  = items.length;
+        const spread = (total > 6 ? 270 : total > 4 ? 240 : 210) * Math.PI / 180;
+
+        items.forEach(function(el, i) {
+            const angle = baseAngle - spread/2 + spread * (i / Math.max(total - 1, 1));
+            const cx    = Math.cos(angle) * cfg.radius;
+            const cy    = Math.sin(angle) * cfg.radius;
+            el.style.left   = (cx + FAB_SIZE / 2) + 'px';
+            el.style.top    = (cy + FAB_SIZE / 2) + 'px';
+            el.style.width  = cfg.item + 'px';
+            el.style.height = cfg.item + 'px';
+        });
+    }
+
     /* ── État ───────────────────────────────────────────────────────────── */
 
     let _open    = false;
@@ -199,6 +236,16 @@
 }
 #asw-overlay.visible { display: block; }
 
+/* ── Taille FAB adaptée au mobile ── */
+@media (max-width: 480px) {
+    #asw-fab {
+        width: 40px;
+        height: 40px;
+    }
+    #asw-fab-icon { font-size: 17px; }
+    #asw-active-dot { bottom: 2px; right: 2px; width: 7px; height: 7px; }
+}
+
 /* ── Tooltip label (name survol) ── */
 .asw-tooltip {
     position: fixed; z-index: 9200;
@@ -325,6 +372,7 @@
 
     function _openMenu() {
         if (_open) { _closeMenu(); return; }
+        _computeItemPositions();   // positionne les items avant l'animation
         _open = true;
         _fab.classList.add('open');
         _overlay.classList.add('visible');

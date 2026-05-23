@@ -1072,6 +1072,9 @@
                     <!-- Hardware section -->
                     <div id="detail-hardware" style="display:none; padding: 0 15px 10px 15px;"></div>
 
+                    <!-- Capacity section -->
+                    <div id="detail-capacity" style="display:none; padding: 0 15px 10px 15px;"></div>
+
                     <div class="nav-buttons">
                         <button class="nav-btn" id="btn-prev" onclick="navigateStation(-1)">◀ PREV</button>
                         <button class="nav-btn" id="btn-jump" onclick="jumpToStation()">🚀 JUMP</button>
@@ -1352,6 +1355,31 @@
         }
 
         // Process station event (kind 30850)
+        function computeBootStats(boots) {
+            if (!Array.isArray(boots) || !boots.length) return null;
+            const now = Date.now() / 1000;
+            const parseTs = s => {
+                if (typeof s === 'number') return s;
+                if (!s) return 0;
+                return (new Date(String(s).replace(' ', 'T'))).getTime() / 1000 || 0;
+            };
+            const firstStart = parseTs(boots[0].start);
+            if (!firstStart) return null;
+            const windowSec = now - firstStart;
+            if (windowSec < 600) return null;
+            let totalOn = 0;
+            for (const b of boots) {
+                if (b.running) {
+                    const st = parseTs(b.start);
+                    if (st > 0) totalOn += now - st;
+                } else {
+                    totalOn += typeof b.duration === 'number' ? b.duration : 0;
+                }
+            }
+            const avail = Math.min(100, Math.round(totalOn / windowSec * 100));
+            return { count: boots.length, reboots: boots.length - 1, avail };
+        }
+
         function processStationEvent(event) {
             try {
                 const content = JSON.parse(event.content);
@@ -1419,6 +1447,11 @@
                         hwCpuCores: content.hardware?.cpu_cores || parseInt(getTagValue(tags, 'hw:cpu_cores') || 1),
                         hwRamGb: content.hardware?.ram_gb || parseFloat(getTagValue(tags, 'hw:ram_gb') || 0),
                         hwGpuVram: content.hardware?.gpu_vram_gb || parseFloat(getTagValue(tags, 'hw:gpu_vram_gb') || 0),
+                        hwBoots: (() => {
+                            const raw = content.hardware?.boots || content.boots;
+                            if (Array.isArray(raw)) return raw;
+                            try { return JSON.parse(getTagValue(tags, 'hw:boots') || '[]'); } catch { return []; }
+                        })(),
                         created_at: event.created_at,
                         content
                     });
@@ -1716,6 +1749,21 @@
                             ${station.hwProviderReady ? '<span style="font-size:0.65rem;color:var(--accent-green);background:rgba(0,255,136,0.1);border-radius:3px;padding:2px 6px;">☁️ PROVIDER</span>' : ''}
                             ${station.hwStorageReady ? '<span style="font-size:0.65rem;color:var(--accent-purple);background:rgba(153,102,255,0.1);border-radius:3px;padding:2px 6px;">💾 STORAGE</span>' : ''}
                         </div>
+                        ${(() => {
+                            const bs = computeBootStats(station.hwBoots);
+                            if (!bs) return '';
+                            const col = bs.avail >= 95 ? 'var(--accent-green)' : bs.avail >= 80 ? 'var(--accent-yellow)' : 'var(--accent-red)';
+                            return `<div style="margin-top:6px;display:flex;gap:12px;align-items:center;">
+                                <div style="text-align:center;">
+                                    <div style="font-family:'Share Tech Mono',monospace;font-size:1.1rem;color:${col};">${bs.avail}%</div>
+                                    <div style="font-size:0.65rem;color:var(--text-dim);letter-spacing:1px;">DISPONIBILITÉ</div>
+                                </div>
+                                <div style="text-align:center;">
+                                    <div style="font-family:'Share Tech Mono',monospace;font-size:1.1rem;color:var(--text-primary);">${bs.reboots}</div>
+                                    <div style="font-size:0.65rem;color:var(--text-dim);letter-spacing:1px;">REBOOTS (${bs.count} sessions)</div>
+                                </div>
+                            </div>`;
+                        })()}
                     </div>
                 `;
             }
@@ -1757,6 +1805,50 @@
             document.getElementById('detail-assets-bar').style.width = `${(station.assetsBalance / maxAssets) * 100}%`;
             document.getElementById('detail-impot-bar').style.width = `${(station.impotBalance / maxImpot) * 100}%`;
             document.getElementById('detail-capital-bar').style.width = `${(station.capitalBalance / maxCapital) * 100}%`;
+
+            // Capacity section (MULTIPASS 10Go + ZenCard 128Go)
+            const capSection = document.getElementById('detail-capacity');
+            if (capSection) {
+                const mpTotal = station.multipassTotal || 0;
+                const mpUsed  = station.multipassUsed  || 0;
+                const zcTotal = station.zencardCapacity || 0;
+                const zcUsed  = station.zencardRenters + station.zencardOwners;
+                const mpPct   = mpTotal > 0 ? Math.min(100, Math.round(mpUsed / mpTotal * 100)) : (mpUsed > 0 ? 100 : 0);
+                const zcPct   = zcTotal > 0 ? Math.min(100, Math.round(zcUsed / zcTotal * 100)) : (zcUsed > 0 ? 100 : 0);
+                const barCol = pct => pct >= 90 ? 'var(--accent-red)' : pct >= 70 ? 'var(--accent-yellow)' : 'var(--accent-green)';
+                const saturated = (mpTotal > 0 && mpPct >= 90) || (zcTotal > 0 && zcPct >= 90);
+                capSection.style.display = 'block';
+                capSection.innerHTML = `
+                    <div style="background:rgba(0,255,136,0.04);border-left:3px solid var(--accent-green);border-radius:4px;padding:10px 12px;margin:4px 0;">
+                        <div style="font-size:0.75rem;color:var(--accent-green);font-weight:700;letter-spacing:1px;margin-bottom:8px;">📊 CAPACITÉ ARMATEUR</div>
+                        <div style="margin-bottom:8px;">
+                            <div style="display:flex;justify-content:space-between;font-size:0.72rem;color:var(--text-secondary);margin-bottom:3px;">
+                                <span>🪪 MULTIPASS × 10 Go</span>
+                                <span style="color:${barCol(mpPct)}">${mpUsed}/${mpTotal > 0 ? mpTotal : '?'} — ${mpTotal > 0 ? mpPct+'%' : 'n/a'}</span>
+                            </div>
+                            <div style="height:6px;background:var(--bg-secondary);border-radius:3px;overflow:hidden;">
+                                <div style="height:100%;width:${mpPct}%;background:${barCol(mpPct)};border-radius:3px;transition:width 0.4s;"></div>
+                            </div>
+                        </div>
+                        <div style="margin-bottom:${saturated ? '8px' : '0'};">
+                            <div style="display:flex;justify-content:space-between;font-size:0.72rem;color:var(--text-secondary);margin-bottom:3px;">
+                                <span>☁️ ZenCard × 128 Go</span>
+                                <span style="color:${barCol(zcPct)}">${zcUsed}/${zcTotal > 0 ? zcTotal : '?'} — ${zcTotal > 0 ? zcPct+'%' : 'n/a'}</span>
+                            </div>
+                            <div style="height:6px;background:var(--bg-secondary);border-radius:3px;overflow:hidden;">
+                                <div style="height:100%;width:${zcPct}%;background:${barCol(zcPct)};border-radius:3px;transition:width 0.4s;"></div>
+                            </div>
+                        </div>
+                        ${saturated ? `
+                        <div style="margin-top:8px;padding:8px;background:rgba(192,57,43,0.12);border-radius:3px;font-size:0.7rem;color:var(--text-secondary);line-height:1.6;">
+                            ⚠ Capacité proche du maximum — besoin d'un nouvel armateur !<br>
+                            <a href="https://opencollective.com/monnaie-libre" target="_blank" rel="noopener"
+                               style="color:var(--accent-yellow);text-decoration:none;">❤ Parrainer sur OpenCollective</a><br>
+                            <span style="color:var(--accent-green);font-family:'Share Tech Mono',monospace;">bash &lt;(curl -sL https://install.astroport.com)</span>
+                        </div>` : ''}
+                    </div>
+                `;
+            }
 
             // Update nav buttons
             const idx = stationOrder.indexOf(stationId);

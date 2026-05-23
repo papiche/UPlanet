@@ -552,7 +552,7 @@
             fbBanner.innerHTML =
                 '<a href="#" onclick="event.preventDefault();window.openFeedbackPage(\'' + feedbackUrl + '\')" ' +
                 'style="color:inherit;text-decoration:none;display:flex;align-items:center;gap:5px;writing-mode:vertical-rl">' +
-                '<span>🐛</span><span>Signaler un bug</span>' +
+                '<span>🐛</span><span>Un bug? Une amélioration?</span>' +
                 '</a>';
 
             const fbs = fbBanner.style;

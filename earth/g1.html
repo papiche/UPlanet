@@ -313,6 +313,7 @@ body {
 .badge-none { color: var(--red);    border-color: rgba(192,57,43,.4);   background: rgba(192,57,43,.07); }
 .badge-star { color: var(--brass);  border-color: rgba(181,134,13,.4);  background: rgba(181,134,13,.07); }
 .badge-ipfs { color: var(--ipfs-col);border-color:rgba(155,89,182,.4); background: rgba(155,89,182,.07); }
+.badge-hw   { color: var(--text-mono);border-color:rgba(0,212,255,.3);  background: rgba(0,212,255,.05); }
 .bilan-pos  { color: var(--green); font-size: 0.66em; font-family: 'Share Tech Mono', monospace; }
 .bilan-neg  { color: var(--red);   font-size: 0.66em; font-family: 'Share Tech Mono', monospace; }
 
@@ -666,12 +667,17 @@ function fmtDist(km) {
 function parseStation(m, forcedActive) {
     const uspot = m['uSPOT'] || '';
     if (!uspot) return null;
+    // Filtrer les peers SWARM non-routables (localhost n'est accessible que par la station elle-même)
+    if (!forcedActive && (uspot.includes('localhost') || uspot.includes('127.0.0.1') || uspot.includes('0.0.0.0'))) return null;
     const cap  = m['capacities'] || {};
     const stor = (cap['storage_details']||{})['root'] || {};
     const up   = (m['services']||{})['upassport'] || {};
     const eco  = m['economy'] || {};
     const host = m['hostname'] || '';
     const city = m['IPCity']   || '';
+    const gpuVram    = parseFloat((cap['gpu']||{})['vram_gb']) || 0;
+    const powerScore = parseInt(cap['power_score']) || 0;
+    const hwTier     = powerScore >= 41 ? 'brain' : powerScore >= 11 ? 'standard' : 'light';
     return {
         label    : [host,city].filter(Boolean).join(' — ') || uspot,
         hostname : host, city, uspot,
@@ -689,7 +695,7 @@ function parseStation(m, forcedActive) {
         multipassCount: parseInt(eco['multipass_count']) || 0,
         zencardCount  : parseInt(eco['zencard_count'])   || 0,
         bilan    : m['BILAN'] || '0',
-        // IPFS fields (in 12345.json)
+        powerScore, gpuVram, hwTier,
         ipfsnodeid: m['ipfsnodeid'] || '',
         g1station : m['g1station']  || '',
         g1swarm   : m['g1swarm']    || '',
@@ -930,6 +936,8 @@ function renderStations(primaryUspot) {
                 <div class="card-badges">
                     ${isPrimary ?'<span class="badge badge-star">★ LOCAL</span>'  :''}
                     ${s.fromIpfs?'<span class="badge badge-ipfs">⬡ IPFS</span>'   :''}
+                    ${s.hwTier?`<span class="badge badge-hw" title="Power Score: ${s.powerScore}${s.gpuVram>0?' · '+s.gpuVram+'Go VRAM GPU':''}">
+                        ${s.hwTier==='brain'?(s.gpuVram>0?'🔥🎮':'🔥'):s.hwTier==='standard'?'⚡':'🌿'}</span>`:''}
                     <span class="badge ${hasSlots?'badge-ok':'badge-none'}">
                         ${s.multipassCount} MP</span>
                     ${bilanInt!==0
@@ -947,9 +955,13 @@ function renderStations(primaryUspot) {
                     <span class="gauge-label">ZENCARD</span>
                     <span class="gauge-value">${s.zencardCount}</span>
                 </div>
-                <div class="gauge-item">
-                    <span class="gauge-label">PAF Ẑ/SEM</span>
-                    <span class="gauge-value">${s.paf}</span>
+                <div class="gauge-item" title="Prix MULTIPASS par semaine">
+                    <span class="gauge-label">NCARD Ẑ/SEM</span>
+                    <span class="gauge-value">${s.ncardPrice||'?'}</span>
+                </div>
+                <div class="gauge-item" title="Prix ZenCard par semaine">
+                    <span class="gauge-label">ZCARD Ẑ/SEM</span>
+                    <span class="gauge-value">${s.zcardPrice||'?'}</span>
                 </div>
                 ${s.diskGb?`<div class="gauge-item">
                     <span class="gauge-label">DISQUE</span>
@@ -1047,8 +1059,14 @@ window.loadSwarmStations = function() {
             }
 
             // SWARM peers
+            let filteredLocalhost = 0;
             (root['SWARM']||[]).forEach(function(raw) {
                 if (!raw||typeof raw!=='object') return;
+                const rawUspot = raw['uSPOT'] || '';
+                if (rawUspot && (rawUspot.includes('localhost') || rawUspot.includes('127.0.0.1') || rawUspot.includes('0.0.0.0'))) {
+                    filteredLocalhost++;
+                    return;
+                }
                 const s=parseStation(raw);
                 if (s&&!list.some(e=>e.uspot===s.uspot)) list.push(s);
             });
@@ -1057,7 +1075,8 @@ window.loadSwarmStations = function() {
             if (userLat!==null) sortByDistance();
 
             const ac=list.filter(s=>s.active).length;
-            setStatus('connected', `${list.length} STATIONS · ${ac} AVEC SLOTS`);
+            const filteredNote = filteredLocalhost>0 ? ` · ${filteredLocalhost} LOCAL IGNORÉE${filteredLocalhost>1?'S':''}` : '';
+            setStatus('connected', `${list.length} STATIONS · ${ac} AVEC SLOTS${filteredNote}`);
 
             initMap();
             updateMapMarkers(window._primaryUspot||'');

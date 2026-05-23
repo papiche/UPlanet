@@ -1449,9 +1449,10 @@
                 const root = await r.json();
 
                 const newRelays = new Set();
-                if (root['myRELAY']) newRelays.add(root['myRELAY']);
+                const _isRoutable = url => url && !url.includes('127.') && !url.includes('localhost') && !url.includes('0.0.0.0');
+                if (_isRoutable(root['myRELAY'])) newRelays.add(root['myRELAY']);
                 (root['SWARM'] || []).forEach(peer => {
-                    if (peer && peer['myRELAY']) newRelays.add(peer['myRELAY']);
+                    if (peer && _isRoutable(peer['myRELAY'])) newRelays.add(peer['myRELAY']);
                 });
 
                 let added = 0;
@@ -1597,7 +1598,8 @@
                 row.className = `station-row ${station.stationId === selectedStationId ? 'selected' : ''}`;
                 row.onclick = () => selectStation(station.stationId);
 
-                const tierEmoji = station.hwTier === 'brain' ? '🔥' : station.hwTier === 'standard' ? '⚡' : '🌿';
+                const isGpuBrain = station.hwTier === 'brain' && station.hwGpuVram > 0;
+                const tierEmoji = isGpuBrain ? '🔥🎮' : station.hwTier === 'brain' ? '🔥' : station.hwTier === 'standard' ? '⚡' : '🌿';
 
                 row.innerHTML = `
                     <div class="station-name-cell">
@@ -1607,7 +1609,7 @@
                     <div>${station.healthStatus.replace('_', ' ').toUpperCase()}</div>
                     <div style="color: ${station.bilan >= 0 ? 'var(--accent-green)' : 'var(--accent-red)'}">${station.bilan.toFixed(1)} Ẑ</div>
                     <div style="color: var(--accent-yellow)">${station.revenueTotal.toFixed(0)} Ẑ</div>
-                    <div title="${station.hwCpuCores}c ${station.hwRamGb.toFixed(0)}Go score:${station.hwPowerScore}">${tierEmoji} MP:${station.multipassUsed} ZC:${station.zencardTotal}</div>
+                    <div title="${station.hwCpuCores}c ${station.hwRamGb.toFixed(0)}Go score:${station.hwPowerScore}${isGpuBrain?' GPU '+station.hwGpuVram+'Go':''}">${tierEmoji} N:${station.priceMultipass}Ẑ Z:${station.priceZencard}Ẑ</div>
                     <div>${station.weeksRunway}w</div>
                 `;
 
@@ -1677,8 +1679,9 @@
             // Hardware section
             const hwSection = document.getElementById('detail-hardware');
             if (hwSection) {
-                const tierEmoji = station.hwTier === 'brain' ? '🔥' : station.hwTier === 'standard' ? '⚡' : '🌿';
-                const tierLabel = station.hwTier === 'brain' ? 'BRAIN' : station.hwTier === 'standard' ? 'STD' : 'LIGHT';
+                const isGpuBrain = station.hwTier === 'brain' && station.hwGpuVram > 0;
+                const tierEmoji = isGpuBrain ? '🔥🎮' : station.hwTier === 'brain' ? '🔥' : station.hwTier === 'standard' ? '⚡' : '🌿';
+                const tierLabel = isGpuBrain ? 'BRAIN GPU' : station.hwTier === 'brain' ? 'BRAIN CPU' : station.hwTier === 'standard' ? 'STD' : 'LIGHT';
                 const rankLabels = {
                     dragon_zen: '🐉 DRAGON ẐEN',
                     dragon_compute: '🔥 DRAGON COMPUTE',

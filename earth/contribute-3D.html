@@ -806,6 +806,12 @@ code {
 <div class="starfield"></div>
 <div class="nebula"></div>
 
+<div id="nostr-bar" style="position:fixed;top:10px;left:12px;z-index:9000;display:flex;align-items:center;gap:8px;background:rgba(0,0,0,0.5);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,0.12);border-radius:20px;padding:5px 14px;font-size:12px;color:rgba(255,255,255,0.9)">
+  <span id="conn-badge" title="Statut NOSTR">🔴</span>
+  <span id="user-name-badge" style="display:none;max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#86efac;font-weight:600"></span>
+  <button id="btn-connect" onclick="handleConnect()" style="background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.25);color:rgba(255,255,255,0.9);padding:3px 10px;border-radius:12px;cursor:pointer;font-size:11px;font-weight:500">⚡ Se connecter</button>
+</div>
+
 <div class="wrap">
 
   <!-- HERO -->
@@ -1142,110 +1148,8 @@ code {
 <script src="nacl-fast.min.js"></script>
 <script src="nostr.bundle.js"></script>
 <script src="common.js"></script>
+<script src="carousel-3d.js"></script>
 <script>
-/* ── 3D CAROUSEL ENGINE ── */
-const cards = document.querySelectorAll('.tier-card');
-const totalCards = cards.length;
-let current = 0;
-let autoTimer;
-
-function getPositions(count) {
-  const radius = Math.min(window.innerWidth * 0.38, 360);
-  const positions = [];
-  for (let i = 0; i < count; i++) {
-    const angle = (i * 360 / count);
-    positions.push({ angle, radius });
-  }
-  return positions;
-}
-
-function applyCarousel() {
-  const positions = getPositions(totalCards);
-  const vw = window.innerWidth;
-
-  cards.forEach((card, i) => {
-    const offset = ((i - current) % totalCards + totalCards) % totalCards;
-    const angle = offset === 0 ? 0 :
-                  offset === 1 ? 90 :
-                  offset === 2 ? 180 :
-                  -90;
-
-    const radius = vw < 600 ? 260 : vw < 900 ? 320 : 400;
-
-    const rotY = angle;
-    const x = Math.sin(angle * Math.PI / 180) * radius;
-    const z = Math.cos(angle * Math.PI / 180) * radius - radius;
-
-    const isActive = offset === 0;
-    const isSide = offset === 1 || offset === 3;
-    const isBack = offset === 2;
-
-    card.style.transform = `translateX(${x}px) translateZ(${z}px) rotateY(${-rotY}deg)`;
-    card.style.opacity = isBack ? 0.15 : isSide ? 0.5 : 1;
-    card.style.zIndex = isActive ? 10 : isSide ? 5 : 1;
-    card.style.pointerEvents = 'auto'; // toutes les cartes cliquables
-
-    card.classList.toggle('active', isActive);
-  });
-
-  // Update dots
-  document.querySelectorAll('.nav-dot').forEach((dot, i) => {
-    dot.classList.toggle('active', i === current);
-  });
-}
-
-function rotate(dir) {
-  current = ((current + dir) % totalCards + totalCards) % totalCards;
-  applyCarousel();
-  resetAuto();
-}
-
-function goTo(idx) {
-  current = idx;
-  applyCarousel();
-  resetAuto();
-}
-
-function resetAuto() {
-  clearInterval(autoTimer);
-  autoTimer = setInterval(() => rotate(1), 5000);
-}
-
-// Clic sur carte non-active → navigation ; carte active → ouvre son URL OC
-cards.forEach((card, i) => {
-  card.addEventListener('click', () => {
-    if (i !== current) { goTo(i); }
-    else {
-      const btn = card.querySelector('.card-cta');
-      if (btn && btn.href) window.open(btn.href, '_blank');
-    }
-  });
-});
-// Les boutons CTA gardent leur action propre
-document.querySelectorAll('.card-cta').forEach(btn => {
-  btn.addEventListener('click', e => e.stopPropagation());
-});
-
-// Pause de la rotation au survol
-const viewport = document.getElementById('viewport');
-viewport.addEventListener('mouseenter', () => clearInterval(autoTimer));
-viewport.addEventListener('mouseleave', () => resetAuto());
-window.addEventListener('resize', applyCarousel);
-
-// Touch/swipe support
-let touchStartX = 0;
-viewport.addEventListener('touchstart', e => {
-  touchStartX = e.touches[0].clientX;
-}, { passive: true });
-viewport.addEventListener('touchend', e => {
-  const diff = touchStartX - e.changedTouches[0].clientX;
-  if (Math.abs(diff) > 50) rotate(diff > 0 ? 1 : -1);
-});
-
-// Init
-applyCarousel();
-resetAuto();
-
 /* ── FAQ ACCORDION ── */
 function toggleFaq(el) {
   const item = el.parentElement;
@@ -1254,22 +1158,8 @@ function toggleFaq(el) {
   if (!wasOpen) item.classList.add('open');
 }
 
-/* ── API LOADING (identique à l'original) ── */
-function getAPIUrl() {
-  const u = new URL(window.location.href);
-  let api = new URL(u.origin);
-  if (u.hostname.startsWith('ipfs.')) api.hostname = api.hostname.replace('ipfs.', 'u.');
-  if (u.port === '8080' || u.port !== '') api.port = '54321';
-  return api.toString().replace(/\/+$/, '');
-}
-
-function getRelayUrl() {
-  if (window.DEFAULT_RELAYS?.length) return window.DEFAULT_RELAYS[0];
-  const h = window.location.hostname;
-  if (h === 'localhost' || h === '127.0.0.1') return 'ws://127.0.0.1:7777';
-  if (h.startsWith('ipfs.') || h.startsWith('u.')) return `wss://relay.${h.replace(/^(ipfs\.|u\.)/, '')}`;
-  return 'wss://relay.copylaradio.com';
-}
+function updateConnectionUI(){var badge=document.getElementById('conn-badge'),btn=document.getElementById('btn-connect'),name=document.getElementById('user-name-badge');if(!badge)return;var ok=window.isNostrConnected&&window.userPubkey;badge.textContent=ok?'🟢':'🔴';btn.style.display=ok?'none':'';if(ok){var h=window.userPubkey;name.textContent=h.slice(0,8)+'…'+h.slice(-4);name.style.display='';if(window.fetchUserMetadata)window.fetchUserMetadata(h).then(function(m){if(m&&m.name)name.textContent=m.name;}).catch(function(){});}else{name.style.display='none';}}
+async function handleConnect(){var btn=document.getElementById('btn-connect');btn.textContent='⏳…';btn.disabled=true;try{await window.connectNostr(false);updateConnectionUI();}catch(e){}finally{btn.textContent='⚡ Se connecter';btn.disabled=false;}}
 
 const OC_BASE = 'https://opencollective.com';
 let ocSlug = 'monnaie-libre';
@@ -1373,6 +1263,9 @@ function updateButtons() {
 }
 
 (async () => {
+  initCarousel({ radiusSm: 260, radiusMd: 320, radiusLg: 400, autoInterval: 5000 });
+  updateConnectionUI();
+  if (window.waitForConnection) window.waitForConnection(updateConnectionUI);
   await Promise.allSettled([ loadStationData(), loadCoopConfig() ]);
   updateButtons();
 })();

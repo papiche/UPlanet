@@ -3,7 +3,7 @@
  * ExtensionWrapper, RelayManager
  * Source lines: 808–1173 of common.js
  */
-
+(function() {
 // ── IMPORTS depuis lib_0 ───────────────────────────────────────────────────
 var NostrState          = window.NostrState;
 var SubscriptionQueue   = window.SubscriptionQueue;
@@ -393,3 +393,5 @@ if (typeof window !== 'undefined') {
 // ── EXPORTS lib_1 vers window ──────────────────────────────────────────────
 window.ExtensionWrapper = ExtensionWrapper;
 window.RelayManager     = RelayManager;
+
+})();

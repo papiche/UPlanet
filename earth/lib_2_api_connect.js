@@ -4,7 +4,7 @@
  * follow/mute, connectNostr, NIP-42, connectToRelay, ensureRelayConnection
  * Source lines: 1174–2997 of common.js
  */
-
+(function() {
 // ── IMPORTS depuis lib_0 et lib_1 ─────────────────────────────────────────
 var NostrState          = window.NostrState;
 var SubscriptionQueue   = window.SubscriptionQueue;
@@ -1813,3 +1813,5 @@ async function connectToRelay(forceAuth = false) {
         return false;
     }
 }
+
+})();

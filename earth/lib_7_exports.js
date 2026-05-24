@@ -3,7 +3,7 @@
  * callAPIWithAuth + window.* global exports + beforeunload cleanup
  * Source lines: 8500–8595 of common.js
  */
-
+(function() {
 // ── IMPORTS depuis lib_0 ───────────────────────────────────────────────────
 var NostrState          = window.NostrState;
 var SubscriptionQueue   = window.SubscriptionQueue;
@@ -173,3 +173,5 @@ if (typeof window !== 'undefined') {
         }
     });
 }
+
+})();

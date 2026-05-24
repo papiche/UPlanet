@@ -3,7 +3,7 @@
  * initWebcamRecording + all webcam functions + DOMContentLoaded init
  * Source lines: 5099–5647 of common.js
  */
-
+(function() {
 // ── IMPORTS depuis lib_0 ───────────────────────────────────────────────────
 var NostrState          = window.NostrState;
 var SubscriptionQueue   = window.SubscriptionQueue;
@@ -584,3 +584,5 @@ window.blobToBase64         = blobToBase64;
 window.sha256               = sha256;
 window.isWebcamVideoCompatible = isWebcamVideoCompatible;
 window.fetchWebcamVideos    = fetchWebcamVideos;
+
+})();

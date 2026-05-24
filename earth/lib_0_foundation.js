@@ -3,7 +3,7 @@
  * Chrome ext wrapper, NostrState, legacy vars, syncLegacyVariables, SubscriptionQueue, wrapRelayWithQueue
  * Source lines: 1–807 of common.js
  */
-
+(function() {
 // Version information for client detection
 if (typeof window.UPLANET_COMMON_VERSION === 'undefined') {
     window.UPLANET_COMMON_VERSION = '1.0.10';
@@ -779,3 +779,5 @@ window.syncLegacyVariables  = syncLegacyVariables;
 window.wrapRelayWithQueue   = wrapRelayWithQueue;
 window.NIP42_AUTH_COOLDOWN  = NIP42_AUTH_COOLDOWN;
 window.CONNECTION_DEBOUNCE  = CONNECTION_DEBOUNCE;
+
+})();

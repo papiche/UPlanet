@@ -6,7 +6,7 @@
  * fetchMessages, uploadPhotoToIPFS
  * Source lines: 2998–5098 of common.js
  */
-
+(function() {
 // ── IMPORTS depuis lib_0 ───────────────────────────────────────────────────
 var NostrState          = window.NostrState;
 var SubscriptionQueue   = window.SubscriptionQueue;
@@ -2168,3 +2168,5 @@ window.fetchMessages            = fetchMessages;
 window.fetchMessagesFromHex     = fetchMessagesFromHex;
 window.deleteMessage            = deleteMessage;
 window.uploadPhotoToIPFS        = uploadPhotoToIPFS;
+
+})();

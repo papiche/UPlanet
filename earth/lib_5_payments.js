@@ -3,7 +3,7 @@
  * initMultipassPayment + all MULTIPASS / ẐEN payment functions
  * Source lines: 5648–5939 of common.js
  */
-
+(function() {
 // ── IMPORTS depuis lib_0 ───────────────────────────────────────────────────
 var NostrState          = window.NostrState;
 var SubscriptionQueue   = window.SubscriptionQueue;
@@ -330,3 +330,5 @@ window.publishPaymentEvent      = publishPaymentEvent;
 window.verifyMultipassPayment   = verifyMultipassPayment;
 window.getMultipassBalance      = getMultipassBalance;
 window.extractTransactionId     = extractTransactionId;
+
+})();

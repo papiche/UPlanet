@@ -3,7 +3,7 @@
  * sendLike, Flora, ORE, UMAP, Journals, NIP-58 Badges, callAPIWithAuth
  * Source lines: 5940–8499 of common.js
  */
-
+(function() {
 // ── IMPORTS depuis lib_0 ───────────────────────────────────────────────────
 var NostrState          = window.NostrState;
 var SubscriptionQueue   = window.SubscriptionQueue;
@@ -2623,3 +2623,5 @@ window.parseBadgeDefinition         = parseBadgeDefinition;
 window.fetchUserBadges              = fetchUserBadges;
 window.renderBadge                  = renderBadge;
 window.displayUserBadges            = displayUserBadges;
+
+})();

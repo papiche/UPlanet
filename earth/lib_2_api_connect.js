@@ -667,7 +667,7 @@ async function fetchUserMuteList(pubkey, timeout = 5000) {
 }
 
 /** Cached muted pubkeys Set for current user (NIP-51). Populated by loadMuteList(). */
-let mutedPubkeys = new Set();
+var mutedPubkeys = new Set();
 
 /**
  * Load current user's mute list and cache it in mutedPubkeys (and window.mutedPubkeys).

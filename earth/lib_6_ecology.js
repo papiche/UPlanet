@@ -193,8 +193,8 @@ async function sendCustomReaction(eventId, authorPubkey, emoji) {
 }
 
 // Session cache for reactions — avoids redundant REQs for the same event (TTL: 5 min)
-const _reactionsCache = new Map();
-const _REACTIONS_CACHE_TTL = 300_000;
+var _reactionsCache = new Map();
+var _REACTIONS_CACHE_TTL = 300_000;
 
 /**
  * Fetch reactions for a specific event

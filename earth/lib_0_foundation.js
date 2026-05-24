@@ -364,7 +364,7 @@ if (typeof window.UPLANET_COMMON_VERSION === 'undefined') {
 // ========================================
 
 // Centralized state object (single source of truth)
-const NostrState = {
+var NostrState = {
     // API Configuration
     upassportUrl: '',
     DEFAULT_RELAYS: [
@@ -396,19 +396,19 @@ const NostrState = {
 };
 
 // Legacy variables for backward compatibility (deprecated, use NostrState)
-let upassportUrl = '';
-let DEFAULT_RELAYS = NostrState.DEFAULT_RELAYS;
-let nostrRelay = null;
-let isNostrConnected = false;
-let userPubkey = null;
-let userPrivateKey = null;
-let authSent = false;
-let connectingNostr = false;
-let connectingRelay = false;
-let lastNIP42AuthTime = 0;
-let pendingNIP42Auth = false;
-const NIP42_AUTH_COOLDOWN = NostrState.NIP42_AUTH_COOLDOWN;
-const CONNECTION_DEBOUNCE = NostrState.CONNECTION_DEBOUNCE;
+var upassportUrl = '';
+var DEFAULT_RELAYS = NostrState.DEFAULT_RELAYS;
+var nostrRelay = null;
+var isNostrConnected = false;
+var userPubkey = null;
+var userPrivateKey = null;
+var authSent = false;
+var connectingNostr = false;
+var connectingRelay = false;
+var lastNIP42AuthTime = 0;
+var pendingNIP42Auth = false;
+var NIP42_AUTH_COOLDOWN = NostrState.NIP42_AUTH_COOLDOWN;
+var CONNECTION_DEBOUNCE = NostrState.CONNECTION_DEBOUNCE;
 
 // Sync function to keep legacy variables in sync with NostrState
 function syncLegacyVariables() {
@@ -518,7 +518,7 @@ if (typeof window !== 'undefined') {
  * Manages NOSTR subscriptions to avoid overwhelming the relay
  * Strfry and other relays limit concurrent REQs per connection
  */
-const SubscriptionQueue = {
+var SubscriptionQueue = {
     MAX_CONCURRENT: 2,  // Maximum concurrent subscriptions (conservative for strfry)
     DELAY_BETWEEN: 300, // Delay between starting subscriptions (ms)
     activeCount: 0,
@@ -692,7 +692,7 @@ function wrapRelayWithQueue(relay) {
 }
 
 // Modify SubscriptionQueue to use original sub when available
-const originalExecuteSubscription = SubscriptionQueue.executeSubscription.bind(SubscriptionQueue);
+var originalExecuteSubscription = SubscriptionQueue.executeSubscription.bind(SubscriptionQueue);
 SubscriptionQueue.executeSubscription = async function(task) {
     this.activeCount++;
 

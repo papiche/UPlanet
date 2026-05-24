@@ -31,7 +31,7 @@ var pendingNIP42Auth   = NostrState.pendingNIP42Auth;
  * Wrapper module for NOSTR extension interactions
  * Handles Chrome compatibility, iframe proxy, and error recovery
  */
-const ExtensionWrapper = {
+var ExtensionWrapper = {
     /**
      * Get public key from NOSTR extension with error handling
      * @returns {Promise<string|null>} Public key or null if failed
@@ -118,7 +118,7 @@ if (typeof window !== 'undefined') {
  * Manager module for NOSTR relay connections
  * Centralizes all relay-related operations
  */
-const RelayManager = {
+var RelayManager = {
     // Internal flag set by on('connect') handler
     _connectionEstablished: false,
 

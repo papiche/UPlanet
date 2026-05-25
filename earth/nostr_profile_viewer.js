@@ -96,6 +96,23 @@ window.addEventListener('resize', function () {
 });
 window.addEventListener('beforeunload', function () { animationRunning = false; });
 
+function stopMatrix() {
+    if (!animationRunning) return;
+    animationRunning = false;
+    if (ctx && canvas) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        canvas.style.opacity = '0';
+        canvas.style.transition = 'opacity 0.6s ease';
+    }
+}
+
+function checkOwnProfileMatrix() {
+    const hk = window.hexKey;
+    const up = window.userPubkey;
+    if (hk && up && hk === up) { stopMatrix(); return true; }
+    return false;
+}
+
 // ================================================================
 // NAVIGATION HISTORY (URL-based)
 // ================================================================
@@ -941,8 +958,6 @@ async function displayNostrData() {
         profileHTML += `<h3>${(profileData.name || profileData.display_name || 'N/A').replace(/</g, '&lt;')}</h3>`;
         profileHTML += `<p>${makeLinksClickable((profileData.about || 'No description.').replace(/</g, '&lt;').replace(/>/g, '&gt;'))}</p>`;
 
-        // Check Balances
-        const balanceResults = await checkAllZenBalances(profileData);
         const ipfsGw = window.IPFS_GATEWAY || 'https://ipfs.copylaradio.com';
 
         // Helper pour créer un lien simple
@@ -971,10 +986,8 @@ async function displayNostrData() {
         // --- 2. CRYPTO & G1 ---
         let cryptoFields = '';
         if (profileData.g1pub) {
-            let balInfo = '';
-            if (balanceResults.multipass) balInfo = ` <span class="balance-info">${balanceResults.multipass.zenBalance} ẐEN</span>`;
-            else if (balanceResults.g1pub) balInfo = ` <span class="balance-info">${balanceResults.g1pub.zenBalance} ẐEN</span>`;
-            else balInfo = ` <a href="${getApiServerUrl()}/check_zencard?email=${profileData.email || 'unknown'}" target="_blank" class="balance-info na">Check</a>`;
+            // Placeholder mis à jour de façon asynchrone après le rendu
+            const balInfo = ` <span id="npv-multipass-bal" class="balance-info" style="opacity:0.4">⏳</span>`;
             const txt = profileData.g1pub.includes(':') ? profileData.g1pub.split(':').join(' • ') : profileData.g1pub;
             cryptoFields += `<div class="profile-field" title="${profileData.g1pub}"><strong>🔑 MULTIPASS:</strong> ${txt.substring(0,6)}...${txt.substring(txt.length-4)} ${balInfo}</div>`;
         }
@@ -1084,6 +1097,25 @@ async function displayNostrData() {
 
         profileContentDiv.innerHTML = profileHTML;
         npvLog.log('✓ Profil rendu dans le DOM');
+
+        // Balance MULTIPASS : fetch non-bloquant, mise à jour du placeholder après rendu
+        if (profileData.g1pub) {
+            checkAllZenBalances(profileData).then(function (balRes) {
+                const el = document.getElementById('npv-multipass-bal');
+                if (!el) return;
+                const bal = balRes.multipass || balRes.g1pub;
+                if (bal) {
+                    el.textContent = `${bal.zenBalance} ẐEN`;
+                    el.style.opacity = '1';
+                } else {
+                    const checkUrl = `${getApiServerUrl()}/check_zencard?email=${encodeURIComponent(profileData.email || '')}`;
+                    el.outerHTML = `<a href="${checkUrl}" target="_blank" class="balance-info na">Check</a>`;
+                }
+            }).catch(function () {
+                const el = document.getElementById('npv-multipass-bal');
+                if (el) { el.textContent = '?'; el.style.opacity = '0.5'; }
+            });
+        }
     } catch (profileError) {
         npvLog.error('Erreur profil:', profileError);
         profileContainerDiv.classList.remove('loading');
@@ -1206,6 +1238,9 @@ async function displayNostrData() {
     if (typeof window._updateCookieSection === 'function') {
         window._updateCookieSection(hexKey);
     }
+
+    // Stopper le Matrix si on visualise son propre profil
+    checkOwnProfileMatrix();
 }
 
 // ================================================================
@@ -1327,6 +1362,12 @@ async function displayNostrData() {
         window.history.replaceState({ hex: hexKey, action: 'initial' }, '', window.location.pathname + '?' + currentParams.toString());
     }
     displayNostrData();
+
+    // userPubkey arrive en asynchrone (common.js) — surveiller pendant 6s
+    let _matrixChecks = 0;
+    const _matrixTimer = setInterval(function () {
+        if (checkOwnProfileMatrix() || ++_matrixChecks > 12) clearInterval(_matrixTimer);
+    }, 500);
 })();
 
 // ================================================================

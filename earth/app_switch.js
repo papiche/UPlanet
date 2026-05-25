@@ -301,7 +301,9 @@
     function _updateConnDot() {
         var pubkey  = window.userPubkey || '';
         var source  = window.nostrSource || '';
-        var relay   = window.nostrRelay  || '';
+        var relayRaw = window.nostrRelay || '';
+        var relay = (typeof relayRaw === 'string') ? relayRaw
+                  : (relayRaw._url || relayRaw.url || (window.NostrState && window.NostrState.DEFAULT_RELAYS && window.NostrState.DEFAULT_RELAYS[0]) || '');
         var connected = !!(pubkey || window.isNostrConnected);
         _connDot.classList.remove('connected', 'roaming', 'disconnected');
         if (connected) {

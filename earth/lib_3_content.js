@@ -1551,7 +1551,16 @@ function renderComment(comment, repliesMap = null, depth = 0) {
             // Update avatar
             const avatarDiv = element.querySelector('.comment-avatar');
             if (avatarDiv && userPicture) {
-                avatarDiv.innerHTML = `<img src="${userPicture}" alt="${userName}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;" onerror="this.style.display='none'; this.parentElement.innerHTML='${userName.substring(0, 2).toUpperCase()}';">`;
+                const img = document.createElement('img');
+                img.src = userPicture;
+                img.alt = userName;
+                img.style.cssText = 'width:100%;height:100%;object-fit:cover;border-radius:50%';
+                const initials = userName.substring(0, 2).toUpperCase();
+                img.addEventListener('error', function() {
+                    avatarDiv.textContent = initials;
+                });
+                avatarDiv.textContent = '';
+                avatarDiv.appendChild(img);
             } else if (avatarDiv && userName) {
                 avatarDiv.textContent = userName.substring(0, 2).toUpperCase();
             }

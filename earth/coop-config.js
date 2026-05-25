@@ -191,7 +191,8 @@
         'OC_URL_SATELLITE': 'URL Satellite', 'OC_URL_CONSTELLATION': 'URL Constellation',
         'PLANTNET_API_KEY': 'PlantNet API Key',
         'GIT_HOST': 'Git Host (github.com ou gitlab)', 'GIT_TOKEN': 'Git Token (PAT)', 'GIT_OWNER': 'Git Owner (compte/org)',
-        'MJ_APIKEY_PUBLIC': 'MailJet Public', 'MJ_APIKEY_PRIVATE': 'MailJet Private', 'MJ_SENDER_EMAIL': 'Email expediteur'
+        'MJ_APIKEY_PUBLIC': 'MailJet Public', 'MJ_APIKEY_PRIVATE': 'MailJet Private', 'MJ_SENDER_EMAIL': 'Email expediteur',
+        'OVH_APP_KEY': 'OVH App Key', 'OVH_APP_SECRET': 'OVH App Secret', 'OVH_CONSUMER_KEY': 'OVH Consumer Key', 'OVH_ZONE': 'OVH Zone DNS'
     };
 
     const SECTIONS = [
@@ -199,10 +200,11 @@
         { title: 'Parts cooperatives', icon: '⭐', keys: ['ZENCARD_SATELLITE', 'ZENCARD_CONSTELLATION'] },
         { title: 'Regle 3x1/3 + 1%', icon: '🤝', keys: ['TREASURY_PERCENT', 'RND_PERCENT', 'ASSETS_PERCENT', 'CAPTAIN_BONUS_PERCENT'] },
         { title: 'OpenCollective', icon: '🌐', keys: ['OCSLUG', 'OCAPIKEY', 'OC_URL_SATELLITE', 'OC_URL_CONSTELLATION'] },
-        { title: 'API Keys', icon: '🔐', keys: ['PLANTNET_API_KEY', 'GIT_HOST', 'GIT_TOKEN', 'GIT_OWNER', 'MJ_APIKEY_PUBLIC', 'MJ_APIKEY_PRIVATE', 'MJ_SENDER_EMAIL'] }
+        { title: 'API Keys', icon: '🔐', keys: ['PLANTNET_API_KEY', 'GIT_HOST', 'GIT_TOKEN', 'GIT_OWNER', 'MJ_APIKEY_PUBLIC', 'MJ_APIKEY_PRIVATE', 'MJ_SENDER_EMAIL'] },
+        { title: 'DNSLink OVH', icon: '🌐', keys: ['OVH_APP_KEY', 'OVH_APP_SECRET', 'OVH_CONSUMER_KEY', 'OVH_ZONE'] }
     ];
 
-    const COMMENTS = ['_comment_fiscal', '_comment_shares', '_comment_3x13', '_comment_oc', '_comment_api', '_comment_mj'];
+    const COMMENTS = ['_comment_fiscal', '_comment_shares', '_comment_3x13', '_comment_oc', '_comment_api', '_comment_mj', '_comment_ovh'];
 
     const DEFAULT_CONFIG = {
         "COOPERATIVE_VERSION": "1.0",
@@ -221,7 +223,9 @@
         "PLANTNET_API_KEY": "",
         "GIT_HOST": "https://github.com", "GIT_TOKEN": "", "GIT_OWNER": "papiche",
         "_comment_mj": "=== MAILJET ===",
-        "MJ_APIKEY_PUBLIC": "", "MJ_APIKEY_PRIVATE": "", "MJ_SENDER_EMAIL": ""
+        "MJ_APIKEY_PUBLIC": "", "MJ_APIKEY_PRIVATE": "", "MJ_SENDER_EMAIL": "",
+        "_comment_ovh": "=== DNSLINK OVH ===",
+        "OVH_APP_KEY": "", "OVH_APP_SECRET": "", "OVH_CONSUMER_KEY": "", "OVH_ZONE": "astroport.one"
     };
 
     // ========================================
@@ -240,8 +244,8 @@
             if (sec.readonly && isNewConfig && editable) html += '<span style="color:#2ecc71;font-size:0.7em;margin-left:6px;">premiere configuration</span>';
             html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:4px;margin-top:4px;">';
             for (const k of sec.keys) {
-                const v = config[k];
-                if (v === undefined) continue;
+                let v = config[k];
+                if (v === undefined) v = DEFAULT_CONFIG[k] !== undefined ? DEFAULT_CONFIG[k] : '';
                 const enc = isEncrypted(v);
                 let display = enc ? '🔒' : v;
                 if (enc && decrypted && decrypted[k]) display = decrypted[k];

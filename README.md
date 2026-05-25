@@ -164,8 +164,4 @@ OSM2IPFS gives a "partition table" to IPFS and a 5 layer information grid over o
 powered by [Astroport.ONE](https://github.com/papiche/Astroport.ONE) : Gateway & Blockchain API engine
 
 Enjoy Life, extend ditributed data storage system
-/ipfs/QmP5oq5MZ3XeP7mHa1XN9kedURBwq1EapVRbJMP87jir8t
-### - (^‿‿^) -
-/ipfs/
-### - (^‿‿^) -
-/ipfs/QmaMcku3QFyDTRcL7k2S8rz51soVq3fpBiBR28gApUpEpZ
+/ipfs/QmbA4tkKvHfCZMJUQ46KdJ5cazxjNM8aTHU4iK7rTVCVqh

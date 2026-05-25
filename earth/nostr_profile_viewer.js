@@ -1169,6 +1169,11 @@ async function displayNostrData() {
     npvLog.timeEnd('displayNostrData');
     npvLog.groupEnd();
     loadN1Zone().catch(function (e) { npvLog.error('N1 zone load error:', e); });
+
+    // ---- Cookie section (own profile only) ----
+    if (typeof window._updateCookieSection === 'function') {
+        window._updateCookieSection(hexKey);
+    }
 }
 
 // ================================================================

@@ -1,7 +1,7 @@
 #!/bin/bash
 ################################################################################
 # Author: Fred (support@qo-op.com)
-# Version: 0.1
+# Version: 0.2
 # License: AGPL-3.0 (https://choosealicense.com/licenses/agpl-3.0/)
 ################################################################################
 MY_PATH="`dirname \"$0\"`"              # relative
@@ -52,5 +52,19 @@ git add .
 read COMMENT \
 && git commit -m "$COMMENT : https://ipfs.copylaradio.com/ipfs/${IPFSME}" \
 && git push
+
+# ── DNSLINK OVH ───────────────────────────────────────────────────────────────
+# Délègue à ovh.me.sh — credentials chargés depuis l'ENV ou Kind 30800 coopératif
+OVH_TOOL="${HOME}/.zen/Astroport.ONE/admin/system/ovh.me.sh"
+
+if [[ -x "$OVH_TOOL" ]]; then
+    # CID du sous-répertoire earth/ (pages web directement accessibles via gateway)
+    IPFSEARTH=$(ipfs add -rq "${MY_PATH}/earth" | tail -n 1)
+    echo "## IPFS EARTH : ${IPFSEARTH}"
+    "$OVH_TOOL" upsert "_dnslink"        "/ipfs/${IPFSEARTH}" || true
+    "$OVH_TOOL" upsert "_dnslink.origin" "/ipfs/${IPFSEARTH}" || true
+else
+    echo "SKIP DNSLink: ${OVH_TOOL} introuvable"
+fi
 
 exit 0

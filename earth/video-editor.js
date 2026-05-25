@@ -44,6 +44,7 @@
         undo:       [],    /* pile d'annulation */
         video:      null,  /* <video> DOM element */
         raf:        null,  /* requestAnimationFrame handle */
+        domCache:   { ph: [], bar: [], tc: null }, /* refs DOM pour le RAF 60fps */
     };
 
     /* ════════════════════════════════════════════════════════════════════
@@ -256,17 +257,17 @@
         const t   = S.video.currentTime;
         const pct = clip.duration > 0 ? t / clip.duration : 0;
 
-        /* Synchroniser les têtes de lecture de chaque piste */
+        /* Synchroniser les têtes de lecture de chaque piste (refs DOM en cache) */
         for (let ci = 0; ci < S.clips.length; ci++) {
-            const ph  = document.getElementById('ve-ph-' + ci);
-            const bar = document.getElementById('ve-track-' + ci);
+            const ph  = S.domCache.ph[ci];
+            const bar = S.domCache.bar[ci];
             if (!ph || !bar) continue;
             if (ci === S.active) {
                 ph.style.left = Math.round(pct * S.clips[ci].duration * S.pxPerSec) + 'px';
             }
         }
 
-        const tc = document.getElementById('ve-timecode');
+        const tc = S.domCache.tc || (S.domCache.tc = document.getElementById('ve-timecode'));
         if (tc) tc.textContent = _fmt(t) + ' / ' + _fmt(clip.duration);
     }
 
@@ -408,6 +409,11 @@
             '<div style="margin-top:6px;font-size:9px;color:#3a3a4a;text-align:center;padding-bottom:4px">' +
             'Clic sur la barre → seek &nbsp;·&nbsp; Clic sur un segment 🟩/🟥 → basculer garder/supprimer' +
             '</div>';
+
+        /* Mettre en cache les refs DOM après l'insertion pour éviter les getElementById 60fps */
+        S.domCache.ph  = S.clips.map((_, ci) => document.getElementById('ve-ph-'    + ci));
+        S.domCache.bar = S.clips.map((_, ci) => document.getElementById('ve-track-' + ci));
+        if (!S.domCache.tc) S.domCache.tc = document.getElementById('ve-timecode');
 
         _updateStats();
     }

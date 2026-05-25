@@ -1871,8 +1871,9 @@ function formatJournalCard(journal, options = {}) {
     const ipfsGateway = window.IPFS_GATEWAY || 'https://ipfs.copylaradio.com';
     const profileUrl = `${ipfsGateway}/ipns/copylaradio.com/nostr_profile_viewer.html?hex=${journal.author}`;
 
-    // Convert markdown to HTML
-    const contentHtml = markdownToHTML(journal.content);
+    // Convert markdown to HTML then sanitize to prevent XSS from NOSTR event content
+    var _sanitize = window.sanitizeHtml || function(h) { return h; };
+    const contentHtml = _sanitize(markdownToHTML(journal.content));
 
     // Escape HTML for title
     const escapeHtml = (text) => {
@@ -2503,21 +2504,26 @@ function renderBadge(badge, options = {}) {
 
     const sizeStyle = sizeClasses[size] || sizeClasses.medium;
 
-    // Tooltip text
+    // Tooltip text (escapeHtml or fallback inline)
+    var _esc = window.escapeHtml || function(t) {
+        if (!t) return '';
+        var d = document.createElement('div'); d.textContent = String(t); return d.innerHTML;
+    };
+
     const tooltipText = showTooltip && metadata.description
-        ? `title="${metadata.description}"`
+        ? `title="${_esc(metadata.description)}"`
         : '';
 
     // Badge name
     const nameHtml = showName && metadata.name
-        ? `<div class="badge-name" style="font-size: 0.75rem; margin-top: 4px; text-align: center; color: #cbd5e1;">${metadata.name}</div>`
+        ? `<div class="badge-name" style="font-size: 0.75rem; margin-top: 4px; text-align: center; color: #cbd5e1;">${_esc(metadata.name)}</div>`
         : '';
 
     return `
         <div class="badge-container ${cssClass}" style="display: inline-block; margin: 4px; text-align: center;" ${tooltipText}>
             <img
                 src="${imageUrl}"
-                alt="${metadata.name || 'Badge'}"
+                alt="${_esc(metadata.name || 'Badge')}"
                 class="badge-image"
                 style="${sizeStyle} border-radius: 50%; border: 2px solid rgba(74, 222, 128, 0.5); object-fit: cover; cursor: pointer; transition: transform 0.2s;"
                 onerror="this.src='data:image/svg+xml,%3Csvg xmlns=\\'http://www.w3.org/2000/svg\\' width=\\'64\\' height=\\'64\\'%3E%3Crect fill=\\'%234ade80\\' width=\\'64\\' height=\\'64\\'/%3E%3Ctext x=\\'50%25\\' y=\\'50%25\\' text-anchor=\\'middle\\' dy=\\'.3em\\' fill=\\'white\\' font-size=\\'24\\'%3E🏅%3C/text%3E%3C/svg%3E';"

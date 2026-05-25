@@ -550,40 +550,28 @@
         Que souhaitez-vous faire ?
     </div>
 
-    <div class="origin-grid">
-
-        <!-- SOLO -->
-        <div class="origin-card" id="card-solo" onclick="selectOrigin('solo')">
-            <div class="origin-icon">🔑</div>
-            <div class="origin-title">Anonyme / Solo</div>
+<div class="origin-grid">
+        <!-- RAPIDE MULTIPASS -->
+        <div class="origin-card" id="card-fast" onclick="selectOrigin('fast')">
+            <div class="origin-icon">🚀</div>
+            <div class="origin-title">Création Rapide</div>
             <div class="origin-desc">
-                Générez vos clefs <strong style="color:var(--text)">localement</strong>, sans enregistrement ni traçabilité.<br>
-                Aucune donnée ne quitte votre appareil.
+                Le chemin le plus simple et recommandé.<br>
+                Générez votre MULTIPASS avec une sécurité simplifiée, grâce à la confiance envers le Capitaine et l'Armateur de l'Astroport.
             </div>
-            <span class="origin-badge badge-free">✓ 100% local &amp; privé</span>
+            <span class="origin-badge badge-multi">✓ Optimisé pour UPlanet</span>
         </div>
 
-        <!-- MULTIPASS -->
-        <div class="origin-card" id="card-multi" onclick="selectOrigin('multi')">
-            <div class="origin-icon">🌍</div>
-            <div class="origin-title">MULTIPASS UPlanet</div>
+        <!-- EXPERT -->
+        <div class="origin-card" id="card-expert" onclick="selectOrigin('expert')">
+            <div class="origin-icon">🛠️</div>
+            <div class="origin-title">Mode Expert (Manuel)</div>
             <div class="origin-desc">
-                Inscription <strong style="color:var(--text)">explicite</strong> à la coopérative numérique UPlanet.<br>
-                Votre email et votre position GPS activent votre passeport sur la carte.
+                Contrôle total sur vos clefs (BIP39, Saisie libre, Entropie).<br>
+                Génération locale, affichage et sauvegarde manuelle.
             </div>
-            <span class="origin-badge badge-multi">🛂 Inscription coopérative</span>
+            <span class="origin-badge badge-free">🔧 Contrôle maximal</span>
         </div>
-
-        <!-- ZEN ECONOMY -->
-        <div class="origin-card" id="card-zen" onclick="selectOrigin('zen')">
-            <div class="origin-icon">🪙</div>
-            <div class="origin-title">ẐEN Economy</div>
-            <div class="origin-desc">
-                Adhérez à la <strong style="color:var(--text)">coopérative Monnaie Libre</strong> et participez à l'économie ẐEN en G1 via votre relai Astroport.
-            </div>
-            <span class="origin-badge badge-zen">⚡ ẐEN + G1 Libre</span>
-        </div>
-
     </div>
 
     <div class="info-box" id="origin-explain" style="display:none;"></div>
@@ -599,7 +587,7 @@
 <div class="step-panel" id="step-2">
 
     <!-- Niveau de sécurité -->
-    <div class="card">
+    <div class="card" id="card-entropy">
         <div class="card-title">🔒 Niveau de sécurité</div>
         <div class="entropy-wrap">
             <div class="entropy-label">
@@ -618,7 +606,7 @@
     <div class="card">
         <div class="card-title">🛠️ Méthode de création</div>
 
-        <div class="tabs">
+        <div class="tabs" id="tabs-container">
             <div class="tab active" onclick="switchTab('v1')">🔐 Identifiant (v1)</div>
             <div class="tab" onclick="switchTab('v2')">📋 Mnémonique (v2)</div>
             <div class="tab" onclick="switchTab('live')">⌨️ Saisie libre</div>
@@ -626,7 +614,7 @@
 
         <!-- TAB V1 : DISCO salt/pepper (clés jumelles souveraines) -->
         <div class="tab-content active" id="tab-v1">
-            <div class="info-box">
+            <div class="info-box" id="info-v1">
                 <strong>🗝️ Clés Jumelles DISCO (méthode native UPlanet)</strong><br>
                 Une seule paire (identifiant, mot de passe) génère simultanément via Scrypt :<br>
                 <span style="color:var(--green);">Ğ1 (Duniter/Monnaie Libre) · NOSTR (réseau social décentralisé) · IPNS (stockage IPFS)</span><br><br>
@@ -971,38 +959,63 @@ function setStepUI(n) {
     }
     // Masquer step 4 dans la barre si SOLO
     const sn4 = document.getElementById('sn-4');
-    sn4.style.display = (currentOrigin === 'solo' && n < 4) ? 'none' : '';
+    if (sn4) sn4.style.display = '';
 }
 
 function goStep(n, skip = false) {
-    if (n === 4) {
-        preparestep4(skip);
-    }
+    if (n === 2) prepareStep2();
+    if (n === 4) preparestep4(skip);
     setStepUI(n);
     window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
+function prepareStep2() {
+    const cardEntropy = document.getElementById('card-entropy');
+    const tabsContainer = document.getElementById('tabs-container');
+    const infoV1 = document.getElementById('info-v1');
+    const labelSalt = document.getElementById('label-salt');
+    const hintSalt = document.getElementById('hint-salt');
+    const labelPepper = document.getElementById('label-pepper');
+    const hintPepper = document.getElementById('hint-pepper');
+    const btnDerive = document.getElementById('btn-derive');
+
+    if (currentOrigin === 'fast') {
+        if(cardEntropy) cardEntropy.style.display = 'none';
+        if(tabsContainer) tabsContainer.style.display = 'none';
+        switchTab('v1'); // Force le mode classique en arrière-plan
+        
+        if(infoV1) infoV1.innerHTML = '<strong>🚀 Création Rapide MULTIPASS</strong><br>Grâce à la confiance envers le Capitaine et l\'Armateur de cet Astroport, la sécurité est simplifiée.<br>Saisissez votre email et un mot de passe pour générer vos identifiants optimisés.';
+        if(labelSalt) labelSalt.textContent = '📧 Adresse Email (Identifiant)';
+        if(hintSalt) hintSalt.textContent = 'Votre email servira d\'identifiant principal';
+        if(labelPepper) labelPepper.textContent = '🔑 Mot de passe';
+        if(hintPepper) hintPepper.textContent = 'Un mot de passe simple suffit pour ce mode de confiance';
+        if(btnDerive) btnDerive.innerHTML = 'Continuer vers l\'Activation →';
+    } else {
+        if(cardEntropy) cardEntropy.style.display = 'block';
+        if(tabsContainer) tabsContainer.style.display = 'flex';
+        
+        // Textes d'origine pour le mode expert
+        if(infoV1) infoV1.innerHTML = '<strong>🗝️ Clés Jumelles DISCO (méthode native UPlanet)</strong><br>Une seule paire (identifiant, mot de passe) génère simultanément via Scrypt...';
+        if(labelSalt) labelSalt.textContent = 'Identifiant (login)';
+        if(hintSalt) hintSalt.textContent = 'Exemple : votre email ou pseudonyme';
+        if(labelPepper) labelPepper.textContent = 'Mot de passe';
+        if(hintPepper) hintPepper.textContent = 'Choisissez un mot de passe fort et unique';
+        if(btnDerive) btnDerive.innerHTML = '⚙️ Générer mes clefs';
+    }
+}
+
 // ── Étape 1 : choix d'origine ─────────────────────────────
 const originExplains = {
-    solo: '🔑 <strong>Anonyme / Solo</strong> – Vos clefs sont calculées et restent sur votre appareil. '
-        + 'Aucune information personnelle n\'est collectée ni transmise. '
-        + 'Vous restez libre et pseudonyme sur les réseaux Nostr et Duniter/G1.',
-    multi: '🌍 <strong>MULTIPASS UPlanet</strong> – Vous vous inscrivez de façon <em>explicite</em> à la coopérative numérique UPlanet. '
-        + 'Votre email et votre position GPS sont transmis à votre relai Astroport pour vous placer sur la carte et activer votre passeport numérique (MULTIPASS).',
-    zen: '🪙 <strong>ẐEN Economy</strong> – Vous adhérez à la <a href="https://opencollective.com/monnaie-libre" target="_blank" style="color:var(--zen);">coopérative Monnaie Libre</a> '
-        + 'et déléguez vos clefs à votre relai Astroport pour participer à l\'économie ẐEN. '
-        + 'Vous pouvez échanger des services, recevoir et envoyer des G1, et contribuer à l\'économie circulaire. '
-        + '<a href="https://github.com/papiche/Astroport.ONE/blob/master/docs/ZEN.ECONOMY.v2.md" target="_blank" style="color:var(--zen);">Documentation ẐEN →</a>',
+    fast: '🚀 <strong>Création Rapide MULTIPASS</strong> – La complexité est masquée. Utilisez votre email et un mot de passe simple. Votre sécurité est assurée par la confiance dans l\'infrastructure de cet Astroport (Capitaine & Armateur).',
+    expert: '🛠️ <strong>Mode Expert</strong> – Accès complet aux méthodes de dérivation (V1, BIP39, Saisie Libre) et à l\'analyse de l\'entropie. Idéal pour un usage 100% local, autonome ou forgeron Ğ1.'
 };
 
 function selectOrigin(origin) {
     currentOrigin = origin;
     document.querySelectorAll('.origin-card').forEach(c => {
-        c.classList.remove('selected', 'selected-zen');
+        c.classList.remove('selected');
     });
-    const card = document.getElementById('card-' + origin);
-    if (origin === 'zen') card.classList.add('selected-zen');
-    else card.classList.add('selected');
+    document.getElementById('card-' + origin).classList.add('selected');
 
     const box = document.getElementById('origin-explain');
     box.innerHTML = originExplains[origin];
@@ -1010,11 +1023,9 @@ function selectOrigin(origin) {
 
     document.getElementById('btn-step1-next').disabled = false;
 
-    // Afficher le warning Forgeron Ğ1 si l'onglet BIP39 est déjà actif en mode MULTIPASS/ZEN
     const forgeronInfo = document.getElementById('v2-forgeron-info');
     if (forgeronInfo) {
-        forgeronInfo.style.display =
-            (currentMode === 'v2' && (origin === 'multi' || origin === 'zen')) ? 'block' : 'none';
+        forgeronInfo.style.display = (currentMode === 'v2' && origin === 'expert') ? 'block' : 'none';
     }
 }
 
@@ -1274,7 +1285,11 @@ async function derive(forceSalt = null, forcePepper = null) {
         extBox.style.display = 'block';
 
         showStatus('ok', '✅ Clefs générées avec succès !');
-        goStep(3);
+        if (currentOrigin === 'fast') {
+            goStep(4); // Saute l'étape 3 (affichage des clefs) pour aller directement à l'activation
+        } else {
+            goStep(3);
+        }
 
         // En mode BIP39 (Forgeron Ğ1) : n'afficher que les clefs Duniter/G1
         {
@@ -1418,50 +1433,34 @@ function preparestep4(skip = false) {
     mpForm.style.display   = 'none';
     mpResult.style.display = 'none';
 
-    if (currentOrigin === 'solo' || skip) {
+    if (skip) {
         soloDiv.style.display = 'block';
-        // Masquer step 4 dans la nav si solo
         const sn4 = document.getElementById('sn-4');
-        if (sn4) sn4.style.display = skip ? '' : 'none';
+        if (sn4) sn4.style.display = 'none';
     } else {
         mpForm.style.display = 'block';
 
-        // ⛔ Clef BIP39 (v2) incompatible avec MULTIPASS / ZEN
-        // L'API /g1nostr n'accepte que salt + pepper (v1 ou saisie libre).
-        // Une clef mnémonique BIP39 est réservée à la ToC Ğ1 (Forgeron).
         if (currentMode === 'v2') {
             const title = document.getElementById('mp-title');
             const intro = document.getElementById('mp-intro');
             const btnReg = document.getElementById('btn-register');
             title.textContent = '⛔ Inscription impossible avec une clef BIP39';
-            intro.innerHTML = '<strong>⚒️ Clef Forgeron Ğ1 détectée</strong><br><br>'
-                + 'Cette clef <strong>mnémonique BIP39</strong> est destinée à devenir membre '
-                + 'certifié de la <strong>Toile de Confiance Duniter</strong> (Forgeron Ğ1).<br>'
-                + 'Elle ne peut pas être enregistrée comme <strong>MULTIPASS</strong>.<br><br>'
-                + '👉 Retournez à l\'étape précédente et régénérez vos clefs avec<br>'
-                + '<strong>🔐 Identifiant (v1)</strong> ou <strong>⌨️ Saisie libre</strong>.';
+            intro.innerHTML = '<strong>⚒️ Clef Forgeron Ğ1 détectée</strong><br><br>Cette clef <strong>mnémonique BIP39</strong> est destinée à devenir membre certifié (Forgeron Ğ1). Elle ne peut pas être enregistrée comme MULTIPASS.<br><br>👉 Retournez à l\'étape précédente et régénérez vos clefs avec <strong>🔐 Identifiant (v1)</strong>.';
             if (btnReg) btnReg.disabled = true;
-            return; // Ne pas pré-remplir les champs du formulaire
+            return;
         }
 
-        // Adapter le titre et intro selon ZEN
         const title = document.getElementById('mp-title');
         const intro = document.getElementById('mp-intro');
-        if (currentOrigin === 'zen') {
-            title.textContent = '⚡ Adhésion ẐEN Economy';
-            intro.innerHTML = 'En vous inscrivant explicitement à la '
-                + '<a href="https://opencollective.com/monnaie-libre" target="_blank" style="color:var(--zen);">coopérative Monnaie Libre</a> '
-                + 'et en déléguant vos clefs à votre relai Astroport, vous participez à l\'économie ẐEN. '
-                + 'Votre relai gère les échanges de services en G1 en votre nom. '
-                + '<a href="https://github.com/papiche/Astroport.ONE/blob/master/docs/ZEN.ECONOMY.v2.md" target="_blank" style="color:var(--zen);">Documentation ẐEN →</a>';
+        
+        if (currentOrigin === 'fast') {
+            title.textContent = '🚀 Activation MULTIPASS Rapide';
+            intro.innerHTML = 'Vos identifiants sécurisés sont prêts ! Confirmez votre position géographique pour activer instantanément votre passeport sur l\'Astroport.';
         } else {
-            title.textContent = '🛂 Inscription coopérative UPlanet';
-            intro.innerHTML = 'Complétez ce formulaire pour vous inscrire <strong>explicitement</strong> à la coopérative numérique UPlanet. '
-                + 'Votre email et votre localisation GPS permettent à votre relai Astroport de vous placer sur la carte '
-                + 'et d\'activer votre passeport numérique (MULTIPASS). '
-                + 'En choisissant cette option, vous <em>consentez</em> explicitement au partage de ces données avec votre relai.';
+            title.textContent = '🛂 Activation MULTIPASS (Mode Expert)';
+            intro.innerHTML = 'Complétez ce formulaire pour vous inscrire <strong>explicitement</strong> à la coopérative numérique UPlanet. En validant, vous consentez au partage de ces données avec votre relai.';
         }
-        // Pré-remplir l'email si salt ressemble à un email
+
         const emailEl = document.getElementById('reg-email');
         if (emailEl && currentSalt && currentSalt.includes('@') && !emailEl.value) {
             emailEl.value = currentSalt;
@@ -1604,21 +1603,10 @@ async function submitRegistration() {
             mpForm.style.display   = 'none';
             mpResult.style.display = 'block';
 
-            if (currentOrigin === 'zen') {
-                mpMsg.innerHTML = 'Votre adhésion ẐEN Economy est enregistrée. '
-                    + 'Votre relai Astroport peut maintenant gérer vos échanges de services en G1. '
-                    + (currentReferrer
-                        ? '🤝 Prime de parrainage (1%) réservée à <strong>' + currentReferrer + '</strong>. '
-                        : '')
-                    + 'Rejoignez la <a href="https://opencollective.com/monnaie-libre" target="_blank" style="color:var(--zen);">coopérative Monnaie Libre sur Open Collective →</a>';
-            } else {
-                mpMsg.textContent = 'Votre inscription à la coopérative UPlanet est confirmée. '
-                    + 'Votre MULTIPASS est activé. '
-                    + (currentReferrer
-                        ? '🤝 Parrain enregistré : ' + currentReferrer + ' recevra la prime de 1%. '
-                        : '')
-                    + 'Vous apparaissez maintenant sur la carte UPlanet dans votre zone géographique.';
-            }
+            mpMsg.textContent = 'Votre inscription à la coopérative UPlanet est confirmée. '
+            + 'Votre MULTIPASS est activé. '
+            + (currentReferrer ? '🤝 Parrain enregistré : ' + currentReferrer + ' recevra la prime de 1%. ' : '')
+            + 'Vous apparaissez maintenant sur la carte UPlanet dans votre zone géographique.';
         } else {
             let errMsg = 'Erreur serveur (code ' + resp.status + ')';
             try {

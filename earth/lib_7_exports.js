@@ -101,6 +101,39 @@ async function callAPIWithAuth(url, options = {}) {
 }
 
 // ========================================
+// SECURITY HELPERS
+// ========================================
+
+function escapeHtml(text) {
+    if (!text) return '';
+    var div = document.createElement('div');
+    div.textContent = String(text);
+    return div.innerHTML;
+}
+
+// Sanitize HTML rendered from user content (e.g. markdown from NOSTR events).
+// Strips script/iframe/on* without requiring DOMPurify.
+function sanitizeHtml(html) {
+    if (!html) return '';
+    var tmp = document.createElement('div');
+    tmp.innerHTML = html;
+    var DANGEROUS = ['script','style','iframe','object','embed','form','base','link','meta'];
+    DANGEROUS.forEach(function(tag) {
+        tmp.querySelectorAll(tag).forEach(function(el) { el.remove(); });
+    });
+    tmp.querySelectorAll('*').forEach(function(el) {
+        Array.from(el.attributes).forEach(function(attr) {
+            if (/^on/i.test(attr.name) ||
+                ((attr.name === 'href' || attr.name === 'src' || attr.name === 'action') &&
+                 /^\s*javascript:/i.test(attr.value))) {
+                el.removeAttribute(attr.name);
+            }
+        });
+    });
+    return tmp.innerHTML;
+}
+
+// ========================================
 // GLOBAL EXPORTS + CLEANUP
 // ========================================
 
@@ -120,6 +153,10 @@ if (typeof window !== 'undefined') {
     window.ExtensionWrapper = ExtensionWrapper;
     window.RelayManager = RelayManager;
     window.NostrState = NostrState;
+
+    // Security helpers (shared across all pages)
+    window.escapeHtml = escapeHtml;
+    window.sanitizeHtml = sanitizeHtml;
 
     // Utility functions
     window.hexToNpub = hexToNpub;

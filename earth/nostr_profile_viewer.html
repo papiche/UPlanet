@@ -45,6 +45,14 @@
                 <div id="follow-error-message"></div>
             </div>
 
+            <!-- ===== COOKIES (own profile only) ===== -->
+            <div id="cookie-container" class="messages" style="display:none">
+                <h2>🍪 Cookies chiffrés</h2>
+                <div id="cookie-content" class="messages-scrollable">
+                    <p style="color:var(--terminal-border)">Chargement…</p>
+                </div>
+            </div>
+
             <!-- ===== MESSAGES & ARTICLES ===== -->
             <div id="messages-container" class="messages loading">
                 <h2>Messages &amp; Articles</h2>
@@ -130,5 +138,116 @@
     -->
     <script src="nostr_profile_viewer.js"></script>
 <script src="app_switch.js"></script>
+<script>
+// ── Cookie section (own profile only) ──────────────────────────────────────
+(function () {
+    'use strict';
+
+    var _cookieLoaded = false;
+
+    function _apiBase() {
+        // Reuse getApiServerUrl() defined in nostr_profile_viewer.js
+        if (typeof getApiServerUrl === 'function') return getApiServerUrl();
+        var u = new URL(window.location.href);
+        var h = u.hostname.replace(/^ipfs\./, 'u.');
+        var p = u.port === '8080' ? '54321' : u.port;
+        return p ? (u.protocol + '//' + h + ':' + p) : (u.protocol + '//' + h);
+    }
+
+    function _ageColor(days) {
+        if (days === null || days === undefined) return '#888';
+        if (days < 14) return '#2ecc71';
+        if (days < 30) return '#f39c12';
+        return '#e74c3c';
+    }
+
+    function _renderCookies(cookies, npub) {
+        var el = document.getElementById('cookie-content');
+        if (!el) return;
+        if (!cookies || cookies.length === 0) {
+            el.innerHTML = '<p style="color:var(--terminal-border)">Aucun cookie stocké. '
+                + '<a href="/cookie.html" style="color:var(--terminal-cyan)">Uploader un cookie →</a></p>';
+            return;
+        }
+        var sorted = cookies.slice().sort(function (a, b) {
+            return (b.uploaded_at || '').localeCompare(a.uploaded_at || '');
+        });
+        var rows = sorted.map(function (c) {
+            var age  = c.age_days !== null && c.age_days !== undefined ? c.age_days + 'j' : '?';
+            var col  = _ageColor(c.age_days);
+            var cid  = c.cid ? c.cid.slice(0, 14) + '…' : '—';
+            var date = c.uploaded_at ? c.uploaded_at.slice(0, 10) : '?';
+            return '<tr>'
+                + '<td style="color:var(--terminal-cyan)">' + c.domain + '</td>'
+                + '<td>' + date + '</td>'
+                + '<td style="color:' + col + ';font-weight:700">' + age + '</td>'
+                + '<td style="font-size:.75em;font-family:monospace;color:#666">' + cid + '</td>'
+                + '<td><button data-domain="' + c.domain + '" class="cookie-del-btn" '
+                + 'style="background:#e74c3c;color:#fff;border:none;padding:2px 7px;'
+                + 'border-radius:4px;cursor:pointer;font-size:.8em">🗑️</button></td>'
+                + '</tr>';
+        }).join('');
+
+        el.innerHTML = '<table style="width:100%;border-collapse:collapse;font-size:.9em">'
+            + '<thead><tr style="color:var(--terminal-green)">'
+            + '<th style="text-align:left;padding:4px 8px;border-bottom:1px solid #333">Domaine</th>'
+            + '<th style="text-align:left;padding:4px 8px;border-bottom:1px solid #333">Uploadé</th>'
+            + '<th style="text-align:left;padding:4px 8px;border-bottom:1px solid #333">Âge</th>'
+            + '<th style="text-align:left;padding:4px 8px;border-bottom:1px solid #333">CID IPFS</th>'
+            + '<th style="padding:4px 8px;border-bottom:1px solid #333"></th>'
+            + '</tr></thead><tbody>' + rows + '</tbody></table>'
+            + '<p style="margin-top:10px"><a href="/cookie.html" '
+            + 'style="color:var(--terminal-cyan);font-size:.85em">+ Uploader un nouveau cookie</a></p>';
+
+        // Delete buttons
+        el.querySelectorAll('.cookie-del-btn').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var domain = btn.getAttribute('data-domain');
+                if (!confirm('Supprimer le cookie pour ' + domain + ' ?')) return;
+                fetch(_apiBase() + '/cookie/' + domain + '?npub=' + encodeURIComponent(npub), {method: 'DELETE'})
+                    .then(function (r) { return r.json(); })
+                    .then(function (j) {
+                        if (j.success) _loadCookies(npub, true);
+                        else alert('Erreur: ' + (j.detail || JSON.stringify(j)));
+                    })
+                    .catch(function (e) { alert('Erreur réseau: ' + e); });
+            });
+        });
+    }
+
+    function _loadCookies(npub, force) {
+        if (_cookieLoaded && !force) return;
+        _cookieLoaded = true;
+        var el = document.getElementById('cookie-content');
+        if (el) el.innerHTML = '<p style="color:var(--terminal-border)">⏳ Chargement…</p>';
+
+        fetch(_apiBase() + '/cookie?npub=' + encodeURIComponent(npub))
+            .then(function (r) {
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                return r.json();
+            })
+            .then(function (data) { _renderCookies(data.cookies || [], npub); })
+            .catch(function (e) {
+                if (el) el.innerHTML = '<p style="color:#e74c3c">Impossible de charger les cookies ('
+                    + e.message + '). Vérifiez votre authentification NOSTR.</p>';
+            });
+    }
+
+    // Called when a profile is displayed — show/hide the section
+    window._updateCookieSection = function (viewedHex) {
+        var myHex  = window.userPubkey || '';
+        var myNpub = window.userNpub   || '';
+        var box    = document.getElementById('cookie-container');
+        if (!box) return;
+
+        if (viewedHex && myHex && viewedHex === myHex && myNpub) {
+            box.style.display = '';
+            _loadCookies(myNpub, false);
+        } else {
+            box.style.display = 'none';
+        }
+    };
+}());
+</script>
 </body>
 </html>

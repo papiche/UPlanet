@@ -3414,12 +3414,13 @@ function parsePeerQR() {
          </div></div>`
     ).join('');
 
+    const _esc = window.escapeHtml || (t => { const d=document.createElement('div'); d.textContent=String(t||''); return d.innerHTML; });
     document.getElementById('peer-profile').innerHTML = `
     <div class="peer-card">
         <div style="font-weight:700;color:var(--accent-light);margin-bottom:6px">
-            <i class="bi bi-person-circle"></i> ${data.name || 'Pair'}
+            <i class="bi bi-person-circle"></i> ${_esc(data.name || 'Pair')}
         </div>
-        <div class="peer-pubkey">${data.npub}</div>
+        <div class="peer-pubkey">${_esc(data.npub)}</div>
         <div style="margin-top:10px">${skills || '<div style="color:var(--text-muted);font-size:13px">Aucune compétence déclarée.</div>'}</div>
     </div>`;
 }
@@ -3506,8 +3507,9 @@ function renderExploreCard(ev) {
     const normPrimary = normalizeSkill(primarySkill);
     const alreadyHave = !!(STATE.mySkills[normPrimary]);
 
+    const _esc = window.escapeHtml || (t => { const d=document.createElement('div'); d.textContent=String(t||''); return d.innerHTML; });
     const skills = tTags.filter(t => t && !_META_T.has(t)).map(t =>
-        `<span class="level-badge level-x1" style="margin:2px">${t}</span>`
+        `<span class="level-badge level-x1" style="margin:2px">${_esc(t)}</span>`
     ).join('');
 
     const broBtn = !alreadyHave ? `
@@ -3519,11 +3521,11 @@ function renderExploreCard(ev) {
     return `
     <div class="wcard">
         <div class="wcard-title">
-            <i class="bi bi-${isComposite ? 'puzzle-fill' : 'award-fill'}"></i> ${name}
+            <i class="bi bi-${isComposite ? 'puzzle-fill' : 'award-fill'}"></i> ${_esc(name)}
             ${isComposite ? '<span class="level-badge level-x2" style="margin-left:auto">Composite</span>' : ''}
             ${alreadyHave ? '<span style="margin-left:auto;font-size:13px;cursor:help" title="Vous possédez déjà cette compétence">✅</span>' : ''}
         </div>
-        ${description ? `<div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">${description}</div>` : ''}
+        ${description ? `<div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">${_esc(description)}</div>` : ''}
         ${skills ? `<div style="margin-bottom:10px">${skills}</div>` : ''}
         <div style="text-align:right;display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap">
             ${broBtn}
@@ -3622,6 +3624,7 @@ async function loadPairsTab(force = false) {
 }
 
 function renderPeerCard(peer, profile) {
+    const _esc3 = window.escapeHtml || (t => { const d=document.createElement('div'); d.textContent=String(t||''); return d.innerHTML; });
     const name     = profile.display_name || profile.name || '';
     const avatar   = profile.picture || '';
     const shortKey = peer.pubkey.slice(0, 8) + '…' + peer.pubkey.slice(-6);
@@ -3635,8 +3638,8 @@ function renderPeerCard(peer, profile) {
     const skillBadges = Object.entries(peer.skills).map(([sk, data]) => {
         const cls = levelBadgeClass(data.level);
         const trustIcon = data.trust === 'oracle' ? '🏅' : data.trust === 'p2p' ? '🔵' : '';
-        return `<span class="level-badge ${cls}" style="font-size:10px;margin:2px" title="${sk}">
-            ${trustIcon} ${sk} X${data.level}
+        return `<span class="level-badge ${cls}" style="font-size:10px;margin:2px" title="${_esc3(sk)}">
+            ${trustIcon} ${_esc3(sk)} X${data.level}
         </span>`;
     }).join('');
 
@@ -3645,7 +3648,7 @@ function renderPeerCard(peer, profile) {
             ${Object.keys(peer.skills).map(sk => `
                 <button class="btn-like" style="font-size:11px;padding:3px 9px"
                     onclick="openLikeModalForPeer('${peer.pubkey}','${sk.replace(/'/g,"\\'")}')">
-                    <i class="bi bi-hand-thumbs-up"></i> +1 ${sk}
+                    <i class="bi bi-hand-thumbs-up"></i> +1 ${_esc3(sk)}
                 </button>`).join('')}
         </div>`;
 
@@ -3653,7 +3656,7 @@ function renderPeerCard(peer, profile) {
     <div class="peer-skill-card" ${isDemo ? 'style="border:1px dashed var(--accent-light,#fbbf24);opacity:0.85"' : ''}>
         <div class="peer-skill-avatar">${avatarHtml}</div>
         <div class="peer-skill-body">
-            <div class="peer-skill-name">${name || '(Pair inconnu)'}${isMe ? ' <span style="color:var(--accent-light);font-size:10px">(vous)</span>' : ''}${isDemo ? ' <span style="background:#78350f;color:#fde68a;font-size:9px;padding:1px 5px;border-radius:3px;vertical-align:middle">DEMO</span>' : ''}</div>
+            <div class="peer-skill-name">${_esc3(name) || '(Pair inconnu)'}${isMe ? ' <span style="color:var(--accent-light);font-size:10px">(vous)</span>' : ''}${isDemo ? ' <span style="background:#78350f;color:#fde68a;font-size:9px;padding:1px 5px;border-radius:3px;vertical-align:middle">DEMO</span>' : ''}</div>
             <div class="peer-skill-pub">${shortKey}</div>
             <div class="peer-skill-list">${skillBadges || '<span style="font-size:11px;color:var(--text-muted)">Aucune compétence certifiée</span>'}</div>
             ${actions}
@@ -3793,6 +3796,7 @@ async function likePeerPreview() {
     } catch(_) {}
 
     const shortKey = hexPub.slice(0, 10) + '…' + hexPub.slice(-6);
+    const _esc2 = window.escapeHtml || (t => { const d=document.createElement('div'); d.textContent=String(t||''); return d.innerHTML; });
     const avatarHtml = avatar
         ? `<img src="${avatar.replace(/"/g,'&quot;')}" alt="avatar" onerror="this.parentElement.textContent='👤'">`
         : '👤';
@@ -3801,9 +3805,9 @@ async function likePeerPreview() {
     <div class="like-peer-card">
         <div class="like-peer-avatar">${avatarHtml}</div>
         <div class="like-peer-info">
-            <div class="like-peer-name">${name || '(profil inconnu)'}</div>
+            <div class="like-peer-name">${_esc2(name) || '(profil inconnu)'}</div>
             <div class="like-peer-pub">${shortKey}</div>
-            ${about ? `<div style="font-size:11px;color:var(--text-muted);margin-top:2px">${about.slice(0,80)}</div>` : ''}
+            ${about ? `<div style="font-size:11px;color:var(--text-muted);margin-top:2px">${_esc2(about.slice(0,80))}</div>` : ''}
         </div>
     </div>`;
 
@@ -3872,11 +3876,32 @@ async function showHoldersModal(skillTag) {
                 byPubkey[ev.pubkey] = { ...parsed, pubkey: ev.pubkey };
             }
         }
+
+        // Charger les profils Kind 0 en batch (1 requête pour tous les holders)
+        const holderPubkeys = Object.keys(byPubkey);
+        const holderProfiles = {};
+        try {
+            const k0evs = await fetchEvents({ kinds: [0], authors: holderPubkeys, limit: holderPubkeys.length });
+            for (const ev of k0evs) {
+                try { holderProfiles[ev.pubkey] = JSON.parse(ev.content || '{}'); } catch(_) {}
+            }
+        } catch(_) {}
+
+        const _esc = window.escapeHtml || (t => { const d=document.createElement('div'); d.textContent=String(t||''); return d.innerHTML; });
         list.innerHTML = Object.values(byPubkey).map(h => {
+            const meta = holderProfiles[h.pubkey] || {};
+            const displayName = meta.display_name || meta.name || '';
+            const avatar = meta.picture || '';
             const shortKey = h.pubkey.slice(0, 8) + '…' + h.pubkey.slice(-4);
+            const avatarHtml = avatar
+                ? `<img src="${avatar.replace(/"/g,'&quot;')}" alt="avatar"
+                        style="width:32px;height:32px;border-radius:50%;object-fit:cover"
+                        onerror="this.parentElement.textContent='👤'">`
+                : '<span style="font-size:20px">👤</span>';
             return `<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:rgba(255,255,255,0.05);border-radius:6px">
-                <div style="flex:1">
-                    <div style="font-size:13px;font-weight:600">${getSkillEmoji(h.skill || skillTag)} ${h.skill || skillTag}</div>
+                <div style="width:32px;height:32px;border-radius:50%;overflow:hidden;display:flex;align-items:center;justify-content:center;flex-shrink:0">${avatarHtml}</div>
+                <div style="flex:1;min-width:0">
+                    <div style="font-size:13px;font-weight:600">${_esc(displayName) || getSkillEmoji(h.skill || skillTag) + ' ' + _esc(h.skill || skillTag)}</div>
                     <div style="font-size:10px;opacity:0.5;font-family:monospace">${shortKey}</div>
                     <span class="level-badge ${levelBadgeClass(h.level)}" style="font-size:10px">X${h.level}</span>
                 </div>

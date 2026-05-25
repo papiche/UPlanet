@@ -12,7 +12,7 @@ if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
 Usage: $(basename "$0") [options]
 
 Publie earth/ sur IPFS, met à jour .chain, commit+push git,
-et met à jour le DNSLink OVH (_dnslink / _dnslink.origin).
+et met à jour le DNSLink OVH (_dnslink.origin sur astroport.one).
 
 Options:
   -h, --help    Affiche cette aide
@@ -22,7 +22,7 @@ Flux:
   2. Si CID inchangé           → exit 0 (rien à faire)
   3. Mise à jour .chain + .moats + README.md
   4. git add / commit (saisie manuelle du commentaire) / push
-  5. DNSLink OVH upsert via ovh.me.sh
+  5. DNSLink OVH upsert _dnslink.origin uniquement (astroport.one géré par astroport.one/microledger.me.sh)
      Credentials (par priorité):
        a. Variables ENV: OVH_APP_KEY / OVH_APP_SECRET / OVH_CONSUMER_KEY
        b. cooperative_config.sh (Kind 30800 NOSTR)
@@ -97,7 +97,6 @@ if [[ -x "$OVH_TOOL" ]]; then
     # CID du sous-répertoire earth/ (pages web directement accessibles via gateway)
     IPFSEARTH=$(ipfs add -rq "${MY_PATH}/earth" | tail -n 1)
     echo "## IPFS EARTH : ${IPFSEARTH}"
-    "$OVH_TOOL" upsert "_dnslink"        "/ipfs/${IPFSEARTH}" || true
     "$OVH_TOOL" upsert "_dnslink.origin" "/ipfs/${IPFSEARTH}" || true
 else
     echo "SKIP DNSLink: ${OVH_TOOL} introuvable"

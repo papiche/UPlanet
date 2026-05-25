@@ -751,14 +751,20 @@
         
         const balances = {};
         
+        // Parse "11.00 Ğ1" ou nombre brut → float Ğ1
+        const parseG1Balance = (raw) => {
+          const str = typeof raw === 'string' ? raw.replace(/[^0-9.]/g, '') : String(raw ?? 0);
+          const val = parseFloat(str);
+          return isNaN(val) ? 0 : val;
+        };
+
         // Fetch CAPTAIN's main balance
         if (captainG1pub) {
           try {
             const response = await fetch(`${apiBase}/check_balance?g1pub=${encodeURIComponent(captainG1pub)}`);
             if (response.ok) {
               const data = await response.json();
-              const rawBal = data.balance ?? data.g1_balance ?? 0;
-              const g1 = isNaN(Number(rawBal)) ? 0 : Number(rawBal);
+              const g1 = parseG1Balance(data.balance ?? data.g1_balance ?? 0);
               const zen = Math.max(0, Math.floor((g1 - 1) * 10));
               balances.main = { g1, zen };
               console.log('[CAPTAIN] Main balance:', balances.main);
@@ -767,21 +773,24 @@
             console.warn('[CAPTAIN] Failed to fetch main balance:', e);
           }
         }
-        
+
         // Fetch CAPTAIN's ZENCARD balance
         if (captainZencardG1pub) {
           try {
             const response = await fetch(`${apiBase}/check_balance?g1pub=${encodeURIComponent(captainZencardG1pub)}`);
             if (response.ok) {
               const data = await response.json();
-              const rawBal = data.balance ?? data.g1_balance ?? 0;
-              const g1 = isNaN(Number(rawBal)) ? 0 : Number(rawBal);
+              const g1 = parseG1Balance(data.balance ?? data.g1_balance ?? 0);
               const zen = Math.max(0, Math.floor((g1 - 1) * 10));
-              balances.zencard = { g1, zen };
+              balances.zencard = { g1, zen, detected: true };
               console.log('[CAPTAIN] ZENCARD balance:', balances.zencard);
+            } else {
+              // ZENCARD pubkey connue mais API indisponible — marquer comme détectée
+              balances.zencard = { g1: 0, zen: 0, detected: true };
             }
           } catch (e) {
             console.warn('[CAPTAIN] Failed to fetch ZENCARD balance:', e);
+            balances.zencard = { g1: 0, zen: 0, detected: true };
           }
         }
         
@@ -838,23 +847,37 @@
       balanceHTML += '<div class="captain-accordion-content" style="display: none;">';
       
       if (captainBalances.main) {
+        const g1Display = Number.isInteger(captainBalances.main.g1)
+          ? captainBalances.main.g1
+          : captainBalances.main.g1.toFixed(2);
         balanceHTML += `<div class="balance-item">
-          <span class="balance-label">MULTIPASS:</span>
+          <span class="balance-label">🔑 MULTIPASS</span>
           <span class="balance-amount">${captainBalances.main.zen} ẐEN</span>
-          <span class="balance-g1">(${captainBalances.main.g1} Ğ1)</span>
+          <span class="balance-g1">${g1Display} Ğ1</span>
         </div>`;
       }
-      
+
       if (captainBalances.zencard) {
-        balanceHTML += `<div class="balance-item">
-          <span class="balance-label">ZENCARD:</span>
-          <span class="balance-amount">${captainBalances.zencard.zen} ẐEN</span>
-          <span class="balance-g1">(${captainBalances.zencard.g1} Ğ1)</span>
-        </div>`;
+        if (captainBalances.zencard.zen > 0) {
+          const g1Display = Number.isInteger(captainBalances.zencard.g1)
+            ? captainBalances.zencard.g1
+            : captainBalances.zencard.g1.toFixed(2);
+          balanceHTML += `<div class="balance-item">
+            <span class="balance-label">💳 ZENCARD</span>
+            <span class="balance-amount">${captainBalances.zencard.zen} ẐEN</span>
+            <span class="balance-g1">${g1Display} Ğ1</span>
+          </div>`;
+        } else {
+          balanceHTML += `<div class="balance-item">
+            <span class="balance-label">💳 ZENCARD</span>
+            <span class="balance-amount" style="color:#94a3b8;font-size:0.85em">Détectée</span>
+            <span class="balance-g1" style="font-style:italic">Solde vide · historique actif</span>
+          </div>`;
+        }
       }
-      
+
       if (!captainBalances.main && !captainBalances.zencard) {
-        balanceHTML += '<div class="balance-item">Balance unavailable</div>';
+        balanceHTML += '<div class="balance-item" style="color:#94a3b8;font-style:italic">Soldes indisponibles</div>';
       }
       
 
@@ -880,12 +903,18 @@
       if (cap?.captainBalances) {
         const capName = cap.captainProfile?.name || 'CAPITAINE';
         const mainZen = cap.captainBalances.main?.zen ?? '—';
-        const mainG1  = cap.captainBalances.main?.g1  ?? '—';
-        const cardZen = cap.captainBalances.zencard?.zen;
+        const mainG1raw = cap.captainBalances.main?.g1;
+        const mainG1 = mainG1raw !== undefined
+          ? (Number.isInteger(mainG1raw) ? mainG1raw : Number(mainG1raw).toFixed(2))
+          : '—';
+        const zc = cap.captainBalances.zencard;
+        const zcLabel = zc?.detected
+          ? (zc.zen > 0 ? ` · 💳 ${zc.zen} ẐEN` : ' · 💳')
+          : '';
         html += `<div class="wallet-card captain">
           <div class="wallet-role">🏴‍☠️ ${capName}</div>
           <div class="wallet-zen">${mainZen} ẐEN</div>
-          <div class="wallet-g1">${mainG1} Ğ1${cardZen !== undefined ? ` · ZENCARD: ${cardZen} ẐEN` : ''}</div>
+          <div class="wallet-g1">${mainG1} Ğ1${zcLabel}</div>
         </div>`;
       } else if (cap === null && !player) {
         bar.style.display = 'none'; return;
@@ -1072,19 +1101,18 @@
       }
     }
 
-    // Calcule l'URL de la station Astroport via le proxy /12345 de uSPOT
     function computeAstroURL() {
-      const { hostname, port, protocol } = new URL(window.location.href);
-      const proto = protocol.replace(/:$/, ''); // "https:" → "https"
-      if ((hostname === '127.0.0.1' || hostname === 'localhost') && port === '8080') {
-        window.__ASTROPORT_STATION_URL__ = `${proto}://127.0.0.1:12345`;
-      } else if (window.upassportUrl) {
-        // uSPOT /12345 proxie directement vers 127.0.0.1:12345
-        window.__ASTROPORT_STATION_URL__ = `${window.upassportUrl}/12345`;
+      if (typeof window.getStationUrl === 'function') {
+        window.__ASTROPORT_STATION_URL__ = window.getStationUrl();
       } else {
-        // Fallback : dérive u.domain depuis le hostname courant
-        const uHost = hostname.replace(/^(astroport|ipfs)\./, 'u.');
-        window.__ASTROPORT_STATION_URL__ = `${proto}://${uHost}/12345`;
+        const { hostname, protocol } = new URL(window.location.href);
+        const proto = protocol.replace(/:$/, '');
+        if (/^(127\.0\.0\.1|localhost)$/.test(hostname)) {
+          window.__ASTROPORT_STATION_URL__ = `${proto}://127.0.0.1:12345`;
+        } else {
+          const base = hostname.replace(/^(astroport\.|ipfs\.|u\.)/, '');
+          window.__ASTROPORT_STATION_URL__ = `${proto}://astroport.${base}`;
+        }
       }
       console.log('[ASTRO] Station URL:', window.__ASTROPORT_STATION_URL__);
     }
@@ -1516,13 +1544,10 @@
       // Replace line breaks with <br> tags to preserve formatting
       let processedText = text.replace(/\n/g, '<br>');
       
-      // Get current IPFS gateway from page URL
-      const currentUrl = window.location.href;
-      const url = new URL(currentUrl);
-      let baseUrl = `${url.protocol}//${url.hostname}`;
-      if (url.port && url.port !== '80' && url.port !== '443') {
-        baseUrl += `:${url.port}`;
-      }
+      const baseUrl = window.IPFS_GATEWAY || (() => {
+        const u = new URL(window.location.href);
+        return `${u.protocol}//${u.hostname}${u.port && u.port !== '80' && u.port !== '443' ? ':' + u.port : ''}`;
+      })();
       
       
       // Use a single regex to match all IPFS links and process them in order of specificity

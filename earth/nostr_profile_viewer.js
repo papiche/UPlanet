@@ -790,20 +790,48 @@ async function checkZenBalance(g1pub) {
 
 async function checkAllZenBalances(profileData) {
     const results = {};
+
+    // Fetch uniquement le solde MULTIPASS (G1 réel → ẐEN disponibles).
+    // La ZenCard a TOUJOURS 1 Ğ1 (PAF) — sa valeur = ẐEN ayant TRANSITÉ via /check_zencard.
+    const toFetch = new Map(); // g1pub → result key
     if (profileData.g1pub) {
         const parts = profileData.g1pub.split(':');
-        if (parts.length >= 2) {
-            const bal = await checkZenBalance(parts[0]);
-            if (bal) results.multipass = bal;
-        } else {
-            const bal = await checkZenBalance(profileData.g1pub);
-            if (bal) results.g1pub = bal;
+        const pub = parts.length >= 2 ? parts[0] : profileData.g1pub;
+        toFetch.set(pub, parts.length >= 2 ? 'multipass' : 'g1pub');
+    }
+    if (toFetch.size === 0) return results;
+
+    const pubkeys = [...toFetch.keys()];
+
+    if (pubkeys.length === 1) {
+        // Single pub — use existing /check_balance
+        const bal = await checkZenBalance(pubkeys[0]);
+        if (bal) results[toFetch.get(pubkeys[0])] = bal;
+    } else {
+        // Multiple unique pubs — batch endpoint (one GraphQL query instead of N sequential requests)
+        try {
+            const apiUrl = getApiServerUrl();
+            const resp = await fetch(`${apiUrl}/check_balances?g1pubs=${pubkeys.join(',')}`);
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            const data = await resp.json();
+            const bals = data.balances || {};
+            for (const [pub, key] of toFetch) {
+                const b = bals[pub];
+                if (b) {
+                    const g1Balance  = parseFloat(b.balance);
+                    const zenBalance = Math.floor((g1Balance - 1) * 10);
+                    results[key] = { g1Balance, zenBalance, g1pub: pub };
+                }
+            }
+        } catch (e) {
+            console.warn('checkAllZenBalances batch error, fallback parallel:', e);
+            await Promise.all([...toFetch.entries()].map(async ([pub, key]) => {
+                const bal = await checkZenBalance(pub);
+                if (bal) results[key] = bal;
+            }));
         }
     }
-    if (profileData.zencard && profileData.zencard !== 'None' && profileData.zencard.trim()) {
-        const bal = await checkZenBalance(profileData.zencard);
-        if (bal) results.zencard = bal;
-    }
+
     return results;
 }
 
@@ -951,8 +979,12 @@ async function displayNostrData() {
             cryptoFields += `<div class="profile-field" title="${profileData.g1pub}"><strong>🔑 MULTIPASS:</strong> ${txt.substring(0,6)}...${txt.substring(txt.length-4)} ${balInfo}</div>`;
         }
         if (profileData.zencard && profileData.zencard !== 'None') {
-            let balInfo = balanceResults.zencard ? ` <a href="${getApiServerUrl()}/check_zencard?email=${profileData.email || 'unknown'}" target="_blank" class="balance-info na">ZEN Card</a>` : '';
-            cryptoFields += `<div class="profile-field" title="${profileData.zencard}"><strong>💳 ZenCard v1:</strong> ${profileData.zencard.substring(0,6)}...${profileData.zencard.substring(profileData.zencard.length-4)} ${balInfo}</div>`;
+            // ZenCard : solde G1 toujours = 1 Ğ1 (PAF) — afficher le transit ẐEN via check_zencard
+            const zcEmail = profileData.email || '';
+            const zcLink = zcEmail
+                ? ` <a href="${getApiServerUrl()}/check_zencard?email=${encodeURIComponent(zcEmail)}&html=1" target="_blank" class="balance-info na">transit ẐEN →</a>`
+                : '';
+            cryptoFields += `<div class="profile-field" title="${profileData.zencard}"><strong>💳 ZenCard v1:</strong> ${profileData.zencard.substring(0,6)}...${profileData.zencard.substring(profileData.zencard.length-4)}${zcLink}</div>`;
         }
         if (profileData.g1v2) cryptoFields += `<div class="profile-field" title="${profileData.g1v2}"><strong>⛓️ G1 v2 (SS58):</strong> ${profileData.g1v2.substring(0,8)}...${profileData.g1v2.substring(profileData.g1v2.length-6)}</div>`;
         if (profileData.g1member) cryptoFields += `<div class="profile-field" title="${profileData.g1member}"><strong>🏛️ G1 Member:</strong> ${profileData.g1member.substring(0,8)}...</div>`;

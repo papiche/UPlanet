@@ -1484,6 +1484,16 @@ async function sendNIP42Auth(relayUrl, forceSend = false) {
 // ── Exports window ───────────────────────────────────────────────────────────
 if (typeof window !== 'undefined') {
     window.detectUSPOTAPI = detectUSPOTAPI;
+    window.connectNostr = connectNostr;
+    window.connectToRelay = connectToRelay;
+    window.ensureRelayConnection = ensureRelayConnection;
+    window.ensureNIP42AuthIfNeeded = ensureNIP42AuthIfNeeded;
+    window.showNotification = showNotification;
+    window.ensureAuthentication = ensureAuthentication;
+    window.applyDynamicTheme = applyDynamicTheme;
+    window.initSmoothScroll = initSmoothScroll;
+    window.getAPIBaseUrl = getAPIBaseUrl;
+    window.getUserDisplayName = getUserDisplayName;
     window.fetchUserFollowsWithMetadata = fetchUserFollowsWithMetadata;
     window.fetchUserFollowList = fetchUserFollowList;
     window.fetchUserMuteList = fetchUserMuteList;

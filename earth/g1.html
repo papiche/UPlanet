@@ -752,16 +752,19 @@ function parseStation(m, forcedActive) {
     const host = m['hostname'] || '';
     const city = m['IPCity']   || '';
     const gpuVram    = parseFloat((cap['gpu']||{})['vram_gb']) || 0;
-    const powerScore = parseInt(cap['power_score']) || 0;
+    // power_score : sous capacities (nouveau) ou top-level (ancien format)
+    const powerScore = parseInt(cap['power_score']) || parseInt(m['power_score']) || 0;
     const hwTier     = powerScore >= 41 ? 'brain' : powerScore >= 11 ? 'standard' : 'light';
+    // lat/lon : STATION_LAT/LON (standard) ou CENTER.LAT/LON (station primaire ancienne version)
+    const center = m['CENTER'] || {};
     return {
         label    : [host,city].filter(Boolean).join(' — ') || uspot,
         hostname : host, city, uspot,
         myIpfs   : m['myIPFS'] || '',
         relay    : m['myRELAY'] || '',
         active   : forcedActive !== undefined ? forcedActive : (up['active']===true),
-        lat      : parseFloat(m['STATION_LAT']) || 0,
-        lon      : parseFloat(m['STATION_LON']) || 0,
+        lat      : parseFloat(m['STATION_LAT']) || parseFloat(center['LAT']) || 0,
+        lon      : parseFloat(m['STATION_LON']) || parseFloat(center['LON']) || 0,
         nostrSlots: parseInt(cap['nostr_slots'])  || 0,
         zcSlots  : parseInt(cap['zencard_slots']) || 0,
         diskGb   : parseFloat(stor['available_gb']||cap['available_space_gb']) || 0,
@@ -776,7 +779,8 @@ function parseStation(m, forcedActive) {
         ramGb    : parseFloat(cap['ram_gb'])  || 0,
         uptime   : m['uptime'] || '',
         boots    : Array.isArray(m['boots']) ? m['boots'] : [],
-        ipfsnodeid: m['ipfsnodeid'] || '',
+        // ipfsnodeid : minuscules (standard) ou IPFSNODEID majuscules (station primaire)
+        ipfsnodeid: m['ipfsnodeid'] || m['IPFSNODEID'] || '',
         g1station : m['g1station']  || '',
         g1swarm   : m['g1swarm']    || '',
         fromIpfs  : false,
@@ -1207,6 +1211,9 @@ window.loadSwarmStations = function() {
             updateUserMarker();
             renderStations(window._primaryUspot||'');
 
+            // Enrichissement asynchrone : récupérer 12345.json complet depuis /ipns/IPFSNODEID
+            enrichStationsFromIpns();
+
             // Secondary: IPFS inside-view
             if (ipfsGateway) loadIpfsInsideView(ipfsGateway);
         })
@@ -1217,6 +1224,59 @@ window.loadSwarmStations = function() {
             renderStations('');
         });
 };
+
+// ── Enrichissement IPNS : récupère 12345.json complet pour chaque station ────
+// Chaque station publie /ipns/IPFSNODEID → les capacités réelles sont là-bas.
+// On enrichit les cartes en arrière-plan après le rendu initial.
+function enrichStationsFromIpns() {
+    const toEnrich = stations.filter(function(s) {
+        return s.g1station && !s._enriched && s.nostrSlots === 0 && s.zcSlots === 0;
+    });
+    if (!toEnrich.length) return;
+    console.debug('[G1] Enrichissement IPNS :', toEnrich.length, 'station(s)');
+
+    let enriched = 0;
+    toEnrich.forEach(function(s) {
+        const url = s.g1station.replace(/\/$/, '') + '/12345.json';
+        const ctrl = typeof AbortSignal !== 'undefined' && AbortSignal.timeout
+            ? { signal: AbortSignal.timeout(12000) } : {};
+        fetch(url, ctrl)
+            .then(function(r) { return r.ok ? r.json() : null; })
+            .then(function(data) {
+                if (!data) return;
+                const idx = stations.findIndex(function(x) { return x.uspot === s.uspot; });
+                if (idx < 0) return;
+                const cap = data.capacities || {};
+                const eco = data.economy   || {};
+                const ps  = parseInt(cap.power_score) || 0;
+                Object.assign(stations[idx], {
+                    nostrSlots    : parseInt(cap.nostr_slots)           || 0,
+                    zcSlots       : parseInt(cap.zencard_slots)         || 0,
+                    diskGb        : parseFloat(cap.available_space_gb)  || 0,
+                    powerScore    : ps,
+                    hwTier        : ps >= 41 ? 'brain' : ps >= 11 ? 'standard' : 'light',
+                    gpuVram       : parseFloat((cap.gpu||{}).vram_gb)   || 0,
+                    cpuCores      : parseInt(cap.cpu_cores)             || 0,
+                    ramGb         : parseFloat(cap.ram_gb)              || 0,
+                    multipassCount: parseInt(eco.multipass_count)       || stations[idx].multipassCount,
+                    zencardCount  : parseInt(eco.zencard_count)         || stations[idx].zencardCount,
+                    bilan         : data.BILAN                          || stations[idx].bilan,
+                    uptime        : data.uptime                         || stations[idx].uptime,
+                    boots         : Array.isArray(data.boots) ? data.boots : stations[idx].boots,
+                    lat           : parseFloat(data.STATION_LAT)        || stations[idx].lat,
+                    lon           : parseFloat(data.STATION_LON)        || stations[idx].lon,
+                    _enriched     : true,
+                });
+                enriched++;
+                if (enriched === toEnrich.length || enriched % 2 === 0) {
+                    if (userLat !== null) sortByDistance();
+                    updateMapMarkers(window._primaryUspot || '');
+                    renderStations(window._primaryUspot || '');
+                }
+            })
+            .catch(function() {});
+    });
+}
 
 // ── Nomenclature station (4 subdomains) ───────────────────────────────────────
 function populateNomenclature(uspotUrl) {

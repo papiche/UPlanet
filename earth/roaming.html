@@ -211,38 +211,39 @@ const S = {
 };
 
 /* ═══════════════════════════════════════════════════════════════
-   URL helpers — même logique que detectUSPOTAPI() dans common.js
+   URL helpers — délèguent à common.js getAPIUrl/getRelayUrl si dispo
    ═══════════════════════════════════════════════════════════════ */
-function detectURLs() {
-    if (typeof window.upassportUrl === 'string' && window.upassportUrl &&
-        typeof window.nostrRelay    === 'string' && window.nostrRelay) {
-        return { upassportUrl: window.upassportUrl, relayUrl: window.nostrRelay };
-    }
-    const u        = new URL(window.location.href);
+function deriveUPassport() {
+    if (typeof window.getAPIUrl === 'function') return window.getAPIUrl();
+    if (typeof window.upassportUrl === 'string' && window.upassportUrl) return window.upassportUrl;
+    const u = new URL(window.location.href);
     const hostname = u.hostname;
-    const port     = u.port;
-    const proto    = u.protocol.replace(':', '');
-
+    const port = u.port;
+    const proto = u.protocol.replace(':', '');
     if ((hostname === '127.0.0.1' || hostname === 'localhost') &&
         (port === '8080' || port === '54321' || port === '7777')) {
-        return { upassportUrl: 'http://127.0.0.1:54321', relayUrl: 'ws://127.0.0.1:7777' };
+        return 'http://127.0.0.1:54321';
     }
-    if (hostname.startsWith('ipfs.')) {
-        const base = hostname.slice('ipfs.'.length);
-        return { upassportUrl: `${proto}://u.${base}`, relayUrl: `wss://relay.${base}` };
-    }
-    if (hostname.startsWith('u.')) {
-        const base = hostname.slice('u.'.length);
-        return { upassportUrl: `${proto}://u.${base}`, relayUrl: `wss://relay.${base}` };
-    }
-    if (hostname.startsWith('relay.')) {
-        const base = hostname.slice('relay.'.length);
-        return { upassportUrl: `${proto}://u.${base}`, relayUrl: `wss://relay.${base}` };
-    }
-    return { upassportUrl: 'https://u.copylaradio.com', relayUrl: 'wss://relay.copylaradio.com' };
+    if (hostname.startsWith('ipfs.')) return `${proto}://u.${hostname.slice('ipfs.'.length)}`;
+    if (hostname.startsWith('u.'))    return `${proto}://u.${hostname.slice('u.'.length)}`;
+    if (hostname.startsWith('relay.')) return `${proto}://u.${hostname.slice('relay.'.length)}`;
+    return 'https://u.copylaradio.com';
 }
-function deriveUPassport() { return detectURLs().upassportUrl; }
-function deriveRelay()     { return detectURLs().relayUrl; }
+function deriveRelay() {
+    if (typeof window.getRelayUrl === 'function') return window.getRelayUrl();
+    if (typeof window.nostrRelay === 'string' && window.nostrRelay) return window.nostrRelay;
+    const u = new URL(window.location.href);
+    const hostname = u.hostname;
+    const port = u.port;
+    if ((hostname === '127.0.0.1' || hostname === 'localhost') &&
+        (port === '8080' || port === '54321' || port === '7777')) {
+        return 'ws://127.0.0.1:7777';
+    }
+    if (hostname.startsWith('ipfs.')) return `wss://relay.${hostname.slice('ipfs.'.length)}`;
+    if (hostname.startsWith('u.'))    return `wss://relay.${hostname.slice('u.'.length)}`;
+    if (hostname.startsWith('relay.')) return `wss://relay.${hostname.slice('relay.'.length)}`;
+    return 'wss://relay.copylaradio.com';
+}
 function extractStationBase(url) {
     try {
         const h = new URL(url).hostname;

@@ -1205,6 +1205,10 @@
 <script>
 // ── URL UTILS ──
 function getUSPOTUrl(route) {
+    if (typeof window.getAPIUrl === 'function') {
+        const base = window.getAPIUrl().replace(/\/+$/, '');
+        return route ? base + '/' + route.replace(/^\//, '') : base;
+    }
     const u = new URL(window.location.href);
     let api = new URL(u.origin);
     if (u.hostname.startsWith('ipfs.')) api.hostname = u.hostname.replace('ipfs.', 'u.');
@@ -1246,10 +1250,12 @@ async function loadStationInfo() {
         const r = await fetch(getUSPOTUrl(''), { signal: AbortSignal.timeout(6000) });
         const d = await r.json();
         document.getElementById('station-name').textContent = d.myDAMAIN || ('…' + (d.IPFSNODEID?.slice(-8) || '----'));
-        const u = new URL(window.location.href);
-        const domain = u.hostname.replace(/^(ipfs\.|u\.)/, '');
-        const coracleHref = (domain && domain !== u.hostname)
-            ? `${u.protocol}//coracle.${domain}`
+        const uBase = (typeof window.getAPIUrl === 'function' ? window.getAPIUrl() : null) || 'https://u.copylaradio.com';
+        let baseDomain = 'copylaradio.com';
+        try { const uh = new URL(uBase).hostname; if (uh.startsWith('u.')) baseDomain = uh.slice(2); } catch(_) {}
+        const proto = location.protocol.replace(':', '');
+        const coracleHref = (baseDomain !== 'copylaradio.com' || !location.hostname.includes('copylaradio.com'))
+            ? `${proto}://coracle.${baseDomain}`
             : 'https://ipfs.copylaradio.com/ipns/coracle.copylaradio.com';
         const cc = document.getElementById('coracle-card');
         if (cc) cc.href = coracleHref;

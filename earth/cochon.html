@@ -291,10 +291,9 @@
       toast.classList.add('show');
       setTimeout(() => toast.classList.remove('show'), 3000);
 
-      // URL MULTIPASS : dériver depuis le hostname actuel → u.DOMAIN/qr
-      const h = location.hostname;
-      const domain = h.replace(/^(ipfs|astroport|soundspot|192\.168\.[0-9]+)\./,'') || 'copylaradio.com';
-      const upassportQr = `https://u.${domain}/qr?data=${encodeURIComponent('https://qo-op.com')}`;
+      // URL MULTIPASS : utiliser getAPIUrl() (calculé par detectUSPOTAPI dans common.js)
+      const uBase = (typeof window.getAPIUrl === 'function' ? window.getAPIUrl() : null) || 'https://u.copylaradio.com';
+      const upassportQr = `${uBase}/qr?data=${encodeURIComponent('https://qo-op.com')}`;
       const fallbackUrl = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent('https://qo-op.com')}&color=ff3399`;
 
       let imgSrc = null;
@@ -320,22 +319,29 @@
 
     // ─── NÉBULEUSE DE SERVICES UPLANET ────────────────────────────────────────
     // Résoudre les URLs de service depuis le hostname du portail
-    const _domain = (() => {
-      const h = location.hostname;
-      return h.replace(/^(ipfs|astroport|soundspot|192\.168\.[0-9.]+)\./i, '') || 'copylaradio.com';
-    })();
+    // Utiliser les URLs calculées par detectUSPOTAPI() dans common.js
+    // afin de respecter la topologie : IP:8080→IP:54321, ipfs.domain→u.domain
     function resolveUrl(tmpl) {
+      const uBase    = (typeof window.getAPIUrl === 'function' ? window.getAPIUrl() : null) || 'https://u.copylaradio.com';
+      const ipfsBase = window.IPFS_GATEWAY || 'https://ipfs.copylaradio.com';
+      const proto    = location.protocol.replace(':', '');
+      // Dériver le domaine de base depuis uBase pour les services sous-domaines
+      let baseDomain = 'copylaradio.com';
+      try {
+        const uh = new URL(uBase).hostname;
+        if (uh.startsWith('u.')) baseDomain = uh.slice(2);
+      } catch(_) {}
       return tmpl
-        .replace('{u}',     `https://u.${_domain}`)
-        .replace('{earth}', `https://ipfs.${_domain}/ipns/copylaradio.com`)
-        .replace('{g1fablab}', `https://opencollective.com/monnaie-libre`)
-        .replace('{zicmama}', `https://ipfs.${_domain}/ipfs/QmSTcJURUCzX4vCPXEy1tqBgdLbAdh5ENvSu3HznaNzcLp/`)
-        .replace('{astroport}', `https://astroport.${_domain}`)
-        .replace('{astroport_site}', `https://ipfs.${_domain}/ipns/astroport.one`)
-        .replace('{coracle}', `https://coracle.${_domain}`)
-        .replace('{zelkova}', `https://zinkgo.${_domain}`)
-        .replace('{troczen}', `https://zen.${_domain}`);
-      }
+        .replace('{u}',            uBase)
+        .replace('{earth}',        `${ipfsBase}/ipns/copylaradio.com`)
+        .replace('{g1fablab}',     'https://opencollective.com/monnaie-libre')
+        .replace('{zicmama}',      `${ipfsBase}/ipfs/QmSTcJURUCzX4vCPXEy1tqBgdLbAdh5ENvSu3HznaNzcLp/`)
+        .replace('{astroport}',    `${proto}://astroport.${baseDomain}`)
+        .replace('{astroport_site}', `${ipfsBase}/ipns/astroport.one`)
+        .replace('{coracle}',      `${proto}://coracle.${baseDomain}`)
+        .replace('{zelkova}',      `${proto}://zinkgo.${baseDomain}`)
+        .replace('{troczen}',      `${proto}://zen.${baseDomain}`);
+    }
 
     const SVCS = [
       {e:'🪪', n:'Multipass Web3',       d:'Votre identité souveraine\nNostr • Ğ1 • IPFS',               c:'p', x:14, y:13, l:'{earth}/contribute-3D-curieux.html'},

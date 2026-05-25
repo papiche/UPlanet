@@ -50,16 +50,19 @@ function getCurrentUrlInfo() {
 }
 
 function getStationUrl() {
+    if (typeof window.getStationUrl === 'function') return window.getStationUrl();
     const urlInfo = getCurrentUrlInfo();
-    let port = urlInfo.port;
-    if (port === "8080") {
-        port = "12345";
-    }
-    const zHost = urlInfo.hostname.replace(/^ipfs\./, 'u.');
-    return `${urlInfo.protocol}://${zHost}${port ? `:${port}` : ""}`;
+    const h = urlInfo.hostname;
+    if (/^(\d+\.\d+\.\d+\.\d+|localhost)$/.test(h)) return `${urlInfo.protocol}://127.0.0.1:12345`;
+    const base = h.startsWith('ipfs.') ? h.slice(5) : (h.startsWith('u.') ? h.slice(2) : h);
+    return `${urlInfo.protocol}://astroport.${base}`;
 }
 
 function getUSPOTUrl(route = '') {
+    if (typeof window.getAPIUrl === 'function') {
+        const base = window.getAPIUrl().replace(/\/+$/, '');
+        return route ? base + '/' + route.replace(/^\//, '') : base;
+    }
     const urlInfo = getCurrentUrlInfo();
     let newUrl = new URL(urlInfo.origin);
 

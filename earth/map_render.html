@@ -1873,17 +1873,15 @@ class EnhancedUPlanetMap {
             }
             
             // Build API URL - Cohérent avec Ustats.sh
-            const currentURL = new URL(window.location.href);
-            const hostname = currentURL.hostname;
-            let port = currentURL.port;
-            const protocol = currentURL.protocol.split(":")[0];
-            
-            // Port adjustment like in original files
-            if (port === "8080") {
-                port = "54321";
-            }
-            const uHost = hostname.replace("ipfs", "u");
-            const UPlanetStation = `${protocol}://${uHost}${port ? ":" + port : ""}`;
+            const UPlanetStation = (typeof window.getAPIUrl === 'function' ? window.getAPIUrl() : null) || (() => {
+                const currentURL = new URL(window.location.href);
+                const hostname = currentURL.hostname;
+                let port = currentURL.port;
+                const protocol = currentURL.protocol.split(":")[0];
+                if (port === "8080") port = "54321";
+                const uHost = hostname.replace("ipfs", "u");
+                return `${protocol}://${uHost}${port ? ":" + port : ""}`;
+            })();
             const apiURL = `${UPlanetStation}/?lat=${southWestLat}&lon=${southWestLon}&deg=${deg}`;
 
             console.log('Loading data from API:', apiURL);
@@ -2400,29 +2398,17 @@ class EnhancedUPlanetMap {
         button.addEventListener('click', () => {
             const { southWestLat, southWestLon } = this.mapParams;
             
-            // Build UPlanet scan URL following map_render.html logic
-            const currentURL = new URL(window.location.href);
-            const hostname = currentURL.hostname;
-            let port = currentURL.port;
-            const protocol = currentURL.protocol.split(":")[0];
-            
-            // Store the initial port
-            const initialPort = port;
-            
-            // Transform hostname ipfs -> u
-            const uHost = hostname.replace("ipfs", "u");
-            
-            // Port logic: only add 54321 if original port was 8080 (localhost case)
-            if (port === "8080") {
-                port = "54321";
-            } else if (!port || port === "80" || port === "443") {
-                // No port for standard HTTP/HTTPS on public domains
-                port = "";
-            }
-            
-            // Build the station URL
-            const UPlanetStation = `${protocol}://${uHost}${port ? ":" + port : ""}`;
-            const scanURL = `${UPlanetStation}/g1?zlat=${parseFloat(southWestLat).toFixed(2)}&zlon=${parseFloat(southWestLon).toFixed(2)}`;
+            // Build UPlanet scan URL
+            const UPlanetStation2 = (typeof window.getAPIUrl === 'function' ? window.getAPIUrl() : null) || (() => {
+                const currentURL = new URL(window.location.href);
+                const hostname = currentURL.hostname;
+                let port = currentURL.port;
+                const protocol = currentURL.protocol.split(":")[0];
+                if (port === "8080") { port = "54321"; } else if (!port || port === "80" || port === "443") { port = ""; }
+                const uHost = hostname.replace("ipfs", "u");
+                return `${protocol}://${uHost}${port ? ":" + port : ""}`;
+            })();
+            const scanURL = `${UPlanetStation2}/g1?zlat=${parseFloat(southWestLat).toFixed(2)}&zlon=${parseFloat(southWestLon).toFixed(2)}`;
             
             console.log('🌐 UMAP Scan URL generated:', {
                 original: window.location.href,

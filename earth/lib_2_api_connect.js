@@ -41,33 +41,41 @@ function detectUSPOTAPI() {
     let determinedRelay = '';
     let determinedIpfsGateway = '';
 
+    let determinedStationUrl = '';
+
     if (hostname === "127.0.0.1" && (port === "8080" || port === "54321")) {
         determinedUpassportUrl = `http://127.0.0.1:54321`;
+        determinedStationUrl   = `http://127.0.0.1:12345`;
         determinedRelay = `ws://127.0.0.1:7777`;
         determinedIpfsGateway = `http://127.0.0.1:8080`;
     } else if (hostname === "localhost" && (port === "8080" || port === "54321")) {
         determinedUpassportUrl = `http://127.0.0.1:54321`;
+        determinedStationUrl   = `http://127.0.0.1:12345`;
         determinedRelay = `ws://127.0.0.1:7777`;
         determinedIpfsGateway = `http://127.0.0.1:8080`;
     } else if (hostname.startsWith("ipfs.")) {
         const baseDomain = hostname.substring("ipfs.".length);
         determinedUpassportUrl = `${protocol}://u.${baseDomain}`;
+        determinedStationUrl   = `${protocol}://astroport.${baseDomain}`;
         determinedRelay = `wss://relay.${baseDomain}`;
         determinedIpfsGateway = `${protocol}://ipfs.${baseDomain}`;
     } else if (hostname.startsWith("u.")) {
         const baseDomain = hostname.substring("u.".length);
         determinedUpassportUrl = `${protocol}://u.${baseDomain}`;
+        determinedStationUrl   = `${protocol}://astroport.${baseDomain}`;
         determinedRelay = `wss://relay.${baseDomain}`;
         determinedIpfsGateway = `${protocol === 'http' ? 'http' : 'https'}://ipfs.${baseDomain}`;
     } else {
         // Fallback for other environments or if detection fails
         determinedUpassportUrl = `https://u.copylaradio.com`;
+        determinedStationUrl   = `https://astroport.copylaradio.com`;
         determinedRelay = `wss://relay.copylaradio.com`; // Uplanet ORIGIN public relay
         determinedIpfsGateway = `https://ipfs.copylaradio.com`;
     }
 
     // Update centralized state
     NostrState.upassportUrl = determinedUpassportUrl;
+    NostrState.stationUrl   = determinedStationUrl;
     NostrState.DEFAULT_RELAYS = [determinedRelay, 'wss://relay.damus.io', 'wss://nos.lol'];
     syncLegacyVariables();
 
@@ -84,8 +92,9 @@ function detectUSPOTAPI() {
 }
 
 // Wrappers globaux — pages sans common.js sont invitées à charger common.js
-window.getAPIUrl   = function() { return NostrState.upassportUrl || 'https://u.copylaradio.com'; };
-window.getRelayUrl = function() { return (NostrState.DEFAULT_RELAYS && NostrState.DEFAULT_RELAYS[0]) || 'wss://relay.copylaradio.com'; };
+window.getAPIUrl     = function() { return NostrState.upassportUrl || 'https://u.copylaradio.com'; };
+window.getStationUrl = function() { return NostrState.stationUrl   || 'https://astroport.copylaradio.com'; };
+window.getRelayUrl   = function() { return (NostrState.DEFAULT_RELAYS && NostrState.DEFAULT_RELAYS[0]) || 'wss://relay.copylaradio.com'; };
 
 /**
  * Get API base URL

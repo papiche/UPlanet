@@ -582,21 +582,34 @@
 
         // ---------- uSPOT / Relay detection and tests ----------
         function detectUSPOTAPI() {
-            const currentURL = new URL(window.location.href);
-            const hostname = currentURL.hostname;
-            const port = currentURL.port;
-            const protocol = currentURL.protocol.split(":")[0];
-
-            if (hostname === "127.0.0.1" && port === "8080") {
-                upassportUrl = `http://127.0.0.1:54321`;
-                derivedRelayUrl = `ws://127.0.0.1:7777`;
-            } else if (hostname.startsWith("ipfs.")) {
-                const baseDomain = hostname.substring("ipfs.".length);
-                upassportUrl = `${protocol}://u.${baseDomain}`;
-                derivedRelayUrl = `wss://relay.${baseDomain}`;
+            if (typeof window.getAPIUrl === 'function') {
+                upassportUrl = window.getAPIUrl();
             } else {
-                upassportUrl = `https://u.copylaradio.com`;
-                derivedRelayUrl = `wss://relay.copylaradio.com`;
+                const currentURL = new URL(window.location.href);
+                const hostname = currentURL.hostname;
+                const port = currentURL.port;
+                const protocol = currentURL.protocol.split(":")[0];
+                if (hostname === "127.0.0.1" && port === "8080") {
+                    upassportUrl = `http://127.0.0.1:54321`;
+                } else if (hostname.startsWith("ipfs.")) {
+                    upassportUrl = `${protocol}://u.${hostname.substring("ipfs.".length)}`;
+                } else {
+                    upassportUrl = `https://u.copylaradio.com`;
+                }
+            }
+            if (typeof window.getRelayUrl === 'function') {
+                derivedRelayUrl = window.getRelayUrl();
+            } else {
+                const currentURL = new URL(window.location.href);
+                const hostname = currentURL.hostname;
+                const port = currentURL.port;
+                if (hostname === "127.0.0.1" && port === "8080") {
+                    derivedRelayUrl = `ws://127.0.0.1:7777`;
+                } else if (hostname.startsWith("ipfs.")) {
+                    derivedRelayUrl = `wss://relay.${hostname.substring("ipfs.".length)}`;
+                } else {
+                    derivedRelayUrl = `wss://relay.copylaradio.com`;
+                }
             }
             return { upassportUrl, derivedRelayUrl };
         }
@@ -683,6 +696,7 @@
             if (UPlanetData && UPlanetData.myRELAY) {
                 return UPlanetData.myRELAY;
             }
+            if (typeof window.getRelayUrl === 'function') return window.getRelayUrl();
             const currentUrl = new URL(window.location.href);
             let relayName = currentUrl.hostname.replace('ipfs.', 'relay.');
             if (currentUrl.port === '8080' || currentUrl.port) {
@@ -982,20 +996,15 @@
         async function startNostrStreamWithProgress() {
             nostrContentArea.innerHTML = `<p style="color:var(--terminal-cyan);">Connecting to UPlanet Network...</p>`;
 
-            const currentURL = new URL(window.location.href);
-            const protocol = currentURL.protocol;
-            const hostname = currentURL.hostname;
-            let port = currentURL.port;
-
-            var uHost = hostname.replace("ipfs.", "u.");
-             if (port === "8080") {
-                port = "54321";
-            } else if (port) {
-                 // keep port
-            } else {
-                port = "";
-            }
-            const UPlanetBase = protocol + "//" + uHost + (port ? (":" + port) : "");
+            const UPlanetBase = (typeof window.getAPIUrl === 'function' ? window.getAPIUrl() : null) || (() => {
+                const currentURL = new URL(window.location.href);
+                const protocol = currentURL.protocol;
+                const hostname = currentURL.hostname;
+                let port = currentURL.port;
+                const uHost = hostname.replace("ipfs.", "u.");
+                if (port === "8080") { port = "54321"; } else if (!port) { port = ""; }
+                return protocol + "//" + uHost + (port ? (":" + port) : "");
+            })();
             // Assuming data json is at the root of this UPlanetBase
             const UPlanetDataURL = UPlanetBase + '/'; // Construct full URL to get json
             console.log('UPLANET DATA URL:', UPlanetDataURL);

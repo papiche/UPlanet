@@ -1212,11 +1212,8 @@ function buildUDriveUrl(ipnsVault, email, gateway = null) {
 // Expose functions globally for use in webcam.html, cookie.html, youtube.html and other pages
 if (typeof window !== 'undefined') {
     window.fetchUserEmailWithFallback = fetchUserEmailWithFallback;
-    window.fetchUserFollowsWithMetadata = fetchUserFollowsWithMetadata;
-    window.fetchUserFollowList = fetchUserFollowList;
-    window.fetchUserMuteList = fetchUserMuteList;
-    window.loadMuteList = loadMuteList;
-    window.getMutedPubkeys = getMutedPubkeys;
+    // fetchUserFollowsWithMetadata, fetchUserFollowList, fetchUserMuteList,
+    // loadMuteList, getMutedPubkeys — defined and exported by lib_2_api_connect.js
     window.fetchUserMetadata = fetchUserMetadata;
     window.fetchUserIdentities = fetchUserIdentities;
     window.fetchUserUDriveInfo = fetchUserUDriveInfo;

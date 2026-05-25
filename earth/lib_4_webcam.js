@@ -16,6 +16,9 @@ var CONNECTION_DEBOUNCE = window.CONNECTION_DEBOUNCE;
 var ExtensionWrapper    = window.ExtensionWrapper;
 var RelayManager        = window.RelayManager;
 
+// ── IMPORTS depuis lib_2 ───────────────────────────────────────────────────
+var detectUSPOTAPI      = window.detectUSPOTAPI;
+
 // Legacy lets accessibles via NostrState
 var upassportUrl    = NostrState.upassportUrl;
 var DEFAULT_RELAYS  = NostrState.DEFAULT_RELAYS;

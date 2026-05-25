@@ -1483,6 +1483,12 @@ async function sendNIP42Auth(relayUrl, forceSend = false) {
 
 // ── Exports window ───────────────────────────────────────────────────────────
 if (typeof window !== 'undefined') {
+    window.detectUSPOTAPI = detectUSPOTAPI;
+    window.fetchUserFollowsWithMetadata = fetchUserFollowsWithMetadata;
+    window.fetchUserFollowList = fetchUserFollowList;
+    window.fetchUserMuteList = fetchUserMuteList;
+    window.loadMuteList = loadMuteList;
+    window.getMutedPubkeys = getMutedPubkeys;
     window.sendNIP42Auth = sendNIP42Auth;
 
     // window.doNip42Auth(pubkeyHex?) — API unifiée pour toutes les pages

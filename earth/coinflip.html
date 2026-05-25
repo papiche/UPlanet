@@ -1406,19 +1406,40 @@
     const coinElement = document.getElementById('coin');
     if (coinElement) {
       coinElement.addEventListener('click', async (event) => {
-        // Vérification roaming : jeu réservé à l'Astroport du MULTIPASS
+        // Vérification roaming : jeu réservé à l'Astroport où le MULTIPASS est enregistré
+        // Basée sur le répertoire NIP-42 local (sans .roaming) via l'API UPassport
         if (window.userPubkey && window.userProfile?.g1pub) {
-          const h = window.location.hostname;
-          const ok = h.includes('astroport.') || h.includes('127.0.0.1') ||
-                     h.includes('localhost') || h.includes('copylaradio.com') ||
-                     (h.includes('ipfs.') && h.includes('.com'));
-          if (!ok) {
-            const msgEl = document.getElementById('message');
-            if (msgEl) msgEl.innerHTML = `<div class="win-display" style="background:linear-gradient(135deg,#fecaca,#fca5a5);border-color:#ef4444">
-              <div class="win-label">⚠️ Astroport requis</div>
-              <div class="win-status">Le jeu nécessite d'être sur l'Astroport où votre MULTIPASS est enregistré</div>
-            </div>`;
-            return;
+          const apiBase = window.upassportUrl || window.NostrState?.upassportUrl || window.__UPASSPORT_API__;
+          if (apiBase) {
+            try {
+              const resp = await fetch(`${apiBase}/coinflip/can_play?pubkey=${window.userPubkey}`);
+              if (resp.ok) {
+                const data = await resp.json();
+                if (!data.is_local) {
+                  const msgEl = document.getElementById('message');
+                  if (msgEl) msgEl.innerHTML = `<div class="win-display" style="background:linear-gradient(135deg,#fecaca,#fca5a5);border-color:#ef4444">
+                    <div class="win-label">⚠️ Astroport requis</div>
+                    <div class="win-status">Le jeu nécessite d'être sur l'Astroport où votre MULTIPASS est enregistré (statut : ${data.source})</div>
+                  </div>`;
+                  isFlipping = false;
+                  return;
+                }
+              }
+            } catch (e) {
+              console.warn('[ROAMING] Vérification can_play échouée, fallback hostname', e);
+              const h = window.location.hostname;
+              const ok = h.includes('astroport.') || h.includes('127.0.0.1') ||
+                         h.includes('localhost') || (h.includes('ipfs.') && h.includes('.com'));
+              if (!ok) {
+                const msgEl = document.getElementById('message');
+                if (msgEl) msgEl.innerHTML = `<div class="win-display" style="background:linear-gradient(135deg,#fecaca,#fca5a5);border-color:#ef4444">
+                  <div class="win-label">⚠️ Astroport requis</div>
+                  <div class="win-status">Le jeu nécessite d'être sur l'Astroport où votre MULTIPASS est enregistré</div>
+                </div>`;
+                isFlipping = false;
+                return;
+              }
+            }
           }
         }
 

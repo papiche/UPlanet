@@ -85,7 +85,7 @@
             position: relative;
             z-index: 1;
             padding: 20px;
-            max-width: 1800px;
+            max-width: 1400px;
             margin: 0 auto;
         }
 
@@ -213,8 +213,8 @@
         /* Main Content Layout */
         .main-content {
             display: grid;
-            grid-template-columns: 1fr 350px;
-            gap: 20px;
+            grid-template-columns: 1fr 300px;
+            gap: 15px;
         }
 
         /* Constellation Map View */
@@ -782,29 +782,66 @@
 
             .side-panel .panel-card {
                 flex: 1;
-                min-width: 300px;
+                min-width: 280px;
+            }
+
+            .station-details.active {
+                order: -1;
             }
         }
 
-        @media (max-width: 768px) {
+        @media (max-width: 900px) {
+            .container { padding: 10px; }
+
             .command-header {
-                flex-direction: column;
-                gap: 15px;
+                padding: 10px 14px;
+                flex-wrap: wrap;
+                gap: 10px;
             }
+
+            .logo-icon { font-size: 1.8rem; }
+            .logo-text h1 { font-size: 1rem; letter-spacing: 2px; }
 
             .status-bar {
                 flex-wrap: wrap;
                 justify-content: center;
+                gap: 12px;
+                font-size: 0.72rem;
             }
 
+            .view-toggle { width: 100%; }
+            .view-btn { flex: 1; padding: 8px 10px; font-size: 0.8rem; }
+
+            .aggregate-grid {
+                grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+            }
+            .aggregate-item { padding: 12px 8px; }
+            .aggregate-value { font-size: 1.1rem; }
+        }
+
+        @media (max-width: 600px) {
             .station-row {
-                grid-template-columns: 1fr 1fr;
-                gap: 8px;
+                grid-template-columns: 1fr 1fr 1fr;
+                gap: 6px;
+                font-size: 0.78rem;
             }
 
             .station-row-header {
                 display: none;
             }
+
+            .station-row > *:nth-child(n+4) {
+                display: none;
+            }
+
+            .panel-content { padding: 10px; }
+
+            .station-stats {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 6px;
+            }
+
+            .nav-buttons { padding: 10px; }
         }
 
         /* Light theme */
@@ -1217,6 +1254,7 @@
     <script src="scrypt.min.js"></script>
     <script src="nostr.bundle.js"></script>
     <script src="common.js"></script>
+    <script src="heartbox.js"></script>
     <script src="coop-config.js"></script>
     <script>
         // Theme management
@@ -1440,6 +1478,8 @@
                             if (Array.isArray(raw)) return raw;
                             try { return JSON.parse(getTagValue(tags, 'hw:boots') || '[]'); } catch { return []; }
                         })(),
+                        hwDiskWriteMbps: content.hardware?.disk_write_mbps || parseInt(getTagValue(tags, 'hw:disk_write_mbps') || 0),
+                        hwDiskReadMbps:  content.hardware?.disk_read_mbps  || parseInt(getTagValue(tags, 'hw:disk_read_mbps')  || 0),
                         created_at: event.created_at,
                         content
                     });
@@ -1621,6 +1661,8 @@
 
                 const isGpuBrain = station.hwTier === 'brain' && station.hwGpuVram > 0;
                 const tierEmoji = isGpuBrain ? '🔥🎮' : station.hwTier === 'brain' ? '🔥' : station.hwTier === 'standard' ? '⚡' : '🌿';
+                const diskTitle = (station.hwDiskReadMbps > 0 || station.hwDiskWriteMbps > 0)
+                    ? ` | 💾R:${station.hwDiskReadMbps} W:${station.hwDiskWriteMbps} MB/s` : '';
 
                 row.innerHTML = `
                     <div class="station-name-cell">
@@ -1630,7 +1672,7 @@
                     <div>${station.healthStatus.replace('_', ' ').toUpperCase()}</div>
                     <div style="color: ${station.bilan >= 0 ? 'var(--accent-green)' : 'var(--accent-red)'}">${station.bilan.toFixed(1)} Ẑ</div>
                     <div style="color: var(--accent-yellow)">${station.revenueTotal.toFixed(0)} Ẑ</div>
-                    <div title="${station.hwCpuCores}c ${station.hwRamGb.toFixed(0)}Go score:${station.hwPowerScore}${isGpuBrain?' GPU '+station.hwGpuVram+'Go':''}">${tierEmoji} N:${station.priceMultipass}Ẑ Z:${station.priceZencard}Ẑ</div>
+                    <div title="${station.hwCpuCores}c ${station.hwRamGb.toFixed(0)}Go score:${station.hwPowerScore}${isGpuBrain?' GPU '+station.hwGpuVram+'Go':''}${diskTitle}">${tierEmoji} N:${station.priceMultipass}Ẑ Z:${station.priceZencard}Ẑ</div>
                     <div>${station.weeksRunway}w</div>
                 `;
 
@@ -1730,6 +1772,10 @@
                             ${station.hwGpuVram > 0 ? `<div style="text-align:center;">
                                 <div style="font-family:'Share Tech Mono',monospace;font-size:1.1rem;color:var(--accent-orange);">${station.hwGpuVram.toFixed(0)} Go</div>
                                 <div style="font-size:0.65rem;color:var(--text-dim);letter-spacing:1px;">VRAM GPU</div>
+                            </div>` : ''}
+                            ${(station.hwDiskReadMbps > 0 || station.hwDiskWriteMbps > 0) ? `<div style="text-align:center;">
+                                <div style="font-family:'Share Tech Mono',monospace;font-size:0.85rem;color:var(--accent-green);line-height:1.3;">R:${station.hwDiskReadMbps}<br>W:${station.hwDiskWriteMbps}</div>
+                                <div style="font-size:0.65rem;color:var(--text-dim);letter-spacing:1px;">DISK MB/s</div>
                             </div>` : ''}
                         </div>
                         <div style="font-size:0.72rem;color:var(--text-secondary);margin-bottom:4px;">${rankLabel}</div>

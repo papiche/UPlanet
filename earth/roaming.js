@@ -96,19 +96,33 @@
         } catch (_) { return hex.slice(0, 16) + '…'; }
     }
 
+    /* ── Logger interne ──────────────────────────────────────────────────── */
+
+    var _PFX = '[RoamingGuard]';
+
+    function _log()  { if (!RoamingGuard._debug) return; var a = Array.prototype.slice.call(arguments); a.unshift(_PFX); console.log.apply(console, a); }
+    function _warn() { var a = Array.prototype.slice.call(arguments); a.unshift(_PFX + ' ⚠️'); console.warn.apply(console, a); }
+    function _err()  { var a = Array.prototype.slice.call(arguments); a.unshift(_PFX + ' ❌'); console.error.apply(console, a); }
+
     /* ── NIP-42 flow ──────────────────────────────────────────────────────── */
 
     function _fetchChallenge(apiUrl, npub) {
+        _log('fetchChallenge →', apiUrl, 'npub', npub.slice(0, 16) + '…');
         return fetch(apiUrl + '/api/nip42/challenge?npub=' + encodeURIComponent(npub),
             { signal: AbortSignal.timeout(6000) })
-            .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+            .then(function (r) {
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                return r.json();
+            })
             .then(function (d) {
                 if (!d.challenge || d.challenge.length < 32) throw new Error('Challenge invalide');
+                _log('challenge reçu:', d.challenge.slice(0, 16) + '…');
                 return d;
             });
     }
 
     function _signEvent(hexPk, relayUrl, challenge) {
+        _log('signEvent kind 22242 relay:', relayUrl, 'challenge:', challenge.slice(0, 16) + '…');
         return w.nostr.signEvent({
             kind: 22242,
             pubkey: hexPk,
@@ -119,28 +133,39 @@
     }
 
     function _sendToRelay(relayUrl, signed) {
+        _log('sendToRelay →', relayUrl, 'eventId:', signed.id.slice(0, 12) + '…');
         return new Promise(function (resolve) {
             var ws;
             try { ws = new WebSocket(relayUrl); }
-            catch (e) { resolve({ ok: false, reason: e.message }); return; }
+            catch (e) { _err('WebSocket création échouée:', e.message); resolve({ ok: false, reason: e.message }); return; }
             var t = setTimeout(function () {
+                _warn('sendToRelay timeout 8s sur', relayUrl);
                 ws.close(); resolve({ ok: false, reason: 'timeout (8s)' });
             }, 8000);
-            ws.onopen = function () { ws.send(JSON.stringify(['EVENT', signed])); };
+            ws.onopen = function () {
+                _log('WS ouvert, envoi EVENT');
+                ws.send(JSON.stringify(['EVENT', signed]));
+            };
             ws.onmessage = function (e) {
                 try {
                     var m = JSON.parse(e.data);
                     if (m[0] === 'OK' && m[1] === signed.id) {
                         clearTimeout(t); ws.close();
+                        if (m[2] === true) { _log('relay OK — auth acceptée'); }
+                        else { _warn('relay rejeté:', m[3] || '(sans raison)'); }
                         resolve({ ok: m[2] === true, reason: m[3] || '' });
                     }
                 } catch (_) {}
             };
-            ws.onerror = function () { clearTimeout(t); ws.close(); resolve({ ok: false, reason: 'WebSocket error' }); };
+            ws.onerror = function () {
+                _warn('WebSocket error sur', relayUrl);
+                clearTimeout(t); ws.close(); resolve({ ok: false, reason: 'WebSocket error' });
+            };
         });
     }
 
     function _verifyMarker(apiUrl, npub) {
+        _log('verifyMarker /api/myGPS →', apiUrl, 'npub:', npub.slice(0, 16) + '…');
         return fetch(apiUrl + '/api/myGPS?npub=' + encodeURIComponent(npub), {
             signal: AbortSignal.timeout(6000),
             headers: { Accept: 'application/json' },
@@ -175,41 +200,50 @@
 
         if (!w.nostr || typeof w.nostr.signEvent !== 'function') {
             result.error = 'Aucune extension NOSTR (NIP-07) détectée.';
+            _warn('detect() — NIP-07 absent ou signEvent manquant');
             return Promise.resolve(result);
         }
 
         var apiUrl   = _apiUrl();
         var relayUrl = _relayUrl();
+        _log('detect() — apiUrl:', apiUrl, 'relay:', relayUrl);
 
         return w.nostr.getPublicKey()
             .then(function (hexPk) {
                 if (!hexPk || hexPk.length !== 64) throw new Error('Clé hex invalide');
                 result.hexPk = hexPk;
                 result.npub  = _hexToNpub(hexPk);
+                _log('pubkey obtenue:', hexPk.slice(0, 12) + '… npub:', result.npub.slice(0, 16) + '…');
                 return _fetchChallenge(apiUrl, result.npub);
             })
             .then(function (chalData) {
                 return _signEvent(result.hexPk, relayUrl, chalData.challenge);
             })
             .then(function (signed) {
+                _log('événement signé id:', signed.id.slice(0, 12) + '…');
                 return _sendToRelay(relayUrl, signed);
             })
             .then(function (authResult) {
                 result.authOk = authResult.ok;
+                _log('authOk:', authResult.ok, authResult.reason ? '(' + authResult.reason + ')' : '');
                 /* Attendre que le marker soit écrit par filter/22242.sh */
+                _log('attente 1200ms (écriture marker 22242.sh)…');
                 return new Promise(function (r) { setTimeout(r, 1200); });
             })
             .then(function () {
                 return _verifyMarker(apiUrl, result.npub);
             })
             .then(function (data) {
-                result.verifyData   = data;
-                result.homeStation  = data.home_station_url || data.website || '';
-                result.source       = _normalizeSource(data.source);
+                result.verifyData  = data;
+                result.homeStation = data.home_station_url || data.website || '';
+                result.source      = _normalizeSource(data.source);
+                _log('source détectée:', result.source,
+                    result.homeStation ? '| homeStation: ' + result.homeStation : '');
                 return result;
             })
             .catch(function (err) {
                 result.error = err.message || String(err);
+                _err('detect() échoué:', result.error);
                 return result;
             });
     }
@@ -297,18 +331,23 @@
      */
     function protect(opts) {
         opts = opts || {};
-        var ovId      = opts.overlayId   || _OVERLAY_ID;
-        var autoOv    = opts.autoOverlay !== false;
+        var ovId   = opts.overlayId   || _OVERLAY_ID;
+        var autoOv = opts.autoOverlay !== false;
+        _log('protect() — autoOverlay:', autoOv, 'overlayId:', ovId);
 
         return detect().then(function (result) {
             var src = result.source;
+            _log('protect() source reçue:', src, result.error ? '| erreur: ' + result.error : '');
 
             if (src === 'local' || src === 'amisofamis') {
+                _log('accès autorisé (' + src + ')');
                 if (typeof opts.onLocal === 'function') opts.onLocal(result);
             } else if (src === 'swarm') {
+                _warn('roaming détecté — homeStation:', result.homeStation || '?');
                 if (typeof opts.onRoaming === 'function') opts.onRoaming(result);
-                if (autoOv) _showOverlay(ovId, result.homeStation);
+                if (autoOv) { _log('affichage overlay roaming'); _showOverlay(ovId, result.homeStation); }
             } else {
+                _warn('source inconnue — accès non déterminé', result.error || '');
                 if (typeof opts.onUnknown === 'function') opts.onUnknown(result);
             }
 
@@ -318,6 +357,14 @@
 
     /* ── Export ───────────────────────────────────────────────────────────── */
 
-    w.RoamingGuard = { detect: detect, protect: protect, showOverlay: _showOverlay };
+    var RoamingGuard = {
+        detect:      detect,
+        protect:     protect,
+        showOverlay: _showOverlay,
+        /* Mettre à true pour voir les logs DEBUG dans la console */
+        _debug: false,
+    };
+
+    w.RoamingGuard = RoamingGuard;
 
 }(window));

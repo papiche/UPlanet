@@ -147,14 +147,28 @@
 
     /* ══════════════════════════════════════════════════════════════════════════
        SECTION 2 : LOGGER INTERNE
-       Log conditionnel — activer via BroChatWidget._debug = true
+       _log()  → DEBUG, gated par BroChatWidget._debug = true
+       _warn() → WARNING, toujours visible (erreurs non fatales)
+       _error()→ ERROR,   toujours visible (échecs critiques)
     ══════════════════════════════════════════════════════════════════════════ */
+
+    var _PFX = '[BRO_chat]';
 
     function _log() {
         if (!BroChatWidget._debug) return;
         var args = Array.prototype.slice.call(arguments);
-        args.unshift('[BRO_chat]');
+        args.unshift(_PFX);
         console.log.apply(console, args);
+    }
+    function _warn() {
+        var args = Array.prototype.slice.call(arguments);
+        args.unshift(_PFX + ' ⚠️');
+        console.warn.apply(console, args);
+    }
+    function _error() {
+        var args = Array.prototype.slice.call(arguments);
+        args.unshift(_PFX + ' ❌');
+        console.error.apply(console, args);
     }
 
     /* ══════════════════════════════════════════════════════════════════════════
@@ -383,16 +397,17 @@
 
                     /* Déchiffrement NIP-04 */
                     w.nostr.nip04.decrypt(_ctx.nodeHex, ev.content).then(function (decrypted) {
+                        _log('réponse déchiffrée:', decrypted.slice(0, 60) + (decrypted.length > 60 ? '…' : ''));
                         _appendMsg('node', '🤖 ' + decrypted);
                     }).catch(function (err) {
-                        _log('déchiffrement échoué:', err.message);
+                        _warn('déchiffrement NIP-04 échoué:', err.message);
                         _appendMsg('sys', '⚠️ Réponse reçue (déchiffrement impossible)');
                     });
                 } catch (_) {}
             };
 
             ws.onerror = function () {
-                _log('erreur WebSocket abonnement');
+                _warn('WebSocket abonnement erreur relay:', _ctx.relayUrl);
                 _appendMsg('sys', '⚠️ Relay déconnecté');
             };
 
@@ -480,6 +495,7 @@
                                     _log('DM accepté par le relay');
                                     resolve();
                                 } else {
+                                    _warn('DM rejeté par le relay:', m[3] || '(sans raison)');
                                     reject(new Error(m[3] || 'Rejeté par le relay'));
                                 }
                             }
@@ -487,6 +503,7 @@
                     };
 
                     ws.onerror = function () {
+                        _warn('WebSocket envoi erreur sur', _ctx.relayUrl);
                         clearTimeout(t);
                         ws.close();
                         reject(new Error('WebSocket error'));
@@ -494,7 +511,7 @@
                 });
             })
             .catch(function (e) {
-                _log('erreur envoi:', e.message);
+                _error('envoi DM kind 4 échoué:', e.message);
                 _appendMsg('sys', '⚠️ ' + e.message);
             })
             .then(function () {
@@ -580,14 +597,14 @@
                 _updateUI();
 
                 if (!_ctx.nodeHex) {
+                    _warn('NODEHEX introuvable (fetch /12345 vide ou échoué) — BRO indisponible');
                     _appendMsg('sys', '⚠️ NODEHEX introuvable — BRO indisponible');
-                    _log('NODEHEX vide — arrêt init');
                     return;
                 }
 
                 if (!w.nostr || !w.nostr.nip04 || !w.nostr.nip04.encrypt) {
+                    _warn('NIP-04 absent sur window.nostr — extension incompatible');
                     _appendMsg('sys', '⚠️ Extension NIP-07 sans support NIP-04');
-                    _log('nip04 absent sur window.nostr');
                     return;
                 }
 
@@ -606,7 +623,7 @@
                 }
             })
             .catch(function (e) {
-                _log('init échoué:', e.message);
+                _error('init échouée:', e.message);
                 _appendMsg('sys', '⚠️ Initialisation échouée: ' + e.message);
             });
     }

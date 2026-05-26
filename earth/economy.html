@@ -2339,6 +2339,7 @@
     <script src="nacl-fast.min.js"></script>
     <script src="scrypt.min.js"></script>
     <script src="nostr.bundle.js"></script>
+    <script src="heartbox.js"></script>
     <!-- coop-config.js : gestion DID NOSTR kind 30800 (partagé avec economy.Swarm.html) -->
     <script src="coop-config.js"></script>
     
@@ -2380,6 +2381,126 @@
         });
     </script>
 
+<script>
+    /* ── Constellation stats via heartbox.js (kind:30850) ── */
+    (function () {
+        if (!window.UPlanetHeartbox) return;
+
+        /* Dériver l'URL du relay NOSTR depuis common.js ou l'URL de la page */
+        function _relayUrl() {
+            if (typeof window.getRelayUrl === 'function') return window.getRelayUrl();
+            var p = new URLSearchParams(window.location.search);
+            var api = p.get('api_url') || '';
+            if (api) {
+                var m = api.match(/https?:\/\/u\.([\w.-]+?)(?::\d+)?(?:\/|$)/);
+                if (m) return 'wss://relay.' + m[1];
+            }
+            var host = window.location.hostname;
+            var hm = host.match(/^(?:u|ipfs|astroport)\.([\w.-]+)$/);
+            if (hm) return 'wss://relay.' + hm[1];
+            return 'wss://relay.copylaradio.com';
+        }
+
+        /* Créer la section DOM et l'injecter dans le dashboard */
+        function _buildSection() {
+            var section = document.createElement('div');
+            section.id = 'hb-constellation-section';
+            section.className = 'status-section';
+            section.style.cssText = [
+                'background:linear-gradient(145deg,#0a1020,#111a2a);',
+                'border-left:4px solid #00d4ff;',
+                'padding:12px;margin-top:8px;'
+            ].join('');
+
+            section.innerHTML = [
+                '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap;">',
+                '  <span style="font-size:1.2em;">🌌</span>',
+                '  <span style="font-size:1em;color:#e0e8ff;font-weight:600;">Constellation</span>',
+                '  <span id="hb-node-count" style="font-size:0.72em;color:#00d4ff;',
+                '    background:rgba(0,212,255,0.1);padding:2px 8px;border-radius:10px;">-- nœuds</span>',
+                '  <a href="./economy.Swarm.html" style="margin-left:auto;font-size:0.72em;',
+                '    color:#00d4ff;text-decoration:none;opacity:0.8;">Swarm →</a>',
+                '</div>',
+                '<div id="hb-agg-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(80px,1fr));',
+                '  gap:4px;margin-bottom:10px;"></div>',
+                '<div id="hb-cards-list" style="display:flex;flex-direction:column;gap:3px;">',
+                '  <div style="color:#405060;font-size:0.78em;text-align:center;padding:8px;">⏳ Connexion…</div>',
+                '</div>'
+            ].join('');
+
+            var dashboard = document.querySelector('.economic-dashboard');
+            if (dashboard) dashboard.appendChild(section);
+            return section;
+        }
+
+        /* Mettre à jour l'affichage stats + cartes */
+        function _render(eose) {
+            var hb = window.UPlanetHeartbox;
+            var stats = hb.getSwarmStats();
+
+            /* Badge compte */
+            var badge = document.getElementById('hb-node-count');
+            if (badge) badge.textContent = stats.stationCount + ' nœud' + (stats.stationCount !== 1 ? 's' : '');
+
+            /* Grille agrégats */
+            var aggGrid = document.getElementById('hb-agg-grid');
+            if (aggGrid) {
+                var cells = [
+                    { val: stats.stationCount,                                   label: 'STATIONS',   color: '#00d4ff' },
+                    { val: stats.healthPercent + '%',                            label: 'SANTÉ',      color: '#00ff88' },
+                    { val: stats.totalRevenue.toFixed(0) + ' Ẑ',               label: 'REV/SEM',    color: '#ffd32a' },
+                    { val: stats.totalMultipass + '+' + (stats.totalZencardRenters + stats.totalZencardOwners),
+                                                                                 label: 'USERS',      color: '#cc77ff' },
+                    { val: stats.brainCount,                                     label: 'BRAIN',      color: '#ff8800' }
+                ];
+                aggGrid.innerHTML = cells.map(function (c) {
+                    return '<div style="text-align:center;background:rgba(0,0,0,0.25);border-radius:4px;padding:5px 3px;">'
+                        + '<div style="font-size:0.95em;font-weight:700;color:' + c.color + ';">' + c.val + '</div>'
+                        + '<div style="font-size:0.58em;color:#506070;letter-spacing:0.5px;">' + c.label + '</div>'
+                        + '</div>';
+                }).join('');
+            }
+
+            /* Cartes stations */
+            var cardsList = document.getElementById('hb-cards-list');
+            if (!cardsList) return;
+
+            var ids = Array.from(hb.stations.keys());
+            if (ids.length === 0) {
+                cardsList.innerHTML = eose
+                    ? '<div style="color:#506070;font-size:0.78em;text-align:center;padding:8px;">Aucun nœud détecté</div>'
+                    : '<div style="color:#405060;font-size:0.78em;text-align:center;padding:8px;">⏳ Connexion…</div>';
+                return;
+            }
+
+            /* Tri : bénévolat d'abord (visibilité), puis solidarité, puis sains */
+            var order = { volunteer: 0, rnd_solidarity: 1, critical: 1, assets_solidarity: 2, warning: 2, healthy: 3 };
+            ids.sort(function (a, b) {
+                var sa = hb.stations.get(a), sb = hb.stations.get(b);
+                return ((order[sa.healthStatus] != null ? order[sa.healthStatus] : 3) -
+                        (order[sb.healthStatus] != null ? order[sb.healthStatus] : 3));
+            });
+
+            cardsList.innerHTML = ids.map(function (id) {
+                return hb.renderCard(id, { compact: true });
+            }).join('');
+        }
+
+        window.addEventListener('load', function () {
+            _buildSection();
+            var relayUrl = _relayUrl();
+
+            window.UPlanetHeartbox.init(relayUrl, {
+                onUpdate: function () { _render(false); },
+                onEose:   function () { _render(true); },
+                onError:  function () {
+                    var el = document.getElementById('hb-cards-list');
+                    if (el) el.innerHTML = '<div style="color:#806060;font-size:0.78em;">⚠ Relay inaccessible (' + relayUrl + ')</div>';
+                }
+            });
+        });
+    }());
+</script>
 <script src="app_switch.js"></script>
 <script src="feedback.js"></script>
 </body>

@@ -447,9 +447,9 @@
                     + (isBrain ? '<span style="font-size:0.68rem;color:#00d4ff;">' + station.hwPowerScore + 'pts</span>' : '')
                     + availHtml
                     + '<span style="color:' + bilanColor + ';font-weight:700;">'
-                    +   (bilanPositive ? '+' : '') + station.bilan.toFixed(1) + 'ẩ0'
+                    +   (bilanPositive ? '+' : '') + station.bilan.toFixed(1) + 'Ẑ'
                     + '</span>'
-                    + '<span style="color:#ffd32a;">' + station.revenueTotal.toFixed(0) + 'ẩ0</span>'
+                    + '<span style="color:#ffd32a;">' + station.revenueTotal.toFixed(0) + 'Ẑ</span>'
                     + '<span style="color:#a0a0b0;font-size:0.7rem;">'
                     +   '👤' + station.multipassUsed + '/' + station.multipassTotal
                     +   ' 🏠' + station.zencardRenters + '+' + station.zencardOwners
@@ -494,13 +494,13 @@
                 +   '<div>'
                 +     '<div style="font-size:0.65rem;color:#808090;letter-spacing:1px;margin-bottom:2px;">BILAN HEB.</div>'
                 +     '<div style="font-weight:700;color:' + bilanColor + ';font-size:0.95rem;">'
-                +       (bilanPositive ? '+' : '') + station.bilan.toFixed(2) + ' ẩ0'
+                +       (bilanPositive ? '+' : '') + station.bilan.toFixed(2) + ' Ẑ'
                 +     '</div>'
                 +   '</div>'
                 +   '<div>'
                 +     '<div style="font-size:0.65rem;color:#808090;letter-spacing:1px;margin-bottom:2px;">REVENU</div>'
                 +     '<div style="font-weight:700;color:#ffd32a;font-size:0.95rem;">'
-                +       station.revenueTotal.toFixed(2) + ' ẩ0'
+                +       station.revenueTotal.toFixed(2) + ' Ẑ'
                 +     '</div>'
                 +   '</div>'
                 +   '<div>'

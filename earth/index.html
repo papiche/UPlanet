@@ -27,6 +27,9 @@
 <script src="astro.js"></script>
 <script src="feedback.js"></script>
 <script src="app_switch.js"></script>
+<script src="nacl-fast.min.js"></script>
+<script src="nostr.bundle.js"></script>
+<script src="common.js"></script>
 
 <script type="text/javascript">
 
@@ -341,6 +344,20 @@ $(document).ready(function() {
         </div>
     </div>
 
+    <!-- Barre de connexion NOSTR (common.js) -->
+    <div id="nostr-bar" style="position:fixed;top:7px;left:62px;z-index:1002;
+      display:flex;align-items:center;gap:6px;
+      background:rgba(0,0,0,0.55);backdrop-filter:blur(10px);
+      border:1px solid rgba(255,255,255,0.12);border-radius:18px;
+      padding:4px 12px;font-size:11px;color:rgba(255,255,255,0.9);">
+      <span id="conn-badge">🔴</span>
+      <span id="user-name-badge" style="display:none;color:#86efac;font-weight:600;max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
+      <button id="btn-connect" onclick="handleConnect()"
+        style="background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.25);
+        color:rgba(255,255,255,0.9);padding:2px 9px;border-radius:10px;
+        cursor:pointer;font-size:11px;font-weight:500">⚡ Connect</button>
+    </div>
+
     <!-- Right side fan menu -->
     <div id="right-fan-menu" style="position: fixed; top: 5px; right: 5px; z-index: 1002;">
         <button id="fan-menu-toggle" class="btn btn-primary btn-lg" onclick="toggleFanMenu()" title="Open menu">☰</button>
@@ -368,9 +385,13 @@ $(document).ready(function() {
         </div>
 
         <div class="mb-2">
-            <h5 class="text-white mb-0">
-                <a target="visio" href="https://vdo.copylaradio.com/?room=UPLANET&effects&record" class="text-white text-decoration-none">VISIO by "vdo.ninja"</a>
+            <h5 class="text-white mb-0" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+                <a id="visio-link" target="visio" href="https://vdo.copylaradio.com/?room=UPLANET&effects&record" class="text-white text-decoration-none">📹 VISIO</a>
+                <span id="visio-live-badge" style="display:none;color:#ff4444;font-size:12px;font-weight:600;animation:vdo-pulse 1.5s ease-in-out infinite;"></span>
+                <a href="minelife.html" target="_blank" class="text-decoration-none" style="font-size:12px;color:#86efac;border:1px solid rgba(134,239,172,0.4);border-radius:10px;padding:2px 8px;" title="Enregistrer un craft / Démarrer un LIVE WoTx2">🎬 Craft &amp; LIVE</a>
             </h5>
+            <!-- Sessions LIVE actives (Kind 30311 NIP-53) -->
+            <div id="live-sessions-container" style="display:none;margin-top:6px;"></div>
         </div>
         <div id="result" class="text-white small mb-0">
             · <a target="entrance" href="https://opencollective.com/monnaie-libre" class="text-white text-decoration-none" title="CopyLaRadio = Web3 Internet Self Hosting ẐEN Cooperative"> Open Collective </a>
@@ -616,6 +637,11 @@ document.addEventListener('click', function(e) {
 </script>
 
 <style>
+@keyframes vdo-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+}
+
 /* Bootstrap Popover custom styling */
 .popover {
     background: rgba(20, 20, 40, 0.95) !important;
@@ -930,6 +956,127 @@ document.getElementById('bang-app-modal').addEventListener('click', function(e) 
 
 document.getElementById('cochon-modal').addEventListener('click', function(e) {
     if (e.target === this) { closeCochon(); }
+});
+
+// === UI connexion NOSTR (common.js) ===
+function updateConnectionUI() {
+    var badge = document.getElementById('conn-badge');
+    var btn   = document.getElementById('btn-connect');
+    var name  = document.getElementById('user-name-badge');
+    if (!badge) return;
+    var ok = window.isNostrConnected && window.userPubkey;
+    badge.textContent    = ok ? '🟢' : '🔴';
+    btn.style.display    = ok ? 'none' : '';
+    if (ok) {
+        var h = window.userPubkey;
+        name.textContent   = h.slice(0,8)+'…'+h.slice(-4);
+        name.style.display = '';
+        if (window.fetchUserMetadata) {
+            window.fetchUserMetadata(h)
+                .then(function(m){ if(m&&m.name) name.textContent = m.name; })
+                .catch(function(){});
+        }
+    } else {
+        name.style.display = 'none';
+    }
+}
+
+async function handleConnect() {
+    var btn = document.getElementById('btn-connect');
+    btn.textContent = '⏳…'; btn.disabled = true;
+    try {
+        await window.connectNostr(false);
+        updateConnectionUI();
+        subscribeToLiveSessions();
+    } catch(e) {}
+    finally { btn.textContent = '⚡ Connect'; btn.disabled = false; }
+}
+
+// === Sessions LIVE Kind 30311 (NIP-53, #t: UPlanet) via relay common.js ===
+var _liveSessions = {};
+
+function _liveTagVal(tags, name) {
+    for (var i = 0; i < tags.length; i++) {
+        if (tags[i][0] === name) return tags[i][1] || '';
+    }
+    return '';
+}
+
+function renderLiveSessions() {
+    var badge = document.getElementById('visio-live-badge');
+    var box   = document.getElementById('live-sessions-container');
+    if (!badge || !box) return;
+    var keys = Object.keys(_liveSessions);
+    if (keys.length === 0) {
+        badge.style.display = 'none';
+        box.style.display   = 'none';
+        box.innerHTML       = '';
+        return;
+    }
+    badge.textContent   = '🔴 ' + keys.length + ' LIVE';
+    badge.style.display = 'inline';
+    var html = '';
+    keys.forEach(function(k) {
+        var s     = _liveSessions[k];
+        var who   = s.title || (s.pubkey ? s.pubkey.slice(0,8)+'…' : '?');
+        var skill = s.skill ? ' · #' + s.skill : '';
+        var join  = s.viewerUrl
+            ? '<a href="' + s.viewerUrl + '" target="_blank" '
+              + 'style="color:#86efac;font-size:11px;white-space:nowrap;'
+              + 'text-decoration:none;border:1px solid rgba(134,239,172,0.4);'
+              + 'border-radius:8px;padding:1px 7px;">▶ Rejoindre</a>'
+            : '';
+        html += '<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;">'
+              + '<span style="color:#ff4444;font-size:10px;animation:vdo-pulse 1.5s infinite;">🔴</span>'
+              + '<span style="color:#fff;font-size:11px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'
+              + who + skill + '</span>' + join + '</div>';
+    });
+    box.innerHTML     = '<div style="border-top:1px solid rgba(255,255,255,0.15);padding-top:5px;">' + html + '</div>';
+    box.style.display = 'block';
+}
+
+function processLiveEvent(ev) {
+    if (!ev || ev.kind !== 30311) return;
+    var tags  = ev.tags || [];
+    var tTags = tags.filter(function(t){ return t[0]==='t'; }).map(function(t){ return t[1]; });
+    if (tTags.indexOf('UPlanet') === -1) return;
+    var status = _liveTagVal(tags, 'status');
+    var dTag   = _liveTagVal(tags, 'd');
+    var key    = ev.pubkey + ':' + dTag;
+    if (status === 'live') {
+        _liveSessions[key] = {
+            title:     _liveTagVal(tags, 'title'),
+            viewerUrl: _liveTagVal(tags, 'recording') || _liveTagVal(tags, 'streaming'),
+            skill:     tTags.filter(function(t){ return t!=='UPlanet'&&t!=='WoTx2'&&t!=='MineLife'; })[0] || '',
+            pubkey:    ev.pubkey
+        };
+    } else if (status === 'ended') {
+        delete _liveSessions[key];
+    }
+    renderLiveSessions();
+}
+
+function subscribeToLiveSessions() {
+    if (!window.nostrRelay) return;
+    try {
+        var sub = window.nostrRelay.sub([
+            { kinds: [30311], '#t': ['UPlanet'], limit: 20 }
+        ]);
+        sub.on('event', processLiveEvent);
+    } catch(e) { console.warn('[LIVE] subscribe error', e); }
+}
+
+// Init après chargement de common.js
+window.addEventListener('load', function() {
+    setTimeout(function() {
+        updateConnectionUI();
+        if (window.waitForConnection) {
+            window.waitForConnection(function() {
+                updateConnectionUI();
+                subscribeToLiveSessions();
+            });
+        }
+    }, 1000);
 });
 
 // Auto-ouvrir le Cyber Cochon une fois par session

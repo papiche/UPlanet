@@ -134,6 +134,22 @@ code { background: rgba(255,255,255,0.08); padding: 1px 5px; border-radius: 4px;
     .step-desc { display: none; }
     .station-actions { width: 100%; justify-content: flex-end; }
 }
+
+/* ── BRO Chat ── */
+.bro-chat-section { background: rgba(118,75,162,0.06); border: 1px solid rgba(118,75,162,0.3); border-radius: 13px; padding: 18px; margin-bottom: 32px; }
+.bro-chat-title { font-size: 16px; font-weight: 700; color: #c39bd3; margin-bottom: 4px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.bro-chat-sub { font-size: 12px; color: #666; margin-bottom: 14px; }
+.bro-msgs { min-height: 80px; max-height: 260px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; padding: 4px 0; }
+.bro-msg { max-width: 88%; padding: 8px 12px; border-radius: 10px; font-size: 13px; line-height: 1.55; word-break: break-word; }
+.bro-msg.user { align-self: flex-end; background: rgba(102,126,234,0.18); border: 1px solid rgba(102,126,234,0.3); color: #ccc; }
+.bro-msg.node { align-self: flex-start; background: rgba(118,75,162,0.14); border: 1px solid rgba(118,75,162,0.35); color: #ddd; }
+.bro-msg.sys  { align-self: center; font-size: 11px; color: #555; font-style: italic; border: none; background: none; padding: 2px 0; }
+.bro-input-row { display: flex; gap: 8px; }
+.bro-input { flex: 1; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); border-radius: 8px; color: #ddd; padding: 9px 12px; font-size: 13px; outline: none; }
+.bro-input:focus { border-color: rgba(118,75,162,0.5); }
+.btn-bro-send { padding: 9px 18px; background: linear-gradient(135deg, rgba(118,75,162,0.8), rgba(80,40,120,0.8)); border: none; border-radius: 8px; color: white; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s; white-space: nowrap; }
+.btn-bro-send:hover:not(:disabled) { background: linear-gradient(135deg, #764ba2, #5a2d82); }
+.btn-bro-send:disabled { opacity: 0.45; cursor: not-allowed; }
 </style>
 </head>
 <body>
@@ -190,10 +206,73 @@ code { background: rgba(255,255,255,0.08); padding: 1px 5px; border-radius: 4px;
     <div class="upload-result" id="upload-result"></div>
 </div>
 
+<!-- BRO Chat section (affiché après auth NIP-42 OK) -->
+<div id="bro-chat-section" style="display:none;" class="bro-chat-section">
+    <div class="bro-chat-title">
+        🤖 BRO — Dialogue avec votre NODE
+        <span id="bro-node-label" style="font-size:11px;font-weight:400;color:#888;font-family:monospace;"></span>
+    </div>
+    <div class="bro-chat-sub" id="bro-chat-sub">Connexion…</div>
+    <div class="bro-msgs" id="bro-msgs"></div>
+    <div class="bro-input-row">
+        <input class="bro-input" id="bro-input" type="text"
+               placeholder="Votre message à BRO…"
+               onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendBroMsg();}">
+        <button class="btn-bro-send" id="btn-bro-send" onclick="sendBroMsg()" disabled>
+            Envoyer →
+        </button>
+    </div>
+</div>
+
 </div><!-- .main-col -->
+
+<!-- ── Overlay blocage roaming (masqué par défaut) ── -->
+<div id="roaming-overlay" style="display:none;position:fixed;inset:0;z-index:9999;
+  background:rgba(5,10,18,0.97);display:none;align-items:center;justify-content:center;
+  flex-direction:column;text-align:center;padding:24px;">
+  <div style="max-width:480px;width:100%;">
+    <div style="font-size:3rem;margin-bottom:16px;">🌍</div>
+    <h2 style="font-family:'Courier New',monospace;color:#c39bd3;font-size:1.3rem;letter-spacing:3px;margin:0 0 12px;">
+      ROAMING DÉTECTÉ
+    </h2>
+    <p style="color:rgba(255,255,255,0.65);font-size:0.9rem;line-height:1.75;margin-bottom:20px;">
+      Votre MULTIPASS est géré par une autre station UPlanet.<br>
+      Connectez-vous depuis votre station <strong style="color:#c39bd3;">home</strong> pour accéder à cette fonction.
+    </p>
+    <div id="roaming-home-block" style="display:none;background:rgba(138,43,226,0.08);
+      border:1px solid rgba(138,43,226,0.3);border-radius:8px;padding:16px;margin-bottom:20px;">
+      <div style="font-family:'Courier New',monospace;font-size:0.62rem;color:#c39bd3;
+        letter-spacing:4px;margin-bottom:8px;">// VOTRE STATION HOME</div>
+      <a id="roaming-home-link" href="#" target="_blank"
+         style="color:#c39bd3;font-family:'Courier New',monospace;font-size:0.9rem;word-break:break-all;
+                text-decoration:none;border-bottom:1px dotted rgba(195,155,211,0.5);">
+        —
+      </a>
+    </div>
+    <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
+      <a id="roaming-home-btn" href="#" target="_blank"
+         style="background:#6c3483;color:#fff;padding:10px 22px;border-radius:6px;
+                text-decoration:none;font-weight:bold;font-size:0.85rem;
+                font-family:'Courier New',monospace;letter-spacing:1px;">
+        🏠 Rejoindre ma station home →
+      </a>
+      <button onclick="document.getElementById('roaming-overlay').style.display='none'"
+              style="background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.15);
+                     color:rgba(255,255,255,0.5);padding:10px 16px;border-radius:6px;
+                     cursor:pointer;font-size:0.82rem;">
+        Continuer quand même
+      </button>
+    </div>
+    <p style="margin-top:18px;font-size:0.75rem;color:rgba(255,255,255,0.25);
+      font-family:'Courier New',monospace;">
+      ASTROPORT.ONE · NIP-42 Anti-Roaming
+    </p>
+  </div>
+</div>
 
 <button class="btn-feedback-bottom" onclick="sendRoamingFeedback()">🐛 Signaler un problème</button>
 
+<script src="BRO_chat.js"></script>
 <script src="feedback.js"></script>
 <script>
 /* ═══════════════════════════════════════════════════════════════
@@ -208,6 +287,9 @@ const S = {
     authOk: false, authReason: '',
     verifyOk: false, verifyData: null,
     sourceTag: '', homeStation: '', prefStation: '',
+    /* BRO chat */
+    localNodeHex: '', homeNodeHex: '', homeNodeIpfsId: '',
+    chatNodeHex: '', chatRelayUrl: '', chatWs: null,
 };
 
 /* ═══════════════════════════════════════════════════════════════
@@ -515,6 +597,15 @@ async function stepDetect() {
         healthOk = r.ok;
     } catch(_){}
 
+    /* Fetch /12345 for local NODEHEX (needed for BRO chat) */
+    try {
+        const rn = await fetch(S.upassportUrl+'/12345', { signal: AbortSignal.timeout(4000) });
+        if (rn.ok) {
+            const j12 = await rn.json();
+            S.localNodeHex = j12.NODEHEX || '';
+        }
+    } catch(_){}
+
     const swarmCount = S.stationJson?.SWARM?.length ?? 0;
     const nostrCount = S.nostrUsers.length;
     const j = S.stationJson;
@@ -527,6 +618,7 @@ async function stepDetect() {
         j ? kv('UPLANETNAME', j.UPLANETNAME || '—') : '',
         j ? kv('Stations swarm', swarmCount) : '',
         j ? kv('Utilisateurs NOSTR', nostrCount) : '',
+        S.localNodeHex ? kv('NODE HEX local', shortKey(S.localNodeHex)) : '',
     ].join('');
 
     /* Show stations section */
@@ -580,6 +672,17 @@ async function stepPubkey() {
                     if (m[0]==='EVENT' && m[2]?.kind===0) {
                         S.profile = JSON.parse(m[2].content||'{}');
                         S.homeStation = S.profile.website || '';
+                        /* Parse home_station tag: ["i", "home_station:IPFSNODEID:NODE_HEX", ""] */
+                        for (const tag of (m[2].tags||[])) {
+                            if (tag[0]==='i' && String(tag[1]).startsWith('home_station:')) {
+                                const parts = String(tag[1]).slice('home_station:'.length).split(':');
+                                if (parts.length >= 2) {
+                                    S.homeNodeIpfsId = parts[0];
+                                    S.homeNodeHex    = parts[1];
+                                }
+                                break;
+                            }
+                        }
                         clearTimeout(t); ws.close(); resolve();
                     }
                 } catch(_){}
@@ -595,6 +698,7 @@ async function stepPubkey() {
             kv('npub', shortKey(S.npub)),
             S.profile ? kv('Nom', S.profile.display_name || S.profile.name || '—') : '',
             S.homeStation ? kv('Station home (profil)', S.homeStation) : '',
+            S.homeNodeHex ? kv('NODE HEX home (tag)', shortKey(S.homeNodeHex)) : '',
         ].join('');
         setStep('pubkey','ok','✅ OK', details, null);
         return true;
@@ -690,6 +794,7 @@ async function stepVerify() {
         const r = await fetch(url, { signal: AbortSignal.timeout(6000), headers: { Accept: 'application/json' } });
         S.verifyOk   = r.ok;
         S.verifyData = r.ok ? await r.json() : null;
+        console.log('[ROAMING] /api/myGPS →', r.status, S.verifyData);
         const details = [
             kv('Endpoint', '/api/myGPS'),
             kv('Status', r.status+' '+r.statusText),
@@ -717,6 +822,18 @@ async function stepVerify() {
 async function stepRoaming() {
     setStep('roaming','running','🔄 Analyse…',null,null);
     await new Promise(r => setTimeout(r, 300));
+
+    console.log('[ROAMING] stepRoaming — state snapshot:', {
+        sourceTag:   S.sourceTag,
+        authOk:      S.authOk,
+        authReason:  S.authReason,
+        homeStation: S.homeStation,
+        verifyOk:    S.verifyOk,
+        verifyData:  S.verifyData,
+        pubkeyHex:   S.pubkeyHex ? S.pubkeyHex.slice(0,16)+'…' : null,
+        npub:        S.npub      ? S.npub.slice(0,16)+'…'      : null,
+        nostrUsers:  S.nostrUsers.length,
+    });
 
     /* Priority 1: source from /api/myGPS response */
     let source = S.sourceTag || '';
@@ -794,6 +911,145 @@ async function stepGPS() {
 }
 
 /* ═══════════════════════════════════════════════════════════════
+   BRO Chat — NIP-04 DMs vers le NODE de la station
+   ═══════════════════════════════════════════════════════════════ */
+
+function _homeRelayUrl() {
+    if (!S.homeStation) return S.relayUrl;
+    try {
+        const u = new URL(S.homeStation);
+        let base = u.hostname;
+        for (const p of ['ipfs.','u.','relay.','astroport.']) {
+            if (base.startsWith(p)) { base = base.slice(p.length); break; }
+        }
+        return `wss://relay.${base}`;
+    } catch(_) { return S.relayUrl; }
+}
+
+function appendBroMsg(who, text) {
+    const msgs = document.getElementById('bro-msgs');
+    if (!msgs) return;
+    const div = document.createElement('div');
+    div.className = 'bro-msg ' + who;
+    div.textContent = text;
+    msgs.appendChild(div);
+    msgs.scrollTop = msgs.scrollHeight;
+}
+
+function _subscribeBroResponses() {
+    if (S.chatWs) { try { S.chatWs.close(); } catch(_){} S.chatWs = null; }
+    if (!S.chatNodeHex || !S.pubkeyHex) return;
+    try {
+        const ws = new WebSocket(S.chatRelayUrl);
+        S.chatWs = ws;
+        const subId = 'bro_' + Date.now();
+        const since = Math.floor(Date.now()/1000) - 30;
+        ws.onopen = () => ws.send(JSON.stringify(['REQ', subId, {
+            kinds: [4], authors: [S.chatNodeHex], '#p': [S.pubkeyHex], since,
+        }]));
+        ws.onmessage = async e => {
+            try {
+                const m = JSON.parse(e.data);
+                if (m[0]==='EVENT' && m[2]?.kind===4 && m[2].pubkey===S.chatNodeHex) {
+                    const pTag = (m[2].tags||[]).find(t=>t[0]==='p');
+                    if (!pTag || pTag[1]!==S.pubkeyHex) return;
+                    try {
+                        const dec = await window.nostr.nip04.decrypt(S.chatNodeHex, m[2].content);
+                        appendBroMsg('node', '🤖 ' + dec);
+                    } catch(_) {
+                        appendBroMsg('sys', '⚠️ Message reçu (impossible à déchiffrer)');
+                    }
+                }
+            } catch(_) {}
+        };
+        ws.onerror = () => appendBroMsg('sys', '⚠️ Relay BRO déconnecté');
+        ws.onclose = () => {};
+    } catch(e) {
+        appendBroMsg('sys', '⚠️ Connexion relay: ' + e.message);
+    }
+}
+
+function showChatSection() {
+    const sec = document.getElementById('bro-chat-section');
+    if (!sec) return;
+
+    /* Choix du node cible : home (roaming) ou local */
+    if (S.sourceTag === 'swarm' && S.homeNodeHex) {
+        S.chatNodeHex  = S.homeNodeHex;
+        S.chatRelayUrl = _homeRelayUrl();
+    } else if (S.localNodeHex) {
+        S.chatNodeHex  = S.localNodeHex;
+        S.chatRelayUrl = S.relayUrl;
+    } else {
+        return; /* Pas de NODEHEX disponible */
+    }
+
+    if (!window.nostr?.nip04?.encrypt) {
+        sec.style.display = 'block';
+        appendBroMsg('sys', '⚠️ Extension NIP-07 sans support NIP-04 — chat indisponible');
+        return;
+    }
+
+    const label   = document.getElementById('bro-node-label');
+    const sub     = document.getElementById('bro-chat-sub');
+    const sendBtn = document.getElementById('btn-bro-send');
+    if (label) label.textContent = S.chatNodeHex.slice(0,12) + '…';
+    if (sub) {
+        const loc = S.sourceTag === 'swarm' ? '🔵 home station (roaming)' : '🟢 station locale';
+        sub.textContent = `${loc} · relay: ${S.chatRelayUrl.replace(/^wss?:\/\//,'')}`;
+    }
+    if (sendBtn) sendBtn.disabled = false;
+
+    sec.style.display = 'block';
+    appendBroMsg('sys', '🤖 BRO en ligne · NIP-04');
+    _subscribeBroResponses();
+}
+
+async function sendBroMsg() {
+    const input   = document.getElementById('bro-input');
+    const sendBtn = document.getElementById('btn-bro-send');
+    if (!input || !S.chatNodeHex || !S.pubkeyHex) return;
+    const text = input.value.trim();
+    if (!text) return;
+
+    input.value = '';
+    sendBtn.disabled = true;
+    appendBroMsg('user', text);
+
+    try {
+        if (!window.nostr?.nip04?.encrypt) throw new Error('NIP-04 non disponible');
+        const encrypted = await window.nostr.nip04.encrypt(S.chatNodeHex, text);
+        const event = await window.nostr.signEvent({
+            kind: 4, pubkey: S.pubkeyHex,
+            created_at: Math.floor(Date.now()/1000),
+            tags: [['p', S.chatNodeHex]],
+            content: encrypted,
+        });
+        await new Promise((resolve, reject) => {
+            let ws;
+            try { ws = new WebSocket(S.chatRelayUrl); } catch(e){ reject(e); return; }
+            const t = setTimeout(() => { ws.close(); reject(new Error('timeout relay')); }, 8000);
+            ws.onopen  = () => ws.send(JSON.stringify(['EVENT', event]));
+            ws.onmessage = e => {
+                try {
+                    const m = JSON.parse(e.data);
+                    if (m[0]==='OK' && m[1]===event.id) {
+                        clearTimeout(t); ws.close();
+                        m[2]===true ? resolve() : reject(new Error(m[3]||'Rejeté'));
+                    }
+                } catch(_){}
+            };
+            ws.onerror = () => { clearTimeout(t); ws.close(); reject(new Error('WebSocket error')); };
+        });
+    } catch(e) {
+        appendBroMsg('sys', '⚠️ ' + e.message);
+    } finally {
+        sendBtn.disabled = false;
+        input.focus();
+    }
+}
+
+/* ═══════════════════════════════════════════════════════════════
    Runner
    ═══════════════════════════════════════════════════════════════ */
 let running = false;
@@ -839,9 +1095,32 @@ async function runAll() {
 
     /* Afficher la section upload si l'auth NIP-42 est validée */
     if (S.authOk && S.npub) showUploadSection();
+
+    /* BRO Chat : disponible dès qu'on a un NODEHEX (local ou home) */
+    if (S.npub && (S.localNodeHex || S.homeNodeHex)) showChatSection();
+
+    /* Blocage roaming : si source=swarm → overlay */
+    if (S.sourceTag === 'swarm') showRoamingBlock();
+}
+
+function showRoamingBlock() {
+    var overlay = document.getElementById('roaming-overlay');
+    if (!overlay) return;
+    var homeUrl = S.homeStation || S.verifyData?.home_station_url || '';
+    if (homeUrl) {
+        var homeBlock = document.getElementById('roaming-home-block');
+        var homeLink  = document.getElementById('roaming-home-link');
+        var homeBtn   = document.getElementById('roaming-home-btn');
+        if (homeBlock) homeBlock.style.display = 'block';
+        if (homeLink)  { homeLink.textContent = homeUrl; homeLink.href = homeUrl; }
+        if (homeBtn)   homeBtn.href = homeUrl;
+    }
+    overlay.style.display = 'flex';
 }
 
 function resetAll() {
+    /* Fermer le WebSocket BRO avant reset état */
+    if (S.chatWs) { try { S.chatWs.close(); } catch(_){} }
     Object.keys(S).forEach(k => {
         if (Array.isArray(S[k])) S[k] = [];
         else if (typeof S[k]==='object'&&S[k]!==null) S[k]=null;
@@ -852,6 +1131,12 @@ function resetAll() {
     document.getElementById('stations-section').style.display = 'none';
     const uploadSec = document.getElementById('udrive-upload-section');
     if (uploadSec) uploadSec.style.display = 'none';
+    const chatSec = document.getElementById('bro-chat-section');
+    if (chatSec) { chatSec.style.display = 'none'; }
+    const broMsgs = document.getElementById('bro-msgs');
+    if (broMsgs) broMsgs.innerHTML = '';
+    const sendBtn = document.getElementById('btn-bro-send');
+    if (sendBtn) sendBtn.disabled = true;
     _uploadFile = null;
     document.getElementById('global-status').textContent = 'En attente…';
     document.getElementById('btn-run').disabled = false;
@@ -997,10 +1282,12 @@ function sendRoamingFeedback() {
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   Init
+   Init — auto-run NIP-42 au chargement
    ═══════════════════════════════════════════════════════════════ */
 buildStepsHTML();
 if (typeof detectUSPOTAPI === 'function') detectUSPOTAPI();
+/* Laisser 900ms aux extensions NIP-07 (Alby, nos2x) pour s'initialiser avant l'auto-run */
+setTimeout(function() { if (!running) runAll(); }, 900);
 </script>
 <script src="app_switch.js"></script>
 </body>

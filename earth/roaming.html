@@ -691,7 +691,7 @@ async function stepPubkey() {
                     const m = JSON.parse(e.data);
                     if (m[0]==='EVENT' && m[2]?.kind===0) {
                         S.profile = JSON.parse(m[2].content||'{}');
-                        S.homeStation = S.profile.website || '';
+                        /* NE PAS utiliser profile.website — peut pointer vers uDRIVE, pas la station home */
                         /* Parse home_station tag: ["i", "home_station:IPFSNODEID:NODE_HEX", ""] */
                         for (const tag of (m[2].tags||[])) {
                             if (tag[0]==='i' && String(tag[1]).startsWith('home_station:')) {
@@ -720,8 +720,7 @@ async function stepPubkey() {
             kv('pubkey hex', shortKey(S.pubkeyHex)),
             kv('npub', shortKey(S.npub)),
             S.profile ? kv('Nom', S.profile.display_name || S.profile.name || '—') : '',
-            S.homeStation ? kv('Station home (kind:0 website)', S.homeStation) : kv('Station home', '— champ website absent du profil'),
-            S.homeNodeHex ? kv('NODE HEX home (tag i:)', shortKey(S.homeNodeHex)) : kv('Home NODE HEX', '— tag i:home_station absent'),
+            S.homeNodeHex ? kv('Home NODE HEX (tag i:)', shortKey(S.homeNodeHex)) : kv('Home NODE HEX', '— tag i:home_station absent'),
             S.homeNodeIpfsId ? kv('Home IPFS NodeID', S.homeNodeIpfsId.slice(0,12)+'…') : '',
         ].join('');
         setStep('pubkey','ok','✅ OK', details, null);
@@ -841,8 +840,9 @@ async function stepVerify() {
         ].join('');
         if (r.ok) {
             if (S.verifyData?.source) S.sourceTag = S.verifyData.source;
-            if (S.verifyData?.home_station_url && !S.homeStation) S.homeStation = S.verifyData.home_station_url;
-            if (S.verifyData?.home_node_hex    && !S.homeNodeHex) S.homeNodeHex  = S.verifyData.home_node_hex;
+            /* Source autoritaire : l'API prime toujours sur le profil kind:0 */
+            if (S.verifyData?.home_station_url) S.homeStation = S.verifyData.home_station_url;
+            if (S.verifyData?.home_node_hex)    S.homeNodeHex  = S.verifyData.home_node_hex;
             setStep('verify','ok','✅ Marker NIP-42 valide', details, null);
         } else if (r.status===401||r.status===403) {
             setStep('verify','error','❌ Non autorisé', kv('Status', r.status),
@@ -934,17 +934,12 @@ async function stepRoaming() {
 
     const details = [
         kvRow('Statut',      `<span class="sbadge ${isSwarm?'sbadge-roam':srcLow==='local'?'sbadge-me':srcLow.includes('amis')?'sbadge-pref':''}">${label}</span>`),
-        kv('Méthode de résolution',     `Priorité ${resoPriority} — ${resoPriorityLabel}`),
-        kv('Station courante',          currHost),
-        kv('Source brute (API)',        S.verifyData?.source || '—'),
-        kv('Station home (kind:0)',     S.homeStation || '— champ website absent'),
-        kv('Station home (API /myGPS)', S.verifyData?.home_station_url || '— non renvoyé'),
-        S.homeNodeHex  ? kv('Home NODE HEX (tag i:)',   shortKey(S.homeNodeHex))  : kv('Home NODE HEX', '— absent du profil'),
-        S.localNodeHex ? kv('NODE HEX station courante', shortKey(S.localNodeHex)) : '',
-        kv('Compte dans NOSTR[]', nostrFound ? '✅ trouvé (SOURCE: ' + (nostrFound.SOURCE||'—') + ')' : '❌ absent'),
-        kv('Relay NIP-42',        S.authOk ? '✅ accepté' : '❌ rejeté — ' + (S.authReason||'?')),
-        kv('homeBase (profil)',   homeBase || '—'),
-        kv('currBase (station)',  currBase || '—'),
+        kv('Station courante',     currHost),
+        kv('Source (API /myGPS)', S.verifyData?.source || '—'),
+        S.homeStation  ? kvRow('Station home', `<a href="${S.homeStation}" target="_blank" style="color:#99aaff;word-break:break-all">${S.homeStation}</a>`) : kv('Station home', '— non renvoyée par l\'API'),
+        S.homeNodeHex  ? kv('Home NODE HEX',   shortKey(S.homeNodeHex))  : '',
+        S.localNodeHex ? kv('NODE HEX local',  shortKey(S.localNodeHex)) : '',
+        kv('Relay NIP-42', S.authOk ? '✅ accepté' : '❌ rejeté — ' + (S.authReason||'?')),
     ].join('') + extra;
 
     setStep('roaming', status,

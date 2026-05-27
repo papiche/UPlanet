@@ -7,6 +7,7 @@
     <link href="/ipfs/QmUPAAEcLVbmXBKcribNfhbpZ655BjbdCB2BsKz6tCGCfk/css2.css" rel="stylesheet">
     <script src="/ipfs/QmUPAAEcLVbmXBKcribNfhbpZ655BjbdCB2BsKz6tCGCfk/chart.js"></script>
     <script src="/ipfs/QmUvcdtTqYgv1aY7SasRb7J28rkCUCTEQqWRHmbgNBxh1H/chartjs-plugin-datalabels.js"></script>
+    <script src="heartbox.js"></script>
     <style>
         * {
             margin: 0;
@@ -1170,8 +1171,8 @@
     </div>
 
     <script>
-        // Constantes fixes
-        const C = {
+        // Constantes (taux fiscaux mis à jour depuis kind:30800 si disponible)
+        var C = {
             TAUX_TVA: 0.20,
             TAUX_IS: 0.25,
             REMUNERATION_CAPITAINE: 42, // 3x PAF (14 Ẑ Armateur + 28 Ẑ Capitaine = 42 Ẑ/semaine)
@@ -1182,6 +1183,24 @@
             LOCATAIRES_PAR_STATION: 250,  // MULTIPASS par station
             PROPRIETAIRES_PAR_STATION: 24, // ZEN Cards par station
         };
+
+        /* ---- Taux coopératifs depuis NOSTR kind:30800 ---- */
+        function detectRelayUrl() {
+            if (typeof window.getRelayUrl === 'function') return window.getRelayUrl();
+            var q = new URLSearchParams(window.location.search).get('relay');
+            if (q) return q;
+            var h = window.location.hostname;
+            var parts = h.split('.');
+            if (parts.length >= 3) { parts[0] = 'relay'; return 'wss://' + parts.join('.'); }
+            return 'wss://relay.copylaradio.com';
+        }
+        function applyCoopConfig() {
+            if (!window.UPlanetHeartbox) return;
+            var tvr = parseFloat(window.UPlanetHeartbox.getCoopValue('TVA_RATE', ''));
+            var isr = parseFloat(window.UPlanetHeartbox.getCoopValue('IS_RATE_NORMAL', ''));
+            if (!isNaN(tvr) && tvr > 0) C.TAUX_TVA = tvr / 100;
+            if (!isNaN(isr) && isr > 0) C.TAUX_IS  = isr / 100;
+        }
         
         // Fonction pour récupérer les valeurs dynamiques
         function getDynamicValues() {
@@ -1927,6 +1946,16 @@
             // Initialisation
             updateSliderValues();
             calculateEconomy();
+
+            // Fetch kind:30800 en arrière-plan → mise à jour des taux fiscaux si disponibles
+            if (window.UPlanetHeartbox) {
+                window.UPlanetHeartbox.fetchCoopConfig(detectRelayUrl(), {
+                    onConfig: function () {
+                        applyCoopConfig();
+                        calculateEconomy();
+                    }
+                });
+            }
         });
     </script>
 <script src="feedback.js"></script>

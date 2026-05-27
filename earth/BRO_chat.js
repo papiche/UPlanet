@@ -133,10 +133,21 @@
      * Utilisé en mode roaming pour contacter le relay de la home station.
      * Ex: "https://u.domain.tld" → "wss://relay.domain.tld"
      */
+    /**
+     * Derive l'URL WSS du relay de la home station depuis son URL IPFS/API.
+     * Si l'URL dérivée pointe vers localhost/127.0.0.1 (non joignable depuis
+     * un navigateur externe), retourne le relay de la constellation (copylaradio).
+     * La home station écoute sur ce relay via son subscriber constellation.
+     */
     function _homeRelayFromUrl(stationUrl, fallback) {
         if (!stationUrl) return fallback;
         try {
             var h = new URL(stationUrl).hostname;
+            /* hostname est 127.0.0.1 ou localhost → relay local non joignable */
+            if (h === '127.0.0.1' || h === 'localhost') {
+                _warn('home station relay local non joignable — fallback constellation relay');
+                return 'wss://relay.copylaradio.com';
+            }
             for (var _i = 0; _i < ['ipfs.', 'u.', 'relay.', 'astroport.'].length; _i++) {
                 var pfx = ['ipfs.', 'u.', 'relay.', 'astroport.'][_i];
                 if (h.startsWith(pfx)) { h = h.slice(pfx.length); break; }

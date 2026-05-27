@@ -64,6 +64,11 @@
             var onEose   = typeof opts.onEose   === 'function' ? opts.onEose   : function () {};
             var onError  = typeof opts.onError  === 'function' ? opts.onError  : function () {};
 
+            /* Fetch cooperative config (kind:30800) in background — silent */
+            fetchCoopConfig(relayUrl, {
+                onConfig: typeof opts.onCoopConfig === 'function' ? opts.onCoopConfig : function () {}
+            });
+
             var since = Math.floor(Date.now() / 1000) - (30 * 24 * 60 * 60);
             var filter = { kinds: [30850], since: since, limit: 500 };
 
@@ -671,6 +676,95 @@
         };
         return colors[cls] || 'rgba(128,128,144,0.12)';
     }
+
+    /* =========================================================================
+     * fetchCoopConfig(relayUrl, opts)
+     *
+     * Fetch the cooperative configuration from NOSTR kind:30800
+     * (d-tag "cooperative-config", published by the constellation captain).
+     *
+     * Public fields (TVA_RATE, IS_RATE_*, TREASURY_PERCENT, RND_PERCENT,
+     * ASSETS_PERCENT, CAPTAIN_BONUS_PERCENT, ZENCARD_SATELLITE,
+     * ZENCARD_CONSTELLATION, OCSLUG, OC_URL_*) are stored in plain text.
+     * Sensitive fields (API keys) appear as encrypted strings — ignored here.
+     *
+     * On success, stores the config in window._coopConfigData (shared with
+     * coop-config.js when present) and calls opts.onConfig(config).
+     * On failure or timeout, calls opts.onError(err) — silent by default.
+     *
+     * Returns a disconnect() function.
+     * ====================================================================== */
+    function fetchCoopConfig(relayUrl, opts) {
+        opts = opts || {};
+        var onConfig = typeof opts.onConfig === 'function' ? opts.onConfig : function () {};
+        var onErr    = typeof opts.onError  === 'function' ? opts.onError  : function () {};
+
+        var filter = { kinds: [30800], '#d': ['cooperative-config'], limit: 1 };
+        var ws;
+
+        /* Raw WebSocket — no NostrTools dependency needed for read-only access */
+        try {
+            ws = new global.WebSocket(relayUrl);
+        } catch (e) { onErr(e); return function () {}; }
+
+        var subId = 'coop30800-' + Date.now();
+        var done = false;
+        var timeout = setTimeout(function () {
+            if (!done) { done = true; try { ws.close(); } catch (e) {} onErr(new Error('kind:30800 timeout')); }
+        }, 8000);
+
+        ws.onopen = function () {
+            ws.send(JSON.stringify(['REQ', subId, filter]));
+        };
+
+        ws.onmessage = function (msg) {
+            try {
+                var data = JSON.parse(msg.data);
+                if (data[0] === 'EVENT' && data[2]) {
+                    var ev = data[2];
+                    var content = {};
+                    try { content = JSON.parse(ev.content); } catch (e) {}
+                    /* Keep only non-encrypted public fields */
+                    var pub = {};
+                    var encRe = /^[0-9a-f]{32}:/;
+                    Object.keys(content).forEach(function (k) {
+                        if (typeof content[k] === 'string' && !encRe.test(content[k])) {
+                            pub[k] = content[k];
+                        } else if (typeof content[k] === 'number') {
+                            pub[k] = content[k];
+                        }
+                    });
+                    /* Merge into window._coopConfigData (coop-config.js compat) */
+                    if (!global._coopConfigData) global._coopConfigData = {};
+                    Object.keys(pub).forEach(function (k) { global._coopConfigData[k] = pub[k]; });
+                    if (!done) { done = true; clearTimeout(timeout); try { ws.close(); } catch (e) {} onConfig(pub); }
+                } else if (data[0] === 'EOSE') {
+                    if (!done) { done = true; clearTimeout(timeout); try { ws.close(); } catch (e) {} onConfig(global._coopConfigData || {}); }
+                }
+            } catch (e) {}
+        };
+
+        ws.onerror = function (err) {
+            if (!done) { done = true; clearTimeout(timeout); onErr(err || new Error('ws error')); }
+        };
+
+        return function () { try { ws.close(); } catch (e) {} };
+    }
+
+    /* Expose fetchCoopConfig on the public API */
+    UPlanetHeartbox.fetchCoopConfig = fetchCoopConfig;
+
+    /* =========================================================================
+     * getCoopValue(key, defaultVal)
+     *
+     * Read a cooperative config value from window._coopConfigData.
+     * Falls back to defaultVal if not loaded yet.
+     * ====================================================================== */
+    UPlanetHeartbox.getCoopValue = function (key, defaultVal) {
+        var cfg = global._coopConfigData;
+        if (cfg && cfg[key] !== undefined && cfg[key] !== '') return cfg[key];
+        return defaultVal;
+    };
 
     /* =========================================================================
      * Export

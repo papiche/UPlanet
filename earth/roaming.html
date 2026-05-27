@@ -170,6 +170,18 @@ code { background: rgba(255,255,255,0.08); padding: 1px 5px; border-radius: 4px;
     <span id="global-status">En attente…</span>
 </div>
 
+<!-- Journal de diagnostic (s'ouvre automatiquement dès le premier log) -->
+<details id="debug-log-panel" style="max-width:720px;margin:0 auto 14px;">
+    <summary style="cursor:pointer;font-size:12px;color:#555;padding:5px 4px;list-style:none;
+      display:flex;align-items:center;gap:6px;user-select:none;">
+        <span>🪲</span> <span style="color:#666">Journal de diagnostic</span>
+        <span id="debug-log-count" style="color:#555;font-size:11px;"></span>
+    </summary>
+    <pre id="debug-log-content" style="background:rgba(0,0,0,0.45);border:1px solid rgba(255,255,255,0.07);
+      border-radius:8px;padding:10px 12px;font-size:11px;color:#777;max-height:240px;
+      overflow-y:auto;margin-top:4px;white-space:pre-wrap;word-break:break-all;line-height:1.5;"></pre>
+</details>
+
 <div class="steps-container" id="steps-container"></div>
 
 <!-- Constellation stations section -->
@@ -206,23 +218,8 @@ code { background: rgba(255,255,255,0.08); padding: 1px 5px; border-radius: 4px;
     <div class="upload-result" id="upload-result"></div>
 </div>
 
-<!-- BRO Chat section (affiché après auth NIP-42 OK) -->
-<div id="bro-chat-section" style="display:none;" class="bro-chat-section">
-    <div class="bro-chat-title">
-        🤖 BRO — Dialogue avec votre NODE
-        <span id="bro-node-label" style="font-size:11px;font-weight:400;color:#888;font-family:monospace;"></span>
-    </div>
-    <div class="bro-chat-sub" id="bro-chat-sub">Connexion…</div>
-    <div class="bro-msgs" id="bro-msgs"></div>
-    <div class="bro-input-row">
-        <input class="bro-input" id="bro-input" type="text"
-               placeholder="Votre message à BRO…"
-               onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendBroMsg();}">
-        <button class="btn-bro-send" id="btn-bro-send" onclick="sendBroMsg()" disabled>
-            Envoyer →
-        </button>
-    </div>
-</div>
+<!-- BRO Chat — le widget est injecté dynamiquement par BroChatWidget.open() -->
+<div id="bro-chat-section" style="display:none;"></div>
 
 </div><!-- .main-col -->
 
@@ -348,6 +345,24 @@ function hexToNpub(hex) {
     } catch(_){ return hex.slice(0,16)+'…'; }
 }
 function shortKey(k) { return k.slice(0,12)+'…'+k.slice(-6); }
+
+/* ═══════════════════════════════════════════════════════════════
+   Journal de diagnostic — _log(stepId, msg)
+   Écrit dans la console ET dans le panel #debug-log-panel
+   ═══════════════════════════════════════════════════════════════ */
+var _dbLogs = [];
+function _log(stepId, msg) {
+    var ts = new Date().toLocaleTimeString('fr-FR', {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+    var line = '[' + ts + '] [' + stepId + '] ' + msg;
+    _dbLogs.push(line);
+    console.log('[ROAMING]', stepId, msg);
+    var el  = document.getElementById('debug-log-content');
+    var cnt = document.getElementById('debug-log-count');
+    var panel = document.getElementById('debug-log-panel');
+    if (el)  { el.textContent = _dbLogs.join('\n'); el.scrollTop = el.scrollHeight; }
+    if (cnt) cnt.textContent = '(' + _dbLogs.length + ' lignes)';
+    if (panel && !panel.open) panel.open = true;
+}
 
 /* ═══════════════════════════════════════════════════════════════
    Step definitions
@@ -577,6 +592,7 @@ async function stepDetect() {
     setStep('detect','running','🔄 En cours…',null,null);
     S.upassportUrl = deriveUPassport();
     S.relayUrl     = deriveRelay();
+    _log('detect', 'upassportUrl=' + S.upassportUrl + ' relayUrl=' + S.relayUrl);
 
     /* Fetch full station JSON from UPassport / */
     let upassportOk = false;
@@ -628,6 +644,9 @@ async function stepDetect() {
         renderConstellationStations();
     }
 
+    _log('detect', 'healthOk=' + healthOk + ' upassportOk=' + upassportOk +
+        ' swarm=' + (S.stationJson?.SWARM?.length??0) + ' nostr=' + S.nostrUsers.length +
+        ' localNodeHex=' + (S.localNodeHex ? S.localNodeHex.slice(0,12)+'…' : '—'));
     if (upassportOk || healthOk) {
         setStep('detect','ok','✅ OK', details, null);
     } else {
@@ -646,6 +665,7 @@ async function stepNip07() {
         kv('window.nostr',   has     ? '✅ présent' : '❌ absent'),
         kv('signEvent()',    hasSign ? '✅ disponible' : '❌ absent'),
     ].join('');
+    _log('nip07', has ? (hasSign ? 'window.nostr + signEvent ✅' : 'window.nostr présent mais signEvent absent') : 'window.nostr ABSENT');
     if (hasSign) { setStep('nip07','ok','✅ OK', details, null); return true; }
     setStep('nip07','error','❌ Absent', details,
         has ? 'window.nostr.signEvent() manquant (extension incompatible).'
@@ -693,12 +713,16 @@ async function stepPubkey() {
         /* Re-render stations with home station info */
         if (S.homeStation && S.swarmStations.length) renderConstellationStations();
 
+        _log('pubkey', 'hex=' + S.pubkeyHex.slice(0,16) + '… home=' + (S.homeStation||'—') +
+            ' homeNodeHex=' + (S.homeNodeHex?S.homeNodeHex.slice(0,12)+'…':'—'));
+
         const details = [
             kv('pubkey hex', shortKey(S.pubkeyHex)),
             kv('npub', shortKey(S.npub)),
             S.profile ? kv('Nom', S.profile.display_name || S.profile.name || '—') : '',
-            S.homeStation ? kv('Station home (profil)', S.homeStation) : '',
-            S.homeNodeHex ? kv('NODE HEX home (tag)', shortKey(S.homeNodeHex)) : '',
+            S.homeStation ? kv('Station home (kind:0 website)', S.homeStation) : kv('Station home', '— champ website absent du profil'),
+            S.homeNodeHex ? kv('NODE HEX home (tag i:)', shortKey(S.homeNodeHex)) : kv('Home NODE HEX', '— tag i:home_station absent'),
+            S.homeNodeIpfsId ? kv('Home IPFS NodeID', S.homeNodeIpfsId.slice(0,12)+'…') : '',
         ].join('');
         setStep('pubkey','ok','✅ OK', details, null);
         return true;
@@ -717,10 +741,11 @@ async function stepChallenge() {
         S.challenge = data.challenge;
         S.challengeTTL = data.expires_in || 120;
         if (!S.challenge || S.challenge.length !== 64) throw new Error('Challenge invalide');
+        _log('challenge', 'nonce=' + S.challenge.slice(0,16) + '… TTL=' + S.challengeTTL + 's');
         const details = [
-            kv('Challenge', shortKey(S.challenge)),
-            kv('TTL', S.challengeTTL+'s'),
-            kv('URL', url),
+            kv('Challenge (nonce)', shortKey(S.challenge)),
+            kv('TTL', S.challengeTTL + 's'),
+            kv('URL appelée', url),
         ].join('');
         setStep('challenge','ok','✅ Reçu', details, null); return true;
     } catch(e) {
@@ -740,10 +765,13 @@ async function stepSign() {
         };
         S.signedEvent = await window.nostr.signEvent(unsigned);
         if (!S.signedEvent?.id || !S.signedEvent?.sig) throw new Error('Événement incomplet');
+        _log('sign', 'event id=' + S.signedEvent.id.slice(0,16) + '… sig=' + S.signedEvent.sig.slice(0,12) + '…');
         const details = [
             kv('kind',       '22242 (éphémère NIP-42)'),
             kv('event id',   shortKey(S.signedEvent.id)),
             kv('sig',        shortKey(S.signedEvent.sig)),
+            kv('relay tag',  normalizedRelayUrl),
+            kv('challenge',  shortKey(S.challenge)),
             kv('created_at', new Date(S.signedEvent.created_at*1000).toISOString()),
         ].join('');
         setStep('sign','ok','✅ Signé', details, null); return true;
@@ -770,9 +798,10 @@ async function stepAuth() {
         ws.onerror = () => { clearTimeout(t); ws.close(); resolve({ok:false, reason:'WebSocket error'}); };
     });
     S.authOk = result.ok; S.authReason = result.reason;
+    _log('auth', 'relay=' + S.relayUrl + ' ok=' + result.ok + ' reason=' + (result.reason||'—'));
     const details = [
         kv('Relay', S.relayUrl),
-        kv('Réponse', result.ok ? '✅ accepté' : '❌ '+(result.reason||'rejeté')),
+        kv('Réponse relay', result.ok ? '✅ Accepté (filter/22242.sh OK)' : '❌ ' + (result.reason||'Rejeté')),
         kv('event id', shortKey(S.signedEvent.id)),
     ].join('');
     if (result.ok) {
@@ -794,22 +823,30 @@ async function stepVerify() {
         const r = await fetch(url, { signal: AbortSignal.timeout(6000), headers: { Accept: 'application/json' } });
         S.verifyOk   = r.ok;
         S.verifyData = r.ok ? await r.json() : null;
-        console.log('[ROAMING] /api/myGPS →', r.status, S.verifyData);
+        _log('verify', 'status=' + r.status + ' source=' + (S.verifyData?.source||'—') +
+            ' email=' + (S.verifyData?.email||'—') +
+            ' home_station=' + (S.verifyData?.home_station_url||'—'));
         const details = [
             kv('Endpoint', '/api/myGPS'),
-            kv('Status', r.status+' '+r.statusText),
-            S.verifyData ? kv('Lat',  S.verifyData.coordinates?.lat??S.verifyData.lat??'—') : '',
-            S.verifyData ? kv('Lon',  S.verifyData.coordinates?.lon??S.verifyData.lon??'—') : '',
-            S.verifyData?.source ? kv('Source (API)', S.verifyData.source) : '',
+            kv('Status HTTP', r.status + ' ' + r.statusText),
+            S.verifyData ? kv('Latitude',  S.verifyData.coordinates?.lat ?? S.verifyData.lat ?? '—') : '',
+            S.verifyData ? kv('Longitude', S.verifyData.coordinates?.lon ?? S.verifyData.lon ?? '—') : '',
+            S.verifyData?.source    ? kv('Source (API)',     S.verifyData.source) : '',
+            S.verifyData?.email     ? kv('Email utilisateur', S.verifyData.email) : '',
+            S.verifyData?.message   ? kv('Message serveur',  S.verifyData.message) : '',
             S.verifyData?.home_station_url ? kvRow('Home station', `<a href="${S.verifyData.home_station_url}" target="_blank" style="color:#99aaff">${S.verifyData.home_station_url}</a>`) : '',
+            S.verifyData?.home_node_hex    ? kv('Home NODE HEX',   shortKey(S.verifyData.home_node_hex)) : '',
+            S.verifyData?.home_ipfsnodeid  ? kv('Home IPFS NodeID', S.verifyData.home_ipfsnodeid.slice(0,12)+'…') : '',
+            S.verifyData?.debug?.user_dir  ? kv('Répertoire user', S.verifyData.debug.user_dir) : '',
         ].join('');
         if (r.ok) {
             if (S.verifyData?.source) S.sourceTag = S.verifyData.source;
             if (S.verifyData?.home_station_url && !S.homeStation) S.homeStation = S.verifyData.home_station_url;
-            setStep('verify','ok','✅ Marker valide', details, null);
+            if (S.verifyData?.home_node_hex    && !S.homeNodeHex) S.homeNodeHex  = S.verifyData.home_node_hex;
+            setStep('verify','ok','✅ Marker NIP-42 valide', details, null);
         } else if (r.status===401||r.status===403) {
             setStep('verify','error','❌ Non autorisé', kv('Status', r.status),
-                'Marker absent ou expiré (TTL 300s). Vérifier filter/22242.sh et que l\'utilisateur est connu de la station.');
+                'Marker NIP-42 absent ou expiré (TTL 300 s). Vérifier filter/22242.sh et que l\'utilisateur est connu de cette station.');
         } else {
             setStep('verify','warn',`⚠️ HTTP ${r.status}`, details, null);
         }
@@ -820,233 +857,193 @@ async function stepVerify() {
 }
 
 async function stepRoaming() {
-    setStep('roaming','running','🔄 Analyse…',null,null);
+    setStep('roaming','running','🔄 Analyse de la source…',null,null);
     await new Promise(r => setTimeout(r, 300));
 
-    console.log('[ROAMING] stepRoaming — state snapshot:', {
-        sourceTag:   S.sourceTag,
-        authOk:      S.authOk,
-        authReason:  S.authReason,
-        homeStation: S.homeStation,
-        verifyOk:    S.verifyOk,
-        verifyData:  S.verifyData,
-        pubkeyHex:   S.pubkeyHex ? S.pubkeyHex.slice(0,16)+'…' : null,
-        npub:        S.npub      ? S.npub.slice(0,16)+'…'      : null,
-        nostrUsers:  S.nostrUsers.length,
-    });
+    _log('roaming', 'début — S.sourceTag=' + S.sourceTag + ' authOk=' + S.authOk +
+        ' verifySource=' + (S.verifyData?.source||'—') +
+        ' homeStation=' + (S.homeStation||'—') +
+        ' homeNodeHex=' + (S.homeNodeHex?S.homeNodeHex.slice(0,12)+'…':'—') +
+        ' NOSTR[]=' + S.nostrUsers.length);
 
-    /* Priority 1: source from /api/myGPS response */
+    /* Priorité 1 : source transmise par /api/myGPS (la plus fiable) */
     let source = S.sourceTag || '';
+    let resoPriority = source ? 1 : 0;
+    let resoPriorityLabel = source ? 'API /myGPS' : '—';
 
-    /* Priority 2: NOSTR[] list from station JSON */
-    if (!source && S.pubkeyHex && S.nostrUsers.length) {
-        const found = S.nostrUsers.find(u => (u.HEX||'').toLowerCase() === S.pubkeyHex.toLowerCase());
-        if (found) source = (found.SOURCE||'local').toLowerCase();
+    /* Priorité 2 : liste NOSTR[] du JSON station */
+    const nostrFound = (S.pubkeyHex && S.nostrUsers.length)
+        ? S.nostrUsers.find(u => (u.HEX||'').toLowerCase() === S.pubkeyHex.toLowerCase())
+        : null;
+    if (!source && nostrFound) {
+        source = (nostrFound.SOURCE||'local').toLowerCase();
+        resoPriority = 2; resoPriorityLabel = 'NOSTR[] station JSON';
     }
 
-    /* Priority 3: profile website comparison (base domain, strips ipfs./u./relay. prefix) */
-    if (!source && S.homeStation) {
-        try {
-            const homeBase = extractStationBase(S.homeStation);
-            const currBase = extractStationBase(S.upassportUrl);
-            if (homeBase && currBase) source = homeBase === currBase ? 'local' : 'swarm';
-        } catch(_){}
+    /* Priorité 3 : comparaison website du profil kind:0 vs station courante */
+    let homeBase = '', currBase = '';
+    try { homeBase = S.homeStation ? extractStationBase(S.homeStation) : ''; } catch(_){}
+    try { currBase = S.upassportUrl ? extractStationBase(S.upassportUrl) : ''; } catch(_){}
+    if (!source && homeBase && currBase) {
+        source = homeBase === currBase ? 'local' : 'swarm';
+        resoPriority = 3; resoPriorityLabel = 'comparaison domaine kind:0 website';
     }
-    if (!source) source = S.authOk ? 'local' : 'unknown';
+
+    /* Priorité 4 : fallback sur authOk */
+    if (!source) {
+        source = S.authOk ? 'local' : 'unknown';
+        resoPriority = 4; resoPriorityLabel = 'fallback authOk=' + S.authOk;
+    }
     S.sourceTag = source;
 
-    const labelMap = { local:'🟢 Local (cette station)', swarm:'🔵 Swarm (roaming)', amisofamis:'🟡 AmisOfAmis', unknown:'⚪ Inconnu' };
-    const label = labelMap[source.toLowerCase()] || source;
+    _log('roaming', 'source=' + source + ' (priorité ' + resoPriority + ' — ' + resoPriorityLabel + ')');
+
+    const srcLow = source.toLowerCase();
+    /* Labels lisibles pour tous les cas possibles retournés par 22242.sh + /api/myGPS */
+    const labelMap = {
+        'local':           '🟢 Local — compte sur cette station',
+        'swarm':           '🔵 Swarm — compte sur une autre station (roaming)',
+        'amisofamis':      '🟡 AmisOfAmis — accès whitelist étendue',
+        'amis':            '🟡 AmisOfAmis — accès whitelist étendue',
+        'unknown':         '⚪ Inconnu — pubkey non reconnu',
+        'unknown_roaming': '⚠️ Inconnu hors constellation — profil éphémère créé',
+        'swarm_roaming':   '🔵 Swarm — roaming éphémère en cours',
+        'amis_roaming':    '🟡 AmisOfAmis — roaming éphémère',
+    };
+    const label = labelMap[srcLow] || ('⚪ Source : ' + source);
+    const isUnknown = srcLow === 'unknown' || srcLow === 'unknown_roaming';
+    const isSwarm   = srcLow.includes('swarm');
 
     let extra = '';
-    if (source === 'swarm') {
+    if (isSwarm) {
         extra = `<div class="step-warn-box" style="margin-top:8px;">
-            🔵 <strong>Roaming parfait en cours (background)</strong><br>
-            filter/22242.sh télécharge les secrets chiffrés (<code>_secret.nostr.uplanet.enc</code>,
-            <code>_secret.dunikey.uplanet.enc</code>, <code>_secret.ipns.uplanet.enc</code>) depuis l'IPNS home,
-            les déchiffre avec <code>uplanet.dunikey</code> et importe la clé IPNS dans le keystore local
-            pour permettre la publication du manifest uDRIVE sur cette station.
+            🔵 <strong>Roaming en cours (arrière-plan)</strong> — filter/22242.sh récupère le vault
+            chiffré depuis l'IPNS home et importe la clé IPNS dans le keystore local,
+            permettant la publication du manifest uDRIVE sur cette station visitée.
+        </div>`;
+    }
+    if (isUnknown) {
+        extra += `<div class="step-warn-box" style="margin-top:8px;">
+            ⚠️ Ce pubkey n'est pas connu de cette station (ni local, ni swarm, ni whitelist).
+            Vérifier la synchronisation du swarm IPFS ou le relay NOSTR.
         </div>`;
     }
 
+    const currHost = (() => { try { return new URL(S.upassportUrl).hostname; } catch(_) { return S.upassportUrl || '—'; } })();
+    const status = isUnknown ? 'warn' : 'ok';
+
     const details = [
-        kvRow('Source', `<span class="sbadge ${source==='swarm'?'sbadge-roam':source==='local'?'sbadge-me':'sbadge-pref'}">${label}</span>`),
-        kv('Station courante', new URL(S.upassportUrl).hostname),
-        S.homeStation ? kv('Station home (profil)', S.homeStation) : '',
-        S.nostrUsers.find(u=>(u.HEX||'').toLowerCase()===S.pubkeyHex.toLowerCase())
-            ? kv('Trouvé dans NOSTR[]', '✅ oui') : kv('Trouvé dans NOSTR[]', '— pas encore (roaming récent ?)'),
+        kvRow('Statut',      `<span class="sbadge ${isSwarm?'sbadge-roam':srcLow==='local'?'sbadge-me':srcLow.includes('amis')?'sbadge-pref':''}">${label}</span>`),
+        kv('Méthode de résolution',     `Priorité ${resoPriority} — ${resoPriorityLabel}`),
+        kv('Station courante',          currHost),
+        kv('Source brute (API)',        S.verifyData?.source || '—'),
+        kv('Station home (kind:0)',     S.homeStation || '— champ website absent'),
+        kv('Station home (API /myGPS)', S.verifyData?.home_station_url || '— non renvoyé'),
+        S.homeNodeHex  ? kv('Home NODE HEX (tag i:)',   shortKey(S.homeNodeHex))  : kv('Home NODE HEX', '— absent du profil'),
+        S.localNodeHex ? kv('NODE HEX station courante', shortKey(S.localNodeHex)) : '',
+        kv('Compte dans NOSTR[]', nostrFound ? '✅ trouvé (SOURCE: ' + (nostrFound.SOURCE||'—') + ')' : '❌ absent'),
+        kv('Relay NIP-42',        S.authOk ? '✅ accepté' : '❌ rejeté — ' + (S.authReason||'?')),
+        kv('homeBase (profil)',   homeBase || '—'),
+        kv('currBase (station)',  currBase || '—'),
     ].join('') + extra;
 
-    const status = source==='unknown' ? 'warn' : 'ok';
-    setStep('roaming', status, status==='ok'?'✅ '+label:'⚠️ Indéterminé', details,
-        source==='unknown' ? 'Source non déterminée. Auth incomplète ou utilisateur inconnu de la station.' : null);
+    setStep('roaming', status,
+        status === 'ok' ? '✅ ' + label : '⚠️ ' + label,
+        details,
+        isUnknown ? 'Pubkey inconnu de la constellation. Vérifier le relay NOSTR et la sync swarm IPFS.' : null);
 
-    /* Update stations section to show user's position */
     if (S.swarmStations.length) renderConstellationStations();
-    return source !== 'unknown';
+    _log('roaming', 'fin — status=' + status + ' source=' + source);
+    return !isUnknown;
 }
 
 async function stepGPS() {
-    setStep('gps','running','🔄 Récupération…',null,null);
+    setStep('gps','running','🔄 Récupération position…',null,null);
     if (!S.verifyData) {
         setStep('gps','warn','⚠️ Ignoré',null,'Ignoré car /api/myGPS a échoué à l\'étape Vérification.');
         return false;
     }
     const d = S.verifyData;
-    const lat = d.coordinates?.lat ?? d.lat ?? d.latitude ?? d.southWestLat ?? '—';
-    const lon = d.coordinates?.lon ?? d.lon ?? d.longitude ?? d.southWestLon ?? '—';
-    const mapUrl = (lat!=='—' && lon!=='—')
+    const lat = d.coordinates?.lat ?? d.lat ?? d.latitude ?? '—';
+    const lon = d.coordinates?.lon ?? d.lon ?? d.longitude ?? '—';
+    const gpsIsZero = (parseFloat(lat)||0) === 0 && (parseFloat(lon)||0) === 0;
+    const mapUrl = (!gpsIsZero && lat !== '—' && lon !== '—')
         ? `map_render.html?southWestLat=${parseFloat(lat).toFixed(2)}&southWestLon=${parseFloat(lon).toFixed(2)}&deg=0.1`
         : null;
-    const homeUrl = d.home_station_url || S.homeStation || null;
+
+    _log('gps', `lat=${lat} lon=${lon} gpsIsZero=${gpsIsZero} source=${d.source||'—'} email=${d.email||'—'} msg=${d.message||'—'}`);
+    if (d.debug) _log('gps', `debug: user_dir=${d.debug.user_dir||'—'} gps_file=${d.debug.gps_file_path||'absent'} roaming=${d.debug.roaming_flag_exists}`);
+
     const details = [
-        kv('Latitude',  lat),
-        kv('Longitude', lon),
-        d.umap_key  ? kv('UMAP key',  d.umap_key)  : '',
-        d.source    ? kv('Source',    d.source)     : '',
-        homeUrl&&S.sourceTag==='swarm' ? kvRow('Station home', `<a href="${homeUrl}" target="_blank" style="color:#99aaff">${homeUrl}</a>`) : '',
-        mapUrl ? kvRow('Carte', `<a href="${mapUrl}" style="color:#99aaff">Voir sur UMAP →</a>`) : '',
+        gpsIsZero
+            ? kvRow('GPS', `<span style="color:#ffc107">⚠️ Coordonnées 0,0 — GPS non encore configuré pour ce compte</span>`)
+            : kv('Latitude',  lat),
+        gpsIsZero ? '' : kv('Longitude', lon),
+        kv('Message serveur',    d.message || '—'),
+        d.email      ? kv('Compte (email)',     d.email) : '',
+        d.umap_key   ? kv('Clé UMAP',           d.umap_key) : '',
+        d.source     ? kv('Source (API)',        d.source) : '',
+        d.ipfsnodeid ? kv('IPFS Node (station)', d.ipfsnodeid.slice(0,12)+'…') : '',
+        d.home_station_url ? kvRow('Station home', `<a href="${d.home_station_url}" target="_blank" style="color:#99aaff">${d.home_station_url}</a>`) : '',
+        d.home_node_hex    ? kv('Home NODE HEX',      shortKey(d.home_node_hex)) : '',
+        d.home_ipfsnodeid  ? kv('Home IPFS NodeID',   d.home_ipfsnodeid.slice(0,12)+'…') : '',
+        mapUrl ? kvRow('Carte UMAP', `<a href="${mapUrl}" style="color:#99aaff">📍 Voir sur la carte →</a>`) : '',
+        /* Champs de debug renvoyés par le serveur */
+        d.debug?.user_dir         ? kv('Répertoire utilisateur', d.debug.user_dir) : '',
+        d.debug?.gps_file_path    ? kv('Fichier GPS (serveur)', d.debug.gps_file_path)
+                                  : kv('Fichier GPS', '— absent (GPS non configuré sur cette station)'),
+        d.debug?.gps_raw          ? kv('Contenu GPS brut', d.debug.gps_raw) : '',
+        d.debug?.source_file_exists !== undefined
+            ? kv('Fichier SOURCE', d.debug.source_file_exists
+                ? '✅ présent : ' + (d.debug.source_file_content||'?')
+                : '❌ absent') : '',
+        d.debug?.roaming_flag_exists !== undefined
+            ? kv('Flag .roaming', d.debug.roaming_flag_exists ? '✅ présent (compte visiteur)' : '❌ absent (compte local)') : '',
+        d.debug?.nostrns ? kv('NOSTRNS (vault home)', d.debug.nostrns.slice(0,24)+'…') : '',
     ].join('');
-    setStep('gps','ok','✅ Localisé', details, null); return true;
+
+    setStep('gps', gpsIsZero ? 'warn' : 'ok',
+        gpsIsZero ? '⚠️ GPS 0,0 (non configuré)' : '✅ Position localisée',
+        details, null);
+    _log('gps', 'fin — ' + (gpsIsZero ? 'GPS absent (0,0)' : `${lat},${lon}`));
+    return true;
 }
 
 /* ═══════════════════════════════════════════════════════════════
    BRO Chat — NIP-04 DMs vers le NODE de la station
    ═══════════════════════════════════════════════════════════════ */
 
-function _homeRelayUrl() {
-    if (!S.homeStation) return S.relayUrl;
-    try {
-        const u = new URL(S.homeStation);
-        let base = u.hostname;
-        for (const p of ['ipfs.','u.','relay.','astroport.']) {
-            if (base.startsWith(p)) { base = base.slice(p.length); break; }
-        }
-        return `wss://relay.${base}`;
-    } catch(_) { return S.relayUrl; }
-}
-
-function appendBroMsg(who, text) {
-    const msgs = document.getElementById('bro-msgs');
-    if (!msgs) return;
-    const div = document.createElement('div');
-    div.className = 'bro-msg ' + who;
-    div.textContent = text;
-    msgs.appendChild(div);
-    msgs.scrollTop = msgs.scrollHeight;
-}
-
-function _subscribeBroResponses() {
-    if (S.chatWs) { try { S.chatWs.close(); } catch(_){} S.chatWs = null; }
-    if (!S.chatNodeHex || !S.pubkeyHex) return;
-    try {
-        const ws = new WebSocket(S.chatRelayUrl);
-        S.chatWs = ws;
-        const subId = 'bro_' + Date.now();
-        const since = Math.floor(Date.now()/1000) - 30;
-        ws.onopen = () => ws.send(JSON.stringify(['REQ', subId, {
-            kinds: [4], authors: [S.chatNodeHex], '#p': [S.pubkeyHex], since,
-        }]));
-        ws.onmessage = async e => {
-            try {
-                const m = JSON.parse(e.data);
-                if (m[0]==='EVENT' && m[2]?.kind===4 && m[2].pubkey===S.chatNodeHex) {
-                    const pTag = (m[2].tags||[]).find(t=>t[0]==='p');
-                    if (!pTag || pTag[1]!==S.pubkeyHex) return;
-                    try {
-                        const dec = await window.nostr.nip04.decrypt(S.chatNodeHex, m[2].content);
-                        appendBroMsg('node', '🤖 ' + dec);
-                    } catch(_) {
-                        appendBroMsg('sys', '⚠️ Message reçu (impossible à déchiffrer)');
-                    }
-                }
-            } catch(_) {}
-        };
-        ws.onerror = () => appendBroMsg('sys', '⚠️ Relay BRO déconnecté');
-        ws.onclose = () => {};
-    } catch(e) {
-        appendBroMsg('sys', '⚠️ Connexion relay: ' + e.message);
-    }
-}
-
 function showChatSection() {
     const sec = document.getElementById('bro-chat-section');
-    if (!sec) return;
+    if (!sec || !window.BroChatWidget) return;
 
-    /* Choix du node cible : home (roaming) ou local */
-    if (S.sourceTag === 'swarm' && S.homeNodeHex) {
-        S.chatNodeHex  = S.homeNodeHex;
-        S.chatRelayUrl = _homeRelayUrl();
-    } else if (S.localNodeHex) {
-        S.chatNodeHex  = S.localNodeHex;
-        S.chatRelayUrl = S.relayUrl;
-    } else {
-        return; /* Pas de NODEHEX disponible */
-    }
-
-    if (!window.nostr?.nip04?.encrypt) {
-        sec.style.display = 'block';
-        appendBroMsg('sys', '⚠️ Extension NIP-07 sans support NIP-04 — chat indisponible');
+    /* Choix du node cible — doit avoir au moins un NODEHEX */
+    const hasLocal = !!S.localNodeHex;
+    const hasHome  = !!(S.sourceTag === 'swarm' && (S.homeNodeHex || S.verifyData?.home_node_hex));
+    if (!hasLocal && !hasHome) {
+        _log('bro', 'NODEHEX introuvable — BRO indisponible');
         return;
     }
 
-    const label   = document.getElementById('bro-node-label');
-    const sub     = document.getElementById('bro-chat-sub');
-    const sendBtn = document.getElementById('btn-bro-send');
-    if (label) label.textContent = S.chatNodeHex.slice(0,12) + '…';
-    if (sub) {
-        const loc = S.sourceTag === 'swarm' ? '🔵 home station (roaming)' : '🟢 station locale';
-        sub.textContent = `${loc} · relay: ${S.chatRelayUrl.replace(/^wss?:\/\//,'')}`;
-    }
-    if (sendBtn) sendBtn.disabled = false;
+    const homeNodeHex = S.homeNodeHex || S.verifyData?.home_node_hex || '';
+    _log('bro', 'ouverture BroChatWidget source=' + S.sourceTag +
+        ' homeNodeHex=' + (homeNodeHex?homeNodeHex.slice(0,12)+'…':'—') +
+        ' localNodeHex=' + (S.localNodeHex?S.localNodeHex.slice(0,12)+'…':'—'));
+
+    /* Fermer le widget précédent si déjà ouvert */
+    try { window.BroChatWidget.close(); } catch(_) {}
 
     sec.style.display = 'block';
-    appendBroMsg('sys', '🤖 BRO en ligne · NIP-04');
-    _subscribeBroResponses();
-}
-
-async function sendBroMsg() {
-    const input   = document.getElementById('bro-input');
-    const sendBtn = document.getElementById('btn-bro-send');
-    if (!input || !S.chatNodeHex || !S.pubkeyHex) return;
-    const text = input.value.trim();
-    if (!text) return;
-
-    input.value = '';
-    sendBtn.disabled = true;
-    appendBroMsg('user', text);
-
-    try {
-        if (!window.nostr?.nip04?.encrypt) throw new Error('NIP-04 non disponible');
-        const encrypted = await window.nostr.nip04.encrypt(S.chatNodeHex, text);
-        const event = await window.nostr.signEvent({
-            kind: 4, pubkey: S.pubkeyHex,
-            created_at: Math.floor(Date.now()/1000),
-            tags: [['p', S.chatNodeHex]],
-            content: encrypted,
-        });
-        await new Promise((resolve, reject) => {
-            let ws;
-            try { ws = new WebSocket(S.chatRelayUrl); } catch(e){ reject(e); return; }
-            const t = setTimeout(() => { ws.close(); reject(new Error('timeout relay')); }, 8000);
-            ws.onopen  = () => ws.send(JSON.stringify(['EVENT', event]));
-            ws.onmessage = e => {
-                try {
-                    const m = JSON.parse(e.data);
-                    if (m[0]==='OK' && m[1]===event.id) {
-                        clearTimeout(t); ws.close();
-                        m[2]===true ? resolve() : reject(new Error(m[3]||'Rejeté'));
-                    }
-                } catch(_){}
-            };
-            ws.onerror = () => { clearTimeout(t); ws.close(); reject(new Error('WebSocket error')); };
-        });
-    } catch(e) {
-        appendBroMsg('sys', '⚠️ ' + e.message);
-    } finally {
-        sendBtn.disabled = false;
-        input.focus();
-    }
+    window.BroChatWidget.open({
+        containerId: 'bro-chat-section',
+        pubkeyHex:   S.pubkeyHex    || undefined,
+        source:      S.sourceTag   || 'local',
+        homeNodeHex: homeNodeHex   || undefined,
+        homeStation: S.homeStation || S.verifyData?.home_station_url || undefined,
+        nodeHex:     (S.sourceTag !== 'swarm' && S.localNodeHex) ? S.localNodeHex : undefined,
+    }).catch(function(e) {
+        _log('bro', 'BroChatWidget.open erreur: ' + e.message);
+    });
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -1057,6 +1054,12 @@ let running = false;
 async function runAll() {
     if (running) return;
     running = true;
+    /* Vider les logs précédents */
+    _dbLogs = [];
+    const _dlEl = document.getElementById('debug-log-content');
+    const _dlCnt = document.getElementById('debug-log-count');
+    if (_dlEl) _dlEl.textContent = '';
+    if (_dlCnt) _dlCnt.textContent = '';
     document.getElementById('btn-run').disabled = true;
     document.getElementById('global-status').textContent = 'Test en cours…';
     let passed = 0;
@@ -1119,8 +1122,8 @@ function showRoamingBlock() {
 }
 
 function resetAll() {
-    /* Fermer le WebSocket BRO avant reset état */
-    if (S.chatWs) { try { S.chatWs.close(); } catch(_){} }
+    /* Fermer BroChatWidget avant reset */
+    if (window.BroChatWidget) { try { window.BroChatWidget.close(); } catch(_){} }
     Object.keys(S).forEach(k => {
         if (Array.isArray(S[k])) S[k] = [];
         else if (typeof S[k]==='object'&&S[k]!==null) S[k]=null;
@@ -1132,15 +1135,19 @@ function resetAll() {
     const uploadSec = document.getElementById('udrive-upload-section');
     if (uploadSec) uploadSec.style.display = 'none';
     const chatSec = document.getElementById('bro-chat-section');
-    if (chatSec) { chatSec.style.display = 'none'; }
-    const broMsgs = document.getElementById('bro-msgs');
-    if (broMsgs) broMsgs.innerHTML = '';
-    const sendBtn = document.getElementById('btn-bro-send');
-    if (sendBtn) sendBtn.disabled = true;
+    if (chatSec) { chatSec.style.display = 'none'; chatSec.innerHTML = ''; }
     _uploadFile = null;
     document.getElementById('global-status').textContent = 'En attente…';
     document.getElementById('btn-run').disabled = false;
     running = false;
+    /* Vider le journal de diagnostic */
+    _dbLogs = [];
+    const el = document.getElementById('debug-log-content');
+    const cnt = document.getElementById('debug-log-count');
+    const panel = document.getElementById('debug-log-panel');
+    if (el) el.textContent = '';
+    if (cnt) cnt.textContent = '';
+    if (panel) panel.open = false;
 }
 
 /* ═══════════════════════════════════════════════════════════════

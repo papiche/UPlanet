@@ -406,12 +406,31 @@
                     var pTag = (ev.tags || []).find(function (t) { return t[0] === 'p'; });
                     if (!pTag || pTag[1] !== _ctx.pubkeyHex) return;
 
-                    /* Déchiffrement NIP-04 */
-                    w.nostr.nip04.decrypt(_ctx.nodeHex, ev.content).then(function (decrypted) {
-                        _log('réponse déchiffrée:', decrypted.slice(0, 60) + (decrypted.length > 60 ? '…' : ''));
+                    /* Déchiffrement : NIP-04 si ?iv= dans le contenu, NIP-44 sinon.
+                       Fallback croisé si la méthode principale échoue. */
+                    var _isNip04 = ev.content.indexOf('?iv=') !== -1;
+                    var _tryPrimary = _isNip04
+                        ? (w.nostr.nip04 ? function () { return w.nostr.nip04.decrypt(_ctx.nodeHex, ev.content); } : null)
+                        : (w.nostr.nip44 ? function () { return w.nostr.nip44.decrypt(_ctx.nodeHex, ev.content); } : null);
+                    var _tryFallback = _isNip04
+                        ? (w.nostr.nip44 ? function () { return w.nostr.nip44.decrypt(_ctx.nodeHex, ev.content); } : null)
+                        : (w.nostr.nip04 ? function () { return w.nostr.nip04.decrypt(_ctx.nodeHex, ev.content); } : null);
+
+                    if (!_tryPrimary && !_tryFallback) {
+                        _warn('aucune méthode de déchiffrement disponible (nip04/nip44)');
+                        _appendMsg('sys', '⚠️ Extension NIP-07 sans support NIP-04/NIP-44');
+                        return;
+                    }
+
+                    var _p = (_tryPrimary || _tryFallback)();
+                    if (_tryPrimary && _tryFallback) {
+                        _p = _p.catch(function () { return _tryFallback(); });
+                    }
+                    _p.then(function (decrypted) {
+                        _log('réponse déchiffrée (' + (_isNip04 ? 'NIP-04' : 'NIP-44') + '):', decrypted.slice(0, 60));
                         _appendMsg('node', '🤖 ' + decrypted);
                     }).catch(function (err) {
-                        _warn('déchiffrement NIP-04 échoué:', err.message);
+                        _warn('déchiffrement échoué (nip04+nip44):', err.message);
                         _appendMsg('sys', '⚠️ Réponse reçue (déchiffrement impossible)');
                     });
                 } catch (_) {}

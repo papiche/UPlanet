@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>💳 ZEN Card — Investissements coopératifs</title>
+<style>
+:root{
+    --bg:#0d1117;--bg2:#161b22;--bg3:#1c2128;--border:#30363d;
+    --green:#86efac;--red:#f87171;--yellow:#fbbf24;--blue:#60a5fa;
+    --purple:#c084fc;--cyan:#67e8f9;--text:#e6edf3;--muted:#8b949e;
+    --card-bg:rgba(22,27,34,0.95);--radius:12px;
+    --oc:#4dabf7;--oc-bg:rgba(77,171,247,0.08);--oc-border:rgba(77,171,247,0.25);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;min-height:100vh;padding:20px}
+a{color:var(--blue);text-decoration:none}
+a:hover{text-decoration:underline}
+
+/* Header */
+.page-header{text-align:center;padding:32px 16px 24px;max-width:960px;margin:0 auto}
+.page-header h1{font-size:2rem;font-weight:700;letter-spacing:-0.5px;margin-bottom:8px}
+.page-header .subtitle{color:var(--muted);font-size:0.95rem}
+.card-icon{font-size:2.5rem;margin-bottom:12px}
+
+/* Identity block */
+.identity-block{
+    background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius);
+    padding:20px 24px;max-width:960px;margin:0 auto 24px;
+}
+.identity-block .email{font-size:1.15rem;font-weight:600;color:var(--green);margin-bottom:6px}
+.identity-block .g1pub{font-size:0.78rem;color:var(--muted);font-family:monospace;word-break:break-all;margin-bottom:4px}
+.identity-block .period{font-size:0.85rem;color:var(--blue)}
+.cesium-link{display:inline-block;margin-top:10px;font-size:0.82rem;
+    background:rgba(96,165,250,0.12);border:1px solid rgba(96,165,250,0.3);
+    color:var(--blue);padding:4px 12px;border-radius:20px}
+
+/* Stats row */
+.stats-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;max-width:960px;margin:0 auto 24px}
+.stat-tile{
+    background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius);
+    padding:16px;text-align:center;
+}
+.stat-tile .val{font-size:1.8rem;font-weight:700;line-height:1}
+.stat-tile .lbl{font-size:0.75rem;color:var(--muted);margin-top:6px;text-transform:uppercase;letter-spacing:.5px}
+.stat-tile.green .val{color:var(--green)}
+.stat-tile.yellow .val{color:var(--yellow)}
+.stat-tile.blue .val{color:var(--blue)}
+.stat-tile.purple .val{color:var(--purple)}
+
+/* Transfers */
+.section-label{max-width:960px;margin:0 auto 14px;font-size:0.9rem;font-weight:600;
+    color:var(--muted);text-transform:uppercase;letter-spacing:.8px;display:flex;align-items:center;gap:8px}
+.transfers-list{max-width:960px;margin:0 auto;display:flex;flex-direction:column;gap:10px}
+.transfer-card{
+    background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius);
+    padding:16px 20px;display:grid;grid-template-columns:auto 1fr auto;gap:12px 16px;align-items:start;
+    transition:border-color .15s;
+}
+.transfer-card:hover{border-color:rgba(96,165,250,0.35)}
+.transfer-card.expired{opacity:.6}
+.tc-date{font-size:0.8rem;color:var(--muted);white-space:nowrap;padding-top:2px}
+.tc-type-badge{display:inline-block;padding:2px 10px;border-radius:12px;font-size:0.75rem;font-weight:600;margin-bottom:6px}
+.tc-type-badge.constellation{background:rgba(134,239,172,0.15);color:var(--green)}
+.tc-type-badge.satellite{background:rgba(96,165,250,0.15);color:var(--blue)}
+.tc-type-badge.parts{background:rgba(251,191,36,0.15);color:var(--yellow)}
+.tc-type-badge.other{background:rgba(139,148,158,0.15);color:var(--muted)}
+.tc-comment{font-size:0.75rem;color:var(--muted);font-family:monospace;margin-top:4px;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:480px}
+.tc-node{font-size:0.75rem;color:var(--purple);margin-top:2px}
+.tc-validity{font-size:0.75rem;margin-top:4px}
+.tc-validity.valid{color:var(--green)}
+.tc-validity.expired{color:var(--red)}
+.tc-amount{text-align:right;white-space:nowrap}
+.tc-zen{font-size:1.3rem;font-weight:700;color:var(--green)}
+.tc-g1{font-size:0.78rem;color:var(--muted)}
+
+/* Distribution bar */
+.dist-bar-wrap{background:var(--bg3);border-radius:8px;height:18px;overflow:hidden;display:flex;margin-top:10px}
+.dist-bar-segment{height:100%;transition:width .4s}
+.dist-legend{display:flex;flex-wrap:wrap;gap:10px;margin-top:10px}
+.dist-legend-item{display:flex;align-items:center;gap:6px;font-size:0.8rem;color:var(--muted)}
+.dist-legend-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+
+/* ═══ LANDING — no email ═══ */
+.landing{max-width:960px;margin:0 auto}
+
+.email-form-block{
+    background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius);
+    padding:28px 28px 24px;margin-bottom:32px;
+}
+.email-form-block h2{font-size:1.05rem;font-weight:600;margin-bottom:6px}
+.email-form-block p{font-size:0.85rem;color:var(--muted);margin-bottom:16px}
+.email-row{display:flex;gap:10px}
+.email-row input{
+    flex:1;padding:10px 14px;background:var(--bg3);border:1px solid var(--border);
+    border-radius:8px;color:var(--text);font-size:0.9rem;outline:none;
+}
+.email-row input:focus{border-color:var(--blue)}
+.email-row button{
+    padding:10px 20px;background:rgba(96,165,250,0.18);border:1px solid var(--blue);
+    border-radius:8px;color:var(--blue);font-size:0.9rem;font-weight:600;cursor:pointer;white-space:nowrap;
+}
+.email-row button:hover{background:rgba(96,165,250,0.35)}
+.swarm-note{font-size:0.75rem;color:var(--muted);margin-top:8px}
+
+/* Contribute grid */
+.contribute-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin-bottom:32px}
+
+.contrib-card{
+    background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius);
+    padding:20px;display:flex;flex-direction:column;gap:10px;
+}
+.contrib-card .cc-icon{font-size:2rem;line-height:1}
+.contrib-card .cc-title{font-size:1rem;font-weight:700;color:var(--text)}
+.contrib-card .cc-desc{font-size:0.83rem;color:var(--muted);flex:1;line-height:1.5}
+.contrib-card .cc-tag{font-size:0.7rem;background:rgba(255,255,255,0.06);border:1px solid var(--border);
+    border-radius:10px;padding:2px 8px;color:var(--muted);display:inline-block;margin-bottom:2px}
+.contrib-card .cc-link{
+    display:block;text-align:center;padding:9px;border-radius:8px;font-size:0.85rem;font-weight:600;
+    text-decoration:none;border:1px solid;cursor:pointer;transition:background .15s;margin-top:4px;
+}
+
+/* Card variants */
+.contrib-card.don{border-color:rgba(134,239,172,0.25)}
+.contrib-card.don .cc-link{background:rgba(134,239,172,0.12);border-color:rgba(134,239,172,0.4);color:var(--green)}
+.contrib-card.don .cc-link:hover{background:rgba(134,239,172,0.25)}
+
+.contrib-card.oc{border-color:var(--oc-border)}
+.contrib-card.oc .cc-link{background:var(--oc-bg);border-color:var(--oc-border);color:var(--oc)}
+.contrib-card.oc .cc-link:hover{background:rgba(77,171,247,0.18)}
+
+.contrib-card.zen{border-color:rgba(192,132,252,0.3)}
+.contrib-card.zen .cc-link{background:rgba(192,132,252,0.12);border-color:rgba(192,132,252,0.4);color:var(--purple)}
+.contrib-card.zen .cc-link:hover{background:rgba(192,132,252,0.25)}
+
+.contrib-card.sat{border-color:rgba(96,165,250,0.3)}
+.contrib-card.sat .cc-link{background:rgba(96,165,250,0.12);border-color:rgba(96,165,250,0.4);color:var(--blue)}
+.contrib-card.sat .cc-link:hover{background:rgba(96,165,250,0.25)}
+
+.contrib-card.gpu{border-color:rgba(251,191,36,0.3)}
+.contrib-card.gpu .cc-link{background:rgba(251,191,36,0.12);border-color:rgba(251,191,36,0.4);color:var(--yellow)}
+.contrib-card.gpu .cc-link:hover{background:rgba(251,191,36,0.25)}
+
+/* Repartition badge */
+.repartition{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px}
+.rep-chip{font-size:0.72rem;padding:2px 8px;border-radius:10px;font-weight:600}
+.rep-chip.mp{background:rgba(134,239,172,0.15);color:var(--green)}
+.rep-chip.coop{background:rgba(192,132,252,0.15);color:var(--purple)}
+
+.section-sep{max-width:960px;margin:0 auto 20px;display:flex;align-items:center;gap:12px;color:var(--muted);font-size:0.85rem;font-weight:600;text-transform:uppercase;letter-spacing:.6px}
+.section-sep::before,.section-sep::after{content:'';flex:1;height:1px;background:var(--border)}
+
+/* Misc */
+.empty-state{
+    max-width:960px;margin:40px auto;text-align:center;
+    background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius);padding:48px 24px;
+}
+.empty-state .icon{font-size:3rem;margin-bottom:16px}
+.loading{max-width:960px;margin:60px auto;text-align:center;color:var(--muted);font-size:0.95rem}
+.spinner{display:inline-block;width:28px;height:28px;border:3px solid var(--border);
+    border-top-color:var(--blue);border-radius:50%;animation:spin .8s linear infinite;margin-bottom:16px}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+.refresh-btn{
+    display:inline-flex;align-items:center;gap:6px;padding:5px 12px;
+    background:rgba(255,255,255,0.05);border:1px solid var(--border);
+    border-radius:20px;color:var(--muted);font-size:0.78rem;cursor:pointer;
+    text-decoration:none;
+}
+.refresh-btn:hover{border-color:var(--blue);color:var(--blue);text-decoration:none}
+.footer-note{max-width:960px;margin:24px auto;text-align:center;font-size:0.75rem;color:var(--muted)}
+</style>
+</head>
+<body>
+
+<div class="page-header">
+    <div class="card-icon">💳</div>
+    <h1>ZEN Card</h1>
+    <div class="subtitle">Historique des investissements coopératifs · <span id="hdr-period">UPlanet Essaim</span></div>
+</div>
+
+<div id="root">
+    <div class="loading"><div class="spinner"></div><br>Initialisation…</div>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════
+   URL helpers
+   ═══════════════════════════════════════════════════════════ */
+function deriveAPIBase() {
+    if (typeof window.getAPIUrl === 'function') return window.getAPIUrl();
+    const u = new URL(window.location.href);
+    const h = u.hostname, port = u.port, proto = u.protocol.replace(':','');
+    if ((h === '127.0.0.1' || h === 'localhost') &&
+        (port === '8080' || port === '54321' || port === '7777'))
+        return 'http://127.0.0.1:54321';
+    if (h.startsWith('ipfs.'))  return `${proto}://u.${h.slice('ipfs.'.length)}`;
+    if (h.startsWith('u.'))     return `${proto}://u.${h.slice('u.'.length)}`;
+    if (h.startsWith('relay.')) return `${proto}://u.${h.slice('relay.'.length)}`;
+    return 'https://u.copylaradio.com';
+}
+const API = deriveAPIBase();
+
+/* ═══════════════════════════════════════════════════════════
+   Type helpers
+   ═══════════════════════════════════════════════════════════ */
+const TYPE_LABELS = {
+    constellation:'🌟 Constellation',
+    satellite:'🛰️ Satellite',
+    parts:'📜 Parts sociales',
+    other:'⚙️ Autre'
+};
+const TYPE_CLS = {constellation:'constellation',satellite:'satellite',parts:'parts',other:'other'};
+
+function formatDate(iso) {
+    if (!iso) return '—';
+    try { return new Date(iso).toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'numeric'}); }
+    catch(_) { return iso.split('T')[0]; }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   LANDING — affichée quand pas d'email
+   ═══════════════════════════════════════════════════════════ */
+function showLanding() {
+    document.getElementById('hdr-period').textContent = 'UPlanet Essaim';
+    document.getElementById('root').innerHTML = `
+<div class="landing">
+
+  <!-- Formulaire email -->
+  <div class="email-form-block">
+    <h2>🔍 Consulter une ZEN Card</h2>
+    <p>Entrez votre email pour voir votre historique d'investissements.<br>
+       La recherche est effectuée sur la station locale <strong>et sur l'ensemble de l'essaim</strong>.</p>
+    <div class="email-row">
+      <input type="email" id="email-input" placeholder="email@example.com" autofocus>
+      <button onclick="submitEmail()">Voir →</button>
+    </div>
+    <div class="swarm-note">🌐 Recherche locale + swarm constellation · données blockchain G1</div>
+  </div>
+
+  <!-- Section : Soutenir directement -->
+  <div class="section-sep">Soutenir la coopérative</div>
+  <div class="contribute-grid">
+
+    <div class="contrib-card don">
+      <div class="cc-icon">💚</div>
+      <div class="cc-title">Don au Labo</div>
+      <div class="cc-tag">Infrastructure · Hébergement</div>
+      <div class="cc-desc">Soutenir les serveurs et l'infrastructure coopérative de Monnaie Libre.
+        Don direct à la coop — tracé sur OpenCollective.</div>
+      <a class="cc-link" href="https://opencollective.com/monnaie-libre/contribute/infrastructure-4827" target="_blank">
+        💳 Soutenir le Labo →
+      </a>
+    </div>
+
+    <div class="contrib-card don">
+      <div class="cc-icon">🔬</div>
+      <div class="cc-title">Don R&amp;D</div>
+      <div class="cc-tag">Recherche · Développement</div>
+      <div class="cc-desc">Financer la recherche et le développement de l'écosystème UPlanet.
+        Contribution libre — généreux donateur.</div>
+      <a class="cc-link" href="https://opencollective.com/monnaie-libre/contribute/genereux-donateur-4804/" target="_blank">
+        🔬 Soutenir la R&amp;D →
+      </a>
+    </div>
+
+  </div>
+
+  <!-- Section : Convertir en ẐEN -->
+  <div class="section-sep">Devenir Parrain U.SOCIETY · Convertir en ẐEN</div>
+  <div style="max-width:960px;margin:0 auto 16px;font-size:0.85rem;color:var(--muted);line-height:1.6">
+    Vos contributions sont converties en ẐEN et notées sur votre ZEN Card :
+    <div class="repartition" style="margin-top:8px">
+      <span class="rep-chip mp">1/3 → votre MULTIPASS</span>
+      <span class="rep-chip coop">2/3 → la coopérative (R&amp;D + ASSETS)</span>
+    </div>
+    Vous devenez <strong>Parrain U.SOCIETY</strong> et rejoignez l'essaim coopératif.
+  </div>
+  <div class="contribute-grid">
+
+    <div class="contrib-card sat">
+      <div class="cc-icon">📦</div>
+      <div class="cc-title">+128 Go uDRIVE</div>
+      <div class="cc-tag">Extension · NextCloud · Stockage</div>
+      <div class="cc-desc">Ajouter 128 Go de stockage souverain (NextCloud) à une station existante.
+        Hébergement décentralisé IPFS + cloud privé.</div>
+      <a class="cc-link" href="https://opencollective.com/monnaie-libre/contribute/parrainage-infrastructure-extension-128-go-98386" target="_blank">
+        📦 Parrainer 128 Go →
+      </a>
+    </div>
+
+    <div class="contrib-card gpu">
+      <div class="cc-icon">🤖</div>
+      <div class="cc-title">+IA / GPU (1/24)</div>
+      <div class="cc-tag">IA · GPU · #BRO · Calcul</div>
+      <div class="cc-desc">Ajouter un module IA/GPU à une station. Donne accès à <strong>#BRO</strong>
+        — le compagnon IA coopératif. Calcul distribué sur l'essaim.</div>
+      <a class="cc-link" href="https://opencollective.com/monnaie-libre/contribute/parrainage-infrastructure-module-gpu-1-24-98385" target="_blank">
+        🤖 Parrainer IA/GPU →
+      </a>
+    </div>
+
+  </div>
+
+  <!-- Section : Station complète -->
+  <div class="section-sep">Station complète</div>
+  <div class="contribute-grid">
+
+    <div class="contrib-card sat">
+      <div class="cc-icon">🛰️</div>
+      <div class="cc-title">Satellite CoeurBox</div>
+      <div class="cc-tag">Station · 128 Go · NextCloud · Le Claude</div>
+      <div class="cc-desc">Station complète Satellite — hébergement souverain, stockage 128 Go,
+        relay NOSTR, IPFS. La CoeurBox « Le Claude ».</div>
+      <a class="cc-link" href="https://opencollective.com/monnaie-libre/projects/coeurbox/contribute/love-box-le-claude-53061" target="_blank">
+        🛰️ Satellite CoeurBox →
+      </a>
+    </div>
+
+    <div class="contrib-card gpu">
+      <div class="cc-icon">🔥</div>
+      <div class="cc-title">GPU CoeurBox Deluxe</div>
+      <div class="cc-tag">Station · GPU · IA · #BRO · Deluxe</div>
+      <div class="cc-desc">Station GPU complète — IA locale, <strong>#BRO</strong> activé,
+        puissance calcul dédiée à l'essaim. La CoeurBox Deluxe.</div>
+      <a class="cc-link" href="https://opencollective.com/monnaie-libre/projects/coeurbox/contribute/love-box-deluxe-gpu-49182" target="_blank">
+        🔥 GPU CoeurBox Deluxe →
+      </a>
+    </div>
+
+  </div>
+
+</div><!-- .landing -->
+`;
+    document.getElementById('email-input').addEventListener('keydown', e => {
+        if (e.key === 'Enter') submitEmail();
+    });
+}
+
+/* ═══════════════════════════════════════════════════════════
+   Render ZEN Card data
+   ═══════════════════════════════════════════════════════════ */
+function renderCard(email, data) {
+    const transfers = data.transfers || [];
+    const totalZen  = data.total_received_zen || 0;
+    const validZen  = data.valid_balance_zen  || 0;
+    const g1pub     = data.zencard_g1pub || '';
+
+    /* Update subtitle */
+    document.getElementById('hdr-period').textContent = data.filter_period || '3 ans';
+
+    /* Distribution by type */
+    const byType = {constellation:0, satellite:0, parts:0, other:0};
+    transfers.forEach(t => { byType[t.part_type] = (byType[t.part_type]||0) + (t.amount_zen||0); });
+
+    const distBar = totalZen > 0
+        ? Object.entries(byType).filter(([,v])=>v>0).map(([k,v]) => {
+            const colors = {constellation:'var(--green)',satellite:'var(--blue)',parts:'var(--yellow)',other:'var(--muted)'};
+            return `<div class="dist-bar-segment" style="width:${(v/totalZen*100).toFixed(1)}%;background:${colors[k]}"></div>`;
+          }).join('')
+        : '<div class="dist-bar-segment" style="width:100%;background:var(--border)"></div>';
+
+    const distLegend = Object.entries(byType).filter(([,v])=>v>0).map(([k,v]) => {
+        const colors = {constellation:'var(--green)',satellite:'var(--blue)',parts:'var(--yellow)',other:'var(--muted)'};
+        return `<div class="dist-legend-item"><div class="dist-legend-dot" style="background:${colors[k]}"></div>
+            ${TYPE_LABELS[k]} · <strong>${v.toFixed(0)} Ẑ</strong> (${(v/totalZen*100).toFixed(0)}%)</div>`;
+    }).join('');
+
+    /* Transfers list */
+    const transfersHtml = transfers.length === 0
+        ? `<div class="empty-state">
+             <div class="icon">📭</div>
+             <div style="color:var(--muted);font-size:0.9rem;margin-bottom:12px">Aucun investissement enregistré</div>
+             <div style="font-size:0.8rem;color:var(--muted)">Les parts sociales apparaîtront ici après traitement par <code>UPLANET.official.sh --societaire</code></div>
+           </div>`
+        : transfers.map(t => {
+            const valid  = t.is_valid !== false;
+            const tClass = TYPE_CLS[t.part_type] || 'other';
+            return `<div class="transfer-card ${valid?'':'expired'}">
+              <div class="tc-date">${formatDate(t.date)}</div>
+              <div>
+                <div class="tc-type-badge ${tClass}">${TYPE_LABELS[t.part_type] || t.part_type}</div>
+                ${t.ipfs_node && t.ipfs_node !== 'N/A' ? `<div class="tc-node">🖥️ ${t.ipfs_node}</div>` : ''}
+                <div class="tc-comment" title="${t.comment||''}">${t.comment||''}</div>
+                <div class="tc-validity ${valid?'valid':'expired'}">${valid ? '✅ Valide' : '⚠️ Expirée (satellite > 1 an)'}</div>
+              </div>
+              <div class="tc-amount">
+                <div class="tc-zen">Ẑ ${parseFloat(t.amount_zen||0).toFixed(0)}</div>
+                <div class="tc-g1">${parseFloat(t.amount_g1||0).toFixed(2)} Ğ1</div>
+              </div>
+            </div>`;
+          }).join('');
+
+    document.getElementById('root').innerHTML = `
+
+      <!-- Identity -->
+      <div class="identity-block">
+        <div class="email">${email}</div>
+        ${g1pub ? `<div class="g1pub">${g1pub}</div>` : ''}
+        <div class="period">Période : ${data.filter_period || '—'}</div>
+        ${g1pub ? `<a class="cesium-link" href="https://cesium.copylaradio.com/#/wot/tx/${encodeURIComponent(g1pub)}/" target="_blank">🔗 Vérifier sur Cesium Ğ1</a>` : ''}
+      </div>
+
+      <!-- Stats -->
+      <div class="stats-row">
+        <div class="stat-tile green"><div class="val">Ẑ ${parseFloat(totalZen).toFixed(0)}</div><div class="lbl">Reçu total</div></div>
+        <div class="stat-tile yellow"><div class="val">Ẑ ${parseFloat(validZen).toFixed(0)}</div><div class="lbl">Solde valide</div></div>
+        <div class="stat-tile blue"><div class="val">${data.total_transfers||0}</div><div class="lbl">Investissements</div></div>
+        <div class="stat-tile purple"><div class="val">${data.valid_transfers||0}</div><div class="lbl">Actifs</div></div>
+      </div>
+
+      ${totalZen > 0 ? `
+      <!-- Distribution -->
+      <div style="max-width:960px;margin:0 auto 24px">
+        <div class="section-label">📊 Répartition par type</div>
+        <div class="dist-bar-wrap">${distBar}</div>
+        <div class="dist-legend">${distLegend}</div>
+      </div>` : ''}
+
+      <!-- Transfers -->
+      <div class="section-label">
+        📑 Historique des investissements
+        <a class="refresh-btn" href="#" onclick="event.preventDefault();loadZencard('${email}')">↻ Actualiser</a>
+        <a class="refresh-btn" href="zencard.html" style="margin-left:4px">← Accueil</a>
+      </div>
+      <div class="transfers-list">${transfersHtml}</div>
+
+    `;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   Load data
+   ═══════════════════════════════════════════════════════════ */
+async function loadZencard(email) {
+    document.getElementById('root').innerHTML =
+        `<div class="loading"><div class="spinner"></div><br>Chargement ZEN Card…<br>
+         <small style="color:var(--muted)">(recherche locale + essaim · peut prendre jusqu'à 60s)</small></div>`;
+    try {
+        const r = await fetch(`${API}/check_zencard?email=${encodeURIComponent(email)}`,
+            { signal: AbortSignal.timeout(65000) });
+        if (!r.ok) {
+            const err = await r.json().catch(()=>({detail:'Erreur réseau'}));
+            throw new Error(err.detail || `HTTP ${r.status}`);
+        }
+        const data = await r.json();
+        renderCard(email, data);
+    } catch(e) {
+        document.getElementById('root').innerHTML = `
+          <div class="empty-state">
+            <div class="icon">⚠️</div>
+            <div style="font-size:1rem;color:var(--muted);margin-bottom:8px">Impossible de charger la ZEN Card</div>
+            <div style="font-size:0.82rem;color:var(--muted)">${e.message}</div>
+            <div style="margin-top:16px"><a href="#" onclick="showLanding()">← Retour</a></div>
+          </div>`;
+    }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   Submit email
+   ═══════════════════════════════════════════════════════════ */
+function submitEmail() {
+    const email = (document.getElementById('email-input')?.value || '').trim();
+    if (!email || !email.includes('@')) return;
+    const url = new URL(window.location.href);
+    url.searchParams.set('email', email);
+    window.history.replaceState({}, '', url);
+    loadZencard(email);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   Init
+   ═══════════════════════════════════════════════════════════ */
+(function init() {
+    const params = new URLSearchParams(window.location.search);
+    const email  = params.get('email') || params.get('mail') || '';
+    if (email && email.includes('@')) {
+        loadZencard(email);
+    } else {
+        showLanding();
+    }
+})();
+</script>
+</body>
+</html>

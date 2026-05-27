@@ -1,0 +1,763 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Forge Skills x1 — Activation Compétences</title>
+<link rel="icon" type="image/x-icon" href="favicon.ring.ico">
+<link rel="stylesheet" href="bootstrap.min.css">
+<link rel="stylesheet" href="fonts/bootstrap-icons.css">
+<style>
+:root {
+    --accent: #059669;
+    --accent-light: #10b981;
+    --bg: linear-gradient(135deg,#0a1628 0%,#0d2b1e 40%,#0a1a2e 100%);
+    --card-bg: rgba(10,30,20,0.92);
+    --card-border: rgba(5,150,105,0.28);
+    --text-muted: #8ba098;
+}
+* { box-sizing: border-box; }
+body { margin:0; min-height:100vh; background:var(--bg); font-family:'Segoe UI',sans-serif; color:#d1fae5; }
+
+/* LAYOUT */
+.main { max-width:900px; margin:56px auto 0; padding:20px 16px; }
+
+/* SESSION CARD */
+.session-card { background:var(--card-bg); border:1px solid var(--card-border);
+  border-radius:12px; padding:14px 18px; margin-bottom:20px; }
+.session-card h6 { color:var(--accent-light); font-size:13px; margin:0 0 8px; font-weight:700; }
+.session-meta { display:flex; flex-wrap:wrap; gap:8px; }
+.meta-badge { font-size:11px; padding:2px 8px; border-radius:10px;
+  background:rgba(5,150,105,.15); border:1px solid rgba(5,150,105,.3); color:#a7f3d0; }
+
+/* SKILLS GRID */
+.skills-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:14px; margin-bottom:24px; }
+
+/* SKILL CARD */
+.skill-card { background:var(--card-bg); border:1px solid var(--card-border);
+  border-radius:12px; padding:14px; display:flex; flex-direction:column; gap:10px;
+  transition:border-color .2s; position:relative; }
+.skill-card.activated { border-color:#059669; background:rgba(5,150,105,.08); }
+.skill-card.has-media { border-color:#f59e0b; }
+.skill-header { display:flex; align-items:center; gap:8px; }
+.skill-icon { font-size:22px; }
+.skill-name { font-weight:700; font-size:14px; color:#a7f3d0; flex:1; }
+.skill-level { font-size:11px; padding:2px 8px; border-radius:8px;
+  background:rgba(14,165,233,.2); border:1px solid rgba(14,165,233,.4); color:#7dd3fc; font-weight:700; }
+.skill-desc { font-size:11px; color:var(--text-muted); line-height:1.4; }
+
+/* STATUS BADGE */
+.status-badge { font-size:10px; padding:2px 8px; border-radius:8px; font-weight:600;
+  align-self:flex-start; }
+.status-pending { background:rgba(255,255,255,.08); color:#9ca3af; border:1px solid rgba(255,255,255,.15); }
+.status-media    { background:rgba(245,158,11,.15); color:#fde68a; border:1px solid rgba(245,158,11,.3); }
+.status-active   { background:rgba(5,150,105,.2); color:#6ee7b7; border:1px solid rgba(5,150,105,.4); }
+.status-error    { background:rgba(239,68,68,.15); color:#fca5a5; border:1px solid rgba(239,68,68,.3); }
+
+/* DROP ZONE */
+.drop-zone { border:1.5px dashed rgba(5,150,105,.4); border-radius:8px;
+  padding:12px; text-align:center; cursor:pointer; transition:all .2s;
+  min-height:70px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px; }
+.drop-zone:hover, .drop-zone.dragover { border-color:var(--accent-light); background:rgba(5,150,105,.08); }
+.drop-zone.has-file { border-color:#f59e0b; background:rgba(245,158,11,.06); }
+.drop-zone .dz-label { font-size:11px; color:var(--text-muted); }
+.drop-zone .dz-file { font-size:11px; color:#fde68a; word-break:break-all; }
+.drop-zone .dz-icon { font-size:18px; }
+
+/* SHARED MEDIA */
+.shared-media-row { display:flex; flex-wrap:wrap; gap:6px; }
+.shared-media-item { font-size:10px; padding:3px 8px; border-radius:8px; cursor:pointer;
+  background:rgba(14,165,233,.1); border:1px solid rgba(14,165,233,.25); color:#7dd3fc;
+  max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.shared-media-item:hover { background:rgba(14,165,233,.25); }
+.shared-media-item.selected { background:rgba(14,165,233,.35); border-color:#38bdf8; }
+.shared-label { font-size:10px; color:var(--text-muted); margin-bottom:3px; }
+
+/* ACTIVATE BTN */
+.btn-activate { width:100%; padding:8px; border:none; border-radius:8px;
+  background:linear-gradient(90deg,#059669,#0ea5e9); color:white; font-weight:700;
+  font-size:12px; cursor:pointer; transition:opacity .2s; }
+.btn-activate:disabled { opacity:.35; cursor:not-allowed; }
+.btn-activate:not(:disabled):hover { opacity:.85; }
+
+
+/* FILE INPUT */
+input[type=file] { display:none; }
+
+/* SUCCESS overlay */
+.activated-check { position:absolute; top:10px; right:10px; font-size:18px; }
+
+/* EMPTY STATE */
+.empty-state { text-align:center; padding:40px 20px; color:var(--text-muted); font-size:13px; }
+.empty-state i { font-size:32px; display:block; margin-bottom:12px; }
+
+/* INTRO BOX */
+.intro-box { background:rgba(14,165,233,.06); border:1px solid rgba(14,165,233,.2);
+  border-radius:10px; padding:14px 16px; margin-bottom:20px; font-size:12px; line-height:1.6; color:#a7f3d0; }
+.intro-box strong { color:#7dd3fc; }
+
+/* DEMO ACCOUNTS */
+.demo-panel { background:rgba(245,158,11,.05); border:1px solid rgba(245,158,11,.2);
+  border-radius:10px; padding:12px 16px; margin-bottom:20px; }
+.demo-panel h6 { color:#fde68a; font-size:12px; font-weight:700; margin:0 0 10px; }
+.demo-cards { display:flex; flex-wrap:wrap; gap:8px; }
+.demo-card { background:rgba(245,158,11,.08); border:1px solid rgba(245,158,11,.2);
+  border-radius:8px; padding:8px 12px; cursor:pointer; transition:all .2s; min-width:150px; }
+.demo-card:hover { background:rgba(245,158,11,.18); border-color:#f59e0b; }
+.demo-card.active { background:rgba(245,158,11,.22); border-color:#fbbf24; }
+.demo-card-name { font-size:12px; font-weight:700; color:#fde68a; }
+.demo-card-role { font-size:10px; color:#d97706; margin-top:2px; }
+.demo-card-skills { font-size:10px; color:var(--text-muted); margin-top:3px; }
+
+/* EXISTING SKILLS */
+.existing-panel { background:rgba(5,150,105,.05); border:1px solid rgba(5,150,105,.2);
+  border-radius:10px; padding:12px 16px; margin-bottom:20px; }
+.existing-panel h6 { color:#6ee7b7; font-size:12px; font-weight:700; margin:0 0 10px; }
+.existing-skills-list { display:flex; flex-wrap:wrap; gap:6px; }
+.existing-skill-badge { font-size:11px; padding:3px 10px; border-radius:8px;
+  background:rgba(5,150,105,.15); border:1px solid rgba(5,150,105,.3); color:#a7f3d0; }
+.existing-skill-badge.x2 { background:rgba(14,165,233,.15); border-color:rgba(14,165,233,.3); color:#7dd3fc; }
+.existing-skill-badge.x3 { background:rgba(168,85,247,.15); border-color:rgba(168,85,247,.3); color:#d8b4fe; }
+.existing-skill-badge.x4 { background:rgba(234,179,8,.15); border-color:rgba(234,179,8,.3); color:#fde68a; }
+</style>
+</head>
+<body>
+
+<!-- MAIN -->
+<div class="main" id="main-content">
+
+  <!-- INTRO -->
+  <div class="intro-box">
+    <strong>Comment ça marche :</strong><br>
+    Votre installation vient d'être détectée. Chaque compétence ci-dessous a été identifiée.<br>
+    <strong>1.</strong> Connectez votre MULTIPASS via le bandeau en haut (⚡ Connecter) ·
+    <strong>2.</strong> <strong style="color:#f59e0b">📎 Obligatoire :</strong> joignez un média (vidéo, capture, PDF) comme preuve, ou réutilisez une preuve déjà partagée dans la constellation ·
+    <strong>3.</strong> Cliquez <em>Activer x1</em> → Kind 30503 signé et publié sur le relay local.<br>
+    <strong>x1</strong> = auto-proclamé (folksonomy) · <strong>x2+</strong> = cérémonie ou 3 likes de la constellation.
+  </div>
+
+  <!-- COMPTES DEMO -->
+  <div class="demo-panel" id="demo-panel" style="display:none">
+    <h6>🎭 Comptes de démonstration WoTx2</h6>
+    <div class="demo-cards">
+      <div class="demo-card" data-nsec="nsec14yvfr9excvh4a34cd2jc9amxy5dzxr8p59eg7vp5pkc4gevd6jcqwlmnc8"
+           data-name="coucou" data-role="Astronaute Fondateur" data-skills="linux · bash · devops"
+           onclick="switchToDemo(this)">
+        <div class="demo-card-name">👤 coucou</div>
+        <div class="demo-card-role">Astronaute Fondateur</div>
+        <div class="demo-card-skills">linux · bash · devops</div>
+      </div>
+      <div class="demo-card" data-nsec="nsec1npyez07znm90h23ey2d3h6c20a6n36nf7mhvepu4c7wuqpj3chwq09xpj9"
+           data-name="toto" data-role="Validateur WoTx2" data-skills="python · docker"
+           onclick="switchToDemo(this)">
+        <div class="demo-card-name">👤 toto</div>
+        <div class="demo-card-role">Validateur WoTx2</div>
+        <div class="demo-card-skills">python · docker</div>
+      </div>
+      <div class="demo-card" data-nsec="nsec1d6h2faf3sged6c0fe7l53rg8637drlwsvcj7c95ajj7guhgtzgdswh6xgf"
+           data-name="jean" data-role="Maître de Forge" data-skills="rust · bash"
+           onclick="switchToDemo(this)">
+        <div class="demo-card-name">👤 jean</div>
+        <div class="demo-card-role">Maître de Forge</div>
+        <div class="demo-card-skills">rust · bash</div>
+      </div>
+    </div>
+    <div style="font-size:10px;color:var(--text-muted);margin-top:8px">
+      💡 Connexion directe — comptes générés par <code>./test.sh wotx2</code>. Explorer sans vos propres données.
+    </div>
+  </div>
+
+  <!-- SKILLS EXISTANTS (visible après connexion) -->
+  <div class="existing-panel" id="existing-panel" style="display:none">
+    <h6><i class="bi bi-award-fill"></i> Compétences déjà acquises</h6>
+    <div class="existing-skills-list" id="existing-skills-list">
+      <span style="color:var(--text-muted);font-size:11px">Chargement…</span>
+    </div>
+  </div>
+
+  <!-- SESSION INFO -->
+  <div class="session-card" id="session-card" style="display:none">
+    <h6><i class="bi bi-cpu"></i> Session détectée</h6>
+    <div class="session-meta" id="session-meta"></div>
+  </div>
+
+  <!-- SKILLS GRID -->
+  <div id="skills-grid" class="skills-grid"></div>
+
+  <!-- Chargement -->
+  <div class="empty-state" id="loading-state">
+    <i class="bi bi-arrow-repeat" style="animation:spin 1s linear infinite"></i>
+    Chargement de la session…
+  </div>
+
+  <!-- FOOTER — Étape suivante -->
+  <div id="footer-cta" style="margin-top:28px;padding:14px 16px;
+       background:rgba(5,150,105,.05);border:1px solid rgba(5,150,105,.15);
+       border-radius:10px;font-size:12px;color:#8ba098;text-align:center;display:none">
+    <div style="font-size:13px;color:#6ee7b7;font-weight:700;margin-bottom:8px">
+      ✅ Skills activés — Prochaine étape
+    </div>
+    Retrouvez vos compétences, gérez vos niveaux et explorez la constellation dans :<br>
+    <a id="minelife-link" href="minelife.html" style="color:#7dd3fc;font-weight:700;text-decoration:none">
+      <i class="bi bi-person-badge-fill"></i> minelife.html → onglet Mes Compétences
+    </a>
+    &nbsp;·&nbsp;
+    <a href="economy.html" style="color:#a7f3d0;text-decoration:none">
+      <i class="bi bi-graph-up-arrow"></i> Tableau de bord ẐEN
+    </a>
+  </div>
+</div>
+
+<style>@keyframes spin{to{transform:rotate(360deg)}}</style>
+
+<script src="nacl-fast.min.js"></script>
+<script src="nostr.bundle.js"></script>
+<script src="common.js"></script>
+<script src="uplanet-header.js"></script>
+<script>
+'use strict';
+
+/* ── État global ─────────────────────────────────────────────── */
+var _privHex = null;      // nsec décodée en hex — jamais transmise
+var _pubHex  = null;
+var _session = null;
+var _skillState = {};     // { skillId: { cid, infoCid, status, eventId, _isShared } }
+
+/* ── Helpers URL ─────────────────────────────────────────────── */
+function getApiBase() {
+    if (window.getAPIUrl) {
+        var u = window.getAPIUrl();
+        if (u) return u;
+    }
+    var h = window.location.hostname;
+    if (h === 'localhost' || h === '127.0.0.1') return 'http://127.0.0.1:54321';
+    return 'https://u.' + h.replace(/^[^.]+\./, '');
+}
+function getRelayWs() {
+    if (window.getRelayUrl) {
+        var u = window.getRelayUrl();
+        if (u) return u.replace('wss://','ws://').replace('https://','ws://');
+    }
+    var h = window.location.hostname;
+    if (h === 'localhost' || h === '127.0.0.1') return 'ws://127.0.0.1:7777';
+    return 'wss://relay.' + h.replace(/^[^.]+\./, '');
+}
+function getIpfsBase() {
+    var h = window.location.hostname;
+    if (h === 'localhost' || h === '127.0.0.1') return 'http://127.0.0.1:8080';
+    return 'https://ipfs.' + h.replace(/^[^.]+\./, '');
+}
+
+
+function refreshActivateButtons() {
+    document.querySelectorAll('.btn-activate').forEach(function(btn) {
+        var sid = btn.dataset.skill;
+        var st  = _skillState[sid] || {};
+        var hasMedia = !!st.cid;
+        var ready = !!_privHex && hasMedia && st.status !== 'active';
+        btn.disabled = !ready;
+        btn.title = !_privHex ? 'Connectez votre MULTIPASS d\'abord'
+                  : !hasMedia ? '📎 Joignez un média de preuve pour activer'
+                  : '';
+    });
+}
+
+/* ── Session ─────────────────────────────────────────────────── */
+async function loadSession() {
+    try {
+        var r = await fetch(getApiBase() + '/api/skill/session');
+        if (r.ok) _session = await r.json();
+    } catch(e) {}
+
+    // Fallback : URL params
+    if (!_session) {
+        var params = new URLSearchParams(window.location.search);
+        _session = {
+            mode: params.get('mode') || 'install',
+            profile: params.get('profile') || 'standard',
+            score: parseInt(params.get('score') || '0'),
+            tier: params.get('tier') || '',
+            log_cid: params.get('session_cid') || '',
+            cpu_model: '', ram_gb: 0, vram_gb: 0
+        };
+    }
+
+    renderSession(_session);
+    var skills = sessionToSkills(_session);
+    await renderSkillCards(skills);
+    document.getElementById('loading-state').style.display = 'none';
+}
+
+function renderSession(s) {
+    if (!s) return;
+    var card = document.getElementById('session-card');
+    var meta = document.getElementById('session-meta');
+    card.style.display = '';
+    var items = [
+        s.mode === 'upgrade' ? '🔄 Upgrade' : '🆕 Install',
+        s.profile ? 'Profil : ' + s.profile : null,
+        s.score ? 'Score : ' + s.score : null,
+        s.tier || null,
+        s.cpu_model ? '🖥 ' + s.cpu_model : null,
+        s.ram_gb ? s.ram_gb + 'Go RAM' : null,
+        s.vram_gb > 0 ? s.vram_gb + 'Go VRAM' : null
+    ].filter(Boolean);
+    meta.innerHTML = items.map(function(t) {
+        return '<span class="meta-badge">' + _esc(t) + '</span>';
+    }).join('');
+}
+
+/* ── Mapping session → skills ────────────────────────────────── */
+function sessionToSkills(s) {
+    s = s || {};
+    var list = [
+        { id:'bash',             icon:'🔧', name:'Bash',              desc:'Scripting bash et automatisation Linux' },
+        { id:'linux-admin',      icon:'🐧', name:'Administration Linux', desc:'Gestion système Debian/Ubuntu/Mint' },
+        { id:'ipfs',             icon:'🌐', name:'IPFS / Kubo',       desc:'Nœud IPFS décentralisé configuré et opérationnel' },
+        { id:'nostr',            icon:'⚡', name:'NOSTR Relay',       desc:'Relay strfry déployé (port 7777)' },
+        { id:'astroport-install', icon:'⚓', name:'Astroport.ONE',
+          desc: 'Installation/mise à jour nœud Astroport.ONE réussie — x2+ via cérémonie ou 3 likes',
+          level: 1 }
+    ];
+    if ((s.score || 0) > 10 || (s.profile && s.profile !== 'standard')) {
+        list.push({ id:'docker', icon:'🐳', name:'Docker', desc:'Orchestration de conteneurs Docker' });
+    }
+    if (s.profile === 'ai-company') {
+        list.push({ id:'ollama', icon:'🤖', name:'Ollama / IA Locale', desc:'Déploiement de modèles IA locaux' });
+        list.push({ id:'qdrant', icon:'🔍', name:'Qdrant',             desc:'Base vectorielle souveraine opérationnelle' });
+    }
+    return list;
+}
+
+/* ── Rendu des cartes ────────────────────────────────────────── */
+async function renderSkillCards(skills) {
+    var grid = document.getElementById('skills-grid');
+    grid.innerHTML = '';
+
+    // Charger les médias partagés pour chaque skill en parallèle
+    var mediaMap = {};
+    await Promise.all(skills.map(async function(sk) {
+        try {
+            var r = await fetch(getApiBase() + '/api/skill/media/' + encodeURIComponent(sk.id) + '?limit=8');
+            if (r.ok) { var d = await r.json(); mediaMap[sk.id] = d.media || []; }
+        } catch(e) { mediaMap[sk.id] = []; }
+    }));
+
+    skills.forEach(function(sk) {
+        var level = sk.level || 1;
+        var media = mediaMap[sk.id] || [];
+        _skillState[sk.id] = { status:'pending', cid: null, infoCid: null, _isShared: false };
+
+        var card = document.createElement('div');
+        card.className = 'skill-card';
+        card.id = 'card-' + sk.id;
+
+        card.innerHTML = [
+            '<div class="skill-header">',
+            '  <span class="skill-icon">', sk.icon, '</span>',
+            '  <span class="skill-name">', _esc(sk.name), '</span>',
+            '  <span class="skill-level">x', level, '</span>',
+            '</div>',
+            '<div class="skill-desc">', _esc(sk.desc), '</div>',
+            '<span class="status-badge status-pending" id="status-' + sk.id + '">En attente</span>',
+
+            // Médias partagés dans la constellation
+            media.length > 0 ? [
+                '<div>',
+                '  <div class="shared-label"><i class="bi bi-people-fill"></i> Médias existants dans la constellation :</div>',
+                '  <div class="shared-media-row" id="shared-' + sk.id + '">',
+                media.map(function(m, i) {
+                    var label = (m.content && m.content.title) ? m.content.title : 'Preuve #' + (i+1);
+                    return '<span class="shared-media-item" title="' + _esc(m.cid) + '" '
+                        + 'onclick="selectSharedMedia(\'' + _esc(sk.id) + '\',\'' + _esc(m.cid) + '\',this)">'
+                        + _esc(label.slice(0,28)) + '</span>';
+                }).join(''),
+                '  </div>',
+                '</div>'
+            ].join('') : '',
+
+            // Drop zone pour nouveau média
+            '<div class="drop-zone" id="dz-' + sk.id + '" ',
+            '     onclick="document.getElementById(\'fi-' + sk.id + '\').click()"',
+            '     ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)"',
+            '     ondrop="handleDrop(event,\'' + sk.id + '\')" >',
+            '  <span class="dz-icon">📎</span>',
+            '  <span class="dz-label"><span style="color:#f59e0b;font-weight:700">📎 Requis</span> — glissez un média ou cliquez pour choisir</span>',
+            '  <span class="dz-file" id="dz-file-' + sk.id + '" style="display:none"></span>',
+            '</div>',
+            '<input type="file" id="fi-' + sk.id + '" accept="image/*,video/*,.pdf,.txt,.md" ',
+            '       onchange="handleFileInput(event,\'' + sk.id + '\')">',
+
+            '<button class="btn-activate" id="btn-' + sk.id + '" data-skill="' + sk.id + '"',
+            '        data-level="' + level + '" disabled onclick="activateSkill(\'' + sk.id + '\',' + level + ')">',
+            '  <i class="bi bi-lightning-charge-fill"></i> Activer x', level,
+            '</button>'
+        ].join('');
+
+        grid.appendChild(card);
+    });
+
+    refreshActivateButtons();
+}
+
+/* ── Sélection d'un média partagé ───────────────────────────── */
+function selectSharedMedia(skillId, cid, el) {
+    document.querySelectorAll('#shared-' + skillId + ' .shared-media-item').forEach(function(i) {
+        i.classList.remove('selected');
+    });
+    el.classList.add('selected');
+    _skillState[skillId].cid     = cid;
+    _skillState[skillId].infoCid = null;    // pas d'info.json pour un média déjà partagé
+    _skillState[skillId]._isShared = true;  // ne pas republier un Kind 30504 déjà existant
+    setCardStatus(skillId, 'media', '📎 Preuve sélectionnée : ' + cid.slice(0,16) + '…');
+    refreshActivateButtons();
+}
+
+/* ── Drag & Drop ─────────────────────────────────────────────── */
+function handleDragOver(e) { e.preventDefault(); e.currentTarget.classList.add('dragover'); }
+function handleDragLeave(e) { e.currentTarget.classList.remove('dragover'); }
+
+async function handleDrop(e, skillId) {
+    e.preventDefault();
+    e.currentTarget.classList.remove('dragover');
+    var file = e.dataTransfer.files[0];
+    if (file) await processFile(skillId, file);
+}
+
+async function handleFileInput(e, skillId) {
+    var file = e.target.files[0];
+    e.target.value = '';  // reset pour permettre de re-sélectionner le même fichier
+    if (file) await processFile(skillId, file);
+}
+
+async function processFile(skillId, file) {
+    setCardStatus(skillId, 'pending', '⏳ Upload en cours…');
+    // Nouveau fichier annule la sélection de média partagé
+    _skillState[skillId]._isShared = false;
+    _skillState[skillId].cid     = null;
+    _skillState[skillId].infoCid = null;
+    document.querySelectorAll('#shared-' + skillId + ' .shared-media-item')
+        .forEach(function(el) { el.classList.remove('selected'); });
+    var dz = document.getElementById('dz-' + skillId);
+    var dzFile = document.getElementById('dz-file-' + skillId);
+    dz.classList.add('has-file');
+    dzFile.style.display = '';
+    dzFile.textContent = file.name + ' (' + (file.size/1024).toFixed(1) + ' Ko)';
+    try {
+        var result = await uploadToIPFS(file);
+        _skillState[skillId].cid     = result.cid;
+        _skillState[skillId].infoCid = result.infoCid;
+        setCardStatus(skillId, 'media', '📎 ' + result.cid.slice(0,20) + '…');
+        document.getElementById('dz-' + skillId).scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    } catch(e) {
+        setCardStatus(skillId, 'error', '❌ Upload échoué : ' + e.message);
+    }
+    refreshActivateButtons();
+}
+
+/* ── Upload IPFS via /api/fileupload (conforme UPlanet_FILE_CONTRACT) ─────── */
+async function uploadToIPFS(file) {
+    var form = new FormData();
+    form.append('file', file);
+    // /api/fileupload : génère info.json, SHA256, provenance, NIP-94 kind 1063
+    try {
+        var r = await fetch(getApiBase() + '/api/fileupload', { method:'POST', body: form });
+        if (!r.ok) throw new Error('HTTP ' + r.status + ' — serveur UPassport');
+        var d = await r.json();
+        var cid     = d.new_cid || d.cid || d.Hash;
+        var infoCid = d.info || null;  // CID du info.json de provenance
+        if (cid) return { cid: cid, infoCid: infoCid };
+        throw new Error('réponse API sans CID');
+    } catch(e) {
+        throw new Error('/api/fileupload : ' + e.message);
+    }
+}
+
+/* ── Signature (nsec local ou extension NIP-07) ──────────────── */
+async function signEvent(template) {
+    if (_privHex === 'EXT' && window.nostr) {
+        template.pubkey = _pubHex;
+        return await window.nostr.signEvent(template);
+    }
+    return NostrTools.finishEvent(template, _privHex);
+}
+
+/* ── Publication Kind 30503 + 30504 ─────────────────────────── */
+async function activateSkill(skillId, level) {
+    if (!_privHex) { alert('Connectez votre MULTIPASS d\'abord.'); return; }
+    var st = _skillState[skillId] || {};
+    var mediaCid = st.cid || null;
+
+    setCardStatus(skillId, 'pending', '⏳ Publication sur relay…');
+    document.getElementById('btn-' + skillId).disabled = true;
+
+    var sessionLogCid = (_session && _session.log_cid) ? _session.log_cid : null;
+    var skillNorm = skillId;
+    var permitKey = 'PERMIT_' + skillId.toUpperCase().replace(/-/g,'_') + '_X' + level;
+    var now = Math.floor(Date.now()/1000);
+    var nowIso = new Date().toISOString();
+
+    var infoCid = st.infoCid || null;
+
+    try {
+        // Kind 30504 — publier le média comme ressource partagée (si fichier local, pas déjà partagé)
+        // Conforme UPlanet_FILE_CONTRACT : référence le CID du info.json de provenance
+        var mediaCidNew = null;
+        if (mediaCid && !st._isShared) {
+            var tags30504 = [
+                ['d', 'resource-' + skillId + '-' + now],
+                ['t', skillNorm],
+                ['t', 'install-evidence'],
+                ['r', 'ipfs://' + mediaCid],
+                ['url', getIpfsBase() + '/ipfs/' + mediaCid]
+            ];
+            if (infoCid) tags30504.push(['info', infoCid]);
+            var ev30504 = await signEvent({
+                kind: 30504,
+                created_at: now,
+                tags: tags30504,
+                content: JSON.stringify({
+                    skill_tag: skillNorm,
+                    title: 'Preuve installation ' + skillNorm,
+                    cid: mediaCid,
+                    info: infoCid || '',
+                    uploaded_at: nowIso
+                })
+            });
+            await publishEvent(ev30504);
+            mediaCidNew = mediaCid;
+        }
+
+        // Kind 30503 — attestation auto-déclarée (folksonomy)
+        var tags30503 = [
+            ['d', permitKey],
+            ['l', permitKey, 'permit_type'],
+            ['level', String(level)],
+            ['t', skillNorm],
+            ['t', 'auto_proclaimed']
+        ];
+        if (sessionLogCid) tags30503.push(['e', sessionLogCid, '', 'install_session']);
+        if (mediaCid)      tags30503.push(['e', mediaCid, '', 'evidence']);
+        if (infoCid)       tags30503.push(['e', infoCid, '', 'info']);
+        if (mediaCidNew)   tags30503.push(['r', 'ipfs://' + mediaCidNew]);
+
+        var ev30503 = await signEvent({
+            kind: 30503,
+            created_at: now,
+            tags: tags30503,
+            content: JSON.stringify({
+                skill: skillNorm, level: level,
+                attested_at: nowIso,
+                auto_proclaimed: true,
+                session_cid: sessionLogCid || ''
+            })
+        });
+
+        await publishEvent(ev30503);
+
+        _skillState[skillId].status = 'active';
+        _skillState[skillId].eventId = ev30503.id;
+        setCardStatus(skillId, 'active', '✅ x' + level + ' activé · event: ' + ev30503.id.slice(0,12) + '…');
+        document.getElementById('card-' + skillId).classList.add('activated');
+        document.getElementById('card-' + skillId).innerHTML += '<span class="activated-check">✅</span>';
+        document.getElementById('footer-cta').style.display = '';
+
+    } catch(e) {
+        setCardStatus(skillId, 'error', '❌ ' + e.message);
+        document.getElementById('btn-' + skillId).disabled = false;
+    }
+}
+
+/* ── Publication WebSocket relay ────────────────────────────── */
+function publishEvent(event) {
+    return new Promise(function(resolve, reject) {
+        var ws;
+        try { ws = new WebSocket(getRelayWs()); } catch(e) { reject(new Error('Relay URL invalide : ' + e.message)); return; }
+        var timer = setTimeout(function() { try { ws.close(); } catch(x){} reject(new Error('Timeout relay (8s) — relay local démarré ?')); }, 8000);
+        ws.onopen = function() { ws.send(JSON.stringify(['EVENT', event])); };
+        ws.onmessage = function(e) {
+            try {
+                var d = JSON.parse(e.data);
+                if (d[0] === 'OK') {
+                    clearTimeout(timer); ws.close();
+                    // d[2] === false → relay a rejeté l'event (NIP-01 OK false)
+                    if (d[2] === false) {
+                        reject(new Error('Relay a rejeté l\'event : ' + (d[3] || 'raison inconnue')));
+                    } else {
+                        resolve(event.id);
+                    }
+                    return;
+                }
+                if (d[0] === 'NOTICE') {
+                    // NOTICE = info relay, pas un rejet — continuer à attendre OK
+                }
+            } catch(ex) {}
+        };
+        ws.onerror = function(e) { clearTimeout(timer); reject(new Error('Erreur WebSocket relay — strfry démarré ?')); };
+    });
+}
+
+/* ── UI helpers ──────────────────────────────────────────────── */
+function setCardStatus(skillId, type, text) {
+    var el = document.getElementById('status-' + skillId);
+    if (!el) return;
+    el.className = 'status-badge status-' + type;
+    el.textContent = text;
+}
+
+function _esc(t) { var d = document.createElement('div'); d.textContent = String(t || ''); return d.innerHTML; }
+
+/* ── Reset des cartes (changement de compte) ─────────────────── */
+function resetAllCards() {
+    Object.keys(_skillState).forEach(function(sid) {
+        _skillState[sid] = { status:'pending', cid: null, infoCid: null, _isShared: false };
+        var card = document.getElementById('card-' + sid);
+        if (card) {
+            card.classList.remove('activated');
+            var check = card.querySelector('.activated-check');
+            if (check) check.remove();
+        }
+        setCardStatus(sid, 'pending', 'En attente');
+        var dz = document.getElementById('dz-' + sid);
+        if (dz) { dz.classList.remove('has-file', 'dragover'); }
+        var dzFile = document.getElementById('dz-file-' + sid);
+        if (dzFile) { dzFile.style.display = 'none'; dzFile.textContent = ''; }
+        document.querySelectorAll('#shared-' + sid + ' .shared-media-item')
+            .forEach(function(el) { el.classList.remove('selected'); });
+    });
+    document.getElementById('footer-cta').style.display = 'none';
+    refreshActivateButtons();
+}
+
+/* ── Comptes démo ────────────────────────────────────────────── */
+function switchToDemo(card) {
+    document.querySelectorAll('.demo-card').forEach(function(c) { c.classList.remove('active'); });
+    card.classList.add('active');
+    var nsec = card.dataset.nsec;
+    var name = card.dataset.name;
+    try {
+        var dec = NostrTools.nip19.decode(nsec);
+        if (dec.type !== 'nsec') throw new Error('type invalide');
+        _privHex = dec.data;
+        _pubHex  = NostrTools.getPublicKey(_privHex);
+        resetAllCards();
+        fetchExistingSkills(_pubHex);
+    } catch(e) {
+        alert('Erreur démo : ' + e.message);
+    }
+}
+
+/* ── Skills existants ────────────────────────────────────────── */
+async function fetchExistingSkills(pubkey) {
+    var panel = document.getElementById('existing-panel');
+    var list  = document.getElementById('existing-skills-list');
+    panel.style.display = '';
+    list.innerHTML = '<span style="color:var(--text-muted);font-size:11px">Chargement…</span>';
+
+    var skills = [];
+    try {
+        await new Promise(function(resolve) {
+            var ws;
+            try { ws = new WebSocket(getRelayWs()); } catch(e) { resolve(); return; }
+            var timer = setTimeout(function() { try { ws.close(); } catch(x){} resolve(); }, 6000);
+            ws.onopen = function() {
+                ws.send(JSON.stringify(['REQ', 'existing_skills', {
+                    kinds: [30503],
+                    authors: [pubkey],
+                    limit: 50
+                }]));
+            };
+            ws.onmessage = function(e) {
+                try {
+                    var d = JSON.parse(e.data);
+                    if (d[0] === 'EOSE') { clearTimeout(timer); ws.close(); resolve(); return; }
+                    if (d[0] === 'EVENT' && d[2]) {
+                        var ev = d[2];
+                        var dTag   = (ev.tags.find(function(t){return t[0]==='d';})||[])[1]||'';
+                        var lvlRaw = parseInt((ev.tags.find(function(t){return t[0]==='level';})||[])[1]||'1');
+                        var lvlTag = (isNaN(lvlRaw) || lvlRaw < 1) ? 1 : lvlRaw;
+                        var ts     = typeof ev.created_at === 'number' ? ev.created_at : 0;
+                        if (dTag) skills.push({ permit: dTag, level: lvlTag, created_at: ts });
+                    }
+                } catch(ex) {}
+            };
+            ws.onerror = function() { clearTimeout(timer); resolve(); };
+        });
+    } catch(e) {}
+
+    if (skills.length === 0) {
+        list.innerHTML = '<span style="color:var(--text-muted);font-size:11px">Aucune compétence trouvée sur le relay local.</span>';
+        return;
+    }
+    // Trier par created_at desc, dédoublonner par permit (garder le plus récent)
+    skills.sort(function(a,b){return b.created_at - a.created_at;});
+    var seen = {};
+    var deduped = skills.filter(function(s) {
+        if (seen[s.permit]) return false;
+        seen[s.permit] = true; return true;
+    });
+    list.innerHTML = deduped.map(function(s) {
+        var cls = s.level >= 4 ? 'x4' : s.level === 3 ? 'x3' : s.level === 2 ? 'x2' : '';
+        var label = s.permit.replace(/^PERMIT_/, '').replace(/_X\d+$/, '').replace(/_/g,'-').toLowerCase();
+        return '<span class="existing-skill-badge ' + cls + '" title="' + _esc(s.permit) + '">'
+             + _esc(label) + ' <strong>x' + s.level + '</strong></span>';
+    }).join('');
+}
+
+/* ── Mise à jour UI connexion ────────────────────────────────── */
+function _onConnected(pubkey, label) {
+    refreshActivateButtons();
+    fetchExistingSkills(pubkey);
+}
+
+/* ── Init ────────────────────────────────────────────────────── */
+document.addEventListener('DOMContentLoaded', function() {
+    // Vérification des dépendances critiques
+    if (typeof NostrTools === 'undefined' || !NostrTools.nip19 || !NostrTools.getPublicKey) {
+        document.getElementById('loading-state').innerHTML =
+            '<i class="bi bi-exclamation-triangle" style="color:#fca5a5"></i>'
+            + ' <span style="color:#fca5a5">Erreur : nostr.bundle.js non chargé —'
+            + ' vérifiez que le fichier est présent dans earth/</span>';
+        return;
+    }
+
+    // Afficher les comptes démo si on est en local ou si l'URL a demo=1
+    var params = new URLSearchParams(window.location.search);
+    var h = window.location.hostname;
+    if (h === 'localhost' || h === '127.0.0.1' || params.get('demo') === '1') {
+        document.getElementById('demo-panel').style.display = '';
+    }
+
+    loadSession().catch(function(e) {
+        document.getElementById('loading-state').innerHTML =
+            '<i class="bi bi-exclamation-triangle" style="color:#fca5a5"></i>'
+            + ' <span style="color:#fca5a5">Impossible de charger la session : '
+            + _esc(e.message) + '</span>';
+    });
+
+    // Tenter connexion via extension NOSTR (NIP-07) si disponible
+    if (window.nostr && window.nostr.getPublicKey) {
+        window.nostr.getPublicKey().then(function(pk) {
+            _pubHex = pk;
+            _privHex = 'EXT'; // sentinelle : signing via extension
+            _onConnected(pk, pk.slice(0,8) + '…');
+        }).catch(function() {
+            // Extension refusée ou absente — comportement attendu
+        });
+    }
+
+    // Synchroniser avec uplanet-header.js (connexion depuis le bandeau UPH)
+    if (typeof window.waitForConnection === 'function') {
+        window.waitForConnection(function() {
+            var pk = (window.NostrState && window.NostrState.userPubkey) || window.userPubkey;
+            if (pk && !_pubHex) {
+                _pubHex  = pk;
+                _privHex = 'EXT';
+                _onConnected(pk, pk.slice(0,8) + '…');
+            }
+        });
+    }
+});
+</script>
+</body>
+</html>

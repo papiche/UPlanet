@@ -64,45 +64,6 @@ body {
 
 .card-body { padding: 22px; }
 
-/* NOSTR connect */
-.nostr-box {
-    background: rgba(102,126,234,0.08);
-    border: 1px solid rgba(102,126,234,0.3);
-    border-radius: 12px;
-    padding: 14px 16px;
-    margin-bottom: 20px;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    flex-wrap: wrap;
-}
-.nostr-box .left { flex: 1; min-width: 200px; }
-.nostr-box h5 { color: #aab4ff; margin: 0 0 3px; font-size: 14px; font-weight: 600; }
-#nostr-status { font-size: 12px; color: #888; margin-top: 4px; }
-#nostr-display-name {
-    background: rgba(102,126,234,0.25);
-    border-radius: 12px;
-    padding: 2px 10px;
-    font-size: 12px;
-    color: #aef;
-    margin-left: 6px;
-    display: none;
-}
-.btn-nostr {
-    padding: 8px 16px;
-    background: linear-gradient(135deg, rgba(102,126,234,0.6), rgba(118,75,162,0.6));
-    border: 1px solid rgba(102,126,234,0.5);
-    border-radius: 20px;
-    color: white;
-    font-size: 13px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.25s;
-    white-space: nowrap;
-}
-.btn-nostr:hover:not(:disabled) { background: linear-gradient(135deg, rgba(102,126,234,0.9), rgba(118,75,162,0.9)); }
-.btn-nostr:disabled { opacity: 0.55; cursor: not-allowed; }
-
 /* Form fields */
 .form-group { margin-bottom: 16px; }
 label {
@@ -310,17 +271,6 @@ textarea { resize: vertical; min-height: 110px; }
             <button onclick="testRoaming()" style="float:right;background:none;border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:#666;font-size:11px;padding:2px 8px;cursor:pointer;">tester</button>
         </div>
 
-        <!-- NOSTR connect -->
-        <div class="nostr-box">
-            <div class="left">
-                <h5>🔑 Identité NOSTR <span id="nostr-display-name"></span></h5>
-                <div id="nostr-status">Connectez votre extension NOSTR pour vous identifier.</div>
-            </div>
-            <button id="nostr-connect-btn" class="btn-nostr" onclick="connectNostr()">
-                🔑 Connecter NOSTR
-            </button>
-        </div>
-
         <!-- Form -->
         <div id="form-section">
             <div class="alert-err" id="err-box"></div>
@@ -357,10 +307,10 @@ textarea { resize: vertical; min-height: 110px; }
             <div class="form-group">
                 <label for="fb-pubkey">Clé publique NOSTR</label>
                 <input type="text" id="fb-pubkey" maxlength="128"
-                       placeholder="npub1… (rempli automatiquement si connecté)"
+                       placeholder="npub1… (rempli automatiquement si connecté via 🔑 Accès)"
                        autocomplete="off" autocorrect="off" autocapitalize="none"
                        spellcheck="false" inputmode="text">
-                <div class="hint">Auto-rempli par "Connecter NOSTR" · Auto-filled by NOSTR connect</div>
+                <div class="hint">Auto-rempli quand vous êtes connecté via UPlanet Header (🔑 Accès)</div>
             </div>
 
             <!-- Console logs (shown if logs captured by feedback.js) -->
@@ -430,6 +380,25 @@ async function testRoaming() {
 /* Run roaming test on page load */
 document.addEventListener('DOMContentLoaded', testRoaming);
 
+/* Auto-remplir le champ pubkey depuis UPlanet Header */
+function _fbFillPubkey() {
+    var el = document.getElementById('fb-pubkey');
+    if (!el || el.value) return;
+    var pubkey = (window.NostrState && window.NostrState.userPubkey) || window.userPubkey || '';
+    if (!pubkey) return;
+    var NostrLib = window.NostrTools || window.Nostr;
+    try {
+        el.value = (NostrLib && NostrLib.nip19 && NostrLib.nip19.npubEncode)
+            ? NostrLib.nip19.npubEncode(pubkey)
+            : pubkey;
+    } catch(e) { el.value = pubkey; }
+}
+window.addEventListener('UPlanetReady', function() { setTimeout(_fbFillPubkey, 500); });
+window.addEventListener('load', function() {
+    setTimeout(_fbFillPubkey, 1500);
+    if (window.waitForConnection) window.waitForConnection(_fbFillPubkey);
+});
+
 /* Sync err-box-bottom with err-box */
 const _origShowErr = window.showErr;
 document.addEventListener('DOMContentLoaded', function () {
@@ -446,9 +415,11 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 </script>
 
+<script src="nacl-fast.min.js"></script>
 <script src="nostr.bundle.js"></script>
 <script src="common.js"></script>
 <script src="feedback.js"></script>
 <script src="app_switch.js"></script>
+<script src="uplanet-header.js"></script>
 </body>
 </html>

@@ -564,8 +564,8 @@
             fbs.height         = 'auto';           // Taille auto selon le texte
             fbs.padding        = '15px 0';         // Espacement haut/bas
             fbs.zIndex         = '9990';
-            fbs.background     = 'linear-gradient(180deg,rgba(180,30,50,0.95),rgba(220,53,69,0.95))';
-            fbs.border         = '1px solid rgba(220,53,69,0.4)';
+            fbs.background     = 'linear-gradient(180deg,rgba(40,70,110,0.95),rgba(55,90,140,0.95))';
+            fbs.border         = '1px solid rgba(55,90,140,0.4)';
             fbs.borderRight    = 'none';
             fbs.borderRadius   = '8px 0 0 8px';    // Arrondi sur les coins gauches
             fbs.color          = '#fff';

@@ -1038,10 +1038,22 @@ function scrollToId(id) {
  * @returns {Promise<string|null>} User public key or null if failed
  */
 async function connectNostr(forceAuth = false) {
-    // Check if extension is available
+    // Check if extension or G1v1 polyfill is available
     if (typeof window.nostr === 'undefined' || typeof window.nostr.getPublicKey !== 'function') {
-        const alertFn = typeof showAlert === 'function' ? showAlert : (typeof showNotification === 'function' ? (msg, type) => showNotification({ message: msg, type: type || 'error' }) : alert);
-        alertFn("L'extension Nostr avec la clef de votre MULTIPASS est requise pour la connexion.", 'error');
+        if (forceAuth) {
+            // Connexion explicite : ouvrir le modal UPH si disponible, sinon alerter
+            if (typeof window.uphOpenLogin === 'function') {
+                window.uphOpenLogin();
+            } else {
+                const alertFn = typeof showAlert === 'function' ? showAlert
+                    : (typeof showNotification === 'function'
+                        ? (msg, type) => showNotification({ message: msg, type: type || 'error' })
+                        : alert);
+                alertFn("Identifiez-vous via 🔑 Accès (G1v1 / nsec) pour vous connecter.", 'info');
+            }
+        } else {
+            console.log('[connectNostr] Pas de window.nostr — connexion silencieuse ignorée');
+        }
         return null;
     }
 

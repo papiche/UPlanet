@@ -503,6 +503,15 @@
 
   <script>
     // État NOSTR géré par common.js — window.nostrRelay, window.isNostrConnected, window.userPubkey
+
+    // Échappe les caractères HTML pour éviter les injections XSS depuis contenu NOSTR.
+    function esc(s) {
+      return String(s == null ? '' : s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+        .replace(/'/g, '&#x27;');
+    }
+
     // GPS utilisateur
     let userLat = null, userLon = null;
     if (navigator.geolocation) {
@@ -733,11 +742,11 @@
       const zcZen = captainBalances.zencard?.zen ?? 0;
 
       captainBarEl.innerHTML = `
-        <span class="captain-bar-name">🏴‍☠️ ${captainName}</span>
+        <span class="captain-bar-name">🏴‍☠️ ${esc(captainName)}</span>
         <span class="captain-bar-sep">·</span>
-        <span class="captain-bar-zen">🔑 ${mainZen} ẐEN</span>
-        <span style="color:#475569;font-size:11px">${mainG1} Ğ1</span>
-        ${hasZencard ? `<span class="captain-bar-sep">·</span><span class="captain-bar-zencard" title="${zcZen > 0 ? zcZen + ' ẐEN' : 'U.SOCIETY'}">💳</span>` : ''}
+        <span class="captain-bar-zen">🔑 ${esc(String(mainZen))} ẐEN</span>
+        <span style="color:#475569;font-size:11px">${esc(String(mainG1))} Ğ1</span>
+        ${hasZencard ? `<span class="captain-bar-sep">·</span><span class="captain-bar-zencard" title="${zcZen > 0 ? esc(String(zcZen)) + ' ẐEN' : 'U.SOCIETY'}">💳</span>` : ''}
         <span class="captain-bar-info">Mise 1 ẐEN · gains × 2ⁿ</span>
       `;
       updateWalletBar();
@@ -765,9 +774,9 @@
           ? (zc.zen > 0 ? ` · 💳 ${zc.zen} Ẑen` : ' · 💳')
           : '';
         html += `<div class="wallet-card captain">
-          <div class="wallet-role">🏴‍☠️ ${capName}</div>
-          <div class="wallet-zen">${mainZen} ẐEN</div>
-          <div class="wallet-g1">${mainG1} Ğ1${zcLabel}</div>
+          <div class="wallet-role">🏴‍☠️ ${esc(capName)}</div>
+          <div class="wallet-zen">${esc(String(mainZen))} ẐEN</div>
+          <div class="wallet-g1">${esc(String(mainG1))} Ğ1${esc(zcLabel)}</div>
         </div>`;
       } else if (cap === null && !player) {
         bar.style.display = 'none'; return;
@@ -775,9 +784,9 @@
 
       if (player) {
         html += `<div class="wallet-card player">
-          <div class="wallet-role">👤 ${player.name || 'Joueur'}</div>
-          <div class="wallet-zen">${player.balance ?? '—'} ẐEN</div>
-          <div class="wallet-g1">${player.g1Balance ?? '—'} Ğ1</div>
+          <div class="wallet-role">👤 ${esc(player.name || 'Joueur')}</div>
+          <div class="wallet-zen">${esc(String(player.balance ?? '—'))} ẐEN</div>
+          <div class="wallet-g1">${esc(String(player.g1Balance ?? '—'))} Ğ1</div>
         </div>`;
       } else {
         html += `<div class="wallet-card player-empty">
@@ -1103,7 +1112,7 @@
         const hasZencard = zencardFromProfile && zencardFromProfile.length > 0 && zencardFromProfile !== 'None';
         const hasG1pub = g1pubFromProfile && g1pubFromProfile.length > 0;
 
-        pName.innerHTML = `${name} <span class="muted">(${short})</span>${hasG1pub ? ' · <span style="color:#22c55e">✓ MULTIPASS</span>' : ' · <span style="color:#ef4444">Sans MULTIPASS</span>'}${hasZencard ? ' · <span style="color:#f59e0b">ZENCARD</span>' : ''}`;
+        pName.innerHTML = `${esc(name)} <span class="muted">(${esc(short)})</span>${hasG1pub ? ' · <span style="color:#22c55e">✓ MULTIPASS</span>' : ' · <span style="color:#ef4444">Sans MULTIPASS</span>'}${hasZencard ? ' · <span style="color:#f59e0b">ZENCARD</span>' : ''}`;
         pAbout.textContent = about || '';
         pFields.innerHTML = '';
         

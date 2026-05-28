@@ -480,7 +480,13 @@ async function fetchWebcamVideos(channelName = null, limit = 20) {
 // INITIALIZATION
 // ========================================
 
-document.addEventListener('DOMContentLoaded', () => {
+// Avec le loader asynchrone de common.js, DOMContentLoaded peut avoir déjà tiré
+// quand cette lib se charge. On utilise _onDomReady pour couvrir les deux cas.
+function _onDomReady(fn) {
+    if (document.readyState !== 'loading') { fn(); }
+    else { document.addEventListener('DOMContentLoaded', fn); }
+}
+_onDomReady(() => {
     detectUSPOTAPI();
     applyDynamicTheme();
     initSmoothScroll();

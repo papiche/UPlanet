@@ -2380,6 +2380,15 @@ function progressPct(n) {
     return Math.min(100, (n / 5) * 100);
 }
 
+// ── UTILITAIRE XSS ───────────────────────────────────────────────────────
+// Échappe les caractères HTML avant insertion dans innerHTML (contenu NOSTR non fiable).
+function _esc(s) {
+    return String(s == null ? '' : s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+        .replace(/'/g, '&#x27;');
+}
+
 // ── VALIDATION DE SCHÉMA ──────────────────────────────────────────────────
 // Prévient l'injection via JSON.parse sur content malveillant
 
@@ -2451,7 +2460,11 @@ function parseAchievement(event) {
     if (pTag && pTag !== event.pubkey) trust = 'oracle';
     else if (pTag && pTag === event.pubkey) trust = 'p2p';
 
-    return { skill, level, holder_npub, is_composite, source_events, trust, event };
+    // NIP-40 expiration tag : unix timestamp au-delà duquel le certificat n'est plus valide
+    const expTag = getTagValue(event, 'expiration');
+    const expiration = expTag ? parseInt(expTag, 10) : null;
+
+    return { skill, level, holder_npub, is_composite, source_events, trust, event, expiration };
 }
 
 // ── VÉRIFICATION ÉLIGIBILITÉ COMPOSITE ────────────────────────────────────
@@ -2460,12 +2473,19 @@ function parseAchievement(event) {
 const _TRUST_RANK = { oracle: 3, p2p: 2, folksonomy: 1 };
 
 function checkCompositeEligibility(recipe, mySkills) {
+    const now = Math.floor(Date.now() / 1000);
     const missing = [];
     let eligible = true;
     for (const ing of recipe) {
         const norm = normalizeSkill(ing.skill);
-        const myLevel = (mySkills[norm] && mySkills[norm].level) || 0;
-        const skillEvents = (mySkills[norm] && mySkills[norm].events) || [];
+        const allEvents = (mySkills[norm] && mySkills[norm].events) || [];
+        // Filtrer les certificats expirés (NIP-40) avant d'évaluer niveau et confiance
+        const skillEvents = allEvents.filter(function(e) {
+            return !e.expiration || e.expiration > now;
+        });
+        const myLevel = skillEvents.length > 0
+            ? Math.max.apply(null, skillEvents.map(function(e) { return e.level || 0; }))
+            : 0;
         const bestEvent = skillEvents.length > 0
             ? skillEvents.reduce((a, b) => a.level >= b.level ? a : b, skillEvents[0])
             : null;
@@ -2981,10 +3001,10 @@ function renderCraftBody(ev, groupId) {
         const trustTitle = ing.min_trust ? (' · qualité requise : ' + ing.min_trust) : '';
         const failHint = isTrustFail ? ' ⚠ qualité insuffisante' : (missEntry ? ' (manquant)' : ' ✓');
         return '<div class="mc-slot ' + slotClass + '"' +
-               ' title="' + ing.skill + ' — requis X' + ing.min_level + trustTitle + failHint + '"' +
+               ' title="' + _esc(ing.skill) + ' — requis X' + ing.min_level + _esc(trustTitle) + _esc(failHint) + '"' +
                ' onclick="toggleIngredientDetail(this,' + JSON.stringify(ing.skill) + ',' + ing.min_level + ',' + have + ')">' +
                '<div class="mc-slot-icon">' + getSkillEmoji(ing.skill) + '</div>' +
-               '<div class="mc-slot-label">' + ing.skill + '</div>' +
+               '<div class="mc-slot-label">' + _esc(ing.skill) + '</div>' +
                '<div class="mc-slot-badge">' + have + '/' + ing.min_level + trustIcon + '</div>' +
                '</div>';
     }).join('');
@@ -3042,7 +3062,7 @@ function renderCraftBody(ev, groupId) {
             onclick="openBroForSkill(${JSON.stringify(resultSkill)})">🤖 BRO</button>`;
 
     return `
-        ${description ? `<div class="mc-desc">${description}</div>` : ''}
+        ${description ? `<div class="mc-desc">${_esc(description)}</div>` : ''}
         <div class="mc-crafting-layout">
             <div>
                 <div class="mc-section-label">Ingrédients</div>
@@ -3053,7 +3073,7 @@ function renderCraftBody(ev, groupId) {
                 <div class="mc-section-label">Résultat</div>
                 <div class="mc-result-slot ${eligible ? 'eligible' : ''}">
                     <div class="mc-result-icon">${getSkillEmoji(resultSkill)}</div>
-                    <div class="mc-result-label">${name.slice(0,14)}</div>
+                    <div class="mc-result-label">${_esc(name.slice(0,14))}</div>
                 </div>
             </div>
         </div>
@@ -3073,7 +3093,7 @@ function renderCraftBody(ev, groupId) {
 function renderCraftGroup(resultSkill, permits) {
     const groupId = resultSkill.replace(/[^a-z0-9]/g, '');
     const emoji = getSkillEmoji(resultSkill);
-    const title = resultSkill.replace(/-/g, ' ').replace(/\b\w/g, function(c){ return c.toUpperCase(); });
+    const title = _esc(resultSkill.replace(/-/g, ' ').replace(/\b\w/g, function(c){ return c.toUpperCase(); }));
 
     const anyEligible = permits.some(function(ev) {
         return checkCompositeEligibility(parseRecipeFromPermit(ev), STATE.mySkills).eligible;

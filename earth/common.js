@@ -1,12 +1,9 @@
 /**
- * UPlanet Common JavaScript — loader synchrone
+ * UPlanet Common JavaScript — loader séquentiel asynchrone
  *
- * Ce fichier remplace le monolithique common.js (8595 lignes).
- * Il charge les 8 modules en ordre synchrone via document.write,
- * garantissant que chaque lib est exécutée avant la suivante.
- *
- * Aucun fichier HTML n'a besoin d'être modifié :
- *   <script src="common.js"></script>  →  charge lib_0 … lib_7 en ordre
+ * Charge les 8 modules dans l'ordre, sans document.write (bloquant/déprécié).
+ * Chaque lib attend la précédente avant de démarrer (ordre de dépendance garanti).
+ * Dispatche 'UPlanetReady' sur window quand tous les modules sont prêts.
  *
  * Architecture des modules :
  *   lib_0_foundation.js  — NostrState, SubscriptionQueue, wrapRelayWithQueue
@@ -30,13 +27,28 @@
         'lib_7_exports.js'
     ];
 
-    // Dériver le chemin de base depuis l'URL de ce script
     var base = '';
     if (typeof document !== 'undefined' && document.currentScript) {
         base = document.currentScript.src.replace(/\/[^\/]*$/, '/');
     }
 
-    libs.forEach(function(lib) {
-        document.write('<script src="' + base + lib + '"><\/script>');
-    });
+    // Charge chaque lib séquentiellement : lib N+1 ne commence qu'après le onload de lib N.
+    // Garantit que window.* exports de lib N sont disponibles quand lib N+1 s'exécute.
+    function loadSequential(index) {
+        if (index >= libs.length) {
+            window.UPlanetModulesReady = true;
+            window.dispatchEvent(new CustomEvent('UPlanetReady'));
+            return;
+        }
+        var s = document.createElement('script');
+        s.src = base + libs[index];
+        s.onload = function() { loadSequential(index + 1); };
+        s.onerror = function() {
+            console.error('[common.js] Échec chargement : ' + libs[index]);
+            loadSequential(index + 1);
+        };
+        document.head.appendChild(s);
+    }
+
+    loadSequential(0);
 })();

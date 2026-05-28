@@ -91,10 +91,19 @@ function detectUSPOTAPI() {
     return NostrState.upassportUrl;
 }
 
-// Wrappers globaux — pages sans common.js sont invitées à charger common.js
-window.getAPIUrl     = function() { return NostrState.upassportUrl || 'https://u.copylaradio.com'; };
-window.getStationUrl = function() { return NostrState.stationUrl   || 'https://astroport.copylaradio.com'; };
-window.getRelayUrl   = function() { return (NostrState.DEFAULT_RELAYS && NostrState.DEFAULT_RELAYS[0]) || 'wss://relay.copylaradio.com'; };
+// Wrappers globaux — auto-détectent l'URL selon la page appelante
+window.getAPIUrl     = function() {
+    if (!NostrState.upassportUrl) detectUSPOTAPI();
+    return NostrState.upassportUrl || 'https://u.copylaradio.com';
+};
+window.getStationUrl = function() {
+    if (!NostrState.stationUrl) detectUSPOTAPI();
+    return NostrState.stationUrl || 'https://astroport.copylaradio.com';
+};
+window.getRelayUrl   = function() {
+    if (!NostrState.DEFAULT_RELAYS || !NostrState.DEFAULT_RELAYS[0]) detectUSPOTAPI();
+    return (NostrState.DEFAULT_RELAYS && NostrState.DEFAULT_RELAYS[0]) || 'wss://relay.copylaradio.com';
+};
 
 /**
  * Get API base URL

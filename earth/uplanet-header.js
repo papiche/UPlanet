@@ -18,15 +18,16 @@
     // ── Navigation ─────────────────────────────────────────────────────────────
     var NAV = [
         { e: '🌍', l: 'HOME',       h: 'index.html' },
-        { e: '♥️',  l: 'Station',    h: 'economy.html' },
-        { e: '⚒️', l: 'MineLife',   h: 'minelife.html' },
-        { e: '🛈',  l: 'myCraft',   h: 'install_craft.html' },
+        { e: '♥️', l: 'Station',    h: 'economy.html' },
+        { e: '🌈', l: 'myCraft',    h: 'install_craft.html' },
+        { e: '⚒️', l: 'mineLife',   h: 'minelife.html' },
         { e: '✨', l: 'MULTIPASS',  h: 'g1.html' },
         { e: '🌌', l: 'Swarm',      h: 'economy.Swarm.html' },
         { e: '🌐', l: 'Roaming',    h: 'roaming.html' },
         { e: '🤝', l: 'Contribuer', h: 'contribute-3D.html' },
+        { e: '💳', l: 'ZenCard',    h: 'zencard.html' },
         { e: '🪙', l: 'Coinflip',   h: 'coinflip.html' },
-        { e: '🛈',  l: 'U.Nation',  h: 'Unation.html' },
+        { e: '🛈', l: 'U.Nation',   h: 'Unation.html' },
     ];
 
     var _page       = (location.pathname.split('/').pop() || 'index.html').replace(/[?#].*/, '');
@@ -58,6 +59,15 @@
         + '#uph-nav-panel a:hover{background:rgba(255,255,255,.09)}'
         + '#uph-nav-panel a.uph-cur{background:rgba(134,239,172,.14);color:#86efac}'
 
+        + '#uph-nav-profile{display:none;flex-direction:column;gap:3px;'
+        + 'padding:8px 10px;border-bottom:1px solid rgba(255,255,255,.09);margin-bottom:4px}'
+        + '#uph-nav-profile .uph-pname{color:#86efac;font-weight:600;font-size:11px;'
+        + 'max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
+        + '#uph-nav-profile .uph-pbal{color:#fbbf24;font-size:12px;font-weight:700}'
+        + '#uph-nav-profile .uph-plink{color:rgba(255,255,255,.45);font-size:10px;cursor:pointer;'
+        + 'text-decoration:underline;text-underline-offset:2px}'
+        + '#uph-nav-profile .uph-plink:hover{color:rgba(255,255,255,.75)}'
+
         + '.uph-sep{width:1px;height:14px;background:rgba(255,255,255,.13);flex-shrink:0}'
         + '.uph-dot{width:7px;height:7px;border-radius:50%;display:inline-block;flex-shrink:0}'
         + '.uph-g{background:#4ade80;box-shadow:0 0 5px #4ade80}'
@@ -82,7 +92,9 @@
         + '#uph-station{color:rgba(255,255,255,.38);font-size:10px;max-width:76px;'
         + 'overflow:hidden;text-overflow:ellipsis;flex-shrink:0;cursor:default}'
 
-        + '@media(max-width:500px){#uph-station,#uph-zen{display:none!important}}';
+        + '@media(max-width:500px){#uph-station,#uph-zen{display:none!important}}'
+        + '#uph-zen.linked{cursor:pointer}'
+        + '#uph-zen.linked:hover{background:rgba(134,239,172,.25);border-color:rgba(134,239,172,.5)}';
 
     // ── HTML ───────────────────────────────────────────────────────────────────
     function _html() {
@@ -92,7 +104,13 @@
         }).join('');
         return '<div id="uph" role="banner">'
             + '<button id="uph-nav-btn" title="Navigation">☰</button>'
-            + '<div id="uph-nav-panel" class="uph-h">' + links + '</div>'
+            + '<div id="uph-nav-panel" class="uph-h">'
+            + '<div id="uph-nav-profile">'
+            + '<span class="uph-pname" id="uph-np-name"></span>'
+            + '<span class="uph-pbal" id="uph-np-bal"></span>'
+            + '<span class="uph-plink" id="uph-np-link" style="display:none">Voir ZenCard →</span>'
+            + '</div>'
+            + links + '</div>'
             + '<span class="uph-sep"></span>'
             + '<span id="uph-wss"  class="uph-dot uph-gr" title="Relay WSS"></span>'
             + '<span id="uph-nip"  class="uph-dot uph-gr" title="NIP-42 Auth"></span>'
@@ -148,10 +166,29 @@
             _applyPubkey(cached);
         }
 
-        // Affichage initial
+        // Affichage initial (peut déjà avoir un pubkey depuis sessionStorage)
         _refreshUI();
 
-        // Écouter les connexions déclenchées par d'autres parties de la page
+        // Station : ne dépend pas des libs (détecte l'URL elle-même)
+        _loadStation();
+
+        // Les libs common.js se chargent ASYNC après ce DOMContentLoaded.
+        // Tout ce qui utilise connectNostr / fetchUserMetadata / hexToNpub
+        // doit attendre l'event 'UPlanetReady' dispatché par common.js.
+        if (window.UPlanetModulesReady) {
+            _onLibsReady();
+        } else {
+            window.addEventListener('UPlanetReady', _onLibsReady, { once: true });
+        }
+    }
+
+    // ── Appelé quand toutes les libs common.js sont prêtes ─────────────────────
+    function _onLibsReady() {
+        // Les libs viennent de charger : si _loadAll() avait déjà tourné sans elles,
+        // on réinitialise _dataLoaded pour qu'il soit rappelé avec fetchUserMetadata disponible.
+        _dataLoaded = false;
+
+        // Enregistrer le callback waitForConnection (lib_2)
         if (typeof window.waitForConnection === 'function') {
             window.waitForConnection(function () {
                 var pk = (window.NostrState && window.NostrState.userPubkey) || window.userPubkey;
@@ -160,12 +197,8 @@
                 if (!_dataLoaded) { _dataLoaded = true; _loadAll(); }
             });
         }
-
-        // Tentative de connexion silencieuse
+        // Tentative de connexion silencieuse (lib_2 disponible)
         _silentConnect();
-
-        // Station accessible indépendamment de la connexion NOSTR
-        _loadStation();
     }
 
     // ── Cache sessionStorage ───────────────────────────────────────────────────
@@ -359,6 +392,14 @@
             if (!meta) { console.warn('[UPH] _loadProfile: meta null (profil kind 0 absent ?)'); return; }
             if (meta.name && nameEl) { nameEl.textContent = meta.name; nameEl._named = true; }
             if (meta.picture && avEl) { avEl.src = meta.picture; avEl.style.display = ''; }
+            // Extraire l'email depuis le profil kind 0 (nip05 = "user@domain.tld")
+            var profileEmail = meta.email || (meta.nip05 && meta.nip05.includes('@') ? meta.nip05 : '');
+            if (profileEmail && !window._uphEmail) {
+                window._uphEmail = profileEmail;
+                console.log('[UPH] email extrait du kind 0:', profileEmail);
+                if (nameEl && !nameEl._named) { nameEl.textContent = profileEmail; nameEl.style.display = ''; }
+                _updateNavProfile();
+            }
             if (meta.g1pub) {
                 console.log('[UPH] g1pub trouvé dans kind 0:', meta.g1pub.slice(0, 8)+'…');
                 window._uphG1Pub = meta.g1pub;
@@ -412,10 +453,21 @@
                 roamEl.style.display = '';
             }
             if (email) {
+                window._uphEmail = email;
                 var nameEl = document.getElementById('uph-name');
                 if (nameEl) {
                     nameEl.title = didLabel;
                     if (!nameEl._named) { nameEl.textContent = email; nameEl.style.display = ''; }
+                }
+                _updateNavProfile();
+                // Rendre le chip ZEN cliquable si déjà affiché
+                var zenEl = document.getElementById('uph-zen');
+                if (zenEl && zenEl.style.display !== 'none') {
+                    zenEl.classList.add('linked');
+                    zenEl.title = (zenEl.textContent || '') + ' · Historique ZenCard';
+                    zenEl.onclick = function() {
+                        location.href = 'zencard.html?email=' + encodeURIComponent(email);
+                    };
                 }
             }
         } catch (e) {
@@ -439,13 +491,42 @@
             console.log('[UPH] _loadBalance réponse:', JSON.stringify(d));
             var zen = d.zen !== undefined ? d.zen : (d.ZEN !== undefined ? d.ZEN : null);
             if (zen !== null) {
+                window._uphZenBal = zen;
                 el.textContent = '⚡ ' + parseFloat(zen).toFixed(1) + ' ẐEN';
                 el.style.display = '';
+                // Lien ZenCard si email disponible
+                if (window._uphEmail) {
+                    el.classList.add('linked');
+                    el.title = 'Ẑ ' + parseFloat(zen).toFixed(1) + ' · Voir historique ZenCard';
+                    el.onclick = function() {
+                        location.href = 'zencard.html?email=' + encodeURIComponent(window._uphEmail);
+                    };
+                }
+                _updateNavProfile();
             } else {
                 console.log('[UPH] _loadBalance: zen absent. Clés:', Object.keys(d).join(', '));
             }
         } catch (e) {
             console.warn('[UPH] _loadBalance erreur:', e.message || e);
+        }
+    }
+
+    // ── Bloc profil dans le nav panel ─────────────────────────────────────────
+    function _updateNavProfile() {
+        var block = document.getElementById('uph-nav-profile');
+        if (!block) return;
+        var nameEl = document.getElementById('uph-np-name');
+        var balEl  = document.getElementById('uph-np-bal');
+        var lnkEl  = document.getElementById('uph-np-link');
+        var email  = window._uphEmail || '';
+        var bal    = window._uphZenBal;
+        if (!email && bal === undefined) return;
+        block.style.display = 'flex';
+        if (nameEl && email) nameEl.textContent = email;
+        if (balEl  && bal !== undefined) balEl.textContent = '⚡ ' + parseFloat(bal).toFixed(1) + ' ẐEN';
+        if (lnkEl  && email) {
+            lnkEl.style.display = '';
+            lnkEl.onclick = function() { location.href = 'zencard.html?email=' + encodeURIComponent(email); };
         }
     }
 

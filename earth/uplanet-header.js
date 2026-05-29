@@ -18,15 +18,16 @@
     // ── Navigation ─────────────────────────────────────────────────────────────
     var NAV = [
         { e: '🌍', l: 'HOME',       h: 'index.html' },
+        { e: '🌐', l: 'Roaming',    h: 'roaming.html' },
+        { e: '✨', l: 'MULTIPASS',  h: 'g1.html' },
         { e: '♥️', l: 'Station',    h: 'economy.html' },
+        { e: '🌌', l: 'Swarm',      h: 'economy.Swarm.html' },
+        { e: '💎', l: 'Atomic',     h: 'atomic.html' },
         { e: '🌈', l: 'myCraft',    h: 'install_craft.html' },
         { e: '⚒️', l: 'mineLife',   h: 'minelife.html' },
-        { e: '✨', l: 'MULTIPASS',  h: 'g1.html' },
-        { e: '🌌', l: 'Swarm',      h: 'economy.Swarm.html' },
-        { e: '🌐', l: 'Roaming',    h: 'roaming.html' },
-        { e: '🤝', l: 'Contribuer', h: 'contribute-3D.html' },
         { e: '💳', l: 'ZenCard',    h: 'zencard.html' },
         { e: '🪙', l: 'Coinflip',   h: 'coinflip.html' },
+        { e: '🤝', l: 'Contribuer', h: 'contribute-3D.html' },
         { e: '🛈', l: 'U.Nation',   h: 'Unation.html' },
     ];
 
@@ -843,19 +844,21 @@
             + '<button id="uph-mclose" title="Fermer">✕</button>'
             + '<div style="font-weight:700;color:rgba(255,255,255,.9);font-size:15px;margin-bottom:14px">🔑 Accès UPlanet</div>'
             + '<div style="background:rgba(134,239,172,.07);border:1px solid rgba(134,239,172,.15);border-radius:10px;padding:10px 12px;margin-bottom:14px;font-size:11px;color:rgba(255,255,255,.5);line-height:1.6">'
-            + '✨ Pour un accès complet (MULTIPASS), soyez ami avec au moins un astronaute UPlanet.</div>'
+            + '✨ Ce (MULTIPASS) vous raccorde à UPlanet.</div>'
             + '<button id="uph-mext-btn" style="display:none">⚡ Connecter via extension NOSTR</button>'
             + '<div id="uph-saved-accounts"></div>'
             + '<hr class="uph-msep">'
-            + '<span class="uph-msection-title">⚡ Dériver depuis G1v1</span>'
+            + '<span class="uph-msection-title">⚡ Inscrivez-vous :</span>'
             + '<form id="uph-login-form" style="display:flex;flex-direction:column;gap:7px">'
-            + '<input id="uph-login-login" type="text" placeholder="Login G1v1 (identifiant / salt)" autocomplete="username">'
-            + '<input id="uph-login-pass" type="password" placeholder="Mot de passe G1" autocomplete="current-password">'
-            + '<input id="uph-login-label" type="email" placeholder="Email (nom du compte sauvegardé, optionnel)" autocomplete="email">'
+            + '<input id="uph-login-label" type="email" placeholder="Email" autocomplete="email">'
+            + '<button id="uph-multipass-btn" style="margin-top:6px">✨ MULTIPASS →</button>'
+            + '<hr class="uph-msep">'
+            + '<span class="uph-msection-title">⚡ Transférez un portefeuille Ğ1 :</span>'
+            + '<input id="uph-login-login" type="text" placeholder="Identifiant" autocomplete="username">'
+            + '<input id="uph-login-pass" type="text" placeholder="Mot de passe" autocomplete="current-password">'
             + '<span id="uph-login-err"></span>'
-            + '<button id="uph-login-btn" type="submit">Dériver G1v1 →</button>'
+            + '<button id="uph-login-btn" type="submit">CONVERTIR →</button>'
             + '</form>'
-            + '<button id="uph-multipass-btn" style="margin-top:6px">✨ Créer un MULTIPASS →</button>'
             + '<hr class="uph-msep">'
             + '<span class="uph-msection-title">🗝 Importer une nsec</span>'
             + '<div style="display:flex;flex-direction:column;gap:7px">'

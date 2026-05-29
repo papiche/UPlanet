@@ -1385,7 +1385,6 @@ textarea.scan-input:focus { border-color: var(--accent); }
             style="font-size:12px;padding:5px 12px;border:1px solid rgba(255,255,255,0.15)">
         <i class="bi bi-broadcast"></i> LIVE
     </button>
-    <button id="btn-connect" onclick="handleConnect()"><i class="bi bi-plug-fill"></i> Connecter</button>
     <button class="btn-ghost" onclick="openOnboarding()" title="Comment ça marche ?" style="font-size:12px;padding:5px 11px;border:1px solid rgba(255,255,255,0.12)">
         <i class="bi bi-question-circle"></i>
     </button>
@@ -2288,43 +2287,36 @@ function notify(msg, type = 'info', duration = 3500) {
     el._t = setTimeout(() => { el.className = 'notif'; }, duration);
 }
 
-// ── CONNEXION ──────────────────────────────────────────────────────────────
-
 function updateConnectionUI() {
     const badge = document.getElementById('conn-badge');
-    const btn = document.getElementById('btn-connect');
     const nameBadge = document.getElementById('user-name-badge');
-    const connected = window.isNostrConnected && window.userPubkey;
-    badge.className = `${connected ? 'connected' : 'disconnected'}`;
-    badge.innerHTML = connected
-        ? '<i class="bi bi-circle-fill" style="font-size:7px"></i> Connecté'
-        : '<i class="bi bi-circle-fill" style="font-size:7px"></i> Déconnecté';
-    btn.style.display = connected ? 'none' : '';
-    if (connected) {
-        const hex = window.userPubkey;
-        const short = hex.slice(0, 8) + '…' + hex.slice(-4);
-        nameBadge.textContent = short;
-        nameBadge.style.display = '';
-        if (window.fetchUserMetadata) {
-            window.fetchUserMetadata(hex).then(meta => {
-                if (meta && meta.name) nameBadge.textContent = meta.name;
-            }).catch(() => {});
-        }
-    } else {
-        nameBadge.style.display = 'none';
+    const connected = !!(window.isNostrConnected && window.userPubkey);
+    if (badge) {
+        badge.className = connected ? 'connected' : 'disconnected';
+        badge.innerHTML = connected
+            ? '<i class="bi bi-circle-fill" style="font-size:7px"></i> Connecté'
+            : '<i class="bi bi-circle-fill" style="font-size:7px"></i> Déconnecté';
+    }
+    if (nameBadge) {
+        if (connected) {
+            const short = window.userPubkey.slice(0,8) + '…' + window.userPubkey.slice(-4);
+            nameBadge.textContent = short;
+            nameBadge.style.display = '';
+            if (window.fetchUserMetadata) window.fetchUserMetadata(window.userPubkey)
+                .then(m => { if (m && m.name) nameBadge.textContent = m.name; }).catch(() => {});
+        } else { nameBadge.style.display = 'none'; }
     }
 }
 
 async function handleConnect() {
-    if (typeof window.connectNostr === 'function') {
-        await window.connectNostr(false);
-        updateConnectionUI();
-        if (window.isNostrConnected && window.userPubkey) {
-            loadMySkills();
-        }
-    } else {
-        notify('common.js non chargé correctement.', 'error');
+    if (typeof window.connectNostr === 'function') await window.connectNostr(false).catch(() => {});
+    else if (window.nostr) {
+        const pk = await window.nostr.getPublicKey().catch(() => null);
+        if (pk) { window.userPubkey = pk; window.isNostrConnected = true;
+            if (!window.NostrState) window.NostrState = {};
+            window.NostrState.userPubkey = pk; window.NostrState.isNostrConnected = true; }
     }
+    if ((window.NostrState && window.NostrState.userPubkey) || window.userPubkey) loadMySkills();
 }
 
 // ── HELPERS RELAY ──────────────────────────────────────────────────────────
@@ -5371,8 +5363,6 @@ function waitForConnection(callback, maxWait = 12000) {
             callback();
         } else if (Date.now() - start < maxWait) {
             setTimeout(check, 400);
-        } else {
-            updateConnectionUI();
         }
     };
     check();

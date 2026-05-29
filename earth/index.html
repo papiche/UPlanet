@@ -944,39 +944,6 @@ document.getElementById('cochon-modal').addEventListener('click', function(e) {
     if (e.target === this) { closeCochon(); }
 });
 
-// === UI connexion NOSTR (common.js) ===
-function updateConnectionUI() {
-    var badge = document.getElementById('conn-badge');
-    var btn   = document.getElementById('btn-connect');
-    var name  = document.getElementById('user-name-badge');
-    if (!badge) return;
-    var ok = window.isNostrConnected && window.userPubkey;
-    badge.textContent    = ok ? '🟢' : '🔴';
-    btn.style.display    = ok ? 'none' : '';
-    if (ok) {
-        var h = window.userPubkey;
-        name.textContent   = h.slice(0,8)+'…'+h.slice(-4);
-        name.style.display = '';
-        if (window.fetchUserMetadata) {
-            window.fetchUserMetadata(h)
-                .then(function(m){ if(m&&m.name) name.textContent = m.name; })
-                .catch(function(){});
-        }
-    } else {
-        name.style.display = 'none';
-    }
-}
-
-async function handleConnect() {
-    var btn = document.getElementById('btn-connect');
-    btn.textContent = '⏳…'; btn.disabled = true;
-    try {
-        await window.connectNostr(false);
-        updateConnectionUI();
-        subscribeToLiveSessions();
-    } catch(e) {}
-    finally { btn.textContent = '⚡ Connect'; btn.disabled = false; }
-}
 
 // === Sessions LIVE Kind 30311 (NIP-53, #t: UPlanet) via relay common.js ===
 var _liveSessions = {};
@@ -1052,17 +1019,11 @@ function subscribeToLiveSessions() {
     } catch(e) { console.warn('[LIVE] subscribe error', e); }
 }
 
-// Init après chargement de common.js
 window.addEventListener('load', function() {
-    setTimeout(function() {
-        updateConnectionUI();
-        if (window.waitForConnection) {
-            window.waitForConnection(function() {
-                updateConnectionUI();
-                subscribeToLiveSessions();
-            });
-        }
-    }, 1000);
+    if (window.waitForConnection) window.waitForConnection(subscribeToLiveSessions);
+    else window.addEventListener('UPlanetReady', function() {
+        if (window.waitForConnection) window.waitForConnection(subscribeToLiveSessions);
+    }, { once: true });
 });
 
 // Auto-ouvrir le Cyber Cochon une fois par session

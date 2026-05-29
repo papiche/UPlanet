@@ -165,10 +165,12 @@
   </style>
 
   <!-- Nostr Library -->
+  <script src="nacl-fast.min.js"></script>
   <script src="nostr.bundle.js"></script>
-  
+
   <!-- Common JavaScript -->
   <script src="common.js"></script>
+  <script src="uplanet-header.js"></script>
 
 </head>
 <body>
@@ -188,7 +190,6 @@
         <a href="#protocole-n2">N²</a>
         <a href="#economie">Économie</a>
         <a href="#rejoindre">Rejoindre</a>
-        <button class="btn btn-ghost" id="loginBtn">Connexion Nostr</button>
         <button class="btn btn-primary" onclick="openCreateAccountPage()">Créer son MULTIPASS</button>
       </nav>
     </div>
@@ -887,6 +888,11 @@
 
     // Entrance-specific functions
     function mockSignup(){ window.open('https://opencollective.com/monnaie-libre#category-CONTRIBUTE', '_blank'); }
+    function openCreateAccountPage() {
+        var url = typeof window.getAPIUrl === 'function' ? window.getAPIUrl() : null;
+        window.open((url ? url : '') + '/g1', '_blank');
+    }
+    function scrollToId(id) { var el = document.getElementById(id); if (el) el.scrollIntoView({ behavior: 'smooth' }); }
     
     // ========================================
     // PARTAGE ET COMMENTAIRES NOSTR
@@ -914,7 +920,7 @@
       }
       
       // Activer les commentaires Nostr sur cette page
-      createCommentsSection('before-footer');
+      if (typeof createCommentsSection === 'function') createCommentsSection('before-footer');
     });
 
     // ========================================
@@ -923,7 +929,6 @@
 
     const CAPTAIN_PUBKEY_HEX = "60c1133d148ae0d2c4b42506fb4abacac903032680b178010c942bd538643f78";
 
-    const loginBtn = document.getElementById('loginBtn');
     const contactForm = document.getElementById('contactForm');
     const loggedOutView = document.getElementById('logged-out-view');
     const loggedInView = document.getElementById('logged-in-view');
@@ -935,15 +940,20 @@
      * Gère la connexion pour le formulaire de contact
      */
     async function handleLogin() {
-        const pubkey = await ensureNostrConnection();
-            if (pubkey) {
-            const displayName = await getUserDisplayName(pubkey);
-            loginBtn.textContent = `Connecté : ${displayName}`;
-        loginBtn.classList.remove('btn-ghost');
-        loginBtn.onclick = null;
-
-        loggedOutView.style.display = 'none';
-        loggedInView.style.display = 'block';
+        var pubkey = (window.NostrState && window.NostrState.userPubkey) || window.userPubkey;
+        if (!pubkey) {
+            if (typeof window.uphOpenLogin === 'function') { window.uphOpenLogin(); return; }
+            try {
+                if (typeof window.connectNostr === 'function') pubkey = await window.connectNostr(false);
+                else if (window.nostr) pubkey = await window.nostr.getPublicKey();
+            } catch(e) {}
+        }
+        if (pubkey) {
+            var displayName = typeof getUserDisplayName === 'function'
+                ? await getUserDisplayName(pubkey).catch(function(){ return pubkey.slice(0,8)+'…'+pubkey.slice(-4); })
+                : pubkey.slice(0,8)+'…'+pubkey.slice(-4);
+            loggedOutView.style.display = 'none';
+            loggedInView.style.display = 'block';
             userProfileId.textContent = displayName;
         }
     }
@@ -954,7 +964,7 @@
     async function handleSendMessage(event) {
         event.preventDefault();
         
-        const pubkey = await ensureNostrConnection();
+        var pubkey = (window.NostrState && window.NostrState.userPubkey) || window.userPubkey;
         if (!pubkey) return;
 
         const messageContent = messageTextarea.value.trim();
@@ -985,22 +995,12 @@
 
     // Initialisation du formulaire de contact
     document.addEventListener('DOMContentLoaded', () => {
-        // Initial check for Nostr extension
-        loginBtn.disabled = true;
-        loginBtn.textContent = "Checking Nostr Extension...";
-
-        setTimeout(() => {
-            if (typeof window.nostr === 'undefined' || typeof window.nostr.getPublicKey !== 'function') {
-                loginBtn.disabled = true;
-                loginBtn.textContent = "Nostr Extension Required";
-            } else {
-                loginBtn.disabled = false;
-                loginBtn.textContent = "Connexion"; // Restore original text
-            }
-        }, 500); // Delay the check by 500ms
-
-        loginBtn.addEventListener('click', handleLogin);
         contactForm.addEventListener('submit', handleSendMessage);
+        // Vérifier si déjà connecté via UPH
+        window.addEventListener('UPlanetReady', function() {
+            var pk = (window.NostrState && window.NostrState.userPubkey) || window.userPubkey;
+            if (pk) handleLogin();
+        }, { once: true });
     });
   </script>
 <script src="feedback.js"></script>

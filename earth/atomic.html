@@ -1,0 +1,1258 @@
+<!DOCTYPE html>
+<html lang="fr" data-bs-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>ATOMIC VIBRATION — Géométrie Sacrée & Match Quantique</title>
+    <script src="p5.min.js"></script>
+    <link rel="stylesheet" href="bootstrap.min.css">
+    <link rel="stylesheet" href="leaflet.css">
+    <style>
+        :root { --primary: #f59e0b; --secondary: #f97316; }
+
+        html, body { margin: 0; padding: 0; width: 100%; height: 100dvh; overflow: hidden; background: #080602; }
+
+        #canvas-container {
+            position: fixed; inset: 0; z-index: 0;
+            background: radial-gradient(circle at center, #1c1005 0%, #080602 100%);
+        }
+
+        #hud-overlay {
+            position: absolute; top: 55px; left: 14px; z-index: 2;
+            font-family: monospace; color: var(--primary); font-size: 0.78rem;
+            background: rgba(0,0,0,0.65); padding: 9px 13px; border-radius: 8px;
+            border: 1px solid rgba(0,255,204,0.2); pointer-events: none; line-height: 1.5;
+        }
+
+        /* Bouton hamburger */
+        #menu-btn {
+            position: fixed; top: 50px; right: 12px; z-index: 1049;
+            background: rgba(0,255,204,0.10); border: 1px solid rgba(0,255,204,0.28);
+            color: var(--primary); border-radius: 8px; width: 34px; height: 30px;
+            font-size: 15px; cursor: pointer; display: flex; align-items: center;
+            justify-content: center; padding: 0; transition: background .2s;
+        }
+        #menu-btn:hover { background: rgba(0,255,204,0.24); }
+
+        /* Kin Maya dans Théorie */
+        .kin-card { border-radius: 10px; padding: 10px 12px; background: rgba(0,0,0,0.35); border: 1px solid rgba(255,255,255,0.09); }
+        .kin-num  { font-size: 2rem; font-weight: 800; line-height: 1; color: #f9a825; }
+        .kin-sub  { font-size: 0.7rem; color: rgba(255,255,255,0.35); margin-bottom: 4px; }
+        .kin-info { font-size: 0.78rem; color: #e0e0e0; margin-bottom: 2px; }
+        .kin-keys { font-size: 0.7rem; color: rgba(255,255,255,0.38); line-height: 1.6; margin-top: 4px; }
+        .kin-empty{ font-size: 0.78rem; color: rgba(255,255,255,0.25); font-style: italic; text-align: center; padding: 14px 0; }
+        .kin-union-bar { height: 3px; border-radius: 2px; background: linear-gradient(90deg, var(--primary), var(--secondary)); margin: 6px 0; }
+        /* Carte lieu de naissance */
+        #birth-map { height: 200px; border-radius: 8px; }
+        #birth-map .leaflet-tile { filter: brightness(0.55) invert(1) contrast(1.1) saturate(0.4) hue-rotate(195deg); }
+        #birth-map .leaflet-control-zoom a { background:rgba(10,12,22,.9); color:var(--primary); border-color:rgba(0,255,204,.2); }
+        #birth-map .leaflet-control-zoom a:hover { background:rgba(0,255,204,.15); }
+        #birth-map .leaflet-control-attribution { display:none; }
+        .kin-resonance { border-radius: 8px; padding: 8px 10px; font-size: 0.78rem; line-height: 1.6; }
+
+        /* Panneau Offcanvas */
+        #atomic-panel {
+            width: min(460px, 97vw) !important;
+            background: rgba(10,12,22,0.97) !important;
+            border-left: 1px solid rgba(0,255,204,0.22) !important;
+        }
+        #atomic-panel .offcanvas-header {
+            border-bottom: 1px solid rgba(255,255,255,0.08);
+            padding: 0.6rem 1rem;
+        }
+        #atomic-panel .offcanvas-title {
+            color: var(--primary); letter-spacing: 2px; font-size: 0.95rem; font-weight: 700;
+        }
+        #atomic-panel .offcanvas-body { padding: 0.75rem 1rem 2rem; }
+
+        /* Nav Tabs */
+        .nav-tabs { border-bottom-color: rgba(255,255,255,0.1) !important; }
+        .nav-tabs .nav-link { color: #777 !important; font-size: 0.82rem; font-weight: 600; text-transform: uppercase; padding: 8px 6px; }
+        .nav-tabs .nav-link:hover { color: #ddd !important; background: rgba(255,255,255,0.05); }
+        .nav-tabs .nav-link.active {
+            color: var(--primary) !important;
+            background: rgba(0,255,204,0.08) !important;
+            border-color: rgba(255,255,255,0.1) rgba(255,255,255,0.1) transparent !important;
+            border-bottom: 2px solid var(--primary) !important;
+        }
+
+        /* Blocs atomes */
+        .atom-a { border-left: 3px solid var(--primary) !important; }
+        .atom-b { border-left: 3px solid var(--secondary) !important; }
+
+        /* Inputs */
+        .form-control, .form-select {
+            background: rgba(255,255,255,0.04) !important;
+            border-color: rgba(255,255,255,0.12) !important;
+            color: #ddd !important; font-family: monospace;
+        }
+        .form-control:focus {
+            border-color: var(--primary) !important;
+            box-shadow: 0 0 0 0.18rem rgba(0,255,204,0.18) !important;
+        }
+        .form-control[readonly] { opacity: .55; cursor: default; }
+
+        /* Slider longitude coloré */
+        input[type="range"].form-range::-webkit-slider-runnable-track {
+            background: linear-gradient(90deg, #0066ff, #00ffcc, #ffaa00, #ff00ff, #0066ff) !important;
+            height: 5px; border-radius: 3px;
+        }
+        input[type="range"].form-range::-webkit-slider-thumb {
+            background: #fff; border: 2px solid #333; box-shadow: 0 0 4px rgba(0,0,0,.7);
+        }
+        .lon-display { font-family: monospace; font-size: 0.85rem; color: #fff; margin-top: 3px; }
+        .lon-btn {
+            background: rgba(245,158,11,.12); border: 1px solid rgba(245,158,11,.32);
+            color: #f59e0b; border-radius: 6px; font-size: 0.78rem; font-weight: 700;
+            padding: 3px 9px; cursor: pointer; user-select: none; min-width: 30px;
+            line-height: 1.5; flex-shrink: 0; touch-action: none;
+        }
+        .lon-btn:active, .lon-btn.pressed { background: rgba(245,158,11,.3); }
+
+        /* Résultat Match */
+        .score-val {
+            font-size: 2.6rem; font-weight: 800;
+            background: linear-gradient(45deg, var(--primary), var(--secondary));
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        }
+
+        /* Info boxes */
+        .info-cyan  { background: rgba(0,102,255,.1);  border-left: 3px solid #0066ff; }
+        .info-pink  { background: rgba(255,0,255,.08); border-left: 3px solid #ff00ff; }
+        .section-title { color: var(--primary); font-size: .88rem; font-weight: 700; margin-bottom: .4rem; }
+    </style>
+</head>
+<body>
+
+<!-- Canvas plein écran -->
+<div id="canvas-container">
+    <div id="hud-overlay">Initialisation...</div>
+</div>
+
+<!-- Bouton hamburger -->
+<button id="menu-btn" data-bs-toggle="offcanvas" data-bs-target="#atomic-panel" aria-label="Menu">☰</button>
+
+<!-- ── PANNEAU OFFCANVAS ─────────────────────────────────────── -->
+<div class="offcanvas offcanvas-end" tabindex="-1" id="atomic-panel"
+     data-bs-scroll="true" data-bs-backdrop="false">
+
+    <div class="offcanvas-header">
+        <span class="offcanvas-title">⚛ ATOMIC VIBRATION</span>
+        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Fermer"></button>
+    </div>
+
+    <div class="offcanvas-body">
+
+        <!-- Nav Tabs Bootstrap -->
+        <ul class="nav nav-tabs nav-fill mb-3" id="atomicTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-profil" type="button" role="tab">PROFIL</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-match" type="button" role="tab">Match</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-theorie" type="button" role="tab">Théorie</button>
+            </li>
+        </ul>
+
+        <div class="tab-content">
+
+            <!-- ── PROFIL ── -->
+            <div class="tab-pane fade show active" id="tab-profil" role="tabpanel">
+                <div class="info-cyan rounded p-2 mb-3 small">
+                    💡 <strong>Décompte de l'Entropie :</strong><br>
+                    9 → 8 → 7 → 6 → 5 → 4 → 3 → 2 → 1 → <strong>0</strong> — chaque chiffre condense la géométrie jusqu'à la Singularité, puis l'Explosion recrée le cycle.
+                </div>
+
+                <div class="border border-secondary rounded p-3 mb-3 atom-a">
+                    <div class="section-title">1. Singularité (Conception)</div>
+                    <div class="row g-2">
+                        <div class="col-7">
+                            <label class="form-label small text-secondary text-uppercase mb-1">Date calculée</label>
+                            <input type="date" class="form-control form-control-sm" id="conception-date" readonly>
+                        </div>
+                        <div class="col-5">
+                            <label class="form-label small text-secondary text-uppercase mb-1">Heure</label>
+                            <input type="time" class="form-control form-control-sm" id="conception-time" readonly>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="border border-secondary rounded p-3 mb-3 atom-a">
+                    <div class="section-title">2. Ancrage (Naissance)</div>
+                    <div class="row g-2">
+                        <div class="col-7">
+                            <label class="form-label small text-secondary text-uppercase mb-1">Date</label>
+                            <input type="date" class="form-control form-control-sm" id="birth-date" oninput="calculateConception()">
+                        </div>
+                        <div class="col-5">
+                            <label class="form-label small text-secondary text-uppercase mb-1">Heure</label>
+                            <input type="time" class="form-control form-control-sm" id="birth-time" oninput="calculateConception()">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="border border-secondary rounded p-3 mb-3">
+                    <div class="section-title">3. Lieu de Naissance</div>
+                    <div class="input-group input-group-sm mb-2">
+                        <input type="text" class="form-control" id="city-search"
+                               placeholder="Ville, pays…"
+                               onkeydown="if(event.key==='Enter'){searchCity();event.preventDefault()}">
+                        <button class="btn btn-outline-secondary" type="button" id="city-search-btn"
+                                onclick="searchCity()">🔍</button>
+                    </div>
+                    <div class="small mb-2" id="city-result" style="min-height:1.1rem;color:rgba(255,255,255,.45)"></div>
+                    <div id="birth-map"></div>
+                    <div class="d-flex align-items-center justify-content-between mt-2">
+                        <span class="small text-secondary" id="birth-location-label">Cliquez sur la carte ou cherchez une ville</span>
+                        <span class="small font-monospace fw-bold" id="birth-lon-display" style="color:var(--primary)"></span>
+                    </div>
+                </div>
+
+                <div id="kin-profil-content"></div>
+
+                <!-- ── MULTIPASS ── -->
+                <div class="border rounded p-3 mt-3" style="border-color:rgba(245,158,11,.35)!important;background:rgba(245,158,11,.05)">
+                    <div class="section-title mb-1">✨ Créer mon MULTIPASS</div>
+                    <p class="small text-secondary mb-2">Votre station UPlanet va créer votre identité décentralisée à partir des données de ce profil.</p>
+                    <div id="multipass-preview" class="small mb-3" style="line-height:1.9;color:rgba(255,255,255,.55);min-height:1.2rem"></div>
+                    <button class="btn btn-sm w-100 fw-bold mb-1" onclick="createMultipass()"
+                            style="background:rgba(245,158,11,.18);border:1px solid rgba(245,158,11,.45);color:#f59e0b">
+                        ✨ Créer mon MULTIPASS
+                    </button>
+                    <div class="text-center mt-1" style="font-size:0.68rem;color:rgba(255,255,255,.28)">L'email sera saisi sur la page suivante</div>
+                </div>
+
+            </div>
+
+            <!-- ── MATCH ── -->
+            <div class="tab-pane fade" id="tab-match" role="tabpanel">
+
+                <div class="info-cyan rounded p-2 mb-3 small">
+                    ⚛ Comparez deux signatures vibratoires. Le <strong>Taux de Cohérence (k)</strong> mesure l'alignement de phase dans l'espace Phi/Octave.<br>
+                    <span style="color:var(--primary)">Atome A</span> est votre Profil ·
+                    <span style="color:var(--secondary)">Atome B</span> est votre partenaire de résonance.
+                    <br><span style="color:rgba(255,255,255,.4)">Renseignez les longitudes de conception pour affiner le calcul spatial.</span>
+                </div>
+
+                <div class="border border-secondary rounded p-3 mb-3 atom-a">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div class="section-title mb-0" style="color:var(--primary)">⚛ Atome A — Vous</div>
+                        <span style="font-size:0.65rem;color:rgba(255,255,255,.25)"><kbd style="font-size:0.65rem;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:3px;padding:1px 4px;color:rgba(255,255,255,.5)">O</kbd> ◀▶ <kbd style="font-size:0.65rem;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:3px;padding:1px 4px;color:rgba(255,255,255,.5)">E</kbd></span>
+                    </div>
+                    <div class="row g-2 mb-2">
+                        <div class="col-7">
+                            <label class="form-label small text-secondary text-uppercase mb-1">Date de naissance</label>
+                            <input type="date" class="form-control form-control-sm" id="match-date-a" oninput="calculateMatch()">
+                        </div>
+                        <div class="col-5">
+                            <label class="form-label small text-secondary text-uppercase mb-1">Heure</label>
+                            <input type="time" class="form-control form-control-sm" id="match-time-a" oninput="calculateMatch()">
+                        </div>
+                    </div>
+                    <label class="form-label small text-secondary text-uppercase mb-1">Longitude</label>
+                    <div class="d-flex align-items-center gap-1">
+                        <button class="lon-btn"
+                                onpointerdown="_startRepeat('a',-0.1)" onpointerup="_stopRepeat()" onpointerleave="_stopRepeat()">O</button>
+                        <input type="range" class="form-range flex-grow-1" id="match-lon-a" min="-180" max="180" step="0.1"
+                               oninput="updateLonVisuel('a'); calculateMatch()">
+                        <button class="lon-btn"
+                                onpointerdown="_startRepeat('a',0.1)" onpointerup="_stopRepeat()" onpointerleave="_stopRepeat()">E</button>
+                    </div>
+                    <div class="lon-display" id="lon-val-a">0.0°</div>
+                </div>
+
+                <div class="border border-secondary rounded p-3 mb-3 atom-b">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div class="section-title mb-0" style="color:var(--secondary)">⚛ Atome B — Partenaire</div>
+                        <span style="font-size:0.65rem;color:rgba(255,255,255,.25)"><kbd style="font-size:0.65rem;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:3px;padding:1px 4px;color:rgba(255,255,255,.5)">Alt+O</kbd> ◀▶ <kbd style="font-size:0.65rem;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:3px;padding:1px 4px;color:rgba(255,255,255,.5)">Alt+E</kbd></span>
+                    </div>
+                    <div class="row g-2 mb-2">
+                        <div class="col-7">
+                            <label class="form-label small text-secondary text-uppercase mb-1">Date de naissance</label>
+                            <input type="date" class="form-control form-control-sm" id="match-date-b" oninput="calculateMatch()">
+                        </div>
+                        <div class="col-5">
+                            <label class="form-label small text-secondary text-uppercase mb-1">Heure</label>
+                            <input type="time" class="form-control form-control-sm" id="match-time-b" oninput="calculateMatch()">
+                        </div>
+                    </div>
+                    <label class="form-label small text-secondary text-uppercase mb-1">Longitude</label>
+                    <div class="d-flex align-items-center gap-1">
+                        <button class="lon-btn"
+                                onpointerdown="_startRepeat('b',-0.1)" onpointerup="_stopRepeat()" onpointerleave="_stopRepeat()">O</button>
+                        <input type="range" class="form-range flex-grow-1" id="match-lon-b" min="-180" max="180" step="0.1"
+                               oninput="updateLonVisuel('b'); calculateMatch()">
+                        <button class="lon-btn"
+                                onpointerdown="_startRepeat('b',0.1)" onpointerup="_stopRepeat()" onpointerleave="_stopRepeat()">E</button>
+                    </div>
+                    <div class="lon-display" id="lon-val-b">0.0°</div>
+                </div>
+
+                <div class="text-center p-3 rounded bg-black bg-opacity-50 border border-secondary mb-3">
+                    <div class="small text-uppercase fw-bold text-info mb-1">Taux de Cohérence (k)</div>
+                    <div class="score-val" id="score-display">--%</div>
+                    <div class="progress my-2" style="height:4px">
+                        <div class="progress-bar" id="score-bar" role="progressbar" style="width:0%"></div>
+                    </div>
+                    <div class="font-monospace small text-secondary text-start" id="match-details">En attente des données...</div>
+                </div>
+
+                <div id="kin-match-content"></div>
+            </div>
+
+            <!-- ── THÉORIE ── -->
+            <div class="tab-pane fade" id="tab-theorie" role="tabpanel">
+                <div class="info-pink rounded p-2 mb-3 small">
+                    💡 <strong>Animation 3D :</strong> Le <em>Polyèdre de Goldberg</em>. 12 points or = Pentagones sacrés. Points cyan = hexagones naissants. Onde rose = Énergie de Conception.
+                </div>
+                <div class="section-title mt-2">1. Géométrie Sacrée & Maillage</div>
+                <p class="small text-secondary">3990 hexagones + 12 pentagones absorbant le déficit d'angle (720°). Ces pentagones agissent comme des portails. 🔗 <a href="https://github.com/nikkiluzader/mapng" target="_blank" style="color:var(--secondary)">Topologie & Hexagones</a></p>
+                <div class="section-title">2. Relativité Conscientielle (Phi2X)</div>
+                <p class="small text-secondary">Interférence onde lumineuse (Φ) × onde matérielle (429.62 Hz). 🔗 <a href="https://github.com/papiche/Phi2X" target="_blank" style="color:var(--secondary)">Projet Phi2X</a></p>
+                <div class="section-title">3. Le Temps Dédoublé</div>
+                <p class="small text-secondary">Cohérence &gt; 85% → "Vortex d'obscurité" (Nassim Haramein / Garnier Malet). 🔗 <a href="https://chaton.g1sms.fr/fr/blog/jean-pierre-garnier-malet" target="_blank" style="color:var(--secondary)">Théorie</a></p>
+
+                <hr class="border-secondary opacity-25 my-3">
+                <div class="section-title">4. Résonance Tzolkin des Atomes</div>
+                <p class="small text-secondary mb-2">Le Calendrier Maya (Tzolkin, 260 jours) encode la <em>signature vibratoire</em> de naissance. La résonance entre deux Kins reflète la qualité de leur synchronie quantique.</p>
+                <div id="kin-theorie-content">
+                    <div class="kin-empty">Renseignez des dates dans l'onglet Match.</div>
+                </div>
+            </div>
+
+        </div><!-- /tab-content -->
+    </div><!-- /offcanvas-body -->
+</div><!-- /offcanvas -->
+
+<!-- ── SCRIPTS ─────────────────────────────────────────────── -->
+<script src="leaflet.js"></script>
+<script src="bootstrap.bundle.min.js"></script>
+<script>
+'use strict';
+
+// ── ÉTAT ──────────────────────────────────────────────────────
+let currentMode = 'profil';
+let globalCoherenceScore = 0;
+let frameTime = 0;
+let meshVertices = [];
+let meshEdges = [];
+let _cachedKinA = null, _cachedKinB = null;
+let _birthMap = null, _birthMarker = null;
+// Performance adaptative
+let _perfLevel      = 1;     // 0=LOW  1=MED  2=HIGH
+let _fpsSamples     = [];
+let _perfCalibrated = false;
+// Buffers pré-alloués — pas de réallocation par frame
+let _projBuffer = null;                // rempli dans buildIcosahedronMesh()
+let _atomA = { x: 0, y: 0 };
+let _atomB = { x: 0, y: 0 };
+
+function _calibratePerf() {
+    if (_perfCalibrated || frameTime < 120) return; // chauffe 2s
+    _fpsSamples.push(frameRate());
+    if (_fpsSamples.length >= 30) {
+        const avg = _fpsSamples.reduce((a,b) => a+b) / 30;
+        _perfLevel = avg > 50 ? 2 : avg > 28 ? 1 : 0;
+        _perfCalibrated = true;
+        console.log('[ATOMIC] Perf calibrée:', ['LOW','MED','HIGH'][_perfLevel], avg.toFixed(1)+'fps');
+    }
+}
+
+function _kinRGB(colorStr) {
+    if (!colorStr) return [0, 255, 204];
+    if (colorStr.includes('Rouge')) return [255,  70, 50];
+    if (colorStr.includes('Blanc')) return [210, 210,240];
+    if (colorStr.includes('Bleu'))  return [ 60, 130,255];
+    if (colorStr.includes('Jaune')) return [255, 195, 40];
+    if (colorStr.includes('Vert'))  return [ 50, 210,100];
+    return [0, 255, 204];
+}
+function _updateKinCache() {
+    _cachedKinA = calcKin(document.getElementById('match-date-a') ? document.getElementById('match-date-a').value : '');
+    _cachedKinB = calcKin(document.getElementById('match-date-b') ? document.getElementById('match-date-b').value : '');
+}
+
+// ── UTILITAIRES ───────────────────────────────────────────────
+function fmt(n) { return String(n).padStart(2, '0'); }
+function formatDateForInput(d) { return `${d.getFullYear()}-${fmt(d.getMonth()+1)}-${fmt(d.getDate())}`; }
+function formatTimeForInput(d) { return `${fmt(d.getHours())}:${fmt(d.getMinutes())}`; }
+function getRandomDate() {
+    return new Date(new Date(1975,0,1).getTime() + Math.random() * (new Date(2005,11,31) - new Date(1975,0,1)));
+}
+function getRegionName(lon) {
+    if (lon < -170 || lon > 170) return 'Océan Pacifique';
+    if (lon < -30)  return 'Amériques';
+    if (lon < -10)  return 'Atlantique';
+    if (lon < 40)   return 'Europe / Afrique';
+    if (lon < 60)   return 'Moyen-Orient';
+    return 'Asie / Océanie';
+}
+
+// ── INTERFACE ─────────────────────────────────────────────────
+window.calculateConception = function() {
+    const dStr = document.getElementById('birth-date').value;
+    const tStr = document.getElementById('birth-time').value;
+    if (!dStr || !tStr) return;
+    const bDate = new Date(dStr + 'T' + tStr);
+    if (!isNaN(bDate)) {
+        const cDate = new Date(bDate - 280*24*3600*1000);
+        document.getElementById('conception-date').value = formatDateForInput(cDate);
+        document.getElementById('conception-time').value = formatTimeForInput(cDate);
+    }
+    document.getElementById('match-date-a').value = dStr;
+    document.getElementById('match-time-a').value = tStr;
+    _updateKinCache();
+    renderKinProfil();
+    updateMultipassPreview();
+    window.calculateMatch();
+};
+
+window.updateLonVisuel = function(id) {
+    const val = parseFloat(document.getElementById('match-lon-' + id).value).toFixed(1);
+    document.getElementById('lon-val-' + id).innerHTML =
+        `${val}° <span class="text-secondary fst-italic small">(${getRegionName(parseFloat(val))})</span>`;
+    // Sync bidirectionnel slider ↔ carte (atome A uniquement)
+    if (id === 'a' && _birthMap) {
+        const lon = parseFloat(val);
+        const lat = _birthMarker ? _birthMarker.getLatLng().lat : 20;
+        if (_birthMarker) _birthMarker.setLatLng([lat, lon]);
+        else _birthMarker = L.marker([lat, lon], { icon: _birthMap._kinIcon }).addTo(_birthMap);
+        const l = document.getElementById('birth-location-label');
+        const d = document.getElementById('birth-lon-display');
+        if (l) l.textContent = getRegionName(lon);
+        if (d) d.textContent = _lonFmt(lon);
+    }
+};
+
+function _lonFmt(lon) { return (lon >= 0 ? '+' : '') + parseFloat(lon).toFixed(1) + '°'; }
+
+function _syncBirthLocation(lon, lat) {
+    const icon = _birthMap && _birthMap._kinIcon;
+    if (_birthMarker) _birthMarker.setLatLng([lat, lon]);
+    else if (_birthMap) _birthMarker = L.marker([lat, lon], { icon }).addTo(_birthMap);
+    const sl = document.getElementById('match-lon-a');
+    if (sl) sl.value = lon;
+    window.updateLonVisuel('a');
+    window.calculateMatch();
+}
+
+function initBirthMap() {
+    const container = document.getElementById('birth-map');
+    if (!container) return;
+    if (_birthMap) { _birthMap.invalidateSize(); return; }
+
+    _birthMap = L.map('birth-map', { center: [20, 0], zoom: 2, zoomControl: true, attributionControl: false });
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18 }).addTo(_birthMap);
+
+    const icon = L.divIcon({
+        className: '',
+        html: '<div style="width:12px;height:12px;border-radius:50%;background:#00ffcc;box-shadow:0 0 8px #00ffcc;border:2px solid rgba(255,255,255,.6)"></div>',
+        iconSize: [12, 12], iconAnchor: [6, 6]
+    });
+    _birthMap._kinIcon = icon;
+
+    _birthMap.on('click', function(e) {
+        _syncBirthLocation(parseFloat(e.latlng.lng.toFixed(2)), parseFloat(e.latlng.lat.toFixed(2)));
+        updateMultipassPreview();
+    });
+
+    // Restaurer la longitude courante depuis le slider
+    const lon0 = parseFloat(document.getElementById('match-lon-a').value) || 0;
+    if (lon0) {
+        _birthMarker = L.marker([20, lon0], { icon }).addTo(_birthMap);
+        _birthMap.setView([20, lon0], 3);
+        const l = document.getElementById('birth-location-label');
+        const d = document.getElementById('birth-lon-display');
+        if (l) l.textContent = getRegionName(lon0);
+        if (d) d.textContent = _lonFmt(lon0);
+    }
+}
+
+window.calculateMatch = function() {
+    if (currentMode !== 'match') return;
+    _updateKinCache();
+    const phiA = getPhase(
+        document.getElementById('match-date-a').value,
+        document.getElementById('match-time-a').value,
+        document.getElementById('match-lon-a').value);
+    const phiB = getPhase(
+        document.getElementById('match-date-b').value,
+        document.getElementById('match-time-b').value,
+        document.getElementById('match-lon-b').value);
+    const deltaPhi = Math.abs(phiA - phiB);
+    globalCoherenceScore = (1 - Math.abs(Math.sin(deltaPhi))) * 100;
+
+    const color  = globalCoherenceScore > 85 ? '#00ffcc' : globalCoherenceScore > 50 ? '#ffaa00' : '#ff0055';
+    const statut = globalCoherenceScore > 95 ? 'Singularité Parfaite (Vortex)'
+                 : globalCoherenceScore > 80 ? 'Super-Cohérence (SDF Blend)'
+                 : globalCoherenceScore > 50 ? 'Interférence Constructive'
+                 : 'Bruit Quantique (Asymétrie)';
+
+    const el = id => document.getElementById(id);
+    if (el('score-display')) { el('score-display').textContent = globalCoherenceScore.toFixed(1) + '%'; el('score-display').style.color = color; }
+    if (el('score-bar'))     { el('score-bar').style.width = globalCoherenceScore.toFixed(1) + '%'; el('score-bar').style.backgroundColor = color; }
+    if (el('match-details')) el('match-details').innerHTML =
+        `φA: ${phiA.toFixed(3)} | φB: ${phiB.toFixed(3)} rad<br>Δφ: ${deltaPhi.toFixed(3)} rad<br><span style="color:${color}">${statut}</span>`;
+    if (el('hud-overlay'))   el('hud-overlay').innerHTML =
+        `Mode: MATCH<br>Cohérence: ${globalCoherenceScore.toFixed(1)}%<br>${statut}`;
+    renderKinMatch();
+};
+
+function getPhase(dateStr, timeStr, lon) {
+    const d = new Date(dateStr + 'T' + timeStr);
+    if (isNaN(d)) return 0;
+    const dayOfYear = Math.floor((d - new Date(d.getFullYear(), 0, 0)) / 86400000);
+    const tAnn  = ((dayOfYear - 80) / 365.25) * 2 * Math.PI;
+    const tDay  = (d.getHours() + d.getMinutes() / 60) / 24 * 2 * Math.PI;
+    const off   = (parseFloat(lon) || 0) * (Math.PI / 180);
+    const ratio = 1.059;
+    return (((tAnn + tDay + off) % ratio) / ratio) * 2 * Math.PI;
+}
+
+// ── KIN MAYA ─────────────────────────────────────────────────
+const KIN_GLYPHS   = ['Imix','Ik','Akbal','Kan','Chicchan','Cimi','Manik','Lamat','Muluc','Oc','Chuen','Eb','Ben','Ix','Men','Cib','Caban','Etznab','Cauac','Ahau'];
+const KIN_GLYPHS_FR= ['Dragon','Vent','Nuit','Graine','Serpent','Lieur','Main','Étoile','Lune','Chien','Singe','Chemin','Roseau','Jaguar','Aigle','Guerrier','Terre','Miroir','Tempête','Soleil'];
+const KIN_TONES    = ['Magnétique','Lunaire','Électrique','Auto-existante','Harmonique','Rythmique','Résonnante','Galactique','Solaire','Planétaire','Spectrale','Cristal','Cosmique'];
+const KIN_TONE_KEYS= [['Unifier','Unification','Présence'],['Polariser','Stabilisation','Définition'],['Activer','Activation','Unification'],['Définir','Mesure','Définition'],['Commander','Commandement','Pouvoir'],['Organiser','Organisation','Équilibre'],['Canaliser','Inspiration','Canalisation'],['Harmoniser','Harmonisation','Modélisation'],['Réaliser','Réalisation','Impulsion'],['Perfectionner','Perfectionnement','Production'],['Dissoudre','Dissolution','Abandon'],['Universaliser','Dédication','Universalisation'],['Transcender','Confrontation','Transcendance']];
+const KIN_COLORS   = ['🔴 Rouge','⚪ Blanc','🔵 Bleu','🟡 Jaune','🟢 Vert'];
+const KIN_MESES    = [0,31,59,90,120,151,181,212,243,13,44,74];
+const KIN_SUMA     = {30:2,35:7,40:12,45:17,50:22,3:27,8:32,13:37,18:42,23:47,28:52,32:57,38:62,42:67,48:72,1:76,6:82,11:87,16:92,21:97,26:102,31:107,36:112,41:117,46:122,51:127,4:132,9:137,14:142,19:147,24:152,29:157,34:162,39:167,44:172,49:177,2:182,7:187,12:192,17:197,22:202,27:207,37:217,47:227,0:232,5:237,10:242,15:247,20:252,25:257};
+
+function calcKin(dateStr) {
+    if (!dateStr) return null;
+    const d = new Date(dateStr);
+    if (isNaN(d)) return null;
+    const y = d.getFullYear(), mo = d.getMonth() + 1, day = d.getDate();
+    let kin = day + KIN_MESES[mo - 1] + (KIN_SUMA[y % 52] || 0);
+    if (kin > 260) kin -= 260;
+    const gi = (kin - 1) % 20, ti = (kin - 1) % 13, ci = Math.floor((kin - 1) / 13) % 5;
+    return { kin, glyph: KIN_GLYPHS[gi], glyphFr: KIN_GLYPHS_FR[gi],
+             tone: KIN_TONES[ti], color: KIN_COLORS[ci], keys: KIN_TONE_KEYS[ti],
+             gi, ti, ci };
+}
+
+function _kinCard(k, label, accentColor) {
+    if (!k) return `<div class="kin-card mb-2"><div class="small fw-bold mb-1" style="color:${accentColor}">${label}</div><div class="kin-empty">Date non renseignée</div></div>`;
+    return `<div class="kin-card mb-2 atom-${accentColor === 'var(--primary)' ? 'a' : 'b'}">
+        <div class="small fw-bold mb-1" style="color:${accentColor}">${label}</div>
+        <div class="d-flex align-items-baseline gap-2">
+            <span class="kin-num">${k.kin}</span>
+            <span class="kin-sub">Kin Maya</span>
+        </div>
+        <div class="kin-info">${k.color} <strong>${k.glyph}</strong> <span class="text-secondary">(${k.glyphFr})</span></div>
+        <div class="kin-info">Tonalité <strong>${k.tone}</strong></div>
+        <div class="kin-keys">⚡ ${k.keys[0]} · 🔥 ${k.keys[1]} · ✨ ${k.keys[2]}</div>
+    </div>`;
+}
+
+function renderKinMatch() {
+    const el = document.getElementById('kin-match-content');
+    if (!el) return;
+    const dA = document.getElementById('match-date-a').value;
+    const dB = document.getElementById('match-date-b').value;
+    const kA = calcKin(dA), kB = calcKin(dB);
+    if (!kA && !kB) { el.innerHTML = ''; return; }
+
+    // Ligne compacte par atome
+    const row = (k, color, label) => !k ? '' :
+        `<div class="d-flex align-items-center gap-2 py-1" style="border-left:2px solid ${color};padding-left:8px">
+            <span class="fw-bold font-monospace" style="color:#f9a825;min-width:28px">${k.kin}</span>
+            <span class="small">${k.color} <strong>${k.glyph}</strong>
+                <span class="text-secondary">(${k.glyphFr})</span> ·
+                <span style="color:rgba(255,255,255,.55)">${k.tone}</span></span>
+        </div>`;
+
+    let html = `<div class="kin-card mb-2">
+        <div class="small fw-bold mb-2" style="color:#f9a825">🌀 Kins Maya</div>
+        ${row(kA,'var(--primary)','A')}
+        ${row(kB,'var(--secondary)','B')}`;
+
+    if (kA && kB) {
+        const unionKin = ((kA.kin + kB.kin - 1) % 260) + 1;
+        const ugi = (unionKin-1)%20, uti = (unionKin-1)%13, uci = Math.floor((unionKin-1)/13)%5;
+        const kU = { kin: unionKin, glyph: KIN_GLYPHS[ugi], glyphFr: KIN_GLYPHS_FR[ugi],
+                     tone: KIN_TONES[uti], color: KIN_COLORS[uci] };
+        const kinDist  = Math.min(Math.abs(kA.kin-kB.kin), 260-Math.abs(kA.kin-kB.kin));
+        const mayaScore= Math.round((1-kinDist/130)*100);
+        const rColor   = mayaScore > 75 ? '#00ffcc' : mayaScore > 40 ? '#ffaa00' : '#ff0055';
+        const flags    = [
+            kA.ci === kB.ci                                    ? 'Même couleur' : '',
+            Math.floor((kA.kin-1)/13)===Math.floor((kB.kin-1)/13) ? 'Même Wavespell' : '',
+            kA.ti+kB.ti === 12                                 ? 'Tonalités complémentaires' : '',
+            kA.kin+kB.kin === 261                              ? 'Miroirs absolus' : '',
+        ].filter(Boolean);
+
+        html += `<div class="kin-union-bar mt-2"></div>
+        <div class="d-flex align-items-center gap-2 py-1" style="border-left:2px solid #f9a825;padding-left:8px">
+            <span class="fw-bold font-monospace" style="color:#f9a825;min-width:28px">${unionKin}</span>
+            <span class="small">${kU.color} <strong>${kU.glyph}</strong>
+                <span class="text-secondary">(${kU.glyphFr})</span> ·
+                <span style="color:rgba(255,255,255,.55)">${kU.tone}</span>
+                <span class="ms-1 fst-italic text-secondary">Union</span></span>
+        </div>
+        <div class="d-flex align-items-center justify-content-between mt-2 pt-2" style="border-top:1px solid rgba(255,255,255,.07)">
+            <span class="small text-secondary">Résonance Maya</span>
+            <span class="fw-bold small" style="color:${rColor}">${mayaScore}%
+                ${flags.length ? '<span class="text-secondary fw-normal"> · ' + flags.join(' · ') + '</span>' : ''}
+            </span>
+        </div>`;
+    }
+
+    html += `</div>`;
+    el.innerHTML = html;
+}
+
+function renderKinProfil() {
+    const el = document.getElementById('kin-profil-content');
+    if (!el) return;
+    const dB = document.getElementById('birth-date').value;
+    const dC = document.getElementById('conception-date').value;
+    const kB = calcKin(dB), kC = calcKin(dC);
+    if (!kB) { el.innerHTML = '<div class="kin-empty mt-2">Renseignez votre date de naissance.</div>'; return; }
+
+    let html = _kinCard(kB, '🌟 Votre Kin de Naissance', 'var(--primary)');
+
+    if (kC) {
+        html += `<div class="kin-card mt-2" style="border-left:3px solid rgba(255,0,255,0.45)">
+            <div class="small fw-bold mb-1" style="color:rgba(255,0,255,0.8)">🌀 Kin de Conception (−280j)</div>
+            <div class="d-flex align-items-baseline gap-2">
+                <span class="kin-num" style="font-size:1.6rem">${kC.kin}</span>
+                <span class="kin-sub">Singularité</span>
+            </div>
+            <div class="kin-info">${kC.color} <strong>${kC.glyph}</strong> <span class="text-secondary">(${kC.glyphFr})</span> · ${kC.tone}</div>
+            <div class="kin-keys">⚡ ${kC.keys[0]} · 🔥 ${kC.keys[1]} · ✨ ${kC.keys[2]}</div>
+        </div>`;
+        const kinDistNC = Math.min(Math.abs(kB.kin-kC.kin), 260-Math.abs(kB.kin-kC.kin));
+        const harmonie  = kB.ci===kC.ci ? 'Harmonie Chromatique (même couleur)'
+                        : kinDistNC<=13 ? 'Même Vague-Sort (Wavespell)'
+                        : 'Polarité Singulière';
+        html += `<div class="kin-resonance mt-2 p-2 rounded small text-secondary"
+            style="background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.07)">
+            Naissance ↔ Conception · Distance Tzolkin : ${kinDistNC} — ${harmonie}
+        </div>`;
+    }
+
+    html += `<div class="mt-2 small"><a href="kin.html" target="_blank" style="color:#86efac">🌀 Voir votre Kin complet →</a></div>`;
+    el.innerHTML = html;
+}
+
+function renderKinTheorie() {
+    const el = document.getElementById('kin-theorie-content');
+    if (!el) return;
+    const dA = document.getElementById('match-date-a').value;
+    const dB = document.getElementById('match-date-b').value;
+    const kA = calcKin(dA), kB = calcKin(dB);
+    if (!kA && !kB) { el.innerHTML = '<div class="kin-empty">Renseignez des dates dans l\'onglet Match.</div>'; return; }
+
+    let html = _kinCard(kA, '⚛ Atome A', 'var(--primary)');
+    html += _kinCard(kB, '⚛ Atome B', 'var(--secondary)');
+
+    if (kA && kB) {
+        // Kin de l'Union = (kA + kB − 1) % 260 + 1
+        const unionKin = ((kA.kin + kB.kin - 1) % 260) + 1;
+        const kU = calcKin(null); // on calcule manuellement
+        const ugi = (unionKin-1)%20, uti = (unionKin-1)%13, uci = Math.floor((unionKin-1)/13)%5;
+        const kUnion = { kin: unionKin, glyph: KIN_GLYPHS[ugi], glyphFr: KIN_GLYPHS_FR[ugi],
+                         tone: KIN_TONES[uti], color: KIN_COLORS[uci], keys: KIN_TONE_KEYS[uti] };
+
+        // Résonance
+        const sameColor    = kA.ci === kB.ci;
+        const sameWavespell= Math.floor((kA.kin-1)/13) === Math.floor((kB.kin-1)/13);
+        const toneSum      = kA.ti + kB.ti; // complémentaires si somme = 12 (0-based)
+        const toneComplem  = toneSum === 12;
+        const isMirror     = (kA.kin + kB.kin) === 261;
+        const kinDist      = Math.min(Math.abs(kA.kin - kB.kin), 260 - Math.abs(kA.kin - kB.kin));
+        const mayaScore    = Math.round((1 - kinDist/130)*100);
+
+        const rColor = mayaScore > 75 ? '#00ffcc' : mayaScore > 40 ? '#ffaa00' : '#ff0055';
+        const rLabel = isMirror ? '🌀 Miroirs Parfaits — Kins complémentaires absolus'
+                     : mayaScore > 75 ? '✨ Haute résonance Tzolkin'
+                     : mayaScore > 40 ? '⚡ Résonance modérée'
+                     : '🌊 Polarité créatrice';
+
+        html += `<div class="kin-union-bar my-2"></div>`;
+        html += `<div class="kin-card mb-2" style="border-color:rgba(249,168,37,0.3)">
+            <div class="small fw-bold mb-1" style="color:#f9a825">🌀 Kin de l'Union</div>
+            <div class="d-flex align-items-baseline gap-2">
+                <span class="kin-num">${unionKin}</span><span class="kin-sub">Kin Maya</span>
+            </div>
+            <div class="kin-info">${kUnion.color} <strong>${kUnion.glyph}</strong> <span class="text-secondary">(${kUnion.glyphFr})</span> — Tonalité <strong>${kUnion.tone}</strong></div>
+            <div class="kin-keys">⚡ ${kUnion.keys[0]} · 🔥 ${kUnion.keys[1]} · ✨ ${kUnion.keys[2]}</div>
+        </div>`;
+
+        html += `<div class="kin-resonance mb-2" style="background:rgba(0,0,0,0.35);border:1px solid ${rColor}33">
+            <div class="fw-bold mb-1" style="color:${rColor}">${rLabel}</div>
+            <div class="text-secondary small">
+                Score Maya : <strong style="color:${rColor}">${mayaScore}%</strong>
+                &nbsp;·&nbsp; Distance Tzolkin : ${kinDist} jours<br>
+                ${sameColor    ? '✅ Même famille de couleur<br>' : ''}
+                ${sameWavespell? '✅ Même Vague-Sort (Wavespell)<br>' : ''}
+                ${toneComplem  ? '✅ Tonalités complémentaires (' + (kA.ti+1) + ' + ' + (kB.ti+1) + ' = 14)<br>' : ''}
+                ${isMirror     ? '✅ Kins Miroirs absolus (A + B = 261)<br>' : ''}
+            </div>
+            <div class="mt-1 small" style="color:rgba(255,255,255,0.4)">
+                Cohérence quantique : <strong style="color:${globalCoherenceScore>85?'#00ffcc':globalCoherenceScore>50?'#ffaa00':'#ff0055'}">${globalCoherenceScore.toFixed(1)}%</strong>
+            </div>
+        </div>`;
+    }
+
+    html += `<div class="mt-2 small"><a href="kin.html" target="_blank" style="color:#86efac">🌀 Calculer votre Kin complet →</a></div>`;
+    el.innerHTML = html;
+}
+
+function updateMultipassPreview() {
+    const el = document.getElementById('multipass-preview');
+    if (!el) return;
+    const lines = [];
+    const bd = document.getElementById('birth-date').value;
+    const bt = document.getElementById('birth-time').value;
+    const cd = document.getElementById('conception-date').value;
+    const loc = document.getElementById('birth-location-label').textContent;
+    const lon = document.getElementById('birth-lon-display').textContent;
+    const lat = _birthMarker ? _birthMarker.getLatLng().lat.toFixed(2) : null;
+    if (bd) lines.push(`📅 Naissance : ${bd}${bt?' '+bt:''}`);
+    if (cd) lines.push(`🌀 Conception : ${cd}`);
+    if (lon && lon !== '') lines.push(`📍 ${loc} (${lon}${lat?', lat '+lat:''})`);
+    if (_cachedKinA) lines.push(`✨ Kin : ${_cachedKinA.kin} · ${_cachedKinA.color} ${_cachedKinA.glyph}`);
+    el.innerHTML = lines.join('<br>') || '<span class="fst-italic">Complétez le profil ci-dessus.</span>';
+}
+
+function createMultipass() {
+    const bd  = document.getElementById('birth-date').value;
+    const bt  = document.getElementById('birth-time').value;
+    const cd  = document.getElementById('conception-date').value;
+    const ct  = document.getElementById('conception-time').value;
+    const lon = parseFloat(document.getElementById('match-lon-a').value || 0);
+    const lat = _birthMarker ? parseFloat(_birthMarker.getLatLng().lat.toFixed(4)) : null;
+    const loc = document.getElementById('birth-location-label').textContent;
+    const cityClean = (loc === 'Cliquez sur la carte ou cherchez une ville' || loc === 'Aucune sélection') ? '' : loc;
+
+    const params = new URLSearchParams();
+    if (bd)           params.set('birth_datetime',      bd + (bt ? 'T' + bt : ''));
+    if (cd)           params.set('conception_datetime', cd + (ct ? 'T' + ct : ''));
+    if (lat !== null) params.set('lat', lat);
+    if (lon !== 0)    params.set('lon', lon.toFixed(4));
+    if (cityClean)    params.set('birth_place', cityClean);
+    params.set('lang', navigator.language ? navigator.language.slice(0, 2) : 'fr');
+
+    try {
+        localStorage.setItem('atomic_birth_data', JSON.stringify({
+            birth_datetime:      bd + (bt ? 'T' + bt : ''),
+            conception_datetime: cd + (ct ? 'T' + ct : ''),
+            birth_place: cityClean, lat, lon, ts: Date.now()
+        }));
+    } catch(e) {}
+
+    const apiUrl = typeof window.getAPIUrl === 'function' ? window.getAPIUrl()
+                 : (location.hostname === '127.0.0.1' || location.hostname === 'localhost')
+                   ? 'http://127.0.0.1:54321' : '';
+    window.open(apiUrl + '/g1?' + params.toString(), '_blank');
+}
+
+async function searchCity() {
+    const input  = document.getElementById('city-search');
+    const result = document.getElementById('city-result');
+    const btn    = document.getElementById('city-search-btn');
+    const q = input ? input.value.trim() : '';
+    if (!q) return;
+    if (result) result.textContent = '🔍 Recherche…';
+    if (btn)    btn.disabled = true;
+    try {
+        const url = 'https://nominatim.openstreetmap.org/search?q='
+            + encodeURIComponent(q) + '&format=json&limit=1&accept-language=fr';
+        const data = await fetch(url, { headers: { 'Accept': 'application/json' } }).then(r => r.json());
+        if (data && data.length > 0) {
+            const place = data[0];
+            const lon = parseFloat(parseFloat(place.lon).toFixed(2));
+            const lat = parseFloat(parseFloat(place.lat).toFixed(2));
+            const label = place.display_name.split(',').slice(0, 3).join(', ');
+            if (result) result.textContent = '📍 ' + label;
+            if (_birthMap) _birthMap.setView([lat, lon], 7);
+            _syncBirthLocation(lon, lat);
+        } else {
+            if (result) result.textContent = '⚠️ Ville non trouvée';
+        }
+    } catch(e) {
+        if (result) result.textContent = '⚠️ Erreur réseau';
+    } finally {
+        if (btn) btn.disabled = false;
+    }
+}
+
+// ── BOOTSTRAP TAB → currentMode ───────────────────────────────
+document.getElementById('atomicTabs').addEventListener('shown.bs.tab', e => {
+    currentMode = e.target.dataset.bsTarget.replace('#tab-', '');
+    const hud = document.getElementById('hud-overlay');
+    if      (currentMode === 'match')  { window.calculateMatch(); }
+    else if (currentMode === 'profil') { hud.innerHTML = 'Mode: PROFIL<br>Cycle Condensation'; renderKinProfil(); setTimeout(initBirthMap, 80); }
+    else                               { hud.innerHTML = 'Mode: THÉORIE<br>Sphère Géodésique'; renderKinTheorie(); }
+});
+
+// Ouvrir le panneau + initialiser état Profil au démarrage
+document.addEventListener('DOMContentLoaded', () => {
+    bootstrap.Offcanvas.getOrCreateInstance(document.getElementById('atomic-panel')).show();
+    renderKinProfil();
+    setTimeout(initBirthMap, 150);
+});
+
+// ── P5.JS ─────────────────────────────────────────────────────
+function setup() {
+    const c = document.getElementById('canvas-container');
+    createCanvas(c.offsetWidth, c.offsetHeight).parent('canvas-container');
+    buildIcosahedronMesh();
+
+    // Valeurs par défaut fixes (pas de random — l'utilisateur remplit son profil)
+    document.getElementById('birth-date').value  = '1972-03-21';
+    document.getElementById('birth-time').value  = '18:30';
+    // Atome B : partenaire de résonance — défaut Paris 21/03/1972 20:12
+    document.getElementById('match-date-b').value = '1972-03-21';
+    document.getElementById('match-time-b').value = '20:12';
+    document.getElementById('match-lon-a').value  = '0';
+    document.getElementById('match-lon-b').value  = '2.35';   // Paris
+    window.updateLonVisuel('a');
+    window.updateLonVisuel('b');
+    _updateKinCache();
+    window.calculateConception();
+}
+
+function windowResized() {
+    const c = document.getElementById('canvas-container');
+    resizeCanvas(c.offsetWidth, c.offsetHeight);
+}
+
+// ── BOUTONS O / E — clic + maintien pour répéter ─────────────
+let _repeatTimer = null;
+function _startRepeat(id, delta) {
+    _adjustLon(id, delta);
+    clearTimeout(_repeatTimer);
+    _repeatTimer = setTimeout(function _rep() {
+        _adjustLon(id, delta);
+        _repeatTimer = setTimeout(_rep, 70);   // ~14 pas/sec en maintien
+    }, 360);
+}
+function _stopRepeat() {
+    clearTimeout(_repeatTimer);
+    _repeatTimer = null;
+}
+
+// ── TOUCHES O / E → affinage longitude ───────────────────────
+// O = Ouest (−) · E = Est (+) · Shift = pas ×10 · Alt = Atome B
+document.addEventListener('keydown', function(e) {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+    const k = e.key.toLowerCase();
+    if (k !== 'o' && k !== 'e') return;
+    e.preventDefault();
+    const step  = e.shiftKey ? 1.0 : 0.1;
+    const delta = (k === 'o') ? -step : step;
+    const id    = e.altKey ? 'b' : 'a';
+    const slider = document.getElementById('match-lon-' + id);
+    if (!slider) return;
+    const newVal = Math.round(
+        Math.max(-180, Math.min(180, parseFloat(slider.value) + delta)) * 10
+    ) / 10;
+    slider.value = newVal;
+    window.updateLonVisuel(id);
+    window.calculateMatch();
+    // Sync carte pour Atome A
+    if (id === 'a' && _birthMap && _birthMarker) {
+        _birthMarker.setLatLng([_birthMarker.getLatLng().lat, newVal]);
+        const lblEl  = document.getElementById('birth-location-label');
+        const dispEl = document.getElementById('birth-lon-display');
+        if (lblEl)  lblEl.textContent  = getRegionName(newVal);
+        if (dispEl) dispEl.textContent = _lonFmt(newVal);
+        updateMultipassPreview();
+    }
+});
+
+// ── PAUSE QUAND L'ONGLET N'EST PAS VISIBLE ────────────────────
+// Page Visibility API — arrête draw() à 0 fps, reprend dès le retour
+document.addEventListener('visibilitychange', () => {
+    if (document.hidden) noLoop();
+    else                 loop();
+});
+// Pause aussi quand le panneau offcanvas masque complètement le canvas
+// (optionnel mais économise la CPU sur mobile)
+document.addEventListener('DOMContentLoaded', () => {
+    const panel = document.getElementById('atomic-panel');
+    if (panel) {
+        panel.addEventListener('shown.bs.offcanvas',  () => { /* canvas visible en fond */ });
+        panel.addEventListener('hidden.bs.offcanvas', () => { if (!document.hidden) loop(); });
+    }
+});
+
+function getCanvasCenter() {
+    const panel = document.getElementById('atomic-panel');
+    const panelW = (panel && panel.classList.contains('show')) ? panel.offsetWidth : 0;
+    return { x: (width - panelW) / 2, y: height / 2 };
+}
+
+function draw() {
+    _calibratePerf();                       // calibration globale, toutes anims
+    background(8, 6, 2, 55);               // fond sombre chaud
+    frameTime++;
+    blendMode(ADD);
+    if      (currentMode === 'profil')  drawProfileMode();
+    else if (currentMode === 'match')   drawMatchMode();
+    else if (currentMode === 'theorie') drawTheorieMode();
+    blendMode(BLEND);
+}
+
+// ── MAILLAGE ICOSAÈDRE ────────────────────────────────────────
+function buildIcosahedronMesh() {
+    const phi = 1.6180339;
+    [[-1,phi,0],[1,phi,0],[-1,-phi,0],[1,-phi,0],[0,-1,phi],[0,1,phi],
+     [0,-1,-phi],[0,1,-phi],[phi,0,-1],[phi,0,1],[-phi,0,-1],[-phi,0,1]
+    ].forEach(v => {
+        const mag = Math.hypot(...v);
+        meshVertices.push({ x: v[0]/mag, y: v[1]/mag, z: v[2]/mag, type: 'pentagon' });
+    });
+    const edges = [];
+    for (let i = 0; i < 12; i++)
+        for (let j = i+1; j < 12; j++) {
+            const a = meshVertices[i], b = meshVertices[j];
+            if (Math.hypot(a.x-b.x, a.y-b.y, a.z-b.z) < 1.1) edges.push([i, j]);
+        }
+    edges.forEach(([a, b]) => {
+        const v1 = meshVertices[a], v2 = meshVertices[b];
+        const mx = (v1.x+v2.x)/2, my = (v1.y+v2.y)/2, mz = (v1.z+v2.z)/2;
+        const mag = Math.hypot(mx, my, mz);
+        const idx = meshVertices.length;
+        meshVertices.push({ x: mx/mag, y: my/mag, z: mz/mag, type: 'hexagon' });
+        meshEdges.push([a, idx], [b, idx]);
+    });
+    // Pré-allouer le buffer de projection (réutilisé sans GC à chaque frame)
+    _projBuffer = meshVertices.map(() => ({ x: 0, y: 0, type: '', z: 0, pulse: false }));
+}
+
+// ── MODES DE DESSIN ────────────────────────────────────────────
+function drawTheorieMode() {
+    const { x: cx, y: cy } = getCanvasCenter();
+    const radius = min(width, height) * 0.38;
+    const PHI  = 1.6180339;
+    const ax   = frameTime * 0.005, ay = frameTime * 0.01;
+
+    // ─ Interférence Phi × Octave ─────────────────────────────────
+    const tN      = frameTime * 0.022;
+    const sOct    = Math.sin(tN * 2);
+    const sPhi    = Math.sin(tN * 2 * PHI);
+    const interfV = sOct + sPhi;
+    const excite  = Math.max(0, (interfV - 0.8) / 1.2);
+
+    // ─ Deux atomes convergents — mise à jour in-place (0 allocation) ─
+    const [arA,agA,abA] = _cachedKinA ? _kinRGB(_cachedKinA.color) : [245, 158, 11];
+    const [arB,agB,abB] = _cachedKinB ? _kinRGB(_cachedKinB.color) : [249, 115, 22];
+    const orbitR = radius * (1.0 - 0.45 * excite);
+    _atomA.x = cx + orbitR * Math.cos(tN * 0.7);
+    _atomA.y = cy + orbitR * 0.4 * Math.sin(tN * 0.7);
+    _atomB.x = cx - orbitR * Math.cos(tN * 0.7 + PHI);
+    _atomB.y = cy + orbitR * 0.4 * Math.sin(tN * 0.7 + PHI);
+
+    // ─ Anneaux Octave (couleur solaire ambre) ────────────────────
+    noFill();
+    const octRings = _perfLevel === 0 ? 3 : _perfLevel === 1 ? 5 : 6;
+    for (let k = 0; k < octRings; k++) {
+        const p = ((tN + k / octRings) % 1);
+        const r = p * radius * 1.12;
+        stroke(245, 158, 11, 90 * Math.pow(1-p, 2) * (1 + 0.3 * sOct));
+        strokeWeight(0.9 + p * 0.5); ellipse(cx, cy, r * 2, r * 2);
+    }
+    if (_perfLevel >= 1) {
+        for (let k = 0; k < 4; k++) {       // 2ème harmonique Octave
+            const p = ((tN * 2 + k / 4) % 1);
+            stroke(249, 115, 22, 45 * (1-p));
+            strokeWeight(0.5); ellipse(cx, cy, p * radius * 0.82 * 2, p * radius * 0.82 * 2);
+        }
+    }
+
+    // ─ Spirales Phi — 5 bras dorés ───────────────────────────────
+    const phiRot   = tN * 0.14 * PHI;
+    const spiralSt = _perfLevel === 0 ? 0.14 : _perfLevel === 1 ? 0.09 : 0.06;
+    for (let arm = 0; arm < 5; arm++) {
+        const base = (arm / 5) * TWO_PI + phiRot;
+        beginShape(); noFill(); stroke(255, 200, 40, 22 + 28 * excite);
+        for (let s = 0; s <= 5.8; s += spiralSt) {
+            const r2 = 9 * Math.exp(0.306 * s);
+            if (r2 > radius) break;
+            vertex(cx + r2 * Math.cos(base + s), cy + r2 * Math.sin(base + s));
+        }
+        endShape();
+    }
+
+    // ─ Maillage icosaèdre (buffer pré-alloué, 0 allocation) ──────
+    const pulseZ = (frameTime % 300) / 300 * 4 - 2;
+    for (let i = 0; i < meshVertices.length; i++) {
+        const v  = meshVertices[i];
+        const y1 = v.y*Math.cos(ax) - v.z*Math.sin(ax);
+        const z1 = v.y*Math.sin(ax) + v.z*Math.cos(ax);
+        const x2 = v.x*Math.cos(ay) + z1*Math.sin(ay);
+        const z2 = -v.x*Math.sin(ay) + z1*Math.cos(ay);
+        const dp  = Math.abs(y1 - pulseZ);
+        const def = dp < 0.4 ? 1 + 0.4*(0.4-dp)*Math.sin(frameTime*0.2) : 1;
+        const sc  = 3/(3+z2);
+        const p   = _projBuffer[i];
+        p.x = cx + x2*radius*sc*def;
+        p.y = cy + y1*radius*sc*def;
+        p.type  = v.type;
+        p.z     = z2;
+        p.pulse = dp < 0.2;
+    }
+    const edgeStep = _perfLevel === 0 ? 2 : 1;
+    for (let i = 0; i < meshEdges.length; i += edgeStep) {
+        const [a, b] = meshEdges[i];
+        stroke(180, 120, 20, (_projBuffer[a].z > 0 && _projBuffer[b].z > 0) ? 12 : 60);
+        strokeWeight(0.7); line(_projBuffer[a].x, _projBuffer[a].y, _projBuffer[b].x, _projBuffer[b].y);
+    }
+    for (let i = 0; i < _projBuffer.length; i++) {
+        const p = _projBuffer[i];
+        if (p.type === 'pentagon') {
+            if (excite > 0.08) {
+                noStroke(); fill(255, 200, 40, p.z > 0 ? 14 : 50 * excite);
+                ellipse(p.x, p.y, 16 * excite + 5, 16 * excite + 5);
+            }
+            stroke(255, 200, 40, p.z > 0 ? 65 : 210 + 40 * excite);
+            strokeWeight(p.z > 0 ? 3.5 : 6 + 4 * excite);
+        } else {
+            stroke(p.pulse ? color(249,115,22) : color(180,120,20), p.z > 0 ? 22 : 100);
+            strokeWeight(p.z > 0 ? 1.2 : 3);
+        }
+        point(p.x, p.y);
+    }
+
+    // ─ Atomes orbitants (MED + HIGH) ─────────────────────────────
+    if (_perfLevel >= 1) {
+        noStroke(); fill(arA, agA, abA, 180 + 40 * excite);
+        ellipse(_atomA.x, _atomA.y, 8 + 5*excite, 8 + 5*excite);
+        fill(arB, agB, abB, 180 + 40 * excite);
+        ellipse(_atomB.x, _atomB.y, 8 + 5*excite, 8 + 5*excite);
+        // Sillages
+        if (_perfLevel >= 2) {
+            for (let t2 = 1; t2 <= 4; t2++) {
+                const faded = 60 * (1 - t2/4);
+                const orb2 = radius * (1 - 0.45*excite) * (1 + t2*0.04);
+                fill(arA, agA, abA, faded);
+                ellipse(cx + orb2*Math.cos(tN*0.7 - t2*0.08), cy + orb2*0.4*Math.sin(tN*0.7 - t2*0.08), 5, 5);
+                fill(arB, agB, abB, faded);
+                ellipse(cx - orb2*Math.cos(tN*0.7+PHI - t2*0.08), cy + orb2*0.4*Math.sin(tN*0.7+PHI - t2*0.08), 5, 5);
+            }
+        }
+    }
+
+    // ─ Onde transversale Phi×Octave ──────────────────────────────
+    noStroke(); fill(249, 115, 22, 15 + 25 * excite);
+    ellipse(cx, cy + pulseZ * radius * (1 + 0.18*sPhi),
+            radius * 1.5 * (1 + 0.07*interfV), radius * 0.2);
+
+    // ─ Flash conception (acte de naissance, pic additif) ─────────
+    if (excite > 0.6) {
+        noStroke();
+        // Halo solaire global
+        fill(255, 200, 40, 8 * excite); ellipse(cx, cy, radius*1.9*excite, radius*1.9*excite);
+        // Singularité centrale (naissance)
+        fill(255, 220, 80, 200 * excite); ellipse(cx, cy, 10*excite, 10*excite);
+        // Rayon entre les deux atomes convergeant
+        if (_perfLevel >= 1 && _cachedKinA && _cachedKinB) {
+            stroke(255, 200, 40, 120 * excite); strokeWeight(1.5);
+            line(_atomA.x, _atomA.y, _atomB.x, _atomB.y);
+        }
+    }
+
+    // ─ Overlay Kin Union ─────────────────────────────────────────
+    if (_cachedKinA && _cachedKinB) {
+        const uKin   = ((_cachedKinA.kin + _cachedKinB.kin - 1) % 260) + 1;
+        const uGlyph = KIN_GLYPHS[(uKin-1)%20];
+        blendMode(BLEND); noStroke(); textAlign(CENTER, CENTER);
+        textSize(38); fill(255, 200, 40, 45 + 20*excite);
+        text(uKin, cx, cy);
+        textSize(9); fill(255, 200, 40, 85 + 30*excite);
+        text('KIN UNION · ' + uGlyph.toUpperCase(), cx, cy + 28);
+    }
+
+    // ─ HUD Phi/Octave ─────────────────────────────────────────────
+    blendMode(BLEND);
+    const hudEl = document.getElementById('hud-overlay');
+    if (hudEl) {
+        const pf = _perfCalibrated ? ['LOW','MED','HIGH'][_perfLevel] : '…';
+        const st = excite > 0.75 ? '⚡ CONCEPTION'
+                 : excite > 0.35 ? '〰 Résonance'
+                 : '· Battement';
+        hudEl.innerHTML = `Φ=${PHI.toFixed(3)} / Oct=2.000<br>Interf: ${interfV.toFixed(3)}<br>${st} · ${pf}`;
+    }
+}
+
+function drawProfileMode() {
+    const { x: cx, y: cy } = getCanvasCenter();
+    const R = min(width, height) * 0.3;
+    const [kr, kg, kb] = _cachedKinA ? _kinRGB(_cachedKinA.color) : [0, 255, 204];
+
+    // ─ Décompte 9 → 0, boucle ─────────────────────────────────────
+    // Durée par chiffre adaptée à la perf : LOW=180 MED=140 HIGH=110 frames
+    const SLOT   = _perfCalibrated ? [180, 140, 110][_perfLevel] : 140;
+    const CYCLE  = SLOT * 10;
+    const pos    = frameTime % CYCLE;
+    const digit  = 9 - Math.floor(pos / SLOT);   // 9,8,...,0
+    const phase  = (pos % SLOT) / SLOT;           // 0→1 dans le slot
+    // Enveloppe: fondu entrée/sortie aux transitions
+    const env    = phase < 0.12 ? phase / 0.12 : phase > 0.88 ? (1 - phase) / 0.12 : 1;
+
+    push(); translate(cx, cy); noFill();
+
+    if (digit === 0) {
+        // ZÉRO — flash d'expansion puis silence
+        const burst = phase < 0.22 ? phase / 0.22 : Math.max(0, 1 - (phase - 0.22) / 0.78);
+        noStroke(); fill(kr, kg, kb, 55 * burst);
+        ellipse(0, 0, R * 3.6 * burst, R * 3.6 * burst);
+        stroke(kr, kg, kb, 190 * burst); strokeWeight(2);
+        ellipse(0, 0, R * 2 * burst, R * 2 * burst);
+        stroke(255, 255, 255, 80 * burst); strokeWeight(1);
+        ellipse(0, 0, R * 1.3 * burst, R * 1.3 * burst);
+
+    } else if (digit === 1) {
+        // UN — singularité pulsante + onde sortante
+        stroke(kr, kg, kb, 200 * env); strokeWeight(10); point(0, 0);
+        strokeWeight(1.5); stroke(kr, kg, kb, 160 * (1 - phase));
+        ellipse(0, 0, R * 2 * phase, R * 2 * phase);
+
+    } else if (digit === 2) {
+        // DEUX — onde sinusoïdale à fréquence croissante
+        const freq = 2 + digit * phase;
+        stroke(kr, kg, kb, 180 * env); strokeWeight(2.2);
+        beginShape();
+        for (let x2 = -R; x2 <= R; x2 += 3)
+            vertex(x2, Math.sin((x2 / R * freq + phase * TWO_PI * 2) * Math.PI) * R * 0.3);
+        endShape();
+        strokeWeight(7); point(-R, 0); point(R, 0);
+
+    } else {
+        // N-GONE (3 à 9)
+        const rot = phase * TWO_PI * (digit % 2 === 0 ? 0.11 : -0.11) + digit * 0.28;
+        rotate(rot);
+
+        // Polygone
+        stroke(kr, kg, kb, 185 * env); strokeWeight(2.5);
+        beginShape();
+        for (let i = 0; i <= digit; i++) {
+            const a = (i / digit) * TWO_PI - PI/2;
+            vertex(Math.cos(a) * R, Math.sin(a) * R);
+        }
+        endShape(CLOSE);
+
+        // Diagonales internes — MED + HIGH
+        if (_perfLevel >= 1) {
+            stroke(kr, kg, kb, 28 * env); strokeWeight(0.7);
+            const skipEvery = (_perfLevel < 2 && digit > 7) ? 2 : 1;
+            for (let i = 0; i < digit; i += skipEvery)
+                for (let j = i + 2; j < digit - (i === 0 ? 1 : 0); j++) {
+                    const ai = (i / digit) * TWO_PI - PI/2;
+                    const aj = (j / digit) * TWO_PI - PI/2;
+                    line(Math.cos(ai)*R, Math.sin(ai)*R, Math.cos(aj)*R, Math.sin(aj)*R);
+                }
+        }
+
+        // Satellites orbitants — HIGH uniquement
+        if (_perfLevel >= 2) {
+            strokeWeight(4.5); stroke(kr, kg, kb, 95 * env);
+            const orb = R * (0.52 + 0.07 * Math.sin(phase * TWO_PI * digit));
+            for (let i = 0; i < digit; i++) {
+                const a = (i / digit) * TWO_PI - PI/2 + phase * TWO_PI * 0.5;
+                point(Math.cos(a) * orb, Math.sin(a) * orb);
+            }
+        }
+    }
+    pop();
+
+    // ─ Grand chiffre semi-transparent en overlay ──────────────────
+    blendMode(BLEND); noStroke(); textAlign(CENTER, CENTER);
+    textSize(R * 0.72); fill(kr, kg, kb, 42 * env);
+    text(digit, cx, cy + R * 0.1);
+
+    // ─ Nom Kin sous la figure ─────────────────────────────────────
+    if (_cachedKinA) {
+        textSize(10); fill(kr, kg, kb, 95);
+        text(_cachedKinA.glyph.toUpperCase() + ' · ' + _cachedKinA.tone, cx, cy + R * 1.3);
+    }
+
+    // ─ HUD dynamique ─────────────────────────────────────────────
+    const hudEl = document.getElementById('hud-overlay');
+    if (hudEl) {
+        const pf  = _perfCalibrated ? ['LOW','MED','HIGH'][_perfLevel] : '…';
+        const fps = Math.round(frameRate());
+        hudEl.innerHTML = `Décompte : <strong>${digit}</strong><br>Perf : ${pf} (${fps} fps)`;
+    }
+}
+
+function drawMatchMode() {
+    const { x: cx, y: cy } = getCanvasCenter();
+    const maxD = min(width, height) * 0.3;
+    const dist = map(globalCoherenceScore, 0, 100, maxD, 0);
+
+    // Couleurs Maya — défaut solaire (ambre / orange solaire)
+    const [arA,agA,abA] = _cachedKinA ? _kinRGB(_cachedKinA.color) : [245, 158, 11];
+    const [arB,agB,abB] = _cachedKinB ? _kinRGB(_cachedKinB.color) : [249, 115, 22];
+
+    noFill(); strokeWeight(2);
+    drawWave(cx-dist, cy, arA, agA, abA, frameTime*2);
+    drawWave(cx+dist, cy, arB, agB, abB, frameTime*2);
+
+    // Labels Kin — MED + HIGH uniquement
+    if (_perfLevel >= 1) {
+        blendMode(BLEND); noStroke(); textAlign(CENTER, CENTER);
+        if (_cachedKinA) {
+            textSize(20); fill(arA, agA, abA, 185);
+            text(_cachedKinA.kin, cx - dist, cy - 22);
+            if (_perfLevel >= 2) {
+                textSize(9); fill(arA, agA, abA, 115);
+                text(_cachedKinA.glyph.toUpperCase(), cx - dist, cy + 16);
+                textSize(8); fill(arA, agA, abA, 75);
+                text(_cachedKinA.tone, cx - dist, cy + 27);
+            }
+        }
+        if (_cachedKinB) {
+            textSize(20); fill(arB, agB, abB, 185);
+            text(_cachedKinB.kin, cx + dist, cy - 22);
+            if (_perfLevel >= 2) {
+                textSize(9); fill(arB, agB, abB, 115);
+                text(_cachedKinB.glyph.toUpperCase(), cx + dist, cy + 16);
+                textSize(8); fill(arB, agB, abB, 75);
+                text(_cachedKinB.tone, cx + dist, cy + 27);
+            }
+        }
+    }
+
+    if (globalCoherenceScore > 85) {
+        push(); translate(cx, cy); rotate(frameTime*0.03);
+        stroke(255, 200, 40, 255); strokeWeight(3);
+        const pr = 100 + Math.sin(frameTime*0.1)*10;
+        beginShape();
+        for (let a = -PI/2; a < TWO_PI-PI/2; a += TWO_PI/5) vertex(Math.cos(a)*pr, Math.sin(a)*pr);
+        endShape(CLOSE);
+        blendMode(BLEND); fill(0,0,0,220); noStroke(); ellipse(0,0,45,45);
+        if (_cachedKinA && _cachedKinB) {
+            const uKin = ((_cachedKinA.kin + _cachedKinB.kin - 1) % 260) + 1;
+            textAlign(CENTER, CENTER); textSize(11); fill(255, 200, 40, 210); noStroke();
+            text(uKin, 0, 0);
+        }
+        pop();
+    }
+}
+
+function drawWave(nx, ny, nr, ng, nb, t) {
+    stroke(nr, ng, nb, 175);
+    ellipse(nx, ny, 9, 9);
+    const maxRad = min(width, height) * 0.55;
+    const rings  = _perfLevel === 0 ? 3 : _perfLevel === 1 ? 4 : 6;
+    for (let r = 1; r <= rings; r++) {
+        const wave = (t + r * 60) % maxRad;
+        stroke(nr, ng, nb, map(wave, 0, maxRad, 195, 0));
+        ellipse(nx, ny, wave, wave);
+    }
+}
+</script>
+
+<script src="nacl-fast.min.js"></script>
+<script src="nostr.bundle.js"></script>
+<script src="common.js"></script>
+<script src="uplanet-header.js"></script>
+</body>
+</html>

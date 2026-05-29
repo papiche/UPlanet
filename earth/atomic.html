@@ -823,6 +823,25 @@ function windowResized() {
 }
 
 // ── BOUTONS O / E — clic + maintien pour répéter ─────────────
+function _adjustLon(id, delta) {
+    const slider = document.getElementById('match-lon-' + id);
+    if (!slider) return;
+    const newVal = Math.round(
+        Math.max(-180, Math.min(180, parseFloat(slider.value) + delta)) * 10
+    ) / 10;
+    slider.value = newVal;
+    window.updateLonVisuel(id);
+    window.calculateMatch();
+    if (id === 'a' && _birthMap && _birthMarker) {
+        _birthMarker.setLatLng([_birthMarker.getLatLng().lat, newVal]);
+        const lblEl  = document.getElementById('birth-location-label');
+        const dispEl = document.getElementById('birth-lon-display');
+        if (lblEl)  lblEl.textContent  = getRegionName(newVal);
+        if (dispEl) dispEl.textContent = _lonFmt(newVal);
+        updateMultipassPreview();
+    }
+}
+
 let _repeatTimer = null;
 function _startRepeat(id, delta) {
     _adjustLon(id, delta);
@@ -847,23 +866,7 @@ document.addEventListener('keydown', function(e) {
     const step  = e.shiftKey ? 1.0 : 0.1;
     const delta = (k === 'o') ? -step : step;
     const id    = e.altKey ? 'b' : 'a';
-    const slider = document.getElementById('match-lon-' + id);
-    if (!slider) return;
-    const newVal = Math.round(
-        Math.max(-180, Math.min(180, parseFloat(slider.value) + delta)) * 10
-    ) / 10;
-    slider.value = newVal;
-    window.updateLonVisuel(id);
-    window.calculateMatch();
-    // Sync carte pour Atome A
-    if (id === 'a' && _birthMap && _birthMarker) {
-        _birthMarker.setLatLng([_birthMarker.getLatLng().lat, newVal]);
-        const lblEl  = document.getElementById('birth-location-label');
-        const dispEl = document.getElementById('birth-lon-display');
-        if (lblEl)  lblEl.textContent  = getRegionName(newVal);
-        if (dispEl) dispEl.textContent = _lonFmt(newVal);
-        updateMultipassPreview();
-    }
+    _adjustLon(id, delta);
 });
 
 // ── PAUSE QUAND L'ONGLET N'EST PAS VISIBLE ────────────────────

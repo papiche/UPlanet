@@ -16,22 +16,60 @@
     'use strict';
 
     // ── Navigation ─────────────────────────────────────────────────────────────
+    // Entrées avec `sep` = séparateur/titre de section (pas de lien)
     var NAV = [
         { e: '🌍', l: 'HOME',       h: 'index.html' },
         { e: '🌐', l: 'Roaming',    h: 'roaming.html' },
+        { sep: 'Identité' },
         { e: '✨', l: 'MULTIPASS',  h: 'g1.html' },
+        { e: '💳', l: 'ZenCard',    h: 'zencard.html' },
+        { sep: 'Station' },
         { e: '♥️', l: 'Station',    h: 'economy.html' },
         { e: '🌌', l: 'Swarm',      h: 'economy.Swarm.html' },
         { e: '💎', l: 'Atomic',     h: 'atomic.html' },
+        { sep: 'WoTx²' },
         { e: '🌈', l: 'myCraft',    h: 'install_craft.html' },
         { e: '⚒️', l: 'mineLife',   h: 'minelife.html' },
-        { e: '💳', l: 'ZenCard',    h: 'zencard.html' },
-        { e: '🪙', l: 'Coinflip',   h: 'coinflip.html' },
+        { e: '☁️', l: 'Skills',     h: 'skills.html' },
+        { e: '📖', l: 'H2G2',       h: 'h2g2.html' },
+        { e: '⚖️', l: 'Justice',    h: 'justice.html' },
+        { sep: 'Communauté' },
         { e: '🤝', l: 'Contribuer', h: 'contribute-3D.html' },
         { e: '🛈', l: 'U.Nation',   h: 'Unation.html' },
+        { e: '🪙', l: 'Coinflip',   h: 'coinflip.html' },
     ];
 
     var _page        = (location.pathname.split('/').pop() || 'index.html').replace(/[?#].*/, '');
+
+    // Préfixe des liens de navigation selon le contexte de chargement.
+    //
+    // API Astroport  : hostname "u.*" (u.copylaradio.com, u.sagittarius.copylaradio.com…)
+    //                  ou port 54321 (dev local).
+    //                  Pages earth montées sous /earth/ → préfixe '/earth/'.
+    //
+    // Passerelle IPFS : hostname "ipfs.*", "relay.*", localhost:8080, file://…
+    //                   Pages earth à la racine ou dans /ipns/… → liens relatifs.
+    //
+    // Si déjà dans /earth/ → relatif quelle que soit l'origine.
+    var _NAV_BASE = (function () {
+        var host = location.hostname;
+        var port = location.port;
+        var path = location.pathname;
+
+        // Déjà dans /earth/ → relatif OK dans les deux contextes
+        if (path.indexOf('/earth/') !== -1) return '';
+
+        // Hostname Astroport API : u.* (u.copylaradio.com, u.sagittarius.copylaradio.com…)
+        // Utilise uSPOT comme point d'entrée → pages earth accessibles sous /earth/
+        if (host.length > 2 && host.slice(0, 2) === 'u.') return '/earth/';
+
+        // Port API local UPassport
+        if (port === '54321') return '/earth/';
+
+        // Passerelle IPFS, domaine public earth, localhost:8080 → liens relatifs
+        return '';
+    }());
+
     var _ready       = false;
     var _dataLoaded  = false;
     var _SS_KEY      = 'uph_pubkey';    // sessionStorage — pubkey actif
@@ -61,6 +99,9 @@
         + 'padding:5px 10px;border-radius:8px;font-size:11.5px;display:block;transition:background .12s}'
         + '#uph-nav-panel a:hover{background:rgba(255,255,255,.09)}'
         + '#uph-nav-panel a.uph-cur{background:rgba(134,239,172,.14);color:#86efac}'
+        + '.uph-section-label{display:block;color:rgba(255,255,255,.22);font-size:9px;'
+        + 'text-transform:uppercase;letter-spacing:.12em;padding:9px 10px 3px;'
+        + 'border-top:1px solid rgba(255,255,255,.06);margin-top:3px}'
 
         + '#uph-nav-profile{display:none;flex-direction:column;gap:3px;'
         + 'padding:8px 10px;border-bottom:1px solid rgba(255,255,255,.09);margin-bottom:4px}'
@@ -148,7 +189,9 @@
     // ── HTML ───────────────────────────────────────────────────────────────────
     function _html() {
         var links = NAV.map(function (p) {
-            return '<a href="' + p.h + '"' + (_page === p.h ? ' class="uph-cur"' : '') + '>'
+            if (p.sep) return '<span class="uph-section-label">' + p.sep + '</span>';
+            var isCur = _page === p.h;
+            return '<a href="' + _NAV_BASE + p.h + '"' + (isCur ? ' class="uph-cur"' : '') + '>'
                 + p.e + ' ' + p.l + '</a>';
         }).join('');
         return '<div id="uph" role="banner">'
@@ -988,9 +1031,9 @@
         if (typeof window.upassportUrl === 'string' && window.upassportUrl) return window.upassportUrl;
         var h = location.hostname, p = location.protocol.replace(':', '');
         if (h === '127.0.0.1' || h === 'localhost') return 'http://127.0.0.1:54321';
-        if (h.startsWith('ipfs.'))  return p + '://u.' + h.slice(5);
-        if (h.startsWith('u.'))     return p + '://u.' + h.slice(2);
-        if (h.startsWith('relay.')) return p + '://u.' + h.slice(6);
+        if (h.startsWith('ipfs.')) return p + '://u.' + h.slice(5);
+        if (h.startsWith('u.'))    return p + '://u.' + h.slice(2);
+        // relay.* = WebSocket strfry uniquement, pas de pages HTML
         return 'https://u.copylaradio.com';
     }
 

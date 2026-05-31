@@ -4,6 +4,7 @@ Architecture JavaScript vanilla, sans bundler, sans npm. Tous les fichiers sont 
 
 ## Stack de chargement (ordre obligatoire)
 
+**Stack de base :**
 ```html
 <script src="nacl-fast.min.js"></script>   <!-- Ed25519, NaCl crypto -->
 <script src="nostr.bundle.js"></script>     <!-- NostrTools : finishEvent, nip19, relayInit -->
@@ -12,6 +13,18 @@ Architecture JavaScript vanilla, sans bundler, sans npm. Tous les fichiers sont 
 <script src="feedback.js"></script>
 <script src="app_switch.js"></script>
 ```
+
+**Stack étendue (pages WoTx²: skills, objects, plantnet, calendars) :**
+```html
+<script src="nacl-fast.min.js"></script>
+<script src="nostr.bundle.js"></script>
+<script src="common.js"></script>
+<script src="uplanet-header.js"></script>   <!-- Header unifié + UI NOSTR -->
+<script src="relay.js"></script>            <!-- RelaySelector.init/query, constellation -->
+```
+
+`relay.js` expose `RelaySelector.init(opts)` et `RelaySelector.query(filter, relay)`.
+`uplanet-header.js` expose le menu global et les helpers de navigation.
 
 ## Architecture des modules (lib_0 → lib_7)
 
@@ -48,6 +61,55 @@ Et en fin de fichier, exporter ses propres symboles :
 // Fin de lib_N — exports vers les libs suivantes
 window.monSymbole = monSymbole;
 ```
+
+## Pages WoTx² — Objets et Crafts
+
+### `objects.html` — Inventaire des objets (Kind 30505)
+
+Interface de gestion des objets/ressources communes. Modèle sur skills.html (grille de cartes).
+
+- **Lecture** : Kind 30505 via `RelaySelector.query({kinds:[30505], limit:300})`
+- **Historique** : Kind 1505 via `RelaySelector.query({kinds:[1505], '#d':[dtag], limit:10})`
+- **Écriture** : Kind 1505 (transaction delta qty/durability) via `window.nostrRelay.publish()`
+- Filtres : type, mobilité, état de santé (durability)
+- Lien entrant depuis `plantnet.html?type=object`
+
+**Quatre régimes de quantité** :
+
+| `quantity_type` | Sémantique | Exemples |
+|-----------------|-----------|---------|
+| `discrete`   | Stock qui décrémente | Câbles, provisions |
+| `capacity`   | Slots fixes, durability varie | Cabane (8 places), salle |
+| `durability` | qty=1 logique, seule la santé varie | RPi, vélo |
+| `infinite`   | Commun cognitif | Guide, doc, savoir |
+
+**Durability** 0–100 : taux de santé structurelle. Trois drivers :
+1. Usage : `Δdur = -(occupants/capacity) × (heures/24) × (1/repairability)`
+2. Passif : `Δdur/mois = -(50/repairability)/12 × attention_multiplier`
+3. Récupération par maintenance : `Δdur = +(intensité × repairability) / 10`
+
+**Repairability** 0–10 : jetable (0) → pierre/métal (10).
+
+### `plantnet.html` — Déclaration d'objets (Kind 30505)
+
+Pour `inventoryType = object | place`, affiche les champs WoTx² :
+`quantity_type`, `quantity`, `unit`, `mobility`, `repairability`, `min_operators`.
+
+Publie un **Kind 30505** (parameterized replaceable, NIP-33) au lieu de Kind 1 pour ces types.
+
+### `calendars.html` — Crafts collectifs (Kind 31922 + 30500)
+
+Onglet "Crafts collectifs" : charge les Kind 30500 avec `min_operators > 1`.
+Permet de planifier une session (Kind 31922) avec les tags `craft` et `min_operators`.
+
+### Modules partagés WoTx²
+
+| Module | Fichier | API publique |
+|--------|---------|-------------|
+| **SkillCloud** | `skills.js` | `SkillCloud.init(opts)` — widget p5.js Kind 30503/30504 |
+| **RelaySelector** | `relay.js` | `RelaySelector.init(opts)`, `RelaySelector.query(filter, relay)` |
+
+---
 
 ## Modules partagés
 
@@ -150,6 +212,27 @@ Chacune appelle `initCarousel({...})` avec ses propres valeurs de rayon :
 | contribute-3D-G1.html | 245 | 305 | 385 | 5500 |
 | contribute-3D-dev.html | 240 | 300 | 380 | 6000 |
 | contribute-3D-curieux.html | 250 | 310 | 390 | 5500 |
+
+## Kinds NOSTR utilisés dans earth/
+
+| Kind | Type | Fichier principale | Rôle |
+|------|------|--------------------|------|
+| 0    | replaceable | common.js | Profil utilisateur (NIP-01) |
+| 1    | regular | plantnet.html, common.js | Note biodiversité / message |
+| 7    | regular | common.js | Réaction / paiement ẐEN (+N) |
+| 31922 | replaceable | calendars.html | Événement calendrier / session craft |
+| 30500 | param. replaceable | calendars.html | Craft (recette collective) |
+| 30503 | param. replaceable | skills.html | Compétence WoTx² (Kind attest) |
+| 30504 | param. replaceable | skills.html | Ressource de formation |
+| **30505** | **param. replaceable** | **objects.html, plantnet.html** | **Objet/ressource — état courant** |
+| **1505** | **regular (journal)** | **objects.html** | **Delta qty/durability (append-only)** |
+
+**Kind 30505 tags obligatoires** : `d` (slug), `title`, `t` (type/mobility/quantity_type),
+`quantity`, `quantity_unit`, `durability`, `repairability`.
+
+**Kind 1505 tags** : `d` (dtag de l'objet), `t` (type de tx), `delta_quantity`, `delta_durability`, `reason`.
+
+---
 
 ## Sécurité — points d'attention
 

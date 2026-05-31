@@ -1,0 +1,1013 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Skills — Nuage de Compétences · UPlanet WoTx2</title>
+<link rel="icon" type="image/x-icon" href="favicon.ring.ico">
+<link rel="stylesheet" href="bootstrap.min.css">
+<link rel="stylesheet" href="fonts/bootstrap-icons.css">
+<style>
+:root {
+    --accent:       #059669;
+    --accent-light: #10b981;
+    --accent-dark:  #047857;
+    --water-blue:   #0ea5e9;
+    --bg-main:      linear-gradient(135deg,#0a1628 0%,#0d2b1e 40%,#0a1a2e 100%);
+    --card-bg:      rgba(8,20,14,0.96);
+    --card-border:  rgba(5,150,105,0.28);
+    --text-muted:   #8ba098;
+}
+* { box-sizing: border-box; }
+:root { --bs-body-bg:#07121a; --bs-body-color:#d1fae5; }
+body {
+    margin: 0; min-height: 100vh;
+    background-color: #07121a;
+    background-image: var(--bg-main);
+    font-family: 'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;
+    color: #d1fae5;
+}
+
+.main { max-width: 1200px; margin: 64px auto 0; padding: 14px 14px 56px; }
+
+.page-header {
+    display: flex; align-items: center; gap: 12px;
+    margin-bottom: 12px; flex-wrap: wrap;
+}
+.page-title {
+    font-size: 18px; font-weight: 700; color: var(--accent-light); flex: 1;
+}
+.page-title small { display: block; font-size: 11px; color: var(--text-muted); font-weight: 400; margin-top: 2px; }
+
+/* ── BARRE SOURCE (choix relay + mode) ── */
+.source-bar {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    background: rgba(16,185,129,0.04);
+    border: 1px solid rgba(16,185,129,0.15);
+    border-radius: 10px; padding: 7px 12px; margin-bottom: 10px;
+    font-size: 11.5px;
+}
+.source-bar-label { color: var(--text-muted); font-weight: 600; white-space: nowrap; }
+.mode-toggle { display: flex; border-radius: 8px; overflow: hidden; border: 1px solid rgba(16,185,129,0.2); }
+.mode-btn {
+    padding: 4px 12px; border: none; cursor: pointer; font-size: 11px; font-weight: 600;
+    background: rgba(16,185,129,0.05); color: var(--text-muted); transition: all 0.15s;
+}
+.mode-btn.active {
+    background: linear-gradient(135deg,var(--accent-dark),var(--water-blue));
+    color: white;
+}
+.relay-sep { width: 1px; background: rgba(16,185,129,0.15); align-self: stretch; }
+#relay-select {
+    background: rgba(7,18,32,0.85); border: 1px solid rgba(16,185,129,0.2);
+    border-radius: 7px; color: #d1fae5; font-size: 11px; padding: 4px 8px;
+    cursor: pointer; min-width: 160px; max-width: 280px;
+}
+#relay-select option { background: #07121a; }
+.relay-status { font-size: 10.5px; color: var(--text-muted); white-space: nowrap; }
+
+/* ── BARRE D'OUTILS (vues) ── */
+.toolbar {
+    display: flex; align-items: center; gap: 8px;
+    margin-bottom: 12px; flex-wrap: wrap;
+}
+.btn-view {
+    padding: 5px 14px; border-radius: 18px; font-size: 12px; font-weight: 600;
+    cursor: pointer; border: 1px solid transparent; transition: all 0.18s;
+    background: rgba(16,185,129,0.08); border-color: rgba(16,185,129,0.25);
+    color: var(--text-muted);
+}
+.btn-view.active { background: linear-gradient(135deg,var(--accent-dark),var(--water-blue)); border-color: transparent; color: white; }
+.btn-view.active.oracle-node   { background: linear-gradient(135deg,#92400e,#fbbf24); }
+.btn-view.active.oracle-constell { background: linear-gradient(135deg,#164e63,#06b6d4); }
+.btn-view:disabled { opacity: 0.38; cursor: not-allowed; }
+#btn-refresh {
+    margin-left: auto; padding: 5px 12px; border-radius: 18px; font-size: 11px;
+    font-weight: 600; cursor: pointer; border: 1px solid rgba(16,185,129,0.25);
+    background: rgba(16,185,129,0.07); color: var(--text-muted); transition: all 0.18s;
+}
+#btn-refresh:hover { background: rgba(16,185,129,0.16); color: var(--accent-light); }
+.conn-hint {
+    font-size: 10.5px; color: var(--text-muted); display: none;
+    background: rgba(251,191,36,0.1); border: 1px solid rgba(251,191,36,0.25);
+    border-radius: 12px; padding: 3px 10px;
+}
+
+/* ── CORPS PRINCIPAL ── */
+.body-wrap { display: flex; gap: 14px; align-items: flex-start; }
+#canvas-wrap {
+    flex: 1; min-width: 0;
+    background: rgba(7,18,32,0.85); border: 1px solid var(--card-border);
+    border-radius: 14px; overflow: hidden; height: 500px; position: relative;
+}
+#canvas-wrap canvas { display: block !important; }
+
+/* ── PANNEAU DÉTAIL ── */
+#detail-panel {
+    width: 280px; flex-shrink: 0;
+    background: var(--card-bg); border: 1px solid var(--card-border);
+    border-radius: 14px; padding: 18px 16px; display: none;
+    animation: fadeIn 0.2s ease;
+}
+@keyframes fadeIn { from { opacity:0; transform:translateX(8px); } to { opacity:1; transform:none; } }
+.detail-skill-name {
+    font-size: 20px; font-weight: 800; color: var(--accent-light);
+    margin-bottom: 4px; display: flex; align-items: center; gap: 8px;
+}
+.detail-skill-name .badge-level {
+    font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 10px;
+    background: rgba(251,191,36,0.15); border: 1px solid rgba(251,191,36,0.35); color: #fbbf24;
+}
+.detail-count { font-size: 12px; color: var(--text-muted); margin-bottom: 14px; }
+.detail-levels { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+.level-row { display: flex; align-items: center; gap: 8px; font-size: 11px; }
+.level-label { width: 28px; color: var(--text-muted); font-weight: 600; }
+.level-bar-wrap { flex: 1; background: rgba(255,255,255,0.06); border-radius: 4px; height: 7px; }
+.level-bar { height: 7px; border-radius: 4px; transition: width 0.4s ease; }
+.lv1 { background: #10b981; } .lv2 { background: #38bdf8; }
+.lv3 { background: #fbbf24; } .lv4 { background: #f87171; }
+.level-count { width: 22px; text-align: right; color: var(--text-muted); }
+.detail-section-title {
+    font-size: 10.5px; font-weight: 700; color: var(--text-muted);
+    text-transform: uppercase; letter-spacing: 0.06em; margin: 14px 0 8px;
+}
+.media-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 12px; }
+.media-thumb {
+    aspect-ratio: 1; border-radius: 8px; overflow: hidden;
+    background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.08);
+    display: flex; align-items: center; justify-content: center;
+    text-decoration: none; transition: border-color 0.15s;
+}
+.media-thumb:hover { border-color: var(--accent); }
+.media-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.media-thumb .media-icon { font-size: 22px; }
+.media-loading { font-size: 11px; color: var(--text-muted); text-align: center; padding: 10px 0; }
+.media-empty   { font-size: 11px; color: var(--text-muted); font-style: italic; }
+.detail-actions { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+.btn-action {
+    width: 100%; padding: 7px 12px; border-radius: 10px; font-size: 12px;
+    font-weight: 600; cursor: pointer; border: 1px solid transparent;
+    text-align: center; text-decoration: none; display: block; transition: all 0.15s;
+}
+.btn-action.primary { background: linear-gradient(135deg,var(--accent-dark),var(--water-blue)); color: white; }
+.btn-action.primary:hover { opacity: 0.88; }
+.btn-action.secondary { background: rgba(16,185,129,0.07); border-color: rgba(16,185,129,0.3); color: var(--accent-light); }
+.btn-action.secondary:hover { background: rgba(16,185,129,0.14); }
+.btn-close-panel { width: 100%; background: none; border: none; color: var(--text-muted); font-size: 11px; cursor: pointer; padding: 6px 0 0; text-align: center; }
+.btn-close-panel:hover { color: #ccc; }
+
+/* ── LÉGENDE ── */
+.legend { display: flex; gap: 16px; flex-wrap: wrap; padding: 10px 0 0; font-size: 11px; color: var(--text-muted); align-items: center; }
+.legend-item { display: flex; align-items: center; gap: 5px; }
+.legend-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+
+.stat-bar {
+    background: var(--card-bg); border: 1px solid var(--card-border);
+    border-radius: 10px; padding: 6px 14px; font-size: 11px; color: var(--text-muted);
+    display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-top: 10px;
+}
+.stat-item strong { color: var(--accent-light); }
+
+/* ── FILTRE DOMAINE ── */
+.domain-filter-wrap {
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 10px; background: rgba(5,150,105,.08);
+    border: 1px solid rgba(5,150,105,.22); border-radius: 10px;
+    margin: 6px 0 0; flex-wrap: wrap;
+}
+.domain-filter-label { font-size: 11px; color: var(--text-muted); white-space: nowrap; }
+.domain-chip {
+    padding: 3px 10px; border-radius: 20px; border: 1px solid rgba(255,255,255,.12);
+    background: rgba(255,255,255,.05); color: rgba(255,255,255,.65); font-size: 11px;
+    cursor: pointer; transition: all .15s; white-space: nowrap;
+}
+.domain-chip:hover { background: rgba(5,150,105,.25); border-color: var(--accent); color: #fff; }
+.domain-chip.active { background: var(--accent); border-color: var(--accent-light); color: #fff; font-weight: 600; }
+.domain-count { font-size: 10px; opacity: .7; }
+
+@media (max-width: 700px) {
+    .body-wrap { flex-direction: column; }
+    #canvas-wrap { height: 380px; }
+    #detail-panel { width: 100%; }
+}
+</style>
+</head>
+<body>
+
+<div class="main">
+  <div class="page-header">
+    <div class="page-title">
+      ☁️ Nuage de Compétences
+      <small>Compétences attestées sur la constellation · WoTx2</small>
+    </div>
+  </div>
+
+  <!--
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │  BARRE SOURCE — Architecture duale de lecture des données WoTx2         │
+  │                                                                         │
+  │  Mode "API + Relay" (défaut, local) :                                   │
+  │    • Oracle pubkeys  ← GET /api/skill/oracles  (UPassport)              │
+  │    • Médias Kind 30504 ← GET /api/skill/media/{skill}  (UPassport)      │
+  │    • Skills Kind 30503 ← WebSocket relay  (SkillCloud widget)           │
+  │    Avantage : oracle pubkeys précis (nœud vs constellation distingués)   │
+  │    Limite   : fonctionne uniquement avec l'API de la station locale      │
+  │                                                                         │
+  │  Mode "Relay seul" (remote ou découverte pure) :                        │
+  │    • Oracle pubkeys ← découverte dans Kind 30503 via tag l permit_type  │
+  │    • Médias Kind 30504 ← WebSocket relay (même relay sélectionné)       │
+  │    • Skills Kind 30503 ← WebSocket relay  (SkillCloud widget)           │
+  │    Avantage : fonctionne avec N'IMPORTE quel relay de la constellation  │
+  │    Limite   : nœud vs constellation indistinguables sans API             │
+  │                                                                         │
+  │  Sélecteur de relay :                                                   │
+  │    La liste est peuplée UNE SEULE FOIS depuis GET /  (station JSON)     │
+  │    en collectant root.myRELAY + root.SWARM[].myRELAY (filtre localhost) │
+  │    Changer de relay détruit + recrée le widget SkillCloud.              │
+  └─────────────────────────────────────────────────────────────────────────┘
+  -->
+  <div class="source-bar">
+    <span class="source-bar-label"><i class="bi bi-database"></i> Source :</span>
+    <div class="mode-toggle">
+      <button id="btn-mode-api" class="mode-btn active" onclick="setDataMode('api')"
+        title="API locale pour les oracles + médias — relay pour les bulles">
+        🔌 API + Relay
+      </button>
+      <button id="btn-mode-relay" class="mode-btn" onclick="setDataMode('relay')"
+        title="Tout depuis le relay WebSocket sélectionné — aucun appel API">
+        📡 Relay seul
+      </button>
+    </div>
+    <span class="relay-sep"></span>
+    <span class="source-bar-label"><i class="bi bi-broadcast"></i> Relay :</span>
+    <select id="relay-select" onchange="onRelayChange(this.value)"
+      title="Changer le relay source — la liste vient de la constellation">
+      <option value="">⏳ Chargement constellation…</option>
+    </select>
+    <span class="relay-status" id="relay-status"></span>
+  </div>
+
+  <!-- Barre d'outils — vues -->
+  <div class="toolbar">
+    <button id="btn-global"   class="btn-view active" onclick="setView('global')">
+      <i class="bi bi-grid-3x3-gap"></i> Nuage global
+    </button>
+    <button id="btn-personal" class="btn-view" onclick="setView('personal')" disabled>
+      <i class="bi bi-person-badge"></i> Vue MULTIPASS
+    </button>
+    <button id="btn-oracle-node" class="btn-view oracle-node" onclick="setView('oracle_node')" disabled
+      title="Skills certifiés par l'Oracle Nœud (secret.nostr de cette station)">
+      <i class="bi bi-cpu"></i> Oracle Nœud
+    </button>
+    <button id="btn-oracle-constell" class="btn-view oracle-constell" onclick="setView('oracle_constellation')" disabled
+      title="Skills certifiés par l'Oracle Constellation (1er bootstrap IPFS)">
+      <i class="bi bi-diagram-3"></i> Oracle Constellation
+    </button>
+    <span class="conn-hint" id="conn-hint">⚡ Connectez votre MULTIPASS pour la vue personnelle</span>
+    <button id="btn-refresh" onclick="refreshCloud()" title="Recharger depuis le relay">
+      <i class="bi bi-arrow-clockwise"></i> Actualiser
+    </button>
+  </div>
+
+  <!-- Filtre domaine -->
+  <div class="domain-filter-wrap" id="domain-filter-wrap">
+    <span class="domain-filter-label"><i class="bi bi-grid-3x3-gap-fill"></i> Domaine :</span>
+    <span class="domain-chip active" data-domain="" onclick="setDomainFilter('')">🌐 Tous</span>
+    <span class="domain-chip" data-domain="numerique"    onclick="setDomainFilter('numerique')">💻 Numérique</span>
+    <span class="domain-chip" data-domain="artisanat"   onclick="setDomainFilter('artisanat')">🛠️ Artisanat</span>
+    <span class="domain-chip" data-domain="nature"       onclick="setDomainFilter('nature')">🌿 Nature</span>
+    <span class="domain-chip" data-domain="culture"      onclick="setDomainFilter('culture')">🎵 Culture</span>
+    <span class="domain-chip" data-domain="habitat"      onclick="setDomainFilter('habitat')">🏠 Habitat</span>
+    <span class="domain-chip" data-domain="agriculture"  onclick="setDomainFilter('agriculture')">🌱 Agriculture</span>
+    <span class="domain-chip" data-domain="sante"        onclick="setDomainFilter('sante')">🌸 Santé</span>
+  </div>
+
+  <!-- Canvas + panneau détail -->
+  <div class="body-wrap">
+    <div id="canvas-wrap"></div>
+
+    <div id="detail-panel">
+      <div class="detail-skill-name" id="dp-name">—</div>
+      <div class="detail-count" id="dp-count"></div>
+
+      <div class="detail-section-title">Niveaux d'attestation</div>
+      <div class="detail-levels" id="dp-levels"></div>
+
+      <div class="detail-section-title">Ressources de formation</div>
+      <div class="media-grid" id="dp-media">
+        <div class="media-loading">Chargement…</div>
+      </div>
+
+      <div class="detail-actions">
+        <a id="dp-minelife-link" href="minelife.html" class="btn-action primary" target="_blank">
+          <i class="bi bi-mortarboard"></i> Explorer dans MineLife
+        </a>
+        <a id="dp-craft-link" href="install_craft.html" class="btn-action secondary" style="display:none">
+          <i class="bi bi-lightning-charge"></i> Activer dans MyCraft
+        </a>
+      </div>
+      <button class="btn-close-panel" onclick="closeDetail()">
+        <i class="bi bi-x"></i> Fermer
+      </button>
+    </div>
+  </div>
+
+  <!-- Légende -->
+  <div class="legend">
+    <span class="legend-item"><span class="legend-dot" style="background:#10b981"></span> x1 auto-proclamé</span>
+    <span class="legend-item"><span class="legend-dot" style="background:#38bdf8"></span> x2 attesté pair</span>
+    <span class="legend-item"><span class="legend-dot" style="background:#fbbf24"></span> x3 oracle nœud</span>
+    <span class="legend-item"><span class="legend-dot" style="background:#f87171"></span> x4 expert</span>
+    <span class="legend-item"><span class="legend-dot" style="background:#86efac;box-shadow:0 0 4px #86efac"></span> Mon skill (MULTIPASS)</span>
+    <span class="legend-item" id="legend-oracle-node" style="display:none">
+      <span class="legend-dot" style="background:#fbbf24;box-shadow:0 0 5px #fbbf24"></span> Oracle Nœud
+    </span>
+    <span class="legend-item" id="legend-oracle-constell" style="display:none">
+      <span class="legend-dot" style="background:#06b6d4;box-shadow:0 0 5px #06b6d4"></span> Oracle Constellation
+    </span>
+  </div>
+
+  <!-- Barre de statistiques -->
+  <div class="stat-bar">
+    <span class="stat-item">Compétences : <strong id="stat-skills">—</strong></span>
+    <span class="stat-item">Attestations : <strong id="stat-total">—</strong></span>
+    <span class="stat-item" id="stat-own-wrap" style="display:none">
+      Mes compétences : <strong id="stat-own">—</strong>
+    </span>
+    <span class="stat-item" id="stat-oracle-wrap" style="display:none">
+      Oracles relay : <strong id="stat-oracle">—</strong>
+    </span>
+    <span class="stat-item" id="stat-mode-wrap">
+      Mode : <strong id="stat-mode">API + Relay</strong>
+    </span>
+  </div>
+</div>
+
+<!-- Ordre de chargement (voir UPlanet/earth/CLAUDE.md) -->
+<script src="nacl-fast.min.js"></script>
+<script src="nostr.bundle.js"></script>
+<script src="common.js"></script>
+<script src="uplanet-header.js"></script>
+<script src="relay.js"></script>
+<script src="p5.min.js"></script>
+<script src="skills.js"></script>
+<script>
+/*
+ * skills.html — Contrôleur de la page Nuage de Compétences WoTx2
+ *
+ * ARCHITECTURE DUALE (source switch) :
+ *
+ *   Mode "api" (défaut) :
+ *     - _fetchOraclePubkeysFromApi()  → /api/skill/oracles  (UPassport 54321)
+ *     - _loadMedia() mode api         → /api/skill/media/{skill}  (UPassport 54321)
+ *     - SkillCloud widget             → WebSocket relay (Kind 30503)
+ *     Utilisez ce mode quand le relay sélectionné est la station locale.
+ *
+ *   Mode "relay" :
+ *     - oracle pubkeys ← getDiscoveredOracles() du widget (Kind 30503 avec tag l permit_type)
+ *     - _loadMediaFromRelay()         → WebSocket relay (Kind 30504, #t=[skill])
+ *     - SkillCloud widget             → même WebSocket relay (Kind 30503)
+ *     Utilisez ce mode quand vous lisez un relay distant de la constellation.
+ *
+ * RELAY CONSTELLATION :
+ *   La liste des relays est peuplée une fois depuis getApiBase() + '/' (station JSON).
+ *   Champs lus : root.myRELAY (station locale) + root.SWARM[].myRELAY (pairs).
+ *   Les URLs localhost/127.0.0.1/0.0.0.0 sont filtrées.
+ *   Changer de relay → réinitialise SkillCloud avec le nouveau relay.
+ *   Passer à un relay distant → bascule automatiquement en mode "relay".
+ */
+'use strict';
+
+/* ═══════════════════════════════════════════════════════════════
+   HELPERS URL
+   Mêmes règles que install_craft.html — dérivation depuis hostname
+   ═══════════════════════════════════════════════════════════════ */
+
+function getApiBase() {
+    var h = window.location.hostname;
+    if (h === 'localhost' || h === '127.0.0.1')
+        return window.location.protocol + '//' + h + ':54321';
+    if (window.getAPIUrl) { var u = window.getAPIUrl(); if (u) return u; }
+    if (h.startsWith('u.'))     return location.protocol + '//u.' + h.slice(2);
+    if (h.startsWith('ipfs.'))  return location.protocol + '//u.' + h.slice(5);
+    if (h.startsWith('relay.')) return location.protocol + '//u.' + h.slice(6);
+    return 'https://u.copylaradio.com';
+}
+function getRelayWs() {
+    if (window.getRelayUrl) {
+        var u = window.getRelayUrl();
+        if (u) return u.replace('wss://', 'ws://').replace('https://', 'ws://');
+    }
+    var h = window.location.hostname;
+    if (h === 'localhost' || h === '127.0.0.1') return 'ws://127.0.0.1:7777';
+    return 'wss://relay.' + h.replace(/^[^.]+\./, '');
+}
+function getIpfsBase() {
+    var h = window.location.hostname;
+    if (h === 'localhost' || h === '127.0.0.1') return 'http://127.0.0.1:8080';
+    return 'https://ipfs.' + h.replace(/^[^.]+\./, '');
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   HELPERS RELAY
+   ═══════════════════════════════════════════════════════════════ */
+
+// Helpers relay délégués au module relay.js
+var _isLocalRelay   = RelaySelector.isLocal;
+var _relayToApiBase = RelaySelector.toApiBase;
+
+/* ═══════════════════════════════════════════════════════════════
+   ÉTAT GLOBAL
+   ═══════════════════════════════════════════════════════════════ */
+
+var _cloud             = null;
+var _pubHex            = null;      // pubkey NOSTR de l'utilisateur connecté
+var _oracleNodeHex     = null;      // pubkey oracle nœud (secret.nostr)
+var _oracleConstellHex = null;      // pubkey oracle constellation (uplanet.G1.nostr)
+var _viewMode          = 'global';
+var _allSkills         = {};
+
+/*
+ * Données source — architecture duale :
+ *   _dataMode    : 'api' | 'relay'
+ *   _activeRelay : URL WebSocket du relay actuellement sélectionné
+ *   _currentApiBase : URL de l'API UPassport correspondant au relay actif
+ */
+var _dataMode          = 'api';
+var _activeRelay       = '';       // initialisé dans DOMContentLoaded
+var _currentApiBase    = '';       // initialisé dans DOMContentLoaded
+var _activeDomain      = '';       // domaine actif pour le filtre
+
+/* ═══════════════════════════════════════════════════════════════
+   FILTRE DOMAINE — mapping domaine → skills connus
+   La liste est extensible : on ajoute les skills découverts via relay
+   qui ont un tag t=<domaine> dans leurs events Kind 30503.
+   ═══════════════════════════════════════════════════════════════ */
+
+var DOMAIN_SKILLS = {
+    'numerique': [
+        'linux','bash','docker','nostr','rust','git','ipfs','python',
+        'javascript','typescript','astroport','sound-spot','nostr-relay',
+        'programmation','devops','cybersecurite','ia','machine-learning',
+        'blockchain','smart-contract','web3','html','css','sql','arduino'
+    ],
+    'artisanat': [
+        'menuiserie','soudure','mecanique','couture','ceramique','forge',
+        'cordonnerie','poterie','lutherie','horlogerie','gravure','bijouterie',
+        'sellerie','tapisserie','ferronnerie','tissage','broderie','maroquinerie'
+    ],
+    'nature': [
+        'permaculture','jardinage','apiculture','semences','compost','botanique',
+        'mecanique-velo','mycologie','cueillette','arboriculture','sylviculture',
+        'astro-ecologie','biomimetisme','gestion-eau','phytoremediation'
+    ],
+    'culture': [
+        'musique','chant','cinema','photographie','danse','theatre','peinture',
+        'sculpture','ecriture','poesie','illustration','bande-dessinee',
+        'video','montage','radio','podcast','slam','improvisation','clown',
+        'cirque','marionnettes','conte','jeu-de-role'
+    ],
+    'habitat': [
+        'maconnerie','charpente','plomberie','electricite','isolation',
+        'paille','bois','pierre','adobe','cob','toit-vegetal','fenetres',
+        'mobilier','design-interieur','feng-shui','geobiologie','domotique'
+    ],
+    'agriculture': [
+        'maraichage','elevage','agroforesterie','viticulture','arboriculture',
+        'aquaponie','hydroponique','sericulture','fromage','fermentation',
+        'pain','brassage','conservation-alimentaire','cueillette-sauvage'
+    ],
+    'sante': [
+        'phytotherapie','premiers-secours','massage','sophrologie','yoga',
+        'meditation','naturopathie','osteopathie','reflexologie','shiatsu',
+        'reiki','aromatherapie','nutrition','ayurveda','acupuncture',
+        'psychologie','soutien-emotionnel','soin-relationnel'
+    ]
+};
+
+function setDomainFilter(domain) {
+    _activeDomain = domain;
+    // Mettre à jour les chips
+    document.querySelectorAll('.domain-chip').forEach(function (el) {
+        el.classList.toggle('active', el.dataset.domain === domain);
+    });
+    if (!_cloud) return;
+    var skills = domain ? DOMAIN_SKILLS[domain] : null;
+    _cloud.setDomainFilter(skills || []);
+    // Mettre à jour le compteur dans la stat-bar si disponible
+    _updateStats();
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   SWITCH DE MODE
+   ═══════════════════════════════════════════════════════════════ */
+
+/*
+ * Bascule entre les deux modes de lecture.
+ * En mode 'relay', les pubkeys oracle viennent du relay lui-même
+ * (découverte via tag l permit_type dans Kind 30503), pas de l'API.
+ */
+function setDataMode(mode, reinit) {
+    _dataMode = mode;
+    document.getElementById('btn-mode-api').classList.toggle('active',   mode === 'api');
+    document.getElementById('btn-mode-relay').classList.toggle('active', mode === 'relay');
+    document.getElementById('stat-mode').textContent =
+        mode === 'api' ? 'API + Relay' : 'Relay seul';
+
+    if (reinit === false) return;  // appelé programmatiquement sans réinitialisation
+
+    if (mode === 'relay' && _cloud) {
+        // En mode relay, les oracles viennent du widget (découverte relay)
+        _oracleNodeHex = null;
+        _oracleConstellHex = null;
+        _applyDiscoveredOracles();
+    } else if (mode === 'api') {
+        // Retour en mode API : récupérer les pubkeys oracle depuis l'API
+        _fetchOraclePubkeysFromApi(_currentApiBase).then(function() {
+            if (_cloud) {
+                if (_oracleNodeHex)    _cloud.setOraclePubkeyNode(_oracleNodeHex);
+                if (_oracleConstellHex) _cloud.setOraclePubkeyConstellation(_oracleConstellHex);
+                _onCloudReady();
+            }
+        });
+    }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   SÉLECTEUR DE RELAY — constellation
+   ═══════════════════════════════════════════════════════════════ */
+
+/*
+ * Peuple le <select> relay via RelaySelector (relay.js).
+ * Une seule requête sur l'API locale, collecte myRELAY + SWARM[].myRELAY.
+ */
+function _loadConstellationRelays() {
+    return RelaySelector.init({
+        selectEl   : '#relay-select',
+        localRelay : _activeRelay,
+        apiBase    : _currentApiBase,
+        onChange   : onRelayChange,
+        onReady    : function () {
+            _setRelayStatus('🟢 ' + _activeRelay.replace(/^wss?:\/\//, ''), '#10b981');
+        }
+    });
+}
+
+/*
+ * Appelé quand l'utilisateur change le relay dans le <select>.
+ * Bascule automatiquement en mode 'relay' si le relay est distant,
+ * revient en mode 'api' si l'utilisateur revient sur le relay local.
+ */
+async function onRelayChange(wsUrl) {
+    if (!wsUrl || wsUrl === _activeRelay) return;
+    _activeRelay = wsUrl;
+    _currentApiBase = _relayToApiBase(wsUrl) || _currentApiBase;
+
+    // Indicateur visuel
+    _setRelayStatus('🔄 Connexion…', 'var(--text-muted)');
+
+    // Basculement automatique de mode selon la localité du relay
+    var isLocal = _isLocalRelay(wsUrl);
+    if (!isLocal && _dataMode === 'api') {
+        setDataMode('relay', false);   // remote → relay only, pas de réinit immédiate
+    } else if (isLocal && _dataMode === 'relay') {
+        setDataMode('api', false);     // local → retour API, pas de réinit immédiate
+    }
+
+    // Réinitialiser les pubkeys oracle
+    _oracleNodeHex = null;
+    _oracleConstellHex = null;
+
+    // En mode API : tenter de récupérer les oracles depuis la nouvelle API
+    if (_dataMode === 'api') {
+        await _fetchOraclePubkeysFromApi(_currentApiBase);
+    }
+    // En mode relay : les oracles seront découverts dans _onCloudReady()
+
+    // Réinitialiser le widget avec le nouveau relay
+    initCloud();
+    _setRelayStatus('🟢 ' + wsUrl.replace(/^wss?:\/\//, ''), '#10b981');
+}
+
+function _setRelayStatus(text, color) {
+    var el = document.getElementById('relay-status');
+    el.textContent = text;
+    el.style.color = color || '';
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   WIDGET SKILLCLOUD
+   ═══════════════════════════════════════════════════════════════ */
+
+function initCloud() {
+    if (_cloud) _cloud.destroy();
+
+    _cloud = SkillCloud.init({
+        container                  : '#canvas-wrap',
+        relay                      : _activeRelay,
+        userPubkey                 : _pubHex,
+        oraclePubkeyNode           : _oracleNodeHex,
+        oraclePubkeyConstellation  : _oracleConstellHex,
+        onSkillClick               : _onSkillClick,
+        onReady                    : _onCloudReady
+    });
+}
+
+function _onCloudReady() {
+    _allSkills = _cloud.getAllSkills();
+    _updateStats();
+
+    var hasNode    = _cloud.hasOracleNode();
+    var hasConstell = _cloud.hasOracleConstellation();
+
+    document.getElementById('btn-oracle-node').disabled    = !hasNode;
+    document.getElementById('btn-oracle-constell').disabled = !hasConstell;
+    document.getElementById('legend-oracle-node').style.display    = hasNode    ? '' : 'none';
+    document.getElementById('legend-oracle-constell').style.display = hasConstell ? '' : 'none';
+
+    if (_oracleNodeHex) {
+        document.getElementById('btn-oracle-node').title =
+            'Oracle Nœud (' + _oracleNodeHex.slice(0,8) + '…) — ' +
+            Object.keys(_cloud.getOracleNodeSkills()).length + ' skills';
+    }
+    if (_oracleConstellHex) {
+        document.getElementById('btn-oracle-constell').title =
+            'Oracle Constellation (' + _oracleConstellHex.slice(0,8) + '…) — ' +
+            Object.keys(_cloud.getOracleConstellSkills()).length + ' skills';
+    }
+
+    // En mode relay ou si l'API n'a fourni aucune pubkey : utiliser la découverte relay
+    if (!_oracleNodeHex && !_oracleConstellHex) {
+        _applyDiscoveredOracles();
+    }
+}
+
+/*
+ * Fallback oracle : quand l'API est indisponible (mode relay ou hors ligne),
+ * on utilise les pubkeys oracles découvertes directement dans les événements Kind 30503
+ * (tag ["l", "PERMIT_SKILL_Xn", "permit_type"] identifie les signataires oracle).
+ * Le premier signataire est assigné à "nœud", le second à "constellation".
+ * Cette heuristique est imprécise sans l'API mais reste utile pour la visualisation.
+ */
+function _applyDiscoveredOracles() {
+    if (!_cloud) return;
+    var discovered = _cloud.getDiscoveredOracles();
+
+    // Mettre à jour le compteur
+    if (discovered.length > 0) {
+        document.getElementById('stat-oracle-wrap').style.display = '';
+        document.getElementById('stat-oracle').textContent = discovered.length;
+    }
+
+    if (discovered[0] && !_oracleNodeHex) {
+        _oracleNodeHex = discovered[0].pubkey;
+        _cloud.setOraclePubkeyNode(_oracleNodeHex);
+        // Activer le bouton après chargement (RELAY_TO ≈ 8s)
+        setTimeout(function() {
+            document.getElementById('btn-oracle-node').disabled = !_cloud.hasOracleNode();
+        }, 9000);
+    }
+    if (discovered[1] && !_oracleConstellHex) {
+        _oracleConstellHex = discovered[1].pubkey;
+        _cloud.setOraclePubkeyConstellation(_oracleConstellHex);
+        setTimeout(function() {
+            document.getElementById('btn-oracle-constell').disabled = !_cloud.hasOracleConstellation();
+        }, 9000);
+    }
+}
+
+function _updateStats() {
+    var allData = _cloud ? _cloud.getAllSkills() : {};
+    var names   = Object.keys(allData);
+    var total   = names.reduce(function(s, n) { return s + (allData[n].count || 0); }, 0);
+    var ownCnt  = (_pubHex && _cloud) ? Object.keys(_cloud.getMySkills()).length : 0;
+
+    document.getElementById('stat-skills').textContent = names.length;
+    document.getElementById('stat-total').textContent  = total;
+
+    if (_pubHex) {
+        document.getElementById('stat-own-wrap').style.display = '';
+        document.getElementById('stat-own').textContent = ownCnt;
+    } else {
+        document.getElementById('stat-own-wrap').style.display = 'none';
+    }
+
+    var discovered = _cloud ? _cloud.getDiscoveredOracles() : [];
+    if (discovered.length > 0) {
+        document.getElementById('stat-oracle-wrap').style.display = '';
+        document.getElementById('stat-oracle').textContent = discovered.length;
+    }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   VUES (global / personal / oracle_node / oracle_constellation)
+   ═══════════════════════════════════════════════════════════════ */
+
+function setView(mode) {
+    if (mode === 'personal'             && !_pubHex)            return;
+    if (mode === 'oracle_node'          && !_oracleNodeHex)     return;
+    if (mode === 'oracle_constellation' && !_oracleConstellHex) return;
+    _viewMode = mode;
+
+    document.getElementById('btn-global').classList.toggle('active',          mode === 'global');
+    document.getElementById('btn-personal').classList.toggle('active',        mode === 'personal');
+    document.getElementById('btn-oracle-node').classList.toggle('active',     mode === 'oracle_node');
+    document.getElementById('btn-oracle-constell').classList.toggle('active', mode === 'oracle_constellation');
+
+    if (_cloud) _cloud.setViewMode(mode);
+    closeDetail();
+}
+
+function refreshCloud() {
+    var btn = document.getElementById('btn-refresh');
+    btn.innerHTML = '<i class="bi bi-arrow-clockwise"></i> Chargement…';
+    btn.disabled = true;
+    closeDetail();
+    if (_cloud) {
+        _cloud.refresh();
+        setTimeout(function() {
+            btn.innerHTML = '<i class="bi bi-arrow-clockwise"></i> Actualiser';
+            btn.disabled = false;
+            _allSkills = _cloud ? _cloud.getAllSkills() : {};
+            _updateStats();
+        }, 10000);
+    } else {
+        btn.innerHTML = '<i class="bi bi-arrow-clockwise"></i> Actualiser';
+        btn.disabled = false;
+    }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   PANNEAU DÉTAIL
+   ═══════════════════════════════════════════════════════════════ */
+
+function _onSkillClick(name, bubble, isOpen) {
+    if (!isOpen || !name) { closeDetail(); return; }
+    _openDetail(name, bubble);
+}
+
+function _openDetail(name, bubble) {
+    document.getElementById('detail-panel').style.display = 'block';
+
+    var lvl = bubble ? bubble.level : 1;
+    document.getElementById('dp-name').innerHTML =
+        _esc(name) + ' <span class="badge-level">x' + lvl + ' max</span>';
+
+    var modeLabel = _viewMode === 'oracle_node'          ? ' (Oracle Nœud)'
+                  : _viewMode === 'oracle_constellation' ? ' (Oracle Constellation)'
+                  : _viewMode === 'personal'             ? ' (personnel)'
+                  : '';
+    document.getElementById('dp-count').textContent =
+        (bubble ? bubble.count : '?') + ' attestation' + ((bubble && bubble.count > 1) ? 's' : '')
+        + modeLabel;
+
+    // Barres de niveaux — toujours depuis les données globales (distribution réelle complète)
+    var s = _allSkills[name] || {};
+    var levels = s.levels || {};
+    var total  = s.count || (bubble && bubble.count) || 1;
+    var maxLvl = s.maxLevel || lvl || 1;
+    var COLS   = ['lv1','lv2','lv3','lv4'];
+    var html   = '';
+    for (var l = 1; l <= Math.max(maxLvl, 1); l++) {
+        var cnt = levels[l] || 0;
+        var pct = total > 0 ? Math.round(cnt / total * 100) : 0;
+        html += '<div class="level-row">'
+            + '<span class="level-label">x' + l + '</span>'
+            + '<span class="level-bar-wrap"><div class="level-bar ' + COLS[l-1]
+            + '" style="width:' + pct + '%"></div></span>'
+            + '<span class="level-count">' + cnt + '</span>'
+            + '</div>';
+    }
+    document.getElementById('dp-levels').innerHTML =
+        html || '<span style="color:var(--text-muted);font-size:11px">Niveau x1</span>';
+
+    document.getElementById('dp-minelife-link').href = 'minelife.html?skill=' + encodeURIComponent(name);
+
+    var mySkills = (_pubHex && _cloud) ? _cloud.getMySkills() : {};
+    var craftEl = document.getElementById('dp-craft-link');
+    craftEl.href = 'install_craft.html?skill=' + encodeURIComponent(name);
+    craftEl.style.display = mySkills[name] ? '' : 'none';
+
+    _loadMedia(name);
+}
+
+function closeDetail() {
+    document.getElementById('detail-panel').style.display = 'none';
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   CHARGEMENT DES MÉDIAS — dispatch selon le mode source
+   ═══════════════════════════════════════════════════════════════ */
+
+/*
+ * Point d'entrée unique : dispatche vers l'API ou le relay selon _dataMode.
+ * Cela évite au code appelant de connaître le mode actif.
+ */
+function _loadMedia(skill) {
+    var grid = document.getElementById('dp-media');
+    grid.innerHTML = '<div class="media-loading"><i class="bi bi-hourglass-split"></i> Chargement des ressources…</div>';
+
+    if (_dataMode === 'relay') {
+        _loadMediaFromRelay(skill, grid);
+    } else {
+        _loadMediaFromApi(skill, grid);
+    }
+}
+
+/*
+ * Mode API : GET /api/skill/media/{skill} sur l'API UPassport courante.
+ * L'API interroge elle-même le relay local via websocket et dédoublonne par CID.
+ */
+async function _loadMediaFromApi(skill, grid) {
+    try {
+        var url = _currentApiBase + '/api/skill/media/' + encodeURIComponent(skill);
+        var r   = await fetch(url);
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        var data  = await r.json();
+        _renderMedia((data.media || []).slice(0, 9), grid);
+    } catch (e) {
+        grid.innerHTML = '<span class="media-empty">API indisponible — essayez le mode Relay seul.</span>';
+    }
+}
+
+/*
+ * Mode Relay : lecture directe de Kind 30504 via WebSocket.
+ * Filtre par tag #t = skill. Timeout 6 s + EOSE.
+ * Cette approche est identique à ce que fait l'API côté serveur,
+ * mais exécutée dans le navigateur sur le relay sélectionné.
+ */
+function _loadMediaFromRelay(skill, grid) {
+    var ws;
+    try { ws = new WebSocket(_activeRelay); } catch (e) {
+        grid.innerHTML = '<span class="media-empty">Relay inaccessible.</span>';
+        return;
+    }
+
+    var rid     = 'media_' + Math.random().toString(36).slice(2, 8);
+    var results = [];
+
+    var tid = setTimeout(function () {
+        try { ws.close(); } catch (x) {}
+        _renderMedia(results, grid);
+    }, 6000);
+
+    ws.onopen = function () {
+        ws.send(JSON.stringify(['REQ', rid, {
+            kinds: [30504],
+            '#t': [skill.toLowerCase().trim()],
+            limit: 20
+        }]));
+    };
+    ws.onerror = function () {
+        clearTimeout(tid);
+        grid.innerHTML = '<span class="media-empty">Erreur relay.</span>';
+    };
+    ws.onmessage = function (e) {
+        try {
+            var d = JSON.parse(e.data);
+            if (d[0] === 'EOSE') {
+                clearTimeout(tid);
+                try { ws.close(); } catch (x) {}
+                _renderMedia(results, grid);
+                return;
+            }
+            if (d[0] === 'EVENT' && d[2]) {
+                var ev = d[2];
+                (ev.tags || []).forEach(function (tag) {
+                    if ((tag[0] === 'r' || tag[0] === 'url') && tag[1]) {
+                        var val = tag[1];
+                        // Accepter ipfs:// et les URL contenant /ipfs/
+                        var cid = val.startsWith('ipfs://') ? val.slice(7)
+                                : val.includes('/ipfs/') ? val.split('/ipfs/').pop().split('/')[0]
+                                : '';
+                        if (cid && !results.some(function (x) { return x.cid === cid; })) {
+                            results.push({ cid: cid, content: {} });
+                        }
+                    }
+                });
+            }
+        } catch (x) {}
+    };
+}
+
+/*
+ * Rendu HTML commun pour les deux modes de chargement de médias.
+ */
+function _renderMedia(items, grid) {
+    if (!items || !items.length) {
+        grid.innerHTML = '<span class="media-empty">Aucune ressource partagée pour ce skill.</span>';
+        return;
+    }
+    var ipfsBase = getIpfsBase();
+    grid.innerHTML = items.map(function (m) {
+        var href  = ipfsBase + '/ipfs/' + m.cid;
+        var title = (m.content && m.content.title) ? m.content.title : m.cid.slice(0, 12) + '…';
+        return '<a href="' + _esc(href) + '" target="_blank" class="media-thumb" title="' + _esc(title) + '">'
+            + '<img src="' + _esc(href) + '" alt="' + _esc(title) + '"'
+            + ' onerror="this.parentNode.innerHTML=\'<span class=media-icon>📄</span>\'">'
+            + '</a>';
+    }).join('');
+}
+
+function _esc(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   ORACLE PUBKEYS — récupération depuis l'API
+   ═══════════════════════════════════════════════════════════════ */
+
+/*
+ * Récupère les pubkeys oracle depuis /api/skill/oracles (UPassport).
+ * Lit : secret.nostr (oracle nœud) + uplanet.G1.nostr (oracle constellation).
+ * Retourne les champs { node, constellation } avec hex 64 chars.
+ * Si l'API est inaccessible ou ne connaît pas ces clés, retourne sans erreur.
+ */
+async function _fetchOraclePubkeysFromApi(apiBase) {
+    var HEX64 = /^[0-9a-f]{64}$/;
+    if (!apiBase) return;
+
+    // Essai 1 : endpoint dédié /api/skill/oracles
+    try {
+        var r = await fetch(apiBase + '/api/skill/oracles', { signal: AbortSignal.timeout(3000) });
+        if (r.ok) {
+            var d = await r.json();
+            if (d.node         && HEX64.test(d.node))         _oracleNodeHex    = d.node;
+            if (d.constellation && HEX64.test(d.constellation)) _oracleConstellHex = d.constellation;
+            if (_oracleNodeHex || _oracleConstellHex) return;
+        }
+    } catch (e) {}
+
+    // Essai 2 : JSON de la station (port 12345) — champ oracle_nostr_pubkey
+    try {
+        var h2 = window.location.hostname;
+        var stUrl = (h2 === 'localhost' || h2 === '127.0.0.1')
+            ? 'http://127.0.0.1:12345'
+            : 'https://astroport.' + h2.replace(/^[^.]+\./, '');
+        var r2 = await fetch(stUrl + '/', { signal: AbortSignal.timeout(3000) });
+        if (r2.ok) {
+            var d2 = await r2.json();
+            var pk = d2.oracle_nostr_pubkey || d2.UPLANETNAME_NOSTR || d2.nostr_pubkey;
+            if (pk && HEX64.test(pk)) _oracleNodeHex = pk;
+        }
+    } catch (e) {}
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   CONNEXION MULTIPASS
+   ═══════════════════════════════════════════════════════════════ */
+
+function _onConnected(pk) {
+    if (_pubHex === pk) return;
+    _pubHex = pk;
+    document.getElementById('btn-personal').disabled = false;
+    document.getElementById('conn-hint').style.display = 'none';
+    if (_cloud) _cloud.setUserPubkey(pk);
+    _updateStats();
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   INIT
+   ═══════════════════════════════════════════════════════════════ */
+
+document.addEventListener('DOMContentLoaded', function () {
+    document.getElementById('conn-hint').style.display = '';
+
+    // Initialiser les URLs actives depuis le hostname courant
+    _activeRelay    = getRelayWs();
+    _currentApiBase = getApiBase();
+
+    // Chargement parallèle :
+    //  1. Oracle pubkeys depuis l'API (mode api par défaut)
+    //  2. Liste des relays de la constellation (une seule requête)
+    //  3. Connection NOSTR MULTIPASS (si déjà disponible)
+    Promise.all([
+        _fetchOraclePubkeysFromApi(_currentApiBase),
+        _loadConstellationRelays()
+    ]).then(function () {
+        initCloud();
+    }).catch(function () {
+        initCloud();
+    });
+
+    // Connexion NOSTR MULTIPASS (UPlanet Header inter-pages)
+    var pk0 = (window.NostrState && window.NostrState.userPubkey) || window.userPubkey || '';
+    if (!pk0) { try { pk0 = sessionStorage.getItem('uph_pubkey') || ''; } catch (e) {} }
+    if (pk0) { _onConnected(pk0); return; }
+
+    if (window.nostr && window.nostr.getPublicKey) {
+        window.nostr.getPublicKey().then(function (pk) {
+            if (pk && !_pubHex) _onConnected(pk);
+        }).catch(function () {});
+    }
+
+    if (typeof window.waitForConnection === 'function') {
+        window.waitForConnection(function () {
+            var pk = (window.NostrState && window.NostrState.userPubkey) || window.userPubkey;
+            if (pk && !_pubHex) _onConnected(pk);
+        });
+    }
+});
+</script>
+</body>
+</html>

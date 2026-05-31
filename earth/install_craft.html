@@ -146,6 +146,27 @@ body { margin:0; min-height:100vh;
 .shared-media-item:hover    { background:rgba(56,189,248,.22); }
 .shared-media-item.selected { background:rgba(56,189,248,.32); border-color:#38bdf8; color:#e0f2fe; }
 .shared-label { font-size:10.5px; color:#94a3b8; margin-bottom:5px; }
+/* Highlight depuis skills.html */
+@keyframes pulse-target {
+    0%   { box-shadow: 0 0 0 8px rgba(56,189,248,.5), 0 4px 28px rgba(0,0,0,.7); }
+    100% { box-shadow: 0 0 0 2px rgba(56,189,248,.08), 0 4px 28px rgba(0,0,0,.7); }
+}
+.skill-card.highlight-target { border-color:#38bdf8; animation: pulse-target 2.4s ease-out forwards; }
+/* Preview média sélectionné */
+.media-preview {
+    margin-top: 7px; border-radius: 9px; overflow: hidden;
+    background: rgba(0,0,0,.45); border: 1px solid rgba(56,189,248,.18);
+    display: flex; align-items: center; justify-content: center;
+    min-height: 44px; max-height: 180px;
+}
+.media-preview img, .media-preview video {
+    max-width: 100%; max-height: 180px; border-radius: 7px;
+    object-fit: contain; display: block;
+}
+.media-preview .pv-fallback {
+    color: #7dd3fc; font-size: 11px; padding: 10px 14px;
+    text-align: center; word-break: break-all;
+}
 
 /* ── BUTTONS ── */
 .btn-activate {
@@ -179,6 +200,15 @@ body { margin:0; min-height:100vh;
 }
 .add-skill-input:focus { border-color:#818cf8; background:rgba(255,255,255,.1); }
 .add-skill-input::placeholder { color:#64748b; }
+
+/* ── RARE SKILL CHIPS (suggestions) ── */
+.rare-skill-chip {
+    font-size:10.5px; padding:3px 10px; border-radius:16px; cursor:pointer;
+    background:rgba(99,102,241,.12); border:1px solid rgba(99,102,241,.28); color:#c7d2fe;
+    transition:all .15s; white-space:nowrap; display:inline-flex; align-items:center; gap:5px;
+}
+.rare-skill-chip:hover { background:rgba(99,102,241,.3); border-color:#818cf8; color:#e0e7ff; }
+.rare-skill-chip .chip-count { opacity:.55; font-size:9px; }
 
 /* ── EXISTING SKILLS ── */
 .existing-skills-list { display:flex; flex-wrap:wrap; gap:7px; }
@@ -255,7 +285,8 @@ input[type=file] { display:none; }
           Nom du skill
           <span class="tip-icon" data-tip="Nom court du service ou de la compétence.&#10;&#10;Exemples :&#10;· Matterbridge &amp; BRO Omni&#10;· PowerJoular&#10;· sound-spot&#10;&#10;→ Devient l'identifiant de l'attestation.">i</span>
         </label>
-        <input class="add-skill-input" id="new-skill-name" placeholder="Ex : Matterbridge & BRO Omni">
+        <input class="add-skill-input" id="new-skill-name" placeholder="Ex : Matterbridge & BRO Omni" list="skill-suggestions" autocomplete="off">
+        <datalist id="skill-suggestions"></datalist>
       </div>
       <div class="field-wrap" style="flex:2">
         <label class="field-label">
@@ -269,10 +300,15 @@ input[type=file] { display:none; }
         <button class="btn-add" onclick="addCustomSkill()"><i class="bi bi-plus-lg"></i> Ajouter</button>
       </div>
     </div>
-    <div style="font-size:10.5px;color:#64748b;margin-top:9px;line-height:1.8">
-      <span style="color:#34d399;font-weight:600">Idées :</span>
-      🌉 <em>Matterbridge</em> · 🔋 <em>PowerJoular</em> · 🎵 <em>sound-spot</em> ·
-      🪙 <em>G1BILLET</em> · 🔀 <em>Nginx Proxy</em> · 🤖 <em>Ollama</em> · 🐳 <em>Docker</em>
+    <!-- Skills peu représentés dans la constellation (chargés depuis le relay) -->
+    <div id="rare-skills-section" style="display:none;margin-top:10px">
+      <div style="font-size:10.5px;color:#a78bfa;font-weight:600;margin-bottom:6px;display:flex;align-items:center;gap:8px">
+        <i class="bi bi-bar-chart-fill"></i> Peu représentés dans la constellation — cliquez pour préremplir
+        <a href="skills.html" style="font-size:10px;color:#7dd3fc;font-weight:400;text-decoration:none" target="_blank">
+          Parcourir tous <i class="bi bi-arrow-right"></i>
+        </a>
+      </div>
+      <div id="rare-skills-wrap" style="display:flex;flex-wrap:wrap;gap:5px"></div>
     </div>
   </div>
 
@@ -308,6 +344,7 @@ input[type=file] { display:none; }
 <script src="nostr.bundle.js"></script>
 <script src="common.js"></script>
 <script src="uplanet-header.js"></script>
+<script src="relay.js"></script>
 <script>
 'use strict';
 
@@ -316,6 +353,8 @@ var _privHex = null;      // nsec décodée en hex — jamais transmise
 var _pubHex  = null;
 var _session = null;
 var _skillState = {};     // { skillId: { cid, infoCid, status, eventId, _isShared } }
+var _localSkills = [];    // skills de la session courante — pour fillSkillName
+var _skillMeta   = {};    // name → { icon, desc } extrait des events relay
 
 /* ── Helpers URL ─────────────────────────────────────────────── */
 function getApiBase() {
@@ -381,8 +420,20 @@ async function loadSession() {
 
     renderSession(_session);
     var skills = sessionToSkills(_session);
+    _localSkills = skills;
     await renderSkillCards(skills);
     document.getElementById('loading-state').style.display = 'none';
+    // Pré-sélectionner le skill si ?skill= dans l'URL (lien depuis skills.html)
+    var targetSkill = params.get('skill');
+    if (targetSkill) {
+        var tCard = document.getElementById('card-' + targetSkill);
+        if (tCard) {
+            setTimeout(function() {
+                tCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                tCard.classList.add('highlight-target');
+            }, 150);
+        }
+    }
 }
 
 function renderSession(s) {
@@ -542,6 +593,7 @@ async function renderSkillCards(skills) {
             '  <span class="dz-label"><span style="color:#f59e0b;font-weight:700">Requis</span> — glissez ou cliquez pour choisir un fichier de preuve</span>',
             '  <span class="dz-file" id="dz-file-' + sk.id + '" style="display:none"></span>',
             '</div>',
+            '<div class="media-preview" id="preview-' + sk.id + '" style="display:none"></div>',
             '<input type="file" id="fi-' + sk.id + '" accept="image/*,video/*,.pdf,.txt,.md" ',
             '       onchange="handleFileInput(event,\'' + sk.id + '\')">',
 
@@ -568,6 +620,7 @@ function selectSharedMedia(skillId, cid, el) {
     _skillState[skillId]._isShared = true;  // ne pas republier un Kind 30504 déjà existant
     setCardStatus(skillId, 'media', '📎 Preuve sélectionnée : ' + cid.slice(0,16) + '…');
     refreshActivateButtons();
+    _showMediaPreview(skillId, getIpfsBase() + '/ipfs/' + cid);
 }
 
 /* ── Drag & Drop ─────────────────────────────────────────────── */
@@ -604,6 +657,7 @@ async function processFile(skillId, file) {
     dz.classList.add('has-file');
     dzFile.style.display = '';
     dzFile.textContent = file.name + ' (' + (file.size/1024).toFixed(1) + ' Ko)';
+    _showLocalPreview(skillId, file);
     try {
         var result = await uploadToIPFS(file);
         _skillState[skillId].cid     = result.cid;
@@ -614,6 +668,38 @@ async function processFile(skillId, file) {
         setCardStatus(skillId, 'error', '❌ Upload échoué : ' + e.message);
     }
     refreshActivateButtons();
+}
+
+/* ── Prévisualisation média ──────────────────────────────────────────────── */
+function _showMediaPreview(skillId, url) {
+    var pv = document.getElementById('preview-' + skillId);
+    if (!pv) return;
+    pv.style.display = '';
+    pv.innerHTML = '';
+    var img = document.createElement('img');
+    img.alt = 'aperçu';
+    img.style.cssText = 'max-width:100%;max-height:180px;border-radius:7px;object-fit:contain';
+    img.onerror = function() {
+        pv.innerHTML = '<div class="pv-fallback">🔗 <a href="' + url + '" target="_blank" style="color:#7dd3fc">Voir le média</a></div>';
+    };
+    img.src = url;
+    pv.appendChild(img);
+}
+function _showLocalPreview(skillId, file) {
+    var pv = document.getElementById('preview-' + skillId);
+    if (!pv) return;
+    var type = file.type || '';
+    var url  = URL.createObjectURL(file);
+    var html;
+    if (type.startsWith('image/')) {
+        html = '<img src="' + url + '" style="max-width:100%;max-height:180px;border-radius:7px;object-fit:contain">';
+    } else if (type.startsWith('video/')) {
+        html = '<video src="' + url + '" controls muted playsinline style="max-width:100%;max-height:180px;border-radius:7px"></video>';
+    } else {
+        html = '<div class="pv-fallback">📎 ' + _esc(file.name) + '</div>';
+    }
+    pv.style.display = '';
+    pv.innerHTML = html;
 }
 
 /* ── Upload IPFS via /api/fileupload (conforme UPlanet_FILE_CONTRACT) ─────── */
@@ -732,6 +818,9 @@ async function activateSkill(skillId, level) {
             mediaCidNew = mediaCid;
         }
 
+        // Métadonnées du skill (icon, nom, desc) depuis la liste locale
+        var skMeta = _localSkills.find(function(s){ return s.id === skillId; }) || {};
+
         // Kind 30503 — attestation auto-déclarée (folksonomy)
         var tags30503 = [
             ['d', permitKey],
@@ -740,6 +829,8 @@ async function activateSkill(skillId, level) {
             ['t', skillNorm],
             ['t', 'auto_proclaimed']
         ];
+        if (skMeta.name) tags30503.push(['title',   skMeta.name]);
+        if (skMeta.desc) tags30503.push(['summary',  skMeta.desc]);
         // Les CIDs IPFS ne sont PAS des event IDs NOSTR (hex 64 chars) →
         // utiliser le tag 'r' (référence URL) pour éviter le rejet du relay
         if (sessionLogCid) tags30503.push(['r', 'ipfs://' + sessionLogCid, 'install_session']);
@@ -752,6 +843,9 @@ async function activateSkill(skillId, level) {
             tags: tags30503,
             content: JSON.stringify({
                 skill: skillNorm, level: level,
+                title: skMeta.name || skillNorm,
+                icon: skMeta.icon || '',
+                description: skMeta.desc || '',
                 attested_at: nowIso,
                 auto_proclaimed: true,
                 session_cid: sessionLogCid || ''
@@ -827,6 +921,8 @@ function resetAllCards() {
         if (dz) { dz.classList.remove('has-file', 'dragover'); }
         var dzFile = document.getElementById('dz-file-' + sid);
         if (dzFile) { dzFile.style.display = 'none'; dzFile.textContent = ''; }
+        var pvEl = document.getElementById('preview-' + sid);
+        if (pvEl) { pvEl.style.display = 'none'; pvEl.innerHTML = ''; }
         document.querySelectorAll('#shared-' + sid + ' .shared-media-item')
             .forEach(function(el) { el.classList.remove('selected'); });
     });
@@ -904,6 +1000,7 @@ async function addSkillCard(sk) {
         '  <span class="dz-label"><span style="color:#f59e0b;font-weight:700">Requis</span> — glissez ou cliquez pour choisir un fichier</span>',
         '  <span class="dz-file" id="dz-file-' + sk.id + '" style="display:none"></span>',
         '</div>',
+        '<div class="media-preview" id="preview-' + sk.id + '" style="display:none"></div>',
         '<input type="file" id="fi-' + sk.id + '" accept="image/*,video/*,.pdf,.txt,.md" ',
         '       onchange="handleFileInput(event,\'' + sk.id + '\')">',
         '<button class="btn-activate" id="btn-' + sk.id + '" data-skill="' + sk.id + '"',
@@ -926,32 +1023,17 @@ async function fetchExistingSkills(pubkey) {
 
     var skills = [];
     try {
-        await new Promise(function(resolve) {
-            var ws;
-            try { ws = new WebSocket(getRelayWs()); } catch(e) { resolve(); return; }
-            var timer = setTimeout(function() { try { ws.close(); } catch(x){} resolve(); }, 6000);
-            ws.onopen = function() {
-                ws.send(JSON.stringify(['REQ', 'existing_skills', {
-                    kinds: [30503],
-                    authors: [pubkey],
-                    limit: 50
-                }]));
-            };
-            ws.onmessage = function(e) {
-                try {
-                    var d = JSON.parse(e.data);
-                    if (d[0] === 'EOSE') { clearTimeout(timer); ws.close(); resolve(); return; }
-                    if (d[0] === 'EVENT' && d[2]) {
-                        var ev = d[2];
-                        var dTag   = (ev.tags.find(function(t){return t[0]==='d';})||[])[1]||'';
-                        var lvlRaw = parseInt((ev.tags.find(function(t){return t[0]==='level';})||[])[1]||'1');
-                        var lvlTag = (isNaN(lvlRaw) || lvlRaw < 1) ? 1 : lvlRaw;
-                        var ts     = typeof ev.created_at === 'number' ? ev.created_at : 0;
-                        if (dTag) skills.push({ permit: dTag, level: lvlTag, created_at: ts });
-                    }
-                } catch(ex) {}
-            };
-            ws.onerror = function() { clearTimeout(timer); resolve(); };
+        var events = await RelaySelector.query(
+            getRelayWs(),
+            { kinds: [30503], authors: [pubkey], limit: 50 },
+            { timeout: 6000 }
+        );
+        events.forEach(function(ev) {
+            var dTag   = (ev.tags.find(function(t){return t[0]==='d';})||[])[1]||'';
+            var lvlRaw = parseInt((ev.tags.find(function(t){return t[0]==='level';})||[])[1]||'1');
+            var lvlTag = (isNaN(lvlRaw) || lvlRaw < 1) ? 1 : lvlRaw;
+            var ts     = typeof ev.created_at === 'number' ? ev.created_at : 0;
+            if (dTag) skills.push({ permit: dTag, level: lvlTag, created_at: ts });
         });
     } catch(e) {}
 
@@ -959,7 +1041,6 @@ async function fetchExistingSkills(pubkey) {
         list.innerHTML = '<span style="color:var(--text-muted);font-size:11px">Aucune compétence trouvée sur le relay local.</span>';
         return;
     }
-    // Trier par created_at desc, dédoublonner par permit (garder le plus récent)
     skills.sort(function(a,b){return b.created_at - a.created_at;});
     var seen = {};
     var deduped = skills.filter(function(s) {
@@ -972,6 +1053,127 @@ async function fetchExistingSkills(pubkey) {
         return '<span class="existing-skill-badge ' + cls + '" title="' + _esc(s.permit) + '">'
              + _esc(label) + ' <strong>x' + s.level + '</strong></span>';
     }).join('');
+}
+
+/* ── Suggestions de skills (autocomplete + rare) ─────────────── */
+var SKILL_EMOJI = {
+    'nostr':'⚡','relay':'📡','ipfs':'🪐','strfry':'📡',
+    'matterbridge':'🌉','bro':'🤝','powerjoular':'⚡','sound':'🎵',
+    'spot':'🎵','nextcloud':'☁️','matrix':'🔮','git':'🐙',
+    'docker':'🐳','nginx':'🌐','postgres':'🐘','python':'🐍',
+    'rust':'🦀','flutter':'🎯','bash':'🖥️','linux':'🐧',
+    'solar':'☀️','wind':'💨','pi':'🍓','raspberry':'🍓',
+    'camera':'📷','video':'🎬','audio':'🎧','mesh':'🕸️',
+    'vpn':'🔒','tor':'🧅','telegram':'✈️','signal':'📶'
+};
+function _skillEmoji(name) {
+    var n = (name || '').toLowerCase();
+    for (var k in SKILL_EMOJI) { if (n.includes(k)) return SKILL_EMOJI[k]; }
+    return '🔧';
+}
+
+function _loadSkillSuggestions() {
+    if (typeof RelaySelector === 'undefined') {
+        console.warn('[Craft] _loadSkillSuggestions: RelaySelector absent — relay.js chargé ?');
+        return;
+    }
+    var wsUrl = getRelayWs();
+    console.log('[Craft] _loadSkillSuggestions → relay:', wsUrl);
+    RelaySelector.query(wsUrl, { kinds: [30503], limit: 300 }, { timeout: 5000 })
+        .then(function(events) {
+            console.log('[Craft] _loadSkillSuggestions: reçu', events.length, 'events Kind 30503');
+            var counts = {};
+            events.forEach(function(ev) {
+                // Premier tag 't' non-générique = nom du skill
+                var tTags = ev.tags.filter(function(x){return x[0]==='t';});
+                var t = '';
+                for (var i=0; i<tTags.length; i++) {
+                    var v = tTags[i][1]||'';
+                    if (v && v !== 'auto_proclaimed') { t = v; break; }
+                }
+                if (!t) {
+                    var d = (ev.tags.find(function(x){return x[0]==='d';})||[])[1]||'';
+                    t = d.replace(/^PERMIT_/,'').replace(/_X\d+$/,'').replace(/_/g,'-').toLowerCase();
+                }
+                if (!t) return;
+
+                counts[t] = (counts[t]||0) + 1;
+
+                if (!_skillMeta[t]) {
+                    // Cherche icon/desc dans : tag 'icon', tag 'summary', content JSON
+                    // (Les anciens events n'ont pas ces champs — les nouveaux oui)
+                    var iconTag    = (ev.tags.find(function(x){return x[0]==='icon';})||[])[1]||'';
+                    var descTag    = (ev.tags.find(function(x){return x[0]==='summary';})||[])[1]||'';
+                    var contentData = {};
+                    try { contentData = JSON.parse(ev.content||'{}'); } catch(e2) {}
+                    _skillMeta[t] = {
+                        icon: iconTag || contentData.icon || '',
+                        desc: descTag || contentData.description || contentData.desc || ''
+                    };
+                    console.log('[Craft] skill relay:', t,
+                        '| icon:', _skillMeta[t].icon || '(absent)',
+                        '| desc:', _skillMeta[t].desc ? _skillMeta[t].desc.slice(0,40)+'…' : '(absent)',
+                        '| tags clés:', ev.tags.map(function(x){return x[0];}).join(' '));
+                }
+            });
+            console.log('[Craft] skills comptés:', Object.keys(counts).join(', '));
+            _applySkillSuggestions(counts);
+        })
+        .catch(function(err) {
+            console.warn('[Craft] _loadSkillSuggestions erreur:', err && err.message || err);
+        });
+}
+
+function _applySkillSuggestions(counts) {
+    var datalist = document.getElementById('skill-suggestions');
+    var wrap     = document.getElementById('rare-skills-wrap');
+    var section  = document.getElementById('rare-skills-section');
+    var names    = Object.keys(counts);
+    if (!names.length) { console.log('[Craft] _applySkillSuggestions: aucun skill'); return; }
+
+    if (datalist) {
+        datalist.innerHTML = names.sort().map(function(n) {
+            return '<option value="' + _esc(n) + '">';
+        }).join('');
+        console.log('[Craft] datalist peuplé avec', names.length, 'suggestions');
+    }
+
+    if (wrap && section) {
+        var sorted = names.slice().sort(function(a,b){ return counts[a]-counts[b]; }).slice(0,9);
+        wrap.innerHTML = sorted.map(function(n) {
+            return '<span class="rare-skill-chip" onclick="fillSkillName(\'' + _esc(n) + '\',true)">'
+                + _skillEmoji(n) + ' ' + _esc(n)
+                + '<span class="chip-count">\xd7' + counts[n] + '</span></span>';
+        }).join('');
+        section.style.display = '';
+        console.log('[Craft] rare chips affichés:', sorted.join(', '));
+    }
+}
+
+/* force=true  → toujours écraser icon+desc (clic chip, sélection datalist)
+   force=false → ne remplir que si le champ est vide (appel interne) */
+function fillSkillName(name, force) {
+    console.log('[Craft] fillSkillName:', name, '| force:', !!force);
+
+    var inp = document.getElementById('new-skill-name');
+    if (inp) inp.value = name;
+
+    // Croise : 1) _skillMeta relay  2) _localSkills session  3) SKILL_EMOJI fallback
+    var meta    = _skillMeta[name] || {};
+    var localSk = _localSkills.find(function(s) {
+        return s.id === name || s.id.toLowerCase() === name.toLowerCase();
+    });
+    console.log('[Craft] fillSkillName meta relay:', JSON.stringify(meta),
+        '| local skill:', localSk ? localSk.id : '(non trouvé dans session)');
+
+    var icon = meta.icon || (localSk && localSk.icon) || _skillEmoji(name);
+    var desc = meta.desc || (localSk && localSk.desc) || '';
+    console.log('[Craft] fillSkillName → icon:', icon, '| desc:', desc ? desc.slice(0,50) : '(vide)');
+
+    var iconInp = document.getElementById('new-skill-icon');
+    var descInp = document.getElementById('new-skill-desc');
+    if (iconInp && (force || !iconInp.value.trim())) iconInp.value = icon;
+    if (descInp && (force || !descInp.value.trim())) descInp.value = desc;
 }
 
 /* ── Mise à jour UI connexion ────────────────────────────────── */
@@ -995,6 +1197,22 @@ document.addEventListener('DOMContentLoaded', function() {
             + ' <span style="color:#fca5a5">Impossible de charger la session : '
             + _esc(e.message) + '</span>';
     });
+
+    // Suggestions de skills depuis la constellation (lecture seule, sans auth)
+    _loadSkillSuggestions();
+
+    // Sélection dans le datalist → remplir icon+desc si le nom correspond à un skill connu
+    var _skillNameInp = document.getElementById('new-skill-name');
+    if (_skillNameInp) {
+        _skillNameInp.addEventListener('change', function() {
+            var v = this.value.trim();
+            if (!v) return;
+            var knownInMeta  = !!_skillMeta[v];
+            var knownInLocal = !!_localSkills.find(function(s){ return s.id === v; });
+            console.log('[Craft] input#new-skill-name change:', v, '| meta:', knownInMeta, '| local:', knownInLocal);
+            if (knownInMeta || knownInLocal) fillSkillName(v, true);
+        });
+    }
 
     // 1. Connexion déjà établie (UPH session storage inter-pages)
     var pk0 = (window.NostrState && window.NostrState.userPubkey) || window.userPubkey || '';

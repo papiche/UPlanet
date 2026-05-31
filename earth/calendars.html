@@ -616,7 +616,7 @@
                 📅 Gestion des Calendriers
             </h1>
             <p class="lead text-secondary">
-                Consultez, modifiez et supprimez vos calendriers de jardinage et leurs événements
+                Consultez, modifiez et supprimez vos calendriers et leurs événements
             </p>
         </div>
         
@@ -697,6 +697,9 @@
                 <button class="view-mode-tab" id="tab-unified" onclick="setViewMode('unified')">
                     <i class="bi bi-calendar3-week"></i> Vue unifiée
                 </button>
+                <button class="view-mode-tab" id="tab-crafts" onclick="setViewMode('crafts')">
+                    <i class="bi bi-hammer"></i> Crafts collectifs
+                </button>
             </div>
             
             <!-- Calendar Selector Panel (for unified view) -->
@@ -725,6 +728,82 @@
                 <div class="text-center py-5">
                     <div class="loading-spinner"></div>
                     <p class="mt-3 text-secondary">Chargement des calendriers...</p>
+                </div>
+            </div>
+
+            <!-- Crafts collectifs (Kind 30500 avec min_operators > 1) -->
+            <div id="crafts-container" style="display:none;">
+                <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+                    <div>
+                        <h6 class="mb-0" style="color:#a5b4fc;"><i class="bi bi-hammer"></i> Crafts collectifs disponibles</h6>
+                        <small class="text-secondary">Kind 30500 · Recettes nécessitant plusieurs MULTIPASS simultanément</small>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button class="btn btn-sm" onclick="loadCrafts()"
+                            style="background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.4);color:#a5b4fc;">
+                            <i class="bi bi-arrow-clockwise"></i> Recharger
+                        </button>
+                        <a class="btn btn-sm" href="minelife.html" target="_blank"
+                            style="background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);color:#6ee7b7;">
+                            <i class="bi bi-mortarboard"></i> MineLife
+                        </a>
+                    </div>
+                </div>
+                <div id="crafts-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;">
+                    <div class="text-center py-4 text-secondary"><i class="bi bi-hourglass-split"></i> Chargement des crafts…</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal : Planifier une session de craft collectif -->
+    <div class="modal fade" id="craftSessionModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content" style="background:#0d1f14;border:1px solid rgba(99,102,241,0.3);color:#d1fae5;">
+                <div class="modal-header" style="border-bottom:1px solid rgba(99,102,241,0.2);">
+                    <h6 class="modal-title" style="color:#a5b4fc;">
+                        <i class="bi bi-calendar-plus"></i> Planifier un craft collectif
+                        <small class="d-block" style="font-size:10px;font-weight:400;color:#94a3b8;" id="craft-session-name"></small>
+                    </h6>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label" style="font-size:11px;color:#94a3b8;">Titre de la session</label>
+                        <input type="text" class="form-control form-control-sm" id="craft-session-title"
+                            style="background:rgba(255,255,255,0.07);border-color:rgba(99,102,241,0.3);color:#d1fae5;">
+                    </div>
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label class="form-label" style="font-size:11px;color:#94a3b8;">Début</label>
+                            <input type="datetime-local" class="form-control form-control-sm" id="craft-session-start"
+                                style="background:rgba(255,255,255,0.07);border-color:rgba(99,102,241,0.3);color:#d1fae5;">
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label" style="font-size:11px;color:#94a3b8;">Fin (optionnel)</label>
+                            <input type="datetime-local" class="form-control form-control-sm" id="craft-session-end"
+                                style="background:rgba(255,255,255,0.07);border-color:rgba(99,102,241,0.3);color:#d1fae5;">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" style="font-size:11px;color:#94a3b8;">Notes / lieu</label>
+                        <textarea class="form-control form-control-sm" id="craft-session-desc" rows="2"
+                            style="background:rgba(255,255,255,0.07);border-color:rgba(99,102,241,0.3);color:#d1fae5;"></textarea>
+                    </div>
+                    <div id="craft-session-operators-info"
+                        style="font-size:10.5px;color:#94a3b8;background:rgba(99,102,241,0.07);border-radius:8px;padding:8px 10px;">
+                        <i class="bi bi-people"></i> Opérateurs requis : <strong id="craft-session-min-op" style="color:#a5b4fc">—</strong>
+                        <br><i class="bi bi-info-circle" style="font-size:9px"></i>
+                        L'événement sera visible de tous sur le relay. Les participants doivent avoir les PERMIT requis.
+                    </div>
+                </div>
+                <div class="modal-footer" style="border-top:1px solid rgba(99,102,241,0.2);">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Annuler</button>
+                    <button type="button" class="btn btn-sm" id="craft-session-submit"
+                        style="background:linear-gradient(135deg,#4338ca,#0ea5e9);color:white;border:none;"
+                        onclick="publishCraftSession()">
+                        <i class="bi bi-send"></i> Publier Kind 31922
+                    </button>
                 </div>
             </div>
         </div>
@@ -798,8 +877,11 @@
 
     <!-- Scripts -->
     <script src="bootstrap.bundle.min.js"></script>
+    <script src="nacl-fast.min.js"></script>
     <script src="nostr.bundle.js"></script>
     <script src="common.js"></script>
+    <script src="uplanet-header.js"></script>
+    <script src="relay.js"></script>
     <script src="lunar-calendar.js"></script>
     
     <script>
@@ -1049,13 +1131,139 @@
             viewMode = mode;
             document.getElementById('tab-separate').classList.toggle('active', mode === 'separate');
             document.getElementById('tab-unified').classList.toggle('active', mode === 'unified');
-            document.getElementById('calendar-selector-panel').classList.toggle('d-none', mode === 'separate');
-            
+            document.getElementById('tab-crafts').classList.toggle('active', mode === 'crafts');
+            document.getElementById('calendar-selector-panel').classList.toggle('d-none', mode !== 'unified');
+            document.getElementById('calendars-container').style.display  = mode === 'crafts' ? 'none' : '';
+            document.getElementById('crafts-container').style.display     = mode === 'crafts' ? '' : 'none';
+
             if (mode === 'unified') {
                 renderCalendarCheckboxes();
                 renderUnifiedView();
+            } else if (mode === 'crafts') {
+                loadCrafts();
             } else {
                 renderCalendars(userCalendars);
+            }
+        }
+
+        /* ══════════════════════════════════════════
+           CRAFTS COLLECTIFS — Kind 30500 (relay.js)
+           Réutilise ensureRelayConnection() de lib_2 et RelaySelector.query() de relay.js
+        ══════════════════════════════════════════ */
+        var _craftSessionCraftId  = null;
+        var _craftSessionMinOp    = 1;
+        var _craftSessionCalDtag  = null;
+
+        async function loadCrafts() {
+            const grid = document.getElementById('crafts-grid');
+            grid.innerHTML = '<div class="text-center py-4 text-secondary"><i class="bi bi-hourglass-split"></i> Interrogation du relay…</div>';
+            try {
+                // Utilise RelaySelector.query() (relay.js) — pas de doublon WebSocket
+                const relayWs = window.getRelayUrl ? window.getRelayUrl().replace(/^https/,'ws').replace(/^http/,'ws')
+                              : (location.hostname === 'localhost' ? 'ws://127.0.0.1:7777' : 'wss://relay.' + location.hostname.replace(/^[^.]+\./,''));
+                const events = await RelaySelector.query(relayWs, { kinds: [30500], limit: 100 }, { timeout: 7000 });
+                // Filtrer : min_operators > 1 ET dédupliquer par d-tag
+                const seen = {};
+                const crafts = events.filter(ev => {
+                    const dtag = (ev.tags.find(t=>t[0]==='d')||[])[1] || ev.id;
+                    const minOp = +((ev.tags.find(t=>t[0]==='min_operators')||[])[1] || 1);
+                    if (seen[dtag] && seen[dtag].created_at >= ev.created_at) return false;
+                    seen[dtag] = ev;
+                    return minOp > 1;
+                });
+                grid.innerHTML = crafts.length ? crafts.map(ev => _craftCardHtml(ev)).join('')
+                    : '<div class="text-center py-4 text-secondary"><i class="bi bi-info-circle"></i> Aucun craft collectif trouvé sur ce relay.</div>';
+            } catch(e) {
+                grid.innerHTML = '<div class="text-center py-4 text-danger"><i class="bi bi-wifi-off"></i> Relay inaccessible</div>';
+            }
+        }
+
+        function _craftCardHtml(ev) {
+            let p = {};
+            try { p = JSON.parse(ev.content); } catch(e) {}
+            const dtag    = (ev.tags.find(t=>t[0]==='d')||[])[1] || ev.id;
+            const title   = p.name || (ev.tags.find(t=>t[0]==='title')||[])[1] || dtag;
+            const desc    = p.description || '';
+            const minOp   = +((ev.tags.find(t=>t[0]==='min_operators')||[])[1] || 2);
+            const estTime = (ev.tags.find(t=>t[0]==='estimated_time')||[])[1] || p.estimated_time || '';
+            const skills  = ev.tags.filter(t=>t[0]==='requires_skill').map(t=>t[1]).join(', ');
+            const objects = ev.tags.filter(t=>t[0]==='requires_object').map(t=>t[1]).join(', ');
+            const roles   = ev.tags.filter(t=>t[0]==='operator_role').map(t=>`<li style="font-size:10px;color:#94a3b8">Opérateur ${t[1]} (${t[2]||'?'}) — ${t[3]||''}</li>`).join('');
+            return `<div style="background:rgba(8,20,14,0.95);border:1px solid rgba(99,102,241,0.25);border-radius:12px;padding:14px;">
+                <div style="font-size:14px;font-weight:700;color:#a5b4fc;margin-bottom:4px;">🔨 ${title}</div>
+                <div style="font-size:11px;color:#94a3b8;margin-bottom:8px;">${desc.slice(0,120)}${desc.length>120?'…':''}</div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
+                    <span style="font-size:10px;font-weight:700;background:rgba(251,191,36,0.15);color:#fcd34d;padding:2px 8px;border-radius:8px;">👥 ${minOp} opérateurs min</span>
+                    ${estTime ? `<span style="font-size:10px;background:rgba(16,185,129,0.1);color:#6ee7b7;padding:2px 8px;border-radius:8px;">⏱ ${estTime}</span>` : ''}
+                </div>
+                ${skills ? `<div style="font-size:10px;color:#94a3b8;margin-bottom:4px;"><i class="bi bi-mortarboard"></i> Skills requis : ${skills}</div>` : ''}
+                ${objects ? `<div style="font-size:10px;color:#94a3b8;margin-bottom:4px;"><i class="bi bi-box-seam"></i> Objets requis : ${objects}</div>` : ''}
+                ${roles ? `<ul style="padding-left:16px;margin-bottom:8px;">${roles}</ul>` : ''}
+                <button class="btn btn-sm w-100" style="background:rgba(99,102,241,0.2);border:1px solid rgba(99,102,241,0.4);color:#a5b4fc;font-size:11px;"
+                    onclick="openCraftSessionModal('${dtag.replace(/'/g,'')}', '${title.replace(/'/g,'').slice(0,60)}', ${minOp})">
+                    <i class="bi bi-calendar-plus"></i> Planifier une session
+                </button>
+            </div>`;
+        }
+
+        function openCraftSessionModal(craftId, craftName, minOp) {
+            _craftSessionCraftId = craftId;
+            _craftSessionMinOp   = minOp;
+            document.getElementById('craft-session-name').textContent   = craftName;
+            document.getElementById('craft-session-title').value        = 'Session ' + craftName;
+            document.getElementById('craft-session-min-op').textContent = minOp;
+            document.getElementById('craft-session-start').value        = '';
+            document.getElementById('craft-session-end').value          = '';
+            document.getElementById('craft-session-desc').value         = '';
+            // Prendre le premier calendrier de l'utilisateur comme cible
+            _craftSessionCalDtag = userCalendars.length
+                ? (getTagValue(userCalendars[0], 'd') || userCalendars[0].id)
+                : 'main';
+            new bootstrap.Modal(document.getElementById('craftSessionModal')).show();
+        }
+
+        async function publishCraftSession() {
+            const title    = document.getElementById('craft-session-title').value;
+            const startStr = document.getElementById('craft-session-start').value;
+            const endStr   = document.getElementById('craft-session-end').value;
+            const desc     = document.getElementById('craft-session-desc').value;
+            if (!title || !startStr) {
+                showNotification({ type:'error', title:'Champs requis', message:'Titre et date de début obligatoires.' });
+                return;
+            }
+            const btn = document.getElementById('craft-session-submit');
+            btn.disabled = true; btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Publication…';
+            try {
+                // Réutilise la même structure Kind 31922 que saveEventChanges()
+                const dTag = 'craft-' + _craftSessionCraftId + '-' + Date.now();
+                const ev = {
+                    kind: 31922,
+                    created_at: Math.floor(Date.now() / 1000),
+                    tags: [
+                        ['d',             dTag],
+                        ['name',          title],
+                        ['start',         new Date(startStr).toISOString()],
+                        ['a',             `31924:${localUserPubkey}:${_craftSessionCalDtag}`],
+                        ['craft',         _craftSessionCraftId],
+                        ['min_operators', String(_craftSessionMinOp)],
+                        ['t',             'craft-collectif'], ['t', 'WoTx2']
+                    ],
+                    content: desc
+                };
+                if (endStr) ev.tags.push(['end', new Date(endStr).toISOString()]);
+                const signed = await window.nostr.signEvent(ev);
+                await ensureRelayConnection();     // lib_2 — déjà défini, pas de doublon
+                const relay = window.nostrRelay;
+                if (relay && relay.publish) await relay.publish(signed);
+                else if (relay._originalRelay) await relay._originalRelay.publish(signed);
+                else throw new Error('Relay non disponible');
+                bootstrap.Modal.getInstance(document.getElementById('craftSessionModal')).hide();
+                showNotification({ type:'success', title:'Session planifiée', message:'Kind 31922 publié avec craft=' + _craftSessionCraftId });
+                await loadUserCalendars();
+            } catch(e) {
+                showNotification({ type:'error', title:'Erreur', message: e.message });
+            } finally {
+                btn.disabled = false; btn.innerHTML = '<i class="bi bi-send"></i> Publier Kind 31922';
             }
         }
         

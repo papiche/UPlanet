@@ -1,0 +1,764 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>H2G2 · Guide du Terraformeur Terrien · UPlanet</title>
+<link rel="icon" type="image/x-icon" href="favicon.ring.ico">
+<link rel="stylesheet" href="bootstrap.min.css">
+<link rel="stylesheet" href="fonts/bootstrap-icons.css">
+<style>
+:root {
+    --accent:       #6366f1;
+    --accent-light: #818cf8;
+    --accent-dark:  #4338ca;
+    --violet:       #7c3aed;
+    --violet-light: #a78bfa;
+    --bg-main:      linear-gradient(135deg,#0f172a 0%,#1e1b4b 40%,#0f172a 100%);
+    --card-bg:      rgba(15,23,42,0.96);
+    --card-border:  rgba(99,102,241,0.28);
+    --text-muted:   #94a3b8;
+}
+* { box-sizing: border-box; }
+:root { --bs-body-bg:#0f172a; --bs-body-color:#e2e8f0; }
+body {
+    margin:0; min-height:100vh;
+    background-color:#0f172a;
+    background-image:var(--bg-main);
+    font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;
+    color:#e2e8f0;
+}
+.main { max-width:1400px; margin:64px auto 0; padding:14px 14px 80px; }
+
+.page-header { display:flex; align-items:center; gap:12px; margin-bottom:16px; flex-wrap:wrap; }
+.page-title  { font-size:20px; font-weight:700; color:var(--accent-light); flex:1; }
+.page-title small { display:block; font-size:11px; color:var(--text-muted); font-weight:400; margin-top:2px; }
+
+/* ── BARRE SOURCE ── */
+.source-bar {
+    display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+    background:rgba(99,102,241,0.04);
+    border:1px solid rgba(99,102,241,0.15);
+    border-radius:10px; padding:7px 12px; margin-bottom:16px;
+    font-size:11.5px;
+}
+.source-bar-label { color:var(--text-muted); font-weight:600; white-space:nowrap; }
+#relay-select {
+    background:rgba(15,23,42,0.85); border:1px solid rgba(99,102,241,0.2);
+    border-radius:7px; color:#e2e8f0; font-size:11px; padding:4px 8px;
+    cursor:pointer; min-width:160px; max-width:280px;
+}
+#relay-select option { background:#0f172a; }
+.relay-status { font-size:10.5px; color:var(--text-muted); }
+
+/* ── COLLECTIONS (style H2G2) ── */
+.coll-row { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:20px; }
+.coll-card {
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    width:88px; height:78px; border-radius:14px; cursor:pointer; text-align:center;
+    background:rgba(99,102,241,0.05); border:2px solid rgba(99,102,241,0.15);
+    transition:all .2s;
+}
+.coll-card:hover { background:rgba(99,102,241,0.12); border-color:rgba(99,102,241,0.4); }
+.coll-card.active { border-color:var(--accent); background:rgba(99,102,241,0.2); }
+.coll-emoji { font-size:26px; margin-bottom:4px; }
+.coll-name { font-size:9.5px; color:var(--text-muted); font-weight:700; letter-spacing:.04em; }
+.coll-card.active .coll-name { color:var(--accent-light); }
+
+/* ── LAYOUT H2G2 (recette + liste) ── */
+.h2g2-body { display:flex; gap:18px; align-items:flex-start; }
+
+/* Panneau recette (gauche) */
+.recipe-panel { flex:1; min-width:0; }
+.recipe-empty {
+    background:var(--card-bg); border:1px solid var(--card-border);
+    border-radius:14px; padding:50px 30px; text-align:center;
+    color:var(--text-muted); font-size:13px; line-height:1.7;
+}
+.recipe-card {
+    background:var(--card-bg); border:1px solid var(--card-border);
+    border-radius:14px; overflow:hidden;
+}
+.recipe-header { padding:18px 20px 14px; border-bottom:1px solid rgba(99,102,241,0.15); }
+.recipe-name { font-size:20px; font-weight:800; color:#e2e8f0; margin-bottom:8px; }
+.recipe-badges { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:4px; }
+.recipe-body { padding:16px 20px; }
+.recipe-section-title {
+    font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.08em;
+    color:var(--text-muted); margin:16px 0 8px; display:flex; align-items:center; gap:6px;
+}
+.recipe-section-title::after { content:''; flex:1; height:1px; background:rgba(99,102,241,0.12); }
+.ingredient-list { list-style:none; margin:0; padding:0; }
+.ingredient-list li {
+    padding:7px 0; border-bottom:1px solid rgba(99,102,241,0.08);
+    font-size:12px; display:flex; align-items:center; gap:8px; color:#c7d2fe;
+}
+.ingredient-list li:last-child { border-bottom:none; }
+.ingredient-list li::before { content:'◆'; font-size:8px; color:var(--accent); }
+.recipe-actions { padding:14px 20px; border-top:1px solid rgba(99,102,241,0.12); display:flex; gap:8px; }
+.btn-recipe {
+    padding:8px 16px; border-radius:10px; font-size:12px; font-weight:600;
+    cursor:pointer; border:none; text-decoration:none; display:inline-block;
+    transition:opacity .15s;
+}
+.btn-recipe:hover { opacity:.85; }
+.btn-recipe.primary { background:linear-gradient(135deg,var(--accent-dark),var(--violet)); color:white; }
+.btn-recipe.secondary { background:rgba(99,102,241,0.12); color:var(--accent-light); border:1px solid rgba(99,102,241,0.25); }
+.recipe-desc { font-size:12px; color:var(--text-muted); line-height:1.6; margin:8px 0 0; }
+
+/* Panneau items (droite) */
+.items-panel { width:270px; flex-shrink:0; }
+.section-title {
+    font-size:10px; font-weight:700; color:var(--text-muted);
+    text-transform:uppercase; letter-spacing:.07em;
+    margin:0 0 8px; display:flex; align-items:center; gap:6px;
+}
+.items-list { display:flex; flex-direction:column; gap:5px; margin-bottom:6px; }
+.item-row {
+    background:var(--card-bg); border:1px solid var(--card-border);
+    border-radius:10px; padding:9px 12px; cursor:pointer; transition:border-color .18s;
+}
+.item-row:hover { border-color:var(--accent); }
+.item-row.active { border-color:var(--accent); background:rgba(99,102,241,0.12); }
+.item-row-name { font-size:12.5px; font-weight:700; color:#e2e8f0; }
+.item-row-meta { font-size:10px; color:var(--text-muted); margin-top:2px; }
+.craft-row {
+    background:var(--card-bg); border:1px solid rgba(124,58,237,0.2);
+    border-radius:10px; padding:9px 12px; cursor:pointer; transition:border-color .18s;
+}
+.craft-row:hover { border-color:var(--violet-light); }
+.craft-row.active { border-color:var(--violet-light); background:rgba(124,58,237,0.1); }
+.craft-row-name { font-size:12.5px; font-weight:700; color:#ddd6fe; }
+.craft-row-meta { font-size:10px; color:#a78bfa; margin-top:2px; }
+
+/* Badges quantité / type */
+.qt-badge {
+    display:inline-block; font-size:10px; padding:2px 7px; border-radius:8px; font-weight:600;
+}
+.dur-bar-wrap { background:rgba(255,255,255,0.07); border-radius:4px; height:5px; margin-top:6px; }
+.dur-bar { height:5px; border-radius:4px; }
+
+/* ── SECTION PERSONAS ── */
+.personas-section {
+    margin-top:32px;
+    background:var(--card-bg); border:1px solid var(--card-border);
+    border-radius:14px; padding:18px 20px;
+}
+.personas-title { font-size:14px; font-weight:700; color:var(--accent-light); margin-bottom:14px; }
+.persona-table { width:100%; border-collapse:collapse; font-size:12px; }
+.persona-table th {
+    text-align:left; padding:6px 10px; font-size:10px; font-weight:700;
+    color:var(--text-muted); text-transform:uppercase; letter-spacing:.06em;
+    border-bottom:1px solid rgba(99,102,241,0.15);
+}
+.persona-table td { padding:8px 10px; border-bottom:1px solid rgba(99,102,241,0.08); vertical-align:top; }
+.persona-table tr:last-child td { border-bottom:none; }
+.persona-name { font-weight:700; color:var(--accent-light); font-size:13px; }
+.skill-chip {
+    display:inline-block; font-size:10px; padding:2px 7px; border-radius:8px;
+    background:rgba(99,102,241,0.14); color:#a5b4fc;
+    border:1px solid rgba(99,102,241,0.2); margin:2px 2px 0 0; font-weight:600;
+}
+.obj-chip {
+    display:inline-block; font-size:10px; padding:2px 7px; border-radius:8px;
+    background:rgba(16,185,129,0.10); color:#6ee7b7;
+    border:1px solid rgba(16,185,129,0.2); margin:2px 2px 0 0;
+}
+
+/* ── STAT BAR ── */
+.stat-bar {
+    background:var(--card-bg); border:1px solid var(--card-border);
+    border-radius:10px; padding:6px 14px; font-size:11px; color:var(--text-muted);
+    display:flex; align-items:center; gap:14px; flex-wrap:wrap; margin-top:12px;
+}
+.stat-item strong { color:var(--accent-light); }
+
+.empty-msg { text-align:center; padding:32px 0; color:var(--text-muted); font-size:13px; }
+
+@media(max-width:800px){
+    .h2g2-body { flex-direction:column; }
+    .items-panel { width:100%; }
+    .coll-card { width:72px; height:64px; }
+    .coll-emoji { font-size:20px; }
+}
+</style>
+</head>
+<body>
+
+<div class="main">
+
+  <!-- ── EN-TÊTE ── -->
+  <div class="page-header">
+    <div class="page-title">
+      🌍 H2G2 — Guide du Terraformeur Terrien
+      <small>Catalogue coopératif · objets communs (Kind 30505) · crafts collectifs (Kind 30500)</small>
+    </div>
+  </div>
+
+  <!-- ── BARRE SOURCE (relay) ── -->
+  <div class="source-bar">
+    <span class="source-bar-label"><i class="bi bi-broadcast"></i> Relay :</span>
+    <select id="relay-select">
+      <option value="">⏳ Constellation…</option>
+    </select>
+    <span class="relay-status" id="relay-status"></span>
+    <span style="margin-left:auto;font-size:10.5px;color:var(--text-muted)">
+      <a href="objects.html" style="color:var(--accent-light);text-decoration:none">📦 Objets</a>
+      &nbsp;·&nbsp;
+      <a href="skills.html" style="color:var(--accent-light);text-decoration:none">☁️ Skills</a>
+      &nbsp;·&nbsp;
+      <a href="calendars.html" style="color:var(--accent-light);text-decoration:none">📅 Crafts</a>
+    </span>
+  </div>
+
+  <!-- ── COLLECTIONS (H2G2 style) ── -->
+  <div class="coll-row" id="coll-row">
+    <div class="coll-card active" data-domain="habitat" onclick="selectDomain('habitat')">
+      <div class="coll-emoji">🏠</div><div class="coll-name">Habitat</div>
+    </div>
+    <div class="coll-card" data-domain="culture" onclick="selectDomain('culture')">
+      <div class="coll-emoji">🌿</div><div class="coll-name">Culture</div>
+    </div>
+    <div class="coll-card" data-domain="cuisine" onclick="selectDomain('cuisine')">
+      <div class="coll-emoji">🍳</div><div class="coll-name">Cuisine</div>
+    </div>
+    <div class="coll-card" data-domain="vêtement" onclick="selectDomain('vêtement')">
+      <div class="coll-emoji">👕</div><div class="coll-name">Textile</div>
+    </div>
+    <div class="coll-card" data-domain="soin" onclick="selectDomain('soin')">
+      <div class="coll-emoji">💊</div><div class="coll-name">Soin</div>
+    </div>
+    <div class="coll-card" data-domain="numérique" onclick="selectDomain('numérique')">
+      <div class="coll-emoji">💻</div><div class="coll-name">Numérique</div>
+    </div>
+    <div class="coll-card" data-domain="transport" onclick="selectDomain('transport')">
+      <div class="coll-emoji">🚗</div><div class="coll-name">Transport</div>
+    </div>
+  </div>
+
+  <!-- ── CORPS H2G2 ── -->
+  <div class="h2g2-body">
+
+    <!-- Panneau recette (gauche) -->
+    <div class="recipe-panel">
+      <div class="recipe-empty" id="recipe-empty">
+        <div style="font-size:40px;margin-bottom:12px;opacity:.3">📖</div>
+        Sélectionnez un objet ou un craft<br>pour afficher sa recette coopérative.
+      </div>
+      <div class="recipe-card" id="recipe-card" style="display:none">
+        <div class="recipe-header">
+          <div class="recipe-name" id="rec-name">—</div>
+          <div class="recipe-badges" id="rec-badges"></div>
+        </div>
+        <div class="recipe-body">
+          <div class="recipe-section-title">Ingrédients</div>
+          <ul class="ingredient-list" id="rec-ingredients"></ul>
+          <div class="recipe-desc" id="rec-desc" style="display:none"></div>
+        </div>
+        <div class="recipe-actions">
+          <a id="rec-link" href="#" class="btn-recipe primary" target="_blank">🔗 Voir l'objet</a>
+          <button class="btn-recipe secondary" onclick="closeRecipe()">✕ Fermer</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Liste d'items (droite) -->
+    <div class="items-panel">
+      <div class="section-title">
+        <i class="bi bi-box-seam"></i> Objets
+        <span style="background:rgba(99,102,241,0.18);border-radius:8px;padding:1px 7px;font-size:10px;color:var(--accent-light)" id="obj-count">—</span>
+      </div>
+      <div id="items-objects" class="items-list">
+        <div class="item-row" style="color:var(--text-muted);text-align:center;cursor:default">
+          <i class="bi bi-hourglass-split"></i> Chargement…
+        </div>
+      </div>
+      <div class="section-title" style="margin-top:14px">
+        <i class="bi bi-hammer"></i> Crafts
+        <span style="background:rgba(124,58,237,0.18);border-radius:8px;padding:1px 7px;font-size:10px;color:#a78bfa" id="craft-count">—</span>
+      </div>
+      <div id="crafts-list" class="items-list">
+        <div class="craft-row" style="color:var(--text-muted);text-align:center;cursor:default">
+          <i class="bi bi-hourglass-split"></i>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── STAT BAR ── -->
+  <div class="stat-bar">
+    <span class="stat-item">Domaine : <strong id="stat-domain">—</strong></span>
+    <span class="stat-item">Relay : <strong id="stat-relay">—</strong></span>
+  </div>
+
+  <!-- ── SECTION PERSONAS (statique) ── -->
+  <div class="personas-section">
+    <div class="personas-title">
+      <i class="bi bi-people"></i> Personas de démo
+    </div>
+    <table class="persona-table">
+      <thead>
+        <tr>
+          <th>Persona</th>
+          <th>Compétences</th>
+          <th>Objets / spécialités</th>
+          <th>Liens</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="persona-name">toto</span></td>
+          <td>
+            <span class="skill-chip">🐧 linux x1</span>
+            <span class="skill-chip">🔧 bash x1</span>
+            <span class="skill-chip">🔊 sound-spot x1</span>
+          </td>
+          <td>
+            <span class="obj-chip">RPi Zero 2W sound-spot</span>
+            <span class="obj-chip">Enceinte JBL EON615</span>
+            <span class="obj-chip">Jardin partagé 30m²</span>
+            <span class="obj-chip">Marmite norvégienne</span>
+          </td>
+          <td>
+            <a href="skills.html" style="color:var(--accent-light);font-size:11px">☁️ Skills</a>
+          </td>
+        </tr>
+        <tr>
+          <td><span class="persona-name">coucou</span></td>
+          <td>
+            <span class="skill-chip">🐳 docker x1</span>
+            <span class="skill-chip">🐧 linux x1</span>
+            <span class="skill-chip">⚡ nostr x1</span>
+          </td>
+          <td>
+            <span class="obj-chip">Guide sound-spot</span>
+            <span class="obj-chip">Guide menuiserie cabane</span>
+          </td>
+          <td>
+            <a href="skills.html" style="color:var(--accent-light);font-size:11px">☁️ Skills</a>
+          </td>
+        </tr>
+        <tr>
+          <td><span class="persona-name">jean</span></td>
+          <td>
+            <span class="skill-chip">⚓ astroport x1</span>
+            <span class="skill-chip">📦 ipfs x1</span>
+            <span class="skill-chip">⚡ nostr x1</span>
+            <span class="skill-chip">🌿 git x1</span>
+          </td>
+          <td>
+            <span class="obj-chip">Cabane-33</span>
+            <span class="obj-chip">Dôme Rocket 4.1</span>
+            <span class="obj-chip">Kit ESP32 Meshtastic</span>
+          </td>
+          <td>
+            <a href="skills.html" style="color:var(--accent-light);font-size:11px">☁️ Skills</a>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+    <div style="margin-top:10px;font-size:11px;color:var(--text-muted)">
+      <i class="bi bi-info-circle"></i>
+      Attestations croisées : jean → linux pour toto · toto → nostr pour coucou · coucou → docker pour jean.
+      <a href="skills.html" style="color:var(--accent-light)">Voir le nuage de compétences →</a>
+    </div>
+    <div style="text-align:center;margin-top:16px">
+      <a href="justice.html" style="color:#f59e0b;font-size:13px;font-weight:600">⚖️ Interface Justice &amp; Médiation N1/N2 →</a>
+    </div>
+  </div>
+
+</div><!-- .main -->
+
+<script src="nacl-fast.min.js"></script>
+<script src="nostr.bundle.js"></script>
+<script src="common.js"></script>
+<script src="uplanet-header.js"></script>
+<script src="relay.js"></script>
+<script>
+'use strict';
+
+/* ══════════════════════════════════════════
+   ÉTAT GLOBAL
+══════════════════════════════════════════ */
+var _activeRelay   = '';
+var _activeDomain  = 'habitat';
+var _objectEvents  = [];   /* stockés pour showRecipe */
+var _craftEvents   = [];   /* stockés pour showCraft */
+var _selectedObjIdx = -1;
+var _selectedCraftIdx = -1;
+
+/* Mapping onglet → tag NOSTR '#t' */
+var DOMAIN_TAGS = {
+    'habitat'   : 'habitat',
+    'culture'   : 'culture',
+    'cuisine'   : 'cuisine',
+    'vêtement'  : 'vêtement',
+    'soin'      : 'soin',
+    'numérique' : 'numérique',
+    'transport' : 'transport'
+};
+
+/* ══════════════════════════════════════════
+   HELPERS
+══════════════════════════════════════════ */
+function _esc(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function _getRelayWs() {
+    var r = window.getRelayUrl && window.getRelayUrl();
+    if (r) return r.replace(/^https/, 'ws').replace(/^http/, 'ws');
+    var h = location.hostname;
+    return (h === 'localhost' || h === '127.0.0.1') ? 'ws://127.0.0.1:7777'
+         : 'wss://relay.' + h.replace(/^[^.]+\./, '');
+}
+
+function _tagVal(ev, name) {
+    var t = (ev.tags || []).find(function(t){ return t[0] === name; });
+    return t ? (t[1] || '') : '';
+}
+
+function _parseContent(ev) {
+    try { return JSON.parse(ev.content); } catch(e) { return {}; }
+}
+
+/* Couleur de la barre de durabilité selon la valeur (0–100) */
+function _durColor(d) {
+    if (d == null || isNaN(d)) return 'rgba(255,255,255,0.2)';
+    if (d >= 80) return '#10b981';   /* 🟢 */
+    if (d >= 60) return '#fbbf24';   /* 🟡 */
+    if (d >= 40) return '#f97316';   /* 🟠 */
+    return '#ef4444';                /* 🔴 */
+}
+
+/* Icône de durabilité pour les badges */
+function _durIcon(d) {
+    if (d == null || isNaN(d)) return '⚪';
+    if (d >= 80) return '🟢';
+    if (d >= 60) return '🟡';
+    if (d >= 40) return '🟠';
+    return '🔴';
+}
+
+/* Badge style selon quantity_type */
+function _qtBadgeStyle(qt) {
+    var styles = {
+        discrete:    'background:rgba(245,158,11,0.15);color:#fcd34d',
+        capacity:    'background:rgba(20,184,166,0.15);color:#5eead4',
+        durability:  'background:rgba(99,102,241,0.15);color:#a5b4fc',
+        infinite:    'background:rgba(139,92,246,0.15);color:#c4b5fd'
+    };
+    return styles[qt] || 'background:rgba(255,255,255,0.08);color:#94a3b8';
+}
+
+function _mobilityIcon(mob) {
+    if (mob === 'fixed')    return '📍';
+    if (mob === 'portable') return '🎒';
+    if (mob === 'mobile')   return '🚶';
+    return '↕️';
+}
+
+/* d-tag d'un event */
+function _dtag(ev) {
+    var t = (ev.tags || []).find(function(t){ return t[0] === 'd'; });
+    return t ? t[1] : ev.id;
+}
+
+/* ══════════════════════════════════════════
+   RELAY CONSTELLATION
+══════════════════════════════════════════ */
+function _initRelay() {
+    var apiBase = window.getAPIUrl ? window.getAPIUrl() : '';
+    return RelaySelector.init({
+        selectEl   : '#relay-select',
+        localRelay : _activeRelay,
+        apiBase    : apiBase,
+        onChange   : function(wsUrl) {
+            if (!wsUrl || wsUrl === _activeRelay) return;
+            _activeRelay = wsUrl;
+            document.getElementById('stat-relay').textContent = wsUrl.replace(/^wss?:\/\//,'');
+            _setStatus('🔄 Connexion…', 'var(--text-muted)');
+            loadDomain(_activeDomain);
+        },
+        onReady    : function() {
+            _setStatus('🟢 ' + _activeRelay.replace(/^wss?:\/\//,''), '#10b981');
+        }
+    });
+}
+
+function _setStatus(txt, color) {
+    var el = document.getElementById('relay-status');
+    el.textContent = txt; el.style.color = color || '';
+}
+
+/* ══════════════════════════════════════════
+   SÉLECTION DOMAINE (collection cards H2G2)
+══════════════════════════════════════════ */
+function selectDomain(domain) {
+    _activeDomain = domain;
+    _selectedObjIdx   = -1;
+    _selectedCraftIdx = -1;
+    closeRecipe();
+
+    document.querySelectorAll('.coll-card').forEach(function(c) {
+        c.classList.toggle('active', c.dataset.domain === domain);
+    });
+
+    loadDomain(domain);
+}
+
+/* ══════════════════════════════════════════
+   CHARGEMENT DES DONNÉES (Kind 30505 + 30500)
+══════════════════════════════════════════ */
+async function loadDomain(domain) {
+    var tag = DOMAIN_TAGS[domain] || domain;
+
+    document.getElementById('items-objects').innerHTML =
+        '<div class="item-row" style="color:var(--text-muted);cursor:default;text-align:center"><i class="bi bi-hourglass-split"></i> Relay…</div>';
+    document.getElementById('crafts-list').innerHTML =
+        '<div class="craft-row" style="color:#a78bfa;cursor:default;text-align:center"><i class="bi bi-hourglass-split"></i></div>';
+    document.getElementById('obj-count').textContent   = '…';
+    document.getElementById('craft-count').textContent = '…';
+    document.getElementById('stat-domain').textContent = domain;
+
+    try {
+        /* Requêtes parallèles : objets + crafts */
+        var results = await Promise.all([
+            RelaySelector.query(
+                _activeRelay,
+                { kinds: [30505], '#t': [tag], limit: 100 },
+                { timeout: 8000 }
+            ),
+            RelaySelector.query(
+                _activeRelay,
+                { kinds: [30500], '#t': [tag], limit: 50 },
+                { timeout: 8000 }
+            )
+        ]);
+
+        var objEvents   = _dedupByDtag(results[0]);
+        var craftEvents = _dedupByDtag(results[1]);
+
+        renderObjects(objEvents);
+        renderCrafts(craftEvents);
+
+    } catch(e) {
+        document.getElementById('items-objects').innerHTML =
+            '<div class="item-row" style="color:var(--text-muted);cursor:default"><i class="bi bi-wifi-off"></i> Relay inaccessible</div>';
+        document.getElementById('crafts-list').innerHTML =
+            '<div class="craft-row" style="color:#a78bfa;cursor:default"><i class="bi bi-wifi-off"></i> Relay inaccessible</div>';
+    }
+}
+
+/* Garde l'événement le plus récent par (pubkey, d-tag) */
+function _dedupByDtag(events) {
+    var map = {};
+    events.forEach(function(ev) {
+        var key = ev.pubkey + ':' + _dtag(ev);
+        if (!map[key] || ev.created_at > map[key].created_at) map[key] = ev;
+    });
+    return Object.values(map);
+}
+
+/* ══════════════════════════════════════════
+   RECETTE — afficher / fermer
+══════════════════════════════════════════ */
+function closeRecipe() {
+    document.getElementById('recipe-empty').style.display = '';
+    document.getElementById('recipe-card').style.display  = 'none';
+}
+
+function showRecipe(idx) {
+    _selectedObjIdx   = idx;
+    _selectedCraftIdx = -1;
+    var ev  = _objectEvents[idx];
+    if (!ev) return;
+
+    var p     = _parseContent(ev);
+    var title = p.title  || _tagVal(ev,'title') || _dtag(ev);
+    var qt    = p.quantity_type || 'discrete';
+    var qty   = p.quantity != null ? p.quantity : '?';
+    var unit  = p.quantity_unit || '';
+    var mob   = p.mobility || 'portable';
+    var dur   = p.durability  != null ? +p.durability  : null;
+    var rep   = p.repairability != null ? +p.repairability : null;
+    var desc  = p.description || '';
+    var dtag  = _dtag(ev);
+    var durPct = dur != null ? Math.min(100, Math.max(0, dur)) : null;
+
+    document.getElementById('rec-name').textContent = title;
+
+    /* Badges */
+    var badges = '<span class="qt-badge" style="' + _qtBadgeStyle(qt) + '">' + _esc(qt) + '</span>'
+        + '<span class="qt-badge" style="background:rgba(255,255,255,0.07);color:#94a3b8">'
+        +   _mobilityIcon(mob) + ' ' + _esc(mob) + '</span>';
+    document.getElementById('rec-badges').innerHTML = badges;
+
+    /* Ingrédients */
+    var ingr = [];
+    ingr.push('📦 Quantité : ' + qty + (unit ? ' ' + unit : ''));
+    if (dur != null)  ingr.push(_durIcon(dur) + ' Durabilité : ' + durPct + '%');
+    if (rep != null)  ingr.push('🔧 Réparabilité : ' + rep + ' / 10');
+    if (durPct != null) {
+        ingr.push('<li style="list-style:none;display:block;padding:4px 0">'
+            + '<div class="dur-bar-wrap"><div class="dur-bar" style="width:' + durPct + '%;background:' + _durColor(dur) + '"></div></div></li>');
+    }
+    var minop = p.min_operators || _tagVal(ev,'min_operators');
+    if (minop && +minop > 1) ingr.push('👥 ' + minop + ' opérateurs minimum');
+    var skillReq = _tagVal(ev,'skill_required');
+    if (skillReq) ingr.push('🎓 Compétence requise : ' + skillReq);
+
+    document.getElementById('rec-ingredients').innerHTML =
+        ingr.filter(function(s){ return !s.startsWith('<li'); })
+            .map(function(s){ return '<li>' + _esc(s) + '</li>'; }).join('')
+        + ingr.filter(function(s){ return s.startsWith('<li'); }).join('');
+
+    /* Description */
+    var descEl = document.getElementById('rec-desc');
+    if (desc) { descEl.textContent = desc; descEl.style.display = ''; }
+    else       { descEl.style.display = 'none'; }
+
+    /* Lien */
+    document.getElementById('rec-link').href = 'objects.html?d=' + encodeURIComponent(dtag);
+    document.getElementById('rec-link').textContent = '🔗 Voir dans Objets';
+
+    /* Marquer la ligne active */
+    document.querySelectorAll('.item-row').forEach(function(r, i) { r.classList.toggle('active', i === idx); });
+    document.querySelectorAll('.craft-row').forEach(function(r) { r.classList.remove('active'); });
+
+    document.getElementById('recipe-empty').style.display = 'none';
+    document.getElementById('recipe-card').style.display  = '';
+}
+
+function showCraft(idx) {
+    _selectedCraftIdx = idx;
+    _selectedObjIdx   = -1;
+    var ev  = _craftEvents[idx];
+    if (!ev) return;
+
+    var p     = _parseContent(ev);
+    var title = p.title || _tagVal(ev,'title') || _dtag(ev);
+    var minop = p.min_operators || _tagVal(ev,'min_operators') || 1;
+    var time  = p.estimated_time || _tagVal(ev,'estimated_time') || '?';
+    var desc  = p.description || '';
+    var dtag  = _dtag(ev);
+
+    document.getElementById('rec-name').textContent = title;
+    document.getElementById('rec-badges').innerHTML =
+        '<span class="qt-badge" style="background:rgba(124,58,237,0.14);color:#a78bfa">🔨 Craft collectif</span>';
+
+    var ingr = [
+        '👥 ' + minop + ' opérateur(s) minimum',
+        '⏱ Durée estimée : ' + time
+    ];
+    var steps = (p.steps || []);
+    steps.forEach(function(s, i) { ingr.push((i+1) + '. ' + s); });
+    document.getElementById('rec-ingredients').innerHTML =
+        ingr.map(function(s){ return '<li>' + _esc(s) + '</li>'; }).join('');
+
+    var descEl = document.getElementById('rec-desc');
+    if (desc) { descEl.textContent = desc; descEl.style.display = ''; }
+    else       { descEl.style.display = 'none'; }
+
+    document.getElementById('rec-link').href = 'calendars.html?craft=' + encodeURIComponent(dtag);
+    document.getElementById('rec-link').textContent = '📅 Planifier ce craft';
+
+    document.querySelectorAll('.craft-row').forEach(function(r, i) { r.classList.toggle('active', i === idx); });
+    document.querySelectorAll('.item-row').forEach(function(r) { r.classList.remove('active'); });
+
+    document.getElementById('recipe-empty').style.display = 'none';
+    document.getElementById('recipe-card').style.display  = '';
+}
+
+/* ══════════════════════════════════════════
+   RENDU OBJETS (Kind 30505) → lignes cliquables
+══════════════════════════════════════════ */
+function renderObjects(events) {
+    _objectEvents = events;
+    if (!events.length) {
+        document.getElementById('items-objects').innerHTML =
+            '<div class="item-row" style="color:var(--text-muted);cursor:default;text-align:center"><i class="bi bi-box"></i> Aucun objet</div>';
+        document.getElementById('obj-count').textContent = '0';
+        return;
+    }
+    document.getElementById('obj-count').textContent = events.length;
+
+    var html = events.map(function(ev, idx) {
+        var p    = _parseContent(ev);
+        var title = p.title || _tagVal(ev,'title') || _dtag(ev);
+        var qt   = p.quantity_type || 'discrete';
+        var dur  = p.durability != null ? +p.durability : null;
+        var qty  = p.quantity != null ? p.quantity : '?';
+        var unit = p.quantity_unit || '';
+
+        return '<div class="item-row" onclick="showRecipe(' + idx + ')">'
+            + '<div class="item-row-name">' + _esc(title) + '</div>'
+            + '<div class="item-row-meta">'
+            +   _esc(qt) + (dur != null ? ' · ' + _durIcon(dur) + ' ' + Math.round(dur) + '%' : '')
+            +   ' · ' + _esc(String(qty)) + (unit ? ' ' + _esc(unit) : '')
+            + '</div>'
+            + '</div>';
+    }).join('');
+
+    document.getElementById('items-objects').innerHTML = html;
+}
+
+/* ══════════════════════════════════════════
+   RENDU CRAFTS (Kind 30500) → lignes cliquables
+══════════════════════════════════════════ */
+function renderCrafts(events) {
+    _craftEvents = events;
+    if (!events.length) {
+        document.getElementById('crafts-list').innerHTML =
+            '<div class="craft-row" style="color:#a78bfa;cursor:default;text-align:center"><i class="bi bi-tools"></i> Aucun craft</div>';
+        document.getElementById('craft-count').textContent = '0';
+        return;
+    }
+    document.getElementById('craft-count').textContent = events.length;
+
+    var html = events.map(function(ev, idx) {
+        var p    = _parseContent(ev);
+        var title = p.title || _tagVal(ev,'title') || _dtag(ev);
+        var minop = p.min_operators || _tagVal(ev,'min_operators') || 1;
+        var time  = p.estimated_time || _tagVal(ev,'estimated_time') || '?';
+
+        return '<div class="craft-row" onclick="showCraft(' + idx + ')">'
+            + '<div class="craft-row-name">🔨 ' + _esc(title) + '</div>'
+            + '<div class="craft-row-meta">👥 ' + _esc(String(minop)) + ' op · ⏱ ' + _esc(String(time)) + '</div>'
+            + '</div>';
+    }).join('');
+
+    document.getElementById('crafts-list').innerHTML = html;
+}
+
+/* ══════════════════════════════════════════
+   INIT
+══════════════════════════════════════════ */
+document.addEventListener('DOMContentLoaded', function() {
+    _activeRelay = _getRelayWs();
+    document.getElementById('stat-relay').textContent = _activeRelay.replace(/^wss?:\/\//,'');
+
+    /* Relay depuis paramètre URL si présent */
+    var qp = new URLSearchParams(location.search);
+    if (qp.get('relay')) _activeRelay = qp.get('relay');
+
+    /* Domaine initial depuis URL si présent */
+    var domainParam = qp.get('domain');
+    if (domainParam && DOMAIN_TAGS[domainParam]) _activeDomain = domainParam;
+
+    _initRelay().then(function() {
+        _setStatus('🟢 ' + _activeRelay.replace(/^wss?:\/\//,''), '#10b981');
+        loadDomain(_activeDomain);
+    }).catch(function() {
+        loadDomain(_activeDomain);
+    });
+
+    /* Marquer la collection active au démarrage */
+    document.querySelectorAll('.coll-card').forEach(function(c) {
+        c.classList.toggle('active', c.dataset.domain === _activeDomain);
+    });
+});
+</script>
+</body>
+</html>

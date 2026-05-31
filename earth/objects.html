@@ -1,0 +1,727 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Objets & Ressources · WoTx² UPlanet</title>
+<link rel="icon" type="image/x-icon" href="favicon.ring.ico">
+<link rel="stylesheet" href="bootstrap.min.css">
+<link rel="stylesheet" href="fonts/bootstrap-icons.css">
+<style>
+:root {
+    --accent:       #059669;
+    --accent-light: #10b981;
+    --accent-dark:  #047857;
+    --water-blue:   #0ea5e9;
+    --bg-main:      linear-gradient(135deg,#0a1628 0%,#0d2b1e 40%,#0a1a2e 100%);
+    --card-bg:      rgba(8,20,14,0.96);
+    --card-border:  rgba(5,150,105,0.28);
+    --text-muted:   #8ba098;
+}
+* { box-sizing: border-box; }
+:root { --bs-body-bg:#07121a; --bs-body-color:#d1fae5; }
+body {
+    margin:0; min-height:100vh;
+    background-color:#07121a;
+    background-image:var(--bg-main);
+    font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;
+    color:#d1fae5;
+}
+.main { max-width:1300px; margin:64px auto 0; padding:14px 14px 56px; }
+
+.page-header { display:flex; align-items:center; gap:12px; margin-bottom:12px; flex-wrap:wrap; }
+.page-title { font-size:18px; font-weight:700; color:var(--accent-light); flex:1; }
+.page-title small { display:block; font-size:11px; color:var(--text-muted); font-weight:400; margin-top:2px; }
+
+.source-bar {
+    display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+    background:rgba(16,185,129,0.04);
+    border:1px solid rgba(16,185,129,0.15);
+    border-radius:10px; padding:7px 12px; margin-bottom:10px;
+    font-size:11.5px;
+}
+.source-bar-label { color:var(--text-muted); font-weight:600; white-space:nowrap; }
+#relay-select {
+    background:rgba(7,18,32,0.85); border:1px solid rgba(16,185,129,0.2);
+    border-radius:7px; color:#d1fae5; font-size:11px; padding:4px 8px;
+    cursor:pointer; min-width:160px; max-width:280px;
+}
+#relay-select option { background:#07121a; }
+.relay-status { font-size:10.5px; color:var(--text-muted); }
+
+.toolbar {
+    display:flex; align-items:center; gap:6px;
+    margin-bottom:12px; flex-wrap:wrap;
+}
+.filter-group { display:flex; gap:4px; flex-wrap:wrap; }
+.filter-sep { width:1px; background:rgba(16,185,129,0.15); align-self:stretch; margin:0 4px; }
+.btn-filter {
+    padding:4px 10px; border-radius:14px; font-size:11px; font-weight:600;
+    cursor:pointer; border:1px solid rgba(16,185,129,0.25);
+    background:rgba(16,185,129,0.06); color:var(--text-muted); transition:all 0.15s;
+}
+.btn-filter.active { background:linear-gradient(135deg,var(--accent-dark),var(--water-blue)); border-color:transparent; color:white; }
+#btn-add {
+    margin-left:auto; padding:5px 12px; border-radius:18px; font-size:11px;
+    font-weight:600; cursor:pointer; border:1px solid rgba(16,185,129,0.35);
+    background:rgba(16,185,129,0.12); color:var(--accent-light);
+    text-decoration:none; display:inline-flex; align-items:center; gap:5px;
+}
+#btn-add:hover { background:rgba(16,185,129,0.22); color:#fff; }
+#btn-refresh {
+    padding:5px 10px; border-radius:18px; font-size:11px; font-weight:600;
+    cursor:pointer; border:1px solid rgba(16,185,129,0.25);
+    background:rgba(16,185,129,0.07); color:var(--text-muted);
+}
+#btn-refresh:hover { background:rgba(16,185,129,0.16); color:var(--accent-light); }
+
+.body-wrap { display:flex; gap:14px; align-items:flex-start; }
+.grid-wrap { flex:1; min-width:0; }
+#objects-grid {
+    display:grid;
+    grid-template-columns:repeat(auto-fill, minmax(220px,1fr));
+    gap:10px;
+}
+.obj-card {
+    background:var(--card-bg); border:1px solid var(--card-border);
+    border-radius:12px; padding:12px 14px; cursor:pointer;
+    transition:border-color 0.18s, transform 0.12s;
+}
+.obj-card:hover { border-color:var(--accent); transform:translateY(-2px); }
+.obj-card.selected { border-color:var(--accent-light); box-shadow:0 0 0 1px var(--accent-light); }
+.obj-card-head { display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:6px; }
+.obj-name { font-size:13px; font-weight:700; color:#d1fae5; line-height:1.3; }
+.obj-mobility {
+    font-size:10px; font-weight:600; padding:2px 6px; border-radius:8px;
+    background:rgba(255,255,255,0.07); color:var(--text-muted); white-space:nowrap; flex-shrink:0;
+}
+.obj-type-badge {
+    display:inline-block; font-size:10px; padding:2px 7px; border-radius:8px;
+    margin-bottom:6px; font-weight:600;
+}
+.dur-bar-wrap { background:rgba(255,255,255,0.07); border-radius:4px; height:6px; margin-bottom:4px; }
+.dur-bar { height:6px; border-radius:4px; transition:width 0.4s; }
+.dur-label { display:flex; justify-content:space-between; font-size:10px; color:var(--text-muted); margin-bottom:6px; }
+.obj-meta { font-size:10.5px; color:var(--text-muted); margin-top:4px; }
+.obj-pubkey { font-size:10px; color:rgba(139,160,152,0.6); margin-top:4px; }
+.obj-empty { text-align:center; padding:40px 0; color:var(--text-muted); font-size:14px; }
+
+#detail-panel {
+    width:290px; flex-shrink:0;
+    background:var(--card-bg); border:1px solid var(--card-border);
+    border-radius:14px; padding:18px 16px; display:none;
+    animation:fadeIn 0.2s ease;
+}
+@keyframes fadeIn { from{opacity:0;transform:translateX(8px)} to{opacity:1;transform:none} }
+.dp-name { font-size:17px; font-weight:800; color:var(--accent-light); margin-bottom:4px; }
+.dp-sub { font-size:11px; color:var(--text-muted); margin-bottom:10px; }
+.dp-dur-wrap { background:rgba(255,255,255,0.07); border-radius:6px; height:10px; margin-bottom:4px; }
+.dp-dur-bar { height:10px; border-radius:6px; }
+.dp-stat { display:flex; justify-content:space-between; font-size:11px; color:var(--text-muted); margin-bottom:10px; }
+.dp-section-title {
+    font-size:10px; font-weight:700; color:var(--text-muted);
+    text-transform:uppercase; letter-spacing:.06em; margin:12px 0 6px;
+}
+.dp-desc { font-size:11px; color:#94a3b8; margin-bottom:8px; line-height:1.5; }
+.tx-list { display:flex; flex-direction:column; gap:5px; max-height:180px; overflow-y:auto; }
+.tx-item {
+    font-size:10.5px; background:rgba(255,255,255,0.04);
+    border-radius:7px; padding:5px 8px;
+    border-left:2px solid var(--card-border);
+}
+.tx-item.consumption { border-left-color:#ef4444; }
+.tx-item.maintenance { border-left-color:#10b981; }
+.tx-item.acquisition { border-left-color:#0ea5e9; }
+.tx-item.degradation { border-left-color:#f59e0b; }
+.dp-actions { display:flex; flex-direction:column; gap:6px; margin-top:12px; }
+.btn-dp {
+    width:100%; padding:7px 12px; border-radius:10px; font-size:12px;
+    font-weight:600; cursor:pointer; border:1px solid transparent;
+    text-align:center; text-decoration:none; display:block; transition:all 0.15s;
+}
+.btn-dp.primary { background:linear-gradient(135deg,var(--accent-dark),var(--water-blue)); color:white; border:none; }
+.btn-dp.primary:hover { opacity:.88; }
+.btn-dp.secondary { background:rgba(16,185,129,0.07); border-color:rgba(16,185,129,0.3); color:var(--accent-light); }
+.btn-dp.secondary:hover { background:rgba(16,185,129,0.14); }
+.btn-close-dp { width:100%; background:none; border:none; color:var(--text-muted); font-size:11px; cursor:pointer; padding:6px 0 0; text-align:center; }
+
+.stat-bar {
+    background:var(--card-bg); border:1px solid var(--card-border);
+    border-radius:10px; padding:6px 14px; font-size:11px; color:var(--text-muted);
+    display:flex; align-items:center; gap:14px; flex-wrap:wrap; margin-top:10px;
+}
+.stat-item strong { color:var(--accent-light); }
+
+/* modal */
+.modal-content { background:#0d1f14; border:1px solid var(--card-border); color:#d1fae5; }
+.modal-header { border-bottom:1px solid var(--card-border); }
+.modal-footer { border-top:1px solid var(--card-border); }
+.form-control, .form-select {
+    background:rgba(7,18,32,0.85); border-color:rgba(16,185,129,0.2);
+    color:#d1fae5;
+}
+.form-control:focus, .form-select:focus {
+    background:rgba(7,18,32,0.95); border-color:var(--accent);
+    color:#d1fae5; box-shadow:0 0 0 2px rgba(5,150,105,0.25);
+}
+.form-label { color:var(--text-muted); font-size:11.5px; font-weight:600; }
+
+@media(max-width:700px){
+    .body-wrap { flex-direction:column; }
+    #detail-panel { width:100%; }
+}
+</style>
+</head>
+<body>
+
+<div class="main">
+  <div class="page-header">
+    <div class="page-title">
+      📦 Objets & Ressources
+      <small>Communs WoTx² · Kind 30505 · durabilité, réparabilité, quorum</small>
+    </div>
+  </div>
+
+  <div class="source-bar">
+    <span class="source-bar-label"><i class="bi bi-broadcast"></i> Relay :</span>
+    <select id="relay-select" onchange="onRelayChange(this.value)">
+      <option value="">⏳ Constellation…</option>
+    </select>
+    <span class="relay-status" id="relay-status"></span>
+  </div>
+
+  <div class="toolbar">
+    <span style="font-size:11px;color:var(--text-muted);font-weight:600">Type :</span>
+    <div class="filter-group" id="filter-type">
+      <button class="btn-filter active" onclick="setFilter('type','all')">Tous</button>
+      <button class="btn-filter" onclick="setFilter('type','tool')">🔧 Outil</button>
+      <button class="btn-filter" onclick="setFilter('type','material')">📦 Matériau</button>
+      <button class="btn-filter" onclick="setFilter('type','infrastructure')">🏗️ Infra</button>
+      <button class="btn-filter" onclick="setFilter('type','capacity')">🏠 Capacité</button>
+      <button class="btn-filter" onclick="setFilter('type','infinite')">∞ Commun</button>
+    </div>
+    <span class="filter-sep"></span>
+    <div class="filter-group" id="filter-mobility">
+      <button class="btn-filter active" onclick="setFilter('mobility','all')">📍 Tous</button>
+      <button class="btn-filter" onclick="setFilter('mobility','fixed')">Fixe</button>
+      <button class="btn-filter" onclick="setFilter('mobility','mobile')">Mobile</button>
+    </div>
+    <span class="filter-sep"></span>
+    <div class="filter-group" id="filter-health">
+      <button class="btn-filter active" onclick="setFilter('health','all')">Santé</button>
+      <button class="btn-filter" onclick="setFilter('health','ok')">✅ OK</button>
+      <button class="btn-filter" onclick="setFilter('health','warn')">🟡 Entretien</button>
+      <button class="btn-filter" onclick="setFilter('health','urgent')">🔴 Urgent</button>
+    </div>
+    <button id="btn-refresh" onclick="loadObjects()" title="Recharger"><i class="bi bi-arrow-clockwise"></i></button>
+    <a id="btn-add" href="plantnet.html?type=object">
+      <i class="bi bi-plus-circle"></i> Déclarer un objet
+    </a>
+  </div>
+
+  <div class="body-wrap">
+    <div class="grid-wrap">
+      <div id="objects-grid">
+        <div class="obj-empty"><i class="bi bi-hourglass-split"></i><br>Chargement…</div>
+      </div>
+    </div>
+
+    <div id="detail-panel">
+      <div class="dp-name" id="dp-name">—</div>
+      <div class="dp-sub" id="dp-sub"></div>
+      <div class="dp-section-title">Santé</div>
+      <div class="dp-dur-wrap"><div class="dp-dur-bar" id="dp-dur-bar" style="width:0%"></div></div>
+      <div class="dp-stat">
+        <span id="dp-dur-label">dur: —%</span>
+        <span id="dp-qty-label">—</span>
+        <span id="dp-rep-label">rep: —/10</span>
+      </div>
+      <div class="dp-section-title">Description</div>
+      <div class="dp-desc" id="dp-desc">—</div>
+      <div class="dp-section-title">Transactions récentes</div>
+      <div class="tx-list" id="dp-tx">
+        <div style="font-size:10.5px;color:var(--text-muted)">Chargement…</div>
+      </div>
+      <div class="dp-section-title" id="dp-geo-section" style="display:none">Localisation</div>
+      <div id="dp-geo" style="font-size:11px;color:var(--text-muted)"></div>
+      <div class="dp-actions">
+        <button class="btn-dp primary" onclick="openTxModal()">
+          <i class="bi bi-pencil-square"></i> Déclarer une transaction
+        </button>
+        <a class="btn-dp secondary" id="dp-craft-link" href="minelife.html" target="_blank">
+          <i class="bi bi-hammer"></i> Recettes de craft liées
+        </a>
+        <a class="btn-dp secondary" id="dp-calendar-link" href="calendars.html" target="_blank">
+          <i class="bi bi-calendar3"></i> Planifier un craft collectif
+        </a>
+      </div>
+      <button class="btn-close-dp" onclick="closeDetail()">
+        <i class="bi bi-x"></i> Fermer
+      </button>
+    </div>
+  </div>
+
+  <div class="stat-bar">
+    <span class="stat-item">Objets : <strong id="stat-objects">—</strong></span>
+    <span class="stat-item">Types : <strong id="stat-types">—</strong></span>
+    <span class="stat-item" id="stat-mine-wrap" style="display:none">
+      Mes objets : <strong id="stat-mine">—</strong>
+    </span>
+    <span class="stat-item">Relay : <strong id="stat-relay">—</strong></span>
+  </div>
+</div>
+
+<!-- Modal : déclarer une transaction Kind 1505 -->
+<div class="modal fade" id="txModal" tabindex="-1" aria-labelledby="txModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h6 class="modal-title" id="txModalLabel">
+          <i class="bi bi-pencil-square"></i> Déclarer une transaction
+          <small class="d-block text-muted" style="font-size:10px;font-weight:400" id="tx-object-name"></small>
+        </h6>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label">Type de transaction</label>
+          <select class="form-select form-select-sm" id="tx-type">
+            <option value="consumption">📉 consumption — stock diminue (usage)</option>
+            <option value="maintenance">🔧 maintenance — durabilité remonte</option>
+            <option value="acquisition">📈 acquisition — stock augmente</option>
+            <option value="degradation">📉 degradation — usure constatée</option>
+            <option value="transfer">🔄 transfer — changement de détenteur</option>
+            <option value="evolution">⬆️ evolution — objet plus abouti</option>
+            <option value="retirement">🪦 retirement — objet retiré</option>
+          </select>
+        </div>
+        <div class="row g-2 mb-3">
+          <div class="col-6">
+            <label class="form-label">Δ quantité (±)</label>
+            <input type="number" class="form-control form-control-sm" id="tx-delta-qty" placeholder="ex: -2" step="1">
+          </div>
+          <div class="col-6">
+            <label class="form-label">Δ durabilité (±)</label>
+            <input type="number" class="form-control form-control-sm" id="tx-delta-dur" placeholder="ex: +5" step="1" min="-100" max="100">
+          </div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Raison / contexte</label>
+          <input type="text" class="form-control form-control-sm" id="tx-reason" placeholder="craft sound-spot-dj, session 2026-05-30…">
+        </div>
+        <div class="mb-2">
+          <label class="form-label">Opérateurs (pubkeys hex, un par ligne)</label>
+          <textarea class="form-control form-control-sm" id="tx-operators" rows="2" placeholder="votre pubkey est ajoutée automatiquement"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Annuler</button>
+        <button type="button" class="btn btn-sm" id="tx-submit-btn"
+          style="background:linear-gradient(135deg,#047857,#0ea5e9);color:white;border:none;"
+          onclick="publishTx()">
+          <i class="bi bi-send"></i> Publier Kind 1505
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="nacl-fast.min.js"></script>
+<script src="nostr.bundle.js"></script>
+<script src="common.js"></script>
+<script src="uplanet-header.js"></script>
+<script src="relay.js"></script>
+<script>
+'use strict';
+
+/* ══════════════════════════════════════════
+   ÉTAT GLOBAL
+══════════════════════════════════════════ */
+var _objects    = {};   // key=pubkey:dtag → event (most recent)
+var _activeRelay = '';
+var _pubHex     = null;
+var _selectedKey = null;
+var _filters = { type: 'all', mobility: 'all', health: 'all' };
+
+/* ══════════════════════════════════════════
+   HELPERS LOCAUX (non dupliqués de common.js)
+   Seul _esc() est local — les URL viennent de window.getAPIUrl/getRelayUrl (common.js)
+══════════════════════════════════════════ */
+function _esc(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function _getRelayWs() {
+    var r = window.getRelayUrl && window.getRelayUrl();
+    if (r) return r.replace(/^https/, 'ws').replace(/^http/, 'ws');
+    var h = location.hostname;
+    return (h === 'localhost' || h === '127.0.0.1') ? 'ws://127.0.0.1:7777'
+         : 'wss://relay.' + h.replace(/^[^.]+\./, '');
+}
+function _getIpfsBase() {
+    var h = location.hostname;
+    return (h === 'localhost' || h === '127.0.0.1') ? 'http://127.0.0.1:8080'
+         : 'https://ipfs.' + h.replace(/^[^.]+\./, '');
+}
+function _dtag(ev) {
+    var t = (ev.tags || []).find(function(t){return t[0]==='d';});
+    return t ? t[1] : ev.id;
+}
+function _tagVal(ev, name) {
+    var t = (ev.tags || []).find(function(t){return t[0]===name;});
+    return t ? (t[1] || '') : '';
+}
+function _parseContent(ev) {
+    try { return JSON.parse(ev.content); } catch(e) { return {}; }
+}
+function _durColor(d) {
+    if (d == null) return 'rgba(255,255,255,0.2)';
+    return d >= 70 ? '#10b981' : d >= 40 ? '#f59e0b' : '#ef4444';
+}
+function _typeEmoji(t) {
+    var m = {tool:'🔧',material:'📦',infrastructure:'🏗️',capacity:'🏠',infinite:'∞',knowledge:'∞'};
+    return m[t] || '📦';
+}
+function _typeBadgeStyle(t) {
+    var m = {
+        tool:           'background:rgba(99,102,241,0.15);color:#a5b4fc',
+        material:       'background:rgba(245,158,11,0.15);color:#fcd34d',
+        infrastructure: 'background:rgba(16,185,129,0.15);color:#6ee7b7',
+        capacity:       'background:rgba(20,184,166,0.15);color:#5eead4',
+        infinite:       'background:rgba(139,92,246,0.15);color:#c4b5fd',
+        knowledge:      'background:rgba(139,92,246,0.15);color:#c4b5fd'
+    };
+    return m[t] || 'background:rgba(255,255,255,0.08);color:#94a3b8';
+}
+function _fmtDate(ts) {
+    return new Date(ts * 1000).toLocaleDateString('fr-FR', {day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'});
+}
+
+/* ══════════════════════════════════════════
+   RELAY CONSTELLATION (réutilise RelaySelector)
+══════════════════════════════════════════ */
+function _loadConstellationRelays() {
+    var apiBase = window.getAPIUrl ? window.getAPIUrl() : '';
+    return RelaySelector.init({
+        selectEl   : '#relay-select',
+        localRelay : _activeRelay,
+        apiBase    : apiBase,
+        onChange   : onRelayChange,
+        onReady    : function() {
+            _setStatus('🟢 ' + _activeRelay.replace(/^wss?:\/\//,''), '#10b981');
+        }
+    });
+}
+function onRelayChange(wsUrl) {
+    if (!wsUrl || wsUrl === _activeRelay) return;
+    _activeRelay = wsUrl;
+    document.getElementById('stat-relay').textContent = wsUrl.replace(/^wss?:\/\//,'');
+    _setStatus('🔄 Connexion…', 'var(--text-muted)');
+    loadObjects();
+}
+function _setStatus(txt, color) {
+    var el = document.getElementById('relay-status');
+    el.textContent = txt; el.style.color = color || '';
+}
+
+/* ══════════════════════════════════════════
+   CHARGEMENT Kind 30505 (utilise RelaySelector.query)
+══════════════════════════════════════════ */
+async function loadObjects() {
+    document.getElementById('objects-grid').innerHTML =
+        '<div class="obj-empty"><i class="bi bi-hourglass-split"></i><br>Interrogation du relay…</div>';
+    try {
+        var events = await RelaySelector.query(
+            _activeRelay,
+            { kinds: [30505], limit: 300 },
+            { timeout: 8000 }
+        );
+        _objects = {};
+        events.forEach(function(ev) {
+            var key = ev.pubkey + ':' + _dtag(ev);
+            var ex  = _objects[key];
+            if (!ex || ev.created_at > ex.created_at) _objects[key] = ev;
+        });
+        renderGrid();
+    } catch(e) {
+        document.getElementById('objects-grid').innerHTML =
+            '<div class="obj-empty"><i class="bi bi-wifi-off"></i><br>Relay inaccessible</div>';
+    }
+}
+
+/* ══════════════════════════════════════════
+   FILTRES
+══════════════════════════════════════════ */
+function setFilter(k, v) {
+    _filters[k] = v;
+    document.querySelectorAll('#filter-' + k + ' .btn-filter').forEach(function(b){
+        b.classList.toggle('active', b.textContent.trim().toLowerCase().includes(v) || v==='all' && b === b.parentNode.firstElementChild);
+    });
+    renderGrid();
+}
+
+function _passFilter(ev, parsed) {
+    var type     = parsed.type     || _tagVal(ev,'t') || '';
+    var mobility = parsed.mobility || _tagVal(ev,'t') || '';
+    var dur      = parsed.durability != null ? +parsed.durability : null;
+
+    if (_filters.type     !== 'all' && type     !== _filters.type)     return false;
+    if (_filters.mobility !== 'all' && mobility !== _filters.mobility)  return false;
+    if (_filters.health === 'ok'     && (dur == null || dur < 70))       return false;
+    if (_filters.health === 'warn'   && (dur == null || dur < 40 || dur >= 70)) return false;
+    if (_filters.health === 'urgent' && (dur == null || dur >= 40))      return false;
+    return true;
+}
+
+/* ══════════════════════════════════════════
+   RENDU GRILLE
+══════════════════════════════════════════ */
+function renderGrid() {
+    var keys   = Object.keys(_objects);
+    var html   = '';
+    var shown  = 0;
+    var types  = new Set();
+    var mine   = 0;
+
+    keys.forEach(function(key) {
+        var ev     = _objects[key];
+        var parsed = _parseContent(ev);
+        if (!_passFilter(ev, parsed)) return;
+        shown++;
+        types.add(parsed.type || 'unknown');
+        if (_pubHex && ev.pubkey === _pubHex) mine++;
+        html += _cardHtml(key, ev, parsed);
+    });
+
+    document.getElementById('objects-grid').innerHTML =
+        html || '<div class="obj-empty"><i class="bi bi-search"></i><br>Aucun objet trouvé pour ces filtres</div>';
+
+    document.getElementById('stat-objects').textContent = shown;
+    document.getElementById('stat-types').textContent   = types.size;
+    if (_pubHex) {
+        document.getElementById('stat-mine-wrap').style.display = '';
+        document.getElementById('stat-mine').textContent = mine;
+    }
+}
+
+function _cardHtml(key, ev, p) {
+    var name     = p.name     || _tagVal(ev,'title') || _dtag(ev);
+    var type     = p.type     || 'unknown';
+    var mobility = p.mobility || _tagVal(ev,'t') || '?';
+    var qty      = p.quantity != null ? p.quantity : '?';
+    var unit     = p.quantity_unit || '';
+    var dur      = p.durability    != null ? +p.durability    : null;
+    var rep      = p.repairability != null ? +p.repairability : null;
+    var durPct   = dur != null ? Math.min(100, Math.max(0, dur)) : 0;
+    var col      = _durColor(dur);
+    var isMe     = _pubHex && ev.pubkey === _pubHex;
+    var minOp    = p.min_operators || 1;
+
+    return '<div class="obj-card' + (_selectedKey===key?' selected':'') + '" onclick="openDetail(\'' + _esc(key) + '\')">'
+        + '<div class="obj-card-head">'
+        +   '<span class="obj-name">' + _typeEmoji(type) + ' ' + _esc(name) + (isMe ? ' <i class="bi bi-person-check" title="Mon objet" style="color:var(--accent-light);font-size:9px"></i>' : '') + '</span>'
+        +   '<span class="obj-mobility">' + (mobility === 'fixed' ? '📍' : mobility === 'mobile' ? '🚶' : '↕️') + ' ' + _esc(mobility) + '</span>'
+        + '</div>'
+        + '<span class="obj-type-badge" style="' + _typeBadgeStyle(type) + '">' + _esc(type) + '</span>'
+        + (minOp > 1 ? '<span class="obj-type-badge" style="background:rgba(251,191,36,0.12);color:#fcd34d;margin-left:4px">👥 ' + minOp + '</span>' : '')
+        + (dur != null ? '<div class="dur-bar-wrap"><div class="dur-bar" style="width:' + durPct + '%;background:' + col + '"></div></div>'
+                       + '<div class="dur-label"><span>dur ' + durPct + '%</span><span>rep ' + (rep != null ? rep + '/10' : '?') + '</span></div>'
+                       : '')
+        + '<div class="obj-meta">qté: <strong>' + qty + (unit ? ' ' + _esc(unit) : '') + '</strong></div>'
+        + '<div class="obj-pubkey">@' + ev.pubkey.slice(0,8) + '…' + ev.pubkey.slice(-4) + '</div>'
+        + '</div>';
+}
+
+/* ══════════════════════════════════════════
+   PANNEAU DÉTAIL
+══════════════════════════════════════════ */
+async function openDetail(key) {
+    _selectedKey = key;
+    renderGrid();
+    var ev     = _objects[key];
+    var p      = _parseContent(ev);
+    var name   = p.name || _tagVal(ev,'title') || _dtag(ev);
+    var type   = p.type || 'unknown';
+    var mob    = p.mobility || '?';
+    var dur    = p.durability != null ? +p.durability : null;
+    var rep    = p.repairability != null ? +p.repairability : null;
+    var qty    = p.quantity != null ? p.quantity : '?';
+    var unit   = p.quantity_unit || '';
+    var durPct = dur != null ? Math.min(100, Math.max(0, dur)) : 0;
+    var minOp  = p.min_operators || 1;
+    var geo    = _tagVal(ev,'geo');
+
+    document.getElementById('detail-panel').style.display = 'block';
+    document.getElementById('dp-name').textContent = _typeEmoji(type) + ' ' + name;
+    document.getElementById('dp-sub').textContent  = type + ' · ' + mob + (minOp > 1 ? ' · 👥 ' + minOp + ' opérateurs' : '');
+    document.getElementById('dp-dur-bar').style.width      = durPct + '%';
+    document.getElementById('dp-dur-bar').style.background = _durColor(dur);
+    document.getElementById('dp-dur-label').textContent    = 'dur: ' + (dur != null ? durPct + '%' : '?');
+    document.getElementById('dp-qty-label').textContent    = qty + (unit ? ' ' + unit : '');
+    document.getElementById('dp-rep-label').textContent    = 'rep: ' + (rep != null ? rep + '/10' : '?');
+    document.getElementById('dp-desc').textContent         = p.description || 'Aucune description.';
+
+    var geoEl  = document.getElementById('dp-geo');
+    var geoSec = document.getElementById('dp-geo-section');
+    if (geo) { geoSec.style.display = ''; geoEl.textContent = '📍 ' + geo; } else { geoSec.style.display = 'none'; }
+
+    var dtag = _dtag(ev);
+    var craftLink = document.getElementById('dp-craft-link');
+    craftLink.href = 'minelife.html?object=' + encodeURIComponent(dtag);
+
+    var calLink = document.getElementById('dp-calendar-link');
+    calLink.href = 'calendars.html?craft=&object=' + encodeURIComponent(dtag);
+
+    document.getElementById('dp-tx').innerHTML = '<div style="font-size:10.5px;color:var(--text-muted)"><i class="bi bi-hourglass-split"></i> Chargement…</div>';
+    var txEvs = await RelaySelector.query(
+        _activeRelay,
+        { kinds: [1505], '#d': [dtag], limit: 10 },
+        { timeout: 5000 }
+    );
+    txEvs.sort(function(a,b){return b.created_at - a.created_at;});
+    document.getElementById('dp-tx').innerHTML = _renderTxHistory(txEvs);
+}
+
+function closeDetail() {
+    document.getElementById('detail-panel').style.display = 'none';
+    _selectedKey = null;
+    renderGrid();
+}
+
+function _renderTxHistory(events) {
+    if (!events.length) return '<div style="font-size:10.5px;color:var(--text-muted);font-style:italic">Aucune transaction enregistrée.</div>';
+    return events.slice(0,8).map(function(ev) {
+        var txType = _tagVal(ev,'t') || 'unknown';
+        var dQty   = _tagVal(ev,'delta_quantity') || '';
+        var dDur   = _tagVal(ev,'delta_durability') || '';
+        var p      = _parseContent(ev);
+        var reason = p.reason || '';
+        return '<div class="tx-item ' + _esc(txType) + '">'
+            + '<strong style="font-size:10px">' + _esc(txType) + '</strong>'
+            + (dQty ? ' qty' + dQty : '') + (dDur ? ' dur' + dDur : '')
+            + '<br><span style="color:rgba(139,160,152,0.7);font-size:9.5px">'
+            + _esc(reason || _fmtDate(ev.created_at))
+            + '</span></div>';
+    }).join('');
+}
+
+/* ══════════════════════════════════════════
+   MODAL TRANSACTION — Kind 1505
+══════════════════════════════════════════ */
+function openTxModal() {
+    if (!_selectedKey) return;
+    var ev   = _objects[_selectedKey];
+    var p    = _parseContent(ev);
+    var name = p.name || _tagVal(ev,'title') || _dtag(ev);
+    document.getElementById('tx-object-name').textContent = name;
+    document.getElementById('tx-delta-qty').value = '';
+    document.getElementById('tx-delta-dur').value = '';
+    document.getElementById('tx-reason').value    = '';
+    document.getElementById('tx-operators').value = _pubHex || '';
+    new bootstrap.Modal(document.getElementById('txModal')).show();
+}
+
+async function publishTx() {
+    if (!_selectedKey) return;
+    var btn = document.getElementById('tx-submit-btn');
+    btn.disabled = true; btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Publication…';
+    try {
+        var ev      = _objects[_selectedKey];
+        var p       = _parseContent(ev);
+        var dtag    = _dtag(ev);
+        var txType  = document.getElementById('tx-type').value;
+        var dQty    = document.getElementById('tx-delta-qty').value;
+        var dDur    = document.getElementById('tx-delta-dur').value;
+        var reason  = document.getElementById('tx-reason').value;
+        var opsRaw  = document.getElementById('tx-operators').value;
+        var ops     = opsRaw.split('\n').map(function(s){return s.trim();}).filter(Boolean);
+
+        var qtyAfter = p.quantity != null && dQty ? (+p.quantity + +dQty) : null;
+        var durAfter = p.durability != null && dDur ? Math.max(0, Math.min(100, +p.durability + +dDur)) : null;
+
+        var content = JSON.stringify({
+            delta_quantity:   dQty ? +dQty : null,
+            delta_durability: dDur ? +dDur : null,
+            quantity_after:   qtyAfter,
+            durability_after: durAfter,
+            reason:           reason
+        });
+
+        var tags = [
+            ['d', dtag],
+            ['e', ev.id, '', 'object'],
+            ['t', txType]
+        ];
+        if (dQty) tags.push(['delta_quantity',   dQty]);
+        if (dDur) tags.push(['delta_durability', dDur]);
+        if (qtyAfter != null) tags.push(['quantity_after',   String(qtyAfter)]);
+        if (durAfter != null) tags.push(['durability_after', String(durAfter)]);
+        ops.forEach(function(pk){ if(pk) tags.push(['operator', pk]); });
+
+        var template = { kind: 1505, created_at: Math.floor(Date.now()/1000), tags: tags, content: content };
+        var signed   = await window.nostr.signEvent(template);
+
+        await ensureRelayConnection();
+        var relay = window.nostrRelay;
+        if (relay && relay.publish) await relay.publish(signed);
+        else throw new Error('Relay non disponible');
+
+        bootstrap.Modal.getInstance(document.getElementById('txModal')).hide();
+
+        // Mettre à jour le Kind 30505 localement avec les nouvelles valeurs
+        if (qtyAfter != null) p.quantity    = qtyAfter;
+        if (durAfter != null) p.durability  = durAfter;
+        try { ev.content = JSON.stringify(p); } catch(e){}
+
+        await openDetail(_selectedKey);
+        renderGrid();
+    } catch(e) {
+        alert('Erreur : ' + e.message);
+    } finally {
+        btn.disabled = false; btn.innerHTML = '<i class="bi bi-send"></i> Publier Kind 1505';
+    }
+}
+
+/* ══════════════════════════════════════════
+   CONNEXION MULTIPASS
+══════════════════════════════════════════ */
+function _onConnected(pk) {
+    if (_pubHex === pk) return;
+    _pubHex = pk;
+    renderGrid();
+}
+
+/* ══════════════════════════════════════════
+   INIT
+══════════════════════════════════════════ */
+document.addEventListener('DOMContentLoaded', function() {
+    _activeRelay = _getRelayWs();
+    document.getElementById('stat-relay').textContent = _activeRelay.replace(/^wss?:\/\//,'');
+
+    // Pré-peupler si URL a ?relay=
+    var qp = new URLSearchParams(location.search);
+    if (qp.get('relay')) _activeRelay = qp.get('relay');
+
+    Promise.all([
+        _loadConstellationRelays()
+    ]).then(function() {
+        loadObjects();
+        _setStatus('🟢 ' + _activeRelay.replace(/^wss?:\/\//,''), '#10b981');
+    }).catch(function() {
+        loadObjects();
+    });
+
+    // Connexion MULTIPASS (UPlanet Header)
+    var pk0 = (window.NostrState && window.NostrState.userPubkey) || window.userPubkey || '';
+    if (!pk0) { try { pk0 = sessionStorage.getItem('uph_pubkey') || ''; } catch(e){} }
+    if (pk0) { _onConnected(pk0); }
+
+    if (typeof window.waitForConnection === 'function') {
+        window.waitForConnection(function() {
+            var pk = (window.NostrState && window.NostrState.userPubkey) || window.userPubkey;
+            if (pk && !_pubHex) _onConnected(pk);
+        });
+    }
+});
+</script>
+</body>
+</html>

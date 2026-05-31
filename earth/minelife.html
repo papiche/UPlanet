@@ -2556,7 +2556,8 @@ async function loadMySkills() {
             : `<span title="Folksonomy" style="font-size:13px;cursor:help">⚪</span>`;
         const revokeBtn = bestId ? `
             <button class="btn-ghost" style="color:#f44;border-color:rgba(255,68,68,0.35);font-size:10px;padding:3px 8px"
-                onclick="revokeSkill(${JSON.stringify(bestId)}, ${JSON.stringify(skill)})">
+                data-event-id="${_esc(bestId)}" data-skill="${_esc(skill)}"
+                onclick="revokeSkill(this.dataset.eventId, this.dataset.skill)">
                 <i class="bi bi-x-circle"></i> Révoquer
             </button>` : '';
         const skillId = skill.replace(/[^a-z0-9]/g, '-');
@@ -2569,10 +2570,12 @@ async function loadMySkills() {
             </div>
             <span class="level-badge ${badgeClass}">X${lvl} — ${levelLabel(lvl)}</span>
             <div class="skill-actions">
-                <button class="btn-accent" onclick="openRequestModal('',${JSON.stringify(skill)},'')">
+                <button class="btn-accent" data-skill="${_esc(skill)}"
+                        onclick="openRequestModal('', this.dataset.skill, '')">
                     <i class="bi bi-send-plus"></i> Demander attestation
                 </button>
-                <button class="btn-like" onclick="openLikeModal(${JSON.stringify(skill)})">
+                <button class="btn-like" data-skill="${_esc(skill)}"
+                        onclick="openLikeModal(this.dataset.skill)">
                     <i class="bi bi-hand-thumbs-up"></i> +1 pair
                 </button>
                 ${revokeBtn}
@@ -2965,7 +2968,8 @@ function toggleIngredientDetail(slotEl, skill, minLevel, have) {
         (permitDesc ? '<div class="mc-ing-detail-desc">' + permitDesc + '</div>' : '') +
         (relatedDocs.length > 0 ? '<div class="mc-ing-detail-docs">' + relatedDocs.map(function(t){ return renderDocItem(t[1], t[2]); }).join('') + '</div>' : '') +
         '<button class="btn-ghost" style="font-size:11px;padding:3px 10px;margin-top:6px" ' +
-            'onclick="openBroForSkill(' + JSON.stringify(skill) + ')">🤖 Demander à BRO</button>';
+            'data-skill="' + _esc(skill) + '" ' +
+            'onclick="openBroForSkill(this.dataset.skill)">🤖 Demander à BRO</button>';
 
     const layout = panel.querySelector('.mc-crafting-layout');
     layout.after(detail);
@@ -2995,7 +2999,8 @@ function renderCraftBody(ev, groupId) {
         const failHint = isTrustFail ? ' ⚠ qualité insuffisante' : (missEntry ? ' (manquant)' : ' ✓');
         return '<div class="mc-slot ' + slotClass + '"' +
                ' title="' + _esc(ing.skill) + ' — requis X' + ing.min_level + _esc(trustTitle) + _esc(failHint) + '"' +
-               ' onclick="toggleIngredientDetail(this,' + JSON.stringify(ing.skill) + ',' + ing.min_level + ',' + have + ')">' +
+               ' data-skill="' + _esc(ing.skill) + '" data-min-level="' + ing.min_level + '" data-have="' + have + '"' +
+               ' onclick="toggleIngredientDetail(this, this.dataset.skill, +this.dataset.minLevel, +this.dataset.have)">' +
                '<div class="mc-slot-icon">' + getSkillEmoji(ing.skill) + '</div>' +
                '<div class="mc-slot-label">' + _esc(ing.skill) + '</div>' +
                '<div class="mc-slot-badge">' + have + '/' + ing.min_level + trustIcon + '</div>' +
@@ -3026,9 +3031,11 @@ function renderCraftBody(ev, groupId) {
                 return `<span class="mc-ghost-item" title="X${m.required} requis, vous avez X${m.have}">
                     ${getSkillEmoji(m.skill)} ${m.skill} <small>(X${m.have}/X${m.required})</small>
                     <button class="btn-ghost" style="font-size:10px;padding:2px 7px;margin-left:6px"
-                        onclick="openRequestModal('',${JSON.stringify(m.skill)},'')">🌱 Aspirer</button>
+                        data-skill="${_esc(m.skill)}"
+                        onclick="openRequestModal('', this.dataset.skill, '')">🌱 Aspirer</button>
                     <button class="btn-ghost" style="font-size:10px;padding:2px 7px"
-                        onclick="openBroForSkill(${JSON.stringify(m.skill)},0,'Comment puis-je apprendre et valider le skill ${m.skill} ?')">🤖 BRO</button>
+                        data-skill="${_esc(m.skill)}"
+                        onclick="openBroForSkill(this.dataset.skill, 0, 'Comment puis-je apprendre et valider le skill ' + this.dataset.skill + ' ?')">🤖 BRO</button>
                 </span>`;
             }).join('')}
             </div>
@@ -3040,19 +3047,20 @@ function renderCraftBody(ev, groupId) {
     const oracleBtnHtml = eligible ? `
         <button class="mc-oracle-btn"
             title="Soumet une demande Kind 30501 — l'Oracle vérifie les ingrédients on-chain et cosigne le Kind 30503 officiel (🏅)"
-            onclick="requestOracleValidation(this,${JSON.stringify(ev.id)},${JSON.stringify(dTag)},${JSON.stringify(name)})">
+            data-evid="${_esc(ev.id)}" data-dtag="${_esc(dTag)}" data-name="${_esc(name)}"
+            onclick="requestOracleValidation(this, this.dataset.evid, this.dataset.dtag, this.dataset.name)">
             🏅 Soumettre à l'Oracle
         </button>` : '';
 
     const editActions = _editMode ? `
         <div style="display:flex;gap:6px;margin-top:8px">
             <button class="btn-ghost" style="font-size:11px;padding:4px 10px;color:#f0c040;border-color:rgba(240,192,64,0.4)"
-                onclick="openCraftEditor(${JSON.stringify(dTag)})"><i class="bi bi-pencil"></i> Modifier</button>
+                data-dtag="${_esc(dTag)}" onclick="openCraftEditor(this.dataset.dtag)"><i class="bi bi-pencil"></i> Modifier</button>
             <button class="btn-ghost" style="font-size:11px;padding:4px 10px"
-                onclick="openBroForSkill(${JSON.stringify(resultSkill)})">🤖 Aide BRO</button>
+                data-skill="${_esc(resultSkill)}" onclick="openBroForSkill(this.dataset.skill)">🤖 Aide BRO</button>
         </div>` : `
         <button class="btn-ghost" style="font-size:10px;padding:3px 8px;margin-top:6px;opacity:0.6"
-            onclick="openBroForSkill(${JSON.stringify(resultSkill)})">🤖 BRO</button>`;
+            data-skill="${_esc(resultSkill)}" onclick="openBroForSkill(this.dataset.skill)">🤖 BRO</button>`;
 
     return `
         ${description ? `<div class="mc-desc">${_esc(description)}</div>` : ''}
@@ -3073,7 +3081,8 @@ function renderCraftBody(ev, groupId) {
         <div class="mc-synth-actions">
             <button id="${synthId}" class="mc-synth-btn ${eligible ? 'eligible' : ''}" ${eligible ? '' : 'disabled'}
                 title="Crée un certificat P2P auto-signé 🔵 — valable sans Oracle"
-                onclick="synthesizeComposite(this,${JSON.stringify(ev.id)},${JSON.stringify(dTag)},${JSON.stringify(name)})">
+                data-evid="${_esc(ev.id)}" data-dtag="${_esc(dTag)}" data-name="${_esc(name)}"
+                onclick="synthesizeComposite(this, this.dataset.evid, this.dataset.dtag, this.dataset.name)">
                 ${eligible ? '⚒ FORGER (P2P)' : '✗ Prérequis manquants'}
             </button>
             ${oracleBtnHtml}
@@ -3100,7 +3109,8 @@ function renderCraftGroup(resultSkill, permits) {
                 try { const cc = validateEventContent(ev); tabName = cc.name || ''; } catch(e) {}
                 if (!tabName) tabName = 'Variante ' + (i + 1);
                 return '<button class="mc-recipe-tab' + (i===0?' active':'') + '"' +
-                       ' onclick="switchRecipe(' + JSON.stringify(groupId) + ',' + i + ')">' + tabName + '</button>';
+                       ' data-group-id="' + _esc(groupId) + '" data-recipe-idx="' + i + '"' +
+                       ' onclick="switchRecipe(this.dataset.groupId, +this.dataset.recipeIdx)">' + tabName + '</button>';
             }).join('')}
         </div>` : '';
 
@@ -3166,11 +3176,13 @@ function renderCraftCard(ev) {
                 <span class="mc-ghost-item" title="X${m.required} requis, vous avez X${m.have}">
                     ${getSkillEmoji(m.skill)} ${m.skill} <small>(X${m.have}/X${m.required})</small>
                     <button class="btn-ghost" style="font-size:10px;padding:2px 7px;margin-left:6px"
-                        onclick="openRequestModal('',${JSON.stringify(m.skill)},'')">
+                        data-skill="${_esc(m.skill)}"
+                        onclick="openRequestModal('', this.dataset.skill, '')">
                         🌱 Aspirer
                     </button>
                     <button class="btn-ghost" style="font-size:10px;padding:2px 7px"
-                        onclick="openBroForSkill(${JSON.stringify(m.skill)},0,'Comment puis-je apprendre et valider le skill ${m.skill} ?')">
+                        data-skill="${_esc(m.skill)}"
+                        onclick="openBroForSkill(this.dataset.skill, 0, 'Comment puis-je apprendre et valider le skill ' + this.dataset.skill + ' ?')">
                         🤖 BRO
                     </button>
                 </span>`).join('')}
@@ -3183,16 +3195,16 @@ function renderCraftCard(ev) {
     const editActions = _editMode ? `
         <div style="display:flex;gap:6px;margin-top:8px">
             <button class="btn-ghost" style="font-size:11px;padding:4px 10px;color:#f0c040;border-color:rgba(240,192,64,0.4)"
-                onclick="openCraftEditor(${JSON.stringify(dTag)})">
+                data-dtag="${_esc(dTag)}" onclick="openCraftEditor(this.dataset.dtag)">
                 <i class="bi bi-pencil"></i> Modifier
             </button>
             <button class="btn-ghost" style="font-size:11px;padding:4px 10px"
-                onclick="openBroForSkill(${JSON.stringify(resultSkill)})">
+                data-skill="${_esc(resultSkill)}" onclick="openBroForSkill(this.dataset.skill)">
                 🤖 Aide BRO
             </button>
         </div>` : `
         <button class="btn-ghost" style="font-size:10px;padding:3px 8px;margin-top:6px;opacity:0.6"
-            onclick="openBroForSkill(${JSON.stringify(resultSkill)})">🤖 BRO</button>`;
+            data-skill="${_esc(resultSkill)}" onclick="openBroForSkill(this.dataset.skill)">🤖 BRO</button>`;
 
     return `
     <div class="mc-panel" id="${cardId}">
@@ -3210,7 +3222,8 @@ function renderCraftCard(ev) {
             </div>
         </div>
         <button id="${synthId}" class="mc-synth-btn ${eligible ? 'eligible' : ''}" ${eligible ? '' : 'disabled'}
-            onclick="synthesizeComposite(this,${JSON.stringify(ev.id)},${JSON.stringify(dTag)},${JSON.stringify(name)})">
+            data-evid="${_esc(ev.id)}" data-dtag="${_esc(dTag)}" data-name="${_esc(name)}"
+            onclick="synthesizeComposite(this, this.dataset.evid, this.dataset.dtag, this.dataset.name)">
             ${eligible ? '⚒ FORGER' : '✗ Prérequis manquants'}
         </button>
         ${ghostHtml}
@@ -3419,10 +3432,14 @@ function parsePeerQR() {
         `<div class="skill-row"><div class="skill-name"><i class="bi bi-tag"></i> ${s.skill}</div>
          <span class="level-badge ${levelBadgeClass(s.level)}">X${s.level} — ${levelLabel(s.level)}</span>
          <div class="skill-actions">
-           <button class="btn-blue" onclick="openAttestModal('',${JSON.stringify(data.npub)},${JSON.stringify(s.skill)},${JSON.stringify(data.name||data.npub)})">
+           <button class="btn-blue"
+             data-npub="${_esc(data.npub)}" data-skill="${_esc(s.skill)}" data-name="${_esc(data.name||data.npub)}"
+             onclick="openAttestModal('', this.dataset.npub, this.dataset.skill, this.dataset.name)">
              <i class="bi bi-patch-check"></i> Attester
            </button>
-           <button class="btn-like" onclick="sendLikePeer(${JSON.stringify(data.npub)},${JSON.stringify(s.skill)})">
+           <button class="btn-like"
+             data-npub="${_esc(data.npub)}" data-skill="${_esc(s.skill)}"
+             onclick="sendLikePeer(this.dataset.npub, this.dataset.skill)">
              <i class="bi bi-hand-thumbs-up"></i> +1
            </button>
          </div></div>`
@@ -3528,12 +3545,13 @@ function renderExploreCard(ev) {
 
     const broBtn = !alreadyHave ? `
         <button class="btn-ghost" style="font-size:11px;padding:4px 10px;margin-right:6px"
-            onclick="openBroForSkill(${JSON.stringify(primarySkill)})">
+            data-skill="${_esc(primarySkill)}"
+            onclick="openBroForSkill(this.dataset.skill)">
             🤖 BRO — trouver formation
         </button>` : '';
 
     return `
-    <div class="wcard">
+    <div class="wcard" data-skill="${_esc(normPrimary)}">
         <div class="wcard-title">
             <i class="bi bi-${isComposite ? 'puzzle-fill' : 'award-fill'}"></i> ${_esc(name)}
             ${isComposite ? '<span class="level-badge level-x2" style="margin-left:auto">Composite</span>' : ''}
@@ -3543,7 +3561,9 @@ function renderExploreCard(ev) {
         ${skills ? `<div style="margin-bottom:10px">${skills}</div>` : ''}
         <div style="text-align:right;display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap">
             ${broBtn}
-            <button class="btn-accent" onclick="openRequestModal(${JSON.stringify(dTag)}, ${JSON.stringify(primarySkill)}, ${JSON.stringify(name)})">
+            <button class="btn-accent"
+                data-dtag="${_esc(dTag)}" data-skill="${_esc(primarySkill)}" data-name="${_esc(name)}"
+                onclick="openRequestModal(this.dataset.dtag, this.dataset.skill, this.dataset.name)">
                 <i class="bi bi-send-plus"></i> Demander attestation
             </button>
         </div>
@@ -3920,7 +3940,8 @@ async function showHoldersModal(skillTag) {
                     <span class="level-badge ${levelBadgeClass(h.level)}" style="font-size:10px">X${h.level}</span>
                 </div>
                 <button class="btn-accent" style="font-size:11px;padding:5px 12px;white-space:nowrap"
-                    onclick="prepareDM(${JSON.stringify(h.pubkey)}, ${JSON.stringify(skillTag)})">
+                    data-pubkey="${_esc(h.pubkey)}" data-skill="${_esc(skillTag)}"
+                    onclick="prepareDM(this.dataset.pubkey, this.dataset.skill)">
                     📩 DM
                 </button>
             </div>`;
@@ -5111,7 +5132,7 @@ function renderBroBtns(containerId, skill) {
     const el = document.getElementById(containerId);
     if (!el) return;
     el.innerHTML = buildBroQuickBtns(skill).map(b =>
-        `<button class="bro-quick" onclick="broQuick('float',${JSON.stringify(b.msg)})">${b.label}</button>`
+        `<button class="bro-quick" data-msg="${_esc(b.msg)}" onclick="broQuick('float', this.dataset.msg)">${_esc(b.label)}</button>`
     ).join('');
 }
 
@@ -5718,6 +5739,21 @@ document.addEventListener('DOMContentLoaded', () => {
     const _tabFormationBtn  = document.getElementById('tab-formation-btn');
     if (_tabExploreBtn)   _tabExploreBtn.addEventListener('shown.bs.tab',   () => loadExploreTab());
     if (_tabFormationBtn) _tabFormationBtn.addEventListener('shown.bs.tab', () => loadFormationTab());
+
+    // ?skill= dans l'URL (lien depuis skills.html "Explorer dans MineLife")
+    const _skillParam = new URLSearchParams(window.location.search).get('skill');
+    if (_skillParam && _tabExploreBtn) {
+        bootstrap.Tab.getOrCreateInstance(_tabExploreBtn).show();
+        loadExploreTab().then(() => {
+            const card = document.querySelector('#explore-list .wcard[data-skill="' + CSS.escape(_skillParam.toLowerCase()) + '"]');
+            if (card) {
+                card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                card.style.transition = 'border-color 0.4s';
+                card.style.borderColor = '#38bdf8';
+                setTimeout(() => { card.style.borderColor = ''; }, 3000);
+            }
+        }).catch(() => {});
+    }
 
     waitForConnection(() => {
         updateConnectionUI();

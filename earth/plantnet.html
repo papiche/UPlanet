@@ -16,9 +16,12 @@
     <script src="bootstrap.bundle.min.js"></script>
     
     <!-- Nostr integration -->
+    <script src="nacl-fast.min.js"></script>
     <script src="nostr.bundle.js"></script>
     <!-- Common UPlanet JavaScript -->
     <script src="common.js"></script>
+    <script src="uplanet-header.js"></script>
+    <script src="relay.js"></script>
     <!-- Leaflet JavaScript -->
     <script src="leaflet.js"></script>
     <!-- Astronomy Engine for precise lunar calculations -->
@@ -1363,7 +1366,50 @@
                                         </div>
                                     </div>
                                 </div>
-                                
+
+                                <!-- Champs WoTx² Kind 30505 — visibles uniquement pour type object/place -->
+                                <div id="wotx2-object-fields" style="display:none; background:rgba(99,102,241,0.07); border:1px solid rgba(99,102,241,0.3); border-radius:10px; padding:14px; margin-top:10px;">
+                                    <div class="mb-1" style="font-size:11.5px; font-weight:700; color:#a5b4fc;">
+                                        <i class="bi bi-box-seam"></i> Métadonnées WoTx² — Kind 30505
+                                        <a href="objects.html" target="_blank" style="font-size:10px; color:#818cf8; margin-left:8px;">Voir le registre →</a>
+                                    </div>
+                                    <div class="row g-2 mt-1">
+                                        <div class="col-6">
+                                            <label class="form-label" style="font-size:11px;color:#94a3b8;">Type de quantité</label>
+                                            <select class="form-select form-select-sm" id="obj-quantity-type" style="background:rgba(255,255,255,0.07);border-color:rgba(99,102,241,0.3);color:#e8e8e8;font-size:11px;">
+                                                <option value="discrete">discrete — stock comptable</option>
+                                                <option value="capacity">capacity — slots simultanés</option>
+                                                <option value="durability">durability — objet unique</option>
+                                                <option value="infinite">infinite — commun immatériel</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-3">
+                                            <label class="form-label" style="font-size:11px;color:#94a3b8;">Quantité</label>
+                                            <input type="number" class="form-control form-control-sm" id="obj-quantity" value="1" min="0" style="background:rgba(255,255,255,0.07);border-color:rgba(99,102,241,0.3);color:#e8e8e8;">
+                                        </div>
+                                        <div class="col-3">
+                                            <label class="form-label" style="font-size:11px;color:#94a3b8;">Unité</label>
+                                            <input type="text" class="form-control form-control-sm" id="obj-unit" placeholder="unit" style="background:rgba(255,255,255,0.07);border-color:rgba(99,102,241,0.3);color:#e8e8e8;">
+                                        </div>
+                                        <div class="col-4">
+                                            <label class="form-label" style="font-size:11px;color:#94a3b8;">Mobilité</label>
+                                            <select class="form-select form-select-sm" id="obj-mobility" style="background:rgba(255,255,255,0.07);border-color:rgba(99,102,241,0.3);color:#e8e8e8;font-size:11px;">
+                                                <option value="fixed">📍 fixed</option>
+                                                <option value="mobile">🚶 mobile</option>
+                                                <option value="portable">🎒 portable</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-4">
+                                            <label class="form-label" style="font-size:11px;color:#94a3b8;">Réparabilité (0–10)</label>
+                                            <input type="number" class="form-control form-control-sm" id="obj-repairability" value="5" min="0" max="10" style="background:rgba(255,255,255,0.07);border-color:rgba(99,102,241,0.3);color:#e8e8e8;">
+                                        </div>
+                                        <div class="col-4">
+                                            <label class="form-label" style="font-size:11px;color:#94a3b8;">Opérateurs min</label>
+                                            <input type="number" class="form-control form-control-sm" id="obj-min-operators" value="1" min="1" style="background:rgba(255,255,255,0.07);border-color:rgba(99,102,241,0.3);color:#e8e8e8;">
+                                        </div>
+                                    </div>
+                                </div>
+
                                 <!-- Action Buttons -->
                                 <div class="d-flex gap-2 mt-4 flex-wrap">
                                     <button class="btn btn-outline-secondary" onclick="goToStep(1)">
@@ -1844,7 +1890,7 @@
                             <h5 class="mb-3" style="color: #93c5fd;"><i class="bi bi-download"></i> Exporter vers votre Calendrier</h5>
                             <p class="mb-3" style="color: #e2e8f0;">
                                 Téléchargez un fichier <code style="background: rgba(59, 130, 246, 0.3); padding: 2px 6px; border-radius: 4px;">.ics</code> contenant tous les rappels de semis, entretien et récoltes, 
-                                synchronisés avec les cycles lunaires. Importez-le dans <strong style="color: #93c5fd;">Google Calendar</strong>, <strong style="color: #93c5fd;">Apple Calendar</strong>, <strong style="color: #93c5fd;">Outlook</strong>, etc.
+                                synchronisés avec les cycles lunaires.
                             </p>
                             <div class="row g-3 align-items-end">
                                 <div class="col-sm-auto">
@@ -2180,7 +2226,7 @@
                 const currentRelay = getNostrRelay();
                 if (!currentRelay) {
                     console.log('🔌 Connecting to relay...');
-                    await connectToRelay();
+                    if (window.connectToRelay) await window.connectToRelay();
                 }
                 
                 // Fetch confirmed identifications (bot responses with UPlanet + plantnet) for stats only
@@ -2256,8 +2302,7 @@
                 let currentRelay = getNostrRelay();
                 if (!currentRelay) {
                     console.log('🔌 Connecting to relay for public gallery...');
-                    // Use connectToRelay without requiring authentication
-                    await connectToRelay();
+                    if (window.connectToRelay) await window.connectToRelay();
                     currentRelay = getNostrRelay();
                 }
                 
@@ -3515,8 +3560,73 @@
                 'place': '🏠'
             };
             const typeIcon = typeIcons[selectedType] || '🔍';
-            
-            // Build enhanced content with title
+
+            // Objets et lieux → Kind 30505 (WoTx² protocol)
+            if (selectedType === 'object' || selectedType === 'place') {
+                const quantityType  = document.getElementById('obj-quantity-type')?.value  || 'discrete';
+                const quantity      = +(document.getElementById('obj-quantity')?.value      || 1);
+                const unit          = document.getElementById('obj-unit')?.value            || 'unit';
+                const mobility      = document.getElementById('obj-mobility')?.value        || 'fixed';
+                const repairability = +(document.getElementById('obj-repairability')?.value || 5);
+                const minOperators  = +(document.getElementById('obj-min-operators')?.value || 1);
+                const objType       = selectedType === 'place' ? 'capacity' : 'tool';
+                const dtag          = (itemTitle || 'objet').toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+                const geoRegion     = `REGION:${Math.floor(adjustedLocation.latitude)}:${Math.floor(adjustedLocation.longitude)}`;
+
+                const content30505 = JSON.stringify({
+                    name:           itemTitle || 'Objet inventorié',
+                    type:           objType,
+                    mobility:       mobility,
+                    quantity:       quantity,
+                    quantity_type:  quantityType,
+                    quantity_unit:  unit,
+                    durability:     100,
+                    repairability:  repairability,
+                    condition:      'new',
+                    min_operators:  minOperators,
+                    description:    messageText || ''
+                });
+                const tags30505 = [
+                    ['d',            dtag],
+                    ['title',        itemTitle || 'Objet'],
+                    ['t',            objType],
+                    ['t',            mobility],
+                    ['t',            quantityType],
+                    ['quantity',     String(quantity)],
+                    ['quantity_unit', unit],
+                    ['durability',   '100'],
+                    ['repairability', String(repairability)],
+                    ['geo',          geoRegion],
+                    ['t',            'UPlanet'], ['t', 'inventory']
+                ];
+                if (minOperators > 1) tags30505.push(['min_operators', String(minOperators)]);
+                if (selectedPhoto.ipfsUrl) tags30505.push(['r', selectedPhoto.ipfsUrl, 'photo']);
+
+                const eventTemplate = {
+                    kind: 30505,
+                    created_at: Math.floor(Date.now() / 1000),
+                    tags: tags30505,
+                    content: content30505
+                };
+                const sendBtn = document.getElementById('sendMessageBtn');
+                if (sendBtn) { sendBtn.disabled = true; sendBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Publication…'; }
+                try {
+                    const signedEvent = await window.nostr.signEvent(eventTemplate);
+                    if (currentRelay) await currentRelay.publish(signedEvent);
+                    else if (typeof publishToNostr === 'function') await publishToNostr(signedEvent);
+                    else throw new Error('No relay available');
+                    showSuccessModal(`<strong>${itemTitle || 'Objet'}</strong> déclaré en Kind 30505 WoTx².<br><br><a href="objects.html" target="_blank">Voir le registre des objets →</a>`, '✅ Objet publié', 6000);
+                    resetContribution();
+                    setTimeout(() => loadUserStats(), 2000);
+                } catch (error) {
+                    showErrorModal('Impossible de publier l\'objet WoTx². ' + error.message, 'Erreur');
+                } finally {
+                    if (sendBtn) { sendBtn.disabled = false; sendBtn.innerHTML = '<i class="bi bi-send"></i> Publier l\'observation'; }
+                }
+                return;
+            }
+
+            // Biodiversité (plant/insect/animal/inventory) → Kind 1 (comportement existant)
             let content = `${typeIcon} ${itemTitle || 'Inventaire UPlanet'}\n`;
             content += `📍 ${adjustedLocation.latitude.toFixed(4)}, ${adjustedLocation.longitude.toFixed(4)}\n`;
             if (messageText) {
@@ -3527,7 +3637,7 @@
             if (requestAIContract) {
                 content += ' #maintenance';
             }
-            
+
             // Build tags based on type
             const tags = [
                 ["t", selectedType],
@@ -3536,26 +3646,26 @@
                 ["t", "inventory"],
                 ["g", `${adjustedLocation.latitude},${adjustedLocation.longitude}`]
             ];
-            
+
             // Add title tag if provided
             if (itemTitle) {
                 tags.push(["title", itemTitle]);
                 tags.push(["inventory_name", itemTitle]);
             }
-            
+
             // Add inventory type tag for filtering
             tags.push(["inventory_type", selectedType]);
-            
+
             // Add plantnet tag for plants (for PlantNet recognition)
             if (selectedType === 'plant') {
                 tags.push(["t", "plantnet"]);
             }
-            
+
             // Add maintenance request tag
             if (requestAIContract) {
                 tags.push(["t", "maintenance"]);
             }
-            
+
             const eventTemplate = {
                 kind: 1,
                 created_at: Math.floor(Date.now() / 1000),
@@ -3785,7 +3895,7 @@
             let currentRelay = getNostrRelay();
             if (!currentRelay) {
                 console.warn('⚠️ No relay available, connecting...');
-                await connectToRelay();
+                if (window.connectToRelay) await window.connectToRelay();
                 currentRelay = getNostrRelay();
                 if (!currentRelay) {
                     console.warn('⚠️ Could not connect to relay');
@@ -5009,9 +5119,27 @@
         // ========================================
         // INITIALIZATION
         // ========================================
+        // Affiche/masque les champs WoTx² Kind 30505 selon le type sélectionné
+        function toggleObjectFields() {
+            const selectedType = document.querySelector('input[name="inventoryType"]:checked')?.value || 'inventory';
+            const el = document.getElementById('wotx2-object-fields');
+            if (el) el.style.display = (selectedType === 'object' || selectedType === 'place') ? 'block' : 'none';
+            const btn = document.getElementById('sendMessageBtn');
+            if (btn) {
+                btn.innerHTML = (selectedType === 'object' || selectedType === 'place')
+                    ? '<i class="bi bi-box-seam"></i> Déclarer l\'objet (Kind 30505)'
+                    : '<i class="bi bi-send"></i> Publier l\'observation';
+            }
+        }
+
         document.addEventListener('DOMContentLoaded', function() {
             const yearEl = document.getElementById('current-year');
             if (yearEl) yearEl.textContent = new Date().getFullYear();
+
+            // Écouter les changements de type pour afficher/masquer les champs WoTx²
+            document.querySelectorAll('input[name="inventoryType"]').forEach(function(radio) {
+                radio.addEventListener('change', toggleObjectFields);
+            });
             
             // Initialize lunar calendar in header
             initializeLunarCalendar();
@@ -5059,11 +5187,18 @@
                 }
             }, 500);
             
-            // Initialize gallery (loads public observations even if not connected)
-            if (getUserPubkey()) {
-                loadUserStats();
+            // Initialize gallery once UPlanet modules are ready (connectToRelay needs lib_2)
+            function _initGallery() {
+                if (getUserPubkey()) {
+                    loadUserStats();
+                } else {
+                    loadPublicGallery();
+                }
+            }
+            if (window.UPlanetModulesReady) {
+                _initGallery();
             } else {
-                loadPublicGallery();
+                window.addEventListener('UPlanetReady', _initGallery, { once: true });
             }
             
             // Initialize USPOT API detection if available

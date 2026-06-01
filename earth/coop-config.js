@@ -192,7 +192,8 @@
         'PLANTNET_API_KEY': 'PlantNet API Key',
         'GIT_HOST': 'Git Host (github.com ou gitlab)', 'GIT_TOKEN': 'Git Token (PAT)', 'GIT_OWNER': 'Git Owner (compte/org)',
         'MJ_APIKEY_PUBLIC': 'MailJet Public', 'MJ_APIKEY_PRIVATE': 'MailJet Private', 'MJ_SENDER_EMAIL': 'Email expediteur',
-        'OVH_APP_KEY': 'OVH App Key', 'OVH_APP_SECRET': 'OVH App Secret', 'OVH_CONSUMER_KEY': 'OVH Consumer Key', 'OVH_ZONE': 'OVH Zone DNS'
+        'OVH_APP_KEY': 'OVH App Key', 'OVH_APP_SECRET': 'OVH App Secret', 'OVH_CONSUMER_KEY': 'OVH Consumer Key', 'OVH_ZONE': 'OVH Zone DNS',
+        'AUTHORIZED_APPS': 'Apps mobiles certifiees'
     };
 
     const SECTIONS = [
@@ -201,10 +202,11 @@
         { title: 'Regle 3x1/3 + 1%', icon: '🤝', keys: ['TREASURY_PERCENT', 'RND_PERCENT', 'ASSETS_PERCENT', 'CAPTAIN_BONUS_PERCENT'] },
         { title: 'OpenCollective', icon: '🌐', keys: ['OCSLUG', 'OCAPIKEY', 'OC_URL_SATELLITE', 'OC_URL_CONSTELLATION'] },
         { title: 'API Keys', icon: '🔐', keys: ['PLANTNET_API_KEY', 'GIT_HOST', 'GIT_TOKEN', 'GIT_OWNER', 'MJ_APIKEY_PUBLIC', 'MJ_APIKEY_PRIVATE', 'MJ_SENDER_EMAIL'] },
-        { title: 'DNSLink OVH', icon: '🌐', keys: ['OVH_APP_KEY', 'OVH_APP_SECRET', 'OVH_CONSUMER_KEY', 'OVH_ZONE'] }
+        { title: 'DNSLink OVH', icon: '🌐', keys: ['OVH_APP_KEY', 'OVH_APP_SECRET', 'OVH_CONSUMER_KEY', 'OVH_ZONE'] },
+        { title: 'Apps Certifiees', icon: '📱', keys: ['AUTHORIZED_APPS'] }
     ];
 
-    const COMMENTS = ['_comment_fiscal', '_comment_shares', '_comment_3x13', '_comment_oc', '_comment_api', '_comment_mj', '_comment_ovh'];
+    const COMMENTS = ['_comment_fiscal', '_comment_shares', '_comment_3x13', '_comment_oc', '_comment_api', '_comment_mj', '_comment_ovh', '_comment_apps'];
 
     const DEFAULT_CONFIG = {
         "COOPERATIVE_VERSION": "1.0",
@@ -225,7 +227,9 @@
         "_comment_mj": "=== MAILJET ===",
         "MJ_APIKEY_PUBLIC": "", "MJ_APIKEY_PRIVATE": "", "MJ_SENDER_EMAIL": "",
         "_comment_ovh": "=== DNSLINK OVH ===",
-        "OVH_APP_KEY": "", "OVH_APP_SECRET": "", "OVH_CONSUMER_KEY": "", "OVH_ZONE": "astroport.one"
+        "OVH_APP_KEY": "", "OVH_APP_SECRET": "", "OVH_CONSUMER_KEY": "", "OVH_ZONE": "astroport.one",
+        "_comment_apps": "=== AUTHORIZED MOBILE APPS (proof salts, comma-separated) ===",
+        "AUTHORIZED_APPS": "ATOM4LOVE_v1"
     };
 
     // ========================================

@@ -344,8 +344,7 @@
             
             // Create a modal or new window to display the full JSON
             const didJson = JSON.stringify(AstroportDemo.userDID, null, 2);
-            const win = window.open('', '_blank', 'width=800,height=600');
-            win.document.write(`
+            const html = `
                 <!DOCTYPE html>
                 <html>
                 <head>
@@ -384,8 +383,10 @@
 <script src="/earth/feedback.js"><\/script>
 </body>
                 </html>
-            `);
-            win.document.close();
+            `;
+            const blob = new Blob([html], { type: 'text/html' });
+            const blobUrl = URL.createObjectURL(blob);
+            window.open(blobUrl, '_blank', 'width=800,height=600');
         }
         
         // Refresh DID Document

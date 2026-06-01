@@ -389,6 +389,9 @@
 
             // Step 2: Create gift wrap (kind 1059) - encrypts the seal with ephemeral key
             // Generate ephemeral key for gift wrap
+            if (!window.NostrTools || typeof window.NostrTools.generatePrivateKey !== 'function') {
+                throw new Error('NostrTools not available — cannot generate ephemeral key');
+            }
             const ephemeralPrivateKey = window.NostrTools.generatePrivateKey();
             const ephemeralPubkey = window.NostrTools.getPublicKey(ephemeralPrivateKey);
 

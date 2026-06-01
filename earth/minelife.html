@@ -2375,12 +2375,17 @@ function progressPct(n) {
 
 // ── UTILITAIRE XSS ───────────────────────────────────────────────────────
 // Échappe les caractères HTML avant insertion dans innerHTML (contenu NOSTR non fiable).
+// window.escapeHtml est fourni par common.js ; _esc est conservé comme alias local.
 function _esc(s) {
     return String(s == null ? '' : s)
         .replace(/&/g, '&amp;').replace(/</g, '&lt;')
         .replace(/>/g, '&gt;').replace(/"/g, '&quot;')
         .replace(/'/g, '&#x27;');
 }
+if (typeof window !== 'undefined' && typeof window.escapeHtml !== 'function') {
+    window.escapeHtml = _esc;
+}
+function escapeHtml(s) { return typeof window !== 'undefined' && typeof window.escapeHtml === 'function' ? window.escapeHtml(s) : _esc(s); }
 
 // ── VALIDATION DE SCHÉMA ──────────────────────────────────────────────────
 // Prévient l'injection via JSON.parse sur content malveillant
@@ -2522,7 +2527,7 @@ async function loadMySkills() {
     try {
         events = await fetchEvents({ authors: [userHex], kinds: [30503], limit: 200 });
     } catch(e) {
-        container.innerHTML = `<div class="empty-state"><i class="bi bi-exclamation-triangle"></i><div>Erreur relay : ${e.message}</div></div>`;
+        container.innerHTML = `<div class="empty-state"><i class="bi bi-exclamation-triangle"></i><div>Erreur relay : ${escapeHtml(e.message || String(e))}</div></div>`;
         return;
     }
 
@@ -2671,7 +2676,7 @@ async function loadCraftingTab(force = false) {
             _permitsToCache(all);
         }
     } catch(e) {
-        container.innerHTML = `<div class="empty-state"><i class="bi bi-exclamation-triangle"></i><div>Erreur : ${e.message}</div></div>`;
+        container.innerHTML = `<div class="empty-state"><i class="bi bi-exclamation-triangle"></i><div>Erreur : ${escapeHtml(e.message || String(e))}</div></div>`;
         return;
     }
 
@@ -2831,7 +2836,7 @@ async function loadMarkdownInline(uid, url) {
         body.dataset.loaded = '1';
         if (btn) btn.textContent = '📖 Fermer';
     } catch(e) {
-        body.innerHTML = `<div style="color:#f87171;font-size:12px;padding:8px">⚠️ Impossible de charger : ${e.message}</div>`;
+        body.innerHTML = `<div style="color:#f87171;font-size:12px;padding:8px">⚠️ Impossible de charger : ${escapeHtml(e.message || String(e))}</div>`;
     }
 }
 
@@ -3493,7 +3498,7 @@ async function loadExploreTab(force = false) {
         }
         STATE.allPermits = permits;
     } catch(e) {
-        container.innerHTML = `<div class="empty-state"><i class="bi bi-exclamation-triangle"></i><div>Erreur : ${e.message}</div></div>`;
+        container.innerHTML = `<div class="empty-state"><i class="bi bi-exclamation-triangle"></i><div>Erreur : ${escapeHtml(e.message || String(e))}</div></div>`;
         return;
     }
 
@@ -3617,7 +3622,7 @@ async function loadPairsTab(force = false) {
     try {
         certs = await fetchEvents({ kinds: [30503], limit: 300 });
     } catch(e) {
-        container.innerHTML = `<div class="empty-state"><i class="bi bi-exclamation-triangle"></i><div>Erreur : ${e.message}</div></div>`;
+        container.innerHTML = `<div class="empty-state"><i class="bi bi-exclamation-triangle"></i><div>Erreur : ${escapeHtml(e.message || String(e))}</div></div>`;
         return;
     }
 
@@ -3947,7 +3952,7 @@ async function showHoldersModal(skillTag) {
             </div>`;
         }).join('');
     } catch(e) {
-        list.innerHTML = `<div class="empty-state" style="font-size:12px">Erreur : ${e.message}</div>`;
+        list.innerHTML = `<div class="empty-state" style="font-size:12px">Erreur : ${escapeHtml(e.message || String(e))}</div>`;
     }
 }
 
@@ -4167,7 +4172,7 @@ async function loadFormationTab(force = false) {
             fetchEvents({ kinds: [30504], limit: 300 }),
         ]);
     } catch(e) {
-        container.innerHTML = `<div class="empty-state"><i class="bi bi-exclamation-triangle"></i><div>Erreur : ${e.message}</div></div>`;
+        container.innerHTML = `<div class="empty-state"><i class="bi bi-exclamation-triangle"></i><div>Erreur : ${escapeHtml(e.message || String(e))}</div></div>`;
         return;
     }
 
@@ -4630,7 +4635,7 @@ function wyOpenMediaBrowserForEditor() {
     }
     fetchEvents({ kinds: [21, 22, 1063, 1222, 30023], authors: [window.userPubkey], limit: 80 })
         .then(evs => { list.innerHTML = evs.length === 0 ? `<div class="empty-state">Aucun média trouvé.</div>` : evs.map(ev => renderMediaBrowserItem(ev)).join(''); })
-        .catch(e  => { list.innerHTML = `<div class="empty-state">Erreur : ${e.message}</div>`; });
+        .catch(e  => { list.innerHTML = `<div class="empty-state">Erreur : ${escapeHtml(e.message || String(e))}</div>`; });
 }
 
 // renderMediaBrowserItem est la version standard (définie dans la section NAVIGATEUR MÉDIAS).
@@ -4734,7 +4739,7 @@ async function openMediaBrowser(skill, cardId) {
         }
         list.innerHTML = evs.map(ev => renderMediaBrowserItem(ev)).join('');
     } catch(e) {
-        list.innerHTML = `<div class="empty-state">Erreur : ${e.message}</div>`;
+        list.innerHTML = `<div class="empty-state">Erreur : ${escapeHtml(e.message || String(e))}</div>`;
     }
 }
 
@@ -4761,7 +4766,7 @@ function renderMediaBrowserItem(ev) {
     if (!title) title = info.label + ' — ' + new Date(ev.created_at * 1000).toLocaleDateString('fr-FR');
 
     const safeUrl = url.replace(/"/g, '&quot;');
-    const safeTitle = (title || url).replace(/</g, '&lt;');
+    const safeTitle = escapeHtml(title || url);
 
     return `<div class="media-browser-item" onclick="selectMediaItem('${safeUrl}','${info.type}')">
         <span class="media-browser-icon">${info.icon}</span>
@@ -4872,7 +4877,7 @@ async function _handleVideoUploadToFormation(file) {
         setTimeout(() => { loadFormationTab(); }, 1000);
 
     } catch (e) {
-        if (status) { status.style.color = '#f87171'; status.innerHTML = '❌ ' + e.message; }
+        if (status) { status.style.color = '#f87171'; status.innerHTML = '❌ ' + escapeHtml(e.message || String(e)); }
         notify('Erreur upload vidéo : ' + e.message, 'error');
     }
 
@@ -5766,7 +5771,8 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // Actualiser UI si connexion change (relay events)
-    setInterval(() => {
+    if (window._minelifeConnPollId) clearInterval(window._minelifeConnPollId);
+    window._minelifeConnPollId = setInterval(() => {
         const wasConnected = document.getElementById('conn-badge').classList.contains('connected');
         const isNow = !!(window.isNostrConnected && window.userPubkey);
         if (wasConnected !== isNow) {
@@ -6002,7 +6008,7 @@ function _appendChatMessage(ev) {
     const div  = document.createElement('div');
     div.style.cssText = 'margin-bottom:4px;word-break:break-word';
     div.innerHTML = `<span style="color:var(--accent-light);font-weight:600">${name}</span> `
-                  + (ev.content || '').replace(/</g, '&lt;');
+                  + escapeHtml(ev.content || '');
     container.appendChild(div);
     container.scrollTop = container.scrollHeight;
 }

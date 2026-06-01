@@ -2513,8 +2513,10 @@ Votez en envoyant des Ẑen avec le tag vote sur l'interface crowdfunding !
             
             for (const relayUrl of relayUrls) {
                 try {
-                    if (window.NostrTools && window.NostrTools.Relay) {
-                        window.appState.relay = await window.NostrTools.Relay.connect(relayUrl);
+                    if (window.NostrTools && typeof window.NostrTools.relayInit === 'function') {
+                        const relay = window.NostrTools.relayInit(relayUrl);
+                        await relay.connect();
+                        window.appState.relay = relay;
                         console.log('✅ Connected to relay:', relayUrl);
                         // Update UI to reflect real connection state
                         syncConnectionStatus();
@@ -2535,8 +2537,9 @@ Votez en envoyant des Ẑen avec le tag vote sur l'interface crowdfunding !
             // Initial sync
             syncConnectionStatus();
             
-            // Periodic sync every 2 seconds to ensure UI reflects truth
-            setInterval(() => {
+            // Periodic sync every 2 seconds — guarded contre les doublons si rappelée
+            if (window._connMonitorId) clearInterval(window._connMonitorId);
+            window._connMonitorId = setInterval(() => {
                 syncConnectionStatus();
             }, 2000);
             

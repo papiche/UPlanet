@@ -772,6 +772,129 @@ if (typeof window !== 'undefined') {
     window.wrapRelayWithQueue = wrapRelayWithQueue;
 }
 
+// ========================================
+// NOSTR RELAY CLIENT MINIMAL (nostrTools)
+// ========================================
+// Client WebSocket brut pour le protocole NOSTR (REQ/EVENT/CLOSE/OK).
+// Utilisé directement par les outils standalone (nostr_message_viewer, nostr_console)
+// sans passer par RelayManager. Intégré ici pour éviter le double chargement.
+var nostrTools = {
+    relayInit: function(relayUrl) {
+        var ws;
+        var eventHandlers = { error: [] };
+        var subHandlers = {};
+
+        var relay = {
+            url: relayUrl,
+            connect: function() {
+                return new Promise(function(resolve, reject) {
+                    ws = new WebSocket(relayUrl);
+                    ws.onopen = function() {
+                        console.log('[nostrTools] Connected to ' + relayUrl);
+                        resolve();
+                    };
+                    ws.onerror = function(error) {
+                        console.error('[nostrTools] WebSocket error on ' + relayUrl, error);
+                        eventHandlers.error.forEach(function(h) { h(error); });
+                        reject('WebSocket error on ' + relayUrl);
+                    };
+                    ws.onclose = function() {
+                        console.log('[nostrTools] Connection closed to ' + relayUrl);
+                    };
+                    ws.onmessage = function(event) {
+                        try {
+                            var message = JSON.parse(event.data);
+                            if (message[0] === 'EVENT') {
+                                var subId = message[1];
+                                var nostrEvent = message[2];
+                                if (subHandlers[subId] && subHandlers[subId].event) {
+                                    subHandlers[subId].event.forEach(function(h) { h(nostrEvent); });
+                                }
+                            } else if (message[0] === 'EOSE') {
+                                var subId = message[1];
+                                if (subHandlers[subId] && subHandlers[subId].eose) {
+                                    subHandlers[subId].eose.forEach(function(h) { h(); });
+                                }
+                            } else if (message[0] === 'NOTICE') {
+                                console.log('[nostrTools Notice from ' + relayUrl + ']:', message[1]);
+                            } else if (message[0] === 'OK') {
+                                var evId = message[1];
+                                Object.keys(subHandlers).forEach(function(id) {
+                                    if (subHandlers[id]._okHandlers && subHandlers[id]._okHandlers[evId]) {
+                                        subHandlers[id]._okHandlers[evId](message[2], message[3]);
+                                        delete subHandlers[id]._okHandlers[evId];
+                                    }
+                                });
+                            }
+                        } catch (e) {
+                            console.error('[nostrTools] Error parsing message:', event.data, e);
+                        }
+                    };
+                });
+            },
+            close: function() {
+                if (ws && ws.readyState === WebSocket.OPEN) ws.close();
+            },
+            sub: function(filters) {
+                var subId = Math.random().toString(36).substring(2, 15);
+                subHandlers[subId] = { event: [], eose: [], _okHandlers: {} };
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify(['REQ', subId].concat(filters)));
+                } else {
+                    console.warn('[nostrTools] WebSocket not open, subscription not sent.');
+                }
+                return {
+                    on: function(type, handler) {
+                        if (subHandlers[subId] && subHandlers[subId][type] !== undefined) {
+                            subHandlers[subId][type].push(handler);
+                        }
+                    },
+                    unsub: function() {
+                        if (ws && ws.readyState === WebSocket.OPEN) {
+                            ws.send(JSON.stringify(['CLOSE', subId]));
+                        }
+                        delete subHandlers[subId];
+                    }
+                };
+            },
+            publish: function(event) {
+                return new Promise(function(resolve, reject) {
+                    if (!ws || ws.readyState !== WebSocket.OPEN) {
+                        reject('WebSocket is not connected.');
+                        return;
+                    }
+                    var fakeSubId = '__pub__';
+                    if (!subHandlers[fakeSubId]) subHandlers[fakeSubId] = { event: [], eose: [], _okHandlers: {} };
+                    subHandlers[fakeSubId]._okHandlers[event.id] = function(success, msg) {
+                        if (success) resolve();
+                        else reject('Relay rejected event: ' + (msg || ''));
+                    };
+                    var timeout = setTimeout(function() {
+                        if (subHandlers[fakeSubId]) delete subHandlers[fakeSubId]._okHandlers[event.id];
+                        reject('Timeout waiting for OK');
+                    }, 10000);
+                    ws.addEventListener('message', function onMsg(msgEvent) {
+                        try {
+                            var m = JSON.parse(msgEvent.data);
+                            if (m[0] === 'OK' && m[1] === event.id) {
+                                clearTimeout(timeout);
+                                ws.removeEventListener('message', onMsg);
+                                if (m[2]) resolve();
+                                else reject('Relay rejected: ' + (m[3] || ''));
+                            }
+                        } catch(e) {}
+                    });
+                    ws.send(JSON.stringify(['EVENT', event]));
+                });
+            },
+            on: function(type, handler) {
+                if (type === 'error') eventHandlers.error.push(handler);
+            }
+        };
+        return relay;
+    }
+};
+
 // ── EXPORTS lib_0 vers window ──────────────────────────────────────────────
 window.NostrState           = NostrState;
 window.SubscriptionQueue    = SubscriptionQueue;
@@ -779,5 +902,6 @@ window.syncLegacyVariables  = syncLegacyVariables;
 window.wrapRelayWithQueue   = wrapRelayWithQueue;
 window.NIP42_AUTH_COOLDOWN  = NIP42_AUTH_COOLDOWN;
 window.CONNECTION_DEBOUNCE  = CONNECTION_DEBOUNCE;
+window.nostrTools           = nostrTools;
 
 })();

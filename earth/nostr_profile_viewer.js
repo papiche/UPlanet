@@ -11,6 +11,10 @@
 
 'use strict';
 
+function _safeUrl(url) {
+    try { var u = new URL(url); return /^https?:$/.test(u.protocol) ? url : ''; } catch(e) { return ''; }
+}
+
 // ================================================================
 // LOGGING UTILITY
 // ================================================================
@@ -494,11 +498,11 @@ function showMediaInModal(media) {
     if (nextBtn) { nextBtn.disabled = window.currentMediaIndex === window.mediaCollection.length - 1; nextBtn.style.opacity = nextBtn.disabled ? '0.5' : '1'; }
     const lc = (media.url || '').toLowerCase();
     if (media.type === 'image')
-        content.innerHTML = `<img src="${media.url}" alt="Image" style="max-width:100%;max-height:80vh;object-fit:contain;">`;
+        content.innerHTML = `<img src="${_safeUrl(media.url)}" alt="Image" style="max-width:100%;max-height:80vh;object-fit:contain;">`;
     else if (media.type === 'video')
-        content.innerHTML = `<video controls style="max-width:100%;max-height:80vh;"><source src="${media.url}" type="video/${lc.split('.').pop()}"></video>`;
+        content.innerHTML = `<video controls style="max-width:100%;max-height:80vh;"><source src="${_safeUrl(media.url)}" type="video/${lc.split('.').pop()}"></video>`;
     else if (media.type === 'audio')
-        content.innerHTML = `<audio controls><source src="${media.url}" type="audio/${lc.split('.').pop()}"></audio>`;
+        content.innerHTML = `<audio controls><source src="${_safeUrl(media.url)}" type="audio/${lc.split('.').pop()}"></audio>`;
 }
 
 function navigateMedia(direction) {
@@ -1119,7 +1123,7 @@ async function displayNostrData() {
     } catch (profileError) {
         npvLog.error('Erreur profil:', profileError);
         profileContainerDiv.classList.remove('loading');
-        profileContentDiv.innerHTML = `<p style="color:var(--terminal-red)">Error loading profile: ${profileError.message || profileError}</p>`;
+        profileContentDiv.innerHTML = `<p style="color:var(--terminal-red)">Error loading profile: ${escapeHtml(String(profileError.message || profileError))}</p>`;
     }
 
     // ---- MESSAGES ----
@@ -1172,7 +1176,7 @@ async function displayNostrData() {
     } catch (messagesError) {
         npvLog.error('Erreur messages:', messagesError);
         messagesContainerDiv.classList.remove('loading');
-        messagesContentDiv.innerHTML = `<p style="color:var(--terminal-red)">Error: ${messagesError.message || messagesError}</p>`;
+        messagesContentDiv.innerHTML = `<p style="color:var(--terminal-red)">Error: ${escapeHtml(String(messagesError.message || messagesError))}</p>`;
     }
 
     // ---- MUTED PROFILES (analytics / NIP-51) ----
@@ -1209,7 +1213,7 @@ async function displayNostrData() {
     } catch (muteError) {
         npvLog.error('Erreur liste mutée:', muteError);
         analyticsContainerDiv.classList.remove('loading');
-        analyticsContentDiv.innerHTML = `<p style="color:var(--terminal-red)">Error: ${muteError.message || muteError}</p>`;
+        analyticsContentDiv.innerHTML = `<p style="color:var(--terminal-red)">Error: ${escapeHtml(String(muteError.message || muteError))}</p>`;
     }
 
     // ---- Mute button state (highlight if already muted) ----
@@ -1659,13 +1663,13 @@ async function displayN1Zone(filter) {
     const subset = computeNetworkSubset(followList, followerSet, filter);
 
     if (subset.length === 0) {
-        n1Content.innerHTML = `<p style="color:var(--terminal-border)">Aucun profil dans cette catégorie (${filter}).</p>`;
+        n1Content.innerHTML = `<p style="color:var(--terminal-border)">Aucun profil dans cette catégorie (${escapeHtml(filter)}).</p>`;
         if (n1Container) n1Container.classList.remove('loading');
         return;
     }
 
     npvLog.log(`displayN1Zone → ${subset.length} profil(s) à afficher (limité à 50)`);
-    n1Content.innerHTML = `<p style="color:var(--terminal-cyan);margin-bottom:10px;">${subset.length} profil(s) — filtre : <strong>${filter}</strong></p>`;
+    n1Content.innerHTML = `<p style="color:var(--terminal-cyan);margin-bottom:10px;">${subset.length} profil(s) — filtre : <strong>${escapeHtml(filter)}</strong></p>`;
     if (n1Container) n1Container.classList.remove('loading');
 
     const limited = subset.slice(0, 50);
@@ -1717,7 +1721,7 @@ async function loadN1Zone() {
         npvLog.error('loadN1Zone erreur:', e);
         npvLog.timeEnd('loadN1Zone');
         npvLog.groupEnd();
-        if (n1Content)   n1Content.innerHTML = `<p style="color:var(--terminal-red)">Erreur N1 : ${e.message || e}</p>`;
+        if (n1Content)   n1Content.innerHTML = `<p style="color:var(--terminal-red)">Erreur N1 : ${escapeHtml(String(e.message || e))}</p>`;
         if (n1Container) n1Container.classList.remove('loading');
     }
 }
@@ -1753,7 +1757,7 @@ async function displayN2Zone(filter) {
         return;
     }
 
-    n2Content.innerHTML = filterNote + `<p style="color:var(--terminal-cyan);margin-bottom:10px;">${subset.length} profil(s) en N² — filtre : <strong>${filter}</strong></p>`;
+    n2Content.innerHTML = filterNote + `<p style="color:var(--terminal-cyan);margin-bottom:10px;">${subset.length} profil(s) en N² — filtre : <strong>${escapeHtml(filter)}</strong></p>`;
     if (n2Container) n2Container.classList.remove('loading');
 
     // Pre-fetch "via" profiles (intermediate N1 contacts)
@@ -1834,7 +1838,7 @@ window.loadN2Zone = async function () {
         npvLog.error('loadN2Zone erreur:', e);
         npvLog.timeEnd('loadN2Zone');
         npvLog.groupEnd();
-        if (n2Content)   n2Content.innerHTML = `<p style="color:var(--terminal-red)">Erreur N2 : ${e.message || e}</p>`;
+        if (n2Content)   n2Content.innerHTML = `<p style="color:var(--terminal-red)">Erreur N2 : ${escapeHtml(String(e.message || e))}</p>`;
         if (n2Container) n2Container.classList.remove('loading');
     }
 };

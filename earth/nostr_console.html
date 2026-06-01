@@ -13,6 +13,7 @@
             --terminal-cyan: #0ff;
             --terminal-purple: #b19cd9;
             --terminal-red: #f44;
+            --terminal-yellow: #ffc107;
             --terminal-glow: rgba(0, 255, 0, 0.7);
             --terminal-border: #333;
             --text-color: #e0e0e0;
@@ -305,7 +306,7 @@
     </div>
     <div id="nav-status-text" class="nav-status" style="margin-top:10px;">Key 0/0 | Msg 0/0</div>
 
-    <script src="nostr.js"></script>
+    <script src="lib_0_foundation.js"></script>
     <script>
         // Matrix effect (from your example)
         const canvas = document.getElementById('matrix');
@@ -550,30 +551,11 @@
         }
 
         async function testRelayConnection(nostrRelayUrl) {
+            const relay = nostrTools.relayInit(nostrRelayUrl);
+            relay.on('error', (e) => appendDiagnostic(`Relay error: ${e?.message || e}`, 'err'));
             try {
-                const relay = nostrTools.relayInit(nostrRelayUrl);
-                relay.on('connect', () => appendDiagnostic(`Connected to relay: ${nostrRelayUrl}`, 'ok'));
-                relay.on('error', (e) => appendDiagnostic(`Relay error: ${e?.message || e}`, 'err'));
-                relay.on('auth', async (challenge) => {
-                    try {
-                        const pub = (typeof window.nostr !== 'undefined' && typeof window.nostr.getPublicKey === 'function') ? await window.nostr.getPublicKey() : '';
-                        if (!pub) return;
-                        const authEvent = {
-                            kind: 22242,
-                            created_at: Math.floor(Date.now() / 1000),
-                            tags: [ ['relay', nostrRelayUrl], ['challenge', challenge || ''] ],
-                            content: '',
-                            pubkey: pub
-                        };
-                        const signed = await window.nostr.signEvent(authEvent);
-                        await relay.publish(signed);
-                        appendDiagnostic('NIP-42 auth event sent.', 'ok');
-                    } catch (err) {
-                        appendDiagnostic(`NIP-42 auth failed: ${err?.message || err}`, 'err');
-                    }
-                });
                 await relay.connect();
-                // Briefly keep connection, then close
+                appendDiagnostic(`Connected to relay: ${nostrRelayUrl}`, 'ok');
                 setTimeout(() => { try { relay.close(); } catch(_){} }, 1000);
             } catch (e) {
                 appendDiagnostic(`Failed to connect relay: ${nostrRelayUrl}`, 'err');
@@ -940,7 +922,7 @@
                 html += `<img src="${profile.picture}" alt="Profile Pic" class="profile-pic">`;
             }
             if (profile.about) {
-                html += `<p class="profile-about"><em>${profile.about.replace(/</g, "<").replace(/>/g, ">")}</em></p>`;
+                html += `<p class="profile-about"><em>${escapeHtml(profile.about)}</em></p>`;
             }
             html += `<div style="clear:both;"></div>`;
 

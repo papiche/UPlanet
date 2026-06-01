@@ -77,18 +77,16 @@
                 try {
                     var relay = global.NostrTools.relayInit(relayUrl);
 
-                    relay.on('connect',    function () {
+                    relay.on('error', function (err) { onError(err || new Error('relay error')); });
+
+                    relay.connect().then(function () {
                         var sub = relay.sub([filter]);
                         sub.on('event', function (event) {
                             var station = self.parseEvent(event);
                             if (station) onUpdate(station.stationId, station);
                         });
                         sub.on('eose', function () { onEose(); });
-                    });
-
-                    relay.on('error', function (err) { onError(err || new Error('relay error')); });
-
-                    relay.connect().catch(function (err) { onError(err); });
+                    }).catch(function (err) { onError(err); });
 
                     return function disconnect() {
                         try { relay.close(); } catch (e) {}

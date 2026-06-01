@@ -501,37 +501,21 @@ window.calculateMatch = function() {
 };
 
 function getPhase(dateStr, timeStr, lon) {
-    const d = new Date(dateStr + 'T' + timeStr);
-    if (isNaN(d)) return 0;
-    const dayOfYear = Math.floor((d - new Date(d.getFullYear(), 0, 0)) / 86400000);
-    const tAnn  = ((dayOfYear - 80) / 365.25) * 2 * Math.PI;
-    const tDay  = (d.getHours() + d.getMinutes() / 60) / 24 * 2 * Math.PI;
-    const off   = (parseFloat(lon) || 0) * (Math.PI / 180);
-    const ratio = 1.059;
-    return (((tAnn + tDay + off) % ratio) / ratio) * 2 * Math.PI;
+    // Délègue à Phi2X.computePhaseFromForm — formule canonique synchronisée
+    // avec phi2x.py (Python) et Phi2X_Math.gd (Godot).
+    //
+    // CORRECTIONS vs implémentation originale :
+    //   1. WAVE_STRETCH (≈1.059) est un multiplicateur d'onde, PAS un diviseur de modulo
+    //      (l'ancien code compressait φ_i dans [0, 2π] via une distorsion incorrecte)
+    //   2. tAnn basé sur Unix timestamp modulo ORBITAL_YEAR_S (cohérent cross-platform)
+    //   3. tDay corrigé par la longitude solaire (birth_lon/360 × 86400s)
+    //   Note : sans latitude, le pentagon offset Goldberg n'est pas appliqué ici.
+    //          Utiliser Phi2X.computePersonalPhase(unix, lat, lon) quand lat est disponible.
+    return Phi2X.computePhaseFromForm(dateStr, timeStr, lon);
 }
 
-// ── KIN MAYA ─────────────────────────────────────────────────
-const KIN_GLYPHS   = ['Imix','Ik','Akbal','Kan','Chicchan','Cimi','Manik','Lamat','Muluc','Oc','Chuen','Eb','Ben','Ix','Men','Cib','Caban','Etznab','Cauac','Ahau'];
-const KIN_GLYPHS_FR= ['Dragon','Vent','Nuit','Graine','Serpent','Lieur','Main','Étoile','Lune','Chien','Singe','Chemin','Roseau','Jaguar','Aigle','Guerrier','Terre','Miroir','Tempête','Soleil'];
-const KIN_TONES    = ['Magnétique','Lunaire','Électrique','Auto-existante','Harmonique','Rythmique','Résonnante','Galactique','Solaire','Planétaire','Spectrale','Cristal','Cosmique'];
-const KIN_TONE_KEYS= [['Unifier','Unification','Présence'],['Polariser','Stabilisation','Définition'],['Activer','Activation','Unification'],['Définir','Mesure','Définition'],['Commander','Commandement','Pouvoir'],['Organiser','Organisation','Équilibre'],['Canaliser','Inspiration','Canalisation'],['Harmoniser','Harmonisation','Modélisation'],['Réaliser','Réalisation','Impulsion'],['Perfectionner','Perfectionnement','Production'],['Dissoudre','Dissolution','Abandon'],['Universaliser','Dédication','Universalisation'],['Transcender','Confrontation','Transcendance']];
-const KIN_COLORS   = ['🔴 Rouge','⚪ Blanc','🔵 Bleu','🟡 Jaune','🟢 Vert'];
-const KIN_MESES    = [0,31,59,90,120,151,181,212,243,13,44,74];
-const KIN_SUMA     = {30:2,35:7,40:12,45:17,50:22,3:27,8:32,13:37,18:42,23:47,28:52,32:57,38:62,42:67,48:72,1:76,6:82,11:87,16:92,21:97,26:102,31:107,36:112,41:117,46:122,51:127,4:132,9:137,14:142,19:147,24:152,29:157,34:162,39:167,44:172,49:177,2:182,7:187,12:192,17:197,22:202,27:207,37:217,47:227,0:232,5:237,10:242,15:247,20:252,25:257};
-
-function calcKin(dateStr) {
-    if (!dateStr) return null;
-    const d = new Date(dateStr);
-    if (isNaN(d)) return null;
-    const y = d.getFullYear(), mo = d.getMonth() + 1, day = d.getDate();
-    let kin = day + KIN_MESES[mo - 1] + (KIN_SUMA[y % 52] || 0);
-    if (kin > 260) kin -= 260;
-    const gi = (kin - 1) % 20, ti = (kin - 1) % 13, ci = Math.floor((kin - 1) / 13) % 5;
-    return { kin, glyph: KIN_GLYPHS[gi], glyphFr: KIN_GLYPHS_FR[gi],
-             tone: KIN_TONES[ti], color: KIN_COLORS[ci], keys: KIN_TONE_KEYS[ti],
-             gi, ti, ci };
-}
+// ── KIN MAYA — délégué à phi2x.js (source canonique) ─────────
+function calcKin(dateStr) { return Phi2X.calcKinFromDate(dateStr); }
 
 function _kinCard(k, label, accentColor) {
     if (!k) return `<div class="kin-card mb-2"><div class="small fw-bold mb-1" style="color:${accentColor}">${label}</div><div class="kin-empty">Date non renseignée</div></div>`;
@@ -571,9 +555,7 @@ function renderKinMatch() {
 
     if (kA && kB) {
         const unionKin = ((kA.kin + kB.kin - 1) % 260) + 1;
-        const ugi = (unionKin-1)%20, uti = (unionKin-1)%13, uci = Math.floor((unionKin-1)/13)%5;
-        const kU = { kin: unionKin, glyph: KIN_GLYPHS[ugi], glyphFr: KIN_GLYPHS_FR[ugi],
-                     tone: KIN_TONES[uti], color: KIN_COLORS[uci] };
+        const kU = Phi2X.calcKinFromNum(unionKin);
         const kinDist  = Math.min(Math.abs(kA.kin-kB.kin), 260-Math.abs(kA.kin-kB.kin));
         const mayaScore= Math.round((1-kinDist/130)*100);
         const rColor   = mayaScore > 75 ? '#00ffcc' : mayaScore > 40 ? '#ffaa00' : '#ff0055';
@@ -652,10 +634,7 @@ function renderKinTheorie() {
     if (kA && kB) {
         // Kin de l'Union = (kA + kB − 1) % 260 + 1
         const unionKin = ((kA.kin + kB.kin - 1) % 260) + 1;
-        const kU = calcKin(null); // on calcule manuellement
-        const ugi = (unionKin-1)%20, uti = (unionKin-1)%13, uci = Math.floor((unionKin-1)/13)%5;
-        const kUnion = { kin: unionKin, glyph: KIN_GLYPHS[ugi], glyphFr: KIN_GLYPHS_FR[ugi],
-                         tone: KIN_TONES[uti], color: KIN_COLORS[uci], keys: KIN_TONE_KEYS[uti] };
+        const kUnion = Phi2X.calcKinFromNum(unionKin);
 
         // Résonance
         const sameColor    = kA.ci === kB.ci;
@@ -1064,7 +1043,7 @@ function drawTheorieMode() {
     // ─ Overlay Kin Union ─────────────────────────────────────────
     if (_cachedKinA && _cachedKinB) {
         const uKin   = ((_cachedKinA.kin + _cachedKinB.kin - 1) % 260) + 1;
-        const uGlyph = KIN_GLYPHS[(uKin-1)%20];
+        const uGlyph = (Phi2X.calcKinFromNum(uKin) || {}).glyph || '';
         blendMode(BLEND); noStroke(); textAlign(CENTER, CENTER);
         textSize(38); fill(255, 200, 40, 45 + 20*excite);
         text(uKin, cx, cy);
@@ -1253,6 +1232,7 @@ function drawWave(nx, ny, nr, ng, nb, t) {
 }
 </script>
 
+<script src="phi2x.js"></script>
 <script src="nacl-fast.min.js"></script>
 <script src="nostr.bundle.js"></script>
 <script src="common.js"></script>

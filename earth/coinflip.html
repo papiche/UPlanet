@@ -506,7 +506,9 @@
     // État NOSTR géré par common.js — window.nostrRelay, window.isNostrConnected, window.userPubkey
 
     // Échappe les caractères HTML pour éviter les injections XSS depuis contenu NOSTR.
+    // Délègue à window.escapeHtml (défini dans common.js) avec fallback intégré.
     function esc(s) {
+      if (typeof window.escapeHtml === 'function') return window.escapeHtml(s);
       return String(s == null ? '' : s)
         .replace(/&/g, '&amp;').replace(/</g, '&lt;')
         .replace(/>/g, '&gt;').replace(/"/g, '&quot;')
@@ -911,7 +913,7 @@
           if (data.type === 'daily_limit') {
             msgEl.innerHTML = '<p style="color:#e53e3e;font-weight:600">⏳ Une partie par jour autorisée. Revenez demain !</p>';
           } else {
-            msgEl.innerHTML = `<p style="color:#e53e3e">⚠ Mise refusée : ${data.error || 'Solde insuffisant ou erreur réseau'}</p>`;
+            msgEl.innerHTML = `<p style="color:#e53e3e">⚠ Mise refusée : ${escapeHtml(data.error || 'Solde insuffisant ou erreur réseau')}</p>`;
           }
         }
         return null;
@@ -952,7 +954,7 @@
             const md = await resp.text();
             viewer.innerHTML = typeof marked !== 'undefined'
               ? marked.parse(md)
-              : '<pre>' + md.replace(/</g, '&lt;') + '</pre>';
+              : '<pre>' + escapeHtml(md) + '</pre>';
             viewer.dataset.loaded = '1';
           } catch (e) {
             viewer.innerHTML = '<p style="color:#e53e3e">Impossible de charger COINFLIP.md</p>';

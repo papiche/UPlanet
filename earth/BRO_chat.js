@@ -475,8 +475,18 @@
             _appendMsg('sys', '⚠️ NODE non connecté');
             return Promise.resolve();
         }
-        if (!w.nostr || !w.nostr.nip04 || !w.nostr.nip04.encrypt) {
-            _appendMsg('sys', '⚠️ Extension NIP-07 sans support NIP-04');
+        /* Choisir NIP-04 (priorité) ou NIP-44 (fallback).
+           Le daemon détecte le chiffrement utilisé (?iv= → NIP-04) et répond
+           avec le même protocole, donc les deux chemins sont cohérents. */
+        var _encFn, _encProto;
+        if (w.nostr && w.nostr.nip04 && w.nostr.nip04.encrypt) {
+            _encFn    = function () { return w.nostr.nip04.encrypt(_ctx.nodeHex, msg); };
+            _encProto = 'NIP-04';
+        } else if (w.nostr && w.nostr.nip44 && w.nostr.nip44.encrypt) {
+            _encFn    = function () { return w.nostr.nip44.encrypt(_ctx.nodeHex, msg); };
+            _encProto = 'NIP-44';
+        } else {
+            _appendMsg('sys', '⚠️ Extension NIP-07 sans support NIP-04/NIP-44');
             return Promise.resolve();
         }
 
@@ -485,9 +495,9 @@
         if (btn) btn.disabled = true;
         _appendMsg('user', msg);
 
-        _log('envoi DM kind 4 à', _ctx.nodeHex.slice(0, 12) + '…');
+        _log('envoi DM kind 4 (' + _encProto + ') à', _ctx.nodeHex.slice(0, 12) + '…');
 
-        return w.nostr.nip04.encrypt(_ctx.nodeHex, msg)
+        return _encFn()
             .then(function (encrypted) {
                 return w.nostr.signEvent({
                     kind:       4,
@@ -632,17 +642,23 @@
                     return;
                 }
 
-                if (!w.nostr || !w.nostr.nip04 || !w.nostr.nip04.encrypt) {
-                    _warn('NIP-04 absent sur window.nostr — extension incompatible');
-                    _appendMsg('sys', '⚠️ Extension NIP-07 sans support NIP-04');
+                var _hasEnc = !!(w.nostr && (
+                    (w.nostr.nip04 && w.nostr.nip04.encrypt) ||
+                    (w.nostr.nip44 && w.nostr.nip44.encrypt)
+                ));
+                if (!_hasEnc) {
+                    _warn('NIP-04/NIP-44 absent sur window.nostr — extension incompatible');
+                    _appendMsg('sys', '⚠️ Extension NIP-07 sans support NIP-04/NIP-44');
                     return;
                 }
+
+                var _encProto = (w.nostr.nip04 && w.nostr.nip04.encrypt) ? 'NIP-04' : 'NIP-44';
 
                 /* Activer le bouton d'envoi */
                 var btn = document.getElementById(_WIDGET_ID + '-send');
                 if (btn) btn.disabled = false;
 
-                _appendMsg('sys', '🤖 BRO en ligne · NIP-04');
+                _appendMsg('sys', '🤖 BRO en ligne · ' + _encProto);
 
                 /* Étape 5 : abonnement aux réponses */
                 _subscribe();

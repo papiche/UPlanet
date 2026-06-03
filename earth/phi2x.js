@@ -200,12 +200,71 @@ const Phi2X = (function() {
         return birthUnix - (280 + (w - 3.5) * 4) * ORBITAL_DAY_S;
     }
 
+    // ── Géométrie hexagonale (pointy-top, cohérent avec Phi2X_Math.gd) ────────
+    const HEX_SIZE_KM = 1.0;
+    const EARTH_R_KM  = 6371.0;
+    const GRID_ROT_S  = 86400.0 / PHI;  // ~14.83h par rotation complète
+
+    function _hexRound(q, r) {
+        let x = q, z = r, y = -x - z;
+        let rx = Math.round(x), ry = Math.round(y), rz = Math.round(z);
+        const dx = Math.abs(rx-x), dy = Math.abs(ry-y), dz = Math.abs(rz-z);
+        if (dx > dy && dx > dz) rx = -ry - rz;
+        else if (dy > dz) ry = -rx - rz;
+        else rz = -rx - ry;
+        return [rx, rz];
+    }
+
+    function gpsToHexAxial(lat, lon) {
+        const x = lat  * (Math.PI/180) * EARTH_R_KM;
+        const y = lon  * (Math.PI/180) * EARTH_R_KM * Math.cos(lat * Math.PI/180);
+        const q = (Math.sqrt(3)/3 * x - 1/3 * y) / HEX_SIZE_KM;
+        const r = (2/3 * y) / HEX_SIZE_KM;
+        return _hexRound(q, r);
+    }
+
+    function getDynamicPentagons(unixTs) {
+        const angle = ((unixTs % GRID_ROT_S) / GRID_ROT_S) * 2 * Math.PI;
+        return PENTAGONS_GPS.map(([plat, plon], i) => {
+            if (i <= 1) return [plat, plon]; // pôles fixes
+            const newLon = ((plon + angle * 180/Math.PI) % 360 + 360) % 360;
+            return [plat, newLon > 180 ? newLon - 360 : newLon];
+        });
+    }
+
+    function getNearestPentagonId(lat, lon, unixTs) {
+        const pentagons = getDynamicPentagons(unixTs || Date.now()/1000);
+        let bestIdx = 0, bestD = Infinity;
+        for (let i = 0; i < pentagons.length; i++) {
+            const d = haversineKm(lat, lon, pentagons[i][0], pentagons[i][1]);
+            if (d < bestD) { bestD = d; bestIdx = i; }
+        }
+        return bestIdx;
+    }
+
+    /**
+     * Retourne l'adresse hexagonale a4l: pour une position GPS + timestamp.
+     * Format : "a4l:P<pp>H<qqqq><rrrr>"
+     * Identique à Phi2X_Math.gd::geo_tags()
+     */
+    function geoTagA4L(lat, lon, unixTs) {
+        const ts = unixTs || Date.now()/1000;
+        const pid = getNearestPentagonId(lat, lon, ts);
+        const [q, r] = gpsToHexAxial(lat, lon);
+        const qenc = ((q + 32768) & 0xFFFF).toString(16).toUpperCase().padStart(4,'0');
+        const renc = ((r + 32768) & 0xFFFF).toString(16).toUpperCase().padStart(4,'0');
+        const penta = `a4l:P${String(pid).padStart(2,'0')}`;
+        const hex   = `a4l:P${String(pid).padStart(2,'0')}H${qenc}${renc}`;
+        return { penta, hex, pentagon_id: pid, q, r };
+    }
+
     return {
         PHI, F_PHI, F_2, F_WATER, WAVE_STRETCH, TAU, ORBITAL_YEAR_S, ORBITAL_DAY_S,
         PENTAGONS_GPS,
         KIN_GLYPHS, KIN_GLYPHS_FR, KIN_TONES_FR, KIN_TONE_KEYS,
         KIN_COLORS, KIN_COLORS_EMO, KIN_MESES, KIN_SUMA,
         haversineKm,
+        gpsToHexAxial, getDynamicPentagons, getNearestPentagonId, geoTagA4L,
         computePersonalPhase, computePhaseFromForm,
         computeResonanceK, isOpticalSingularity,
         computeOmegaBio,

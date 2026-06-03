@@ -420,6 +420,7 @@ const TEST_HEXES = TEST_ACCOUNTS.map(a => a.hex);
 let _ws       = null;
 let _events   = [];
 let _profiles = {};
+let _atomData = {};   // Kind 30078 : { phi, omega } par pubkey hex
 let _filterKind = 30500;
 
 /* ── Notifications ── */
@@ -460,6 +461,10 @@ function renderAccounts() {
                 ZenCard: <span style="color:var(--accent2)">${a.zencard.name}</span>
                 <span style="color:var(--muted);margin-left:4px">${a.zencard.npub.slice(0,20)}…</span>
             </div>
+            ${_atomData[a.hex] ? `
+            <div style="margin-top:6px;font-size:10px;color:rgba(0,255,204,0.8)">
+                ⚛ φ=${_atomData[a.hex].phi.toFixed(3)} rad &nbsp;·&nbsp; ω=${_atomData[a.hex].omega.toFixed(1)} Hz
+            </div>` : ''}
         </div>`;
     }).join('');
 }
@@ -595,6 +600,11 @@ function _subscribeAll() {
     _ws.send(JSON.stringify(['REQ', 'oracle',
         { kinds: [30503], '#t': ['WoTx2'], limit: 100 }
     ]));
+
+    /* Certificats d'Incarnation ATOM4LOVE (Kind 30078) */
+    _ws.send(JSON.stringify(['REQ', 'atom4love',
+        { kinds: [30078], '#d': ['atom4love'], authors: TEST_HEXES, limit: 20 }
+    ]));
 }
 
 function _handleEvent(ev) {
@@ -605,6 +615,19 @@ function _handleEvent(ev) {
             const p = JSON.parse(ev.content);
             _profiles[ev.pubkey] = p;
             renderAccounts();
+        } catch(_) {}
+        return;
+    }
+
+    if (ev.kind === 30078) {
+        try {
+            const c = JSON.parse(ev.content);
+            const phi   = parseFloat(c.personal_phase);
+            const omega = parseFloat(c.omega_bio);
+            if (phi > 0 && phi < 7 && omega > 0.1 && omega < 50) {
+                _atomData[ev.pubkey] = { phi, omega };
+                renderAccounts();
+            }
         } catch(_) {}
         return;
     }

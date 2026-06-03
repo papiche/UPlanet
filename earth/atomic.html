@@ -43,11 +43,15 @@
         .kin-empty{ font-size: 0.78rem; color: rgba(255,255,255,0.25); font-style: italic; text-align: center; padding: 14px 0; }
         .kin-union-bar { height: 3px; border-radius: 2px; background: linear-gradient(90deg, var(--primary), var(--secondary)); margin: 6px 0; }
         /* Carte lieu de naissance */
-        #birth-map { height: 200px; border-radius: 8px; }
-        #birth-map .leaflet-tile { filter: brightness(0.55) invert(1) contrast(1.1) saturate(0.4) hue-rotate(195deg); }
+        #birth-map, #conception-map { height: 180px; border-radius: 8px; }
+        #birth-map .leaflet-tile, #conception-map .leaflet-tile {
+            filter: brightness(0.55) invert(1) contrast(1.1) saturate(0.4) hue-rotate(195deg); }
         #birth-map .leaflet-control-zoom a { background:rgba(10,12,22,.9); color:var(--primary); border-color:rgba(0,255,204,.2); }
+        #conception-map .leaflet-control-zoom a { background:rgba(10,12,22,.9); color:var(--secondary); border-color:rgba(249,115,22,.2); }
         #birth-map .leaflet-control-zoom a:hover { background:rgba(0,255,204,.15); }
-        #birth-map .leaflet-control-attribution { display:none; }
+        #conception-map .leaflet-control-zoom a:hover { background:rgba(249,115,22,.15); }
+        #birth-map .leaflet-control-attribution,
+        #conception-map .leaflet-control-attribution { display:none; }
         .kin-resonance { border-radius: 8px; padding: 8px 10px; font-size: 0.78rem; line-height: 1.6; }
 
         /* Panneau Offcanvas */
@@ -154,6 +158,9 @@
             <li class="nav-item" role="presentation">
                 <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-theorie" type="button" role="tab">Théorie</button>
             </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-radar" type="button" role="tab">📡 Radar</button>
+            </li>
         </ul>
 
         <div class="tab-content">
@@ -165,49 +172,94 @@
                     9 → 8 → 7 → 6 → 5 → 4 → 3 → 2 → 1 → <strong>0</strong> — chaque chiffre condense la géométrie jusqu'à la Singularité, puis l'Explosion recrée le cycle.
                 </div>
 
+                <!-- ── 1. ANCRAGE — Naissance (SALT) ── -->
                 <div class="border border-secondary rounded p-3 mb-3 atom-a">
-                    <div class="section-title">1. Singularité (Conception)</div>
-                    <div class="row g-2">
-                        <div class="col-7">
-                            <label class="form-label small text-secondary text-uppercase mb-1">Date calculée</label>
-                            <input type="date" class="form-control form-control-sm" id="conception-date" readonly>
-                        </div>
-                        <div class="col-5">
-                            <label class="form-label small text-secondary text-uppercase mb-1">Heure</label>
-                            <input type="time" class="form-control form-control-sm" id="conception-time" readonly>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="border border-secondary rounded p-3 mb-3 atom-a">
-                    <div class="section-title">2. Ancrage (Naissance)</div>
-                    <div class="row g-2">
+                    <div class="section-title">1. ⚓ Ancrage — Naissance <span style="font-size:.7rem;opacity:.6;font-weight:400">(définit votre SALT)</span></div>
+                    <div class="row g-2 mb-2">
                         <div class="col-7">
                             <label class="form-label small text-secondary text-uppercase mb-1">Date</label>
                             <input type="date" class="form-control form-control-sm" id="birth-date" oninput="calculateConception()">
                         </div>
                         <div class="col-5">
-                            <label class="form-label small text-secondary text-uppercase mb-1">Heure</label>
+                            <label class="form-label small text-secondary text-uppercase mb-1">Heure locale</label>
                             <input type="time" class="form-control form-control-sm" id="birth-time" oninput="calculateConception()">
                         </div>
+                        <div class="col-6">
+                            <label class="form-label small text-secondary text-uppercase mb-1">Poids naissance (kg)</label>
+                            <input type="number" class="form-control form-control-sm" id="birth-weight"
+                                   placeholder="ex: 3.2" step="0.1" min="0.5" max="6"
+                                   oninput="calculateConception()" value="3.5">
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small text-secondary text-uppercase mb-1">Polarité</label>
+                            <select class="form-select form-select-sm" id="birth-polarity" oninput="calculateConception()">
+                                <option value="0">☀ Onde Φ (Homme)</option>
+                                <option value="1">🌙 Onde ♪ (Femme)</option>
+                            </select>
+                        </div>
                     </div>
-                </div>
-
-                <div class="border border-secondary rounded p-3 mb-3">
-                    <div class="section-title">3. Lieu de Naissance</div>
+                    <!-- Recherche ville de naissance -->
+                    <label class="form-label small text-secondary text-uppercase mb-1 mt-1">📍 Lieu de naissance</label>
                     <div class="input-group input-group-sm mb-2">
                         <input type="text" class="form-control" id="city-search"
-                               placeholder="Ville, pays…"
+                               placeholder="Ville de naissance (ex: Paris, Fort-de-France…)"
                                onkeydown="if(event.key==='Enter'){searchCity();event.preventDefault()}">
-                        <button class="btn btn-outline-secondary" type="button" id="city-search-btn"
-                                onclick="searchCity()">🔍</button>
+                        <button class="btn btn-outline-secondary" type="button" onclick="searchCity()">🔍</button>
                     </div>
-                    <div class="small mb-2" id="city-result" style="min-height:1.1rem;color:rgba(255,255,255,.45)"></div>
+                    <div class="small mb-2" id="city-result" style="min-height:1rem;color:rgba(255,255,255,.45)"></div>
                     <div id="birth-map"></div>
                     <div class="d-flex align-items-center justify-content-between mt-2">
                         <span class="small text-secondary" id="birth-location-label">Cliquez sur la carte ou cherchez une ville</span>
                         <span class="small font-monospace fw-bold" id="birth-lon-display" style="color:var(--primary)"></span>
                     </div>
+                    <!-- UTC auto-dérivé + adresse hexagonale a4l: -->
+                    <div class="mt-2 p-2 rounded" style="background:rgba(0,255,204,.06);font-size:.75rem">
+                        <span id="birth-utc-display" style="color:rgba(255,255,255,.6)">UTC : —</span>
+                        &nbsp;·&nbsp;
+                        <span id="birth-a4l-display" style="color:var(--primary);font-family:monospace">a4l : —</span>
+                    </div>
+                </div>
+
+                <!-- ── 2. SINGULARITÉ — Conception (PEPPER, éditable) ── -->
+                <div class="border rounded p-3 mb-3 atom-b">
+                    <div class="section-title" style="color:var(--secondary)">2. 🌀 Singularité — Conception <span style="font-size:.7rem;opacity:.6;font-weight:400">(définit votre PEPPER)</span></div>
+                    <p class="small text-secondary mb-2" style="font-size:.75rem">
+                        Pré-remplie automatiquement depuis votre naissance + poids.<br>
+                        Corrigez si vos parents connaissent la date et le lieu exacts — cela renforce la sécurité de votre clé.
+                    </p>
+                    <div class="row g-2 mb-2">
+                        <div class="col-7">
+                            <label class="form-label small text-secondary text-uppercase mb-1">Date de conception</label>
+                            <input type="date" class="form-control form-control-sm" id="conception-date" oninput="onConceptionChanged()">
+                        </div>
+                        <div class="col-5">
+                            <label class="form-label small text-secondary text-uppercase mb-1">Heure locale</label>
+                            <input type="time" class="form-control form-control-sm" id="conception-time" oninput="onConceptionChanged()">
+                        </div>
+                    </div>
+                    <!-- Recherche ville de conception -->
+                    <label class="form-label small text-secondary text-uppercase mb-1">📍 Lieu de conception <span style="font-size:.68rem;font-weight:400">(= naissance par défaut)</span></label>
+                    <div class="input-group input-group-sm mb-2">
+                        <input type="text" class="form-control" id="con-city-search"
+                               placeholder="Lieu de conception (défaut = naissance)…"
+                               onkeydown="if(event.key==='Enter'){searchConceptionCity();event.preventDefault()}">
+                        <button class="btn btn-outline-secondary" type="button" onclick="searchConceptionCity()">🔍</button>
+                    </div>
+                    <div class="small mb-2" id="con-city-result" style="min-height:1rem;color:rgba(255,255,255,.45)"></div>
+                    <div id="conception-map"></div>
+                    <div class="d-flex align-items-center justify-content-between mt-2">
+                        <span class="small text-secondary" id="con-location-label">Identique au lieu de naissance</span>
+                        <span class="small font-monospace fw-bold" id="con-lon-display" style="color:var(--secondary)"></span>
+                    </div>
+                    <!-- UTC auto-dérivé + adresse hexagonale a4l: conception -->
+                    <div class="mt-2 p-2 rounded" style="background:rgba(249,115,22,.06);font-size:.75rem">
+                        <span id="con-utc-display" style="color:rgba(255,255,255,.6)">UTC : —</span>
+                        &nbsp;·&nbsp;
+                        <span id="con-a4l-display" style="color:var(--secondary);font-family:monospace">a4l : —</span>
+                    </div>
+                    <!-- Champs cachés pour lat/lon conception -->
+                    <input type="hidden" id="con-lat" value="">
+                    <input type="hidden" id="con-lon" value="">
                 </div>
 
                 <div id="kin-profil-content"></div>
@@ -216,12 +268,36 @@
                 <div class="border rounded p-3 mt-3" style="border-color:rgba(245,158,11,.35)!important;background:rgba(245,158,11,.05)">
                     <div class="section-title mb-1">✨ Créer mon MULTIPASS</div>
                     <p class="small text-secondary mb-2">Votre station UPlanet va créer votre identité décentralisée à partir des données de ce profil.</p>
+                    <div class="mb-2">
+                        <label class="form-label small text-secondary text-uppercase mb-1">📧 Email</label>
+                        <input type="email" class="form-control form-control-sm" id="multipass-email"
+                               placeholder="votre@email.com" autocomplete="email">
+                    </div>
                     <div id="multipass-preview" class="small mb-3" style="line-height:1.9;color:rgba(255,255,255,.55);min-height:1.2rem"></div>
-                    <button class="btn btn-sm w-100 fw-bold mb-1" onclick="createMultipass()"
+                    <button class="btn btn-sm w-100 fw-bold mb-1" id="btn-multipass" onclick="createMultipass()"
                             style="background:rgba(245,158,11,.18);border:1px solid rgba(245,158,11,.45);color:#f59e0b">
                         ✨ Créer mon MULTIPASS
                     </button>
-                    <div class="text-center mt-1" style="font-size:0.68rem;color:rgba(255,255,255,.28)">L'email sera saisi sur la page suivante</div>
+                    <div id="multipass-result" class="mt-2" style="display:none"></div>
+                </div>
+
+                <!-- ── CERTIFICAT D'INCARNATION (Kind 30078) ── -->
+                <div class="border rounded p-3 mt-3" style="border-color:rgba(0,255,204,.22)!important;background:rgba(0,255,204,.04)">
+                    <div class="section-title mb-1" style="color:#00ffcc">⚛ Certificat d'Incarnation NOSTR</div>
+                    <p class="small text-secondary mb-2" style="font-size:.75rem">
+                        Publiez votre <strong>signature vibratoire</strong> (Kind 30078) sur le relay NOSTR.
+                        Cela vous intègre au <em>Web of Trust</em> <strong>avant</strong> la création de votre MULTIPASS.
+                        La phase φ et l'indice ω sont calculés depuis votre profil.
+                    </p>
+                    <div id="cert-status" class="small mb-1" style="color:rgba(255,255,255,.35);min-height:1.1rem"></div>
+                    <div id="cert-nostr-hint" class="small mb-2" style="color:rgba(255,255,255,.3)">Détection extension…</div>
+                    <button class="btn btn-sm w-100 fw-bold" id="btn-publish-cert" onclick="publishIncarnationCert()"
+                            style="background:rgba(0,255,204,.12);border:1px solid rgba(0,255,204,.32);color:#00ffcc">
+                        ⚛ Publier mon Certificat d'Incarnation
+                    </button>
+                    <div class="text-center mt-1" style="font-size:.65rem;color:rgba(255,255,255,.25)">
+                        Requiert Alby, nos2x ou Flamingo (NIP-07) · <span style="font-family:monospace">Kind 30078 d=atom4love</span>
+                    </div>
                 </div>
 
             </div>
@@ -322,6 +398,19 @@
                 </div>
             </div>
 
+            <!-- ── RADAR ── -->
+            <div class="tab-pane fade" id="tab-radar" role="tabpanel">
+                <div class="info-cyan rounded p-2 mb-3 small">
+                    📡 <strong>Radar vibratoire :</strong> Découvrez les profils les plus résonants avec votre signature ATOM4LOVE. Requiert votre date et lieu de naissance.
+                </div>
+                <div id="radar-status" class="text-center small mb-2" style="color:#aaa;min-height:1.4rem"></div>
+                <button class="btn btn-sm w-100 fw-bold mb-3" id="btn-radar-scan" onclick="loadRadar()"
+                    style="background:rgba(0,255,204,.12);border:1px solid rgba(0,255,204,.4);color:#00ffcc">
+                    📡 Scanner le réseau (Kind 30078)
+                </button>
+                <div id="radar-results"></div>
+            </div>
+
         </div><!-- /tab-content -->
     </div><!-- /offcanvas-body -->
 </div><!-- /offcanvas -->
@@ -340,6 +429,8 @@ let meshVertices = [];
 let meshEdges = [];
 let _cachedKinA = null, _cachedKinB = null;
 let _birthMap = null, _birthMarker = null;
+let _conMap   = null, _conMarker   = null;
+let _conLocationUserSet = false;  // true = l'utilisateur a explicitement choisi un lieu de conception
 // Performance adaptative
 let _perfLevel      = 1;     // 0=LOW  1=MED  2=HIGH
 let _fpsSamples     = [];
@@ -391,22 +482,57 @@ function getRegionName(lon) {
 }
 
 // ── INTERFACE ─────────────────────────────────────────────────
+// ── Mise à jour des affichages UTC + a4l: ────────────────────────────────────
+function _updateLocationDisplay(lat, lon, utcEl, a4lEl) {
+    if (!lat || !lon) return;
+    const utc = lon !== 0 ? Math.round(lon / 15) : 0;
+    if (utcEl) utcEl.textContent = `UTC ${utc >= 0 ? '+' : ''}${utc}  (lon/15)`;
+    if (a4lEl) {
+        const tag = Phi2X.geoTagA4L(lat, lon, Date.now()/1000);
+        a4lEl.textContent = tag.hex;
+        a4lEl.title = `Pentagone P${String(tag.pentagon_id).padStart(2,'0')} · q=${tag.q} r=${tag.r}`;
+    }
+}
+
 window.calculateConception = function() {
     const dStr = document.getElementById('birth-date').value;
     const tStr = document.getElementById('birth-time').value;
-    if (!dStr || !tStr) return;
-    const bDate = new Date(dStr + 'T' + tStr);
+    if (!dStr) return;
+    const bDate = new Date(dStr + 'T' + (tStr || '12:00'));
     if (!isNaN(bDate)) {
-        const cDate = new Date(bDate - 280*24*3600*1000);
+        const birthUnix = Math.floor(bDate.getTime() / 1000);
+        const wEl = document.getElementById('birth-weight');
+        const weight = wEl ? parseFloat(wEl.value) || 3.5 : 3.5;
+        // gestation_days = 280 + (weight - 3.5) × 4  — cohérent avec Phi2X.py + TabProfil.gd
+        const conceptionUnix = Phi2X.computeConceptionUnix(birthUnix, weight);
+        const cDate = new Date(conceptionUnix * 1000);
         document.getElementById('conception-date').value = formatDateForInput(cDate);
         document.getElementById('conception-time').value = formatTimeForInput(cDate);
+        // Si le lieu de conception n'a pas été modifié → pré-remplir depuis naissance
+        const conLat = document.getElementById('con-lat').value;
+        if (!conLat && _birthMarker) {
+            const bll = _birthMarker.getLatLng();
+            _syncConceptionLocation(bll.lng, bll.lat, false); // false = ne pas marquer comme "modifié"
+        }
     }
+    // Mise à jour UTC + a4l: naissance
+    const birthLon = parseFloat(document.getElementById('match-lon-a')?.value || 0);
+    const birthLat = _birthMarker ? _birthMarker.getLatLng().lat : null;
+    _updateLocationDisplay(birthLat, birthLon,
+        document.getElementById('birth-utc-display'),
+        document.getElementById('birth-a4l-display'));
+
     document.getElementById('match-date-a').value = dStr;
-    document.getElementById('match-time-a').value = tStr;
+    document.getElementById('match-time-a').value = tStr || '12:00';
     _updateKinCache();
     renderKinProfil();
     updateMultipassPreview();
     window.calculateMatch();
+};
+
+window.onConceptionChanged = function() {
+    // L'utilisateur a modifié manuellement la date/lieu de conception
+    updateMultipassPreview();
 };
 
 window.updateLonVisuel = function(id) {
@@ -435,7 +561,42 @@ function _syncBirthLocation(lon, lat) {
     const sl = document.getElementById('match-lon-a');
     if (sl) sl.value = lon;
     window.updateLonVisuel('a');
+    // Si conception n'a pas été modifiée manuellement → suit le lieu de naissance
+    if (!_conLocationUserSet) {
+        _syncConceptionLocation(lon, lat, false);
+    }
+    // UTC + a4l: naissance
+    _updateLocationDisplay(lat, lon,
+        document.getElementById('birth-utc-display'),
+        document.getElementById('birth-a4l-display'));
     window.calculateMatch();
+    updateMultipassPreview();
+}
+
+function _syncConceptionLocation(lon, lat, userSet = true) {
+    _conLocationUserSet = userSet;
+    // Champs cachés
+    const cl = document.getElementById('con-lat');
+    const co = document.getElementById('con-lon');
+    if (cl) cl.value = lat;
+    if (co) co.value = lon;
+    // Affichage labels
+    const lbl  = document.getElementById('con-location-label');
+    const disp = document.getElementById('con-lon-display');
+    if (lbl)  lbl.textContent  = userSet ? getRegionName(lon) : 'Identique au lieu de naissance';
+    if (disp) disp.textContent = _lonFmt(lon);
+    // Carte conception
+    if (_conMap) {
+        const icon = _conMap._conIcon;
+        if (_conMarker) _conMarker.setLatLng([lat, lon]);
+        else _conMarker = L.marker([lat, lon], { icon }).addTo(_conMap);
+        if (userSet) _conMap.setView([lat, lon], 7);
+    }
+    // UTC + a4l: conception
+    _updateLocationDisplay(lat, lon,
+        document.getElementById('con-utc-display'),
+        document.getElementById('con-a4l-display'));
+    updateMultipassPreview();
 }
 
 function initBirthMap() {
@@ -455,8 +616,9 @@ function initBirthMap() {
 
     _birthMap.on('click', function(e) {
         _syncBirthLocation(parseFloat(e.latlng.lng.toFixed(2)), parseFloat(e.latlng.lat.toFixed(2)));
-        updateMultipassPreview();
     });
+    // Initialiser aussi la carte conception (DOM ready à ce stade)
+    setTimeout(initConceptionMap, 100);
 
     // Restaurer la longitude courante depuis le slider
     const lon0 = parseFloat(document.getElementById('match-lon-a').value) || 0;
@@ -467,6 +629,66 @@ function initBirthMap() {
         const d = document.getElementById('birth-lon-display');
         if (l) l.textContent = getRegionName(lon0);
         if (d) d.textContent = _lonFmt(lon0);
+    }
+}
+
+function initConceptionMap() {
+    const container = document.getElementById('conception-map');
+    if (!container) return;
+    if (_conMap) { _conMap.invalidateSize(); return; }
+
+    _conMap = L.map('conception-map', { center: [20, 0], zoom: 2, zoomControl: true, attributionControl: false });
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18 }).addTo(_conMap);
+
+    const icon = L.divIcon({
+        className: '',
+        html: '<div style="width:12px;height:12px;border-radius:50%;background:#f97316;box-shadow:0 0 8px #f97316;border:2px solid rgba(255,255,255,.6)"></div>',
+        iconSize: [12, 12], iconAnchor: [6, 6]
+    });
+    _conMap._conIcon = icon;
+
+    _conMap.on('click', function(e) {
+        _syncConceptionLocation(parseFloat(e.latlng.lng.toFixed(2)), parseFloat(e.latlng.lat.toFixed(2)), true);
+    });
+
+    // Initialiser depuis lieu de naissance si disponible
+    if (_birthMarker) {
+        const bll = _birthMarker.getLatLng();
+        _syncConceptionLocation(bll.lng, bll.lat, false);
+        _conMap.setView([bll.lat, bll.lng], 5);
+    }
+}
+
+async function searchConceptionCity() {
+    const input  = document.getElementById('con-city-search');
+    const result = document.getElementById('con-city-result');
+    const q = input ? input.value.trim() : '';
+    // Si vide → utiliser le lieu de naissance comme suggestion
+    if (!q && _birthMarker) {
+        const bll = _birthMarker.getLatLng();
+        _syncConceptionLocation(bll.lng, bll.lat, true);
+        if (result) result.textContent = '📍 Lieu de naissance utilisé';
+        return;
+    }
+    if (!q) return;
+    if (result) result.textContent = '🔍 Recherche…';
+    try {
+        const url = 'https://nominatim.openstreetmap.org/search?q='
+            + encodeURIComponent(q) + '&format=json&limit=1&accept-language=fr';
+        const data = await fetch(url, { headers: { 'Accept': 'application/json' } }).then(r => r.json());
+        if (data && data.length > 0) {
+            const place = data[0];
+            const lon = parseFloat(parseFloat(place.lon).toFixed(2));
+            const lat = parseFloat(parseFloat(place.lat).toFixed(2));
+            const label = place.display_name.split(',').slice(0, 3).join(', ');
+            if (result) result.textContent = '📍 ' + label;
+            if (_conMap) _conMap.setView([lat, lon], 7);
+            _syncConceptionLocation(lon, lat, true);
+        } else {
+            if (result) result.textContent = '⚠️ Ville non trouvée';
+        }
+    } catch(e) {
+        if (result) result.textContent = '⚠️ Erreur réseau';
     }
 }
 
@@ -691,43 +913,124 @@ function updateMultipassPreview() {
     const loc = document.getElementById('birth-location-label').textContent;
     const lon = document.getElementById('birth-lon-display').textContent;
     const lat = _birthMarker ? _birthMarker.getLatLng().lat.toFixed(2) : null;
-    if (bd) lines.push(`📅 Naissance : ${bd}${bt?' '+bt:''}`);
-    if (cd) lines.push(`🌀 Conception : ${cd}`);
-    if (lon && lon !== '') lines.push(`📍 ${loc} (${lon}${lat?', lat '+lat:''})`);
-    if (_cachedKinA) lines.push(`✨ Kin : ${_cachedKinA.kin} · ${_cachedKinA.color} ${_cachedKinA.glyph}`);
+    const wEl  = document.getElementById('birth-weight');
+    const polEl = document.getElementById('birth-polarity');
+    const weight = wEl ? parseFloat(wEl.value) || 3.5 : 3.5;
+    const polLabel = (polEl && polEl.value === '1') ? '🌙 Onde ♪' : '☀ Onde Φ';
+    const birthLon = parseFloat(document.getElementById('match-lon-a')?.value || 0);
+    const utcAuto  = birthLon !== 0 ? `UTC${birthLon >= 0 ? '+' : ''}${Math.round(birthLon/15)}` : '';
+    if (bd) lines.push(`📅 Naissance : ${bd}${bt?' '+bt:''}  ${utcAuto}`);
+    if (cd) lines.push(`🌀 Conception : ${cd}  (gestation ${(280+(weight-3.5)*4).toFixed(1)} j)`);
+    if (lon && lon !== '') {
+        const bA4l = document.getElementById('birth-a4l-display')?.textContent || '—';
+        lines.push(`📍 Naissance (SALT) : ${loc} ${lat?'lat '+lat:''} → <span style="color:var(--primary)">${bA4l}</span>`);
+    }
+    const conA4l = document.getElementById('con-a4l-display')?.textContent || '—';
+    const conLoc = document.getElementById('con-location-label')?.textContent || '';
+    lines.push(`🌱 Conception (PEPPER) : ${conLoc} → <span style="color:var(--secondary)">${conA4l}</span>`);
+    lines.push(`⚖ ${weight} kg  |  ${polLabel}`);
+    if (_cachedKinA) lines.push(`✨ Kin : ${_cachedKinA.kin} · ${_cachedKinA.colorFr || _cachedKinA.color} ${_cachedKinA.glyphFr || _cachedKinA.glyph}`);
     el.innerHTML = lines.join('<br>') || '<span class="fst-italic">Complétez le profil ci-dessus.</span>';
 }
 
-function createMultipass() {
+async function createMultipass() {
+    const email = (document.getElementById('multipass-email')?.value || '').trim();
+    if (!email) { alert('⚠ Renseignez votre adresse email.'); return; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { alert('⚠ Adresse email invalide.'); return; }
+
     const bd  = document.getElementById('birth-date').value;
     const bt  = document.getElementById('birth-time').value;
     const cd  = document.getElementById('conception-date').value;
     const ct  = document.getElementById('conception-time').value;
-    const lon = parseFloat(document.getElementById('match-lon-a').value || 0);
-    const lat = _birthMarker ? parseFloat(_birthMarker.getLatLng().lat.toFixed(4)) : null;
-    const loc = document.getElementById('birth-location-label').textContent;
+    if (!bd) { alert('⚠ La date de naissance est requise.'); return; }
+    const bdParts = bd.split('-');
+    if (bdParts.length < 3 || !bdParts[1] || !bdParts[2]) {
+        alert('⚠ La date de naissance doit inclure jour, mois et année.'); return;
+    }
+
+    const birthLon  = parseFloat(document.getElementById('match-lon-a').value || 0);
+    const birthLat  = _birthMarker ? parseFloat(_birthMarker.getLatLng().lat.toFixed(4)) : null;
+    const loc       = document.getElementById('birth-location-label').textContent;
     const cityClean = (loc === 'Cliquez sur la carte ou cherchez une ville' || loc === 'Aucune sélection') ? '' : loc;
+    const wEl       = document.getElementById('birth-weight');
+    const weight    = wEl ? (parseFloat(wEl.value) || 3.5) : 3.5;
+    const utcOffset = birthLon !== 0 ? Math.round(birthLon / 15) : 0;
 
-    const params = new URLSearchParams();
-    if (bd)           params.set('birth_datetime',      bd + (bt ? 'T' + bt : ''));
-    if (cd)           params.set('conception_datetime', cd + (ct ? 'T' + ct : ''));
-    if (lat !== null) params.set('lat', lat);
-    if (lon !== 0)    params.set('lon', lon.toFixed(4));
-    if (cityClean)    params.set('birth_place', cityClean);
-    params.set('lang', navigator.language ? navigator.language.slice(0, 2) : 'fr');
-
-    try {
-        localStorage.setItem('atomic_birth_data', JSON.stringify({
-            birth_datetime:      bd + (bt ? 'T' + bt : ''),
-            conception_datetime: cd + (ct ? 'T' + ct : ''),
-            birth_place: cityClean, lat, lon, ts: Date.now()
-        }));
-    } catch(e) {}
+    const conLatEl = document.getElementById('con-lat');
+    const conLonEl = document.getElementById('con-lon');
+    const conLat   = (conLatEl && conLatEl.value) ? parseFloat(conLatEl.value) : birthLat;
+    const conLon   = (conLonEl && conLonEl.value) ? parseFloat(conLonEl.value) : birthLon;
+    const conceptionPlace = (conLat !== null && conLon !== 0)
+        ? conLat.toFixed(4) + ', ' + conLon.toFixed(4) : '';
+    const conUtcOffset = conLon !== 0 ? Math.round(conLon / 15) : utcOffset;
 
     const apiUrl = typeof window.getAPIUrl === 'function' ? window.getAPIUrl()
                  : (location.hostname === '127.0.0.1' || location.hostname === 'localhost')
                    ? 'http://127.0.0.1:54321' : '';
-    window.open(apiUrl + '/g1?' + params.toString(), '_blank');
+
+    const resultEl = document.getElementById('multipass-result');
+    const btn      = document.getElementById('btn-multipass');
+    if (btn)      { btn.textContent = '⏳ Création…'; btn.disabled = true; }
+    if (resultEl) { resultEl.style.display = '';
+        resultEl.innerHTML = '<div class="text-center py-3 small" style="color:rgba(255,200,40,.7)">'
+            + '⏳ Création du MULTIPASS en cours…<br>'
+            + '<span style="color:rgba(255,255,255,.3);font-size:.65rem">30–60 secondes</span></div>'; }
+
+    try {
+        localStorage.setItem('atomic_birth_data', JSON.stringify({
+            birth_datetime: bd + (bt ? 'T' + bt : 'T12:00'),
+            conception_datetime: cd + (ct ? 'T' + ct : 'T00:00'),
+            birth_place: cityClean, conception_place: conceptionPlace,
+            lat: birthLat, lon: birthLon, weight, utc_offset: utcOffset, ts: Date.now()
+        }));
+    } catch(e) {}
+
+    const fd = new FormData();
+    fd.append('email', email);
+    fd.append('lang',  navigator.language ? navigator.language.slice(0, 2) : 'fr');
+    if (birthLat !== null) fd.append('lat', birthLat.toFixed(4));
+    if (birthLon !== 0)   fd.append('lon', birthLon.toFixed(4));
+    fd.append('birth_datetime', bd + (bt ? 'T' + bt : 'T12:00'));
+    if (cd)              fd.append('conception_datetime', cd + (ct ? 'T' + ct : 'T00:00'));
+    if (cityClean)       fd.append('birth_place',        cityClean);
+    if (conceptionPlace) fd.append('conception_place',   conceptionPlace);
+    if (weight !== 3.5)  fd.append('birth_weight',       weight.toFixed(1));
+    const polEl2 = document.getElementById('birth-polarity');
+    if (polEl2)          fd.append('polarity',           polEl2.value);
+    fd.append('utc_offset',     String(utcOffset));
+    fd.append('con_utc_offset', String(conUtcOffset));
+    fd.append('format', 'json');
+
+    try {
+        const res = await fetch(apiUrl + '/g1nostr', { method: 'POST', body: fd });
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({ detail: 'HTTP ' + res.status }));
+            throw new Error(err.detail || 'HTTP ' + res.status);
+        }
+        const data = await res.json();
+        _renderMultipassResult(data, resultEl);
+    } catch(e) {
+        if (resultEl) resultEl.innerHTML = '<div class="small p-2 rounded" style="background:rgba(255,0,0,.08);'
+            + 'border:1px solid rgba(255,0,0,.2);color:#ff8888">⚠ ' + (e.message || String(e)) + '</div>';
+    } finally {
+        if (btn) { btn.textContent = '✨ Créer mon MULTIPASS'; btn.disabled = false; }
+    }
+}
+
+function _renderMultipassResult(data, el) {
+    if (!el) return;
+    const npub  = data.npub  || data.pubkey || '';
+    const email = data.email || (document.getElementById('multipass-email')?.value || '');
+    const url   = data.url   || data.uplanet_home || '';
+    el.innerHTML = '<div class="p-2 rounded" style="background:rgba(245,158,11,.06);border:1px solid rgba(245,158,11,.3)">'
+        + '<div class="small fw-bold mb-1" style="color:#f59e0b">✅ MULTIPASS créé !</div>'
+        + (email ? '<div class="small text-secondary mb-1">📧 ' + email + '</div>' : '')
+        + (npub  ? '<div class="font-monospace mb-2" style="word-break:break-all;font-size:.6rem;color:rgba(255,255,255,.45)">' + npub + '</div>' : '')
+        + (url   ? '<a href="' + url + '" target="_blank" class="btn btn-sm w-100 fw-bold"'
+            + ' style="background:rgba(245,158,11,.2);border:1px solid rgba(245,158,11,.5);color:#f59e0b;font-size:.75rem">'
+            + '🎴 Voir mon MULTIPASS →</a>' : '')
+        + '</div>';
+    el.style.display = '';
 }
 
 async function searchCity() {
@@ -765,7 +1068,8 @@ document.getElementById('atomicTabs').addEventListener('shown.bs.tab', e => {
     currentMode = e.target.dataset.bsTarget.replace('#tab-', '');
     const hud = document.getElementById('hud-overlay');
     if      (currentMode === 'match')  { window.calculateMatch(); }
-    else if (currentMode === 'profil') { hud.innerHTML = 'Mode: PROFIL<br>Cycle Condensation'; renderKinProfil(); setTimeout(initBirthMap, 80); }
+    else if (currentMode === 'profil') { hud.innerHTML = 'Mode: PROFIL<br>Cycle Condensation'; renderKinProfil(); setTimeout(initBirthMap, 80); setTimeout(initConceptionMap, 200); }
+    else if (currentMode === 'radar')  { hud.innerHTML = 'Mode: RADAR<br>Résonance vibratoire'; }
     else                               { hud.innerHTML = 'Mode: THÉORIE<br>Sphère Géodésique'; renderKinTheorie(); }
 });
 
@@ -1229,6 +1533,220 @@ function drawWave(nx, ny, nr, ng, nb, t) {
         stroke(nr, ng, nb, map(wave, 0, maxRad, 195, 0));
         ellipse(nx, ny, wave, wave);
     }
+}
+
+// ── ATOM4LOVE — Certificat d'Incarnation (Kind 30078) ────────────────────────
+
+const A4L_PROOF_SALT = 'ATOM4LOVE_v1';
+
+async function _sha256Hex(str) {
+    const buf  = new TextEncoder().encode(str);
+    const hash = await crypto.subtle.digest('SHA-256', buf);
+    return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2,'0')).join('');
+}
+
+function _certStatus(msg, color) {
+    const el = document.getElementById('cert-status');
+    if (el) { el.textContent = msg; el.style.color = color || 'rgba(255,255,255,.4)'; }
+}
+
+async function publishIncarnationCert() {
+    if (!window.nostr) {
+        alert('⚠ Aucune extension NOSTR détectée.\nInstallez Alby, nos2x ou Flamingo pour signer.');
+        return;
+    }
+    const bd    = document.getElementById('birth-date').value;
+    const bt    = document.getElementById('birth-time').value;
+    const wEl   = document.getElementById('birth-weight');
+    const polEl = document.getElementById('birth-polarity');
+    if (!bd) { alert('⚠ Renseignez votre date de naissance.'); return; }
+    if (!_birthMarker) { alert('⚠ Sélectionnez votre lieu de naissance sur la carte.'); return; }
+
+    const weight   = wEl  ? parseFloat(wEl.value)  || 3.5 : 3.5;
+    const polarity = polEl ? parseInt(polEl.value)         : 0;
+    const birthLat = parseFloat(_birthMarker.getLatLng().lat.toFixed(6));
+    const birthLon = parseFloat(document.getElementById('match-lon-a').value || 0);
+    const birthUnix = Math.floor(new Date(bd + 'T' + (bt || '12:00')).getTime() / 1000);
+
+    // Phase avec pentagon offset Goldberg (requires lat) — plus précis que computePhaseFromForm
+    const personal_phase = Phi2X.computePersonalPhase(birthUnix, birthLat, birthLon);
+    // ω_bio depuis le poids de naissance (0.5–6 kg → ω ∈ 2–24, compatible plage 0.1–50)
+    const omega_bio = Phi2X.computeOmegaBio(170, weight, polarity);
+
+    if (personal_phase < 0 || personal_phase >= 7) {
+        alert('⚠ Erreur calcul phase (' + personal_phase.toFixed(4) + ').'); return;
+    }
+    if (omega_bio <= 0.1 || omega_bio >= 50) {
+        alert('⚠ omega_bio hors plage (' + omega_bio.toFixed(4) + ').\nPoids naissance attendu 0.5–6 kg.'); return;
+    }
+
+    const btn = document.getElementById('btn-publish-cert');
+    if (btn) { btn.textContent = '⏳ Connexion…'; btn.disabled = true; }
+    _certStatus('Connexion à l\'extension NOSTR…');
+
+    try {
+        const pubkey    = await window.nostr.getPublicKey();
+        const a4l_proof = await _sha256Hex(pubkey + ':' + A4L_PROOF_SALT);
+
+        const event = {
+            kind: 30078,
+            created_at: Math.floor(Date.now() / 1000),
+            tags: [
+                ['d', 'atom4love'],
+                ['app', 'atom4love'],
+                ['a4l_proof', a4l_proof]
+            ],
+            content: JSON.stringify({
+                personal_phase: parseFloat(personal_phase.toFixed(6)),
+                omega_bio:      parseFloat(omega_bio.toFixed(4))
+            })
+        };
+
+        if (btn) btn.textContent = '✍ Signature…';
+        _certStatus('Signature via extension NOSTR…');
+        const signed = await window.nostr.signEvent(event);
+
+        if (btn) btn.textContent = '📡 Publication…';
+        _certStatus('Publication sur le relay…');
+        await _publishEventToRelay(signed);
+
+        _certStatus('✅ Certificat publié — WoT Level 0 actif', '#00ffcc');
+        if (btn) { btn.textContent = '✅ Republier'; btn.style.borderColor = 'rgba(0,255,204,.6)'; btn.disabled = false; }
+        console.log('[atomic] Kind 30078 publié :', signed.id,
+            '| φ=', personal_phase.toFixed(4), '| ω=', omega_bio.toFixed(4));
+
+    } catch(e) {
+        console.error('[atomic] Kind 30078 KO:', e);
+        _certStatus('⚠ ' + (e.message || String(e)), '#ff6060');
+        if (btn) { btn.textContent = '⚛ Réessayer'; btn.disabled = false; }
+    }
+}
+
+function _publishEventToRelay(event) {
+    return new Promise((resolve, reject) => {
+        const relayUrl = typeof window.getRelayUrl === 'function'
+            ? window.getRelayUrl()
+            : (location.hostname === '127.0.0.1' ? 'ws://127.0.0.1:7777'
+               : 'wss://relay.' + location.hostname.replace(/^(ipfs\.|u\.)/, ''));
+        const ws = new WebSocket(relayUrl);
+        const timer = setTimeout(() => { ws.close(); reject(new Error('Timeout relay 8s')); }, 8000);
+        ws.onopen    = () => ws.send(JSON.stringify(['EVENT', event]));
+        ws.onmessage = (ev) => {
+            try {
+                const msg = JSON.parse(ev.data);
+                if (msg[0] === 'OK') {
+                    clearTimeout(timer); ws.close();
+                    msg[2] ? resolve(msg) : reject(new Error(msg[3] || 'Relay rejected'));
+                }
+            } catch (_) {}
+        };
+        ws.onerror = () => { clearTimeout(timer); reject(new Error('WebSocket error')); };
+    });
+}
+
+// Détection extension NIP-07 au boot
+document.addEventListener('DOMContentLoaded', () => {
+    setTimeout(() => {
+        const el = document.getElementById('cert-nostr-hint');
+        if (el) el.textContent = window.nostr
+            ? '🟢 Extension NOSTR détectée'
+            : '🔴 Aucune extension NIP-07 (Alby, nos2x, Flamingo…)';
+    }, 900);
+});
+
+// ── RADAR — Découverte vibratoire (Kind 30078) ─────────────────
+async function loadRadar() {
+    const statusEl  = document.getElementById('radar-status');
+    const resultsEl = document.getElementById('radar-results');
+    const btn       = document.getElementById('btn-radar-scan');
+    if (!statusEl || !resultsEl) return;
+
+    const bd = document.getElementById('birth-date')?.value;
+    const bt = document.getElementById('birth-time')?.value;
+    if (!bd) {
+        statusEl.textContent = '⚠ Renseignez votre date de naissance dans l\'onglet PROFIL d\'abord.';
+        return;
+    }
+
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Scan en cours…'; }
+    statusEl.textContent = '⏳ Connexion au relay…';
+    resultsEl.innerHTML  = '';
+
+    const myBirthUnix = Math.floor(new Date(bd + 'T' + (bt || '12:00')).getTime() / 1000);
+    const myLat  = (typeof birthLat !== 'undefined' && birthLat !== null) ? birthLat : 0;
+    const myLon  = (typeof birthLon !== 'undefined') ? birthLon : 0;
+    const myPhi  = Phi2X.computePersonalPhase(myBirthUnix, myLat, myLon);
+
+    try {
+        const relayUrl = typeof window.getRelayUrl === 'function'
+            ? window.getRelayUrl()
+            : (location.hostname === '127.0.0.1' ? 'ws://127.0.0.1:7777'
+               : 'wss://relay.' + location.hostname.replace(/^(ipfs\.|u\.)/, ''));
+
+        const events = await _queryRelayFilter(relayUrl, { kinds: [30078], '#d': ['atom4love'], limit: 50 });
+
+        if (!events.length) {
+            statusEl.textContent = '📭 Aucun Certificat d\'Incarnation trouvé sur ce relay.';
+            if (btn) { btn.disabled = false; btn.textContent = '📡 Scanner le réseau (Kind 30078)'; }
+            return;
+        }
+
+        const profiles = events.map(ev => {
+            let c = {};
+            try { c = JSON.parse(ev.content); } catch (_) {}
+            const phi_j = parseFloat(c.personal_phase) || 0;
+            const omega_j = parseFloat(c.omega_bio) || 0;
+            const delta = myPhi - phi_j;
+            const k = 1 / (1 + Math.abs(Math.sin(delta)));
+            return { pubkey: ev.pubkey, phi: phi_j, omega: omega_j, k };
+        }).filter(p => p.pubkey && p.phi > 0 && p.phi < 7);
+
+        profiles.sort((a, b) => b.k - a.k);
+        const top5 = profiles.slice(0, 5);
+
+        statusEl.textContent = `✅ ${events.length} certificat(s) analysé(s) — top ${top5.length} résonance(s) :`;
+
+        resultsEl.innerHTML = top5.map((p, i) => {
+            const npubStr = typeof window.hexToNpub === 'function'
+                ? window.hexToNpub(p.pubkey)
+                : p.pubkey.slice(0, 16) + '…';
+            const kPct  = (p.k * 100).toFixed(1);
+            const kColor = p.k >= 0.95 ? '#ff00aa' : p.k >= 0.85 ? '#00ffcc' : '#999';
+            const kLabel = p.k >= 0.95 ? '🔮 Singularité' : p.k >= 0.85 ? '✨ Super-cohérence' : p.k >= 0.75 ? '💫 Cohérence' : '〰 Interférence';
+            return `
+            <div class="border rounded p-2 mb-2" style="border-color:rgba(0,255,204,.2)!important">
+                <div class="d-flex justify-content-between align-items-center">
+                    <span class="small fw-bold" style="color:${kColor}">#${i+1} k=${kPct}% ${kLabel}</span>
+                    <a href="minelife.html?npub=${encodeURIComponent(npubStr)}"
+                       class="btn btn-sm" style="background:rgba(255,255,255,.1);color:#ddd;font-size:.7rem;padding:2px 8px">👤 Profil</a>
+                </div>
+                <div class="text-secondary mt-1" style="font-size:.7rem;word-break:break-all">${p.pubkey.slice(0,16)}…</div>
+                <div class="text-secondary" style="font-size:.7rem">φ=${p.phi.toFixed(3)} rad &nbsp;·&nbsp; ω=${p.omega.toFixed(1)} Hz</div>
+            </div>`;
+        }).join('');
+
+    } catch(err) {
+        statusEl.textContent = '❌ Erreur : ' + (err.message || String(err));
+    }
+    if (btn) { btn.disabled = false; btn.textContent = '📡 Scanner le réseau (Kind 30078)'; }
+}
+
+function _queryRelayFilter(relayUrl, filter) {
+    return new Promise((resolve, reject) => {
+        const events = [];
+        const ws     = new WebSocket(relayUrl);
+        const subId  = 'radar-' + Math.random().toString(36).slice(2, 8);
+        const timer  = setTimeout(() => { ws.close(); resolve(events); }, 8000);
+        ws.onopen    = () => ws.send(JSON.stringify(['REQ', subId, filter]));
+        ws.onmessage = ev => {
+            try {
+                const msg = JSON.parse(ev.data);
+                if (msg[0] === 'EVENT' && msg[1] === subId) events.push(msg[2]);
+                else if (msg[0] === 'EOSE') { clearTimeout(timer); ws.close(); resolve(events); }
+            } catch(_) {}
+        };
+        ws.onerror = () => { clearTimeout(timer); ws.close(); reject(new Error('WebSocket error')); };
+    });
 }
 </script>
 

@@ -489,7 +489,7 @@
             'fetchUserMetadata=', typeof window.fetchUserMetadata);
         if (!pubkey) { console.warn('[UPH] _loadProfile: pubkey manquant'); return; }
         if (typeof window.fetchUserMetadata !== 'function') {
-            console.warn('[UPH] _loadProfile: fetchUserMetadata absent (common.js chargé ?)');
+            console.log('[UPH] _loadProfile: fetchUserMetadata absent, retry via _onLibsReady');
             return;
         }
         try {
@@ -533,9 +533,9 @@
             try { npub = window.hexToNpub(pubkey); }
             catch (e) { console.warn('[UPH] hexToNpub erreur:', e.message || e); }
         } else {
-            console.warn('[UPH] window.hexToNpub absent — myGPS ignoré (lib_3_content chargé ?)');
+            console.log('[UPH] window.hexToNpub absent, retry via _onLibsReady');
         }
-        if (!npub) { console.warn('[UPH] _loadMyGPS: npub vide, abandon'); return; }
+        if (!npub) { console.log('[UPH] _loadMyGPS: npub vide, abandon'); return; }
         var url    = _apiUrl() + '/api/myGPS?npub=' + encodeURIComponent(npub);
         var nipEl  = document.getElementById('uph-nip');
         var roamEl = document.getElementById('uph-roam');

@@ -423,7 +423,7 @@
         console.log('[coop-config] Initialisation, recherche de #coop-config-root');
         const root = document.getElementById('coop-config-root');
         if (!root) {
-            console.warn('[coop-config] #coop-config-root non trouvé, arrêt');
+            console.log('[coop-config] #coop-config-root non trouvé (init différée)');
             return;
         }
 

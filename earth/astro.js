@@ -163,22 +163,12 @@ window.uPlanetAnalytics = {
      * @returns {string} Base URL for uSPOT API (e.g., "https://u.domain.tld" or "http://localhost:54321")
      */
     getUSPOTBaseURL: function() {
+        if (typeof window.getAPIUrl === 'function') return window.getAPIUrl();
         const currentURL = new URL(window.location.href);
         const protocol = currentURL.protocol;
         let hostname = currentURL.hostname;
-        
-        // Transform hostname: ipfs.domain -> u.domain (keep u.domain as is)
-        if (hostname.startsWith("ipfs.")) {
-            hostname = hostname.replace("ipfs.", "u.");
-        }
-        
-        // Add port for localhost/127.0.0.1 (local development - HTTP)
-        if (hostname === "localhost" || hostname === "127.0.0.1") {
-            return protocol + "//" + hostname + ":54321";
-        }
-        
-        // For production (u.domain): HTTPS uses default port 443, no need to specify
-        // HTTP would need port, but production is always HTTPS
+        if (hostname.startsWith("ipfs.")) hostname = hostname.replace("ipfs.", "u.");
+        if (hostname === "localhost" || hostname === "127.0.0.1") return protocol + "//" + hostname + ":54321";
         return protocol + "//" + hostname;
     },
 

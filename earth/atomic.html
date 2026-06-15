@@ -7,8 +7,8 @@
     <script src="p5.min.js"></script>
     <link rel="stylesheet" href="bootstrap.min.css">
     <link rel="stylesheet" href="leaflet.css">
+    <link rel="stylesheet" href="uplanet-atomic.css">
     <style>
-        :root { --primary: #f59e0b; --secondary: #f97316; }
 
         html, body { margin: 0; padding: 0; width: 100%; height: 100dvh; overflow: hidden; background: #080602; }
 
@@ -35,12 +35,6 @@
         #menu-btn:hover { background: rgba(0,255,204,0.24); }
 
         /* Kin Maya dans Théorie */
-        .kin-card { border-radius: 10px; padding: 10px 12px; background: rgba(0,0,0,0.35); border: 1px solid rgba(255,255,255,0.09); }
-        .kin-num  { font-size: 2rem; font-weight: 800; line-height: 1; color: #f9a825; }
-        .kin-sub  { font-size: 0.7rem; color: rgba(255,255,255,0.35); margin-bottom: 4px; }
-        .kin-info { font-size: 0.78rem; color: #e0e0e0; margin-bottom: 2px; }
-        .kin-keys { font-size: 0.7rem; color: rgba(255,255,255,0.38); line-height: 1.6; margin-top: 4px; }
-        .kin-empty{ font-size: 0.78rem; color: rgba(255,255,255,0.25); font-style: italic; text-align: center; padding: 14px 0; }
         .kin-union-bar { height: 3px; border-radius: 2px; background: linear-gradient(90deg, var(--primary), var(--secondary)); margin: 6px 0; }
         /* Carte lieu de naissance */
         #birth-map, #conception-map { height: 180px; border-radius: 8px; }
@@ -81,19 +75,6 @@
         }
 
         /* Blocs atomes */
-        .atom-a { border-left: 3px solid var(--primary) !important; }
-        .atom-b { border-left: 3px solid var(--secondary) !important; }
-
-        /* Inputs */
-        .form-control, .form-select {
-            background: rgba(255,255,255,0.04) !important;
-            border-color: rgba(255,255,255,0.12) !important;
-            color: #ddd !important; font-family: monospace;
-        }
-        .form-control:focus {
-            border-color: var(--primary) !important;
-            box-shadow: 0 0 0 0.18rem rgba(0,255,204,0.18) !important;
-        }
         .form-control[readonly] { opacity: .55; cursor: default; }
 
         /* Slider longitude coloré */
@@ -147,21 +128,6 @@
         .match-loc-confirm:hover { background:rgba(0,255,204,.22); }
         .match-loc-confirm:disabled { opacity:.35; cursor:default; }
 
-        /* ─ Saisie date/heure segmentée ─ */
-        .date-seg-row { display:flex; gap:6px; align-items:flex-end; }
-        .date-seg { display:flex; flex-direction:column; }
-        .date-seg label { font-size:.65rem; color:rgba(255,255,255,.38); text-transform:uppercase; letter-spacing:1px; margin-bottom:3px; }
-        .date-seg input[type="number"] {
-            background:rgba(255,255,255,.05) !important;
-            border:1px solid rgba(255,255,255,.14) !important;
-            color:#ddd !important; font-family:monospace; font-size:.92rem;
-            border-radius:7px; text-align:center; padding:6px 4px;
-            -moz-appearance:textfield; appearance:textfield; width:100%;
-        }
-        .date-seg input[type="number"]::-webkit-inner-spin-button { -webkit-appearance:none; appearance:none; }
-        .date-seg input[type="number"]:focus { border-color:var(--primary) !important; box-shadow:0 0 0 .15rem rgba(0,255,204,.18) !important; outline:none; }
-        .date-seg-sep { font-size:1.1rem; color:rgba(255,255,255,.2); padding-bottom:7px; }
-        .date-display { font-family:monospace; font-size:.8rem; color:rgba(255,255,255,.45); margin-top:4px; min-height:1.1rem; }
         /* ─ Bloc Harmonique / Anomalie ─ */
         .harmonic-display {
             background:rgba(0,255,204,.05); border:1px solid rgba(0,255,204,.2);
@@ -986,37 +952,45 @@ function _dateToUtcUnix(dateStr, timeStr, lonDeg) {
     return Math.floor(Date.UTC(y, mo - 1, d, 0, Math.round(utcMin), 0) / 1000);
 }
 
+let _birthDebounce;
 window._syncBirthDateFromSeg = function() {
-    const r = _seg2hidden(
-        document.getElementById('birth-dd').value,
-        document.getElementById('birth-mm').value,
-        document.getElementById('birth-yyyy').value,
-        document.getElementById('birth-hh').value,
-        document.getElementById('birth-minseg').value
-    );
-    if (!r) { document.getElementById('birth-date-display').textContent = '— date invalide —'; return; }
-    document.getElementById('birth-date').value = r.date;
-    document.getElementById('birth-time').value = r.time;
-    const d = new Date(r.date + 'T' + r.time);
-    document.getElementById('birth-date-display').textContent = _fmtDateFR(d);
-    calculateConception();
+    clearTimeout(_birthDebounce);
+    _birthDebounce = setTimeout(function() {
+        const r = _seg2hidden(
+            document.getElementById('birth-dd').value,
+            document.getElementById('birth-mm').value,
+            document.getElementById('birth-yyyy').value,
+            document.getElementById('birth-hh').value,
+            document.getElementById('birth-minseg').value
+        );
+        if (!r) { document.getElementById('birth-date-display').textContent = '— date invalide —'; return; }
+        document.getElementById('birth-date').value = r.date;
+        document.getElementById('birth-time').value = r.time;
+        const d = new Date(r.date + 'T' + r.time);
+        document.getElementById('birth-date-display').textContent = _fmtDateFR(d);
+        calculateConception();
+    }, 300);
 };
 
+let _conDebounce;
 window._syncConDateFromSeg = function() {
-    const r = _seg2hidden(
-        document.getElementById('con-dd').value,
-        document.getElementById('con-mm').value,
-        document.getElementById('con-yyyy').value,
-        document.getElementById('con-hh').value,
-        document.getElementById('con-minseg').value
-    );
-    const disp = document.getElementById('con-date-display');
-    if (!r) { disp.textContent = '— date invalide —'; return; }
-    document.getElementById('conception-date').value = r.date;
-    document.getElementById('conception-time').value = r.time;
-    const d = new Date(r.date + 'T' + r.time);
-    disp.textContent = _fmtDateFR(d);
-    onConceptionChanged();
+    clearTimeout(_conDebounce);
+    _conDebounce = setTimeout(function() {
+        const r = _seg2hidden(
+            document.getElementById('con-dd').value,
+            document.getElementById('con-mm').value,
+            document.getElementById('con-yyyy').value,
+            document.getElementById('con-hh').value,
+            document.getElementById('con-minseg').value
+        );
+        const disp = document.getElementById('con-date-display');
+        if (!r) { disp.textContent = '— date invalide —'; return; }
+        document.getElementById('conception-date').value = r.date;
+        document.getElementById('conception-time').value = r.time;
+        const d = new Date(r.date + 'T' + r.time);
+        disp.textContent = _fmtDateFR(d);
+        onConceptionChanged();
+    }, 300);
 };
 
 window._toggleAnomaliePanel = function() {
@@ -1117,7 +1091,7 @@ function _syncConceptionLocation(lon, lat, userSet = true) {
 // ── Visualisation hexagonale A4L sur carte Leaflet ────────────────────────
 // Dessine le polygone hexagonal (1 km, pointy-top) autour du point SALT ancré.
 function _drawHexPolygon(map, lat, lon) {
-    if (!map || !lat || !lon || typeof Phi2X === 'undefined') return;
+    if (!map || lat == null || lon == null || typeof Phi2X === 'undefined') return;
     const H  = 1.0;   // km
     const R  = 6371.0;
     const tag = Phi2X.geoTagA4L(lat, lon, Date.now()/1000);
@@ -1145,6 +1119,8 @@ function _drawHexPolygon(map, lat, lon) {
         fillOpacity: 0.06,
         dashArray:   '5 4'
     }).addTo(map).bindTooltip(tag.hex, { permanent: false, direction: 'top', className: 'a4l-tip' });
+    // Zoomer pour que l'hexagone (1 km) soit réellement visible
+    try { map.fitBounds(map._hexPolygon.getBounds(), { maxZoom: 14, padding: [40, 40] }); } catch(_) {}
 }
 
 function initBirthMap() {
@@ -1586,7 +1562,7 @@ function _publishableOmega(omegaBio) {
     let noise = parseFloat(localStorage.getItem('a4l_omega_noise') || 'x');
     if (isNaN(noise)) {
         noise = Math.random() * 2.0; // [0, 2) Hz, une seule fois par appareil
-        try { localStorage.setItem('a4l_omega_noise', noise.toFixed(4)); } catch (_) {}
+        try { localStorage.setItem('a4l_omega_noise', noise.toFixed(4)); } catch (_) { if(window.DEBUG) console.warn('[atomic] omega noise storage:', _); }
     }
     const coarse = Math.floor(omegaBio / 2) * 2; // bucket 2 Hz
     return parseFloat(Math.max(0.1, Math.min(49.9, coarse + noise)).toFixed(2));
@@ -1675,7 +1651,7 @@ async function createMultipass() {
             birth_place: cityClean, conception_place: conceptionPlace,
             lat: birthLat, lon: birthLon, weight, utc_offset: utcOffset, ts: Date.now()
         }));
-    } catch(e) {}
+    } catch(e) { if(window.DEBUG) console.warn('[atomic] birth data storage:', e); }
 
     const fd = new FormData();
     fd.append('email', email);
@@ -1772,7 +1748,51 @@ document.addEventListener('DOMContentLoaded', () => {
     bootstrap.Offcanvas.getOrCreateInstance(document.getElementById('atomic-panel')).show();
     renderKinProfil();
     setTimeout(initBirthMap, 150);
+
+    // Auto-tab : focus champ suivant dès que la longueur max est atteinte
+    document.querySelectorAll('.date-seg-row').forEach(function(row) {
+        const inputs = Array.from(row.querySelectorAll('input[type="number"]'));
+        inputs.forEach(function(inp, idx) {
+            inp.addEventListener('input', function() {
+                if (String(this.value).length >= this.placeholder.length && idx + 1 < inputs.length) {
+                    inputs[idx + 1].focus();
+                    inputs[idx + 1].select();
+                }
+            });
+        });
+    });
 });
+
+// ── Utilitaires p5.js ─────────────────────────────────────────────────────────
+
+// Projection GPS → écran 2D (rotation caméra _camRotX / _camRotY)
+function projectLatLonToScreen(lat, lon, rotX, rotY, radius, cx, cy) {
+    const phi   = lat * (Math.PI / 180);
+    const theta = lon * (Math.PI / 180);
+    let x = Math.cos(phi) * Math.sin(theta);
+    let y = Math.sin(phi);
+    let z = Math.cos(phi) * Math.cos(theta);
+    // Rotation Y (longitude → yaw)
+    const x2 = x * Math.cos(rotY) - z * Math.sin(rotY);
+    const z2 = x * Math.sin(rotY) + z * Math.cos(rotY);
+    // Rotation X (latitude → pitch)
+    const y3 = y * Math.cos(rotX) - z2 * Math.sin(rotX);
+    const z3 = y * Math.sin(rotX) + z2 * Math.cos(rotX);
+    return { x: cx + x2 * radius, y: cy - y3 * radius, z: z3 };
+}
+
+// Bloom natif via drawingContext (évite les shaders)
+function setGlow(colorStr, blurRadius) {
+    drawingContext.shadowBlur  = blurRadius;
+    drawingContext.shadowColor = colorStr;
+}
+function clearGlow() {
+    drawingContext.shadowBlur = 0;
+}
+
+// Variables caméra pour lerp du mode PROFIL
+let _camRotX = 0, _camRotY = 0;
+let _targetRotX = 0, _targetRotY = 0;
 
 // ── P5.JS ─────────────────────────────────────────────────────
 function setup() {
@@ -1895,7 +1915,7 @@ document.addEventListener('visibilitychange', () => {
 document.addEventListener('DOMContentLoaded', () => {
     const panel = document.getElementById('atomic-panel');
     if (panel) {
-        panel.addEventListener('shown.bs.offcanvas',  () => { /* canvas visible en fond */ });
+        panel.addEventListener('shown.bs.offcanvas',  () => { if (window.innerWidth < 768) noLoop(); });
         panel.addEventListener('hidden.bs.offcanvas', () => { if (!document.hidden) loop(); });
     }
 });
@@ -1908,7 +1928,9 @@ function getCanvasCenter() {
 
 function draw() {
     _calibratePerf();                       // calibration globale, toutes anims
-    background(8, 6, 2, 55);               // fond sombre chaud
+    blendMode(BLEND); noStroke();
+    fill(8, 6, 2, 40);
+    rect(0, 0, width, height);
     frameTime++;
     blendMode(ADD);
     if      (currentMode === 'profil')  drawProfileMode();
@@ -2101,190 +2123,182 @@ function drawTheorieMode() {
 
 function drawProfileMode() {
     const { x: cx, y: cy } = getCanvasCenter();
-    const R = min(width, height) * 0.3;
+    const R = min(width, height) * 0.38;
+
+    // ─ Lecture coordonnées géographiques ─────────────────────────────
+    const latB = parseFloat(document.getElementById('match-lat-a')?.value || 0);
+    const lonB = parseFloat(document.getElementById('match-lon-a')?.value || 0);
+    const latC = parseFloat(document.getElementById('con-lat')?.value  || latB);
+    const lonC = parseFloat(document.getElementById('con-lon')?.value  || lonB);
+    const hasData = !!_cachedDoubleBang && (latB !== 0 || lonB !== 0 || latC !== 0 || lonC !== 0);
+
+    // ─ Caméra : lerp vers lieu de naissance ou rotation idle ─────────
+    if (hasData) {
+        _targetRotX = -latB * (Math.PI / 180);
+        _targetRotY = -lonB * (Math.PI / 180);
+    } else {
+        _targetRotY += 0.003;
+    }
+    _camRotX += (_targetRotX - _camRotX) * 0.04;
+    _camRotY += (_targetRotY - _camRotY) * 0.04;
+
+    // ─ Couleurs KIN ──────────────────────────────────────────────────
     const [kr, kg, kb] = _cachedKinA ? _kinRGB(_cachedKinA.color) : [0, 255, 204];
 
-    // ─ Décompte 9 → 0, boucle ─────────────────────────────────────
-    // Durée par chiffre adaptée à la perf : LOW=180 MED=140 HIGH=110 frames
-    const SLOT   = _perfCalibrated ? [180, 140, 110][_perfLevel] : 140;
-    const CYCLE  = SLOT * 10;
-    const pos    = frameTime % CYCLE;
-    const digit  = 9 - Math.floor(pos / SLOT);   // 9,8,...,0
-    const phase  = (pos % SLOT) / SLOT;           // 0→1 dans le slot
-    // Enveloppe: fondu entrée/sortie aux transitions
-    const env    = phase < 0.12 ? phase / 0.12 : phase > 0.88 ? (1 - phase) / 0.12 : 1;
+    function _h2rgb(h) {
+        return [parseInt(h.slice(1,3),16), parseInt(h.slice(3,5),16), parseInt(h.slice(5,7),16)];
+    }
+    const [crC, cgC, cbC] = _cachedElements ? _h2rgb(_cachedElements.conceptionColor) : [0, 255, 204];
+    const [crB, cgB, cbB] = _cachedElements ? _h2rgb(_cachedElements.birthColor)      : [245, 158, 11];
 
-    push(); translate(cx, cy); noFill();
+    // Audio réactivité
+    const audioE = (window.AudioOrchestra && typeof AudioOrchestra.getEnergy === 'function')
+        ? AudioOrchestra.getEnergy() : 0;
 
-    if (digit === 0) {
-        // ZÉRO — flash d'expansion puis silence
-        const burst = phase < 0.22 ? phase / 0.22 : Math.max(0, 1 - (phase - 0.22) / 0.78);
-        noStroke(); fill(kr, kg, kb, 55 * burst);
-        ellipse(0, 0, R * 3.6 * burst, R * 3.6 * burst);
-        stroke(kr, kg, kb, 190 * burst); strokeWeight(2);
-        ellipse(0, 0, R * 2 * burst, R * 2 * burst);
-        stroke(255, 255, 255, 80 * burst); strokeWeight(1);
-        ellipse(0, 0, R * 1.3 * burst, R * 1.3 * burst);
+    // ─ Maillage icosaèdre (sphère de Goldberg) ───────────────────────
+    const meshAlpha = hasData ? 14 : 28;
+    for (let i = 0; i < meshVertices.length; i++) {
+        const v  = meshVertices[i];
+        const y1 = v.y * Math.cos(_camRotX) - v.z * Math.sin(_camRotX);
+        const z1 = v.y * Math.sin(_camRotX) + v.z * Math.cos(_camRotX);
+        const x2 = v.x * Math.cos(_camRotY) + z1 * Math.sin(_camRotY);
+        const z2 = -v.x * Math.sin(_camRotY) + z1 * Math.cos(_camRotY);
+        const sc = 3 / (3 + z2);
+        const p  = _projBuffer[i];
+        p.x = cx + x2 * R * sc;
+        p.y = cy + y1 * R * sc;
+        p.z = z2;
+        p.type = v.type;
+    }
+    const edgeStep = _perfLevel === 0 ? 3 : _perfLevel === 1 ? 2 : 1;
+    stroke(180, 120, 20, meshAlpha);
+    strokeWeight(0.6);
+    for (let i = 0; i < meshEdges.length; i += edgeStep) {
+        const [a, b] = meshEdges[i];
+        if (_projBuffer[a].z > 0 && _projBuffer[b].z > 0)
+            line(_projBuffer[a].x, _projBuffer[a].y, _projBuffer[b].x, _projBuffer[b].y);
+    }
+    // Pentagones discrets (nœuds du maillage)
+    for (let i = 0; i < _projBuffer.length; i++) {
+        const p = _projBuffer[i];
+        if (p.type !== 'pentagon') continue;
+        stroke(kr, kg, kb, p.z > 0 ? 20 : meshAlpha * 1.8);
+        strokeWeight(p.z > 0 ? 1.8 : 3.5);
+        point(p.x, p.y);
+    }
 
-    } else if (digit === 1) {
-        // UN — singularité pulsante + onde sortante
-        stroke(kr, kg, kb, 200 * env); strokeWeight(10); point(0, 0);
-        strokeWeight(1.5); stroke(kr, kg, kb, 160 * (1 - phase));
-        ellipse(0, 0, R * 2 * phase, R * 2 * phase);
+    if (!hasData) {
+        // ─ Invitation textuelle ───────────────────────────────────────
+        blendMode(BLEND); textAlign(CENTER, CENTER); noStroke();
+        textSize(11); fill(kr, kg, kb, 80);
+        text('Entrez date et lieu de naissance', cx, cy + R * 1.5);
+        return;
+    }
 
-    } else if (digit === 2) {
-        // DEUX — onde sinusoïdale à fréquence croissante
-        const freq = 2 + digit * phase;
-        stroke(kr, kg, kb, 180 * env); strokeWeight(2.2);
-        beginShape();
-        for (let x2 = -R; x2 <= R; x2 += 3)
-            vertex(x2, Math.sin((x2 / R * freq + phase * TWO_PI * 2) * Math.PI) * R * 0.3);
+    // ─ Point B — Naissance ───────────────────────────────────────────
+    const ptB = projectLatLonToScreen(latB, lonB, _camRotX, _camRotY, R, cx, cy);
+    if (ptB.z > 0) {
+        setGlow(`rgb(${crB},${cgB},${cbB})`, 18 + audioE * 12);
+        stroke(crB, cgB, cbB, 200 + 55 * audioE); strokeWeight(9 + audioE * 4);
+        point(ptB.x, ptB.y);
+        clearGlow();
+        stroke(crB, cgB, cbB, 50); strokeWeight(0.7);
+        line(cx, cy, ptB.x, ptB.y);
+    }
+
+    // ─ Point C — Conception ──────────────────────────────────────────
+    const ptC = projectLatLonToScreen(latC, lonC, _camRotX, _camRotY, R, cx, cy);
+    const conDiffers = (latC !== latB || lonC !== lonB);
+    if (ptC.z > 0 && conDiffers) {
+        setGlow(`rgb(${crC},${cgC},${cbC})`, 14 + audioE * 10);
+        stroke(crC, cgC, cbC, 180 + 55 * audioE); strokeWeight(7 + audioE * 3);
+        point(ptC.x, ptC.y);
+        clearGlow();
+        stroke(crC, cgC, cbC, 40); strokeWeight(0.7);
+        line(cx, cy, ptC.x, ptC.y);
+    }
+
+    // ─ Flux de fusion : B→centre et C→centre ─────────────────────────
+    const { phiC, phiB, spiralCoherence } = _cachedDoubleBang;
+    const effCoh = Math.min(1, spiralCoherence + audioE * 0.4);
+    const N_PARTS = _perfLevel === 0 ? 5 : _perfLevel === 1 ? 8 : 12;
+    noStroke();
+    for (let i = 0; i < N_PARTS; i++) {
+        const tB = ((frameTime * 0.012 + i / N_PARTS) % 1);
+        if (ptB.z > 0) {
+            const px = ptB.x + (cx - ptB.x) * tB;
+            const py = ptB.y + (cy - ptB.y) * tB;
+            fill(crB, cgB, cbB, Math.sin(tB * Math.PI) * (150 + 80 * audioE));
+            ellipse(px, py, (1 - tB) * 5 + 1, (1 - tB) * 5 + 1);
+        }
+        if (ptC.z > 0 && conDiffers) {
+            const tC = ((frameTime * 0.012 + i / N_PARTS + 0.5) % 1);
+            const px = ptC.x + (cx - ptC.x) * tC;
+            const py = ptC.y + (cy - ptC.y) * tC;
+            fill(crC, cgC, cbC, Math.sin(tC * Math.PI) * (120 + 70 * audioE));
+            ellipse(px, py, (1 - tC) * 4 + 1, (1 - tC) * 4 + 1);
+        }
+    }
+
+    // ─ Spirale Ψ centrale (Nature Alchimique) ────────────────────────
+    const PHI_S     = 1.6180339887;
+    const spiralRot = frameTime * 0.018 + phiB;
+    const spiralMax = R * (0.08 + 0.22 * effCoh);
+    const SSTEPS    = _perfLevel === 0 ? 40 : _perfLevel === 1 ? 60 : 80;
+
+    // Bras 1 — couleur naissance
+    setGlow(`rgb(${crB},${cgB},${cbB})`, 12 + 18 * effCoh + audioE * 14);
+    beginShape(); noFill();
+    stroke(crB, cgB, cbB, 90 + 130 * effCoh + audioE * 35);
+    strokeWeight(1.3 + 1.7 * effCoh);
+    for (let s = 0; s <= SSTEPS; s++) {
+        const θ = (s / SSTEPS) * Math.PI * 4;
+        const r = 3 * Math.pow(PHI_S, θ / (Math.PI / 2));
+        if (r > spiralMax) break;
+        curveVertex(cx + r * Math.cos(θ + spiralRot), cy + r * Math.sin(θ + spiralRot));
+    }
+    endShape();
+    clearGlow();
+
+    // Bras 2 — couleur conception (décalé de π, visible si C ≠ B)
+    if (conDiffers) {
+        setGlow(`rgb(${crC},${cgC},${cbC})`, 10 + 14 * effCoh + audioE * 10);
+        beginShape(); noFill();
+        stroke(crC, cgC, cbC, 70 + 100 * effCoh + audioE * 25);
+        strokeWeight(0.9 + 1.2 * effCoh);
+        for (let s = 0; s <= SSTEPS; s++) {
+            const θ = (s / SSTEPS) * Math.PI * 4;
+            const r = 3 * Math.pow(PHI_S, θ / (Math.PI / 2));
+            if (r > spiralMax) break;
+            curveVertex(cx + r * Math.cos(θ + spiralRot + Math.PI), cy + r * Math.sin(θ + spiralRot + Math.PI));
+        }
         endShape();
-        strokeWeight(7); point(-R, 0); point(R, 0);
-
-    } else {
-        // N-GONE (3 à 9)
-        const rot = phase * TWO_PI * (digit % 2 === 0 ? 0.11 : -0.11) + digit * 0.28;
-        rotate(rot);
-
-        // Polygone
-        stroke(kr, kg, kb, 185 * env); strokeWeight(2.5);
-        beginShape();
-        for (let i = 0; i <= digit; i++) {
-            const a = (i / digit) * TWO_PI - PI/2;
-            vertex(Math.cos(a) * R, Math.sin(a) * R);
-        }
-        endShape(CLOSE);
-
-        // Diagonales internes — MED + HIGH
-        if (_perfLevel >= 1) {
-            stroke(kr, kg, kb, 28 * env); strokeWeight(0.7);
-            const skipEvery = (_perfLevel < 2 && digit > 7) ? 2 : 1;
-            for (let i = 0; i < digit; i += skipEvery)
-                for (let j = i + 2; j < digit - (i === 0 ? 1 : 0); j++) {
-                    const ai = (i / digit) * TWO_PI - PI/2;
-                    const aj = (j / digit) * TWO_PI - PI/2;
-                    line(Math.cos(ai)*R, Math.sin(ai)*R, Math.cos(aj)*R, Math.sin(aj)*R);
-                }
-        }
-
-        // Satellites orbitants — HIGH uniquement
-        if (_perfLevel >= 2) {
-            strokeWeight(4.5); stroke(kr, kg, kb, 95 * env);
-            const orb = R * (0.52 + 0.07 * Math.sin(phase * TWO_PI * digit));
-            for (let i = 0; i < digit; i++) {
-                const a = (i / digit) * TWO_PI - PI/2 + phase * TWO_PI * 0.5;
-                point(Math.cos(a) * orb, Math.sin(a) * orb);
-            }
-        }
-    }
-    pop();
-
-    // ─ Double Bang — C (Conception/Esprit) · B (Naissance/Matière) · Ψ ──────
-    if (_cachedDoubleBang) {
-        const { phiC, phiB, spiralCoherence, stretchRatio } = _cachedDoubleBang;
-        const dbR = R * 0.40;
-
-        // Couleurs issues des éléments alchimiques (ou défaut teal/ambre)
-        function _h2rgb(h) {
-            return [parseInt(h.slice(1,3),16), parseInt(h.slice(3,5),16), parseInt(h.slice(5,7),16)];
-        }
-        const [crC, cgC, cbC] = _cachedElements ? _h2rgb(_cachedElements.conceptionColor) : [0, 255, 204];
-        const [crB, cgB, cbB] = _cachedElements ? _h2rgb(_cachedElements.birthColor)      : [245, 158, 11];
-
-        const rt   = frameTime * 0.006;
-        // En mode Anomalie : C orbite sur une ellipse (tension quantique) + micro-jitter
-        const isAnomalie  = _pepperMode === 'anomalie';
-        const deltaFactor = isAnomalie ? Math.min(1, _pepperDeltaDays / 70) : 0;
-        const ellipseA    = dbR;                                   // demi-grand axe
-        const ellipseB    = dbR * (1 - 0.35 * deltaFactor);       // demi-petit axe compressé
-        // Jitter de phase Anomalie : vibration haute-fréquence proportionnelle au Delta
-        const jitter      = isAnomalie ? Math.sin(frameTime * 0.19) * deltaFactor * 0.22 : 0;
-
-        const cAng = phiC + rt + jitter;
-        const bAng = phiB + rt * (0.9 + 0.1 * stretchRatio);   // dérive lente B/C
-
-        // C sur ellipse (Anomalie) ou cercle (Harmonique)
-        const cX = cx + ellipseA * Math.cos(cAng);
-        const cY = cy + ellipseB * Math.sin(cAng);
-        const bX = cx + dbR * Math.cos(bAng), bY = cy + dbR * Math.sin(bAng);
-
-        // Ψ = C + B (somme vectorielle live)
-        const pvX = (cX - cx) + (bX - cx), pvY = (cY - cy) + (bY - cy);
-        const pvLen = Math.sqrt(pvX*pvX + pvY*pvY) || 1;
-        const pScale = Math.min(1, dbR * 1.05 / pvLen);
-        const psiX = cx + pvX * pScale, psiY = cy + pvY * pScale;
-
-        // Cercle/ellipse de phase (guide discret)
-        noFill(); stroke(255, 255, 255, 10); strokeWeight(0.5);
-        if (isAnomalie) ellipse(cx, cy, ellipseA * 2, ellipseB * 2);
-        else            ellipse(cx, cy, dbR * 2, dbR * 2);
-
-        // Vecteur C — couleur de l'élément Conception
-        // En Anomalie : opacité pulsante + légère frange glitch
-        const cAlpha = isAnomalie
-            ? 110 + 80 * Math.abs(Math.sin(frameTime * 0.08 + jitter * 5))
-            : 130 + 60 * spiralCoherence;
-        stroke(crC, cgC, cbC, cAlpha); strokeWeight(isAnomalie ? 1.8 : 1.4);
-        line(cx, cy, cX, cY);
-        if (isAnomalie && deltaFactor > 0.3) {
-            // Glitch : deuxième trait décalé à faible opacité
-            stroke(crC, cgC, cbC, 30 + 40 * deltaFactor);
-            const gOff = deltaFactor * 4;
-            line(cx + gOff, cy, cX + gOff * 0.5, cY - gOff * 0.5);
-        }
-        noStroke(); fill(crC, cgC, cbC, 210); ellipse(cX, cY, isAnomalie ? 7 : 5, isAnomalie ? 7 : 5);
-
-        // Vecteur B — couleur de l'élément Naissance
-        stroke(crB, cgB, cbB, 130 + 60 * spiralCoherence); strokeWeight(1.4);
-        line(cx, cy, bX, bY);
-        noStroke(); fill(crB, cgB, cbB, 210); ellipse(bX, bY, 5, 5);
-
-        // Lien barycentriste C↔B (tiret léger)
-        stroke(255, 255, 255, 16); strokeWeight(0.5);
-        line(cX, cY, bX, bY);
-
-        // Vecteur Ψ — or · épaisseur et halo ∝ spiralCoherence
-        // En Anomalie : halo plus intense (puissance brute)
-        const psiBoost = isAnomalie ? 0.15 * deltaFactor : 0;
-        stroke(255, 220, 80, 90 + 165 * Math.min(1, spiralCoherence + psiBoost));
-        strokeWeight(1.8 + 3.2 * Math.min(1, spiralCoherence + psiBoost));
-        line(cx, cy, psiX, psiY);
-        noStroke();
-        const effCoh = Math.min(1, spiralCoherence + psiBoost);
-        if (effCoh > 0.08) {
-            fill(255, 220, 80, 28 * effCoh);
-            ellipse(psiX, psiY, 22 * effCoh, 22 * effCoh);
-        }
-        fill(255, 220, 80, 200); ellipse(psiX, psiY, 7, 7);
+        clearGlow();
     }
 
-    // ─ Grand chiffre semi-transparent en overlay ──────────────────
+    // Noyau Ψ pulsant au centre
+    const nucPulse = 3 + 7 * Math.abs(Math.sin(frameTime * 0.04 + phiB)) + audioE * 8;
+    setGlow('rgba(255,240,120,1)', nucPulse * 3 + audioE * 12);
+    noStroke(); fill(255, 240, 120, 220 + 35 * audioE);
+    ellipse(cx, cy, nucPulse * 1.5, nucPulse * 1.5);
+    clearGlow();
+
+    // ─ KIN en overlay ────────────────────────────────────────────────
     blendMode(BLEND); noStroke(); textAlign(CENTER, CENTER);
-    textSize(R * 0.72); fill(kr, kg, kb, 42 * env);
-    text(digit, cx, cy + R * 0.1);
-
-    // ─ Nom Kin sous la figure ─────────────────────────────────────
     if (_cachedKinA) {
-        textSize(10); fill(kr, kg, kb, 95);
-        text(_cachedKinA.glyph.toUpperCase() + ' · ' + _cachedKinA.tone, cx, cy + R * 1.3);
+        textSize(9); fill(kr, kg, kb, 80);
+        text(_cachedKinA.glyph.toUpperCase() + ' · T' + _cachedKinA.tone, cx, cy + R * 1.5);
     }
 
-    // ─ HUD dynamique ─────────────────────────────────────────────
+    // ─ HUD ────────────────────────────────────────────────────────────
     const hudEl = document.getElementById('hud-overlay');
     if (hudEl) {
         const pf  = _perfCalibrated ? ['LOW','MED','HIGH'][_perfLevel] : '…';
         const fps = Math.round(frameRate());
-        const effCohHud = _cachedDoubleBang
-            ? Math.min(1, _cachedDoubleBang.spiralCoherence + (_pepperMode === 'anomalie' ? 0.15 * Math.min(1, _pepperDeltaDays / 70) : 0))
-            : null;
-        const dbTxt = effCohHud !== null
-            ? ` | Ψ ${(effCohHud * 100).toFixed(0)}%`
-            : '';
-        const pepperTxt = _pepperMode === 'anomalie'
-            ? `<br><span style="color:#f59e0b">⚡ Anomalie · Δ ${_pepperDeltaDays}j</span>`
-            : '';
-        hudEl.innerHTML = `Décompte : <strong>${digit}</strong><br>Perf : ${pf} (${fps} fps)${dbTxt}${pepperTxt}`;
+        hudEl.innerHTML = `Mode: GAÏA · ${pf} (${fps} fps)`
+            + `<br>Ψ ${(effCoh * 100).toFixed(0)}%`
+            + (hasData ? `<br>B: ${latB.toFixed(2)}°N ${lonB.toFixed(2)}°E` : '')
+            + (conDiffers ? `<br>C: ${latC.toFixed(2)}°N ${lonC.toFixed(2)}°E` : '');
     }
 }
 
@@ -2403,6 +2417,7 @@ window._copyShareLink = function() {
     const btn   = document.getElementById('btn-copy-link');
     if (!input.value) return;
     navigator.clipboard?.writeText(input.value).then(() => {
+        input.select();
         btn.textContent = '✅ Copié !';
         setTimeout(() => { btn.textContent = '📋 Copier'; }, 2000);
     }).catch(() => {
@@ -2530,7 +2545,7 @@ function _publishEventToRelay(event) {
                     clearTimeout(timer); ws.close();
                     msg[2] ? resolve(msg) : reject(new Error(msg[3] || 'Relay rejected'));
                 }
-            } catch (_) {}
+            } catch (_) { if(window.DEBUG) console.warn('[atomic] relay publish parse:', _); }
         };
         ws.onerror = () => { clearTimeout(timer); reject(new Error('WebSocket error')); };
     });
@@ -2585,7 +2600,7 @@ async function loadRadar() {
 
         const profiles = events.map(ev => {
             let c = {};
-            try { c = JSON.parse(ev.content); } catch (_) {}
+            try { c = JSON.parse(ev.content); } catch (_) { if(window.DEBUG) console.warn('[atomic] radar event content parse:', _); }
             const phi_j = parseFloat(c.personal_phase) || 0;
             const omega_j = parseFloat(c.omega_bio) || 0;
             const delta = myPhi - phi_j;
@@ -2635,7 +2650,7 @@ function _queryRelayFilter(relayUrl, filter) {
                 const msg = JSON.parse(ev.data);
                 if (msg[0] === 'EVENT' && msg[1] === subId) events.push(msg[2]);
                 else if (msg[0] === 'EOSE') { clearTimeout(timer); ws.close(); resolve(events); }
-            } catch(_) {}
+            } catch(_) { if(window.DEBUG) console.warn('[atomic] relay query parse:', _); }
         };
         ws.onerror = () => { clearTimeout(timer); ws.close(); reject(new Error('WebSocket error')); };
     });

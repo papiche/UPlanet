@@ -6,8 +6,8 @@
     <title>⚛ Résonance Cosmique — ATOM4LOVE</title>
     <link rel="stylesheet" href="bootstrap.min.css">
     <link rel="stylesheet" href="leaflet.css">
+    <link rel="stylesheet" href="uplanet-atomic.css">
     <style>
-        :root { --primary: #f59e0b; --secondary: #f97316; --teal: #00ffcc; }
         html, body { margin:0; padding:0; background:#080602; color:#e0e0e0; font-family:system-ui,sans-serif; min-height:100dvh; }
 
         /* ── Canvas fond ── */
@@ -43,27 +43,6 @@
             border-radius:14px; padding:18px 16px; margin-bottom:16px;
         }
         .section-title { font-size:.82rem; font-weight:700; color:var(--teal); text-transform:uppercase; letter-spacing:1.5px; margin-bottom:12px; }
-        .form-label { font-size:.7rem; color:rgba(255,255,255,.4); text-transform:uppercase; letter-spacing:.8px; }
-        .form-control, .form-select {
-            background:rgba(255,255,255,.05) !important; border:1px solid rgba(255,255,255,.13) !important;
-            color:#ddd !important; font-family:monospace;
-        }
-        .form-control:focus { border-color:var(--teal) !important; box-shadow:0 0 0 .15rem rgba(0,255,204,.18) !important; outline:none; }
-
-        /* ── Inputs segmentés ── */
-        .date-seg-row { display:flex; gap:5px; align-items:flex-end; }
-        .date-seg { display:flex; flex-direction:column; }
-        .date-seg label { font-size:.6rem; color:rgba(255,255,255,.3); text-transform:uppercase; letter-spacing:.8px; margin-bottom:3px; }
-        .date-seg input[type="number"] {
-            background:rgba(255,255,255,.05) !important; border:1px solid rgba(255,255,255,.14) !important;
-            color:#ddd !important; font-family:monospace; font-size:.9rem;
-            border-radius:7px; text-align:center; padding:7px 3px;
-            -moz-appearance:textfield; appearance:textfield; width:100%;
-        }
-        .date-seg input[type="number"]::-webkit-inner-spin-button { -webkit-appearance:none; appearance:none; }
-        .date-seg input[type="number"]:focus { border-color:var(--teal) !important; box-shadow:0 0 0 .12rem rgba(0,255,204,.18) !important; outline:none; }
-        .date-seg-sep { font-size:1rem; color:rgba(255,255,255,.2); padding-bottom:8px; }
-        .date-display { font-family:monospace; font-size:.75rem; color:rgba(255,255,255,.4); margin-top:4px; min-height:1.1rem; }
 
         /* ── Bouton lieu ── */
         .btn-location {
@@ -80,15 +59,6 @@
         .btn-location .loc-chevron { color:rgba(0,255,204,.5); font-size:.9rem; }
 
         /* ── Modal Leaflet ── */
-        .modal-content {
-            background:rgba(10,12,22,.97) !important;
-            border:1px solid rgba(0,255,204,.2) !important;
-            border-radius:14px !important;
-        }
-        .modal-header { border-bottom:1px solid rgba(255,255,255,.08) !important; padding:.75rem 1rem; }
-        .modal-title  { color:var(--teal); font-size:.95rem; font-weight:700; letter-spacing:1px; }
-        .modal-body   { padding:.75rem 1rem 1rem; }
-        .btn-close    { filter:invert(1); }
         #loc-search-input {
             background:rgba(255,255,255,.05) !important; border:1px solid rgba(255,255,255,.15) !important;
             color:#ddd !important; font-size:.9rem; border-radius:8px 0 0 8px;
@@ -156,6 +126,11 @@
         }
         .btn-compute:hover { background:linear-gradient(135deg,rgba(0,255,204,.3),rgba(245,158,11,.2)); }
         .btn-compute:disabled { opacity:.4; cursor:default; }
+        @keyframes btn-ready-pulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(0,255,204,0); }
+            50%       { box-shadow: 0 0 18px 4px rgba(0,255,204,.4); }
+        }
+        .btn-compute.btn-ready { animation: btn-ready-pulse 1.8s ease-in-out infinite; }
 
         /* ── Sécurité notice ── */
         .security-notice {
@@ -394,15 +369,17 @@ function _syncVisitorDate() {
     const disp = document.getElementById('v-date-display');
     const btn  = document.getElementById('btn-compute');
     if (!dd||!mm||!yyyy||parseInt(yyyy)<1920||parseInt(yyyy)>2015) {
-        disp.textContent = '— date invalide —'; _vDateISO = null; btn.disabled = true; return;
+        disp.textContent = '— date invalide —'; _vDateISO = null; btn.disabled = true; btn.classList.remove('btn-ready'); return;
     }
     const y = parseInt(yyyy), mo = parseInt(mm), d = parseInt(dd);
-    if (mo<1||mo>12||d<1||d>31) { disp.textContent = '— date invalide —'; _vDateISO = null; btn.disabled = true; return; }
+    if (mo<1||mo>12||d<1||d>31) { disp.textContent = '— date invalide —'; _vDateISO = null; btn.disabled = true; btn.classList.remove('btn-ready'); return; }
     _vDateISO = `${y}-${_fmt2(mo)}-${_fmt2(d)}`;
     _vTimeStr = `${_fmt2(parseInt(hh)||12)}:${_fmt2(parseInt(mn)||0)}`;
     const dt  = new Date(_vDateISO + 'T' + _vTimeStr);
     disp.textContent = _fmtDateFR(dt);
-    btn.disabled = !_bDateObj; // ne pas activer si aucun lien partenaire
+    const _canCompute = !!_bDateObj;
+    btn.disabled = !_canCompute;
+    btn.classList.toggle('btn-ready', _canCompute);
 }
 
 // ── Carte Leaflet dans le modal ────────────────────────────────────────────

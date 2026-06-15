@@ -10,6 +10,9 @@ if (typeof window.UPLANET_COMMON_VERSION === 'undefined') {
     window.UPLANET_COMMON_DATE = '2025-01-09';
 }
 
+// ── Debug flag (active uniquement en développement local) ──────────────────
+window.DEBUG = (location.hostname === 'localhost' || location.hostname === '127.0.0.1');
+
 // ========================================
 // NOSTR EXTENSION WRAPPER FOR CHROME COMPATIBILITY
 // ========================================

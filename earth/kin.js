@@ -85,7 +85,7 @@
                 var msg = JSON.parse(e.data);
                 if (msg[0] === 'EVENT' && msg[1] === sid && onEvent) onEvent(msg[2]);
                 if (msg[0] === 'EOSE') { if (onEOSE) onEOSE(); ws.close(); }
-            } catch (ex) {}
+            } catch (ex) { if(window.DEBUG) console.warn('[kin.js] relay message parse:', ex); }
         };
         return ws;
     }
@@ -105,7 +105,7 @@
             _st.kind0 = evt;
             console.group('[kin.js] Kind 0 — Profil NOSTR');
             console.log('Événement brut :', evt);
-            try { console.log('Contenu (JSON) :', JSON.parse(evt.content)); } catch (e) {}
+            try { console.log('Contenu (JSON) :', JSON.parse(evt.content)); } catch (e) { if(window.DEBUG) console.warn('[kin.js] Kind 0 content parse:', e); }
             console.groupEnd();
             _render();
         });
@@ -295,7 +295,7 @@
                 h += '<div><div class="kp-pname">' + _esc(m.name || m.display_name || _st.pubkey.slice(0, 10) + '…') + '</div>';
                 if (m.about) h += '<div class="kp-pabout">' + _esc(m.about) + '</div>';
                 h += '</div></div>';
-            } catch (e) {}
+            } catch (e) { if(window.DEBUG) console.warn('[kin.js] kind0 render:', e); }
         }
 
         return h;

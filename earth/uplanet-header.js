@@ -307,10 +307,10 @@
         try { return sessionStorage.getItem(_SS_KEY) || ''; } catch (e) { return ''; }
     }
     function _cachePubkey(pk) {
-        try { if (pk) sessionStorage.setItem(_SS_KEY, pk); } catch (e) {}
+        try { if (pk) sessionStorage.setItem(_SS_KEY, pk); } catch (e) { if(window.DEBUG) console.warn('[UPH storage] cachePubkey:', e); }
     }
     function _clearCache() {
-        try { sessionStorage.removeItem(_SS_KEY); } catch (e) {}
+        try { sessionStorage.removeItem(_SS_KEY); } catch (e) { if(window.DEBUG) console.warn('[UPH storage] clearCache:', e); }
     }
 
     // Pré-peupler window.NostrState avec le pubkey connu sans relay actif
@@ -713,13 +713,13 @@
     function _saveAccount(email, pubkey) {
         var list = _loadAccounts().filter(function (a) { return a.pubkey !== pubkey; });
         list.unshift({ email: email, pubkey: pubkey });
-        try { localStorage.setItem(_LS_ACCOUNTS, JSON.stringify(list.slice(0, 10))); } catch (e) {}
+        try { localStorage.setItem(_LS_ACCOUNTS, JSON.stringify(list.slice(0, 10))); } catch (e) { if(window.DEBUG) console.warn('[UPH storage] saveAccount:', e); }
         _renderSavedAccounts();
     }
 
     function _deleteAccount(pubkey) {
         var list = _loadAccounts().filter(function (a) { return a.pubkey !== pubkey; });
-        try { localStorage.setItem(_LS_ACCOUNTS, JSON.stringify(list)); } catch (e) {}
+        try { localStorage.setItem(_LS_ACCOUNTS, JSON.stringify(list)); } catch (e) { if(window.DEBUG) console.warn('[UPH storage] deleteAccount:', e); }
         _renderSavedAccounts();
     }
 
@@ -760,7 +760,7 @@
     // ── Active une identité dérivée : installe polyfill, met à jour UPH ────────
     function _activateIdentity(email, pubkey, privHex) {
         _closeModal();
-        try { sessionStorage.setItem(_SS_PRIV_KEY, privHex); } catch (e) {}
+        try { sessionStorage.setItem(_SS_PRIV_KEY, privHex); } catch (e) { if(window.DEBUG) console.warn('[UPH storage] privKey cache:', e); }
         _installNostrPolyfill(pubkey, privHex);
         _saveAccount(email, pubkey);
         _applyPubkey(pubkey);
@@ -783,7 +783,7 @@
             _applyPubkey(pubkey);
             _cachePubkey(pubkey);
             console.log('[UPH] Session restaurée depuis sessionStorage');
-        } catch (e) {}
+        } catch (e) { if(window.DEBUG) console.warn('[UPH storage] session restore:', e); }
     }
 
     // ── Formulaire G1v1 + import nsec ─────────────────────────────────────────
@@ -867,7 +867,7 @@
                             pepper: pass.slice(0, 56),
                             ts:     Date.now()
                         }));
-                    } catch(e) {}
+                    } catch(e) { if(window.DEBUG) console.warn('[UPH storage] g1creds save:', e); }
                 }
                 var url = _apiUrl() + '/g1' + (label ? '?email=' + encodeURIComponent(label) : '');
                 window.open(url, '_blank');
@@ -965,7 +965,7 @@
                 el.style.top       = Math.min(saved.y, window.innerHeight - 30) + 'px';
                 el.style.transform = 'none';
             }
-        } catch (e) {}
+        } catch (e) { if(window.DEBUG) console.warn('[UPH storage] drag restore pos:', e); }
 
         function _savePos() {
             try {
@@ -973,7 +973,7 @@
                     x: parseFloat(el.style.left) || 0,
                     y: parseFloat(el.style.top)  || 0
                 }));
-            } catch (e) {}
+            } catch (e) { if(window.DEBUG) console.warn('[UPH storage] drag save pos:', e); }
         }
 
         function _startDrag(clientX, clientY, target) {

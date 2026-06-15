@@ -63,7 +63,7 @@
             buf.push({ t: new Date().toISOString().slice(11, 23), l: level, m: msg });
             if (buf.length > MAX_LOGS) buf.splice(0, buf.length - MAX_LOGS);
             sessionStorage.setItem(LOG_KEY, JSON.stringify(buf));
-        } catch (_) {}
+        } catch (_) { if(window.DEBUG) console.warn('[FB log] sessionStorage write:', _); }
     }
 
     console.log   = function (...a) { pushLog('LOG',  a); _orig.log(...a);   };
@@ -139,7 +139,7 @@
         try {
             const raw = sessionStorage.getItem(DIAG_KEY);
             if (raw) diag.nip42 = JSON.parse(raw);
-        } catch (_) {}
+        } catch (_) { if(window.DEBUG) console.warn('[FB diag] nip42 parse:', _); }
         return diag;
     }
 
@@ -202,7 +202,7 @@
             } else {
                 results.push(`Step ${step} [⚠️] : NIP-42 aucun test récent en sessionStorage (relancer roaming.html)`);
             }
-        } catch (_) {}
+        } catch (_) { if(window.DEBUG) console.warn('[FB diag] nip42 step parse:', _); }
 
         const report = `### Auto-diagnostic (${new Date().toISOString().slice(0,19)})\n` + results.join('\n');
         if (descEl) {
@@ -217,7 +217,7 @@
         try {
             sessionStorage.setItem(PAGE_KEY, window.location.href);
             sessionStorage.setItem(SNAP_KEY, sessionStorage.getItem(LOG_KEY) || '[]');
-        } catch (_) {}
+        } catch (_) { if(window.DEBUG) console.warn('[FB storage] openFeedback snap:', _); }
         window.open(target || deriveFeedbackUrl(), '_blank');
     };
 
@@ -274,13 +274,13 @@
                                 }
                                 clearTimeout(timer); ws.close(); resolve();
                             }
-                        } catch (_) {}
+                        } catch (_) { if(window.DEBUG) console.warn('[FB relay] profile parse:', _); }
                     };
                     ws.onerror = () => { clearTimeout(timer); resolve(); };
                 });
                 if (document.getElementById('nostr-display-name')?.style.display !== 'none') break;
             }
-        } catch (_) {}
+        } catch (_) { if(window.DEBUG) console.warn('[FB relay] profile fetch loop:', _); }
     }
 
     if (isFeedbackPage()) {
@@ -338,10 +338,10 @@
                 }
                 localStorage.removeItem('uplanet_feedback_prefill');
             }
-        } catch (_) {}
+        } catch (_) { if(window.DEBUG) console.warn('[FB storage] prefill read:', _); }
 
         let sourcePage = '';
-        try { sourcePage = sessionStorage.getItem(PAGE_KEY) || document.referrer || ''; } catch (_) {}
+        try { sourcePage = sessionStorage.getItem(PAGE_KEY) || document.referrer || ''; } catch (_) { if(window.DEBUG) console.warn('[FB storage] sourcePage read:', _); }
         const sourceEl = document.getElementById('fb-source-page');
         if (sourceEl && sourcePage) {
             sourceEl.value = sourcePage;
@@ -358,7 +358,7 @@
             } else {
                 logs = JSON.parse(sessionStorage.getItem(LOG_KEY) || '[]');
             }
-        } catch (_) {}
+        } catch (_) { if(window.DEBUG) console.warn('[FB storage] logs read:', _); }
 
         /* Appliquer le filtre ERR-first */
         const filtered   = filterLogs(logs);
@@ -446,7 +446,7 @@
             const data = await resp.json();
             if (!data.ok) throw new Error('ok=false');
 
-            try { sessionStorage.removeItem(LOG_KEY); sessionStorage.removeItem(PAGE_KEY); } catch (_) {}
+            try { sessionStorage.removeItem(LOG_KEY); sessionStorage.removeItem(PAGE_KEY); } catch (_) { if(window.DEBUG) console.warn('[FB storage] cleanup after send:', _); }
 
             document.getElementById('form-section').style.display    = 'none';
             document.getElementById('success-section').style.display = 'block';
@@ -482,7 +482,7 @@
     }
 
     window.clearFeedbackLogs = function () {
-        try { sessionStorage.removeItem(LOG_KEY); } catch (_) {}
+        try { sessionStorage.removeItem(LOG_KEY); } catch (_) { if(window.DEBUG) console.warn('[FB storage] clearLogs:', _); }
         const el = document.getElementById('fb-console-logs');
         if (el) el.value = '';
         const section = document.getElementById('fb-log-section');

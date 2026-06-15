@@ -30,6 +30,8 @@ const AudioOrchestra = (function() {
     let _volume     = 0.5;
     let _muted      = false;
     let _enabled    = false;   // audio activé uniquement après geste utilisateur
+    let _analyser    = null;
+    let _analysedBuf = null;
 
     function _ensureCtx() {
         if (_ctx) return;
@@ -37,12 +39,17 @@ const AudioOrchestra = (function() {
         _masterGain = _ctx.createGain();
         _masterGain.gain.value = _muted ? 0 : _volume * BASE_GAIN;
         _masterGain.connect(_ctx.destination);
+        _analyser = _ctx.createAnalyser();
+        _analyser.fftSize = 64;
+        _analyser.smoothingTimeConstant = 0.85;
+        _analysedBuf = new Uint8Array(_analyser.frequencyBinCount);
+        _masterGain.connect(_analyser);
     }
 
     function _stopSource(src) {
         if (!src) return;
-        const stop = (n) => { try { if (n && n.stop) n.stop(0); } catch(_) {} };
-        const disc = (n) => { try { if (n && n.disconnect) n.disconnect(); } catch(_) {} };
+        const stop = (n) => { try { if (n && n.stop) n.stop(0); } catch(e) { if(window.DEBUG) console.warn('[Audio] stop:', e); } };
+        const disc = (n) => { try { if (n && n.disconnect) n.disconnect(); } catch(e) { if(window.DEBUG) console.warn('[Audio] disconnect:', e); } };
         if (src.oscs)    src.oscs.forEach(o  => { stop(o); disc(o); });
         if (src.gains)   src.gains.forEach(g  => disc(g));
         if (src.lfo)     { stop(src.lfo);     disc(src.lfo); }
@@ -285,7 +292,15 @@ const AudioOrchestra = (function() {
 
     return { enable, disable, stop, setVolume, toggleMute, playProfile, playMatch, getBeatFreq,
              get enabled() { return _enabled; },
-             get muted()   { return _muted; } };
+             get muted()   { return _muted; },
+             getEnergy() {
+                 if (!_analyser || !_enabled) return 0;
+                 _analyser.getByteFrequencyData(_analysedBuf);
+                 let sum = 0;
+                 for (let i = 0; i < _analysedBuf.length; i++) sum += _analysedBuf[i];
+                 return Math.min(1, sum / (_analysedBuf.length * 180));
+             }
+           };
 })();
 
 window.AudioOrchestra = AudioOrchestra;

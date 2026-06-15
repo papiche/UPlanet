@@ -357,6 +357,30 @@ if (_bDateObj && !isNaN(_bDateObj) && typeof Phi2X !== 'undefined') {
     _kinB = Phi2X.calcKin(_bDateObj.getFullYear(), _bDateObj.getMonth()+1, _bDateObj.getDate());
 }
 
+// ── Guard : page inutilisable sans lien partagé ───────────────────────────
+if (!_bDate || !_bDateObj) {
+    document.getElementById('invite-header').innerHTML = `
+        <div style="font-size:2.8rem;margin-bottom:12px">🔗</div>
+        <div class="invite-name" style="color:var(--teal)">Aucun partenaire détecté</div>
+        <div class="invite-sub" style="margin-top:8px;line-height:1.7;color:rgba(255,255,255,.55)">
+            Cette page nécessite un lien partagé par un autre explorateur.<br>
+            Crée ton profil, puis partage <strong style="color:#fff">ton lien unique</strong> depuis l'onglet MATCH.
+        </div>
+        <div style="margin-top:24px;width:100%;max-width:720px;margin-left:auto;margin-right:auto">
+            <iframe src="atomic.html"
+                style="width:100%;height:820px;border:1px solid rgba(0,255,204,.2);
+                       border-radius:16px;background:#0a0a0a"
+                title="Créer mon profil ATOM4LOVE"
+                loading="lazy">
+            </iframe>
+        </div>`;
+    // Masquer le formulaire de matching — aucun calcul possible sans partenaire
+    const card = document.querySelector('.section-card');
+    if (card) card.style.display = 'none';
+    const notice = document.querySelector('.security-notice');
+    if (notice) notice.style.display = 'none';
+}
+
 // ── État visiteur ─────────────────────────────────────────────────────────
 let _vDateISO = null;
 let _vTimeStr = '12:00';
@@ -378,7 +402,7 @@ function _syncVisitorDate() {
     _vTimeStr = `${_fmt2(parseInt(hh)||12)}:${_fmt2(parseInt(mn)||0)}`;
     const dt  = new Date(_vDateISO + 'T' + _vTimeStr);
     disp.textContent = _fmtDateFR(dt);
-    btn.disabled = false;
+    btn.disabled = !_bDateObj; // ne pas activer si aucun lien partenaire
 }
 
 // ── Carte Leaflet dans le modal ────────────────────────────────────────────
@@ -469,6 +493,7 @@ let _elemResult   = null;
 
 function _computeMatch() {
     if (!_vDateISO) return;
+    if (!_bDateObj) return; // guard : pas de lien partenaire
     if (typeof Phi2X === 'undefined') { alert('Moteur Phi2X non chargé.'); return; }
 
     const btn = document.getElementById('btn-compute');

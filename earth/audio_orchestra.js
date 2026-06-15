@@ -248,6 +248,14 @@ const AudioOrchestra = (function() {
         return Math.abs(fa - fb);
     }
 
+    // ── Libération mémoire à la navigation ───────────────────────────────────
+    window.addEventListener('pagehide', function() {
+        if (_ctx && _ctx.state === 'running') _ctx.suspend();
+    });
+    window.addEventListener('pageshow', function() {
+        if (_ctx && _enabled && _ctx.state === 'suspended') _ctx.resume();
+    });
+
     // ── Gestion arrière-plan (tab/mobile) ────────────────────────────────────
     // Fade out propre à la mise en arrière-plan, fade in au retour.
     // Évite les "pops" (clics audio) causés par une reprise brutale du contexte.

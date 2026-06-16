@@ -200,7 +200,18 @@
         + 'font-family:system-ui,sans-serif}'
         + '.uph-mp-summary{font-size:10px;color:rgba(255,255,255,.55);line-height:1.7;'
         + 'padding:7px 9px;background:rgba(0,255,204,.05);border:1px solid rgba(0,255,204,.15);'
-        + 'border-radius:7px;margin-bottom:7px}';
+        + 'border-radius:7px;margin-bottom:7px}'
+        + '@keyframes uphSpin{to{transform:rotate(360deg)}}'
+        + '.uph-spin{animation:uphSpin 1.2s linear infinite;display:inline-block;transform-origin:center}'
+        + '.uph-mp-create-btn{width:100%;padding:10px 0;border-radius:11px;cursor:pointer;'
+        + 'background:linear-gradient(135deg,rgba(245,158,11,.22),rgba(245,158,11,.10));'
+        + 'border:1px solid rgba(245,158,11,.52);color:#f59e0b;font-size:12px;font-weight:700;'
+        + 'font-family:system-ui,sans-serif;transition:background .2s,box-shadow .2s;letter-spacing:.3px}'
+        + '.uph-mp-create-btn:hover{background:linear-gradient(135deg,rgba(245,158,11,.36),rgba(245,158,11,.18));'
+        + 'box-shadow:0 0 14px rgba(245,158,11,.22)}'
+        + '.uph-mp-create-btn:disabled{opacity:.45;cursor:default}'
+        + '.uph-kin-badge{font-size:10px;color:rgba(255,255,255,.7);padding:5px 9px;border-radius:7px;'
+        + 'background:rgba(134,239,172,.07);border:1px solid rgba(134,239,172,.18);margin:4px 0}';
 
     // ── HTML ───────────────────────────────────────────────────────────────────
     function _html() {
@@ -689,7 +700,8 @@
     }
 
     // PBKDF2-SHA256 / 600 000 itérations / domaine 'uplanet-a4l-v1' — même paramétrage qu'atomic.html
-    async function _uphPbkdf2Stretch(rawSalt, rawPepper) {
+    // onProgress(step) est appelé avant chaque étape (1/2 puis 2/2) avec un setTimeout(50ms) pour le repaint.
+    async function _uphPbkdf2Stretch(rawSalt, rawPepper, onProgress) {
         var enc     = new TextEncoder();
         var domSalt = enc.encode('uplanet-a4l-v1');
         async function _s(input) {
@@ -700,7 +712,13 @@
             return btoa(String.fromCharCode.apply(null, new Uint8Array(b)))
                 .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
         }
-        return { stretchedSalt: await _s(rawSalt), stretchedPepper: await _s(rawPepper) };
+        if (onProgress) onProgress(1);
+        await new Promise(function (r) { setTimeout(r, 60); }); // repaint avant le premier calcul
+        var stretchedSalt = await _s(rawSalt);
+        if (onProgress) onProgress(2);
+        await new Promise(function (r) { setTimeout(r, 20); }); // repaint entre les deux calculs
+        var stretchedPepper = await _s(rawPepper);
+        return { stretchedSalt: stretchedSalt, stretchedPepper: stretchedPepper };
     }
 
     // Date de conception harmonique : gestation = 280 + (poids − 3.5) × 4 jours (formule Phi2X)
@@ -805,7 +823,7 @@
         } catch (e) { if(window.DEBUG) console.warn('[UPH storage] session restore:', e); }
     }
 
-    // ── Formulaire G1v1 + import nsec ─────────────────────────────────────────
+    // ── Formulaire création MULTIPASS ─────────────────────────────────────────
     function _initLoginForm() {
         // Afficher la bonne section selon l'état de localStorage
         _uphShowCreateSection();
@@ -827,12 +845,13 @@
             if (e.key === 'Enter') { e.preventDefault(); _uphCitySearch(); }
         });
 
-        // Auto-focus champ suivant dans la ligne de date (mini-form)
+        // Auto-focus champ suivant dans la ligne de date + mise à jour KIN
         var dateRow = document.querySelector('.uph-date-row');
         if (dateRow) {
             var segs = Array.from(dateRow.querySelectorAll('input[type="number"]'));
             segs.forEach(function (seg, idx) {
                 seg.addEventListener('input', function () {
+                    _uphUpdateKin();
                     if (String(this.value).length >= this.placeholder.length && idx + 1 < segs.length) {
                         segs[idx + 1].focus();
                         segs[idx + 1].select();
@@ -849,40 +868,63 @@
         var existBtnEl = document.getElementById('uph-mp-btn');
         if (existBtnEl) existBtnEl.addEventListener('click', _uphCreateFromExisting);
 
-        // Import nsec
-        var nsecBtn = document.getElementById('uph-nsec-btn');
-        if (nsecBtn) {
-            nsecBtn.addEventListener('click', function () {
-                var inputEl = document.getElementById('uph-nsec-input');
-                var errEl   = document.getElementById('uph-nsec-err');
-                var nsec = (inputEl ? inputEl.value : '').trim();
-                if (!nsec) { if (errEl) errEl.textContent = 'Collez un nsec1…'; return; }
-                if (errEl) errEl.textContent = '';
-                try {
-                    var NostrLib = window.NostrTools || window.Nostr;
-                    if (!NostrLib || !NostrLib.nip19 || !NostrLib.getPublicKey)
-                        throw new Error('nostr.bundle.js manquant');
-                    var decoded = NostrLib.nip19.decode(nsec);
-                    if (decoded.type !== 'nsec') throw new Error('Format invalide (attendu nsec1…)');
-                    var privHex = decoded.data;
-                    if (typeof privHex !== 'string') {
-                        privHex = Array.from(privHex).map(function (b) {
-                            return ('0' + b.toString(16)).slice(-2);
-                        }).join('');
-                    }
-                    var pubkey = NostrLib.getPublicKey(privHex);
-                    var label  = NostrLib.nip19.npubEncode
-                        ? NostrLib.nip19.npubEncode(pubkey).slice(0, 20) + '…'
-                        : pubkey.slice(0, 12) + '…';
-                    _activateIdentity(label, pubkey, privHex);
-                    if (inputEl) inputEl.value = '';
-                } catch (err) {
-                    if (errEl) errEl.textContent = err.message || 'nsec invalide';
-                }
-            });
-        }
-
         _renderSavedAccounts();
+    }
+
+    // ── Calcul KIN Maya (Tzolkin) — algorithme identique à phi2x.js ────────────
+    var _UPH_KIN_MESES = [0,31,59,90,120,151,181,212,243,13,44,74];
+    var _UPH_KIN_SUMA  = {30:2,35:7,40:12,45:17,50:22,3:27,8:32,13:37,18:42,23:47,28:52,
+                          32:57,38:62,42:67,48:72,1:76,6:82,11:87,16:92,21:97,26:102,31:107,
+                          36:112,41:117,46:122,51:127,4:132,9:137,14:142,19:147,24:152,29:157,
+                          34:162,39:167,44:172,49:177,2:182,7:187,12:192,17:197,22:202,27:207,
+                          37:217,47:227,0:232,5:237,10:242,15:247,20:252,25:257};
+    var _UPH_KIN_G_FR  = ['Dragon','Vent','Nuit','Graine','Serpent','Lieur','Main','Étoile',
+                           'Lune','Chien','Singe','Chemin','Roseau','Jaguar','Aigle','Guerrier',
+                           'Terre','Miroir','Tempête','Soleil'];
+    var _UPH_KIN_T_FR  = ['Magnétique','Lunaire','Électrique','Auto-existante','Harmonique',
+                           'Rythmique','Résonnante','Galactique','Solaire','Planétaire',
+                           'Spectrale','Cristal','Cosmique'];
+    var _UPH_KIN_C     = ['🔴','⚪','🔵','🟡','🟢'];
+    var _UPH_KIN_CF    = ['Rouge','Blanc','Bleu','Jaune','Vert'];
+
+    function _uphCalcKin(year, month, day) {
+        if (!year || !month || !day || month < 1 || month > 12 || day < 1 || day > 31) return null;
+        var kin = day + _UPH_KIN_MESES[month-1] + (_UPH_KIN_SUMA[year % 52] || 0);
+        if (kin > 260) kin -= 260;
+        if (kin <= 0)  kin += 260;
+        var gi = (kin-1) % 20, ti = (kin-1) % 13, ci = Math.floor((kin-1)/13) % 5;
+        return { kin: kin, glyphFr: _UPH_KIN_G_FR[gi], toneFr: _UPH_KIN_T_FR[ti],
+                 colorEmo: _UPH_KIN_C[ci], colorFr: _UPH_KIN_CF[ci], toneNum: ti + 1 };
+    }
+
+    function _uphKinHtml(k) {
+        if (!k) return '';
+        return 'KIN ' + k.kin + ' · <strong>T' + k.toneNum + ' ' + k.toneFr + '</strong>'
+            + ' · ' + k.glyphFr + ' ' + k.colorEmo + ' ' + k.colorFr;
+    }
+
+    // Met à jour le badge KIN dans le mini-formulaire à chaque saisie de date
+    function _uphUpdateKin() {
+        var kinEl = document.getElementById('uph-mp-kin');
+        if (!kinEl) return;
+        var dd   = parseInt((document.getElementById('uph-mp-dd')   || {}).value);
+        var mm   = parseInt((document.getElementById('uph-mp-mm')   || {}).value);
+        var yyyy = parseInt((document.getElementById('uph-mp-yyyy') || {}).value);
+        var k = _uphCalcKin(yyyy, mm, dd);
+        if (!k) { kinEl.style.display = 'none'; return; }
+        kinEl.style.display = '';
+        kinEl.innerHTML = '✨ ' + _uphKinHtml(k);
+    }
+
+    // HTML du spinner de calcul PBKDF2
+    function _uphSpinnerHtml(step) {
+        return '<div style="text-align:center;padding:16px 0">'
+            + '<div class="uph-spin" style="font-size:30px;margin-bottom:7px">⏳</div>'
+            + '<div style="font-size:10.5px;color:rgba(255,200,40,.85);font-weight:600">'
+            + 'Dérivation ' + step + '/2…</div>'
+            + '<div style="font-size:9px;color:rgba(255,255,255,.22);margin-top:4px">'
+            + '600 000 × SHA-256 · brute-force résistant</div>'
+            + '</div>';
     }
 
     // ── Recherche de ville via Nominatim (geocoding) ──────────────────────────
@@ -930,6 +972,9 @@
             else parts.push('📍 ' + parseFloat(stored.lat || 0).toFixed(2) + '°, ' + parseFloat(stored.lon).toFixed(2) + '°');
             parts.push('📅 ' + dayStr);
             parts.push('⚖ ' + parseFloat(stored.weight || 3.5).toFixed(1) + ' kg');
+            // KIN depuis la date de naissance stockée
+            var kinStored = _uphCalcKin(parseInt(p[0]), parseInt(p[1]), parseInt(p[2]));
+            if (kinStored) parts.push('✨ ' + _uphKinHtml(kinStored));
             var summaryEl = document.getElementById('uph-mp-existing-summary');
             if (summaryEl) summaryEl.innerHTML = parts.join('<br>');
             // Pré-remplir la polarité si stockée
@@ -964,10 +1009,9 @@
 
     // ── Création MULTIPASS : assemblage SALT/PEPPER + PBKDF2 + POST /g1nostr ──
     async function _uphDoCreate(email, bd, bt, birthLon, birthLat, conDt, conLon, conLat, weight, polarity, resultEl, errEl, btn) {
-        if (btn)   { btn.textContent = '⏳ Dérivation PBKDF2…'; btn.disabled = true; }
+        if (btn)   { btn.textContent = '⏳'; btn.disabled = true; }
         if (errEl)  errEl.textContent = '';
-        if (resultEl) resultEl.innerHTML = '<div style="font-size:10px;color:rgba(255,200,40,.7);text-align:center;padding:6px 0">'
-            + '🔑 Dérivation cryptographique (~3s)…</div>';
+        if (resultEl) resultEl.innerHTML = _uphSpinnerHtml(1);
         try {
             var birthUnix = _uphDateToUtcUnix(bd, bt || '12:00', birthLon || 0);
             var conUnix;
@@ -989,10 +1033,13 @@
             var pepperRaw = _uphUnixToUtcStr(conUnix)
                 + '_' + conLatStr + '_' + conLonStr
                 + '_' + parseFloat(weight).toFixed(1);
-            var stretched = await _uphPbkdf2Stretch(saltRaw, pepperRaw);
+            var stretched = await _uphPbkdf2Stretch(saltRaw, pepperRaw, function (step) {
+                if (resultEl) resultEl.innerHTML = _uphSpinnerHtml(step);
+            });
 
-            if (resultEl) resultEl.innerHTML = '<div style="font-size:10px;color:rgba(255,200,40,.7);text-align:center;padding:6px 0">'
-                + '⏳ Création de votre identité… (30–60s)</div>';
+            if (resultEl) resultEl.innerHTML = '<div style="text-align:center;padding:10px 0;font-size:10px;color:rgba(255,200,40,.7)">'
+                + '<div class="uph-spin" style="font-size:22px;margin-bottom:5px">🔮</div>'
+                + 'Création de votre identité… (30–60s)</div>';
 
             var fd = new FormData();
             fd.append('email', email);
@@ -1121,7 +1168,7 @@
             + '<input id="uph-mp-email" type="email" placeholder="📧 votre@email.com" autocomplete="email">'
             + '<span id="uph-mp-err" style="color:#f87171;font-size:9px;min-height:11px;display:block"></span>'
             + '<div id="uph-mp-result"></div>'
-            + '<button id="uph-mp-btn">✨ Créer mon MULTIPASS</button>'
+            + '<button id="uph-mp-btn" class="uph-mp-create-btn">✨ Créer mon MULTIPASS</button>'
             + '<div style="text-align:center;margin-top:6px">'
             + '<span id="uph-mp-reset" style="font-size:9px;color:rgba(255,255,255,.25);cursor:pointer;'
             + 'text-decoration:underline;text-underline-offset:2px">Nouveau profil ↩</span></div>'
@@ -1143,6 +1190,7 @@
             + '<span class="uph-date-sep">:</span>'
             + '<input class="uph-date-seg" id="uph-mp-min"  type="number" min="0"    max="59"   placeholder="MM">'
             + '</div>'
+            + '<div id="uph-mp-kin" class="uph-kin-badge" style="display:none"></div>'
             + '<span style="display:block;font-size:9px;color:rgba(255,255,255,.3);margin:4px 0 3px">📍 Lieu de naissance</span>'
             + '<div style="display:flex;gap:0;margin-bottom:3px">'
             + '<input id="uph-mp-city" type="text" placeholder="Paris, Fort-de-France…" style="flex:1">'
@@ -1160,9 +1208,9 @@
             + '</div>'
             + '<span id="uph-mp-mini-err" style="color:#f87171;font-size:9px;min-height:11px;display:block"></span>'
             + '<div id="uph-mp-mini-result"></div>'
-            + '<button id="uph-mp-mini-btn">✨ Créer mon MULTIPASS</button>'
+            + '<button id="uph-mp-mini-btn" class="uph-mp-create-btn">✨ Créer mon MULTIPASS</button>'
             + '<div style="text-align:center;margin-top:5px;font-size:9px;color:rgba(255,255,255,.2)">'
-            + '→ ou renseignez le profil complet sur <a href="atomic.html" style="color:rgba(0,255,204,.45)">Atomic</a></div>'
+            + '→ profil complet sur <a href="atomic.html" style="color:rgba(0,255,204,.4)">Atomic</a></div>'
             + '</div>';
 
         overlay.innerHTML =
@@ -1175,13 +1223,6 @@
             + '<span class="uph-msection-title">✨ Nouvelle identité :</span>'
             + existSection
             + miniSection
-            + '<hr class="uph-msep">'
-            + '<span class="uph-msection-title">🗝 Importer une nsec</span>'
-            + '<div style="display:flex;flex-direction:column;gap:7px">'
-            + '<input id="uph-nsec-input" type="password" placeholder="nsec1…">'
-            + '<span id="uph-nsec-err"></span>'
-            + '<button id="uph-nsec-btn">Importer nsec →</button>'
-            + '</div>'
             + '</div>';
         document.body.appendChild(overlay);
 

@@ -240,10 +240,6 @@
 
             <!-- ── PROFIL ── -->
             <div class="tab-pane fade show active" id="tab-profil" role="tabpanel">
-                <div class="info-cyan rounded p-2 mb-3 small">
-                    💡 <strong>Décompte de l'Entropie :</strong><br>
-                    9 → 8 → 7 → 6 → 5 → 4 → 3 → 2 → 1 → <strong>0</strong> — chaque chiffre condense la géométrie jusqu'à la Singularité, puis l'Explosion recrée le cycle.
-                </div>
 
                 <!-- ── 1. ANCRAGE — Naissance (SALT) ── -->
                 <div class="border border-secondary rounded p-3 mb-3 atom-a">
@@ -448,17 +444,12 @@
 
                 <div id="kin-profil-content"></div>
 
-                <!-- ── Boutons Cinématique & 3D ── -->
-                <div class="d-flex gap-2 mb-3">
-                    <button class="btn btn-sm flex-fill btn-cinematic"
+                <!-- ── Bouton Cinématique ── -->
+                <div class="mb-3">
+                    <button class="btn btn-sm w-100 btn-cinematic"
                             onclick="toggleCinematicMode()"
                             style="border:1px dashed rgba(0,255,204,.4);color:#00ffcc;background:rgba(0,255,204,.05)">
-                        👁 Contempler
-                    </button>
-                    <button class="btn btn-sm flex-fill"
-                            onclick="_open3D()"
-                            style="border:1px dashed rgba(120,80,255,.45);color:rgba(160,120,255,.9);background:rgba(120,80,255,.05)">
-                        🌍 Vue 3D
+                        👁 Contempler la Sphère
                     </button>
                 </div>
 
@@ -1529,20 +1520,7 @@ function renderKinProfil() {
     }
 }
 
-// ── Ouvre atomic_3D.html avec les coordonnées courantes ────────────────────
-window._open3D = function() {
-    const latB = parseFloat(document.getElementById('match-lat-a')?.value || 0);
-    const lonB = parseFloat(document.getElementById('match-lon-a')?.value || 0);
-    const latC = parseFloat(document.getElementById('con-lat')?.value  || latB);
-    const lonC = parseFloat(document.getElementById('con-lon')?.value  || lonB);
-    const phiB = _cachedDoubleBang ? _cachedDoubleBang.phiB : 1.618;
-    const phiC = _cachedDoubleBang ? _cachedDoubleBang.phiC : 2.718;
-    const coh  = _cachedDoubleBang ? _cachedDoubleBang.spiralCoherence : 0.5;
-    const dStr = document.getElementById('birth-date')?.value || '';
-    const born = dStr ? Math.floor(new Date(dStr).getTime()/1000) : 0;
-    const params = new URLSearchParams({ latB, lonB, latC, lonC, phiB, phiC, coh, born });
-    window.open('atomic_3D.html?' + params, '_blank');
-};
+// atomic_3D.html supprimé — visualisation intégrée directement dans le canvas WebGL
 
 // ── Mode Cinématique — masque le panneau pour voir l'animation ─────────────
 let _isCinematic = false;
@@ -1939,13 +1917,15 @@ function projectLatLonToScreen(lat, lon, rotX, rotY, radius, cx, cy) {
     return { x: cx + x2 * radius, y: cy - y3 * radius, z: z3 };
 }
 
-// Bloom natif via drawingContext (évite les shaders)
-function setGlow(colorStr, blurRadius) {
-    drawingContext.shadowBlur  = blurRadius;
-    drawingContext.shadowColor = colorStr;
-}
-function clearGlow() {
-    drawingContext.shadowBlur = 0;
+// WebGL bloom : blending additif + halos concentriques (shadowBlur absent en WEBGL)
+function setGlow(colorStr, blurRadius) { /* no-op WebGL */ }
+function clearGlow()                   { /* no-op WebGL */ }
+// Halo bloom GPU : 3 cercles concentriques semi-transparents en mode ADD
+function _glow3(x, y, r, g, b, alpha, size) {
+    noStroke();
+    fill(r, g, b, Math.min(255, alpha * 0.11)); ellipse(x, y, size * 5.5, size * 5.5);
+    fill(r, g, b, Math.min(255, alpha * 0.28)); ellipse(x, y, size * 2.8, size * 2.8);
+    fill(r, g, b, Math.min(255, alpha * 0.62)); ellipse(x, y, size * 1.4, size * 1.4);
 }
 
 // Variables caméra pour lerp du mode PROFIL
@@ -1955,7 +1935,7 @@ let _targetRotX = 0, _targetRotY = 0;
 // ── P5.JS ─────────────────────────────────────────────────────
 function setup() {
     const c = document.getElementById('canvas-container');
-    createCanvas(c.offsetWidth, c.offsetHeight).parent('canvas-container');
+    createCanvas(c.offsetWidth, c.offsetHeight, WEBGL).parent('canvas-container');
     buildIcosahedronMesh();
 
     // Valeurs par défaut fixes (pas de random — l'utilisateur remplit son profil)
@@ -2081,19 +2061,21 @@ document.addEventListener('DOMContentLoaded', () => {
 function getCanvasCenter() {
     const panel = document.getElementById('atomic-panel');
     const panelW = (panel && panel.classList.contains('show')) ? panel.offsetWidth : 0;
-    return { x: (width - panelW) / 2, y: height / 2 };
+    // WEBGL : (0,0) = centre du canvas → décaler visuellement pour le panneau
+    return { x: -panelW / 2, y: 0 };
 }
 
 function draw() {
-    _calibratePerf();                       // calibration globale, toutes anims
-    blendMode(BLEND); noStroke();
-    fill(8, 6, 2, 40);
-    rect(0, 0, width, height);
+    _calibratePerf();
     frameTime++;
+    // WEBGL : (0,0) = centre canvas → rect plein écran pour le fondu traîne
+    blendMode(BLEND); noStroke();
+    fill(8, 6, 2, 42);
+    rect(-width/2, -height/2, width, height);
     blendMode(ADD);
     if      (currentMode === 'profil')  drawProfileMode();
     else if (currentMode === 'match')   drawMatchMode();
-    else if (currentMode === 'aide') drawTheorieMode();
+    else if (currentMode === 'aide')    drawTheorieMode();
     blendMode(BLEND);
 }
 
@@ -2417,10 +2399,9 @@ function drawProfileMode() {
         // Pentagone d'ancrage naissance (sommet 0 de la sphère émotionnelle = nœud centré)
         const ep0 = _emoBuffer[0];
         if (ep0.z > 0) {
-            setGlow(`rgb(${crB},${cgB},${cbB})`, 10 + audioE*8);
-            stroke(crB, cgB, cbB, 200); strokeWeight(5);
+            _glow3(ep0.x, ep0.y, crB, cgB, cbB, 180 + audioE * 60, 14 + audioE * 6);
+            stroke(crB, cgB, cbB, 220); strokeWeight(5);
             point(ep0.x, ep0.y);
-            clearGlow();
         }
     }
 
@@ -2435,10 +2416,9 @@ function drawProfileMode() {
     // ─ Point B — Naissance ───────────────────────────────────────────
     const ptB = projectLatLonToScreen(latB, lonB, _camRotX, _camRotY, R, cx, cy);
     if (ptB.z > 0) {
-        setGlow(`rgb(${crB},${cgB},${cbB})`, 18 + audioE * 12);
-        stroke(crB, cgB, cbB, 200 + 55 * audioE); strokeWeight(9 + audioE * 4);
+        _glow3(ptB.x, ptB.y, crB, cgB, cbB, 170 + 55 * audioE, 16 + audioE * 6);
+        stroke(crB, cgB, cbB, 210 + 45 * audioE); strokeWeight(9 + audioE * 4);
         point(ptB.x, ptB.y);
-        clearGlow();
         stroke(crB, cgB, cbB, 50); strokeWeight(0.7);
         line(cx, cy, ptB.x, ptB.y);
     }
@@ -2447,10 +2427,9 @@ function drawProfileMode() {
     const ptC = projectLatLonToScreen(latC, lonC, _camRotX, _camRotY, R, cx, cy);
     const conDiffers = (latC !== latB || lonC !== lonB);
     if (ptC.z > 0 && conDiffers) {
-        setGlow(`rgb(${crC},${cgC},${cbC})`, 14 + audioE * 10);
-        stroke(crC, cgC, cbC, 180 + 55 * audioE); strokeWeight(7 + audioE * 3);
+        _glow3(ptC.x, ptC.y, crC, cgC, cbC, 150 + 55 * audioE, 13 + audioE * 5);
+        stroke(crC, cgC, cbC, 190 + 45 * audioE); strokeWeight(7 + audioE * 3);
         point(ptC.x, ptC.y);
-        clearGlow();
         stroke(crC, cgC, cbC, 40); strokeWeight(0.7);
         line(cx, cy, ptC.x, ptC.y);
     }
@@ -2487,8 +2466,7 @@ function drawProfileMode() {
     const spiralMax = R * (0.08 + 0.22 * effCoh) * growFactor;
     const SSTEPS    = _perfLevel === 0 ? 40 : _perfLevel === 1 ? 60 : 80;
 
-    // Bras 1 — couleur naissance
-    setGlow(`rgb(${crB},${cgB},${cbB})`, 12 + 18 * effCoh + audioE * 14);
+    // Bras 1 — couleur naissance (ADD + strokeWeight = bloom naturel WebGL)
     beginShape(); noFill();
     stroke(crB, cgB, cbB, 90 + 130 * effCoh + audioE * 35);
     strokeWeight(1.3 + 1.7 * effCoh);
@@ -2499,11 +2477,9 @@ function drawProfileMode() {
         curveVertex(cx + r * Math.cos(θ + spiralRot), cy + r * Math.sin(θ + spiralRot));
     }
     endShape();
-    clearGlow();
 
     // Bras 2 — couleur conception (décalé de π, visible si C ≠ B)
     if (conDiffers) {
-        setGlow(`rgb(${crC},${cgC},${cbC})`, 10 + 14 * effCoh + audioE * 10);
         beginShape(); noFill();
         stroke(crC, cgC, cbC, 70 + 100 * effCoh + audioE * 25);
         strokeWeight(0.9 + 1.2 * effCoh);
@@ -2514,15 +2490,13 @@ function drawProfileMode() {
             curveVertex(cx + r * Math.cos(θ + spiralRot + Math.PI), cy + r * Math.sin(θ + spiralRot + Math.PI));
         }
         endShape();
-        clearGlow();
     }
 
     // Noyau Ψ pulsant au centre
     const nucPulse = 3 + 7 * Math.abs(Math.sin(frameTime * 0.04 + phiB)) + audioE * 8;
-    setGlow('rgba(255,240,120,1)', nucPulse * 3 + audioE * 12);
-    noStroke(); fill(255, 240, 120, 220 + 35 * audioE);
+    _glow3(cx, cy, 255, 240, 120, 190 + 35 * audioE, nucPulse * 2.5);
+    noStroke(); fill(255, 240, 120, 230 + 25 * audioE);
     ellipse(cx, cy, nucPulse * 1.5, nucPulse * 1.5);
-    clearGlow();
 
     // ─ KIN en overlay ────────────────────────────────────────────────
     blendMode(BLEND); noStroke(); textAlign(CENTER, CENTER);
@@ -2600,8 +2574,10 @@ function drawMatchMode() {
     const speed    = kFact > 0.8 ? 0.012 : 0.035;         // harmonieux ou chaotique
     const manAlpha = 140 + kFact * 115;
 
-    drawingContext.shadowBlur  = 18 + kFact * 28;
-    drawingContext.shadowColor = `rgb(${mixR},${mixG},${mixB_c})`;
+    // Bloom WebGL : halo ADD pré-mandala (remplace drawingContext.shadowBlur)
+    noStroke();
+    fill(mixR, mixG, mixB_c, 16 + kFact * 38); ellipse(cx, cy, manR * 4.5, manR * 4.5);
+    fill(mixR, mixG, mixB_c,  9 + kFact * 22); ellipse(cx, cy, manR * 7.5, manR * 7.5);
 
     push(); translate(cx, cy); rotate(frameTime * speed);
     stroke(mixR, mixG, mixB_c, manAlpha);
@@ -2614,7 +2590,6 @@ function drawMatchMode() {
         vertex(rOff * Math.cos(a), rOff * Math.sin(a));
     }
     endShape(CLOSE);
-    drawingContext.shadowBlur = 0;
 
     // Deuxième bras contra-rotatif (MED+HIGH) — effet Moiré central
     if (_perfLevel >= 1 && kFact > 0.3) {

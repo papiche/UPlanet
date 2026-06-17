@@ -105,6 +105,72 @@ function _haptic(pattern) {
     if (navigator.vibrate) navigator.vibrate(pattern || 20);
 }
 
+// ── UI HELPERS ───────────────────────────────────────────────────────────
+
+function _progressHTML(label, sub) {
+    return '<div class="text-center py-2 small" style="color:rgba(255,200,40,.8)">'
+        + label + '<br><span style="color:rgba(255,255,255,.3);font-size:.65rem">' + sub + '</span></div>';
+}
+
+function _errorInlineHTML(msg) {
+    return '<div class="small p-2 rounded" style="background:rgba(255,0,0,.08);border:1px solid rgba(255,0,0,.2);color:#ff8888">⚠ ' + msg + '</div>';
+}
+
+// Toast flottant générique — nécessite un élément #security-toast dans la page
+function _showA4lToast(msg) {
+    const t = document.getElementById('security-toast');
+    if (!t) return;
+    if (msg) t.innerHTML = msg;
+    t.style.display = 'block'; t.style.opacity = '1';
+    clearTimeout(t._timer);
+    t._timer = setTimeout(() => {
+        t.style.opacity = '0';
+        setTimeout(() => { t.style.display = 'none'; }, 400);
+    }, 2600);
+}
+
+// Capture WebGL canvas → PNG social card 900×900
+function _A4L_captureCanvas(canvasEl, score, kinANum, kinBNum) {
+    const size = 900;
+    const oc   = document.createElement('canvas');
+    oc.width = oc.height = size;
+    const ctx = oc.getContext('2d');
+    const bg = ctx.createRadialGradient(size/2,size/2,0,size/2,size/2,size*0.6);
+    bg.addColorStop(0,'#0b0d1a'); bg.addColorStop(1,'#04050d');
+    ctx.fillStyle = bg; ctx.fillRect(0,0,size,size);
+    try {
+        const ww=canvasEl.width, wh=canvasEl.height;
+        const ratio=Math.min(size*0.85/ww, size*0.85/wh);
+        ctx.globalAlpha=0.92;
+        ctx.drawImage(canvasEl,(size-ww*ratio)/2,(size-wh*ratio)/2,ww*ratio,wh*ratio);
+        ctx.globalAlpha=1;
+    } catch(_) {}
+    const scoreColor = score>85 ? '#00ffcc' : score>50 ? '#f59e0b' : '#ff5566';
+    ctx.textAlign='center';
+    ctx.fillStyle='rgba(0,255,204,.7)';
+    ctx.font='bold 28px system-ui,sans-serif';
+    ctx.fillText('⚛ ATOM4LOVE', size/2, 44);
+    ctx.font='bold 96px system-ui,sans-serif';
+    ctx.fillStyle=scoreColor; ctx.shadowColor=scoreColor; ctx.shadowBlur=24;
+    ctx.fillText(Math.round(score)+'%', size/2, size/2+38);
+    ctx.shadowBlur=0;
+    ctx.font='20px system-ui,sans-serif';
+    ctx.fillStyle='rgba(255,255,255,.5)';
+    ctx.fillText('Cohérence Cosmique', size/2, size/2+68);
+    if (kinANum||kinBNum) {
+        ctx.font='bold 18px system-ui,sans-serif';
+        ctx.fillStyle='rgba(255,255,255,.32)';
+        ctx.fillText('KIN '+(kinANum||'?')+'  ×  KIN '+(kinBNum||'?'), size/2, size-55);
+    }
+    ctx.font='13px system-ui,sans-serif';
+    ctx.fillStyle='rgba(255,255,255,.15)';
+    ctx.fillText('phi2x · décentralisé · IPFS · local', size/2, size-25);
+    const a=document.createElement('a');
+    a.href=oc.toDataURL('image/png');
+    a.download='resonance-atom4love-'+Math.round(score)+'pct.png';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+}
+
 // ── INIT ─────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
     _initTheme();

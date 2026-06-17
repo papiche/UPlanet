@@ -347,6 +347,22 @@
             <div id="publish-status" style="font-size:.72rem;color:rgba(255,255,255,.4);margin-top:8px;text-align:center"></div>
         </div>
 
+        <!-- Progressive disclosure — refine hint -->
+        <div id="refine-hint" style="display:none;margin-bottom:12px;
+             background:rgba(245,158,11,.05);border:1px dashed rgba(245,158,11,.3);
+             border-radius:10px;padding:12px 14px">
+            <div style="font-size:.78rem;color:rgba(245,158,11,.8);font-weight:600;margin-bottom:4px">🔬 Affinez votre score à ±1%</div>
+            <div style="font-size:.72rem;color:rgba(255,255,255,.4);line-height:1.5;margin-bottom:8px">
+                Calculé depuis la date seule. Ajoutez lieu et heure pour révéler votre empreinte vibratoire complète.
+            </div>
+            <button class="btn-location" onclick="document.getElementById('btn-pick-location').click()"
+                    style="width:100%;padding:9px 12px;font-size:.78rem">
+                <span class="loc-icon">📍</span>
+                <span class="loc-text"><span class="loc-name">Ajouter mon lieu de naissance</span></span>
+                <span class="loc-chevron">›</span>
+            </button>
+        </div>
+
         <!-- Partage viral du résultat -->
         <div class="share-block" id="share-block" style="display:none">
             <div class="share-title">📤 Partager ce résultat</div>
@@ -362,6 +378,27 @@
                 </a>
                 <button id="btn-copy-share" class="btn-share btn-share-copy" onclick="_copyShareMsg()">📋 Copier</button>
                 <button id="btn-native-share" class="btn-share btn-share-native" onclick="_nativeShare()" style="display:none">↑ Partager</button>
+            </div>
+        </div>
+
+        <!-- Shadow Profile CTA — visible après calcul de résonance -->
+        <div id="shadow-cta" style="display:none;margin-bottom:16px">
+            <div style="border-radius:16px;padding:20px 18px;text-align:center;
+                        background:linear-gradient(135deg,rgba(0,255,204,.07),rgba(245,158,11,.07));
+                        border:2px solid rgba(0,255,204,.22)">
+                <div id="shadow-cta-badge" style="font-size:2.2rem;margin-bottom:8px">💫</div>
+                <div id="shadow-cta-pct" style="font-size:2rem;font-weight:800;color:#fff;line-height:1;margin-bottom:4px">--%</div>
+                <div id="shadow-cta-label" style="font-size:.82rem;color:rgba(255,255,255,.55);margin-bottom:14px;line-height:1.5">de cohérence cosmique</div>
+                <div style="font-size:.78rem;color:rgba(255,255,255,.4);margin-bottom:16px;line-height:1.6">
+                    Transformez ce résultat en <strong style="color:#fff">MULTIPASS</strong> pour découvrir<br>
+                    vos autres matchs dans la Constellation ✨
+                </div>
+                <a id="shadow-cta-btn" href="atomic.html" class="btn-cta"
+                   style="display:block;font-size:.92rem;padding:13px 18px;font-weight:800;
+                          background:linear-gradient(135deg,rgba(0,255,204,.18),rgba(245,158,11,.18));
+                          border:1px solid rgba(0,255,204,.4)">
+                    🌟 Créer mon MULTIPASS gratuit →
+                </a>
             </div>
         </div>
 
@@ -454,7 +491,10 @@
 const _params   = new URLSearchParams(location.search);
 const _bDate    = _params.get('d') || '';  // YYYYMMDD
 const _bTime    = _params.get('t') || '1200';  // HHMM
-const _bLoInt   = parseInt(_params.get('lo')) || 0;
+const _bLoRaw   = _params.get('lo');
+const _bLaRaw   = _params.get('la');
+const _bLoInt   = _bLoRaw !== null ? parseFloat(_bLoRaw) : 0;
+const _bLat     = _bLaRaw !== null ? parseFloat(_bLaRaw) : 0;
 const _bKin     = parseInt(_params.get('k'))  || null;
 const _bName    = _params.get('n') || 'Un Explorateur';
 
@@ -647,7 +687,7 @@ let _elemResult   = null;
 function _computeMatch() {
     if (!_vDateISO) return;
     if (!_bDateObj) return; // guard : pas de lien partenaire
-    if (typeof Phi2X === 'undefined') { alert('Moteur Phi2X non chargé.'); return; }
+    if (typeof Phi2X === 'undefined') { document.getElementById('res-detail').innerHTML = '<span style="color:#ff8888">⚠ Moteur Phi2X non chargé.</span>'; document.getElementById('result-block').style.display='block'; return; }
 
     const btn = document.getElementById('btn-compute');
     btn.disabled = true; btn.textContent = '⏳ Calcul en cours…';
@@ -662,7 +702,7 @@ function _computeMatch() {
         const lonB   = _bLoInt;
 
         const phiA = Phi2X.computePersonalPhase(bUnixA, latA, lonA);
-        const phiB = Phi2X.computePersonalPhase(bUnixB, 0, lonB);
+        const phiB = Phi2X.computePersonalPhase(bUnixB, _bLat, lonB);
         const k    = Phi2X.computeResonanceK(phiA, phiB);
         const pct  = Math.round(k * 100);
 
@@ -679,7 +719,7 @@ function _computeMatch() {
     } catch(e) {
         console.error('[A4L match]', e);
         btn.disabled = false; btn.textContent = '🔮 Révéler notre résonance';
-        alert('Erreur de calcul : ' + e.message);
+        document.getElementById('res-detail').innerHTML = '<span style="color:#ff8888">⚠ Erreur : ' + e.message + '</span>'; document.getElementById('result-block').style.display='block';
         return;
     }
     btn.disabled = false; btn.textContent = '🔄 Recalculer';
@@ -764,11 +804,38 @@ function _renderResult() {
     });
     document.getElementById('cta-link').href = `${base}atomic.html?${ctaP.toString()}`;
 
+    // Shadow Profile CTA
+    const _sc    = document.getElementById('shadow-cta');
+    const _scPct = document.getElementById('shadow-cta-pct');
+    const _scLbl = document.getElementById('shadow-cta-label');
+    const _scBdg = document.getElementById('shadow-cta-badge');
+    const _scBtn = document.getElementById('shadow-cta-btn');
+    if (_sc) {
+        const _lbl = pctDisplay > 95 ? 'Singularité Parfaite — une rencontre unique'
+                   : pctDisplay > 80 ? 'Super-Cohérence — un duo fait pour durer'
+                   : pctDisplay > 50 ? 'Cohérence Positive — des énergies complémentaires'
+                   : 'Résonance Quantique — l\'attraction des opposés';
+        const _bdg = pctDisplay > 95 ? '✨' : pctDisplay > 80 ? '💫' : pctDisplay > 50 ? '🌊' : '🌀';
+        if (_scPct) { _scPct.textContent = pctDisplay + '%'; _scPct.style.color = k > 0.85 ? '#00ffcc' : k > 0.7 ? '#f59e0b' : '#ff6655'; }
+        if (_scLbl) _scLbl.textContent = _lbl;
+        if (_scBdg) _scBdg.textContent = _bdg;
+        if (_scBtn) _scBtn.href = document.getElementById('cta-link')?.href || 'atomic.html';
+        _sc.style.display = 'block';
+    }
+
+    // Progressive disclosure — affiner si pas de lieu
+    const _rHint = document.getElementById('refine-hint');
+    if (_rHint) {
+        const _latA = parseFloat(document.getElementById('v-lat')?.value || 0);
+        const _lonA = parseFloat(document.getElementById('v-lon')?.value || 0);
+        _rHint.style.display = (_latA === 0 && _lonA === 0) ? '' : 'none';
+    }
+
     // Lien de partage de A (les autres voient LEUR résonance avec MOI)
     const aDateStr = _vDateISO.replace(/-/g, '');
     const aTimeStr = _vTimeStr.replace(':', '');
-    const aLoInt   = Math.round(aLo);
-    const aShareP  = new URLSearchParams({ d: aDateStr, t: aTimeStr, lo: aLoInt });
+    const aShareP  = new URLSearchParams({ d: aDateStr, t: aTimeStr,
+        lo: parseFloat(aLo.toFixed(2)), la: parseFloat(aLa.toFixed(2)) });
     if (_kinA) aShareP.set('k', _kinA.kin);
     const _myShareUrl = `${base}atomic_match.html?${aShareP.toString()}`;
 

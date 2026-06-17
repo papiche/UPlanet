@@ -12,6 +12,8 @@
     <meta name="twitter:card"       content="summary">
     <meta name="twitter:title"      content="⚛ Révèle notre Résonance Cosmique — ATOM4LOVE">
     <meta name="twitter:description" content="Calcule notre taux de cohérence phi2x. 100% local & confidentiel.">
+    <!-- Anti-FOUC thème : applique data-theme AVANT le premier rendu CSS -->
+    <script>try{var _t=localStorage.getItem('a4l_theme');if(_t==='biolum')document.documentElement.setAttribute('data-theme','biolum')}catch(e){}</script>
     <link rel="stylesheet" href="bootstrap.min.css">
     <link rel="stylesheet" href="leaflet.css">
     <link rel="stylesheet" href="uplanet-atomic.css">
@@ -207,6 +209,16 @@
 <body>
 
 <canvas id="bg-canvas"></canvas>
+
+<!-- Switch de thème (coin haut-gauche, partagé avec atomic.html) -->
+<button id="btn-theme-toggle" title="Changer de thème" onclick="_toggleTheme()"
+        style="position:fixed;top:14px;left:14px;z-index:1200;
+               background:rgba(0,0,0,.6);border:1px solid rgba(255,255,255,.15);
+               color:rgba(255,255,255,.55);border-radius:20px;padding:6px 11px;
+               font-size:.78rem;cursor:pointer;backdrop-filter:blur(8px);
+               transition:all .3s;letter-spacing:.5px">
+    🌊 Biolum
+</button>
 
 <div class="page-content">
 
@@ -684,6 +696,7 @@ function _renderResult() {
     const pctDisplay = Math.round((k - 0.5) * 200);
     document.getElementById('res-score').textContent = pctDisplay + '%';
     document.getElementById('res-bar').style.width   = pctDisplay + '%';
+    if (typeof _setScoreResonant === 'function') _setScoreResonant(pctDisplay);
     document.getElementById('res-bar').style.background = k > 0.85
         ? 'linear-gradient(90deg,#00ffcc,#f59e0b)'
         : k > 0.7 ? 'linear-gradient(90deg,#3b82f6,#00ffcc)'
@@ -1043,11 +1056,122 @@ _syncVisitorDate();
 </script>
 <script src="common.js"></script>
 <script src="uplanet-header.js"></script>
+<script src="astro.js"></script>
+<script src="uplanet-atomic.js"></script>
 <script>
 // Mettre à jour le bouton quand la connexion change
 if (typeof window.waitForConnection === 'function') {
     window.waitForConnection(_updatePublishBtn);
 }
+</script>
+<script>
+/* ── ATOM4LOVE Extension + Analytics + hex/origin ──────────────────────── */
+(function() {
+'use strict';
+
+const _qpM    = new URLSearchParams(location.search);
+const _hexM   = (_qpM.get('hex')    || '').replace(/[^0-9a-f]/gi,'').slice(0,64);
+const _origM  = (_qpM.get('origin') || '').replace(/[^0-9a-f]/gi,'').slice(0,64);
+// _params, _bDate etc. déjà définis dans le bloc précédent
+
+function _relayUrlM() {
+    const h = location.hostname;
+    if (h.startsWith('ipfs.')) return 'wss://relay.' + h.slice(5);
+    if (h.startsWith('u.'))    return 'wss://relay.' + h.slice(2);
+    return 'wss://relay.copylaradio.com';
+}
+function _wsQueryM(relay, filter, timeout) {
+    return new Promise(resolve => {
+        const evs = []; let ws;
+        const done = () => { try { ws && ws.close(); } catch(_) {} resolve(evs); };
+        const t = setTimeout(done, timeout || 5000);
+        try {
+            ws = new WebSocket(relay);
+            const sub = 'a4lm-' + Math.random().toString(36).slice(2,8);
+            ws.onopen    = () => ws.send(JSON.stringify(['REQ', sub, filter]));
+            ws.onmessage = e => {
+                try {
+                    const m = JSON.parse(e.data);
+                    if (m[0]==='EVENT' && m[1]===sub) evs.push(m[2]);
+                    else if (m[0]==='EOSE') { clearTimeout(t); done(); }
+                } catch(_) {}
+            };
+            ws.onerror = ws.onclose = () => { clearTimeout(t); resolve(evs); };
+        } catch(_) { clearTimeout(t); resolve([]); }
+    });
+}
+
+/* ── Afficher le profil ext dans un badge flottant léger ──────────────── */
+function _injectExtBadge(name, pubkey) {
+    const existing = document.getElementById('a4l-ext-badge');
+    if (existing) { existing.querySelector('.a4l-badge-name').textContent = name || pubkey.slice(0,8)+'…'; return; }
+    const badge = document.createElement('div');
+    badge.id = 'a4l-ext-badge';
+    badge.style.cssText = 'position:fixed;top:60px;right:12px;z-index:1999;background:rgba(8,6,2,.9);border:1px solid rgba(0,255,204,.3);border-radius:10px;padding:5px 10px;display:flex;align-items:center;gap:7px;font-size:.72rem;color:rgba(255,255,255,.7);backdrop-filter:blur(8px);pointer-events:none';
+    badge.innerHTML = `<span style="color:rgba(0,255,204,.7)">⚛</span><span class="a4l-badge-name">${name || pubkey.slice(0,8)+'…'}</span>`;
+    document.body.appendChild(badge);
+    setTimeout(() => { if (badge.parentNode) badge.style.opacity='0'; badge.style.transition='opacity 1s'; }, 5000);
+}
+
+document.addEventListener('DOMContentLoaded', async () => {
+    const relay  = _relayUrlM();
+    const isA4L  = !!(window.nostr && window.nostr._isA4L);
+    let extPubkey = null, extName = null, extPhase = null;
+
+    /* 1. Extension présente → identité + phase φ */
+    if (isA4L) {
+        try {
+            extPubkey = await window.nostr.getPublicKey();
+            const [k0, k30] = await Promise.all([
+                _wsQueryM(relay, { kinds:[0],     authors:[extPubkey], limit:1 }, 3000),
+                _wsQueryM(relay, { kinds:[30078], '#d':['atom4love'], authors:[extPubkey], limit:1 }, 3000),
+            ]);
+            if (k0.length)  { const m = JSON.parse(k0[0].content); extName = m.display_name || m.name; }
+            if (k30.length) { const c = JSON.parse(k30[0].content); extPhase = parseFloat(c.personal_phase) || null; }
+            _injectExtBadge(extName, extPubkey);
+        } catch(_) {}
+    }
+
+    /* 2. hex= param → enrichir _bName si pas de nom dans URL */
+    if (_hexM && _hexM !== extPubkey) {
+        try {
+            const k0 = await _wsQueryM(relay, { kinds:[0], authors:[_hexM], limit:1 }, 3000);
+            if (k0.length) {
+                const m = JSON.parse(k0[0].content);
+                const n = m.display_name || m.name;
+                if (n) {
+                    /* Mettre à jour le titre affiché si "Un Explorateur" */
+                    document.querySelectorAll('[data-bname]').forEach(el => {
+                        if (el.textContent === 'Un Explorateur' || el.textContent === bNameSafe) el.textContent = n;
+                    });
+                }
+            }
+        } catch(_) {}
+    }
+
+    /* 3. Analytics Kind 10600 — riche et analysable */
+    setTimeout(() => {
+        if (!window.uPlanetAnalytics) return;
+        const bDateRaw  = typeof _bDate  !== 'undefined' ? _bDate  : '';
+        const bKinRaw   = typeof _bKin   !== 'undefined' ? _bKin   : null;
+        const bLoRaw    = typeof _bLoInt !== 'undefined' ? _bLoInt : null;
+        window.uPlanetAnalytics.smartSend({
+            type:       'resonance_share',
+            page:       'atomic_match',
+            source:     isA4L ? 'atom4love-ext' : (_origM ? 'chain_share' : 'web'),
+            hex:        _hexM  || undefined,   // pubkey de l'Atome B (partageur)
+            origin:     _origM || undefined,   // pubkey du chaineur
+            ext_pub:    extPubkey || undefined, // pubkey du visiteur (via ext)
+            b_date:     bDateRaw  || undefined,
+            b_kin:      bKinRaw   || undefined,
+            b_lo:       bLoRaw    !== null ? bLoRaw : undefined,
+            relay:      relay,
+        }, true,  /* includeContext */
+           true   /* preferNostr  */);
+    }, 800);
+});
+
+})();
 </script>
 </body>
 </html>

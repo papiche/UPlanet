@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>ATOMIC VIBRATION — Géométrie Sacrée & Match Quantique</title>
+    <!-- Anti-FOUC thème : applique data-theme AVANT le premier rendu CSS -->
+    <script>try{var _t=localStorage.getItem('a4l_theme');if(_t==='biolum')document.documentElement.setAttribute('data-theme','biolum')}catch(e){}</script>
     <script src="p5.min.js"></script>
     <link rel="stylesheet" href="bootstrap.min.css">
     <link rel="stylesheet" href="leaflet.css">
@@ -246,6 +248,16 @@
         <span>Découvrir</span>
     </button>
 </nav>
+
+<!-- Switch de thème (coin haut-gauche) -->
+<button id="btn-theme-toggle" title="Changer de thème" onclick="_toggleTheme()"
+        style="position:fixed;top:14px;left:14px;z-index:1200;
+               background:rgba(0,0,0,.6);border:1px solid rgba(255,255,255,.15);
+               color:rgba(255,255,255,.55);border-radius:20px;padding:6px 11px;
+               font-size:.78rem;cursor:pointer;backdrop-filter:blur(8px);
+               transition:all .3s;letter-spacing:.5px">
+    🌊 Biolum
+</button>
 
 <!-- Bouton Orchestre Quantique (coin haut-droit) -->
 <button id="btn-audio-toggle" title="Orchestre Quantique" onclick="_toggleAudio()"
@@ -512,7 +524,7 @@
                             Ce MULTIPASS existe déjà. Saisissez le code reçu lors de la création initiale.
                         </div>
                     </div>
-                    <button class="btn btn-sm w-100 fw-bold mb-1" id="btn-multipass" onclick="createMultipass()"
+                    <button class="btn btn-sm w-100 fw-bold mb-1 btn-cine" id="btn-multipass" onclick="createMultipass()"
                             style="background:rgba(245,158,11,.18);border:1px solid rgba(245,158,11,.45);color:#f59e0b">
                         ✨ Créer mon MULTIPASS
                     </button>
@@ -529,7 +541,7 @@
                     </p>
                     <div id="cert-status" class="small mb-1" style="color:rgba(255,255,255,.35);min-height:1.1rem"></div>
                     <div id="cert-nostr-hint" class="small mb-2" style="color:rgba(255,255,255,.3)">Détection clé de signature…</div>
-                    <button class="btn btn-sm w-100 fw-bold" id="btn-publish-cert" onclick="publishIncarnationCert()"
+                    <button class="btn btn-sm w-100 fw-bold btn-cine" id="btn-publish-cert" onclick="publishIncarnationCert()"
                             style="background:rgba(0,255,204,.12);border:1px solid rgba(0,255,204,.32);color:#00ffcc">
                         ⚛ Rejoindre le réseau
                     </button>
@@ -600,13 +612,14 @@
                     <input type="hidden" id="match-lat-b" value="0">
                 </div>
 
-                <div class="text-center p-3 rounded bg-black bg-opacity-50 border border-secondary mb-3">
-                    <div class="small text-uppercase fw-bold text-info mb-1">Taux de Cohérence (k)</div>
+                <div id="score-card" class="score-card mb-3">
+                    <div class="score-card-label">Taux de Cohérence Φ²</div>
                     <div class="score-val" id="score-display">--%</div>
-                    <div class="progress my-2" style="height:4px">
-                        <div class="progress-bar" id="score-bar" role="progressbar" style="width:0%"></div>
+                    <div class="score-progress-wrap my-2">
+                        <div id="score-bar" role="progressbar" aria-valuenow="0" style="width:0%"></div>
                     </div>
-                    <div class="font-monospace small text-secondary text-start" id="match-details">En attente des données...</div>
+                    <div class="font-monospace small" id="match-details"
+                         style="color:rgba(255,255,255,.4);text-align:left">En attente des données...</div>
                 </div>
 
                 <div id="kin-match-content"></div>
@@ -616,7 +629,7 @@
                     <div style="font-size:.8rem;color:rgba(255,255,255,.5);margin-bottom:8px">
                         💌 Invite ton partenaire à révéler votre résonance
                     </div>
-                    <button class="btn btn-sm w-100" id="btn-share-match"
+                    <button class="btn btn-sm w-100 btn-cine" id="btn-share-match"
                             onclick="_shareMatchLink()"
                             style="background:linear-gradient(135deg,rgba(0,255,204,.15),rgba(180,100,255,.15));border:1px solid rgba(0,255,204,.4);color:#00ffcc;font-weight:700;font-size:.85rem;border-radius:12px;padding:10px">
                         💫 Inviter à résonner ensemble
@@ -1405,7 +1418,8 @@ window.calculateMatch = function() {
             if (Math.abs(target - cur) < 0.05) { scoreEl.textContent = target.toFixed(1) + '%'; clearInterval(scoreEl._scoreTimer); }
         }, 25);
     }
-    if (el('score-bar'))     { el('score-bar').style.width = globalCoherenceScore.toFixed(1) + '%'; el('score-bar').style.backgroundColor = color; }
+    if (el('score-bar'))     { el('score-bar').style.width = globalCoherenceScore.toFixed(1) + '%'; el('score-bar').style.background = color; }
+    if (typeof _setScoreResonant === 'function') _setScoreResonant(globalCoherenceScore);
     if (el('match-details')) el('match-details').innerHTML =
         `φA: ${phiA.toFixed(3)} | φB: ${phiB.toFixed(3)} rad<br>Δφ: ${deltaPhi.toFixed(3)} rad<br><span style="color:${color}">${statut}</span>`;
     if (el('hud-overlay'))   el('hud-overlay').innerHTML =
@@ -3126,5 +3140,132 @@ document.addEventListener('DOMContentLoaded', () => {
 <script src="audio_orchestra.js"></script>
 <script src="common.js"></script>
 <script src="uplanet-header.js"></script>
+<script src="astro.js"></script>
+<script src="uplanet-atomic.js"></script>
+<script>
+/* ── ATOM4LOVE Extension + Analytics + hex/origin ──────────────────────── */
+(function() {
+'use strict';
+
+const _qp     = new URLSearchParams(location.search);
+const _hexP   = (_qp.get('hex') || '').replace(/[^0-9a-f]/gi,'').slice(0,64);
+const _origP  = (_qp.get('origin') || '').replace(/[^0-9a-f]/gi,'').slice(0,64);
+
+/* ── Helpers relay ─────────────────────────────────────────────────────── */
+function _relayUrl() {
+    const h = location.hostname;
+    if (h.startsWith('ipfs.')) return 'wss://relay.' + h.slice(5);
+    if (h.startsWith('u.'))    return 'wss://relay.' + h.slice(2);
+    return 'wss://relay.copylaradio.com';
+}
+function _wsQuery(relay, filter, timeout) {
+    return new Promise(resolve => {
+        const evs = []; let ws;
+        const done = () => { try { ws && ws.close(); } catch(_) {} resolve(evs); };
+        const t = setTimeout(done, timeout || 5000);
+        try {
+            ws = new WebSocket(relay);
+            const sub = 'a4l-' + Math.random().toString(36).slice(2,8);
+            ws.onopen    = () => ws.send(JSON.stringify(['REQ', sub, filter]));
+            ws.onmessage = e => {
+                try {
+                    const m = JSON.parse(e.data);
+                    if (m[0]==='EVENT' && m[1]===sub) evs.push(m[2]);
+                    else if (m[0]==='EOSE') { clearTimeout(t); done(); }
+                } catch(_) {}
+            };
+            ws.onerror = ws.onclose = () => { clearTimeout(t); resolve(evs); };
+        } catch(_) { clearTimeout(t); resolve([]); }
+    });
+}
+function _hexToNpub(hex) {
+    try { return NostrTools.nip19.npubEncode(hex); } catch(_) { return hex.slice(0,8)+'…'; }
+}
+
+/* ── Afficher un profil "visiteur référencé" (hex= param) ─────────────── */
+async function _showHexProfile(pubkey) {
+    const relay = _relayUrl();
+    let name = _hexToNpub(pubkey), avatar = null, phase = null, kinNum = null;
+
+    try {
+        const k0 = await _wsQuery(relay, { kinds:[0], authors:[pubkey], limit:1 }, 3000);
+        if (k0.length) {
+            const m = JSON.parse(k0[0].content);
+            name   = m.display_name || m.name || name;
+            avatar = m.picture || null;
+        }
+        const k30 = await _wsQuery(relay, { kinds:[30078], '#d':['atom4love'], authors:[pubkey], limit:1 }, 3000);
+        if (k30.length) {
+            const c = JSON.parse(k30[0].content);
+            phase  = parseFloat(c.personal_phase);
+            kinNum = c.kin_num || null;
+        }
+    } catch(_) {}
+
+    /* Insérer ou mettre à jour le bloc profil dans #cert-nostr-hint */
+    const hint = document.getElementById('cert-nostr-hint');
+    if (!hint) return;
+    const avatarHtml = avatar
+        ? `<img src="${avatar}" style="width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0">`
+        : `<span style="width:28px;height:28px;border-radius:50%;background:rgba(0,255,204,.15);display:flex;align-items:center;justify-content:center;font-size:.9rem;flex-shrink:0">⚛</span>`;
+    const phaseHtml = (phase !== null && !isNaN(phase))
+        ? `<span style="font-size:.62rem;color:rgba(0,255,204,.5);font-family:monospace">φ ${phase.toFixed(3)}</span>`
+        : '';
+    hint.innerHTML = `<div style="display:flex;align-items:center;gap:8px;background:rgba(0,255,204,.05);border:1px solid rgba(0,255,204,.2);border-radius:10px;padding:7px 10px">
+        ${avatarHtml}
+        <div style="min-width:0">
+            <div style="font-size:.8rem;font-weight:700;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${name}</div>
+            ${phaseHtml}
+        </div>
+        <span style="margin-left:auto;font-size:.65rem;color:rgba(0,255,204,.6);white-space:nowrap">⚛ ATOM4LOVE</span>
+    </div>`;
+}
+
+/* ── Init au chargement ────────────────────────────────────────────────── */
+document.addEventListener('DOMContentLoaded', async () => {
+    const relay  = _relayUrl();
+    const isA4L  = !!(window.nostr && window.nostr._isA4L);
+    let extPubkey = null, extName = null;
+
+    /* 1. Extension ATOM4LOVE présente → récupérer l'identité */
+    if (isA4L) {
+        try {
+            extPubkey = await window.nostr.getPublicKey();
+            const k0  = await _wsQuery(relay, { kinds:[0], authors:[extPubkey], limit:1 }, 3000);
+            if (k0.length) {
+                const m = JSON.parse(k0[0].content);
+                extName = m.display_name || m.name;
+            }
+            const hint = document.getElementById('cert-nostr-hint');
+            if (hint && !_hexP) {
+                hint.textContent = extName
+                    ? `🔵 ATOM4LOVE — ${extName}`
+                    : `🔵 ATOM4LOVE connecté (${_hexToNpub(extPubkey)})`;
+                hint.style.color = 'rgba(0,255,204,.7)';
+            }
+        } catch(_) {}
+    }
+
+    /* 2. hex= param → afficher le profil référencé */
+    if (_hexP) _showHexProfile(_hexP);
+
+    /* 3. Analytics Kind 10600 (via extension si présente, sinon HTTP /ping) */
+    setTimeout(() => {
+        if (!window.uPlanetAnalytics) return;
+        window.uPlanetAnalytics.smartSend({
+            type:    'page_view',
+            page:    'atomic',
+            source:  isA4L ? 'atom4love-ext' : 'web',
+            hex:     _hexP   || undefined,
+            origin:  _origP  || undefined,
+            ext_pub: extPubkey || undefined,
+            relay:   relay,
+        }, true, /* includeContext */
+           true  /* preferNostr  */);
+    }, 800);
+});
+
+})();
+</script>
 </body>
 </html>

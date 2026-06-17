@@ -1,8 +1,50 @@
 /* uplanet-atomic.css — Styles partagés entre atomic.html et atomic_match.html */
+
+/* ══ THÈME PAR DÉFAUT : Ambre des Profondeurs ══════════════════════════════
+   Thème alternatif : ajouter data-theme="biolum" sur <html> pour activer
+   "Bioluminescence Profonde" (fond marin, cyan pur, violet mystique)       */
 :root {
-    --primary: #f59e0b;
-    --secondary: #f97316;
-    --teal: #00ffcc;
+    --primary:   #f59e0b;   /* ambre */
+    --secondary: #f97316;   /* orange brûlé */
+    --teal:      #00ffcc;   /* accent holographique */
+    --bg-deep:   #080602;   /* fond quasi-noir chaud */
+    --bg-panel:  rgba(10,12,22,0.95);
+    --aurora-a:  rgba(0,255,204,0.07);
+    --aurora-b:  rgba(168,85,247,0.05);
+    --aurora-c:  rgba(245,158,11,0.05);
+}
+[data-theme="biolum"] {
+    --primary:   #00f5d4;   /* cyan bioluminescent */
+    --secondary: #a78bfa;   /* violet mystique */
+    --teal:      #00f5d4;
+    --bg-deep:   #05080f;   /* fond marin profond */
+    --bg-panel:  rgba(5,12,24,0.95);
+    --aurora-a:  rgba(0,245,212,0.08);
+    --aurora-b:  rgba(167,139,250,0.07);
+    --aurora-c:  rgba(56,189,248,0.05);
+}
+
+/* ══ AURORA — couche atmosphérique derrière le canvas p5.js ════════════════ */
+#canvas-container {
+    background: var(--bg-deep);
+}
+#canvas-container::before {
+    content: '';
+    position: absolute;
+    inset: -30%;
+    background:
+        radial-gradient(ellipse 60% 45% at 25% 65%, var(--aurora-a) 0%, transparent 65%),
+        radial-gradient(ellipse 50% 38% at 78% 22%, var(--aurora-b) 0%, transparent 60%),
+        radial-gradient(ellipse 40% 30% at 55% 80%, var(--aurora-c) 0%, transparent 55%);
+    animation: aurora 14s ease-in-out infinite alternate;
+    pointer-events: none;
+    z-index: 0;
+}
+@keyframes aurora {
+    0%   { transform: translate(0,0)    scale(1);    opacity: .8; }
+    33%  { transform: translate(4%,3%)  scale(1.04); opacity: 1;  }
+    66%  { transform: translate(-3%,5%) scale(.97);  opacity: .9; }
+    100% { transform: translate(6%,-4%) scale(1.06); opacity: 1;  }
 }
 
 /* ── Form controls ── */
@@ -89,3 +131,101 @@
 /* ── Atomes ── */
 .atom-a { border-left: 3px solid var(--primary) !important; }
 .atom-b { border-left: 3px solid var(--secondary) !important; }
+
+/* ══ ONGLETS GLISSANTS ══════════════════════════════════════════════════════
+   Animation CSS sur l'event shown.bs.tab — ne casse pas le layout Bootstrap */
+@keyframes tab-slide-in  { from { opacity: .2; transform: translateX(24px); } to { opacity: 1; transform: none; } }
+@keyframes tab-slide-back { from { opacity: .2; transform: translateX(-24px); } to { opacity: 1; transform: none; } }
+.tab-pane._slide-in   { animation: tab-slide-in  .22s cubic-bezier(.4,0,.2,1); }
+.tab-pane._slide-back { animation: tab-slide-back .22s cubic-bezier(.4,0,.2,1); }
+
+/* ══ SCORE CARD ════════════════════════════════════════════════════════════ */
+.score-card {
+    position: relative;
+    padding: 1.4rem 1rem 1rem;
+    border-radius: 16px;
+    background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.09);
+    backdrop-filter: blur(12px);
+    overflow: hidden;
+    text-align: center;
+    transition: border-color .5s ease, box-shadow .5s ease;
+}
+.score-card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse 80% 50% at 50% 0%, rgba(0,255,204,.06), transparent 70%);
+    pointer-events: none;
+}
+.score-card.resonant {
+    border-color: rgba(0,255,204,.45);
+    box-shadow: 0 0 32px rgba(0,255,204,.18), inset 0 0 20px rgba(0,255,204,.06);
+}
+.score-card.resonant::before {
+    animation: score-glow-pulse 2s ease-in-out infinite;
+}
+@keyframes score-glow-pulse {
+    0%,100% { opacity: .6; }
+    50%      { opacity: 1;  }
+}
+.score-card-label {
+    font-size: .65rem;
+    letter-spacing: 2.5px;
+    text-transform: uppercase;
+    color: rgba(255,255,255,.35);
+    margin-bottom: .5rem;
+}
+.score-progress-wrap {
+    height: 3px;
+    background: rgba(255,255,255,.08);
+    border-radius: 2px;
+    overflow: hidden;
+}
+.score-progress-wrap > div {
+    height: 100%;
+    border-radius: 2px;
+    background: var(--teal);
+    transition: width .6s cubic-bezier(.4,0,.2,1), background .4s;
+}
+
+/* ══ BOUTONS CINÉMATIQUES ═══════════════════════════════════════════════════ */
+.btn-cine {
+    position: relative;
+    overflow: hidden;
+    transition: transform .15s ease, box-shadow .2s ease;
+}
+.btn-cine::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(120deg, transparent 30%, rgba(255,255,255,.14) 50%, transparent 70%);
+    transform: translateX(-100%);
+    transition: transform 0s;
+}
+.btn-cine:hover::after { transform: translateX(100%); transition: transform .45s ease; }
+.btn-cine:active       { transform: scale(.97); }
+.btn-cine:active:not(:focus-visible) { box-shadow: none !important; }
+
+/* ══ INPUTS — focus cinématique ══════════════════════════════════════════
+   Micro-scale + inner glow sans briser la lisibilité                     */
+.date-seg input[type="number"]:focus,
+.form-control:focus,
+.form-select:focus {
+    transform: scale(1.012);
+    transition: transform .18s ease, border-color .15s, box-shadow .15s;
+}
+
+/* ══ SECTION TITLES — shimmer subtil ════════════════════════════════════ */
+.section-title {
+    background-image: linear-gradient(90deg, currentColor 0%, rgba(255,255,255,.9) 45%, currentColor 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-size: 200% 100%;
+    animation: shimmer-title 6s linear infinite;
+}
+@keyframes shimmer-title {
+    0%   { background-position: 200% center; }
+    100% { background-position: -200% center; }
+}

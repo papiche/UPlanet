@@ -187,6 +187,34 @@
             50%       { box-shadow: 0 0 14px 3px rgba(0,255,204,.3); }
         }
         .btn-cinematic { animation: cinematic-pulse 2.4s ease-in-out infinite; }
+
+        /* ─ Barre de navigation fixe en bas ─ */
+        #bottom-nav {
+            position: fixed; bottom: 0; left: 0; right: 0; z-index: 1300;
+            display: flex; justify-content: space-around; align-items: stretch;
+            background: rgba(6,8,18,.82); backdrop-filter: blur(16px);
+            border-top: 1px solid rgba(0,255,204,.12);
+            padding: 0; height: 58px;
+            box-shadow: 0 -4px 24px rgba(0,0,0,.5);
+        }
+        .bnav-btn {
+            flex: 1; display: flex; flex-direction: column;
+            align-items: center; justify-content: center; gap: 2px;
+            background: none; border: none; cursor: pointer;
+            color: rgba(255,255,255,.35); font-size: .6rem;
+            letter-spacing: .5px; text-transform: uppercase;
+            padding: 6px 4px; transition: color .2s, background .2s;
+            border-top: 2px solid transparent;
+        }
+        .bnav-btn .bnav-icon { font-size: 1.3rem; line-height: 1; }
+        .bnav-btn:hover { color: rgba(255,255,255,.7); background: rgba(255,255,255,.04); }
+        .bnav-btn.active {
+            color: #00ffcc;
+            border-top-color: #00ffcc;
+            background: rgba(0,255,204,.06);
+        }
+        /* Espace pour éviter que le contenu soit masqué par la barre */
+        .offcanvas-body { padding-bottom: 72px !important; }
     </style>
 </head>
 <body>
@@ -198,6 +226,26 @@
 
 <!-- Bouton hamburger -->
 <button id="menu-btn" data-bs-toggle="offcanvas" data-bs-target="#atomic-panel" aria-label="Menu">☰</button>
+
+<!-- Barre de navigation fixe en bas -->
+<nav id="bottom-nav" role="navigation" aria-label="Navigation principale">
+    <button class="bnav-btn active" id="bnav-profil" onclick="_bnavGo('tab-profil','bnav-profil')" aria-label="Empreinte">
+        <span class="bnav-icon">🌌</span>
+        <span>Empreinte</span>
+    </button>
+    <button class="bnav-btn" id="bnav-match" onclick="_bnavGo('tab-match','bnav-match')" aria-label="Résonance">
+        <span class="bnav-icon">💫</span>
+        <span>Résonance</span>
+    </button>
+    <button class="bnav-btn" id="bnav-aide" onclick="_bnavGo('tab-aide','bnav-aide')" aria-label="Théorie">
+        <span class="bnav-icon">📖</span>
+        <span>Théorie</span>
+    </button>
+    <button class="bnav-btn" id="bnav-radar" onclick="_bnavGo('tab-radar','bnav-radar')" aria-label="Découvrir">
+        <span class="bnav-icon">🔭</span>
+        <span>Découvrir</span>
+    </button>
+</nav>
 
 <!-- Bouton Orchestre Quantique (coin haut-droit) -->
 <button id="btn-audio-toggle" title="Orchestre Quantique" onclick="_toggleAudio()"
@@ -460,9 +508,19 @@
                     <div class="mb-2">
                         <label class="form-label small text-secondary text-uppercase mb-1">📧 Email</label>
                         <input type="email" class="form-control form-control-sm" id="multipass-email"
-                               placeholder="votre@email.com" autocomplete="email">
+                               placeholder="votre@email.com" autocomplete="email"
+                               oninput="document.getElementById('multipass-pass-block').style.display='none'">
                     </div>
                     <div id="multipass-preview" class="small mb-3" style="line-height:1.9;color:rgba(255,255,255,.55);min-height:1.2rem"></div>
+                    <!-- Bloc PASS — affiché uniquement sur 409 MULTIPASS_EXISTS -->
+                    <div id="multipass-pass-block" style="display:none;margin-bottom:8px">
+                        <label class="form-label small text-secondary text-uppercase mb-1">🔑 Code PASS reçu par email</label>
+                        <input type="text" class="form-control form-control-sm font-monospace" id="multipass-pass-input"
+                               placeholder="XXXX-XXXX-XXXX" autocomplete="off" maxlength="20">
+                        <div class="small mt-1" style="color:rgba(255,200,80,.7)">
+                            Ce MULTIPASS existe déjà. Saisissez le code reçu lors de la création initiale.
+                        </div>
+                    </div>
                     <button class="btn btn-sm w-100 fw-bold mb-1" id="btn-multipass" onclick="createMultipass()"
                             style="background:rgba(245,158,11,.18);border:1px solid rgba(245,158,11,.45);color:#f59e0b">
                         ✨ Créer mon MULTIPASS
@@ -714,6 +772,8 @@
 </div>
 
 <!-- ── SCRIPTS ─────────────────────────────────────────────── -->
+<script src="scrypt.min.js"></script>
+<script src="nostr.bundle.js"></script>
 <script src="leaflet.js"></script>
 <script src="bootstrap.bundle.min.js"></script>
 <script>
@@ -1548,6 +1608,40 @@ window.toggleCinematicMode = function() {
     document.body.appendChild(returnLayer);
 };
 
+// ── Barre navigation bas ───────────────────────────────────────────────────
+function _bnavGo(tabId, btnId) {
+    // Activer l'onglet Bootstrap
+    const tabEl = document.querySelector(`[data-bs-target="#${tabId}"]`);
+    if (tabEl) {
+        const tab = bootstrap.Tab.getOrCreateInstance(tabEl);
+        tab.show();
+    }
+    // Ouvrir le panneau offcanvas si fermé
+    const panelEl = document.getElementById('atomic-panel');
+    if (panelEl) {
+        const oc = bootstrap.Offcanvas.getOrCreateInstance(panelEl);
+        oc.show();
+    }
+    // Mettre à jour les indicateurs de la barre
+    document.querySelectorAll('.bnav-btn').forEach(b => b.classList.remove('active'));
+    const active = document.getElementById(btnId);
+    if (active) active.classList.add('active');
+}
+
+// Synchroniser la barre quand un onglet change depuis le panneau
+document.addEventListener('DOMContentLoaded', () => {
+    document.addEventListener('shown.bs.tab', e => {
+        const target = e.target.getAttribute('data-bs-target');
+        const map = { '#tab-profil':'bnav-profil', '#tab-match':'bnav-match',
+                      '#tab-aide':'bnav-aide', '#tab-radar':'bnav-radar' };
+        const btnId = map[target];
+        if (!btnId) return;
+        document.querySelectorAll('.bnav-btn').forEach(b => b.classList.remove('active'));
+        const btn = document.getElementById(btnId);
+        if (btn) btn.classList.add('active');
+    });
+});
+
 // ── Orchestre Quantique — contrôle UI ──────────────────────────────────────
 window._toggleAudio = function() {
     const btn = document.getElementById('btn-audio-toggle');
@@ -1691,6 +1785,48 @@ async function _pbkdf2StretchKey(rawSalt, rawPepper) {
     return { stretchedSalt: await _stretch(rawSalt), stretchedPepper: await _stretch(rawPepper) };
 }
 
+// ── Dérivation locale des clés NOSTR (scrypt → ed25519) ─────────────────────
+// Même paramètres que keygen -t nostr : N=4096 r=16 p=1 dkLen=32
+// Entrée : stretchedSalt/stretchedPepper (sorties PBKDF2)
+// Sortie : { npub, nsec } disponibles immédiatement, avant retour serveur
+const _SCRYPT_N = 4096, _SCRYPT_R = 16, _SCRYPT_P = 1, _SCRYPT_DKLEN = 32;
+
+function _scryptPromise(password, salt) {
+    return new Promise((resolve, reject) => {
+        if (typeof scrypt === 'undefined') { reject(new Error('scrypt.min.js absent')); return; }
+        const enc = new TextEncoder();
+        const pw  = enc.encode(password);
+        const sl  = enc.encode(salt);
+        try {
+            const res = scrypt.scrypt(pw, sl, _SCRYPT_N, _SCRYPT_R, _SCRYPT_P, _SCRYPT_DKLEN);
+            if (res instanceof Promise) res.then(k => resolve(new Uint8Array(k))).catch(reject);
+            else scrypt.scrypt(pw, sl, _SCRYPT_N, _SCRYPT_R, _SCRYPT_P, _SCRYPT_DKLEN,
+                    (e, k) => e ? reject(e) : resolve(new Uint8Array(k)));
+        } catch(e) {
+            try { scrypt(pw, sl, _SCRYPT_N, _SCRYPT_R, _SCRYPT_P, _SCRYPT_DKLEN,
+                (e2, k) => e2 ? reject(e2) : resolve(new Uint8Array(k))); }
+            catch(e3) { reject(e3); }
+        }
+    });
+}
+
+async function _deriveNostrKeysLocally(stretchedSalt, stretchedPepper) {
+    const NostrLib = window.NostrTools || window.Nostr;
+    if (!NostrLib || typeof scrypt === 'undefined') return null;
+    try {
+        // scrypt(password=stretchedPepper, salt=stretchedSalt) — identique à keygen -t nostr
+        const seed = await _scryptPromise(stretchedPepper, stretchedSalt);
+        const privHex = Array.from(seed).map(b => b.toString(16).padStart(2, '0')).join('');
+        const pubHex  = NostrLib.getPublicKey(privHex);
+        const npub    = NostrLib.nip19.npubEncode(pubHex);
+        const nsec    = NostrLib.nip19.nsecEncode(privHex);
+        return { npub, nsec, privHex, pubHex };
+    } catch(e) {
+        if (window.DEBUG) console.warn('[atomic] local key derivation failed:', e);
+        return null;
+    }
+}
+
 // ── ω_bio publié : quantification 2 Hz + bruit local (non réversible) ──────────
 // Empêche l'inférence exacte du poids depuis le Kind 30078 public.
 // Le bruit est stocké en localStorage pour la cohérence multi-sessions sur le même appareil.
@@ -1719,7 +1855,6 @@ async function createMultipass() {
         alert('⚠ La date de naissance doit inclure jour, mois et année.'); return;
     }
 
-    // Précision SALT : 0.01° (~1km) — assure la reproductibilité lors de la récupération SSSS
     const birthLon  = parseFloat(parseFloat(document.getElementById('match-lon-a').value || 0).toFixed(2));
     const birthLat  = _birthMarker ? parseFloat(_birthMarker.getLatLng().lat.toFixed(2)) : null;
     const loc       = document.getElementById('birth-location-label').textContent;
@@ -1727,57 +1862,58 @@ async function createMultipass() {
     const wEl       = document.getElementById('birth-weight');
     const weight    = wEl ? (parseFloat(wEl.value) || 3.5) : 3.5;
     const utcOffset = birthLon !== 0 ? Math.round(birthLon / 15) : 0;
-
-    const conLatEl = document.getElementById('con-lat');
-    const conLonEl = document.getElementById('con-lon');
-    const conLat   = (conLatEl && conLatEl.value) ? parseFloat(parseFloat(conLatEl.value).toFixed(2)) : birthLat;
-    const conLon   = (conLonEl && conLonEl.value) ? parseFloat(parseFloat(conLonEl.value).toFixed(2)) : birthLon;
+    const conLatEl  = document.getElementById('con-lat');
+    const conLonEl  = document.getElementById('con-lon');
+    const conLat    = (conLatEl && conLatEl.value) ? parseFloat(parseFloat(conLatEl.value).toFixed(2)) : birthLat;
+    const conLon    = (conLonEl && conLonEl.value) ? parseFloat(parseFloat(conLonEl.value).toFixed(2)) : birthLon;
     const conceptionPlace = (conLat !== null && conLon !== 0)
         ? conLat.toFixed(2) + ', ' + conLon.toFixed(2) : '';
     const conUtcOffset = conLon !== 0 ? Math.round(conLon / 15) : utcOffset;
+    const polEl2   = document.getElementById('birth-polarity');
+    const polarity = polEl2 ? polEl2.value : '0';
 
     const apiUrl = typeof window.getAPIUrl === 'function' ? window.getAPIUrl()
                  : (location.hostname === '127.0.0.1' || location.hostname === 'localhost')
                    ? 'http://127.0.0.1:54321' : '';
 
-    const resultEl = document.getElementById('multipass-result');
-    const btn      = document.getElementById('btn-multipass');
-    const polEl2   = document.getElementById('birth-polarity');
-    const polarity = polEl2 ? polEl2.value : '0';
+    const resultEl   = document.getElementById('multipass-result');
+    const btn        = document.getElementById('btn-multipass');
+    const passBlock  = document.getElementById('multipass-pass-block');
+    const passInput  = document.getElementById('multipass-pass-input');
+    const passCode   = (passInput && passBlock.style.display !== 'none') ? (passInput.value || '').trim() : '';
+
     if (btn) { btn.textContent = '⏳ Sécurisation…'; btn.disabled = true; }
     if (resultEl) {
         resultEl.style.display = '';
-        resultEl.innerHTML = '<div class="text-center py-3 small" style="color:rgba(255,200,40,.7)">'
-            + '🔑 Dérivation cryptographique de votre clé…<br>'
-            + '<span style="color:rgba(255,255,255,.3);font-size:.65rem">'
-            + '~3 secondes — rend le brute-force impraticable</span></div>';
+        resultEl.innerHTML = _progressHTML('🔑 Dérivation cryptographique…', '~3 s — résistance au brute-force');
     }
 
-    // ── Key Stretching côté client (PBKDF2-SHA256, 600 000 itérations) ──────────
-    // Assemble les chaînes SALT/PEPPER depuis les données de naissance (UTC solaire)
-    // avant de les étirer. Les valeurs étirées (43 chars base64url) sont envoyées
-    // au serveur → DISCO déterministe et brute-force-résistant.
-    const birthUnixFull    = birthLat !== null
-        ? _dateToUtcUnix(bd, bt || '12:00', birthLon)
-        : _dateToUtcUnix(bd, bt || '12:00', birthLon);
-    const conUnixFull      = cd
-        ? _dateToUtcUnix(cd, ct || '00:00', conLon || birthLon)
-        : birthUnixFull;
-    const birthDtUtc       = _unixToUtcStr(birthUnixFull);   // YYYYMMDDHHMM (UTC)
-    const conDtUtc         = _unixToUtcStr(conUnixFull);
-    const latStr           = birthLat !== null ? birthLat.toFixed(2) : '0';
-    const lonStr           = birthLon.toFixed(2);
-    const conLatStr        = conLat  !== null  ? conLat.toFixed(2)   : latStr;
-    const conLonStr        = conLon.toFixed(2);
-    const saltRaw          = `${birthDtUtc}_${latStr}_${lonStr}_${polarity}_${weight.toFixed(1)}`;
-    const pepperRaw        = `${conDtUtc}_${conLatStr}_${conLonStr}_${weight.toFixed(1)}`;
+    // ── Phase 1 : PBKDF2 (600k SHA-256) ──────────────────────────────────────
+    const birthUnixFull = _dateToUtcUnix(bd, bt || '12:00', birthLon);
+    const conUnixFull   = cd ? _dateToUtcUnix(cd, ct || '00:00', conLon || birthLon) : birthUnixFull;
+    const birthDtUtc    = _unixToUtcStr(birthUnixFull);
+    const conDtUtc      = _unixToUtcStr(conUnixFull);
+    const latStr        = birthLat !== null ? birthLat.toFixed(2) : '0';
+    const lonStr        = birthLon.toFixed(2);
+    const conLatStr     = conLat !== null ? conLat.toFixed(2) : latStr;
+    const conLonStr     = conLon.toFixed(2);
+    const saltRaw       = `${birthDtUtc}_${latStr}_${lonStr}_${polarity}_${weight.toFixed(1)}`;
+    const pepperRaw     = `${conDtUtc}_${conLatStr}_${conLonStr}_${weight.toFixed(1)}`;
 
     const { stretchedSalt, stretchedPepper } = await _pbkdf2StretchKey(saltRaw, pepperRaw);
 
-    if (resultEl) {
-        resultEl.innerHTML = '<div class="text-center py-3 small" style="color:rgba(255,200,40,.7)">'
-            + '⏳ Création de votre identité en cours…<br>'
-            + '<span style="color:rgba(255,255,255,.3);font-size:.65rem">30–60 secondes</span></div>';
+    // ── Phase 2 : scrypt → ed25519 (local, instantané) ───────────────────────
+    if (resultEl) resultEl.innerHTML = _progressHTML('🔐 Dérivation locale des clés NOSTR…', 'scrypt N=4096 · même algo que keygen');
+    const localKeys = await _deriveNostrKeysLocally(stretchedSalt, stretchedPepper);
+
+    if (localKeys) {
+        // Afficher le npub immédiatement — l'identité est connue AVANT le serveur
+        if (resultEl) {
+            resultEl.innerHTML = _keyPreviewHTML(localKeys.npub, email)
+                + _progressHTML('⏳ Publication sur la station…', 'SSSS · IPFS · DID · email en cours…');
+        }
+    } else {
+        if (resultEl) resultEl.innerHTML = _progressHTML('⏳ Création de votre identité…', '15–30 secondes');
     }
 
     try {
@@ -1785,37 +1921,60 @@ async function createMultipass() {
             birth_datetime: bd + (bt ? 'T' + bt : 'T12:00'),
             conception_datetime: cd + (ct ? 'T' + ct : 'T00:00'),
             birth_place: cityClean, conception_place: conceptionPlace,
-            lat: birthLat, lon: birthLon, weight, polarity,
-            utc_offset: utcOffset, ts: Date.now()
+            lat: birthLat, lon: birthLon, weight, polarity, utc_offset: utcOffset, ts: Date.now()
         }));
     } catch(e) { if(window.DEBUG) console.warn('[atomic] birth data storage:', e); }
 
     const fd = new FormData();
-    fd.append('email', email);
-    fd.append('lang',  navigator.language ? navigator.language.slice(0, 2) : 'fr');
+    fd.append('email',   email);
+    fd.append('lang',    navigator.language ? navigator.language.slice(0, 2) : 'fr');
     if (birthLat !== null) fd.append('lat', birthLat.toFixed(2));
-    if (birthLon !== 0)   fd.append('lon', birthLon.toFixed(2));
+    if (birthLon !== 0)    fd.append('lon', birthLon.toFixed(2));
     fd.append('birth_datetime', bd + (bt ? 'T' + bt : 'T12:00'));
     if (cd)              fd.append('conception_datetime', cd + (ct ? 'T' + ct : 'T00:00'));
     if (cityClean)       fd.append('birth_place',        cityClean);
     if (conceptionPlace) fd.append('conception_place',   conceptionPlace);
     if (weight !== 3.5)  fd.append('birth_weight',       weight.toFixed(1));
     if (polEl2)          fd.append('polarity',           polarity);
-    // Clés étirées (PBKDF2) → le serveur les utilise pour le DISCO déterministe
-    fd.append('salt',         stretchedSalt);
-    fd.append('pepper',       stretchedPepper);
-    fd.append('utc_offset',     String(utcOffset));
-    fd.append('con_utc_offset', String(conUtcOffset));
-    fd.append('format', 'json');
+    fd.append('salt',            stretchedSalt);
+    fd.append('pepper',          stretchedPepper);
+    fd.append('utc_offset',      String(utcOffset));
+    fd.append('con_utc_offset',  String(conUtcOffset));
+    fd.append('format',          'json');
+    if (passCode) fd.append('pass_code', passCode);
 
     try {
         const res = await fetch(apiUrl + '/g1nostr', { method: 'POST', body: fd });
-        if (!res.ok) {
-            const err = await res.json().catch(() => ({ detail: 'HTTP ' + res.status }));
-            throw new Error(err.detail || 'HTTP ' + res.status);
+        const json = await res.json().catch(() => ({}));
+
+        if (res.status === 409) {
+            const err = json.error || '';
+            if (err === 'IDENTITY_CONFLICT') {
+                // Mêmes clés, email différent → collision cryptographique
+                if (resultEl) resultEl.innerHTML =
+                    '<div class="small p-2 rounded" style="background:rgba(180,0,255,.08);border:1px solid rgba(180,0,255,.3);color:#cc88ff">'
+                    + '🔮 Ces données biométriques appartiennent déjà à une autre identité.<br>'
+                    + '<span style="color:rgba(255,255,255,.4);font-size:.7rem">'
+                    + 'Chaque signature vibratoire est unique et non transférable.</span></div>';
+            } else {
+                // MULTIPASS_EXISTS → demander le PASS
+                if (passBlock) passBlock.style.display = '';
+                if (passInput) passInput.focus();
+                if (resultEl) resultEl.innerHTML =
+                    '<div class="small p-2 rounded" style="background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.3);color:#f59e0b">'
+                    + '🔑 Ce MULTIPASS existe déjà.<br>'
+                    + '<span style="font-size:.7rem;color:rgba(255,255,255,.45)">Saisissez le code PASS reçu par email lors de la création initiale.</span>'
+                    + '</div>';
+            }
+            return;
         }
-        const data = await res.json();
-        _renderMultipassResult(data, resultEl);
+
+        if (!res.ok) {
+            throw new Error(json.detail || json.error || 'HTTP ' + res.status);
+        }
+
+        _renderMultipassResult(json, resultEl, localKeys);
+
     } catch(e) {
         if (resultEl) resultEl.innerHTML = '<div class="small p-2 rounded" style="background:rgba(255,0,0,.08);'
             + 'border:1px solid rgba(255,0,0,.2);color:#ff8888">⚠ ' + (e.message || String(e)) + '</div>';
@@ -1824,15 +1983,30 @@ async function createMultipass() {
     }
 }
 
-function _renderMultipassResult(data, el) {
+function _progressHTML(label, sub) {
+    return '<div class="text-center py-2 small" style="color:rgba(255,200,40,.8)">'
+        + label + '<br><span style="color:rgba(255,255,255,.3);font-size:.65rem">' + sub + '</span></div>';
+}
+
+function _keyPreviewHTML(npub, email) {
+    return '<div class="p-2 rounded mb-1" style="background:rgba(0,255,204,.05);border:1px solid rgba(0,255,204,.2)">'
+        + '<div class="small fw-bold mb-1" style="color:#00ffcc">🔑 Identité calculée localement</div>'
+        + '<div class="font-monospace" style="word-break:break-all;font-size:.58rem;color:rgba(0,255,204,.6)">'
+        + npub + '</div></div>';
+}
+
+function _renderMultipassResult(data, el, localKeys) {
     if (!el) return;
-    const npub  = data.npub  || data.pubkey || '';
+    const npub  = data.npub  || (localKeys && localKeys.npub) || '';
     const email = data.email || (document.getElementById('multipass-email')?.value || '');
     const url   = data.url   || data.uplanet_home || '';
+    const creating = data.status === 'creating';
     el.innerHTML = '<div class="p-2 rounded" style="background:rgba(245,158,11,.06);border:1px solid rgba(245,158,11,.3)">'
-        + '<div class="small fw-bold mb-1" style="color:#f59e0b">✅ MULTIPASS créé !</div>'
+        + '<div class="small fw-bold mb-1" style="color:#f59e0b">'
+        + (creating ? '🚀 MULTIPASS initialisé !' : '✅ MULTIPASS créé !') + '</div>'
         + (email ? '<div class="small text-secondary mb-1">📧 ' + email + '</div>' : '')
         + (npub  ? '<div class="font-monospace mb-2" style="word-break:break-all;font-size:.6rem;color:rgba(255,255,255,.45)">' + npub + '</div>' : '')
+        + (creating ? '<div class="small mb-1" style="color:rgba(255,200,80,.55);font-size:.7rem">⏳ Publication IPFS/DID en cours en arrière-plan…</div>' : '')
         + (url   ? '<a href="' + url + '" target="_blank" class="btn btn-sm w-100 fw-bold"'
             + ' style="background:rgba(245,158,11,.2);border:1px solid rgba(245,158,11,.5);color:#f59e0b;font-size:.75rem">'
             + '🎴 Voir mon MULTIPASS →</a>' : '')

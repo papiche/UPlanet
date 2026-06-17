@@ -279,7 +279,7 @@
 
     <div class="security-notice">
         🔐 Calcul local · Aucune donnée transmise · Hébergé sur IPFS<br>
-        Le lien partagé ne contient ni poids de naissance ni polarité
+        📐 Précision géographique : 0.01° (~1 km) · Poids &amp; polarité exclus du lien partagé
     </div>
 
     <!-- Résultat -->
@@ -302,6 +302,20 @@
             <div class="archetype-label">🧬 Nature Alchimique</div>
             <div class="archetype-name" id="arch-name">—</div>
             <div class="elem-duo" id="elem-duo"></div>
+        </div>
+
+        <!-- Décrypteur de relation KIN -->
+        <div id="kin-decode-block" style="display:none;margin-top:14px;
+             background:rgba(120,80,255,.06);border:1px solid rgba(120,80,255,.18);
+             border-radius:12px;padding:14px 16px">
+            <div style="font-size:.62rem;color:rgba(167,139,250,.6);text-transform:uppercase;
+                        letter-spacing:1.5px;margin-bottom:10px">🔍 La nature de votre résonance</div>
+            <div id="kin-decode-content"></div>
+            <a href="atomic_help.html" target="_blank"
+               style="display:block;text-align:right;font-size:.68rem;
+                      color:rgba(167,139,250,.45);margin-top:8px;text-decoration:none">
+                En savoir plus sur le Tzolkin →
+            </a>
         </div>
 
         <!-- Partage viral du résultat -->
@@ -353,6 +367,44 @@
 
         <!-- CTA : créer son propre lien de résonance -->
         <div class="cta-block" style="padding-top:18px">
+
+            <!-- Gamification des niveaux de précision -->
+            <div style="margin-bottom:18px">
+                <div style="font-size:.62rem;color:rgba(255,255,255,.28);text-transform:uppercase;
+                            letter-spacing:1.5px;text-align:center;margin-bottom:8px">
+                    🔬 Niveaux de précision phi2x
+                </div>
+                <div style="display:flex;gap:5px">
+                    <div style="flex:1;padding:8px 4px;border-radius:7px;text-align:center;
+                                background:rgba(0,255,204,.1);border:1px solid rgba(0,255,204,.35)">
+                        <div style="font-size:.78rem;font-weight:800;color:#00ffcc">1</div>
+                        <div style="font-size:.6rem;color:rgba(0,255,204,.75);margin-top:2px;line-height:1.3">Date<br>seule</div>
+                        <div style="font-size:.55rem;color:rgba(0,255,204,.5);margin-top:3px">✅ actif</div>
+                    </div>
+                    <div style="flex:1;padding:8px 4px;border-radius:7px;text-align:center;
+                                background:rgba(0,255,204,.03);border:1px dashed rgba(0,255,204,.18)">
+                        <div style="font-size:.78rem;font-weight:800;color:rgba(255,255,255,.3)">2</div>
+                        <div style="font-size:.6rem;color:rgba(255,255,255,.22);margin-top:2px;line-height:1.3">+ Heure<br>exacte</div>
+                        <div style="font-size:.55rem;color:rgba(255,255,255,.18);margin-top:3px">🔒 débloquer</div>
+                    </div>
+                    <div style="flex:1;padding:8px 4px;border-radius:7px;text-align:center;
+                                background:rgba(0,255,204,.03);border:1px dashed rgba(0,255,204,.12)">
+                        <div style="font-size:.78rem;font-weight:800;color:rgba(255,255,255,.22)">3</div>
+                        <div style="font-size:.6rem;color:rgba(255,255,255,.18);margin-top:2px;line-height:1.3">+ Lieu<br>(~1 km)</div>
+                        <div style="font-size:.55rem;color:rgba(255,255,255,.14);margin-top:3px">🔒 débloquer</div>
+                    </div>
+                    <div style="flex:1;padding:8px 4px;border-radius:7px;text-align:center;
+                                background:rgba(249,115,22,.04);border:1px dashed rgba(249,115,22,.18)">
+                        <div style="font-size:.78rem;font-weight:800;color:rgba(249,115,22,.4)">4</div>
+                        <div style="font-size:.6rem;color:rgba(249,115,22,.35);margin-top:2px;line-height:1.3">Double<br>Bang ✨</div>
+                        <div style="font-size:.55rem;color:rgba(249,115,22,.3);margin-top:3px">🔒 débloquer</div>
+                    </div>
+                </div>
+                <div style="font-size:.67rem;color:rgba(255,255,255,.25);text-align:center;margin-top:7px;line-height:1.5">
+                    Chaque niveau révèle une couche plus profonde de votre empreinte vibratoire
+                </div>
+            </div>
+
             <p style="font-size:.82rem;color:rgba(255,255,255,.45);margin-bottom:10px">
                 Crée ton profil ATOM4LOVE en <strong style="color:#fff">2 minutes</strong>.<br>
                 Gratuit · Décentralisé · Hébergé sur IPFS
@@ -699,6 +751,13 @@ function _renderResult() {
     const p    = new URLSearchParams({ 'match-b-d': _params.get('d') || '', 'match-b-lo': _bLoInt });
     document.getElementById('cta-link').href = `${base}atomic.html?${p.toString()}`;
 
+    // Décrypteur de relation KIN
+    const kdBlock = document.getElementById('kin-decode-block');
+    if (kdBlock && _kinA && _kinB) {
+        document.getElementById('kin-decode-content').innerHTML = _buildKinRelations(_kinA, _kinB);
+        kdBlock.style.display = 'block';
+    }
+
     // Section partage viral
     const viralMsg   = _buildViralMsg(pctDisplay);
     document.getElementById('share-msg').textContent = viralMsg;
@@ -838,6 +897,40 @@ function _tryGeolocate() {
     }, err => {
         sub.textContent = '⚠ GPS refusé — utilisez la carte ci-dessous';
     }, { timeout: 8000 });
+}
+
+// ── Décrypteur de relation KIN ─────────────────────────────────────────────
+function _kinCI(kin)  { return kin ? ((kin - 1) / 13 | 0) % 5 : 0; }
+
+function _buildKinRelations(kA, kB) {
+    const rels  = [];
+    const distRaw = Math.abs(kA.kin - kB.kin);
+    const dist    = Math.min(distRaw, 260 - distRaw);
+
+    if (kA.kin + kB.kin === 261)
+        rels.push({ i: '🌙', n: 'Paires Occultes', d: 'Vos Kins s\'additionnent à 261 — échange de dons cachés, magie inattendue dans l\'ordinaire.' });
+    if (_kinCI(kA.kin) === _kinCI(kB.kin))
+        rels.push({ i: '🌈', n: 'Même famille de couleur', d: 'Vous partagez la même énergie fondamentale. La compréhension est naturelle et immédiate.' });
+    if (Math.floor((kA.kin - 1) / 13) === Math.floor((kB.kin - 1) / 13))
+        rels.push({ i: '🌊', n: 'Même Wavespell', d: 'Vous portez la même intention créatrice sur 13 jours. Vos élans se renforcent mutuellement.' });
+    if (kA.tone + kB.tone === 14)
+        rels.push({ i: '🎵', n: 'Tonalités complémentaires', d: 'Vos rythmes galactiques (T' + kA.tone + ' + T' + kB.tone + ' = 14) créent une harmonie naturelle dans vos décisions.' });
+    if (((kA.kin - 1) % 20) === (((kB.kin - 1) % 20 + 10) % 20))
+        rels.push({ i: '⚡', n: 'Paire Antipode', d: 'Défi créateur — votre tension productive est votre carburant d\'innovation.' });
+    if (dist <= 5 && dist > 0)
+        rels.push({ i: '💎', n: 'Voisins du Tzolkin', d: 'Vos Kins sont proches dans la matrice (Δ' + dist + '). Vous portez des missions similaires avec des approches complémentaires.' });
+    if (rels.length === 0)
+        rels.push({ i: '🌀', n: 'Polarité Singulière', d: 'Votre combinaison est unique dans la matrice Tzolkin. Une rencontre rare — à explorer au-delà des catégories.' });
+
+    return rels.map(r =>
+        `<div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:10px">
+            <span style="font-size:1.25rem;flex-shrink:0;line-height:1.3">${r.i}</span>
+            <span>
+                <strong style="color:#e0e7ff;font-size:.84rem;display:block;margin-bottom:2px">${r.n}</strong>
+                <span style="font-size:.73rem;color:rgba(255,255,255,.42);line-height:1.45">${r.d}</span>
+            </span>
+         </div>`
+    ).join('');
 }
 
 // ── Partage viral ─────────────────────────────────────────────────────────

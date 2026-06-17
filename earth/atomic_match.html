@@ -283,7 +283,6 @@
     </div>
 
     <!-- Résultat -->
-    <!-- Note: keep "<!-- Résultat -->" as anchor -->
     <div id="result-block">
         <div class="result-card">
             <div class="score-big" id="res-score">--%</div>
@@ -333,35 +332,6 @@
                 </a>
                 <button id="btn-copy-share" class="btn-share btn-share-copy" onclick="_copyShareMsg()">📋 Copier</button>
                 <button id="btn-native-share" class="btn-share btn-share-native" onclick="_nativeShare()" style="display:none">↑ Partager</button>
-            </div>
-        </div>
-
-        <!-- Avantages utilisateurs — visibles après le score -->
-        <div style="margin-top:20px">
-            <div style="font-size:.72rem;font-weight:700;color:rgba(255,255,255,.35);text-transform:uppercase;letter-spacing:1.5px;text-align:center;margin-bottom:10px">
-                Ce que tu obtiens avec ton propre profil
-            </div>
-            <div class="benefits-grid">
-                <div class="benefit-card">
-                    <div class="benefit-icon">🔗</div>
-                    <div class="benefit-title">Ton lien unique</div>
-                    <div class="benefit-desc">Partage ta résonance avec tous tes contacts</div>
-                </div>
-                <div class="benefit-card">
-                    <div class="benefit-icon">💰</div>
-                    <div class="benefit-title">Économie ẐEN</div>
-                    <div class="benefit-desc">Monnaie coopérative · 1 € = 1 ẐEN · Sans banque</div>
-                </div>
-                <div class="benefit-card">
-                    <div class="benefit-icon">🌐</div>
-                    <div class="benefit-title">Identité souveraine</div>
-                    <div class="benefit-desc">NOSTR décentralisé · Pas de GAFAM</div>
-                </div>
-                <div class="benefit-card">
-                    <div class="benefit-icon">🤝</div>
-                    <div class="benefit-title">Communauté locale</div>
-                    <div class="benefit-desc">Réseau coopératif · Services de proximité</div>
-                </div>
             </div>
         </div>
 
@@ -746,10 +716,28 @@ function _renderResult() {
     // Canvas Double Bang
     _drawDoubleBang(phiA, phiB, k);
 
-    // CTA lien vers atomic.html (avec date pré-remplie pour l'utilisateur)
+    // CTA lien vers atomic.html (données visiteur pré-remplies + partenaire B)
     const base = location.href.replace(/\/[^/]*$/, '/').replace(/atomic_match\.html.*$/, '');
-    const p    = new URLSearchParams({ 'match-b-d': _params.get('d') || '', 'match-b-lo': _bLoInt });
-    document.getElementById('cta-link').href = `${base}atomic.html?${p.toString()}`;
+    const [aYYYY, aMM, aDD] = _vDateISO.split('-');
+    const [aHH, aMN] = _vTimeStr.split(':');
+    const aLo  = parseFloat(document.getElementById('v-lon').value) || 0;
+    const aLa  = parseFloat(document.getElementById('v-lat').value) || 0;
+    const ctaP = new URLSearchParams({
+        'match-b-d':  _params.get('d') || '',
+        'match-b-lo': _bLoInt,
+        'a-dd': aDD, 'a-mm': aMM, 'a-yyyy': aYYYY,
+        'a-hh': aHH, 'a-mn': aMN,
+        'a-lo': aLo.toFixed(2), 'a-la': aLa.toFixed(2)
+    });
+    document.getElementById('cta-link').href = `${base}atomic.html?${ctaP.toString()}`;
+
+    // Lien de partage de A (les autres voient LEUR résonance avec MOI)
+    const aDateStr = _vDateISO.replace(/-/g, '');
+    const aTimeStr = _vTimeStr.replace(':', '');
+    const aLoInt   = Math.round(aLo);
+    const aShareP  = new URLSearchParams({ d: aDateStr, t: aTimeStr, lo: aLoInt });
+    if (_kinA) aShareP.set('k', _kinA.kin);
+    const _myShareUrl = `${base}atomic_match.html?${aShareP.toString()}`;
 
     // Décrypteur de relation KIN
     const kdBlock = document.getElementById('kin-decode-block');
@@ -758,13 +746,13 @@ function _renderResult() {
         kdBlock.style.display = 'block';
     }
 
-    // Section partage viral
-    const viralMsg   = _buildViralMsg(pctDisplay);
+    // Section partage viral — on partage le lien de TOI (A), pas la page actuelle
+    const viralMsg = _buildViralMsg(pctDisplay, _myShareUrl);
     document.getElementById('share-msg').textContent = viralMsg;
 
     const waUrl  = 'https://wa.me/?text=' + encodeURIComponent(viralMsg);
     const tgText = encodeURIComponent(viralMsg.split('\n').slice(0, 3).join('\n'));
-    const tgUrl  = 'https://t.me/share/url?url=' + encodeURIComponent(location.href) + '&text=' + tgText;
+    const tgUrl  = 'https://t.me/share/url?url=' + encodeURIComponent(_myShareUrl) + '&text=' + tgText;
     document.getElementById('btn-wa').href = waUrl;
     document.getElementById('btn-tg').href = tgUrl;
     document.getElementById('share-block').style.display = 'block';
@@ -934,12 +922,12 @@ function _buildKinRelations(kA, kB) {
 }
 
 // ── Partage viral ─────────────────────────────────────────────────────────
-function _buildViralMsg(pctDisplay) {
+function _buildViralMsg(pctDisplay, myShareUrl) {
     const emoji  = pctDisplay >= 80 ? '✨' : pctDisplay >= 60 ? '💫' : '🌀';
     const status = pctDisplay >= 80 ? 'une résonance cosmique rare'
                  : pctDisplay >= 60 ? 'une belle cohérence phi2x'
                  : 'une polarité complémentaire fascinante';
-    return `${emoji} ${bNameSafe} et moi partageons ${status} — ${pctDisplay}% de cohérence phi2x !\n\nTu veux savoir combien vous résonnez ensemble ? Le calcul est 100% local, aucune donnée transmise.\n\n👇 Clique ici pour révéler la tienne avec ${bNameSafe} :\n${location.href}`;
+    return `${emoji} J'ai découvert que ${bNameSafe} et moi partageons ${status} — ${pctDisplay}% de cohérence phi2x !\n\nEt toi, quelle est notre résonance ? Calcule-la ici — 100% local, aucune donnée transmise :\n${myShareUrl}`;
 }
 
 function _copyShareMsg() {

@@ -5,15 +5,23 @@
 'use strict';
 
 // ── THÈME ──────────────────────────────────────────────────────────────────
-// Deux thèmes disponibles via data-theme sur <html> :
-//   (vide)     → Ambre des Profondeurs  (amber chaud, teal froid)
-//   "biolum"   → Bioluminescence Profonde (cyan pur, violet mystique)
+// Thèmes : 5 couleurs KIN Maya + amber (défaut) + biolum (alternatif)
+// data-theme sur <html> : null=amber, 'biolum', 'kin-rouge', 'kin-blanc',
+//   'kin-bleu', 'kin-jaune', 'kin-vert'
 const _A4L_THEME_KEY = 'a4l_theme';
 
 const _A4L_THEMES = {
-    amber:  { attr: null,     btnLabel: '🌊 Biolum', title: 'Ambre des Profondeurs'  },
-    biolum: { attr: 'biolum', btnLabel: '🔥 Ambre',  title: 'Bioluminescence Profonde' },
+    'amber':     { attr: null,          btnLabel: '🔥 Ambre',  title: 'Ambre des Profondeurs'    },
+    'biolum':    { attr: 'biolum',      btnLabel: '🌊 Biolum', title: 'Bioluminescence Profonde'  },
+    'kin-rouge': { attr: 'kin-rouge',   btnLabel: '🔴 Rouge',  title: 'KIN Rouge — Feu'           },
+    'kin-blanc': { attr: 'kin-blanc',   btnLabel: '⚪ Blanc',  title: 'KIN Blanc — Vent'          },
+    'kin-bleu':  { attr: 'kin-bleu',    btnLabel: '🔵 Bleu',   title: 'KIN Bleu — Nuit'           },
+    'kin-jaune': { attr: 'kin-jaune',   btnLabel: '🟡 Jaune',  title: 'KIN Jaune — Graine'        },
+    'kin-vert':  { attr: 'kin-vert',    btnLabel: '🟢 Vert',   title: 'KIN Vert — Monde'          },
 };
+
+// Ordre de cycle au clic
+const _A4L_THEME_CYCLE = ['amber','kin-rouge','kin-blanc','kin-bleu','kin-jaune','kin-vert','biolum'];
 
 function _applyTheme(name) {
     const t = _A4L_THEMES[name] || _A4L_THEMES.amber;
@@ -32,11 +40,22 @@ function _initTheme() {
 }
 
 function _toggleTheme() {
-    const cur  = document.documentElement.getAttribute('data-theme') || 'amber';
-    const next = cur === 'biolum' ? 'amber' : 'biolum';
+    const cur  = localStorage.getItem(_A4L_THEME_KEY) || 'amber';
+    const idx  = _A4L_THEME_CYCLE.indexOf(cur);
+    const next = _A4L_THEME_CYCLE[(idx + 1) % _A4L_THEME_CYCLE.length];
     _applyTheme(next);
     try { localStorage.setItem(_A4L_THEME_KEY, next); } catch(e) {}
     if (navigator.vibrate) navigator.vibrate(20);
+}
+
+// Applique la couleur KIN comme thème (appelé depuis renderKinProfil)
+function _setKinTheme(kinColor) {
+    const map = { 'Rouge':'kin-rouge', 'Blanc':'kin-blanc', 'Bleu':'kin-bleu',
+                  'Jaune':'kin-jaune', 'Vert':'kin-vert' };
+    const name = map[kinColor];
+    if (!name) return;
+    _applyTheme(name);
+    try { localStorage.setItem(_A4L_THEME_KEY, name); } catch(e) {}
 }
 
 // ── ONGLETS GLISSANTS ─────────────────────────────────────────────────────

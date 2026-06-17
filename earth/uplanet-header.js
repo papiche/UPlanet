@@ -211,7 +211,18 @@
         + 'box-shadow:0 0 14px rgba(245,158,11,.22)}'
         + '.uph-mp-create-btn:disabled{opacity:.45;cursor:default}'
         + '.uph-kin-badge{font-size:10px;color:rgba(255,255,255,.7);padding:5px 9px;border-radius:7px;'
-        + 'background:rgba(134,239,172,.07);border:1px solid rgba(134,239,172,.18);margin:4px 0}';
+        + 'background:rgba(134,239,172,.07);border:1px solid rgba(134,239,172,.18);margin:4px 0}'
+        + '#uph-id-switcher{display:flex;flex-direction:column;gap:2px;'
+        + 'padding:4px 0 6px;border-bottom:1px solid rgba(255,255,255,.07);margin-bottom:4px}'
+        + '#uph-id-switcher:empty{display:none}'
+        + '.uph-id-item{display:flex;align-items:center;gap:6px;padding:4px 10px;'
+        + 'border-radius:7px;cursor:pointer;transition:background .12s;font-size:10.5px;color:rgba(255,255,255,.78)}'
+        + '.uph-id-item:hover{background:rgba(255,255,255,.09)}'
+        + '.uph-id-item.active{background:rgba(134,239,172,.12);color:#86efac;cursor:default}'
+        + '.uph-id-dot{font-size:8px;flex-shrink:0;color:rgba(255,255,255,.35)}'
+        + '.uph-id-item.active .uph-id-dot{color:#86efac}'
+        + '.uph-id-label{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
+        + '.uph-id-locked{font-size:9px;flex-shrink:0;opacity:.5}';
 
     // ── HTML ───────────────────────────────────────────────────────────────────
     function _html() {
@@ -224,6 +235,7 @@
         return '<div id="uph" role="banner">'
             + '<button id="uph-nav-btn" title="Navigation">☰</button>'
             + '<div id="uph-nav-panel" class="uph-h">'
+            + '<div id="uph-id-switcher"></div>'
             + '<div id="uph-nav-profile">'
             + '<span class="uph-pname" id="uph-np-name"></span>'
             + '<span class="uph-pbal" id="uph-np-bal"></span>'
@@ -269,6 +281,9 @@
         document.querySelectorAll('#nostr-bar').forEach(function (el) {
             el.style.display = 'none';
         });
+
+        // Peupler le sélecteur d'identités dès l'injection
+        _renderIdSwitcher();
 
         // Déplacement
         _initDrag();
@@ -744,17 +759,98 @@
         console.log('[UPH] Polyfill window.nostr installé (G1v1, sans extension requise)');
     }
 
+    // ── Chiffrement AES-256-GCM pour nsec (WebCrypto) ────────────────────────
+    function _b64enc(buf) {
+        return btoa(String.fromCharCode.apply(null, new Uint8Array(buf)));
+    }
+    function _b64dec(s) {
+        var bin = atob(s), buf = new Uint8Array(bin.length);
+        for (var i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
+        return buf;
+    }
+    async function _deriveEncKey(pin, salt) {
+        var raw = await crypto.subtle.importKey('raw', new TextEncoder().encode(pin), 'PBKDF2', false, ['deriveKey']);
+        return crypto.subtle.deriveKey(
+            { name: 'PBKDF2', salt: salt, iterations: 200000, hash: 'SHA-256' },
+            raw,
+            { name: 'AES-GCM', length: 256 },
+            false, ['encrypt', 'decrypt']
+        );
+    }
+    async function _encryptNsec(nsecHex, pin) {
+        var salt = crypto.getRandomValues(new Uint8Array(16));
+        var iv   = crypto.getRandomValues(new Uint8Array(12));
+        var key  = await _deriveEncKey(pin, salt);
+        var ct   = await crypto.subtle.encrypt({ name: 'AES-GCM', iv: iv }, key, new TextEncoder().encode(nsecHex));
+        return { ct: _b64enc(ct), iv: _b64enc(iv), salt: _b64enc(salt) };
+    }
+    async function _decryptNsec(enc, pin) {
+        var key = await _deriveEncKey(pin, _b64dec(enc.salt));
+        var pt  = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: _b64dec(enc.iv) }, key, _b64dec(enc.ct));
+        return new TextDecoder().decode(pt);
+    }
+
+    // ── Sélecteur d'identités dans le panneau nav ─────────────────────────────
+    function _renderIdSwitcher() {
+        var container = document.getElementById('uph-id-switcher');
+        if (!container) return;
+        var accounts  = _loadAccounts();
+        var activePub = (window.NostrState && window.NostrState.userPubkey) || window.userPubkey || '';
+        if (accounts.length === 0) { container.innerHTML = ''; return; }
+        container.innerHTML = accounts.map(function (a) {
+            var isActive = a.pubkey === activePub;
+            return '<div class="uph-id-item' + (isActive ? ' active' : '') + '"'
+                + ' data-pubkey="' + a.pubkey + '">'
+                + '<span class="uph-id-dot">' + (isActive ? '●' : '○') + '</span>'
+                + '<span class="uph-id-label">' + (a.email || a.pubkey.slice(0, 8) + '…') + '</span>'
+                + (a.enc_nsec ? '<span class="uph-id-locked">🔑</span>' : '')
+                + '</div>';
+        }).join('');
+        container.querySelectorAll('.uph-id-item').forEach(function (el) {
+            el.addEventListener('click', async function (e) {
+                e.stopPropagation();
+                var pubkey = el.dataset.pubkey;
+                var activePub2 = (window.NostrState && window.NostrState.userPubkey) || window.userPubkey || '';
+                if (pubkey === activePub2) return;
+                var acct = _loadAccounts().find(function (a) { return a.pubkey === pubkey; });
+                if (!acct) return;
+                if (!acct.enc_nsec) {
+                    // Pas de nsec chiffré : ouvrir la modal pour re-dériver
+                    var em = document.getElementById('uph-mp-email') || document.getElementById('uph-mp-mini-email');
+                    if (em) em.value = acct.email;
+                    _openModal();
+                    return;
+                }
+                var pin = prompt('🔑 PIN pour "' + acct.email + '" :');
+                if (pin === null) return;
+                try {
+                    var privHex = await _decryptNsec(acct.enc_nsec, pin);
+                    var NostrLib = window.NostrTools || window.Nostr;
+                    if (!NostrLib || !NostrLib.getPublicKey) throw new Error('NostrLib absent');
+                    var derived = NostrLib.getPublicKey(privHex);
+                    if (derived !== acct.pubkey) throw new Error('PIN incorrect');
+                    _activateIdentity(acct.email, acct.pubkey, privHex, acct.enc_nsec);
+                } catch (err) {
+                    alert('❌ ' + (err.message === 'PIN incorrect' ? 'PIN incorrect — réessayez' : 'Déchiffrement impossible'));
+                }
+            });
+        });
+    }
+
     // ── Gestion des comptes sauvegardés (localStorage, SANS clé privée) ────────
     function _loadAccounts() {
         try { return JSON.parse(localStorage.getItem(_LS_ACCOUNTS) || '[]'); }
         catch (e) { return []; }
     }
 
-    function _saveAccount(email, pubkey) {
+    function _saveAccount(email, pubkey, enc_nsec) {
         var list = _loadAccounts().filter(function (a) { return a.pubkey !== pubkey; });
-        list.unshift({ email: email, pubkey: pubkey });
+        var acct = { email: email, pubkey: pubkey };
+        if (enc_nsec) acct.enc_nsec = enc_nsec;
+        list.unshift(acct);
         try { localStorage.setItem(_LS_ACCOUNTS, JSON.stringify(list.slice(0, 10))); } catch (e) { if(window.DEBUG) console.warn('[UPH storage] saveAccount:', e); }
         _renderSavedAccounts();
+        _renderIdSwitcher();
     }
 
     function _deleteAccount(pubkey) {
@@ -795,14 +891,15 @@
     }
 
     // ── Active une identité dérivée : installe polyfill, met à jour UPH ────────
-    function _activateIdentity(email, pubkey, privHex) {
+    function _activateIdentity(email, pubkey, privHex, enc_nsec) {
         _closeModal();
         try { sessionStorage.setItem(_SS_PRIV_KEY, privHex); } catch (e) { if(window.DEBUG) console.warn('[UPH storage] privKey cache:', e); }
         _installNostrPolyfill(pubkey, privHex);
-        _saveAccount(email, pubkey);
+        _saveAccount(email, pubkey, enc_nsec || undefined);
         _applyPubkey(pubkey);
         _cachePubkey(pubkey);
         _refreshUI();
+        _renderIdSwitcher();
         var panel = document.getElementById('uph-nav-panel');
         if (panel) panel.classList.add('uph-h');
         if (!_dataLoaded) { _dataLoaded = true; _loadAll(); }
@@ -1075,7 +1172,15 @@
                                     return ('0' + b.toString(16)).slice(-2);
                                 }).join('');
                             var pubkey = NostrLib.getPublicKey(privHex);
-                            _activateIdentity(email, pubkey, privHex);
+                            // Proposer un PIN pour chiffrer le nsec localement
+                            var enc_nsec = null;
+                            try {
+                                var pin = window.confirm('🔐 Protéger cette identité avec un PIN ?\n(permet de switcher entre identités sans re-dériver)')
+                                    ? prompt('Choisissez votre PIN (mémorisez-le, non récupérable) :')
+                                    : null;
+                                if (pin) enc_nsec = await _encryptNsec(privHex, pin);
+                            } catch (pe) { if(window.DEBUG) console.warn('[UPH] PIN encrypt:', pe); }
+                            _activateIdentity(email, pubkey, privHex, enc_nsec);
                         }
                     } catch (e) { if(window.DEBUG) console.warn('[UPH] nsec activation:', e); }
                 }
@@ -1250,6 +1355,7 @@
             extBtn.style.display = hasExt ? '' : 'none';
         }
         _renderSavedAccounts();
+        _renderIdSwitcher();
         _uphShowCreateSection();
         overlay.classList.add('open');
         // Focus sur le premier champ email visible

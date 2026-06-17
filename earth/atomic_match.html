@@ -317,6 +317,24 @@
             </a>
         </div>
 
+        <!-- Publication NOSTR de la révélation -->
+        <div id="reveal-nostr-block" style="display:none;margin-top:14px;
+             background:rgba(0,255,204,.04);border:1px solid rgba(0,255,204,.18);
+             border-radius:14px;padding:14px 16px">
+            <div style="font-size:.78rem;font-weight:700;color:var(--teal);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:10px">
+                ⚡ Publier sur NOSTR
+            </div>
+            <p style="font-size:.75rem;color:rgba(255,255,255,.45);margin-bottom:10px">
+                Publie ta révélation de résonance sur le réseau décentralisé — les autres atomes pourront te trouver.
+            </p>
+            <button id="btn-publish-reveal" class="btn-compute"
+                    style="margin-top:0;font-size:.88rem;padding:11px"
+                    onclick="_publishRevelation()">
+                ⚡ Publier ma révélation
+            </button>
+            <div id="publish-status" style="font-size:.72rem;color:rgba(255,255,255,.4);margin-top:8px;text-align:center"></div>
+        </div>
+
         <!-- Partage viral du résultat -->
         <div class="share-block" id="share-block" style="display:none">
             <div class="share-title">📤 Partager ce résultat</div>
@@ -414,6 +432,8 @@
 
 <script src="bootstrap.bundle.min.js"></script>
 <script src="leaflet.js"></script>
+<script src="nacl-fast.min.js"></script>
+<script src="nostr.bundle.js"></script>
 <script src="phi2x.js"></script>
 <script>
 'use strict';
@@ -759,6 +779,65 @@ function _renderResult() {
     if (navigator.share) {
         document.getElementById('btn-native-share').style.display = '';
     }
+
+    // Bloc publication NOSTR (visible si common.js chargé)
+    if (typeof window.publishNote === 'function' || typeof window.connectNostr === 'function') {
+        document.getElementById('reveal-nostr-block').style.display = 'block';
+        _updatePublishBtn();
+    }
+}
+
+// ── Publication NOSTR de la révélation (Kind 1) ───────────────────────────
+function _updatePublishBtn() {
+    const btn = document.getElementById('btn-publish-reveal');
+    const st  = document.getElementById('publish-status');
+    if (!btn) return;
+    const connected = window.isNostrConnected && window.userPubkey;
+    btn.textContent = connected ? '⚡ Publier ma révélation' : '🔌 Se connecter pour publier';
+    if (st) st.textContent = connected
+        ? 'Connecté · ta révélation sera signée avec ta clé NOSTR'
+        : 'Nécessite une extension NOSTR (Alby, nos2x, Flamingo)';
+}
+
+async function _publishRevelation() {
+    const btn = document.getElementById('btn-publish-reveal');
+    const st  = document.getElementById('publish-status');
+
+    if (!window.userPubkey && typeof window.connectNostr === 'function') {
+        btn.disabled = true; btn.textContent = '⏳ Connexion…';
+        try { await window.connectNostr(false); } catch(_) {}
+        btn.disabled = false;
+        _updatePublishBtn();
+        if (!window.userPubkey) return;
+    }
+
+    if (typeof window.publishNote !== 'function') {
+        if (st) st.textContent = '⚠ Bibliothèque NOSTR non disponible';
+        return;
+    }
+
+    const shareUrl = document.getElementById('btn-wa')?.href
+        ? decodeURIComponent(document.getElementById('btn-wa').href.replace('https://wa.me/?text=', ''))
+              .split('\n').slice(-1)[0]
+        : location.href;
+
+    const msg = document.getElementById('share-msg').textContent;
+    const tags = [['t', 'atom4love'], ['t', 'phi2x'], ['t', 'resonance']];
+
+    btn.disabled = true; btn.textContent = '⏳ Publication…';
+    if (st) st.textContent = '';
+
+    const result = await window.publishNote(msg, tags, 1, { silent: true });
+
+    btn.disabled = false;
+    if (result && result.success) {
+        btn.textContent = '✅ Révélation publiée !';
+        if (st) st.textContent = `Événement diffusé sur ${result.relaysSuccess} relay(s)`;
+        setTimeout(() => { btn.textContent = '✅ Déjà publié'; btn.disabled = true; }, 3000);
+    } else {
+        btn.textContent = '⚡ Publier ma révélation';
+        if (st) st.textContent = '⚠ Échec — ' + (result?.errors?.[0] || 'erreur inconnue');
+    }
 }
 
 // ── Double Bang canvas léger (requestAnimationFrame, pas p5) ──────────────
@@ -961,6 +1040,14 @@ if (_bLoInt !== 0) {
 }
 // Validation initiale
 _syncVisitorDate();
+</script>
+<script src="common.js"></script>
+<script src="uplanet-header.js"></script>
+<script>
+// Mettre à jour le bouton quand la connexion change
+if (typeof window.waitForConnection === 'function') {
+    window.waitForConnection(_updatePublishBtn);
+}
 </script>
 </body>
 </html>

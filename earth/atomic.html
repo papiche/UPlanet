@@ -2474,15 +2474,15 @@ function drawTheorieMode() {
         }
     }
 
-    // ─ Overlay Kin Union ─────────────────────────────────────────
+    // ─ Overlay Kin Union — halo pulsant (text() non dispo WEBGL sans loadFont) ───
     if (_cachedKinA && _cachedKinB) {
-        const uKin   = ((_cachedKinA.kin + _cachedKinB.kin - 1) % 260) + 1;
-        const uGlyph = (Phi2X.calcKinFromNum(uKin) || {}).glyph || '';
-        blendMode(BLEND); noStroke(); textAlign(CENTER, CENTER);
-        textSize(38); fill(255, 200, 40, 45 + 20*excite);
-        text(uKin, cx, cy);
-        textSize(9); fill(255, 200, 40, 85 + 30*excite);
-        text('KIN UNION · ' + uGlyph.toUpperCase(), cx, cy + 28);
+        blendMode(BLEND); noStroke();
+        fill(255, 200, 40, 50 + 25*excite); ellipse(cx, cy, 48 + 12*excite, 48 + 12*excite);
+        fill(255, 200, 40, 20 + 10*excite); ellipse(cx, cy, 80 + 18*excite, 80 + 18*excite);
+        // Mise à jour de l'overlay HTML si présent
+        var uKin = ((_cachedKinA.kin + _cachedKinB.kin - 1) % 260) + 1;
+        var elU = document.getElementById('canvas-kin-union');
+        if (elU) elU.textContent = uKin;
     }
 
     // ─ HUD Phi/Octave ─────────────────────────────────────────────
@@ -2611,13 +2611,7 @@ function drawProfileMode() {
         }
     }
 
-    if (!hasData) {
-        // ─ Invitation textuelle ───────────────────────────────────────
-        blendMode(BLEND); textAlign(CENTER, CENTER); noStroke();
-        textSize(11); fill(kr, kg, kb, 80);
-        text('Entrez date et lieu de naissance', cx, cy + R * 1.5);
-        return;
-    }
+    if (!hasData) { return; }
 
     // ─ Point B — Naissance ───────────────────────────────────────────
     const ptB = projectLatLonToScreen(latB, lonB, _camRotX, _camRotY, R, cx, cy);
@@ -2704,11 +2698,10 @@ function drawProfileMode() {
     noStroke(); fill(255, 240, 120, 230 + 25 * audioE);
     ellipse(cx, cy, nucPulse * 1.5, nucPulse * 1.5);
 
-    // ─ KIN en overlay ────────────────────────────────────────────────
-    blendMode(BLEND); noStroke(); textAlign(CENTER, CENTER);
+    // ─ KIN marqueur (text() non dispo WEBGL) — point coloré sous la sphère ─────
     if (_cachedKinA) {
-        textSize(9); fill(kr, kg, kb, 80);
-        text(_cachedKinA.glyph.toUpperCase() + ' · T' + _cachedKinA.tone, cx, cy + R * 1.5);
+        blendMode(BLEND); noStroke(); fill(kr, kg, kb, 60);
+        ellipse(cx, cy + R * 1.5, 6, 6);
     }
 
     // ─ Halo battant sur le bouton Audio ──────────────────────────────
@@ -2749,26 +2742,14 @@ function drawMatchMode() {
     drawWave(cx - dist, cy, arA, agA, abA, frameTime * 2);
     drawWave(cx + dist, cy, arB, agB, abB, frameTime * 2);
 
-    // ─ Labels Kin (MED+HIGH) ──────────────────────────────────────
+    // ─ Labels Kin — points colorés (text() non disponible en WEBGL sans loadFont) ──
     if (_perfLevel >= 1) {
-        blendMode(BLEND); noStroke(); textAlign(CENTER, CENTER);
+        blendMode(BLEND); noStroke();
         if (_cachedKinA) {
-            textSize(18); fill(arA, agA, abA, 180);
-            text(_cachedKinA.kin, cx - dist, cy - 20);
-            if (_perfLevel >= 2) {
-                textSize(8); fill(arA, agA, abA, 100);
-                text(_cachedKinA.glyphFr?.toUpperCase() || _cachedKinA.glyph.toUpperCase(), cx - dist, cy + 14);
-                text(_cachedKinA.tone, cx - dist, cy + 24);
-            }
+            fill(arA, agA, abA, 200); ellipse(cx - dist, cy - 18, 8, 8);
         }
         if (_cachedKinB) {
-            textSize(18); fill(arB, agB, abB, 180);
-            text(_cachedKinB.kin, cx + dist, cy - 20);
-            if (_perfLevel >= 2) {
-                textSize(8); fill(arB, agB, abB, 100);
-                text(_cachedKinB.glyphFr?.toUpperCase() || _cachedKinB.glyph.toUpperCase(), cx + dist, cy + 14);
-                text(_cachedKinB.tone, cx + dist, cy + 24);
-            }
+            fill(arB, agB, abB, 200); ellipse(cx + dist, cy - 18, 8, 8);
         }
     }
 
@@ -2786,28 +2767,27 @@ function drawMatchMode() {
     fill(mixR, mixG, mixB_c,  9 + kFact * 22); ellipse(cx, cy, manR * 7.5, manR * 7.5);
 
     push(); translate(cx, cy); rotate(frameTime * speed);
-    stroke(mixR, mixG, mixB_c, manAlpha);
-    strokeWeight(1.2 + kFact * 1.8);
-    noFill();
+    // strokeWeight fixe = 1 : le weight variable déclenche un recalcul buffers WEBGL à chaque frame
+    stroke(mixR, mixG, mixB_c, manAlpha); strokeWeight(1); noFill();
+    // Pas de CLOSE : la rhodonée est déjà périodique, CLOSE ajoutait un segment spurieux
+    const step = _perfLevel === 0 ? 0.12 : _perfLevel === 1 ? 0.07 : 0.04;
     beginShape();
-    const step = _perfLevel === 0 ? 0.08 : _perfLevel === 1 ? 0.05 : 0.03;
     for (let a = 0; a < TWO_PI * 2; a += step) {
         const rOff = manR * Math.cos(petals * a + frameTime * speed * 0.8);
         vertex(rOff * Math.cos(a), rOff * Math.sin(a));
     }
-    endShape(CLOSE);
+    endShape();
 
-    // Deuxième bras contra-rotatif (MED+HIGH) — effet Moiré central
-    if (_perfLevel >= 1 && kFact > 0.3) {
+    // Deuxième bras contra-rotatif (HIGH uniquement) — effet Moiré central
+    if (_perfLevel >= 2 && kFact > 0.3) {
         rotate(-frameTime * speed * 2.618);
-        stroke(mixR, mixG, mixB_c, manAlpha * 0.45);
-        strokeWeight(0.8);
+        stroke(mixR, mixG, mixB_c, manAlpha * 0.45); strokeWeight(1);
         beginShape();
-        for (let a = 0; a < TWO_PI * 2; a += step * 1.5) {
+        for (let a = 0; a < TWO_PI * 2; a += step * 2) {
             const rOff = manR * 0.6 * Math.cos((petals + 1) * a);
             vertex(rOff * Math.cos(a), rOff * Math.sin(a));
         }
-        endShape(CLOSE);
+        endShape();
     }
     pop();
 
@@ -2816,13 +2796,10 @@ function drawMatchMode() {
     const pulse = 7 + 5 * Math.sin(frameTime * 0.09);
     noStroke(); fill(mixR, mixG, mixB_c, 210 + 45 * Math.sin(frameTime * 0.07));
     ellipse(cx, cy, pulse, pulse);
-    if (_cachedKinA && _cachedKinB) {
-        const uKin = ((_cachedKinA.kin + _cachedKinB.kin - 1) % 260) + 1;
-        textAlign(CENTER, CENTER); noStroke();
-        if (kFact > 0.6) {
-            fill(255, 255, 255, 170 + kFact * 85); textSize(11);
-            text(uKin, cx, cy - manR * 0.55);
-        }
+    if (_cachedKinA && _cachedKinB && kFact > 0.6) {
+        // KIN Union : petit halo central à la place du text() (WEBGL sans loadFont)
+        noStroke(); fill(255, 255, 255, 100 + kFact * 80);
+        ellipse(cx, cy - manR * 0.55, 5 + kFact * 5, 5 + kFact * 5);
     }
 }
 

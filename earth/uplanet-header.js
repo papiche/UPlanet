@@ -575,9 +575,13 @@
             try { npub = window.hexToNpub(pubkey); }
             catch (e) { console.warn('[UPH] hexToNpub erreur:', e.message || e); }
         } else {
-            console.log('[UPH] window.hexToNpub absent, retry via _onLibsReady');
+            // Libs pas encore prêtes : auto-retry à UPlanetReady
+            if (!window.UPlanetModulesReady) {
+                window.addEventListener('UPlanetReady', function() { _loadMyGPS(); }, { once: true });
+            }
+            return;
         }
-        if (!npub) { console.log('[UPH] _loadMyGPS: npub vide, abandon'); return; }
+        if (!npub) { return; }
         var url    = _apiUrl() + '/api/myGPS?npub=' + encodeURIComponent(npub);
         var nipEl  = document.getElementById('uph-nip');
         var roamEl = document.getElementById('uph-roam');

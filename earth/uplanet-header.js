@@ -540,7 +540,12 @@
                 meta ? JSON.stringify(meta).slice(0, 300) : 'null');
             var nameEl = document.getElementById('uph-name');
             var avEl   = document.getElementById('uph-avatar');
-            if (!meta) { console.warn('[UPH] _loadProfile: meta null (profil kind 0 absent ?)'); return; }
+            if (!meta) {
+                window.isMultipass = false;
+                _showNonMultipassBadge();
+                console.warn('[UPH] _loadProfile: meta null (profil kind 0 absent ?)');
+                return;
+            }
             if (meta.name && nameEl) { nameEl.textContent = meta.name; nameEl._named = true; }
             if (meta.picture && avEl) { avEl.src = meta.picture; avEl.style.display = ''; }
             // Extraire l'email depuis le profil kind 0 (nip05 = "user@domain.tld")
@@ -551,12 +556,15 @@
                 if (nameEl && !nameEl._named) { nameEl.textContent = profileEmail; nameEl.style.display = ''; }
                 _updateNavProfile();
             }
+            // Marqueur MULTIPASS : g1pub présent = compte enregistré via UPassport /g1nostr
+            window.isMultipass = !!meta.g1pub;
             if (meta.g1pub) {
                 console.log('[UPH] g1pub trouvé dans kind 0:', meta.g1pub.slice(0, 8)+'…');
                 window._uphG1Pub = meta.g1pub;
                 _loadBalance(meta.g1pub);
             } else {
-                console.warn('[UPH] g1pub absent du profil kind 0 — solde ẐEN non chargé.',
+                _showNonMultipassBadge();
+                console.warn('[UPH] g1pub absent du profil kind 0 — compte non MULTIPASS (calculé localement).',
                     'Champs disponibles:', Object.keys(meta).join(', '));
             }
         } catch (e) {
@@ -855,6 +863,44 @@
         try { localStorage.setItem(_LS_ACCOUNTS, JSON.stringify(list.slice(0, 10))); } catch (e) { if(window.DEBUG) console.warn('[UPH storage] saveAccount:', e); }
         _renderSavedAccounts();
         _renderIdSwitcher();
+    }
+
+    function _showNonMultipassBadge() {
+        var pubkey = (window.NostrState && window.NostrState.userPubkey) || window.userPubkey;
+        var nip = document.getElementById('uph-nip');
+        if (nip) { nip.className = 'uph-dot uph-y'; nip.title = '⚠ Non-MULTIPASS — ne peut pas publier sur ce relay'; }
+        var uph = document.getElementById('uph');
+        if (!uph || document.getElementById('uph-nonmp-del')) return;
+        var delBtn = document.createElement('button');
+        delBtn.id    = 'uph-nonmp-del';
+        delBtn.title = 'Compte de test — supprimer';
+        delBtn.textContent = '🗑';
+        delBtn.style.cssText = 'background:rgba(255,80,80,.15);border:1px solid rgba(255,80,80,.3);'
+            + 'color:rgba(255,150,150,.8);padding:2px 6px;border-radius:6px;cursor:pointer;'
+            + 'font-size:.85rem;margin-left:4px;flex-shrink:0';
+        delBtn.onclick = function() {
+            if (confirm('Supprimer ce compte de test ?\nToutes les données locales (clés, données de naissance) seront effacées.')) {
+                _clearNonMultipass(pubkey);
+            }
+        };
+        var accessBtn = document.getElementById('uph-access-btn');
+        if (accessBtn) uph.insertBefore(delBtn, accessBtn);
+        else uph.appendChild(delBtn);
+    }
+
+    function _clearNonMultipass(pubkey) {
+        if (pubkey) _deleteAccount(pubkey);
+        try { sessionStorage.removeItem(_SS_KEY); sessionStorage.removeItem(_SS_PRIV_KEY); } catch (e) {}
+        if (window.nostr && window.nostr._isG1v1) { try { delete window.nostr; } catch(e) { window.nostr = undefined; } }
+        window.userPubkey    = null;
+        window.isMultipass   = undefined;
+        window._uphG1Pub     = undefined;
+        window._uphEmail     = undefined;
+        if (window.NostrState) { window.NostrState.userPubkey = null; window.NostrState.isNostrConnected = false; }
+        ['atomic_birth_data', 'a4l_multipass_ok', 'a4l_omega_noise', 'a4l_theme'].forEach(function(k) {
+            try { localStorage.removeItem(k); } catch (e) {}
+        });
+        location.reload();
     }
 
     function _deleteAccount(pubkey) {

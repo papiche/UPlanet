@@ -1199,7 +1199,14 @@ async function handleTheaterLike(eventId) {
             return;
         }
     }
-    
+
+    // Check MULTIPASS — only registered accounts can publish on Astroport relay
+    if (window.isMultipass === false) {
+        alert('❌ Compte non MULTIPASS — créez votre MULTIPASS pour interagir sur ce relay.');
+        if (typeof window.uphOpenLogin === 'function') window.uphOpenLogin();
+        return;
+    }
+
     // Ensure relay is connected
     if (!nostrRelay || !isNostrConnected) {
         console.log('🔌 Connecting to relay...');

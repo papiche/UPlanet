@@ -83,6 +83,20 @@ async function publishNote(content, additionalTags = [], kind = 1, options = {})
         return result;
     }
 
+    // Vérification MULTIPASS — seuls les comptes enregistrés via UPassport peuvent publier sur le relay Astroport
+    if (window.isMultipass === false) {
+        const mpMsg = "❌ Compte non MULTIPASS — seuls les MULTIPASS peuvent publier sur ce relay.\nCréez votre MULTIPASS sur UPlanet pour rejoindre le réseau coopératif.";
+        if (!silent) {
+            if (typeof window.uphOpenLogin === 'function') {
+                if (confirm(mpMsg + '\n\nOuvrir la création de MULTIPASS ?')) window.uphOpenLogin();
+            } else {
+                alert(mpMsg);
+            }
+        }
+        result.errors.push('NOT_MULTIPASS');
+        return result;
+    }
+
     try {
         // Préparer les tags
         const tags = [...additionalTags];

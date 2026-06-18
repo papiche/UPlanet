@@ -918,6 +918,7 @@ let _conMap   = null, _conMarker   = null;
 let _conLocationUserSet = false;  // true = l'utilisateur a explicitement choisi un lieu de conception
 let _spiralBirthFrame  = -1;      // frame où les données deviennent disponibles (grow-in spirale)
 let _pepperMode       = 'harmonique'; // 'harmonique' | 'anomalie'
+let _lastHudHtml      = '';           // cache anti-thrash DOM (draw loop)
 let _pepperDeltaDays  = 0;            // |conception_réelle - conception_harmonique| en jours
 let _captureRequested = false;
 // Performance adaptative
@@ -2068,13 +2069,13 @@ async function createMultipass() {
     const passInput  = document.getElementById('multipass-pass-input');
     const passCode   = (passInput && passBlock.style.display !== 'none') ? (passInput.value || '').trim() : '';
 
-    if (btn) { btn.textContent = '✨ Calcul de l\'empreinte…'; btn.disabled = true; }
+    if (btn) { btn.textContent = '⚛ Alignement quantique…'; btn.disabled = true; }
     if (resultEl) {
         resultEl.style.display = '';
-        resultEl.innerHTML = _progressHTML('✨ Calcul de l\'empreinte vibratoire…', '~3 s · 600 000 itérations SHA-256');
+        resultEl.innerHTML = _progressHTML('⚛ Alignement des coordonnées quantiques…', '600 000 itérations SHA-256');
     }
 
-    // ── Phase 1 : PBKDF2 (600k SHA-256) ──────────────────────────────────────
+    // ── Phase 1 : PBKDF2 (600k SHA-256) — phrases animées via Web Worker ────
     const birthUnixFull = _dateToUtcUnix(bd, bt || '12:00', birthLon);
     const conUnixFull   = cd ? _dateToUtcUnix(cd, ct || '00:00', conLon || birthLon) : birthUnixFull;
     const birthDtUtc    = _unixToUtcStr(birthUnixFull);
@@ -2086,7 +2087,22 @@ async function createMultipass() {
     const saltRaw       = `${birthDtUtc}_${latStr}_${lonStr}_${polarity}_${weight.toFixed(1)}`;
     const pepperRaw     = `${conDtUtc}_${conLatStr}_${conLonStr}_${weight.toFixed(1)}`;
 
-    const { stretchedSalt, stretchedPepper } = await _pbkdf2StretchKey(saltRaw, pepperRaw);
+    const _cpPhrases = [
+        ['⚛', 'Alignement des coordonnées quantiques…'],
+        ['💎', 'Cristallisation de la Singularité…'],
+        ['🔑', 'Forgeage de votre clé cosmique…'],
+        ['✨', 'Inscription dans le registre cosmique…'],
+    ];
+    let _cpIdx = 0;
+    let _cpTimer = setInterval(function() {
+        _cpIdx = (_cpIdx + 1) % _cpPhrases.length;
+        const _ph = _cpPhrases[_cpIdx];
+        if (resultEl) resultEl.innerHTML = _progressHTML(_ph[0] + ' ' + _ph[1], '600 000 itérations SHA-256');
+        if (btn) btn.textContent = _ph[0] + ' ' + _ph[1];
+    }, 900);
+    const { stretchedSalt, stretchedPepper } = await _pbkdf2StretchKey(saltRaw, pepperRaw)
+        .catch(function(e) { clearInterval(_cpTimer); throw e; });
+    clearInterval(_cpTimer);
 
     // ── Phase 2 : scrypt → ed25519 (local, instantané) ───────────────────────
     if (btn) btn.textContent = '🔐 Identité cosmique…';
@@ -2181,12 +2197,124 @@ function _keyPreviewHTML(npub, email) {
         + npub + '</div></div>';
 }
 
+// ── Vault onboarding — ADN Cosmique (wallet detection + PIN mobile) ──────────
+let _vaultPrivHex = null;
+
+function _getRecommendedWallet() {
+    var ua = navigator.userAgent;
+    if (/Mobi|Android|iPhone|iPad/i.test(ua)) {
+        return { isMobile: true };
+    }
+    if (/Firefox/i.test(ua)) {
+        return { name: 'nos2x-fox', url: 'https://addons.mozilla.org/fr/firefox/addon/nos2x-fox/', icon: '🦊', isMobile: false };
+    }
+    // Chrome / Edge / Brave / default → nos2x (atom4love-ext à venir)
+    return { name: 'nos2x', url: 'https://chrome.google.com/webstore/detail/nos2x/kpgefcfmnafjgpblomihpgmejjdanjjp', icon: '🧩', isMobile: false };
+}
+
+window._atomicCopyNsec = function() {
+    var inp = document.getElementById('vault-nsec-input');
+    if (!inp) return;
+    inp.type = 'text';
+    inp.select();
+    try { document.execCommand('copy'); } catch (_) {}
+    if (navigator.clipboard) navigator.clipboard.writeText(inp.value).catch(function() {});
+    setTimeout(function() { inp.type = 'password'; }, 300);
+    var cbtn = document.getElementById('vault-copy-btn');
+    if (cbtn) { cbtn.textContent = '✅ Copié'; setTimeout(function() { cbtn.textContent = '📋 Copier'; }, 2200); }
+};
+
+window._atomicSaveWithPin = async function() {
+    var privHex = _vaultPrivHex;
+    if (!privHex) return;
+    var pin = prompt('🔐 Créez un code PIN (4 caractères min.)\nIl vous sera demandé pour vous connecter sur cet appareil.');
+    if (!pin || pin.length < 4) { if (pin !== null) alert('PIN trop court (4 caractères minimum).'); return; }
+    var pin2 = prompt('🔐 Confirmez votre PIN :');
+    if (pin !== pin2) { alert('Les PIN ne correspondent pas.'); return; }
+    try {
+        var enc = new TextEncoder();
+        var salt = crypto.getRandomValues(new Uint8Array(16));
+        var iv   = crypto.getRandomValues(new Uint8Array(12));
+        var rawKey = await crypto.subtle.importKey('raw', enc.encode(pin), 'PBKDF2', false, ['deriveKey']);
+        var aesKey = await crypto.subtle.deriveKey(
+            { name: 'PBKDF2', salt: salt, iterations: 200000, hash: 'SHA-256' },
+            rawKey, { name: 'AES-GCM', length: 256 }, false, ['encrypt']);
+        var ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv: iv }, aesKey, enc.encode(privHex));
+        var b64 = function(ab) { return btoa(String.fromCharCode.apply(null, new Uint8Array(ab))); };
+        localStorage.setItem('a4l_vault_nsec', JSON.stringify({ ct: b64(ct), iv: b64(iv.buffer), salt: b64(salt.buffer) }));
+        var pbtn = document.getElementById('vault-pin-btn');
+        if (pbtn) { pbtn.textContent = '✅ Clé sécurisée sur cet appareil !'; pbtn.disabled = true; pbtn.style.background = 'rgba(0,255,100,.18)'; pbtn.style.borderColor = 'rgba(0,255,100,.4)'; }
+    } catch(e) { alert('Erreur chiffrement : ' + (e.message || e)); }
+};
+
 function _renderMultipassResult(data, el, localKeys) {
     if (!el) return;
     const npub  = data.npub  || (localKeys && localKeys.npub) || '';
     const email = data.email || (document.getElementById('multipass-email')?.value || '');
     const url   = data.url   || data.uplanet_home || '';
     const creating = data.status === 'creating';
+    var _vHtml = '';
+    if (localKeys && localKeys.nsec) {
+        _vaultPrivHex = localKeys.privHex;
+        var _w = _getRecommendedWallet();
+        var _step2 = _w.isMobile
+            ? '<button id="vault-pin-btn" onclick="_atomicSaveWithPin()" '
+              + 'style="display:block;width:100%;background:rgba(0,255,100,.12);border:1px solid rgba(0,255,100,.35);'
+              + 'color:#00ff88;border-radius:8px;padding:9px;font-size:.8rem;cursor:pointer;margin-top:4px">'
+              + '📱 Sécuriser avec un code PIN sur cet appareil</button>'
+            : '<a href="' + _w.url + '" target="_blank" rel="noopener" '
+              + 'style="display:block;text-align:center;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.2);'
+              + 'color:#fff;text-decoration:none;padding:9px;border-radius:8px;font-size:.83rem">'
+              + _w.icon + ' Installer ' + _w.name + '</a>'
+              + '<div style="font-size:.65rem;color:#aaa;text-align:center;margin-top:6px">'
+              + 'Ouvrez l\'extension, choisissez <em>"Importer une clé"</em> et collez votre ADN.</div>';
+        _vHtml = '<div style="background:rgba(120,80,255,.1);border:1px solid rgba(120,80,255,.35);'
+            + 'border-radius:10px;padding:13px;margin-top:12px">'
+            + '<div style="color:#b464ff;font-size:.88rem;font-weight:700;margin-bottom:8px">🔒 Sécurisez votre ADN Cosmique</div>'
+            + '<p style="font-size:.75rem;color:#ddd;margin-bottom:12px;line-height:1.55">'
+            + 'Votre <strong>ADN Cosmique</strong> est le seul moyen de prouver que vous êtes vous. '
+            + '<span style="color:#ff5566">Ne le montrez à personne.</span></p>'
+            + '<div style="background:rgba(0,0,0,.4);padding:10px;border-radius:8px;margin-bottom:10px">'
+            + '<div style="font-size:.7rem;color:#aaa;margin-bottom:6px">Étape 1 — Copiez votre ADN Cosmique</div>'
+            + '<div style="display:flex;gap:5px">'
+            + '<input type="password" id="vault-nsec-input" value="' + localKeys.nsec + '" readonly '
+            + 'style="flex:1;background:transparent;border:1px solid #555;color:#fff;border-radius:6px;padding:5px 8px;font-size:.65rem;font-family:monospace">'
+            + '<button id="vault-copy-btn" onclick="_atomicCopyNsec()" '
+            + 'style="background:#b464ff;color:#fff;border:none;border-radius:6px;padding:5px 10px;font-size:.75rem;cursor:pointer;white-space:nowrap">'
+            + '📋 Copier</button></div>'
+            + '<div style="font-size:.62rem;color:#ff5566;margin-top:5px">⚠ Ne partagez JAMAIS ce code.</div>'
+            + '</div>'
+            + '<div style="background:rgba(0,0,0,.4);padding:10px;border-radius:8px;margin-bottom:10px">'
+            + '<div style="font-size:.7rem;color:#aaa;margin-bottom:6px">Étape 2 — Protégez votre identité</div>'
+            + _step2
+            + (_w.isMobile ? '' :
+                '<div style="margin-top:8px;font-size:.65rem;color:rgba(255,255,255,.25);line-height:1.5">'
+                + '🔜 <em>atom4love-ext</em> — extension UPlanet native (bientôt disponible)</div>')
+            + '</div>'
+            + '<div style="background:rgba(0,255,204,.05);border:1px solid rgba(0,255,204,.15);border-radius:8px;padding:10px;margin-bottom:10px">'
+            + '<div style="font-size:.72rem;font-weight:700;color:#00ffcc;margin-bottom:5px">🚀 Rejoindre l\'Astroport <span style="font-size:.6rem;font-weight:400;color:rgba(255,255,255,.3)">(facultatif)</span></div>'
+            + '<div style="font-size:.7rem;color:#ccc;line-height:1.55;margin-bottom:8px">'
+            + 'Votre clé est déjà active localement. Inscrire votre MULTIPASS sur l\'Astroport débloque :'
+            + '</div>'
+            + '<div style="display:flex;flex-direction:column;gap:4px;font-size:.7rem;margin-bottom:9px">'
+            + '<span>💌 <strong style="color:#fff">BRO Love</strong> — délégation de clé & messagerie vibratoire</span>'
+            + '<span>📰 <strong style="color:#fff">KIN.news</strong> — actualité de votre constellation Maya</span>'
+            + '<span>⚗️ <strong style="color:#fff">Alpha test</strong> — cabin-33 · atomic · zelkova</span>'
+            + '</div>'
+            + '<div style="font-size:.65rem;color:rgba(255,200,0,.55);font-style:italic;line-height:1.5">'
+            + 'L\'inscription déclenche la création SSSS/IPFS/DID et envoie votre PASS par email.'
+            + '</div>'
+            + '</div>'
+            + '<div style="background:rgba(255,200,0,.06);border:1px solid rgba(255,200,0,.2);border-radius:8px;padding:9px;text-align:center">'
+            + '<div style="font-size:.7rem;color:#ffcc00;font-weight:700;margin-bottom:4px">🧪 Alpha Test — Logiciels AGPL</div>'
+            + '<div style="font-size:.65rem;color:rgba(255,255,255,.4);line-height:1.6">'
+            + 'Atom4LOVE est un logiciel libre (<strong style="color:rgba(255,255,255,.6)">AGPL-3.0</strong>). '
+            + 'En tant qu\'alpha testeur·ice, vous participez à choisir l\'évolution des outils '
+            + 'que la coopérative met à votre service. Vos retours façonnent le produit.'
+            + '</div>'
+            + '</div>'
+            + '</div>';
+    }
     el.innerHTML = '<div class="p-2 rounded" style="background:rgba(245,158,11,.06);border:1px solid rgba(245,158,11,.3)">'
         + '<div class="small fw-bold mb-1" style="color:#f59e0b">'
         + (creating ? '🚀 MULTIPASS initialisé !' : '✅ MULTIPASS créé !') + '</div>'
@@ -2196,7 +2324,8 @@ function _renderMultipassResult(data, el, localKeys) {
         + (url   ? '<a href="' + url + '" target="_blank" class="btn btn-sm w-100 fw-bold"'
             + ' style="background:rgba(245,158,11,.2);border:1px solid rgba(245,158,11,.5);color:#f59e0b;font-size:.75rem">'
             + '🎴 Voir mon MULTIPASS →</a>' : '')
-        + '</div>';
+        + '</div>'
+        + _vHtml;
     // Flag MULTIPASS créé → déverrouille tabs et boutons bottom nav
     try { localStorage.setItem('a4l_multipass_ok','1'); } catch(_) {}
     ['tab-btn-radar','tab-btn-oracle'].forEach(id => {
@@ -2260,10 +2389,14 @@ document.addEventListener('DOMContentLoaded', () => {
     setTimeout(initBirthMap, 150);
 
     // Auto-tab : focus champ suivant dès que la longueur max est atteinte
+    // Guard Tab : si l'utilisateur navigue au clavier (Tab), ne pas sauter un champ supplémentaire
     document.querySelectorAll('.date-seg-row').forEach(function(row) {
         const inputs = Array.from(row.querySelectorAll('input[type="number"]'));
         inputs.forEach(function(inp, idx) {
+            let _tabPressed = false;
+            inp.addEventListener('keydown', function(e) { _tabPressed = e.key === 'Tab'; });
             inp.addEventListener('input', function() {
+                if (_tabPressed) return;
                 if (String(this.value).length >= this.placeholder.length && idx + 1 < inputs.length) {
                     inputs[idx + 1].focus();
                     inputs[idx + 1].select();
@@ -2312,10 +2445,7 @@ function setup() {
     createCanvas(c.offsetWidth, c.offsetHeight, WEBGL).parent('canvas-container');
     buildIcosahedronMesh();
 
-    // Valeurs par défaut fixes (pas de random — l'utilisateur remplit son profil)
-    document.getElementById('birth-date').value  = '1972-03-21';
-    document.getElementById('birth-time').value  = '18:30';
-    // Atome B : partenaire de résonance — défaut Paris 21/03/1972 20:12
+    // Atome B : date démo pour l'onglet Résonance (partenaire fictif — Paris)
     document.getElementById('match-date-b').value = '1972-03-21';
     document.getElementById('match-time-b').value = '20:12';
     document.getElementById('match-lon-a').value  = '0';
@@ -2698,7 +2828,7 @@ function drawTheorieMode() {
         if (elU) elU.textContent = uKin;
     }
 
-    // ─ HUD Phi/Octave — throttle 4fps (évite reflow/repaint à 60fps) ──────────
+    // ─ HUD Phi/Octave — throttle 4fps + cache anti-thrash ────────────────────
     blendMode(BLEND);
     if (frameTime % 12 === 0) {
         const hudEl = document.getElementById('hud-overlay');
@@ -2707,7 +2837,8 @@ function drawTheorieMode() {
             const st = excite > 0.75 ? '⚡ CONCEPTION'
                      : excite > 0.35 ? '〰 Résonance'
                      : '· Battement';
-            hudEl.innerHTML = `Φ=${PHI.toFixed(3)} / Oct=2.000<br>Interf: ${interfV.toFixed(3)}<br>${st} · ${pf}`;
+            const _h = `Φ=${PHI.toFixed(3)} / Oct=2.000<br>Interf: ${interfV.toFixed(3)}<br>${st} · ${pf}`;
+            if (_h !== _lastHudHtml) { hudEl.innerHTML = _lastHudHtml = _h; }
         }
     }
 }
@@ -2919,8 +3050,8 @@ function drawProfileMode() {
         ellipse(cx, cy + R * 1.5, 6, 6);
     }
 
-    // ─ Halo battant sur le bouton Audio ──────────────────────────────
-    if (window.AudioOrchestra && AudioOrchestra.enabled) {
+    // ─ Halo battant sur le bouton Audio — throttle 10fps ────────────
+    if (frameTime % 6 === 0 && window.AudioOrchestra && AudioOrchestra.enabled) {
         const btnA = document.getElementById('btn-audio-toggle');
         if (btnA) {
             btnA.style.boxShadow  = `0 0 ${10 + audioE * 28}px rgba(0,255,204,${(audioE * 0.9).toFixed(2)})`;
@@ -2928,15 +3059,18 @@ function drawProfileMode() {
         }
     }
 
-    // ─ HUD ────────────────────────────────────────────────────────────
-    const hudEl = document.getElementById('hud-overlay');
-    if (hudEl) {
-        const pf  = _perfCalibrated ? ['LOW','MED','HIGH'][_perfLevel] : '…';
-        const fps = Math.round(frameRate());
-        hudEl.innerHTML = `Mode: GAÏA · ${pf} (${fps} fps)`
-            + `<br>Ψ ${(effCoh * 100).toFixed(0)}%`
-            + (hasData ? `<br>B: ${latB.toFixed(2)}°N ${lonB.toFixed(2)}°E` : '')
-            + (conDiffers ? `<br>C: ${latC.toFixed(2)}°N ${lonC.toFixed(2)}°E` : '');
+    // ─ HUD — throttle 4fps + cache anti-thrash ────────────────────────
+    if (frameTime % 12 === 0) {
+        const hudEl = document.getElementById('hud-overlay');
+        if (hudEl) {
+            const pf  = _perfCalibrated ? ['LOW','MED','HIGH'][_perfLevel] : '…';
+            const fps = Math.round(frameRate());
+            const _h  = `Mode: GAÏA · ${pf} (${fps} fps)`
+                + `<br>Ψ ${(effCoh * 100).toFixed(0)}%`
+                + (hasData ? `<br>B: ${latB.toFixed(2)}°N ${lonB.toFixed(2)}°E` : '')
+                + (conDiffers ? `<br>C: ${latC.toFixed(2)}°N ${lonC.toFixed(2)}°E` : '');
+            if (_h !== _lastHudHtml) { hudEl.innerHTML = _lastHudHtml = _h; }
+        }
     }
 }
 
@@ -3060,15 +3194,15 @@ window._shareMatchLink = function() {
     const loV  = parseFloat(lon.toFixed(2));
     const laV  = parseFloat(lat.toFixed(2));
 
-    const params = new URLSearchParams({ d, t, lo: loV, la: laV });
-    if (kin) params.set('k', kin);
     const displayName = (window.userPubkey && window.cachedProfile?.name)
         ? window.cachedProfile.name
         : (kin ? `KIN ${kin}` : 'Un Explorateur');
-    params.set('n', displayName);
 
+    // Payload Base64 URL-safe — protège la date de naissance d'un regard furtif
+    const _rawP = JSON.stringify(Object.assign({ d, t, lo: loV, la: laV, n: displayName }, kin ? { k: kin } : {}));
+    const _b64P = btoa(unescape(encodeURIComponent(_rawP))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
     const base = location.href.replace(/\/[^/]*$/, '/').replace(/atomic\.html.*$/, '');
-    const url  = `${base}atomic_match.html?${params.toString()}`;
+    const url  = `${base}atomic_match.html?p=${_b64P}`;
 
     // Texte viral pré-formaté
     const kinInfo  = kin ? ` (KIN ${kin} · ${_cachedKinA?.glyphFr || ''})` : '';

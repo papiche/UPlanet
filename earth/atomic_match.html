@@ -488,15 +488,25 @@
 'use strict';
 
 // ── Données Atome B (depuis URL) ──────────────────────────────────────────
-const _params   = new URLSearchParams(location.search);
-const _bDate    = _params.get('d') || '';  // YYYYMMDD
-const _bTime    = _params.get('t') || '1200';  // HHMM
-const _bLoRaw   = _params.get('lo');
-const _bLaRaw   = _params.get('la');
-const _bLoInt   = _bLoRaw !== null ? parseFloat(_bLoRaw) : 0;
-const _bLat     = _bLaRaw !== null ? parseFloat(_bLaRaw) : 0;
-const _bKin     = parseInt(_params.get('k'))  || null;
-const _bName    = _params.get('n') || 'Un Explorateur';
+// Décodage URL — nouveau format ?p=base64(JSON) avec fallback anciens liens ?d=...&lo=...
+const _qp = new URLSearchParams(location.search);
+let _pRaw = {};
+if (_qp.has('p')) {
+    try {
+        const _b64 = _qp.get('p').replace(/-/g, '+').replace(/_/g, '/');
+        const _pad = _b64 + '='.repeat((4 - _b64.length % 4) % 4);
+        _pRaw = JSON.parse(decodeURIComponent(escape(atob(_pad))));
+    } catch(e) { if(window.DEBUG) console.warn('[A4L match] lien Base64 invalide', e); }
+}
+const _params   = _qp;  // compatibilité lignes suivantes
+const _bDate    = String(_pRaw.d  !== undefined ? _pRaw.d  : (_qp.get('d')  || ''));
+const _bTime    = String(_pRaw.t  !== undefined ? _pRaw.t  : (_qp.get('t')  || '1200'));
+const _bLoRaw   = _pRaw.lo !== undefined ? String(_pRaw.lo) : _qp.get('lo');
+const _bLaRaw   = _pRaw.la !== undefined ? String(_pRaw.la) : _qp.get('la');
+const _bLoInt   = _bLoRaw !== null && _bLoRaw !== undefined ? parseFloat(_bLoRaw) : 0;
+const _bLat     = _bLaRaw !== null && _bLaRaw !== undefined ? parseFloat(_bLaRaw) : 0;
+const _bKin     = parseInt(_pRaw.k !== undefined ? _pRaw.k : (_qp.get('k') || '')) || null;
+const _bName    = String(_pRaw.n  !== undefined ? _pRaw.n  : (_qp.get('n')  || 'Un Explorateur'));
 
 // ── Validation des paramètres (anti-injection) ────────────────────────────
 function _safeStr(s, maxLen) { return String(s || '').replace(/[<>&"'`]/g, '').slice(0, maxLen); }
@@ -719,7 +729,9 @@ function _computeMatch() {
     } catch(e) {
         console.error('[A4L match]', e);
         btn.disabled = false; btn.textContent = '🔮 Révéler notre résonance';
-        document.getElementById('res-detail').innerHTML = '<span style="color:#ff8888">⚠ Erreur : ' + e.message + '</span>'; document.getElementById('result-block').style.display='block';
+        const _errEl = document.getElementById('res-detail');
+        if (_errEl) { _errEl.textContent = ''; const _s = document.createElement('span'); _s.style.color = '#ff8888'; _s.textContent = '⚠ Erreur : ' + (e.message || String(e)); _errEl.appendChild(_s); }
+        document.getElementById('result-block').style.display='block';
         return;
     }
     btn.disabled = false; btn.textContent = '🔄 Recalculer';
@@ -796,7 +808,7 @@ function _renderResult() {
     const aLo  = parseFloat(document.getElementById('v-lon').value) || 0;
     const aLa  = parseFloat(document.getElementById('v-lat').value) || 0;
     const ctaP = new URLSearchParams({
-        'match-b-d':  _params.get('d') || '',
+        'match-b-d':  _bDate || '',
         'match-b-lo': _bLoInt,
         'a-dd': aDD, 'a-mm': aMM, 'a-yyyy': aYYYY,
         'a-hh': aHH, 'a-mn': aMN,
@@ -996,6 +1008,13 @@ function _drawDoubleBang(phiA, phiB, k) {
     _dbAnim = requestAnimationFrame(frame);
 }
 
+// ── Page Visibility API — stoppe les animations quand l'onglet est caché ─────
+let _pageVisible = true;
+document.addEventListener('visibilitychange', function() {
+    _pageVisible = document.visibilityState === 'visible';
+    if (!_pageVisible && _dbAnim) { cancelAnimationFrame(_dbAnim); _dbAnim = null; }
+});
+
 // ── Canvas fond (particules légères) ─────────────────────────────────────
 (function bgParticles() {
     const c   = document.getElementById('bg-canvas');
@@ -1010,6 +1029,7 @@ function _drawDoubleBang(phiA, phiB, k) {
         }));
     }
     function draw() {
+        if (!_pageVisible) { requestAnimationFrame(draw); return; }
         ctx.clearRect(0,0,W,H);
         pts.forEach(p => {
             p.x += p.vx; p.y += p.vy;

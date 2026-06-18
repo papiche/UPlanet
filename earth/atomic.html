@@ -570,8 +570,8 @@
                     <div class="mb-2">
                         <label class="form-label small text-secondary text-uppercase mb-1">📧 Email</label>
                         <input type="email" class="form-control form-control-sm" id="multipass-email"
-                               placeholder="votre@email.com" autocomplete="email"
-                               oninput="document.getElementById('multipass-pass-block').style.display='none'">
+                               placeholder="votre@email.com" autocomplete="email">
+                        <div id="multipass-email-hint" class="mt-1"></div>
                     </div>
                     <div id="multipass-preview" class="small mb-3" style="line-height:1.9;color:rgba(255,255,255,.55);min-height:1.2rem"></div>
                     <!-- Bloc PASS — affiché uniquement sur 409 MULTIPASS_EXISTS -->
@@ -1991,9 +1991,13 @@ async function _deriveNostrKeysLocally(stretchedSalt, stretchedPepper) {
     const NostrLib = window.NostrTools || window.Nostr;
     if (!NostrLib || typeof scrypt === 'undefined') return null;
     try {
-        // scrypt(password=stretchedPepper, salt=stretchedSalt) — identique à keygen -t nostr
-        const seed = await _scryptPromise(stretchedPepper, stretchedSalt);
-        const privHex = Array.from(seed).map(b => b.toString(16).padStart(2, '0')).join('');
+        // Étape 1 : scrypt(password=stretchedPepper, salt=stretchedSalt) N=4096 r=16 p=1 → 32 bytes (ed25519 seed)
+        const ed25519Seed = await _scryptPromise(stretchedPepper, stretchedSalt);
+        // Étape 2 : SHA256(ed25519Seed) → secp256k1 private key — IDENTIQUE à keygen :
+        //   secp256k1_seed = hashlib.sha256(ed25519_seed).digest()
+        const sha256buf = await crypto.subtle.digest('SHA-256', ed25519Seed);
+        const privHex = Array.from(new Uint8Array(sha256buf))
+            .map(b => b.toString(16).padStart(2, '0')).join('');
         const pubHex  = NostrLib.getPublicKey(privHex);
         const npub    = NostrLib.nip19.npubEncode(pubHex);
         const nsec    = NostrLib.nip19.nsecEncode(privHex);
@@ -2224,6 +2228,15 @@ window._atomicCopyNsec = function() {
     if (cbtn) { cbtn.textContent = '✅ Copié'; setTimeout(function() { cbtn.textContent = '📋 Copier'; }, 2200); }
 };
 
+window._atomicRevealNsec = function() {
+    var inp  = document.getElementById('vault-nsec-input');
+    var rbtn = document.getElementById('vault-reveal-btn');
+    if (!inp) return;
+    var revealed = inp.type === 'text';
+    inp.type = revealed ? 'password' : 'text';
+    if (rbtn) rbtn.textContent = revealed ? '👁' : '🙈';
+};
+
 window._atomicSaveWithPin = async function() {
     var privHex = _vaultPrivHex;
     if (!privHex) return;
@@ -2253,6 +2266,32 @@ function _renderMultipassResult(data, el, localKeys) {
     const email = data.email || (document.getElementById('multipass-email')?.value || '');
     const url   = data.url   || data.uplanet_home || '';
     const creating = data.status === 'creating';
+
+    // ── Preuve de travail : vérification croisée client ↔ serveur ────────────
+    // Les deux côtés dérivent indépendamment PBKDF2→scrypt→SHA256→secp256k1.
+    // Si les npub concordent, le nsec local est cryptographiquement exact.
+    var _proofHtml = '';
+    if (localKeys && data.npub) {
+        if (localKeys.npub === data.npub) {
+            _proofHtml = '<div style="background:rgba(0,255,100,.06);border:1px solid rgba(0,255,100,.25);'
+                + 'border-radius:8px;padding:8px;margin-top:8px;font-size:.7rem">'
+                + '✅ <strong style="color:#00ff88">Preuve de travail validée</strong>'
+                + '<div style="color:rgba(255,255,255,.4);font-size:.6rem;margin-top:2px">'
+                + 'SHA256(scrypt(PBKDF2(ADN))) — client et serveur ont dérivé les mêmes clés'
+                + '</div></div>';
+        } else {
+            // Ne devrait pas arriver après le fix — garde-fou de détection
+            _proofHtml = '<div style="background:rgba(255,0,0,.08);border:1px solid rgba(255,0,0,.35);'
+                + 'border-radius:8px;padding:8px;margin-top:8px;font-size:.7rem">'
+                + '🔴 <strong style="color:#ff5566">Divergence client ↔ serveur détectée</strong>'
+                + '<div style="color:rgba(255,255,255,.4);font-size:.6rem;margin-top:2px">'
+                + 'Contactez support@qo-op.com avec cet identifiant : '
+                + (data.npub || '').slice(0, 16) + '…'
+                + '</div></div>';
+            console.error('[atomic] KEY MISMATCH', { client: localKeys.npub, server: data.npub });
+        }
+    }
+
     var _vHtml = '';
     if (localKeys && localKeys.nsec) {
         _vaultPrivHex = localKeys.privHex;
@@ -2275,14 +2314,18 @@ function _renderMultipassResult(data, el, localKeys) {
             + 'Votre <strong>ADN Cosmique</strong> est le seul moyen de prouver que vous êtes vous. '
             + '<span style="color:#ff5566">Ne le montrez à personne.</span></p>'
             + '<div style="background:rgba(0,0,0,.4);padding:10px;border-radius:8px;margin-bottom:10px">'
-            + '<div style="font-size:.7rem;color:#aaa;margin-bottom:6px">Étape 1 — Copiez votre ADN Cosmique</div>'
-            + '<div style="display:flex;gap:5px">'
+            + '<div style="font-size:.7rem;color:#aaa;margin-bottom:6px">Étape 1 — Copiez votre ADN Cosmique (nsec)</div>'
+            + '<div style="display:flex;gap:5px;margin-bottom:4px">'
             + '<input type="password" id="vault-nsec-input" value="' + localKeys.nsec + '" readonly '
             + 'style="flex:1;background:transparent;border:1px solid #555;color:#fff;border-radius:6px;padding:5px 8px;font-size:.65rem;font-family:monospace">'
+            + '<button id="vault-reveal-btn" onclick="_atomicRevealNsec()" title="Afficher/masquer" '
+            + 'style="background:rgba(255,255,255,.1);color:#ccc;border:1px solid #555;border-radius:6px;padding:5px 8px;font-size:.8rem;cursor:pointer">'
+            + '👁</button>'
             + '<button id="vault-copy-btn" onclick="_atomicCopyNsec()" '
             + 'style="background:#b464ff;color:#fff;border:none;border-radius:6px;padding:5px 10px;font-size:.75rem;cursor:pointer;white-space:nowrap">'
             + '📋 Copier</button></div>'
-            + '<div style="font-size:.62rem;color:#ff5566;margin-top:5px">⚠ Ne partagez JAMAIS ce code.</div>'
+            + '<div style="font-size:.62rem;color:#ff5566;margin-top:2px">⚠ Ne partagez JAMAIS ce code.</div>'
+            + '<div style="font-size:.62rem;color:rgba(255,255,255,.3);margin-top:3px">→ Collez dans <strong style="color:rgba(200,180,255,.7)">nos2x</strong> · alby · atom4love-ext via <em>"Importer une clé"</em></div>'
             + '</div>'
             + '<div style="background:rgba(0,0,0,.4);padding:10px;border-radius:8px;margin-bottom:10px">'
             + '<div style="font-size:.7rem;color:#aaa;margin-bottom:6px">Étape 2 — Protégez votre identité</div>'
@@ -2324,6 +2367,7 @@ function _renderMultipassResult(data, el, localKeys) {
         + (url   ? '<a href="' + url + '" target="_blank" class="btn btn-sm w-100 fw-bold"'
             + ' style="background:rgba(245,158,11,.2);border:1px solid rgba(245,158,11,.5);color:#f59e0b;font-size:.75rem">'
             + '🎴 Voir mon MULTIPASS →</a>' : '')
+        + _proofHtml
         + '</div>'
         + _vHtml;
     // Flag MULTIPASS créé → déverrouille tabs et boutons bottom nav
@@ -3613,6 +3657,71 @@ function _hexToNpub(hex) {
     try { return NostrTools.nip19.npubEncode(hex); } catch(_) { return hex.slice(0,8)+'…'; }
 }
 
+/* ── Détection MULTIPASS via tag #i NIP-39 sur le relay constellation ── */
+let _emailDetectTimer = null;
+
+function _updateEmailHint(state, data) {
+    const hint      = document.getElementById('multipass-email-hint');
+    const passBlock = document.getElementById('multipass-pass-block');
+    const btn       = document.getElementById('btn-multipass');
+    if (!hint) return;
+    switch (state) {
+        case 'checking':
+            hint.innerHTML = '<span style="color:rgba(255,255,255,.28);font-size:.7rem">🔍 Recherche dans la constellation…</span>';
+            break;
+        case 'found': {
+            const station = (data.home_station || '').split(':')[0];
+            const stDisp  = station ? station.slice(0,14)+'…' : '?';
+            const nameStr = data.name ? ` · <span style="color:rgba(255,255,255,.6)">${data.name}</span>` : '';
+            hint.innerHTML =
+                `<div style="background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.3);`
+                +`border-radius:8px;padding:6px 10px;font-size:.72rem;color:#f59e0b;margin-top:4px">`
+                +`✅ MULTIPASS détecté${nameStr}<br>`
+                +`<span style="color:rgba(255,255,255,.35)">Station : ${stDisp}</span><br>`
+                +`<span style="color:rgba(255,200,80,.6)">Saisissez le code PASS reçu par email lors de la création.</span>`
+                +`</div>`;
+            if (passBlock) passBlock.style.display = '';
+            if (btn) btn.textContent = '🔑 Récupérer mon MULTIPASS';
+            break;
+        }
+        case 'notfound':
+            hint.innerHTML = '';
+            if (passBlock) passBlock.style.display = 'none';
+            if (btn) btn.textContent = '✨ Créer mon MULTIPASS';
+            break;
+        case 'error':
+            hint.innerHTML = '<span style="color:rgba(255,120,120,.45);font-size:.7rem">⚠ Relay inaccessible — envoi direct</span>';
+            if (passBlock) passBlock.style.display = 'none';
+            if (btn) btn.textContent = '✨ Créer mon MULTIPASS';
+            break;
+        default:
+            hint.innerHTML = '';
+    }
+}
+
+async function _detectEmailOnRelay(email) {
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        _updateEmailHint('idle'); return;
+    }
+    _updateEmailHint('checking');
+    try {
+        const relay = _relayUrl();
+        const evs   = await _wsQuery(relay, { kinds:[0], '#i':['email:'+email], limit:1 }, 4000);
+        if (evs.length) {
+            let meta = {};
+            try { meta = JSON.parse(evs[0].content); } catch(_) {}
+            _updateEmailHint('found', {
+                name:         meta.display_name || meta.name || '',
+                home_station: meta.home_station || ''
+            });
+        } else {
+            _updateEmailHint('notfound');
+        }
+    } catch(_) {
+        _updateEmailHint('error');
+    }
+}
+
 /* ── Afficher un profil "visiteur référencé" (hex= param) ─────────────── */
 async function _showHexProfile(pubkey) {
     const relay = _relayUrl();
@@ -3654,6 +3763,17 @@ async function _showHexProfile(pubkey) {
 
 /* ── Init au chargement ────────────────────────────────────────────────── */
 document.addEventListener('DOMContentLoaded', async () => {
+    /* Détection debounce 800ms sur le champ email */
+    const emailInput = document.getElementById('multipass-email');
+    if (emailInput) {
+        emailInput.addEventListener('input', () => {
+            clearTimeout(_emailDetectTimer);
+            const val = emailInput.value.trim();
+            if (!val) { _updateEmailHint('idle'); return; }
+            _emailDetectTimer = setTimeout(() => _detectEmailOnRelay(val), 800);
+        });
+    }
+
     const relay  = _relayUrl();
     const isA4L  = !!(window.nostr && window.nostr._isA4L);
     let extPubkey = null, extName = null;

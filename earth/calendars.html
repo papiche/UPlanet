@@ -663,9 +663,9 @@
                     <button class="btn btn-primary" onclick="refreshCalendars()">
                         <i class="bi bi-arrow-clockwise"></i> <span class="d-none d-sm-inline">Actualiser</span>
                     </button>
-                    <a href="plantnet.html#section-autonomy" class="btn btn-success">
+                    <button class="btn btn-success" onclick="showCreateCalendarModal()">
                         <i class="bi bi-plus-circle"></i> <span class="d-none d-sm-inline">Créer</span>
-                    </a>
+                    </button>
                 </div>
                 <div class="d-flex gap-2 align-items-center">
                     <!-- View Toggle -->
@@ -869,6 +869,65 @@
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
                     <button type="button" class="btn btn-danger" onclick="confirmDelete()">
                         <i class="bi bi-trash"></i> Supprimer
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Calendar Modal -->
+    <div class="modal fade" id="createCalendarModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content" style="background:#0f172a;border:1px solid rgba(74,222,128,0.3);color:#f1f5f9;">
+                <div class="modal-header" style="border-bottom:1px solid rgba(74,222,128,0.2);">
+                    <h5 class="modal-title"><i class="bi bi-calendar-plus" style="color:#4ade80;"></i> Créer un calendrier lunaire</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold" style="color:#94a3b8;font-size:11px;">Année</label>
+                        <select class="form-select" id="lunar-year-select" style="background:#1e293b;border-color:rgba(74,222,128,0.3);color:#f1f5f9;">
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold" style="color:#94a3b8;font-size:11px;">Style de production</label>
+                        <select class="form-select" id="lunar-style-select" style="background:#1e293b;border-color:rgba(74,222,128,0.3);color:#f1f5f9;">
+                            <option value="foret">🌳 Forêt Jardin (recommandé)</option>
+                            <option value="umap">🏙️ UMAP Optimisé</option>
+                            <option value="variety">🌿 Variété Nutritionnelle</option>
+                            <option value="autonomy">🏡 Autonomie Complète</option>
+                            <option value="conservation">🥫 Conservation Longue Durée</option>
+                            <option value="continuous">🔄 Production Continue</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold" style="color:#94a3b8;font-size:11px;">Nombre de jours à générer</label>
+                        <select class="form-select" id="create-days-select" style="background:#1e293b;border-color:rgba(74,222,128,0.3);color:#f1f5f9;">
+                            <option value="30">30 jours</option>
+                            <option value="60">60 jours</option>
+                            <option value="90">90 jours</option>
+                            <option value="180">180 jours</option>
+                            <option value="365">365 jours (année complète)</option>
+                        </select>
+                    </div>
+                    <div class="row g-2 mb-2">
+                        <div class="col-6">
+                            <label class="form-label fw-bold" style="color:#94a3b8;font-size:11px;">Latitude (optionnel)</label>
+                            <input type="number" class="form-control" id="latitude" placeholder="ex: 48.85" step="0.01"
+                                style="background:#1e293b;border-color:rgba(74,222,128,0.2);color:#f1f5f9;">
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label fw-bold" style="color:#94a3b8;font-size:11px;">Longitude (optionnel)</label>
+                            <input type="number" class="form-control" id="longitude" placeholder="ex: 2.35" step="0.01"
+                                style="background:#1e293b;border-color:rgba(74,222,128,0.2);color:#f1f5f9;">
+                        </div>
+                    </div>
+                    <div id="nostr-publish-status" class="small mt-2" style="min-height:20px;"></div>
+                </div>
+                <div class="modal-footer" style="border-top:1px solid rgba(74,222,128,0.2);">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Annuler</button>
+                    <button type="button" class="btn btn-success" id="btn-create-calendar" onclick="createCalendar()">
+                        <i class="bi bi-cloud-upload"></i> Publier sur NOSTR
                     </button>
                 </div>
             </div>
@@ -1577,10 +1636,10 @@
                     <div class="empty-state">
                         <i class="bi bi-calendar-x"></i>
                         <h4>Aucun calendrier trouvé</h4>
-                        <p>Créez votre premier calendrier de jardinage depuis l'onglet Autonomie.</p>
-                        <a href="plantnet.html#section-autonomy" class="btn btn-success mt-3">
+                        <p>Créez votre premier calendrier de jardinage lunaire.</p>
+                        <button class="btn btn-success mt-3" onclick="showCreateCalendarModal()">
                             <i class="bi bi-plus-circle"></i> Créer un calendrier
-                        </a>
+                        </button>
                     </div>
                 `;
                 return;
@@ -2079,6 +2138,73 @@
             const div = document.createElement('div');
             div.textContent = text;
             return div.innerHTML;
+        }
+
+        // ========================================
+        // CREATE CALENDAR MODAL
+        // ========================================
+        function showCreateCalendarModal() {
+            // Populate year selector
+            const yearSel = document.getElementById('lunar-year-select');
+            if (yearSel && yearSel.options.length === 0) {
+                const thisYear = new Date().getFullYear();
+                for (let y = thisYear; y <= thisYear + 3; y++) {
+                    const opt = document.createElement('option');
+                    opt.value = y;
+                    opt.textContent = y;
+                    if (y === thisYear) opt.selected = true;
+                    yearSel.appendChild(opt);
+                }
+            }
+            // Reset status
+            const statusEl = document.getElementById('nostr-publish-status');
+            if (statusEl) statusEl.innerHTML = '';
+            new bootstrap.Modal(document.getElementById('createCalendarModal')).show();
+        }
+
+        async function createCalendar() {
+            const btn = document.getElementById('btn-create-calendar');
+            const statusEl = document.getElementById('nostr-publish-status');
+
+            if (!window.nostr) {
+                showNotification({ type: 'error', title: 'Extension NOSTR requise', message: 'Installez Alby ou nos2x pour vous connecter.' });
+                return;
+            }
+
+            const year = parseInt(document.getElementById('lunar-year-select').value);
+            const style = document.getElementById('lunar-style-select').value;
+            const days = parseInt(document.getElementById('create-days-select').value) || 30;
+            const latVal = document.getElementById('latitude').value;
+            const lonVal = document.getElementById('longitude').value;
+            const location = (latVal && lonVal) ? { lat: parseFloat(latVal), lon: parseFloat(lonVal) } : null;
+
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Publication…';
+            if (statusEl) { statusEl.innerHTML = '<i class="bi bi-hourglass-split"></i> Publication en cours…'; statusEl.className = 'text-warning small'; }
+
+            try {
+                if (typeof publishCalendarToNostr !== 'function' && !(window.publishCalendarToNostr)) {
+                    throw new Error('lunar-calendar.js non chargé — fonction publishCalendarToNostr manquante');
+                }
+                const fn = typeof publishCalendarToNostr === 'function' ? publishCalendarToNostr : window.publishCalendarToNostr;
+                const result = await fn({ year, style, location, daysToPublish: days });
+
+                if (result && result.success) {
+                    if (statusEl) { statusEl.innerHTML = `<i class="bi bi-check-circle"></i> Calendrier publié ! ${result.eventCount} événements`; statusEl.className = 'text-success small'; }
+                    showNotification({ type: 'success', title: 'Calendrier créé', message: `${result.eventCount} événements publiés sur NOSTR.` });
+                    bootstrap.Modal.getInstance(document.getElementById('createCalendarModal')).hide();
+                    await loadUserCalendars();
+                } else {
+                    throw new Error((result && result.error) || 'Erreur inconnue');
+                }
+            } catch (err) {
+                console.error('[Calendars] createCalendar error:', err);
+                if (statusEl) { statusEl.innerHTML = `<i class="bi bi-x-circle"></i> ${err.message}`; statusEl.className = 'text-danger small'; }
+                showNotification({ type: 'error', title: 'Erreur de publication', message: err.message });
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="bi bi-cloud-upload"></i> Publier sur NOSTR';
+            }
         }
     </script>
 <script src="feedback.js"></script>

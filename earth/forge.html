@@ -1,0 +1,1415 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Forge WoTx² · UPlanet</title>
+<link rel="icon" type="image/x-icon" href="favicon.ring.ico">
+<link rel="stylesheet" href="fonts/bootstrap-icons.css">
+<style>
+:root {
+    --acc:  #059669; --acc-l: #10b981; --acc-d: #047857;
+    --blue: #0ea5e9; --amb:   #f59e0b; --purp:  #8b5cf6;
+    --red:  #f87171;
+    --bg:   #070f14; --cbg:   rgba(8,20,15,0.95);
+    --cb:   rgba(5,150,105,0.25);
+    --slbg: rgba(5,150,105,0.07); --slb: rgba(5,150,105,0.3);
+    --txt:  #d1fae5; --muted: #7a9e8e;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--txt);font-family:'Segoe UI',system-ui,sans-serif;min-height:100vh}
+
+/* HEADER */
+#fh{position:sticky;top:0;z-index:200;display:flex;align-items:center;gap:10px;
+  padding:0 14px;height:52px;
+  background:rgba(7,15,20,0.96);backdrop-filter:blur(10px);
+  border-bottom:1px solid rgba(5,150,105,0.2)}
+#fh .brand{font-weight:800;font-size:.9rem;color:var(--acc-l)}
+#fh .relay-dot{width:8px;height:8px;border-radius:50%;background:#374151;flex-shrink:0}
+#fh .relay-dot.ok{background:var(--acc-l)}
+#fh .user-area{display:flex;align-items:center;gap:7px;margin-left:auto}
+#fh .avatar{width:28px;height:28px;border-radius:50%;background:var(--acc-d);
+  display:flex;align-items:center;justify-content:center;font-size:13px;overflow:hidden;flex-shrink:0}
+#fh .avatar img{width:100%;height:100%;object-fit:cover}
+#fh .uname{font-size:.8rem;color:var(--txt);max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#fh .zen{color:var(--amb);font-size:.75rem;font-weight:700}
+
+/* LAYOUT */
+#fb{display:flex;min-height:calc(100vh - 52px - 56px);padding-bottom:56px}
+.panel{display:flex;flex-direction:column;padding:10px;overflow-y:auto}
+#pi{width:240px;flex-shrink:0;border-right:1px solid rgba(5,150,105,0.15);background:rgba(5,20,12,.5)}
+#pc{flex:1;min-width:0;align-items:center;padding:18px 10px}
+#pr{width:240px;flex-shrink:0;border-left:1px solid rgba(5,150,105,0.15);background:rgba(5,20,12,.5)}
+
+/* PANEL TITLE */
+.pt{font-size:.68rem;font-weight:700;letter-spacing:1px;text-transform:uppercase;
+  color:var(--muted);padding:2px 0 8px;border-bottom:1px solid rgba(5,150,105,0.15);margin-bottom:8px;
+  display:flex;align-items:center;gap:6px}
+.pt .cnt{background:rgba(5,150,105,.2);color:var(--acc-l);border-radius:10px;padding:0 6px;font-size:.64rem}
+
+/* INV SECTION */
+.isec{margin-bottom:10px}
+.isec-lbl{font-size:.66rem;color:var(--muted);margin-bottom:5px;padding:0 2px}
+.igrid{display:grid;grid-template-columns:1fr 1fr;gap:5px}
+.icard{background:var(--cbg);border:1px solid var(--cb);border-radius:8px;
+  padding:7px 8px;cursor:grab;user-select:none;transition:border-color .15s;position:relative}
+.icard:hover{border-color:var(--acc-l)}
+.icard[data-itype="object"]{border-color:rgba(245,158,11,.3)}
+.icard[data-itype="object"]:hover{border-color:var(--amb)}
+.icard .ic{font-size:20px;line-height:1}
+.icard .iname{font-size:.7rem;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.icard .imeta{font-size:.6rem;color:var(--muted);margin-top:2px}
+.lvb{position:absolute;top:3px;right:3px;font-size:.55rem;font-weight:700;padding:1px 4px;border-radius:3px}
+.lv1{background:rgba(5,150,105,.2);color:#6ee7b7}
+.lv2{background:rgba(14,165,233,.2);color:#7dd3fc}
+.lv3{background:rgba(139,92,246,.2);color:#c4b5fd}
+.vbar{height:2px;background:rgba(255,255,255,.1);border-radius:1px;margin-top:4px}
+.vfill{height:100%;background:var(--acc-l);border-radius:1px;transition:width .3s}
+.dbar{height:2px;background:rgba(255,255,255,.1);border-radius:1px;margin-top:4px}
+.dfill{height:100%;border-radius:1px}
+
+/* FORGE GRID */
+.clbl{font-size:.72rem;font-weight:700;letter-spacing:1px;text-transform:uppercase;
+  color:var(--muted);margin-bottom:14px;text-align:center}
+#cg{display:grid;grid-template-columns:repeat(3,72px);grid-template-rows:repeat(3,72px);
+  gap:6px;margin-bottom:16px}
+.cslot{width:72px;height:72px;background:var(--slbg);border:2px dashed var(--slb);
+  border-radius:10px;display:flex;align-items:center;justify-content:center;
+  cursor:pointer;transition:border-color .15s,background .15s;position:relative;font-size:26px}
+.cslot.over{border-color:var(--acc-l);background:rgba(5,150,105,.18)}
+.cslot.filled{border-style:solid;border-color:var(--acc-d);background:rgba(5,150,105,.12)}
+.cslot.filled[data-stype="object"]{border-color:rgba(245,158,11,.5);background:rgba(245,158,11,.07)}
+.cslot .slv{position:absolute;bottom:3px;right:4px;font-size:.55rem;font-weight:700;color:var(--acc-l)}
+.cslot .slv.obj{color:var(--amb)}
+.cslot .sx{position:absolute;top:1px;right:3px;font-size:11px;color:var(--red);
+  display:none;cursor:pointer;z-index:2;line-height:1}
+.cslot:hover .sx{display:block}
+
+/* RESULT */
+.carr{font-size:22px;color:var(--muted);margin:4px 0 12px;text-align:center}
+#cr{width:220px;min-height:68px;background:var(--cbg);border:2px solid rgba(5,150,105,.2);
+  border-radius:12px;display:flex;align-items:center;padding:10px 14px;gap:12px;
+  transition:border-color .3s,box-shadow .3s;margin-bottom:14px}
+#cr.match{border-color:var(--acc-l);box-shadow:0 0 20px rgba(16,185,129,.25)}
+#cr.obj{border-color:var(--amb);box-shadow:0 0 20px rgba(245,158,11,.2)}
+#cr .cri{font-size:32px}
+#cr .crn{font-weight:700;font-size:.9rem}
+#cr .crt{font-size:.7rem;color:var(--muted);margin-top:2px}
+#cr .cre{color:var(--muted);font-size:.8rem;text-align:center;width:100%}
+
+/* BTNS */
+#bforge{width:220px;padding:10px;background:var(--acc-d);color:#fff;border:none;
+  border-radius:10px;font-size:.9rem;font-weight:700;cursor:pointer;transition:background .15s,opacity .15s}
+#bforge:disabled{opacity:.35;cursor:not-allowed}
+#bforge:not(:disabled):hover{background:var(--acc)}
+#bclr{width:220px;padding:6px;background:transparent;color:var(--muted);
+  border:1px solid rgba(5,150,105,.2);border-radius:8px;font-size:.76rem;cursor:pointer;margin-top:6px}
+#bclr:hover{color:var(--txt);border-color:var(--acc-d)}
+
+/* DECLARE BUTTON */
+.badd{width:100%;padding:7px;margin-top:6px;background:rgba(5,150,105,.08);color:var(--acc-l);
+  border:1px dashed var(--acc-d);border-radius:8px;font-size:.76rem;cursor:pointer}
+.badd:hover{background:rgba(5,150,105,.16)}
+
+/* RECIPES */
+.rftrs{display:flex;gap:6px;margin-bottom:8px}
+.rfb{flex:1;padding:5px;font-size:.7rem;font-weight:600;border:1px solid var(--cb);
+  border-radius:6px;background:transparent;color:var(--muted);cursor:pointer}
+.rfb.on{background:rgba(5,150,105,.15);color:var(--acc-l);border-color:var(--acc-d)}
+#rsrch{width:100%;padding:6px 10px;margin-bottom:8px;background:rgba(255,255,255,.05);
+  border:1px solid var(--cb);border-radius:8px;color:var(--txt);font-size:.78rem;outline:none}
+#rsrch:focus{border-color:var(--acc-d)}
+.rcard{background:var(--cbg);border:1px solid var(--cb);border-radius:8px;
+  padding:8px 10px;margin-bottom:6px;cursor:pointer;transition:border-color .15s}
+.rcard:hover{border-color:var(--acc-l)}
+.rcard.craftable{border-color:rgba(5,150,105,.4)}
+.rch{display:flex;align-items:center;gap:8px}
+.rci{font-size:20px}
+.rcn{font-size:.8rem;font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rcs{font-size:.62rem;padding:2px 5px;border-radius:10px;font-weight:700;flex-shrink:0}
+.rcs.ok{background:rgba(5,150,105,.2);color:var(--acc-l)}
+.rcs.no{background:rgba(245,158,11,.15);color:var(--amb)}
+.rcs.obj{background:rgba(14,165,233,.15);color:var(--blue)}
+.rings{display:flex;flex-wrap:wrap;gap:3px;margin-top:5px}
+.ring{font-size:.62rem;padding:1px 5px;border-radius:4px;background:rgba(5,150,105,.1);color:var(--muted)}
+.ring.miss{background:rgba(245,158,11,.1);color:var(--amb)}
+
+/* VALIDATION QUEUE */
+.vqt{font-size:.68rem;font-weight:700;letter-spacing:1px;text-transform:uppercase;
+  color:var(--muted);padding:8px 0 6px;border-top:1px solid rgba(5,150,105,.15);margin-top:10px}
+.vqi{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid rgba(5,150,105,.08);font-size:.76rem}
+.vqb{margin-left:auto;padding:2px 8px;font-size:.68rem;background:rgba(5,150,105,.15);
+  color:var(--acc-l);border:1px solid var(--acc-d);border-radius:5px;cursor:pointer}
+.vqb:hover{background:rgba(5,150,105,.3)}
+
+/* TOAST */
+#toast{position:fixed;bottom:68px;left:50%;transform:translateX(-50%);
+  padding:8px 18px;border-radius:10px;font-size:.82rem;font-weight:600;
+  z-index:9999;pointer-events:none;opacity:0;transition:opacity .25s;white-space:nowrap}
+#toast.show{opacity:1}
+#toast.s{background:rgba(5,150,105,.92);color:#fff}
+#toast.e{background:rgba(239,68,68,.92);color:#fff}
+#toast.w{background:rgba(245,158,11,.92);color:#1a0800}
+
+/* MODAL */
+#mnew{display:none;position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:500;
+  align-items:center;justify-content:center}
+#mnew.open{display:flex}
+.mbox{background:#0b1a12;border:1px solid var(--cb);border-radius:14px;
+  width:min(96vw,460px);padding:20px}
+.mbox h3{font-size:.96rem;margin-bottom:14px;display:flex;align-items:center;gap:8px}
+.mf{margin-bottom:10px}
+.mf label{font-size:.72rem;color:var(--muted);display:block;margin-bottom:4px}
+.mf input,.mf textarea,.mf select{width:100%;padding:7px 10px;
+  background:rgba(255,255,255,.05);border:1px solid var(--cb);
+  border-radius:8px;color:var(--txt);font-size:.83rem;outline:none}
+.mf input:focus,.mf textarea:focus{border-color:var(--acc-d)}
+.mrow{display:flex;gap:8px}
+.mrow .mf{flex:1}
+.mact{display:flex;gap:8px;margin-top:14px;justify-content:flex-end}
+.bcnl{padding:8px 16px;background:transparent;color:var(--muted);
+  border:1px solid var(--cb);border-radius:8px;cursor:pointer;font-size:.82rem}
+.bpub{padding:8px 18px;background:var(--acc-d);color:#fff;border:none;
+  border-radius:8px;cursor:pointer;font-size:.82rem;font-weight:700}
+
+/* DEFINE RECIPE INLINE FORM */
+#dr-form{width:220px;display:none;flex-direction:column;gap:8px;margin-top:10px;
+  background:var(--cbg);border:1px dashed rgba(245,158,11,.4);border-radius:12px;padding:12px}
+#dr-form.show{display:flex}
+.dr-title{font-size:.72rem;font-weight:700;letter-spacing:1px;text-transform:uppercase;
+  color:var(--amb);margin-bottom:2px}
+.dr-ings{display:flex;flex-wrap:wrap;gap:3px;margin-bottom:4px}
+.dr-ing{font-size:.65rem;padding:2px 6px;border-radius:4px;
+  background:rgba(5,150,105,.12);color:var(--muted)}
+.dr-row{display:flex;gap:6px}
+.dr-row .mf{flex:1}
+.mf label{font-size:.68rem;color:var(--muted);display:block;margin-bottom:3px}
+.mf input,.mf select{width:100%;padding:5px 8px;
+  background:rgba(255,255,255,.06);border:1px solid var(--cb);
+  border-radius:7px;color:var(--txt);font-size:.8rem;outline:none}
+.mf input:focus,.mf select:focus{border-color:var(--acc-d)}
+#btn-def-recipe{width:100%;padding:8px;background:rgba(245,158,11,.15);color:var(--amb);
+  border:1px solid rgba(245,158,11,.4);border-radius:8px;font-size:.8rem;font-weight:700;cursor:pointer}
+#btn-def-recipe:hover{background:rgba(245,158,11,.25)}
+
+/* RESSOURCES uDRIVE */
+.dr-res-section{display:flex;flex-direction:column;gap:5px;border-top:1px solid rgba(5,150,105,.15);padding-top:8px}
+.dr-res-label{font-size:.67rem;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--muted)}
+.dr-res-input-row{display:flex;gap:5px}
+.dr-res-input-row input{flex:1;padding:5px 8px;background:rgba(255,255,255,.06);
+  border:1px solid var(--cb);border-radius:7px;color:var(--txt);font-size:.78rem;outline:none}
+.dr-res-input-row input:focus{border-color:var(--acc-d)}
+.dr-res-add-btn{padding:5px 9px;background:rgba(5,150,105,.15);color:var(--acc-l);
+  border:1px solid var(--acc-d);border-radius:7px;cursor:pointer;font-size:.85rem;flex-shrink:0}
+.dr-res-add-btn.udrive{background:rgba(14,165,233,.1);color:var(--blue);border-color:rgba(14,165,233,.3)}
+.dr-res-add-btn.upload{background:rgba(139,92,246,.15);color:#a78bfa;border-color:rgba(139,92,246,.35)}
+.dr-res-add-btn:hover{opacity:.8}
+/* Mini navigateur uDRIVE */
+#udrive-picker{background:rgba(0,0,0,.3);border:1px solid rgba(14,165,233,.25);
+  border-radius:8px;padding:8px;max-height:130px;overflow-y:auto}
+.udrive-head{font-size:.68rem;color:var(--blue);margin-bottom:6px;display:flex;align-items:center;gap:6px}
+.udrive-list{display:flex;flex-direction:column;gap:3px}
+.udrive-item{display:flex;align-items:center;gap:6px;font-size:.72rem;padding:4px 6px;
+  border-radius:5px;cursor:pointer;color:var(--muted);transition:background .12s}
+.udrive-item:hover{background:rgba(14,165,233,.12);color:var(--txt)}
+.udrive-item .ui-icon{font-size:14px;flex-shrink:0}
+.udrive-item .ui-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.udrive-item .ui-add{color:var(--acc-l);font-size:14px;flex-shrink:0}
+/* Liste ressources ajoutées */
+#dr-res-list{display:flex;flex-direction:column;gap:3px}
+.dr-res-item{display:flex;align-items:center;gap:6px;font-size:.71rem;
+  padding:3px 6px;background:rgba(5,150,105,.08);border-radius:5px;color:var(--muted)}
+.dr-res-item .ri-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dr-res-item .ri-rm{color:var(--red);cursor:pointer;font-size:12px;flex-shrink:0}
+
+/* EMPTY */
+.fempty{color:var(--muted);font-size:.78rem;text-align:center;padding:20px 0;line-height:1.6}
+.spin{display:inline-block;animation:sp .8s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+
+/* MOBILE NAV */
+#mnav{display:none;position:fixed;bottom:0;left:0;right:0;z-index:300;
+  height:56px;background:rgba(6,14,10,.97);border-top:1px solid rgba(5,150,105,.2);
+  display:none;gap:0}
+#mnav a{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  text-decoration:none;color:var(--muted);font-size:.62rem;gap:2px;transition:color .15s}
+#mnav a.on,#mnav a:hover{color:var(--acc-l)}
+#mnav .mi{font-size:20px;line-height:1}
+
+/* RESPONSIVE */
+@media(max-width:860px){
+    #pi,#pr,#pc{display:none}
+    #pi.ms,#pr.ms,#pc.ms{display:flex;width:100%;border:none}
+    #mnav{display:flex}
+    #fb{flex-direction:column;min-height:calc(100vh - 52px - 56px)}
+}
+@media(min-width:861px){
+    #pi,#pc,#pr{display:flex !important}
+}
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header id="fh">
+    <span class="brand">⚒️ Forge WoTx²</span>
+    <span class="relay-dot" id="rdot"></span>
+    <div class="user-area">
+        <div class="avatar" id="uavatar">🧑</div>
+        <span class="uname" id="uname">—</span>
+        <span class="zen" id="uzen"></span>
+    </div>
+</header>
+
+<!-- MAIN LAYOUT -->
+<div id="fb">
+
+    <!-- LEFT — INVENTAIRE -->
+    <section id="pi" class="panel ms">
+        <div class="pt">📦 Inventaire <span class="cnt" id="inv-cnt">0</span></div>
+
+        <div class="isec">
+            <div class="isec-lbl">⚡ Compétences</div>
+            <div class="igrid" id="skill-grid">
+                <div class="fempty" style="grid-column:span 2"><span class="spin">⏳</span></div>
+            </div>
+        </div>
+
+        <div class="isec">
+            <div class="isec-lbl">📦 Objets</div>
+            <div class="igrid" id="object-grid">
+                <div class="fempty" style="grid-column:span 2"><span class="spin">⏳</span></div>
+            </div>
+        </div>
+
+        <button class="badd" onclick="openNew('skill')">＋ Déclarer un skill</button>
+        <button class="badd" onclick="openNew('object')">＋ Ajouter un objet</button>
+
+        <div id="vqueue"></div>
+    </section>
+
+    <!-- CENTER — TABLE DE FORGE -->
+    <section id="pc" class="panel ms">
+        <div class="clbl">Table de forge</div>
+        <div id="cg">
+            <!-- 9 slots générés par JS -->
+        </div>
+        <div class="carr">↓</div>
+        <div id="cr"><span class="cre">Remplissez la grille avec vos skills / objets</span></div>
+        <button id="bforge" disabled onclick="executeForge()">⚒️ Forger</button>
+        <button id="bclr" onclick="clearForge()">✕ Vider la grille</button>
+
+        <!-- Formulaire "Définir cette recette" (visible quand la grille a des items sans recette connue) -->
+        <div id="dr-form">
+            <div class="dr-title">📋 Définir cette recette</div>
+            <div class="dr-ings" id="dr-ings"></div>
+            <div class="dr-row">
+                <div class="mf" style="max-width:58px">
+                    <label>Emoji</label>
+                    <input id="dr-icon" type="text" value="✨" maxlength="4">
+                </div>
+                <div class="mf">
+                    <label>Nom du résultat</label>
+                    <input id="dr-name" type="text" placeholder="ex: devops-avancé">
+                </div>
+            </div>
+            <div class="dr-row">
+                <div class="mf">
+                    <label>Type</label>
+                    <select id="dr-type" onchange="onDrTypeChange()">
+                        <option value="skill">⚡ Skill</option>
+                        <option value="object">📦 Objet</option>
+                    </select>
+                </div>
+                <div class="mf" id="dr-level-row">
+                    <label>Niveau</label>
+                    <select id="dr-level">
+                        <option value="1">x1</option>
+                        <option value="2">x2</option>
+                        <option value="3">x3</option>
+                    </select>
+                </div>
+                <div class="mf" id="dr-qty-row" style="display:none">
+                    <label>Quantité</label>
+                    <input id="dr-qty" type="number" value="1" min="1">
+                </div>
+            </div>
+            <!-- Ressources IPFS / uDRIVE -->
+            <div class="dr-res-section">
+                <div class="dr-res-label">📎 Ressources <span style="font-weight:400;color:var(--muted)">(optionnel)</span></div>
+                <div class="dr-res-input-row">
+                    <button class="dr-res-add-btn udrive" onclick="toggleUDrive()" title="Parcourir uDRIVE" style="flex:1">📂 uDRIVE</button>
+                    <button class="dr-res-add-btn upload" onclick="document.getElementById('dr-file-input').click()" title="Uploader un fichier" style="flex:1">📎 Uploader</button>
+                    <input id="dr-file-input" type="file" style="display:none" onchange="uploadToDrive(this)">
+                </div>
+                <!-- Mini navigateur uDRIVE -->
+                <div id="udrive-picker" style="display:none">
+                    <div class="udrive-head">
+                        <span>📂 uDRIVE — fichiers IPFS</span>
+                        <span class="spin" id="udrive-spin" style="display:none">⏳</span>
+                    </div>
+                    <div id="udrive-list" class="udrive-list"></div>
+                </div>
+                <!-- Liste des ressources ajoutées -->
+                <div id="dr-res-list"></div>
+            </div>
+            <button id="btn-def-recipe" onclick="publishRecipe()">📤 Publier la recette</button>
+        </div>
+    </section>
+
+    <!-- RIGHT — RECETTES -->
+    <section id="pr" class="panel ms">
+        <div class="pt">📜 Recettes <span class="cnt" id="rec-cnt">0</span></div>
+        <div class="rftrs">
+            <button class="rfb on" id="rf-all"   onclick="setFilter('all')">Toutes</button>
+            <button class="rfb"    id="rf-craft" onclick="setFilter('craftable')">Craftables</button>
+        </div>
+        <input id="rsrch" type="search" placeholder="🔍 Rechercher…" oninput="renderRecipes()">
+        <div id="recipe-list">
+            <div class="fempty"><span class="spin">⏳</span></div>
+        </div>
+    </section>
+
+</div>
+
+<!-- MOBILE BOTTOM NAV -->
+<nav id="mnav">
+    <a href="#" onclick="showTab('inv',this)"   class="on"><span class="mi">📦</span>Inventaire</a>
+    <a href="#" onclick="showTab('forge',this)"     ><span class="mi">⚒️</span>Forge</a>
+    <a href="#" onclick="showTab('recipes',this)"   ><span class="mi">📜</span>Recettes</a>
+    <a href="#" onclick="showTab('valid',this)"     ><span class="mi">🕸️</span>Valider</a>
+</nav>
+
+<!-- MODAL NOUVEAU SKILL / OBJET -->
+<div id="mnew">
+    <div class="mbox">
+        <h3 id="mnew-title">⚡ Nouveau skill x1</h3>
+        <div class="mrow">
+            <div class="mf" style="max-width:70px">
+                <label>Emoji</label>
+                <input id="m-icon" type="text" value="⚡" maxlength="4">
+            </div>
+            <div class="mf">
+                <label>Nom <span id="m-name-hint" style="color:var(--muted)"></span></label>
+                <input id="m-name" type="text" placeholder="ex: linux, soudure…">
+            </div>
+        </div>
+        <div class="mf">
+            <label>Description (optionnel)</label>
+            <textarea id="m-desc" rows="2" placeholder="En quoi consiste cette compétence / cet objet ?"></textarea>
+        </div>
+        <div class="mf" id="m-qty-row" style="display:none">
+            <label>Quantité initiale</label>
+            <input id="m-qty" type="number" value="1" min="0">
+        </div>
+        <div class="mf" id="m-dur-row" style="display:none">
+            <label>Durabilité (0–100)</label>
+            <input id="m-dur" type="number" value="100" min="0" max="100">
+        </div>
+        <div class="mact">
+            <button class="bcnl" onclick="closeNew()">Annuler</button>
+            <button class="bpub" onclick="publishNew()">Publier</button>
+        </div>
+    </div>
+</div>
+
+<!-- TOAST -->
+<div id="toast"></div>
+
+<!-- SCRIPTS -->
+<script src="nacl-fast.min.js"></script>
+<script src="nostr.bundle.js"></script>
+<script src="common.js"></script>
+<script src="uplanet-header.js"></script>
+<script>
+'use strict';
+
+// ══════════════════════════════════════════════════════════════
+// STATE
+// ══════════════════════════════════════════════════════════════
+var S = {
+    skills:      [],
+    objects:     [],
+    recipes:     [],
+    valids:      [], // Kind 7 reactions toward my skills
+    slots:       new Array(9).fill(null), // { type, tag, name, icon, level, qty }
+    matched:     null,
+    filter:      'all',
+    newType:     'skill',
+    drResources: [], // { url, type, name } — ressources attachées à la recette en cours
+    udriveFiles: [], // cache des fichiers uDRIVE
+};
+
+// ══════════════════════════════════════════════════════════════
+// NOSTR HELPERS
+// ══════════════════════════════════════════════════════════════
+function fetchEvs(filter, timeout) {
+    return new Promise(function(resolve) {
+        if (!window.nostrRelay) { resolve([]); return; }
+        var evs = [];
+        var sub;
+        var tid = setTimeout(function() { try { sub.unsub(); } catch(e){} resolve(evs); }, timeout || 6000);
+        try {
+            sub = window.nostrRelay.sub([filter]);
+            sub.on('event', function(e) { evs.push(e); });
+            sub.on('eose',  function()  { clearTimeout(tid); try { sub.unsub(); } catch(e){} resolve(evs); });
+        } catch(e) { clearTimeout(tid); resolve(evs); }
+    });
+}
+
+function requireSigned(evTemplate) {
+    return new Promise(function(resolve, reject) {
+        if (!window.userPubkey || !window.nostrRelay) {
+            reject(new Error('Non connecté')); return;
+        }
+        evTemplate.pubkey     = window.userPubkey;
+        evTemplate.created_at = Math.floor(Date.now() / 1000);
+        evTemplate.tags       = evTemplate.tags || [];
+        evTemplate.content    = evTemplate.content || '';
+
+        function doPublish(signed) {
+            try { window.nostrRelay.publish(signed); } catch(e) {}
+            resolve(signed);
+        }
+
+        // Priorité 1 : extension NIP-07 (nos2x, Alby, Flamingo…)
+        if (window.nostr && window.nostr.signEvent) {
+            window.nostr.signEvent(evTemplate).then(doPublish).catch(reject);
+            return;
+        }
+        // Fallback : clef privée en mémoire (mode démo nsec via common.js)
+        if (window.userPrivateKey && window.NostrTools && window.NostrTools.finishEvent) {
+            try {
+                var signed = window.NostrTools.finishEvent(evTemplate, window.userPrivateKey);
+                doPublish(signed);
+            } catch(e) { reject(e); }
+            return;
+        }
+        reject(new Error('Aucun moyen de signer — installez nos2x ou Alby'));
+    });
+}
+
+// ══════════════════════════════════════════════════════════════
+// PARSERS
+// ══════════════════════════════════════════════════════════════
+function parseSkillEv(ev) {
+    try {
+        var c = JSON.parse(ev.content || '{}');
+        var dTag = (ev.tags.find(function(t){return t[0]==='d'}) || [])[1] || '';
+        var tTag = (ev.tags.filter(function(t){return t[0]==='t' && t[1] !== 'permit' && t[1] !== 'auto_proclaimed' && t[1] !== 'composite' && t[1] !== 'wotx2';}) || [])[0];
+        var skillTag = tTag ? tTag[1] : (c.skill_tag || dTag);
+        var lvl = 1;
+        if (ev.tags.find(function(t){return t[0]==='l' && t[1] && t[1].includes('X3');})) lvl = 3;
+        else if (ev.tags.find(function(t){return t[0]==='l' && t[1] && t[1].includes('X2');})) lvl = 2;
+        else if (c.level) lvl = parseInt(c.level, 10) || 1;
+        return {
+            type:  'skill',
+            id:    ev.id,
+            dTag:  dTag,
+            tag:   skillTag,
+            name:  c.name || skillTag || dTag,
+            icon:  c.icon || '⚡',
+            level: lvl,
+            ev:    ev,
+        };
+    } catch(e) { return null; }
+}
+
+function parseObjectEv(ev) {
+    try {
+        var c = JSON.parse(ev.content || '{}');
+        var dTag = (ev.tags.find(function(t){return t[0]==='d'}) || [])[1] || '';
+        var qty  = parseFloat((ev.tags.find(function(t){return t[0]==='quantity'}) || [])[1] || c.quantity || 0);
+        var dur  = parseFloat((ev.tags.find(function(t){return t[0]==='durability'}) || [])[1] || c.durability || 100);
+        return {
+            type:       'object',
+            id:         ev.id,
+            dTag:       dTag,
+            tag:        dTag,
+            name:       c.name || c.title || dTag,
+            icon:       c.icon || c.emoji || '📦',
+            quantity:   qty,
+            durability: dur,
+            ev:         ev,
+        };
+    } catch(e) { return null; }
+}
+
+function parseRecipeEv(ev) {
+    try {
+        var c   = JSON.parse(ev.content || '{}');
+        var dTag = (ev.tags.find(function(t){return t[0]==='d'}) || [])[1] || '';
+        // Ingrédients skills : ['requires', tag, min_level]
+        var reqs = ev.tags.filter(function(t){return t[0]==='requires' && t[1];}).map(function(t){
+            return { type:'skill', tag:t[1], minLevel:parseInt(t[2],10)||1 };
+        });
+        // Ingrédients objets : ['uses', dtag, qty]
+        var uses = ev.tags.filter(function(t){return t[0]==='uses' && t[1];}).map(function(t){
+            return { type:'object', tag:t[1], qty:parseFloat(t[2])||1 };
+        });
+        // Résultat : content.result_type + content.result_name, ou dérivé du d-tag
+        var resultType = c.result_type || 'skill';
+        var resultName = c.result_name || c.name || dTag;
+        var resultIcon = c.icon || '✨';
+        return {
+            id:          ev.id,
+            dTag:        dTag,
+            name:        c.name || dTag,
+            icon:        resultIcon,
+            requires:    reqs,
+            uses:        uses,
+            resultType:  resultType,
+            resultName:  resultName,
+            resultTag:   c.skill_tag || resultName.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,''),
+            ev:          ev,
+        };
+    } catch(e) { return null; }
+}
+
+// ══════════════════════════════════════════════════════════════
+// RESSOURCES IPFS / uDRIVE
+// ══════════════════════════════════════════════════════════════
+function _ipfsGateway() {
+    var h = location.hostname;
+    if (h === '127.0.0.1' || h === 'localhost') return 'http://127.0.0.1:8080';
+    // Même hôte que la page, port 8080
+    return location.protocol + '//' + h + ':8080';
+}
+function _ipfsApi() { return null; } // API port 5001 non exposée — on lit manifest.json via gateway
+function _fileIcon(name, mime) {
+    mime = mime || '';
+    if (mime.startsWith('video/') || /\.(mp4|webm|mov|avi)$/i.test(name)) return '🎬';
+    if (mime.startsWith('audio/') || /\.(mp3|ogg|wav|flac)$/i.test(name)) return '🎵';
+    if (mime === 'application/pdf' || /\.pdf$/i.test(name)) return '📄';
+    if (mime.startsWith('image/') || /\.(jpg|jpeg|png|gif|webp|svg)$/i.test(name)) return '🖼️';
+    if (/\.(md|txt|rst)$/i.test(name)) return '📝';
+    return '📎';
+}
+function _fileType(name, mime) {
+    mime = mime || '';
+    if (mime.startsWith('video/') || /\.(mp4|webm|mov)$/i.test(name)) return 'video';
+    if (mime.startsWith('audio/')) return 'audio';
+    if (mime === 'application/pdf' || /\.pdf$/i.test(name)) return 'pdf';
+    if (mime.startsWith('image/') || /\.(jpg|jpeg|png|gif|webp)$/i.test(name)) return 'image';
+    return 'lien';
+}
+
+// ── uDRIVE toggle & load ──────────────────────────────────────
+var _udriveOpen = false;
+function toggleUDrive() {
+    var picker = document.getElementById('udrive-picker');
+    _udriveOpen = !_udriveOpen;
+    picker.style.display = _udriveOpen ? '' : 'none';
+    if (_udriveOpen && !S.udriveFiles.length) loadUDrive();
+}
+
+function loadUDrive() {
+    var spin = document.getElementById('udrive-spin');
+    var list = document.getElementById('udrive-list');
+    if (spin) spin.style.display = '';
+    list.innerHTML = '<div style="color:var(--muted);font-size:.7rem;padding:2px 0">Chargement…</div>';
+
+    if (!window.fetchUserUDriveInfo || !window.userPubkey) {
+        _udriveFromKind1063(list);
+        if (spin) spin.style.display = 'none';
+        return;
+    }
+
+    window.fetchUserUDriveInfo(window.userPubkey).then(function(info) {
+        if (!info.ipnsVault || !info.email) throw new Error('vault absent');
+        var gw  = _ipfsGateway();
+        // Lecture du manifest.json : /ipns/{vault}/{email}/APP/uDRIVE/manifest.json
+        var manifestUrl = gw + '/ipns/' + info.ipnsVault
+            + '/' + encodeURIComponent(info.email)
+            + '/APP/uDRIVE/manifest.json';
+        return fetch(manifestUrl)
+            .then(function(r) {
+                if (!r.ok) throw new Error('manifest HTTP ' + r.status);
+                return r.json();
+            })
+            .then(function(manifest) {
+                // manifest peut être un tableau ou { files: [...] }
+                var items = Array.isArray(manifest) ? manifest : (manifest.files || manifest.items || []);
+                S.udriveFiles = items.map(function(f) {
+                    var cid = f.cid || f.hash || f.Hash || '';
+                    var url = f.url || (cid ? gw + '/ipfs/' + cid : '');
+                    return {
+                        name:  f.name || f.Name || url.split('/').pop() || 'fichier',
+                        url:   url,
+                        hash:  cid,
+                        isDir: !!(f.isDir || f.type === 'directory' || f.Type === 2),
+                        mime:  f.mime || f.type || '',
+                    };
+                }).filter(function(f){ return f.url; });
+                if (!S.udriveFiles.length) throw new Error('manifest vide');
+                _renderUDriveList(list);
+            });
+    }).catch(function() {
+        _udriveFromKind1063(list);
+    }).finally(function() {
+        if (spin) spin.style.display = 'none';
+    });
+}
+
+function _udriveFromKind1063(list) {
+    fetchEvs({ kinds:[1063], authors:[window.userPubkey], limit:60 }).then(function(evs) {
+        var gw = _ipfsGateway();
+        S.udriveFiles = evs.map(function(ev) {
+            var urlTag = (ev.tags.find(function(t){return t[0]==='url';}) || [])[1] || '';
+            var mTag   = (ev.tags.find(function(t){return t[0]==='m';})   || [])[1] || '';
+            var alt    = (ev.tags.find(function(t){return t[0]==='alt';}) || [])[1] || '';
+            var name   = alt || urlTag.split('/').pop() || 'fichier';
+            return { name:name, url:urlTag, hash:'', isDir:false, mime:mTag };
+        }).filter(function(f){ return f.url; });
+        _renderUDriveList(list);
+    });
+}
+
+function _renderUDriveList(list) {
+    if (!S.udriveFiles.length) {
+        list.innerHTML = '<div style="color:var(--muted);font-size:.7rem;padding:4px 0">Aucun fichier trouvé</div>';
+        return;
+    }
+    list.innerHTML = S.udriveFiles.map(function(f, i) {
+        if (f.isDir) {
+            return '<div class="udrive-item" onclick="_openUDriveDir(\''+esc(f.hash)+'\',\''+esc(f.name)+'\')">'
+                + '<span class="ui-icon">📁</span>'
+                + '<span class="ui-name">'+esc(f.name)+'</span>'
+                + '<span class="ui-add">›</span></div>';
+        }
+        var icon = _fileIcon(f.name, f.mime);
+        var type = _fileType(f.name, f.mime);
+        return '<div class="udrive-item" onclick="drAddFile(\''+esc(f.url)+'\',\''+esc(type)+'\',\''+esc(f.name)+'\')">'
+            + '<span class="ui-icon">'+icon+'</span>'
+            + '<span class="ui-name">'+esc(f.name)+'</span>'
+            + '<span class="ui-add">＋</span></div>';
+    }).join('');
+}
+
+function _openUDriveDir(hash, name) {
+    if (!hash) return;
+    var list = document.getElementById('udrive-list');
+    var spin = document.getElementById('udrive-spin');
+    var gw   = _ipfsGateway();
+    if (spin) spin.style.display = '';
+    // Lire le manifest.json du sous-répertoire IPFS
+    fetch(gw + '/ipfs/' + hash + '/manifest.json')
+        .then(function(r) { return r.json(); })
+        .then(function(manifest) {
+            var items = Array.isArray(manifest) ? manifest : (manifest.files || manifest.items || []);
+            S.udriveFiles = items.map(function(f) {
+                var cid = f.cid || f.hash || '';
+                var url = f.url || (cid ? gw + '/ipfs/' + cid : '');
+                return { name:f.name||url.split('/').pop()||'fichier', url:url, hash:cid, isDir:false, mime:f.mime||f.type||'' };
+            }).filter(function(f){ return f.url; });
+            _renderUDriveList(list);
+        })
+        .catch(function() {
+            // Pas de manifest dans ce sous-répertoire — afficher un lien direct vers le dossier
+            var dirUrl = gw + '/ipfs/' + hash;
+            S.udriveFiles = [{ name:name+' (dossier)', url:dirUrl, hash:hash, isDir:false, mime:'inode/directory' }];
+            _renderUDriveList(list);
+        })
+        .finally(function() { if (spin) spin.style.display = 'none'; });
+}
+
+// ── Gestion de la liste de ressources attachées ───────────────
+function drAddFile(url, type, name) {
+    if (!url) return;
+    if (S.drResources.find(function(r){ return r.url === url; })) {
+        notify('Déjà dans la liste', 'w'); return;
+    }
+    S.drResources.push({ url:url, type:type||'lien', name:name||url.split('/').pop()||url.slice(-20) });
+    renderDrResources();
+    // Fermer le picker après sélection
+    document.getElementById('udrive-picker').style.display = 'none';
+    _udriveOpen = false;
+}
+
+function uploadToDrive(inputEl) {
+    var file = inputEl.files && inputEl.files[0];
+    if (!file) return;
+    inputEl.value = '';
+    var apiUrl = (window.getAPIUrl ? window.getAPIUrl() : 'http://127.0.0.1:54321');
+    var uploadUrl = apiUrl + '/api/fileupload';
+    var btn = document.querySelector('.dr-res-add-btn.upload');
+    if (btn) { btn.textContent = '⏳ Upload…'; btn.disabled = true; }
+    var authEv = {
+        kind: 27235,
+        pubkey: window.userPubkey,
+        created_at: Math.floor(Date.now() / 1000),
+        tags: [['u', uploadUrl], ['method', 'POST']],
+        content: '',
+    };
+    var signerP;
+    if (window.nostr && window.nostr.signEvent) {
+        signerP = window.nostr.signEvent(authEv);
+    } else if (window.userPrivateKey && window.NostrTools && window.NostrTools.finishEvent) {
+        signerP = Promise.resolve(window.NostrTools.finishEvent(authEv, window.userPrivateKey));
+    } else {
+        if (btn) { btn.textContent = '📎 Uploader'; btn.disabled = false; }
+        alert('Extension NOSTR (nos2x/Alby) requise pour uploader.');
+        return;
+    }
+    signerP.then(function(signed) {
+        var token = btoa(unescape(encodeURIComponent(JSON.stringify(signed))));
+        var fd = new FormData();
+        fd.append('file', file);
+        return fetch(uploadUrl, {
+            method: 'POST',
+            headers: { 'Authorization': 'Nostr ' + token },
+            body: fd,
+        });
+    }).then(function(resp) {
+        if (!resp.ok) return resp.text().then(function(t){throw new Error(resp.status + ' — ' + t);});
+        return resp.json();
+    }).then(function(data) {
+        if (btn) { btn.textContent = '📎 Uploader'; btn.disabled = false; }
+        var cid = data.file_cid || data.new_cid;
+        if (!cid) throw new Error('Réponse API sans file_cid');
+        var url = _ipfsGateway() + '/ipfs/' + cid;
+        var name = file.name || cid.slice(-12);
+        drAddFile(url, _fileType(name, file.type || ''), name);
+        // Rafraîchir le picker uDRIVE si ouvert
+        if (_udriveOpen) loadUDrive();
+    }).catch(function(err) {
+        if (btn) { btn.textContent = '📎 Uploader'; btn.disabled = false; }
+        console.error('[uploadToDrive]', err);
+        alert('Erreur upload : ' + err.message);
+    });
+}
+
+function drRemoveResource(i) {
+    S.drResources.splice(i, 1);
+    renderDrResources();
+}
+
+function renderDrResources() {
+    var el = document.getElementById('dr-res-list');
+    if (!el) return;
+    el.innerHTML = S.drResources.map(function(r, i) {
+        return '<div class="dr-res-item">'
+            + '<span>'+_fileIcon(r.name, '')+'</span>'
+            + '<span class="ri-name" title="'+esc(r.url)+'">'+esc(r.name)+'</span>'
+            + '<span class="ri-rm" onclick="drRemoveResource('+i+')">✕</span>'
+            + '</div>';
+    }).join('');
+}
+
+// ══════════════════════════════════════════════════════════════
+// DEFINE RECIPE HELPERS
+// ══════════════════════════════════════════════════════════════
+function onDrTypeChange() {
+    var t = document.getElementById('dr-type').value;
+    document.getElementById('dr-level-row').style.display = t === 'skill'   ? '' : 'none';
+    document.getElementById('dr-qty-row').style.display   = t === 'object'  ? '' : 'none';
+}
+
+function publishRecipe() {
+    var icon    = (document.getElementById('dr-icon').value || '✨').trim();
+    var name    = document.getElementById('dr-name').value.trim();
+    var rType   = document.getElementById('dr-type').value;
+    var rLevel  = parseInt(document.getElementById('dr-level').value, 10) || 1;
+    var rQty    = parseFloat(document.getElementById('dr-qty') ? document.getElementById('dr-qty').value : 1) || 1;
+
+    if (!name) { notify('Donnez un nom au résultat', 'w'); return; }
+
+    var normTag = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    var dTag    = 'RECIPE_' + normTag.toUpperCase().replace(/-/g, '_') + '_X' + rLevel;
+
+    var tags = [
+        ['d', dTag],
+        ['t', 'permit'],
+        ['t', rType === 'object' ? 'object' : 'skill'],
+        ['t', normTag],
+    ];
+
+    // Ingrédients depuis la grille
+    S.slots.filter(Boolean).forEach(function(s) {
+        if (s.type === 'skill') {
+            tags.push(['requires', s.tag, String(s.level || 1)]);
+            tags.push(['t', s.tag]);
+        } else {
+            tags.push(['uses', s.tag, String(s.qty || 1)]);
+        }
+    });
+
+    // Ressources IPFS attachées (documents, vidéos, liens uDRIVE)
+    S.drResources.forEach(function(r) {
+        if (r.url) tags.push(['r', r.url, r.type || 'lien']);
+    });
+
+    var content = JSON.stringify({
+        name:         name,
+        icon:         icon,
+        result_type:  rType,
+        result_name:  name,
+        result_level: rLevel,
+        skill_tag:    normTag,
+        auto_proclaimed: false,
+        composite:    true,
+    });
+
+    document.getElementById('btn-def-recipe').disabled = true;
+    document.getElementById('btn-def-recipe').textContent = '⏳ Publication…';
+
+    requireSigned({ kind: 30500, tags: tags, content: content }).then(function() {
+        notify('📋 Recette « ' + name + ' » publiée !', 's');
+        document.getElementById('dr-form').classList.remove('show');
+        document.getElementById('dr-name').value = '';
+        // Reset ressources
+        S.drResources = [];
+        S.udriveFiles = [];
+        renderDrResources();
+        loadRecipes();
+    }).catch(function(e) {
+        notify('Erreur : ' + (e.message || e), 'e');
+    }).finally(function() {
+        var btn = document.getElementById('btn-def-recipe');
+        if (btn) { btn.disabled = false; btn.textContent = '📤 Publier la recette'; }
+    });
+}
+
+// ══════════════════════════════════════════════════════════════
+// LOAD
+// ══════════════════════════════════════════════════════════════
+function loadAll() {
+    Promise.all([loadSkills(), loadObjects(), loadRecipes()]).then(function() {
+        matchRecipe();
+        loadValidations();
+    });
+}
+
+function loadSkills() {
+    return fetchEvs({ kinds:[30503], authors:[window.userPubkey], limit:200 }).then(function(evs) {
+        S.skills = evs.map(parseSkillEv).filter(Boolean);
+        renderInventory();
+    });
+}
+
+function loadObjects() {
+    return fetchEvs({ kinds:[30505], authors:[window.userPubkey], limit:200 }).then(function(evs) {
+        S.objects = evs.map(parseObjectEv).filter(Boolean);
+        renderInventory();
+    });
+}
+
+function loadRecipes() {
+    return fetchEvs({ kinds:[30500], limit:400 }, 8000).then(function(evs) {
+        S.recipes = evs.map(parseRecipeEv).filter(Boolean);
+        renderRecipes();
+    });
+}
+
+function loadValidations() {
+    if (!S.skills.length) return;
+    var skillTags = S.skills.map(function(s){return s.tag;});
+    fetchEvs({ kinds:[7], '#t':skillTags, '#p':[window.userPubkey], limit:500 }).then(function(evs) {
+        S.valids = evs;
+        renderInventory();
+        renderValidQueue();
+    });
+}
+
+function updateHeaderUI() {
+    var n  = document.getElementById('uname');
+    var av = document.getElementById('uavatar');
+    document.getElementById('rdot').classList.add('ok');
+    if (!window.userPubkey || !window.fetchUserMetadata) return;
+    window.fetchUserMetadata(window.userPubkey).then(function(m) {
+        if (!m) return;
+        if (n  && m.name)    n.textContent = m.name;
+        if (av && m.picture) av.innerHTML  = '<img src="'+esc(m.picture)+'" alt="">';
+        if (m.lud06 || m.lud16) {
+            var z = document.getElementById('uzen');
+            if (z) z.textContent = '';
+        }
+    }).catch(function(){});
+}
+
+// ══════════════════════════════════════════════════════════════
+// RENDER — INVENTORY
+// ══════════════════════════════════════════════════════════════
+function renderInventory() {
+    var sg = document.getElementById('skill-grid');
+    var og = document.getElementById('object-grid');
+    var cnt = S.skills.length + S.objects.length;
+    var el = document.getElementById('inv-cnt');
+    if (el) el.textContent = cnt;
+
+    if (!S.skills.length) {
+        sg.innerHTML = '<div class="fempty" style="grid-column:span 2">Aucun skill déclaré</div>';
+    } else {
+        sg.innerHTML = S.skills.map(function(s) {
+            var vCount = S.valids.filter(function(v) {
+                return (v.tags||[]).some(function(t){return t[0]==='t'&&t[1]===s.tag;}) &&
+                       v.content === '+';
+            }).length;
+            var vPct = Math.min((vCount / 3) * 100, 100);
+            return '<div class="icard" data-itype="skill" data-itag="'+esc(s.tag)+'"'
+                 + ' data-iname="'+esc(s.name)+'" data-iicon="'+esc(s.icon)+'" data-ilevel="'+s.level+'"'
+                 + ' draggable="true" ondragstart="onDragStart(event)" ondblclick="addToNextSlot(this)">'
+                 + '<span class="lvb lv'+s.level+'">x'+s.level+'</span>'
+                 + '<div class="ic">'+s.icon+'</div>'
+                 + '<div class="iname">'+esc(s.name)+'</div>'
+                 + '<div class="imeta">'+vCount+'/3 ✓</div>'
+                 + '<div class="vbar"><div class="vfill" style="width:'+vPct+'%"></div></div>'
+                 + '</div>';
+        }).join('');
+    }
+
+    if (!S.objects.length) {
+        og.innerHTML = '<div class="fempty" style="grid-column:span 2">Aucun objet</div>';
+    } else {
+        og.innerHTML = S.objects.map(function(o) {
+            var durColor = o.durability > 60 ? 'var(--acc-l)' : o.durability > 30 ? 'var(--amb)' : 'var(--red)';
+            return '<div class="icard" data-itype="object" data-itag="'+esc(o.tag)+'"'
+                 + ' data-iname="'+esc(o.name)+'" data-iicon="'+esc(o.icon)+'" data-ilevel="1"'
+                 + ' draggable="true" ondragstart="onDragStart(event)" ondblclick="addToNextSlot(this)">'
+                 + '<div class="ic">'+o.icon+'</div>'
+                 + '<div class="iname">'+esc(o.name)+'</div>'
+                 + '<div class="imeta">qté '+o.quantity+'</div>'
+                 + '<div class="dbar"><div class="dfill" style="width:'+o.durability+'%;background:'+durColor+'"></div></div>'
+                 + '</div>';
+        }).join('');
+    }
+}
+
+// ══════════════════════════════════════════════════════════════
+// RENDER — VALIDATION QUEUE
+// ══════════════════════════════════════════════════════════════
+function renderValidQueue() {
+    // Aspirations (Kind 30501) from peers that mention our skills
+    var vq = document.getElementById('vqueue');
+    if (!vq) return;
+    // Simplifié : afficher les skills qui ont des validations en attente
+    var pending = S.skills.filter(function(s) {
+        var v = S.valids.filter(function(e){ return (e.tags||[]).some(function(t){return t[0]==='t'&&t[1]===s.tag;}); });
+        return v.length > 0 && v.length < 3 && s.level < 2;
+    });
+    if (!pending.length) { vq.innerHTML = ''; return; }
+    vq.innerHTML = '<div class="vqt">🕸️ En attente de validation</div>'
+        + pending.map(function(s) {
+            var v = S.valids.filter(function(e){ return (e.tags||[]).some(function(t){return t[0]==='t'&&t[1]===s.tag;}); }).length;
+            return '<div class="vqi">'
+                + s.icon+' '+esc(s.name)
+                + ' <span style="color:var(--muted);font-size:.7rem">'+v+'/3</span>'
+                + '</div>';
+        }).join('');
+}
+
+// ══════════════════════════════════════════════════════════════
+// RENDER — FORGE GRID
+// ══════════════════════════════════════════════════════════════
+function initForgeGrid() {
+    var cg = document.getElementById('cg');
+    var html = '';
+    for (var i = 0; i < 9; i++) {
+        html += '<div class="cslot" id="slot-'+i+'"'
+              + ' ondragover="onDragOver(event)" ondragleave="onDragLeave(event)"'
+              + ' ondrop="onDrop(event,'+i+')" onclick="onSlotClick('+i+')">'
+              + '<span class="sx" onclick="clearSlot('+i+',event)">✕</span>'
+              + '</div>';
+    }
+    cg.innerHTML = html;
+}
+
+function renderSlot(i) {
+    var slot = document.getElementById('slot-'+i);
+    if (!slot) return;
+    var item = S.slots[i];
+    slot.className = 'cslot' + (item ? ' filled' + (item.type === 'object' ? ' ' : '') : '');
+    if (item && item.type === 'object') slot.dataset.stype = 'object'; else delete slot.dataset.stype;
+    if (item) {
+        slot.innerHTML = '<span class="sx" onclick="clearSlot('+i+',event)">✕</span>'
+                       + item.icon
+                       + '<span class="slv'+(item.type==='object'?' obj':'')+'">'+
+                         (item.type==='skill' ? 'x'+item.level : '×'+( item.qty || 1 ) )+
+                         '</span>';
+    } else {
+        slot.innerHTML = '<span class="sx" onclick="clearSlot('+i+',event)">✕</span>';
+    }
+}
+
+function renderResult() {
+    var cr  = document.getElementById('cr');
+    var bf  = document.getElementById('bforge');
+    var drf = document.getElementById('dr-form');
+    cr.className = '';
+
+    var hasFilled = S.slots.some(Boolean);
+
+    if (!hasFilled) {
+        cr.innerHTML = '<span class="cre">Remplissez la grille avec vos skills / objets</span>';
+        bf.disabled = true;
+        drf.classList.remove('show');
+        return;
+    }
+
+    if (!S.matched) {
+        // Grille remplie, aucune recette connue → proposer de la définir
+        cr.innerHTML = '<span class="cre" style="font-size:.76rem">Recette inconnue —<br>définissez-la ci-dessous</span>';
+        bf.disabled = true;
+        drf.classList.add('show');
+        // Mettre à jour la liste des ingrédients dans le formulaire
+        var ings = S.slots.filter(Boolean).map(function(s) {
+            return '<span class="dr-ing">'
+                + s.icon + ' ' + esc(s.name)
+                + (s.type==='skill' ? ' x'+s.level : ' ×'+(s.qty||1))
+                + '</span>';
+        }).join('');
+        document.getElementById('dr-ings').innerHTML = ings;
+        return;
+    }
+
+    drf.classList.remove('show');
+    var r = S.matched;
+    cr.className = r.resultType === 'object' ? 'obj' : 'match';
+    cr.innerHTML = '<span class="cri">'+r.icon+'</span>'
+                 + '<div><div class="crn">'+esc(r.resultName)+'</div>'
+                 + '<div class="crt">'+(r.resultType==='object'?'📦 Nouvel objet':'⚡ Nouvelle compétence')+'</div></div>';
+    bf.disabled = false;
+}
+
+// ══════════════════════════════════════════════════════════════
+// RENDER — RECIPES
+// ══════════════════════════════════════════════════════════════
+function renderRecipes() {
+    var el = document.getElementById('recipe-list');
+    var cnt = document.getElementById('rec-cnt');
+    var q = (document.getElementById('rsrch').value || '').toLowerCase();
+    var list = S.recipes.filter(function(r) {
+        if (q && r.name.toLowerCase().indexOf(q) < 0) return false;
+        return true;
+    });
+
+    // Calculer craftabilité
+    list = list.map(function(r) {
+        var canCraft = r.requires.every(function(req) {
+            return S.skills.some(function(s){ return s.tag === req.tag && s.level >= req.minLevel; });
+        }) && r.uses.every(function(u) {
+            return S.objects.some(function(o){ return o.tag === u.tag && o.quantity >= u.qty; });
+        });
+        return { r:r, ok:canCraft };
+    });
+
+    if (S.filter === 'craftable') list = list.filter(function(x){ return x.ok; });
+
+    if (cnt) cnt.textContent = list.length;
+
+    if (!list.length) {
+        el.innerHTML = '<div class="fempty">'+(S.recipes.length ? 'Aucune recette craftable<br><small>Ajoutez des skills à votre inventaire</small>' : '<span class="spin">⏳</span> Chargement…')+'</div>';
+        return;
+    }
+
+    el.innerHTML = list.map(function(x) {
+        var r = x.r;
+        var statusLabel = x.ok ? '✓' : '…';
+        var statusClass = x.ok ? 'ok' : 'no';
+        if (r.resultType === 'object' && x.ok) statusClass = 'obj';
+
+        var ings = r.requires.map(function(req) {
+            var have = S.skills.some(function(s){ return s.tag===req.tag && s.level>=req.minLevel; });
+            return '<span class="ring'+(have?'':' miss')+'">'+esc(req.tag)+' x'+req.minLevel+'</span>';
+        }).join('') + r.uses.map(function(u) {
+            var have = S.objects.some(function(o){ return o.tag===u.tag && o.quantity>=u.qty; });
+            return '<span class="ring'+(have?'':' miss')+'">📦 '+esc(u.tag)+' ×'+u.qty+'</span>';
+        }).join('');
+
+        return '<div class="rcard'+(x.ok?' craftable':'')+'" onclick="autoFillForge(\''+esc(r.id)+'\')">'
+             + '<div class="rch">'
+             + '<span class="rci">'+r.icon+'</span>'
+             + '<span class="rcn">'+esc(r.name)+'</span>'
+             + '<span class="rcs '+statusClass+'">'+statusLabel+'</span>'
+             + '</div>'
+             + (ings ? '<div class="rings">'+ings+'</div>' : '')
+             + '</div>';
+    }).join('');
+}
+
+// ══════════════════════════════════════════════════════════════
+// DRAG & DROP
+// ══════════════════════════════════════════════════════════════
+var _drag = null;
+
+function onDragStart(e) {
+    var card = e.currentTarget;
+    _drag = {
+        type:  card.dataset.itype,
+        tag:   card.dataset.itag,
+        name:  card.dataset.iname,
+        icon:  card.dataset.iicon,
+        level: parseInt(card.dataset.ilevel, 10) || 1,
+    };
+    e.dataTransfer.effectAllowed = 'copy';
+}
+
+function onDragOver(e)  { e.preventDefault(); e.currentTarget.classList.add('over'); }
+function onDragLeave(e) { e.currentTarget.classList.remove('over'); }
+
+function onDrop(e, idx) {
+    e.preventDefault();
+    e.currentTarget.classList.remove('over');
+    if (!_drag) return;
+    S.slots[idx] = _drag;
+    renderSlot(idx);
+    _drag = null;
+    matchRecipe();
+}
+
+function onSlotClick(idx) { /* handled by ondblclick on inventory + manual clear */ }
+
+function addToNextSlot(card) {
+    var freeIdx = S.slots.indexOf(null);
+    if (freeIdx < 0) { notify('Grille pleine — libérez un slot', 'w'); return; }
+    S.slots[freeIdx] = {
+        type:  card.dataset.itype,
+        tag:   card.dataset.itag,
+        name:  card.dataset.iname,
+        icon:  card.dataset.iicon,
+        level: parseInt(card.dataset.ilevel, 10) || 1,
+    };
+    renderSlot(freeIdx);
+    matchRecipe();
+}
+
+function clearSlot(idx, e) {
+    if (e) { e.stopPropagation(); }
+    S.slots[idx] = null;
+    renderSlot(idx);
+    matchRecipe();
+}
+
+function clearForge() {
+    S.slots = new Array(9).fill(null);
+    for (var i = 0; i < 9; i++) renderSlot(i);
+    matchRecipe();
+}
+
+// ══════════════════════════════════════════════════════════════
+// RECIPE MATCH
+// ══════════════════════════════════════════════════════════════
+function matchRecipe() {
+    S.matched = null;
+    var filled = S.slots.filter(Boolean);
+    if (!filled.length) { renderResult(); return; }
+
+    for (var i = 0; i < S.recipes.length; i++) {
+        if (recipeMatches(S.recipes[i])) { S.matched = S.recipes[i]; break; }
+    }
+    renderResult();
+    renderRecipes(); // met à jour les badges craftable
+}
+
+function recipeMatches(r) {
+    if (!r.requires.length && !r.uses.length) return false;
+    // Chaque ingrédient skill doit être présent dans un slot au bon niveau
+    for (var i = 0; i < r.requires.length; i++) {
+        var req = r.requires[i];
+        var found = S.slots.some(function(s){ return s && s.type==='skill' && s.tag===req.tag && s.level>=req.minLevel; });
+        if (!found) return false;
+    }
+    // Chaque objet requis doit être dans l'inventaire (pas forcément dans les slots)
+    for (var j = 0; j < r.uses.length; j++) {
+        var u = r.uses[j];
+        var hasObj = S.objects.some(function(o){ return o.tag===u.tag && o.quantity>=u.qty; });
+        if (!hasObj) return false;
+    }
+    return true;
+}
+
+function autoFillForge(recipeId) {
+    var r = S.recipes.find(function(x){ return x.id === recipeId; });
+    if (!r) return;
+    clearForge();
+    var idx = 0;
+    r.requires.forEach(function(req) {
+        var skill = S.skills.find(function(s){ return s.tag===req.tag && s.level>=req.minLevel; });
+        if (skill && idx < 9) {
+            S.slots[idx++] = { type:'skill', tag:skill.tag, name:skill.name, icon:skill.icon, level:skill.level };
+        }
+    });
+    r.uses.forEach(function(u) {
+        var obj = S.objects.find(function(o){ return o.tag===u.tag; });
+        if (obj && idx < 9) {
+            S.slots[idx++] = { type:'object', tag:obj.tag, name:obj.name, icon:obj.icon, level:1, qty:u.qty };
+        }
+    });
+    for (var i = 0; i < 9; i++) renderSlot(i);
+    matchRecipe();
+}
+
+// ══════════════════════════════════════════════════════════════
+// EXECUTE FORGE
+// ══════════════════════════════════════════════════════════════
+function executeForge() {
+    if (!S.matched) return;
+    var r = S.matched;
+    var bf = document.getElementById('bforge');
+    bf.disabled = true;
+    bf.textContent = '⏳ Publication…';
+
+    var normTag = r.resultTag;
+    var dTag    = 'FORGE_' + normTag.toUpperCase().replace(/-/g,'_') + '_' + Date.now();
+
+    var tags = [
+        ['d', dTag],
+        ['t', normTag],
+    ];
+    // Tracer l'origine (ingrédients)
+    S.slots.filter(Boolean).forEach(function(s) {
+        if (s.type === 'skill') tags.push(['t', s.tag]);
+    });
+
+    var kind, content;
+    if (r.resultType === 'object') {
+        kind = 30505;
+        tags.push(['t', 'object'], ['quantity', '1'], ['durability', '100']);
+        content = JSON.stringify({ name:r.resultName, icon:r.icon, quantity:1, durability:100, synthesized_at: Math.floor(Date.now()/1000) });
+    } else {
+        kind = 30503;
+        tags.push(['t', 'auto_proclaimed'], ['l', 'PERMIT_SKILL_X1', 'permit_type']);
+        content = JSON.stringify({ name:r.resultName, icon:r.icon, skill:normTag, level:1, synthesized_at: Math.floor(Date.now()/1000), composite:true });
+    }
+
+    requireSigned({ kind:kind, tags:tags, content:content }).then(function() {
+        notify('🎉 ' + r.resultName + ' forgé !', 's');
+        clearForge();
+        bf.textContent = '⚒️ Forger';
+        // Recharger inventaire
+        if (kind === 30505) loadObjects(); else loadSkills();
+    }).catch(function(e) {
+        notify('Erreur : ' + (e.message || e), 'e');
+        bf.textContent = '⚒️ Forger';
+        bf.disabled = false;
+    });
+}
+
+// ══════════════════════════════════════════════════════════════
+// NEW SKILL / OBJECT
+// ══════════════════════════════════════════════════════════════
+function openNew(type) {
+    S.newType = type;
+    var title = document.getElementById('mnew-title');
+    title.textContent = type === 'skill' ? '⚡ Déclarer un skill x1' : '📦 Ajouter un objet';
+    document.getElementById('m-qty-row').style.display = type === 'object' ? '' : 'none';
+    document.getElementById('m-dur-row').style.display = type === 'object' ? '' : 'none';
+    document.getElementById('m-icon').value = type === 'skill' ? '⚡' : '📦';
+    document.getElementById('m-name').value = '';
+    document.getElementById('m-desc').value = '';
+    document.getElementById('mnew').classList.add('open');
+}
+
+function closeNew() { document.getElementById('mnew').classList.remove('open'); }
+
+function publishNew() {
+    var icon = (document.getElementById('m-icon').value || '').trim() || (S.newType==='skill'?'⚡':'📦');
+    var name = document.getElementById('m-name').value.trim();
+    if (!name) { notify('Le nom est requis', 'w'); return; }
+
+    var normTag = name.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
+    var desc    = document.getElementById('m-desc').value.trim();
+
+    var tags, content, kind;
+    if (S.newType === 'skill') {
+        var dTag = 'PERMIT_' + normTag.toUpperCase().replace(/-/g,'_') + '_X1';
+        tags = [
+            ['d', dTag], ['t', 'permit'], ['t', 'auto_proclaimed'], ['t', normTag],
+            ['l', 'PERMIT_SKILL_X1', 'permit_type'],
+        ];
+        content = JSON.stringify({ id:dTag, name:name, icon:icon, description:desc, skill_tag:normTag, auto_proclaimed:true });
+        kind = 30503;
+    } else {
+        var qty = parseFloat(document.getElementById('m-qty').value) || 1;
+        var dur = parseFloat(document.getElementById('m-dur').value) || 100;
+        var dTagObj = normTag + '_' + Date.now();
+        tags = [
+            ['d', dTagObj], ['t', 'object'], ['t', normTag],
+            ['quantity', String(qty)], ['durability', String(dur)],
+        ];
+        content = JSON.stringify({ name:name, icon:icon, description:desc, quantity:qty, durability:dur });
+        kind = 30505;
+    }
+
+    requireSigned({ kind:kind, tags:tags, content:content }).then(function() {
+        notify(icon + ' ' + name + ' ajouté !', 's');
+        closeNew();
+        if (kind === 30505) loadObjects(); else loadSkills();
+    }).catch(function(e) { notify('Erreur : ' + (e.message || e), 'e'); });
+}
+
+// ══════════════════════════════════════════════════════════════
+// UI HELPERS
+// ══════════════════════════════════════════════════════════════
+function setFilter(f) {
+    S.filter = f;
+    document.getElementById('rf-all').className   = 'rfb' + (f==='all'       ? ' on' : '');
+    document.getElementById('rf-craft').className = 'rfb' + (f==='craftable' ? ' on' : '');
+    renderRecipes();
+}
+
+function showTab(tab, el) {
+    // Mobile tab switching
+    document.querySelectorAll('#mnav a').forEach(function(a){a.classList.remove('on');});
+    if (el) el.classList.add('on');
+    document.getElementById('pi').classList.remove('ms');
+    document.getElementById('pc').classList.remove('ms');
+    document.getElementById('pr').classList.remove('ms');
+    if (tab === 'inv')     { document.getElementById('pi').classList.add('ms'); }
+    if (tab === 'forge')   { document.getElementById('pc').classList.add('ms'); }
+    if (tab === 'recipes') { document.getElementById('pr').classList.add('ms'); }
+    if (tab === 'valid')   {
+        document.getElementById('pi').classList.add('ms');
+        // Scroll to validation queue
+        var vq = document.getElementById('vqueue');
+        if (vq) vq.scrollIntoView({ behavior:'smooth' });
+    }
+    return false;
+}
+
+var _toastTid;
+function notify(msg, type) {
+    var t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = 'show ' + (type || 's');
+    clearTimeout(_toastTid);
+    _toastTid = setTimeout(function(){ t.className = ''; }, 3000);
+}
+
+function esc(s) {
+    return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ══════════════════════════════════════════════════════════════
+// INIT — connexion via UPH (waitForConnection)
+// ══════════════════════════════════════════════════════════════
+var _forgeReady = false;
+function onForgeConnected() {
+    if (_forgeReady) return;
+    _forgeReady = true;
+    updateHeaderUI();
+    loadAll();
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    initForgeGrid();
+    if (window.innerWidth <= 860) showTab('forge', document.querySelector('#mnav a:nth-child(2)'));
+    // Si déjà connecté (pubkey en sessionStorage, relay reconnecté)
+    if (window.userPubkey && window.isNostrConnected) onForgeConnected();
+});
+
+// Signal UPH : connexion relay + pubkey établis
+if (window.waitForConnection) {
+    window.waitForConnection(onForgeConnected);
+} else {
+    // Fallback si common.js ne fournit pas waitForConnection
+    var _fbt = setInterval(function() {
+        if (window.userPubkey && window.nostrRelay && window.isNostrConnected) {
+            clearInterval(_fbt);
+            onForgeConnected();
+        }
+    }, 400);
+}
+</script>
+</body>
+</html>

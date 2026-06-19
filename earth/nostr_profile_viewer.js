@@ -110,10 +110,19 @@ function stopMatrix() {
     }
 }
 
+function enterOwnProfileMode() {
+    var container = document.querySelector('.terminal-container');
+    if (container && !container.classList.contains('own-profile')) {
+        container.classList.add('own-profile');
+    }
+    var followBtns = document.getElementById('follow-button-container');
+    if (followBtns) followBtns.style.display = 'none';
+}
+
 function checkOwnProfileMatrix() {
     const hk = window.hexKey;
     const up = window.userPubkey;
-    if (hk && up && hk === up) { stopMatrix(); return true; }
+    if (hk && up && hk === up) { stopMatrix(); enterOwnProfileMode(); return true; }
     return false;
 }
 

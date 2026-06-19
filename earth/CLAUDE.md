@@ -23,7 +23,7 @@ Architecture JavaScript vanilla, sans bundler, sans npm. Tous les fichiers sont 
 <script src="relay.js"></script>            <!-- RelaySelector.init/query, constellation -->
 ```
 
-`relay.js` expose `RelaySelector.init(opts)` et `RelaySelector.query(filter, relay)`.
+`relay.js` expose `RelaySelector.init(opts)` et `RelaySelector.query(wsUrl, filter, opts)`.
 `uplanet-header.js` expose le menu global et les helpers de navigation.
 
 ## Architecture des modules (lib_0 → lib_7)
@@ -62,7 +62,55 @@ Et en fin de fichier, exporter ses propres symboles :
 window.monSymbole = monSymbole;
 ```
 
-## Pages WoTx² — Objets et Crafts
+## Pages WoTx² — Forge, Skills, Objets
+
+### `forge.html` — Interface unifiée WoTx² (Kind 30500/30503/30505)
+
+Interface principale de la Forge : combine crafting, inventaire et recettes dans un seul écran inspiré de Minecraft.
+
+**Stack :**
+```html
+<script src="nacl-fast.min.js"></script>
+<script src="nostr.bundle.js"></script>
+<script src="common.js"></script>
+<script src="uplanet-header.js"></script>
+<script src="relay.js"></script>
+<script src="lib_3_content.js"></script>  <!-- fetchUserUDriveInfo -->
+<script src="wotx2-nav.js"></script>
+```
+
+**Mise en page 3 colonnes** (desktop) / 4 onglets mobiles :
+- `#pi` **Inventaire** — skills (Kind 30503) + objets (Kind 30505) du compte connecté
+- `#pc` **Forge** — grille 3×3, drag & drop, résultat dynamique (skill ou objet produit)
+- `#pr` **Recettes** — liste des Kind 30500 disponibles sur la constellation
+
+**Connexion** : `window.waitForConnection(onForgeConnected)` (UPH). Fallback polling sur `window.isNostrConnected`.
+
+**Kind 30500 — Recette (Permit)**
+- Ingrédients skill : `['requires', skill_dtag, min_level]`
+- Ingrédients objet : `['uses', object_dtag, qty]`
+- Résultat encodé dans `content` JSON : `{ name, icon, result_type, result_name, skill_tag, composite }`
+- Ressources attachées : `['r', url, type]` (documents/vidéos uDRIVE)
+
+**Résultat d'un craft** :
+- `result_type: 'skill'` → publie Kind 30503 (certificat de compétence)
+- `result_type: 'object'` → publie Kind 30505 (objet/ressource physique ou logique)
+
+**Ressources documentaires (section `#dr-form`)** :
+- 📂 **uDRIVE** — lit `{gateway}/ipns/{vault}/{email}/APP/uDRIVE/manifest.json` via `window.fetchUserUDriveInfo(pubkey)` (lib_3_content.js)
+- 📎 **Uploader** — POST multipart/form-data vers `{getAPIUrl()}/api/fileupload` avec NIP-98 auth (Kind 27235 signé) ; retourne `{ file_cid, new_cid }` ; URL finale : `{gateway}/ipfs/{file_cid}`
+
+**NIP-98 pour `/api/fileupload` :**
+```javascript
+var authEv = { kind: 27235, pubkey, created_at, tags: [['u', uploadUrl], ['method', 'POST']], content: '' };
+var signed = await window.nostr.signEvent(authEv);          // nos2x / Alby
+var token  = btoa(unescape(encodeURIComponent(JSON.stringify(signed))));
+fetch(uploadUrl, { method:'POST', headers:{'Authorization':'Nostr '+token}, body: formData });
+```
+
+**Signing** : priorité `window.nostr.signEvent()` (NIP-07), fallback `window.NostrTools.finishEvent(ev, userPrivateKey)`.
+
+---
 
 ### `objects.html` — Inventaire des objets (Kind 30505)
 
@@ -107,7 +155,8 @@ Permet de planifier une session (Kind 31922) avec les tags `craft` et `min_opera
 | Module | Fichier | API publique |
 |--------|---------|-------------|
 | **SkillCloud** | `skills.js` | `SkillCloud.init(opts)` — widget p5.js Kind 30503/30504 |
-| **RelaySelector** | `relay.js` | `RelaySelector.init(opts)`, `RelaySelector.query(filter, relay)` |
+| **RelaySelector** | `relay.js` | `RelaySelector.init(opts)`, `RelaySelector.query(wsUrl, filter, opts)` |
+| **WoTx²Nav** | `wotx2-nav.js` | Auto-injecte une barre d'onglets fixe bas de page (⚒️ Forge / ☁️ Skills / ⛏️ MineLife / 📦 Objets). Charger après `uplanet-header.js`. Ajoute `padding-bottom` au `body` automatiquement. |
 
 ---
 
@@ -221,11 +270,12 @@ Chacune appelle `initCarousel({...})` avec ses propres valeurs de rayon :
 | 1    | regular | plantnet.html, common.js | Note biodiversité / message |
 | 7    | regular | common.js | Réaction / paiement ẐEN (+N) |
 | 31922 | replaceable | calendars.html | Événement calendrier / session craft |
-| 30500 | param. replaceable | calendars.html | Craft (recette collective) |
-| 30503 | param. replaceable | skills.html | Compétence WoTx² (Kind attest) |
-| 30504 | param. replaceable | skills.html | Ressource de formation |
-| **30505** | **param. replaceable** | **objects.html, plantnet.html** | **Objet/ressource — état courant** |
+| 30500 | param. replaceable | forge.html, calendars.html | Recette de craft (ingrédients skills/objets + ressources) |
+| 30503 | param. replaceable | forge.html, skills.html | Compétence WoTx² (certificat auto/P2P/Oracle) |
+| 30504 | param. replaceable | skills.html | Ressource de formation liée à un skill |
+| **30505** | **param. replaceable** | **forge.html, objects.html, plantnet.html** | **Objet/ressource — état courant** |
 | **1505** | **regular (journal)** | **objects.html** | **Delta qty/durability (append-only)** |
+| 1063 | regular (NIP-94) | forge.html (fallback uDRIVE) | Métadonnées fichier IPFS (url, m, alt) |
 
 **Kind 30505 tags obligatoires** : `d` (slug), `title`, `t` (type/mobility/quantity_type),
 `quantity`, `quantity_unit`, `durability`, `repairability`.

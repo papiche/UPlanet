@@ -381,12 +381,22 @@ function _togglePentagons() {
 setInterval(_drawPentagons, 120000);
 
 // ── Conformité a4l ────────────────────────────────────────────────────────────
-// Un atome est "conforme" si son Kind 0 contient un tag NIP-39 g1pub
-// (clé dérivée via UPassport keygen naissance→scrypt→secp256k1→G1→NOSTR).
-// Sans ce tag, la clé a été générée indépendamment ("hybridée").
-function _isConforme(atom) {
-    return !!(atom.profile && atom.profile.g1pub);
+// Niveaux de conformité (du plus fort au plus faible) :
+//   2 — CONFORME  : cert 30078 contient g1pub + g1pub_proof valide ET concorde avec Kind 0 NIP-39
+//   1 — PROBABLE  : Kind 0 a un g1pub NIP-39 mais le cert 30078 n'a pas de g1pub_proof
+//   0 — HYBRIDE   : aucune preuve de co-dérivation keygen
+function _conformeLevel(atom) {
+    var p   = atom.profile  || {};
+    var c   = atom.certData || {};   // contenu du Kind 30078
+    var k0g = p.g1pub       || '';   // g1pub du Kind 0 NIP-39
+    var cg  = c.g1pub       || '';   // g1pub embarqué dans le cert 30078
+    var cgp = c.g1pub_proof || '';   // preuve croisée dans le cert
+    if (cg && cgp && k0g && cg === k0g) return 2;  // concordance totale
+    if (cg && cgp)                      return 2;  // preuve présente, Kind 0 non chargé
+    if (k0g)                            return 1;  // Kind 0 g1pub seul (probable)
+    return 0;
 }
+function _isConforme(atom) { return _conformeLevel(atom) >= 1; }
 
 // ── Icône de marqueur ─────────────────────────────────────────────────────────
 function _mkIcon(phi, psi, k, conforme) {
@@ -423,13 +433,19 @@ function _buildPopup(atom) {
     var psiS = (atom.psi   !== null && !isNaN(atom.psi))   ? Math.round(atom.psi * 100) + '%' : '—';
     var penS = 'P' + String(atom.pentagonId).padStart(2, '0');
 
-    var conforme = _isConforme(atom);
-    // Badge de conformité : 🔑 = clé dérivée via keygen (g1pub NIP-39 présent) / ⚠ = clé externe
-    var badge = conforme
+    var clvl  = _conformeLevel(atom);
+    var badge = clvl === 2
         ? '<span style="font-size:.6rem;background:rgba(0,255,204,.1);border:1px solid rgba(0,255,204,.3);' +
-          'color:#00ffcc;border-radius:8px;padding:1px 6px;margin-left:5px" title="Clé conforme a4l — dérivée via keygen naissance+UPassport">🔑 MULTIPASS</span>'
+          'color:#00ffcc;border-radius:8px;padding:1px 6px;margin-left:5px" ' +
+          'title="Clé conforme a4l — g1pub_proof vérifié, co-dérivée via keygen">🔑 MULTIPASS</span>'
+        : clvl === 1
+        ? '<span style="font-size:.6rem;background:rgba(234,179,8,.1);border:1px solid rgba(234,179,8,.3);' +
+          'color:#eab308;border-radius:8px;padding:1px 6px;margin-left:5px" ' +
+          'title="Probable — Kind 0 a un g1pub NIP-39 mais pas de g1pub_proof dans le cert">🟡 probable</span>'
         : '<span style="font-size:.6rem;background:rgba(251,146,60,.1);border:1px solid rgba(251,146,60,.3);' +
-          'color:#fb923c;border-radius:8px;padding:1px 6px;margin-left:5px" title="Clé externe non vérifiée — non liée à la chaîne keygen a4l">⚠ hybridé</span>';
+          'color:#fb923c;border-radius:8px;padding:1px 6px;margin-left:5px" ' +
+          'title="Clé externe — pas de preuve de co-dérivation keygen a4l">⚠ hybridé</span>';
+    var conforme = clvl >= 1;
 
     return '<div class="atom-popup">' +
         '<div class="pop-head">' +
@@ -775,6 +791,7 @@ async function _loadMap() {
             omega:      isNaN(omega) ? null : omega,
             psi:        isNaN(psi)   ? 0    : psi,
             profile:    profiles[ev.pubkey] || null,
+            certData:   c,               // contenu brut du Kind 30078 (g1pub, g1pub_proof…)
             k:          null, marker: null,
             createdAt:  ev.created_at
         };

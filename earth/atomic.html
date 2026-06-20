@@ -2211,6 +2211,7 @@ function _keyPreviewHTML(npub, email) {
 
 // ── Vault onboarding — ADN Cosmique (wallet detection + PIN mobile) ──────────
 let _vaultPrivHex = null;
+let _cachedG1pub  = null;   // g1pub retourné par UPassport /g1nostr — ancre de conformité a4l
 
 function _getRecommendedWallet() {
     var ua = navigator.userAgent;
@@ -2299,6 +2300,9 @@ function _renderMultipassResult(data, el, localKeys) {
             console.error('[atomic] KEY MISMATCH', { client: localKeys.npub, server: data.npub });
         }
     }
+
+    // Stocker g1pub depuis la réponse serveur — ancre de conformité pour le cert 30078
+    if (data.g1pub) _cachedG1pub = data.g1pub;
 
     var _vHtml = '';
     if (localKeys && localKeys.nsec) {
@@ -3415,6 +3419,20 @@ async function publishIncarnationCert() {
 
         const a4l_proof = await _sha256Hex(pubkey + ':' + A4L_PROOF_SALT);
 
+        // ── Preuve de conformité keygen a4l ───────────────────────────────────
+        // g1pub_proof = sha256(nostr_pubkey + ':' + g1pub + ':' + SALT)
+        // Prouve que le publisher connaît BOTH clés issues du même keygen.
+        // Le relay vérifie que g1pub 30078 == g1pub Kind 0 NIP-39 du même pubkey.
+        // Sources du g1pub (priorité décroissante) :
+        //   1. UPH cachedProfile — Kind 0 déjà chargé à la connexion, immédiat
+        //   2. _cachedG1pub     — retourné par UPassport /g1nostr (session MULTIPASS)
+        const _uphG1pub = (window.cachedProfile && window.cachedProfile.g1pub)
+            ? window.cachedProfile.g1pub : null;
+        const _g1pub = _uphG1pub || _cachedG1pub || null;
+        const _g1pub_proof = _g1pub
+            ? await _sha256Hex(pubkey + ':' + _g1pub + ':' + A4L_PROOF_SALT)
+            : null;
+
         // Tag géographique NIP-52 : permet au relay de filtrer par pentagone local
         const _geoTag       = Phi2X.geoTagA4L(birthLat, birthLon, birthUnix);
 
@@ -3426,9 +3444,11 @@ async function publishIncarnationCert() {
             personal_phase: parseFloat(personal_phase.toFixed(6)),
             // ω_bio publié : quantifié 2 Hz + bruit local — non réversible au poids exact
             omega_bio:      _publishableOmega(omega_bio),
-            // Champ cymatique : amplitude Ψ du ventre d'onde planétaire au lieu/temps de naissance
+            // Champ cymatique : amplitude Ψ du ventre d'onde planétaire à la naissance
             a5l_amplitude:  parseFloat(_a5lAmplitude.toFixed(6)),
         };
+        if (_g1pub)       certContent.g1pub       = _g1pub;
+        if (_g1pub_proof) certContent.g1pub_proof = _g1pub_proof;
         if (kin_birth_val)  certContent.kin_birth      = kin_birth_val;
         if (kin_conc_val)   certContent.kin_conception  = kin_conc_val;
         if (elems) {
@@ -3439,17 +3459,22 @@ async function publishIncarnationCert() {
         certContent.pepper_type = _pepperMode;
         if (_pepperMode === 'anomalie') certContent.pepper_delta_jours = _pepperDeltaDays;
 
+        const tags = [
+            ['d', 'atom4love'],
+            ['app', 'atom4love'],
+            ['a4l_proof', a4l_proof],
+            ['g', _geoTag.penta],   // ex: "a4l:P05" — filtre géo pentagon
+            ['g', _geoTag.hex],     // ex: "a4l:P05H3F2A12B8" — adresse hexagonale
+            ['a5l', _a5lTag],       // ex: "a5l:9F3C" — ventre d'onde cymatique (naissance)
+        ];
+        // Tag g1pub pour cross-vérification rapide par le relay sans parser le content
+        if (_g1pub)       tags.push(['g1pub', _g1pub]);
+        if (_g1pub_proof) tags.push(['g1pub_proof', _g1pub_proof]);
+
         const event = {
             kind: 30078,
             created_at: Math.floor(Date.now() / 1000),
-            tags: [
-                ['d', 'atom4love'],
-                ['app', 'atom4love'],
-                ['a4l_proof', a4l_proof],
-                ['g', _geoTag.penta],   // ex: "a4l:P05" — filtre géo pentagon
-                ['g', _geoTag.hex],     // ex: "a4l:P05H3F2A12B8" — adresse hexagonale
-                ['a5l', _a5lTag],       // ex: "a5l:9F3C" — ventre d'onde cymatique (naissance)
-            ],
+            tags,
             content: JSON.stringify(certContent)
         };
 

@@ -17,23 +17,27 @@
 
     // ── Navigation ─────────────────────────────────────────────────────────────
     // Entrées avec `sep` = séparateur/titre de section (pas de lien)
+    // mini:true → visible même sur mobile (<480px). Priorité : items essentiels.
     var NAV = [
-        { e: '🌍', l: 'HOME',       h: 'index.html' },
+        { e: '🌍', l: 'HOME',           h: 'index.html',             mini: true },
         { sep: 'Identité' },
-        { e: '💎', l: 'Atomic',     h: 'atomic.html' },
-        { e: '🌐', l: 'Roaming',    h: 'roaming.html' },
+        { e: '💎', l: 'Atomic',         h: 'atomic.html',            mini: true },
+        { e: '🌐', l: 'Roaming',        h: 'roaming.html' },
         { sep: 'Station' },
-        { e: '♥️', l: 'Station',    h: 'economy.html' },
-        { e: '🌌', l: 'Swarm',      h: 'economy.Swarm.html' },
+        { e: '♥️', l: 'Station',        h: 'economy.html',           mini: true },
+        { e: '🌌', l: 'Swarm',          h: 'economy.Swarm.html' },
         { sep: 'WoTx²' },
-        { e: '⚒️', l: 'Forge',      h: 'forge.html' },
-        { e: '☁️', l: 'Skills',     h: 'skills.html' },
-        { e: '📖', l: 'H2G2',       h: 'h2g2.html' },
-        { e: '⚖️', l: 'Justice',    h: 'justice.html' },
+        { e: '⚒️', l: 'Forge',          h: 'forge.html',             mini: true },
+        { e: '☁️', l: 'Skills',         h: 'skills.html' },
+        { e: '📖', l: 'H2G2',           h: 'h2g2.html' },
+        { e: '⚖️', l: 'Justice',        h: 'justice.html' },
+        { sep: 'Médias' },
+        { e: '📺', l: 'NOSTR Tube',     h: 'youtube.html',           mini: true },
+        { e: '🦋', l: 'Coracle',        h: 'https://coracle.copylaradio.com' },
         { sep: 'Communauté' },
-        { e: '🤝', l: 'Contribuer', h: 'contribute-3D.html' },
-        { e: '🛈', l: 'U.Nation',   h: 'Unation.html' },
-        { e: '🪙', l: 'Collectif Ẑen',   h: 'https://opencollective.com/monnaie-libre' },
+        { e: '🤝', l: 'Contribuer',     h: 'contribute-3D.html',     mini: true },
+        { e: '🛈', l: 'U.Nation',       h: 'Unation.html' },
+        { e: '🪙', l: 'Collectif Ẑen', h: 'https://opencollective.com/monnaie-libre' },
     ];
 
     var _page        = (location.pathname.split('/').pop() || 'index.html').replace(/[?#].*/, '');
@@ -93,7 +97,8 @@
         + '#uph-nav-panel{position:absolute;top:calc(100% + 7px);left:0;'
         + 'background:rgba(7,7,18,.96);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);'
         + 'border:1px solid rgba(255,255,255,.11);border-radius:13px;'
-        + 'padding:6px;display:flex;flex-direction:column;gap:2px;min-width:162px;z-index:9600}'
+        + 'padding:6px;display:flex;flex-direction:column;gap:2px;min-width:162px;z-index:9600;'
+        + 'max-height:min(70vh,420px);overflow-y:auto;overflow-x:hidden}'
         + '#uph-nav-panel.uph-h{display:none}'
         + '#uph-nav-panel a{color:rgba(255,255,255,.82);text-decoration:none;'
         + 'padding:5px 10px;border-radius:8px;font-size:11.5px;display:block;transition:background .12s}'
@@ -137,6 +142,7 @@
         + 'overflow:hidden;text-overflow:ellipsis;flex-shrink:0;cursor:default}'
 
         + '@media(max-width:500px){#uph-station,#uph-zen{display:none!important}}'
+        + '@media(max-width:480px){.uph-full{display:none!important}}'
         + '#uph-zen.linked{cursor:pointer}'
         + '#uph-zen.linked:hover{background:rgba(134,239,172,.25);border-color:rgba(134,239,172,.5)}'
 
@@ -226,10 +232,20 @@
 
     // ── HTML ───────────────────────────────────────────────────────────────────
     function _html() {
+        // Pré-calcul : sections ayant au moins un item mini
+        var _sectMini = {}, _cs = null;
+        NAV.forEach(function(p) {
+            if (p.sep) { _cs = p.sep; _sectMini[p.sep] = false; }
+            else if (p.mini && _cs) { _sectMini[_cs] = true; }
+        });
         var links = NAV.map(function (p) {
-            if (p.sep) return '<span class="uph-section-label">' + p.sep + '</span>';
+            if (p.sep) {
+                var sc = _sectMini[p.sep] ? '' : ' uph-full';
+                return '<span class="uph-section-label' + sc + '">' + p.sep + '</span>';
+            }
             var isCur = _page === p.h;
-            return '<a href="' + _NAV_BASE + p.h + '"' + (isCur ? ' class="uph-cur"' : '') + '>'
+            var cls = [(isCur ? 'uph-cur' : ''), (p.mini ? '' : 'uph-full')].filter(Boolean).join(' ');
+            return '<a href="' + _NAV_BASE + p.h + '"' + (cls ? ' class="' + cls + '"' : '') + '>'
                 + p.e + ' ' + p.l + '</a>';
         }).join('');
         return '<div id="uph" role="banner">'

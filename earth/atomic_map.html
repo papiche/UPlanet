@@ -257,7 +257,9 @@ html, body { margin:0; padding:0; height:100%; overflow:hidden;
 
 // ── Relay ─────────────────────────────────────────────────────────────────────
 function _relayUrl() {
+    if (typeof window.getRelayUrl === 'function') return window.getRelayUrl();
     const h = location.hostname;
+    if (h === '127.0.0.1' || h === 'localhost') return 'ws://127.0.0.1:7777';
     if (h.startsWith('ipfs.')) return 'wss://relay.' + h.slice(5);
     if (h.startsWith('u.'))    return 'wss://relay.' + h.slice(2);
     return 'wss://relay.copylaradio.com';
@@ -680,7 +682,7 @@ async function _onConnected() {
     if (!pubkey) return;
     _log('Connecté: ' + pubkey.slice(0, 8) + '…');
 
-    // Charger mon propre cert pour avoir φ
+    // Charger mon propre cert pour avoir φ + niveau de conformité a4l
     var myCerts = await _wsQuery(_relayUrl(),
         { kinds:[30078], '#d':['atom4love'], authors:[pubkey], limit:1 }, 5000);
     if (myCerts.length > 0) {
@@ -688,6 +690,22 @@ async function _onConnected() {
             var c = JSON.parse(myCerts[0].content);
             var v = parseFloat(c.personal_phase);
             if (!isNaN(v)) { _myPhi = v; _log('φ personnel: ' + v.toFixed(4)); }
+
+            // g1pub + preuve depuis les tags du Kind 30078
+            var _certTags      = myCerts[0].tags || [];
+            var _g1pubFromCert = ''; var _g1pubProof = '';
+            _certTags.forEach(function(t) {
+                if (t[0] === 'g1pub')       _g1pubFromCert = t[1] || '';
+                if (t[0] === 'g1pub_proof') _g1pubProof    = t[1] || '';
+            });
+            // g1pub depuis UPH (rapide, déjà chargé) ou fallback vide
+            var _g1pubK0 = (window.cachedProfile && window.cachedProfile.g1pub) ? window.cachedProfile.g1pub : '';
+            var _myConformity = _conformeLevel({
+                certData: { g1pub: _g1pubFromCert, g1pub_proof: _g1pubProof },
+                profile:  { g1pub: _g1pubK0 }
+            });
+            _log('Conformité a4l: niveau ' + _myConformity);
+            if (window.uphSetA4lBadge) window.uphSetA4lBadge(_myConformity);
         } catch(_) {}
     }
 

@@ -21,8 +21,6 @@
         { e: '🌍', l: 'HOME',       h: 'index.html' },
         { e: '🌐', l: 'Roaming',    h: 'roaming.html' },
         { sep: 'Identité' },
-        { e: '✨', l: 'MULTIPASS',  h: 'g1.html' },
-        { e: '💳', l: 'ZenCard',    h: 'zencard.html' },
         { sep: 'Station' },
         { e: '♥️', l: 'Station',    h: 'economy.html' },
         { e: '🌌', l: 'Swarm',      h: 'economy.Swarm.html' },
@@ -33,7 +31,7 @@
         { e: '📖', l: 'H2G2',       h: 'h2g2.html' },
         { e: '⚖️', l: 'Justice',    h: 'justice.html' },
         { sep: 'Communauté' },
-        { e: '🤝', l: 'Contribuer', h: 'contribute-3D.html' },
+        { e: '🤝', l: 'Comprendre', h: 'contribute-3D.html' },
         { e: '🛈', l: 'U.Nation',   h: 'Unation.html' },
         { e: '🪙', l: 'Coinflip',   h: 'coinflip.html' },
     ];
@@ -250,6 +248,8 @@
             + '<img  id="uph-avatar" src="" alt="avatar">'
             + '<span id="uph-name" style="display:none"></span>'
             + '<span id="uph-zen"  class="uph-chip uph-ok" style="display:none" title="Solde ẐEN"></span>'
+            + '<span id="uph-a4l" style="display:none;font-size:9px;padding:2px 6px;border-radius:10px;'
+            + 'border:1px solid;cursor:default;flex-shrink:0" title="État ATOM4LOVE"></span>'
             + '<span class="uph-sep"></span>'
             + '<span id="uph-station" title="Station Astroport.ONE">📡</span>'
             + '<button id="uph-access-btn" title="Connexion / Accès">🔑 Accès</button>'
@@ -1530,6 +1530,34 @@
         _cachePubkey(pk);
         _refreshUI();
         if (!_dataLoaded) { _dataLoaded = true; _loadAll(); }
+    };
+
+    // Affiche l'état ATOM4LOVE dans le pill UPH.
+    // level : 2 = conforme (🔑), 1 = probable (🟡), 0 = hybridé (⚠), -1 = absent (masqué)
+    window.uphSetA4lBadge = function (level) {
+        var el = document.getElementById('uph-a4l');
+        if (!el) return;
+        if (level === 2) {
+            el.textContent = '🔑 a4l';
+            el.style.color = '#00ffcc'; el.style.borderColor = 'rgba(0,255,204,.35)';
+            el.style.background = 'rgba(0,255,204,.08)';
+            el.title = 'ATOM4LOVE conforme — clé co-dérivée via keygen UPassport';
+            el.style.display = '';
+        } else if (level === 1) {
+            el.textContent = '🟡 a4l';
+            el.style.color = '#eab308'; el.style.borderColor = 'rgba(234,179,8,.35)';
+            el.style.background = 'rgba(234,179,8,.08)';
+            el.title = 'ATOM4LOVE probable — g1pub NIP-39 présent, preuve non complète';
+            el.style.display = '';
+        } else if (level === 0) {
+            el.textContent = '⚠ a4l';
+            el.style.color = '#fb923c'; el.style.borderColor = 'rgba(251,146,60,.35)';
+            el.style.background = 'rgba(251,146,60,.08)';
+            el.title = 'ATOM4LOVE hybridé — clé externe, non liée à la chaîne keygen';
+            el.style.display = '';
+        } else {
+            el.style.display = 'none';
+        }
     };
 
 })();

@@ -19,21 +19,21 @@
     // Entrées avec `sep` = séparateur/titre de section (pas de lien)
     var NAV = [
         { e: '🌍', l: 'HOME',       h: 'index.html' },
-        { e: '🌐', l: 'Roaming',    h: 'roaming.html' },
         { sep: 'Identité' },
+        { e: '💎', l: 'Atomic',     h: 'atomic.html' },
+        { e: '🌐', l: 'Roaming',    h: 'roaming.html' },
         { sep: 'Station' },
         { e: '♥️', l: 'Station',    h: 'economy.html' },
         { e: '🌌', l: 'Swarm',      h: 'economy.Swarm.html' },
-        { e: '💎', l: 'Atomic',     h: 'atomic.html' },
         { sep: 'WoTx²' },
         { e: '⚒️', l: 'Forge',      h: 'forge.html' },
         { e: '☁️', l: 'Skills',     h: 'skills.html' },
         { e: '📖', l: 'H2G2',       h: 'h2g2.html' },
         { e: '⚖️', l: 'Justice',    h: 'justice.html' },
         { sep: 'Communauté' },
-        { e: '🤝', l: 'Comprendre', h: 'contribute-3D.html' },
+        { e: '🤝', l: 'Contribuer', h: 'contribute-3D.html' },
         { e: '🛈', l: 'U.Nation',   h: 'Unation.html' },
-        { e: '🪙', l: 'Coinflip',   h: 'coinflip.html' },
+        { e: '🪙', l: 'Collectif Ẑen',   h: 'https://opencollective.com/monnaie-libre' },
     ];
 
     var _page        = (location.pathname.split('/').pop() || 'index.html').replace(/[?#].*/, '');
@@ -69,9 +69,12 @@
 
     var _ready       = false;
     var _dataLoaded  = false;
-    var _SS_KEY      = 'uph_pubkey';    // sessionStorage — pubkey actif
-    var _SS_PRIV_KEY = 'uph_privkey';   // sessionStorage — clé privée (effacée à la fermeture de l'onglet)
-    var _LS_ACCOUNTS = 'uph_accounts';  // localStorage  — liste {email,pubkey} (JAMAIS de clé privée)
+    var _SS_KEY      = 'uph_pubkey';    // sessionStorage — pubkey actif (public, non-secret)
+
+    function _cleanLegacyStorage() {
+        try { sessionStorage.removeItem('uph_privkey'); } catch (e) {}
+        try { var o = localStorage.getItem('uph_accounts'); if (o) localStorage.removeItem('uph_accounts'); } catch (e) {}
+    }
 
     // ── Styles (scopés #uph) ───────────────────────────────────────────────────
     var _CSS = '#uph{position:fixed;top:5px;left:50%;transform:translateX(-50%);z-index:9500;'
@@ -280,9 +283,6 @@
         document.querySelectorAll('#nostr-bar').forEach(function (el) {
             el.style.display = 'none';
         });
-
-        // Peupler le sélecteur d'identités dès l'injection
-        _renderIdSwitcher();
 
         // Déplacement
         _initDrag();
@@ -546,7 +546,6 @@
             var avEl   = document.getElementById('uph-avatar');
             if (!meta) {
                 window.isMultipass = false;
-                _showNonMultipassBadge();
                 console.warn('[UPH] _loadProfile: meta null (profil kind 0 absent ?)');
                 return;
             }
@@ -567,7 +566,6 @@
                 window._uphG1Pub = meta.g1pub;
                 _loadBalance(meta.g1pub);
             } else {
-                _showNonMultipassBadge();
                 console.warn('[UPH] g1pub absent du profil kind 0 — compte non MULTIPASS (calculé localement).',
                     'Champs disponibles:', Object.keys(meta).join(', '));
             }
@@ -698,691 +696,34 @@
         }
     }
 
-    // ── Utilitaires cryptographiques — méthode coordonnées de naissance ──────────
-    // Identiques aux fonctions de atomic.html pour garantir la cohérence des clés.
-
-    // Équation du temps : correction solaire apparente (−14…+16 min selon saison)
-    function _uphEoT(dateStr) {
-        var p = (dateStr || '1972-01-01').split('-').map(Number);
-        var doy = Math.round((Date.UTC(p[0], p[1]-1, p[2]) - Date.UTC(p[0], 0, 1)) / 86400000) + 1;
-        var B = (2 * Math.PI / 365) * (doy - 81);
-        return 9.87 * Math.sin(2*B) - 7.53 * Math.cos(B) - 1.5 * Math.sin(B);
-    }
-
-    // Conversion heure solaire locale → timestamp UTC (même algo que atomic.html)
-    function _uphDateToUtcUnix(dateStr, timeStr, lonDeg) {
-        var parts = (dateStr || '').split('-').map(Number);
-        if (parts.length < 3 || !parts[0]) return NaN;
-        var y = parts[0], mo = parts[1], d = parts[2];
-        var tp = (timeStr || '12:00').split(':').map(Number);
-        var h = tp[0] || 12, mn = tp[1] || 0;
-        var offsetMin = (lonDeg || 0) * 4 + _uphEoT(dateStr);
-        var utcMin    = h * 60 + mn - offsetMin;
-        return Math.floor(Date.UTC(y, mo - 1, d, 0, Math.round(utcMin), 0) / 1000);
-    }
-
-    // Format YYYYMMDDHHMM depuis timestamp UTC
-    function _uphUnixToUtcStr(unix) {
-        var d = new Date((unix || 0) * 1000);
-        return String(d.getUTCFullYear())
-            + String(d.getUTCMonth() + 1).padStart(2, '0')
-            + String(d.getUTCDate()).padStart(2, '0')
-            + String(d.getUTCHours()).padStart(2, '0')
-            + String(d.getUTCMinutes()).padStart(2, '0');
-    }
-
-    // PBKDF2-SHA256 / 600 000 itérations / domaine 'uplanet-a4l-v1' — même paramétrage qu'atomic.html
-    // onProgress(step) est appelé avant chaque étape (1/2 puis 2/2) avec un setTimeout(50ms) pour le repaint.
-    async function _uphPbkdf2Stretch(rawSalt, rawPepper, onProgress) {
-        var enc     = new TextEncoder();
-        var domSalt = enc.encode('uplanet-a4l-v1');
-        async function _s(input) {
-            var k = await crypto.subtle.importKey('raw', enc.encode(input), 'PBKDF2', false, ['deriveBits']);
-            var b = await crypto.subtle.deriveBits(
-                { name: 'PBKDF2', salt: domSalt, iterations: 600000, hash: 'SHA-256' }, k, 256
-            );
-            return btoa(String.fromCharCode.apply(null, new Uint8Array(b)))
-                .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-        }
-        if (onProgress) onProgress(1);
-        await new Promise(function (r) { setTimeout(r, 60); }); // repaint avant le premier calcul
-        var stretchedSalt = await _s(rawSalt);
-        if (onProgress) onProgress(2);
-        await new Promise(function (r) { setTimeout(r, 20); }); // repaint entre les deux calculs
-        var stretchedPepper = await _s(rawPepper);
-        return { stretchedSalt: stretchedSalt, stretchedPepper: stretchedPepper };
-    }
-
-    // Date de conception harmonique : gestation = 280 + (poids − 3.5) × 4 jours (formule Phi2X)
-    function _uphConceptionUnix(birthUnix, weight) {
-        return birthUnix - Math.round(280 + (weight - 3.5) * 4) * 86400;
-    }
-
-    // ── Polyfill window.nostr (remplace l'extension nos2x/NIP-07) ──────────────
-    function _installNostrPolyfill(pubkey, privHex) {
-        // Ne remplace pas une vraie extension (sauf si c'est déjà notre polyfill)
-        if (window.nostr && !window.nostr._isG1v1) return;
-        var NostrLib = window.NostrTools || window.Nostr;
-        window.nostr = {
-            _isG1v1: true,
-            getPublicKey: function () { return Promise.resolve(pubkey); },
-            signEvent: function (event) {
-                if (!NostrLib || !NostrLib.finishEvent)
-                    return Promise.reject(new Error('NostrLib absent'));
-                return Promise.resolve(NostrLib.finishEvent(event, privHex));
-            },
-            getRelays: function () { return Promise.resolve({}); }
-        };
-        console.log('[UPH] Polyfill window.nostr installé (G1v1, sans extension requise)');
-    }
-
-    // ── Chiffrement AES-256-GCM pour nsec (WebCrypto) ────────────────────────
-    function _b64enc(buf) {
-        return btoa(String.fromCharCode.apply(null, new Uint8Array(buf)));
-    }
-    function _b64dec(s) {
-        var bin = atob(s), buf = new Uint8Array(bin.length);
-        for (var i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
-        return buf;
-    }
-    async function _deriveEncKey(pin, salt) {
-        var raw = await crypto.subtle.importKey('raw', new TextEncoder().encode(pin), 'PBKDF2', false, ['deriveKey']);
-        return crypto.subtle.deriveKey(
-            { name: 'PBKDF2', salt: salt, iterations: 200000, hash: 'SHA-256' },
-            raw,
-            { name: 'AES-GCM', length: 256 },
-            false, ['encrypt', 'decrypt']
-        );
-    }
-    async function _encryptNsec(nsecHex, pin) {
-        var salt = crypto.getRandomValues(new Uint8Array(16));
-        var iv   = crypto.getRandomValues(new Uint8Array(12));
-        var key  = await _deriveEncKey(pin, salt);
-        var ct   = await crypto.subtle.encrypt({ name: 'AES-GCM', iv: iv }, key, new TextEncoder().encode(nsecHex));
-        return { ct: _b64enc(ct), iv: _b64enc(iv), salt: _b64enc(salt) };
-    }
-    async function _decryptNsec(enc, pin) {
-        var key = await _deriveEncKey(pin, _b64dec(enc.salt));
-        var pt  = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: _b64dec(enc.iv) }, key, _b64dec(enc.ct));
-        return new TextDecoder().decode(pt);
-    }
-
-    // ── Sélecteur d'identités dans le panneau nav ─────────────────────────────
-    function _renderIdSwitcher() {
-        var container = document.getElementById('uph-id-switcher');
-        if (!container) return;
-        var accounts  = _loadAccounts();
-        var activePub = (window.NostrState && window.NostrState.userPubkey) || window.userPubkey || '';
-        if (accounts.length === 0) { container.innerHTML = ''; return; }
-        container.innerHTML = accounts.map(function (a) {
-            var isActive = a.pubkey === activePub;
-            return '<div class="uph-id-item' + (isActive ? ' active' : '') + '"'
-                + ' data-pubkey="' + a.pubkey + '">'
-                + '<span class="uph-id-dot">' + (isActive ? '●' : '○') + '</span>'
-                + '<span class="uph-id-label">' + (a.email || a.pubkey.slice(0, 8) + '…') + '</span>'
-                + (a.enc_nsec ? '<span class="uph-id-locked">🔑</span>' : '')
-                + '</div>';
-        }).join('');
-        container.querySelectorAll('.uph-id-item').forEach(function (el) {
-            el.addEventListener('click', async function (e) {
-                e.stopPropagation();
-                var pubkey = el.dataset.pubkey;
-                var activePub2 = (window.NostrState && window.NostrState.userPubkey) || window.userPubkey || '';
-                if (pubkey === activePub2) return;
-                var acct = _loadAccounts().find(function (a) { return a.pubkey === pubkey; });
-                if (!acct) return;
-                if (!acct.enc_nsec) {
-                    // Pas de nsec chiffré : ouvrir la modal pour re-dériver
-                    var em = document.getElementById('uph-mp-email') || document.getElementById('uph-mp-mini-email');
-                    if (em) em.value = acct.email;
-                    _openModal();
-                    return;
-                }
-                var pin = prompt('🔑 PIN pour "' + acct.email + '" :');
-                if (pin === null) return;
-                try {
-                    var privHex = await _decryptNsec(acct.enc_nsec, pin);
-                    var NostrLib = window.NostrTools || window.Nostr;
-                    if (!NostrLib || !NostrLib.getPublicKey) throw new Error('NostrLib absent');
-                    var derived = NostrLib.getPublicKey(privHex);
-                    if (derived !== acct.pubkey) throw new Error('PIN incorrect');
-                    _activateIdentity(acct.email, acct.pubkey, privHex, acct.enc_nsec);
-                } catch (err) {
-                    alert('❌ ' + (err.message === 'PIN incorrect' ? 'PIN incorrect — réessayez' : 'Déchiffrement impossible'));
-                }
-            });
-        });
-    }
-
-    // ── Gestion des comptes sauvegardés (localStorage, SANS clé privée) ────────
-    function _loadAccounts() {
-        try { return JSON.parse(localStorage.getItem(_LS_ACCOUNTS) || '[]'); }
-        catch (e) { return []; }
-    }
-
-    function _saveAccount(email, pubkey, enc_nsec) {
-        var list = _loadAccounts().filter(function (a) { return a.pubkey !== pubkey; });
-        var acct = { email: email, pubkey: pubkey };
-        if (enc_nsec) acct.enc_nsec = enc_nsec;
-        list.unshift(acct);
-        try { localStorage.setItem(_LS_ACCOUNTS, JSON.stringify(list.slice(0, 10))); } catch (e) { if(window.DEBUG) console.warn('[UPH storage] saveAccount:', e); }
-        _renderSavedAccounts();
-        _renderIdSwitcher();
-    }
-
-    function _showNonMultipassBadge() {
-        var pubkey = (window.NostrState && window.NostrState.userPubkey) || window.userPubkey;
-        var nip = document.getElementById('uph-nip');
-        if (nip) { nip.className = 'uph-dot uph-y'; nip.title = '⚠ Non-MULTIPASS — ne peut pas publier sur ce relay'; }
-        var uph = document.getElementById('uph');
-        if (!uph || document.getElementById('uph-nonmp-del')) return;
-        var delBtn = document.createElement('button');
-        delBtn.id    = 'uph-nonmp-del';
-        delBtn.title = 'Compte de test — supprimer';
-        delBtn.textContent = '🗑';
-        delBtn.style.cssText = 'background:rgba(255,80,80,.15);border:1px solid rgba(255,80,80,.3);'
-            + 'color:rgba(255,150,150,.8);padding:2px 6px;border-radius:6px;cursor:pointer;'
-            + 'font-size:.85rem;margin-left:4px;flex-shrink:0';
-        delBtn.onclick = function() {
-            if (confirm('Supprimer ce compte de test ?\nToutes les données locales (clés, données de naissance) seront effacées.')) {
-                _clearNonMultipass(pubkey);
-            }
-        };
-        var accessBtn = document.getElementById('uph-access-btn');
-        if (accessBtn) uph.insertBefore(delBtn, accessBtn);
-        else uph.appendChild(delBtn);
-    }
-
-    function _clearNonMultipass(pubkey) {
-        if (pubkey) _deleteAccount(pubkey);
-        try { sessionStorage.removeItem(_SS_KEY); sessionStorage.removeItem(_SS_PRIV_KEY); } catch (e) {}
-        if (window.nostr && window.nostr._isG1v1) { try { delete window.nostr; } catch(e) { window.nostr = undefined; } }
-        window.userPubkey    = null;
-        window.isMultipass   = undefined;
-        window._uphG1Pub     = undefined;
-        window._uphEmail     = undefined;
-        if (window.NostrState) { window.NostrState.userPubkey = null; window.NostrState.isNostrConnected = false; }
-        ['atomic_birth_data', 'a4l_multipass_ok', 'a4l_omega_noise', 'a4l_theme'].forEach(function(k) {
-            try { localStorage.removeItem(k); } catch (e) {}
-        });
-        location.reload();
-    }
-
-    function _deleteAccount(pubkey) {
-        var list = _loadAccounts().filter(function (a) { return a.pubkey !== pubkey; });
-        try { localStorage.setItem(_LS_ACCOUNTS, JSON.stringify(list)); } catch (e) { if(window.DEBUG) console.warn('[UPH storage] deleteAccount:', e); }
-        _renderSavedAccounts();
-    }
-
-    function _renderSavedAccounts() {
-        var container = document.getElementById('uph-saved-accounts');
-        if (!container) return;
-        var accounts  = _loadAccounts();
-        var activePub = (window.NostrState && window.NostrState.userPubkey) || window.userPubkey || '';
-        if (accounts.length === 0) { container.innerHTML = ''; return; }
-        container.innerHTML = accounts.map(function (a) {
-            var cls = 'uph-saved-acct' + (a.pubkey === activePub ? ' active' : '');
-            return '<div class="' + cls + '" data-pubkey="' + a.pubkey + '">'
-                + '<span class="uph-saved-acct-label">'
-                + (a.pubkey === activePub ? '✓ ' : '') + a.email + '</span>'
-                + '<span class="uph-saved-del" data-del="' + a.pubkey + '">✕</span>'
-                + '</div>';
-        }).join('');
-        container.querySelectorAll('.uph-saved-acct').forEach(function (el) {
-            el.addEventListener('click', function (e) {
-                if (e.target.dataset.del) {
-                    e.stopPropagation();
-                    _deleteAccount(e.target.dataset.del);
-                    return;
-                }
-                var acct = _loadAccounts().find(function (a) { return a.pubkey === el.dataset.pubkey; });
-                if (!acct) return;
-                // Pré-remplir l'email dans le formulaire MULTIPASS actif
-                var emailEl = document.getElementById('uph-mp-email')
-                           || document.getElementById('uph-mp-mini-email');
-                if (emailEl) { emailEl.value = acct.email; emailEl.focus(); }
-            });
-        });
-    }
-
-    // ── Active une identité dérivée : installe polyfill, met à jour UPH ────────
-    function _activateIdentity(email, pubkey, privHex, enc_nsec) {
-        _closeModal();
-        try { sessionStorage.setItem(_SS_PRIV_KEY, privHex); } catch (e) { if(window.DEBUG) console.warn('[UPH storage] privKey cache:', e); }
-        _installNostrPolyfill(pubkey, privHex);
-        _saveAccount(email, pubkey, enc_nsec || undefined);
-        _applyPubkey(pubkey);
-        _cachePubkey(pubkey);
-        _refreshUI();
-        _renderIdSwitcher();
-        var panel = document.getElementById('uph-nav-panel');
-        if (panel) panel.classList.add('uph-h');
-        if (!_dataLoaded) { _dataLoaded = true; _loadAll(); }
-    }
-
-    // ── Restauration de session : si la clé privée est en sessionStorage ────────
+    // ── Restauration de session (pubkey uniquement) ───────────────────────────
     function _restoreSession() {
+        _cleanLegacyStorage();
         try {
-            var privHex = sessionStorage.getItem(_SS_PRIV_KEY);
-            if (!privHex) return;
-            var NostrLib = window.NostrTools || window.Nostr;
-            if (!NostrLib || !NostrLib.getPublicKey) return;
-            var pubkey = NostrLib.getPublicKey(privHex);
-            _installNostrPolyfill(pubkey, privHex);
-            _applyPubkey(pubkey);
-            _cachePubkey(pubkey);
-            console.log('[UPH] Session restaurée depuis sessionStorage');
-        } catch (e) { if(window.DEBUG) console.warn('[UPH storage] session restore:', e); }
+            var pk = sessionStorage.getItem(_SS_KEY);
+            if (pk) { _applyPubkey(pk); console.log('[UPH] Pubkey restauré depuis cache session'); }
+        } catch (e) {}
     }
 
-    // ── Formulaire création MULTIPASS ─────────────────────────────────────────
-    function _initLoginForm() {
-        // Afficher la bonne section selon l'état de localStorage
-        _uphShowCreateSection();
-
-        // Bouton "Reset profil" (mode existing → mini-form)
-        var resetBtn = document.getElementById('uph-mp-reset');
-        if (resetBtn) {
-            resetBtn.addEventListener('click', function () {
-                try { localStorage.removeItem('atomic_birth_data'); } catch (e) {}
-                _uphShowCreateSection();
-            });
-        }
-
-        // Recherche de ville (mini-form)
-        var cityBtn = document.getElementById('uph-mp-city-btn');
-        var cityInp = document.getElementById('uph-mp-city');
-        if (cityBtn) cityBtn.addEventListener('click', _uphCitySearch);
-        if (cityInp) cityInp.addEventListener('keydown', function (e) {
-            if (e.key === 'Enter') { e.preventDefault(); _uphCitySearch(); }
-        });
-
-        // Auto-focus champ suivant dans la ligne de date + mise à jour KIN
-        var dateRow = document.querySelector('.uph-date-row');
-        if (dateRow) {
-            var segs = Array.from(dateRow.querySelectorAll('input[type="number"]'));
-            segs.forEach(function (seg, idx) {
-                seg.addEventListener('input', function () {
-                    _uphUpdateKin();
-                    if (String(this.value).length >= this.placeholder.length && idx + 1 < segs.length) {
-                        segs[idx + 1].focus();
-                        segs[idx + 1].select();
-                    }
-                });
-            });
-        }
-
-        // Bouton créer (mini-form)
-        var miniBtnEl = document.getElementById('uph-mp-mini-btn');
-        if (miniBtnEl) miniBtnEl.addEventListener('click', _uphCreateFromMiniForm);
-
-        // Bouton créer (existing)
-        var existBtnEl = document.getElementById('uph-mp-btn');
-        if (existBtnEl) existBtnEl.addEventListener('click', _uphCreateFromExisting);
-
-        _renderSavedAccounts();
-    }
-
-    // ── Calcul KIN Maya (Tzolkin) — algorithme identique à phi2x.js ────────────
-    var _UPH_KIN_MESES = [0,31,59,90,120,151,181,212,243,13,44,74];
-    var _UPH_KIN_SUMA  = {30:2,35:7,40:12,45:17,50:22,3:27,8:32,13:37,18:42,23:47,28:52,
-                          32:57,38:62,42:67,48:72,1:76,6:82,11:87,16:92,21:97,26:102,31:107,
-                          36:112,41:117,46:122,51:127,4:132,9:137,14:142,19:147,24:152,29:157,
-                          34:162,39:167,44:172,49:177,2:182,7:187,12:192,17:197,22:202,27:207,
-                          37:217,47:227,0:232,5:237,10:242,15:247,20:252,25:257};
-    var _UPH_KIN_G_FR  = ['Dragon','Vent','Nuit','Graine','Serpent','Lieur','Main','Étoile',
-                           'Lune','Chien','Singe','Chemin','Roseau','Jaguar','Aigle','Guerrier',
-                           'Terre','Miroir','Tempête','Soleil'];
-    var _UPH_KIN_T_FR  = ['Magnétique','Lunaire','Électrique','Auto-existante','Harmonique',
-                           'Rythmique','Résonnante','Galactique','Solaire','Planétaire',
-                           'Spectrale','Cristal','Cosmique'];
-    var _UPH_KIN_C     = ['🔴','⚪','🔵','🟡','🟢'];
-    var _UPH_KIN_CF    = ['Rouge','Blanc','Bleu','Jaune','Vert'];
-
-    function _uphCalcKin(year, month, day) {
-        if (!year || !month || !day || month < 1 || month > 12 || day < 1 || day > 31) return null;
-        var kin = day + _UPH_KIN_MESES[month-1] + (_UPH_KIN_SUMA[year % 52] || 0);
-        if (kin > 260) kin -= 260;
-        if (kin <= 0)  kin += 260;
-        var gi = (kin-1) % 20, ti = (kin-1) % 13, ci = Math.floor((kin-1)/13) % 5;
-        return { kin: kin, glyphFr: _UPH_KIN_G_FR[gi], toneFr: _UPH_KIN_T_FR[ti],
-                 colorEmo: _UPH_KIN_C[ci], colorFr: _UPH_KIN_CF[ci], toneNum: ti + 1 };
-    }
-
-    function _uphKinHtml(k) {
-        if (!k) return '';
-        return 'KIN ' + k.kin + ' · <strong>T' + k.toneNum + ' ' + k.toneFr + '</strong>'
-            + ' · ' + k.glyphFr + ' ' + k.colorEmo + ' ' + k.colorFr;
-    }
-
-    // Met à jour le badge KIN dans le mini-formulaire à chaque saisie de date
-    function _uphUpdateKin() {
-        var kinEl = document.getElementById('uph-mp-kin');
-        if (!kinEl) return;
-        var dd   = parseInt((document.getElementById('uph-mp-dd')   || {}).value);
-        var mm   = parseInt((document.getElementById('uph-mp-mm')   || {}).value);
-        var yyyy = parseInt((document.getElementById('uph-mp-yyyy') || {}).value);
-        var k = _uphCalcKin(yyyy, mm, dd);
-        if (!k) { kinEl.style.display = 'none'; return; }
-        kinEl.style.display = '';
-        kinEl.innerHTML = '✨ ' + _uphKinHtml(k);
-    }
-
-    // HTML du spinner de calcul PBKDF2
-    function _uphSpinnerHtml(step) {
-        return '<div style="text-align:center;padding:16px 0">'
-            + '<div class="uph-spin" style="font-size:30px;margin-bottom:7px">⏳</div>'
-            + '<div style="font-size:10.5px;color:rgba(255,200,40,.85);font-weight:600">'
-            + 'Dérivation ' + step + '/2…</div>'
-            + '<div style="font-size:9px;color:rgba(255,255,255,.22);margin-top:4px">'
-            + '600 000 × SHA-256 · brute-force résistant</div>'
-            + '</div>';
-    }
-
-    // ── Recherche de ville via Nominatim (geocoding) ──────────────────────────
-    async function _uphCitySearch() {
-        var inp = document.getElementById('uph-mp-city');
-        var res = document.getElementById('uph-mp-city-result');
-        var q   = inp ? inp.value.trim() : '';
-        if (!q) return;
-        if (res) res.textContent = '🔍…';
-        try {
-            var url  = 'https://nominatim.openstreetmap.org/search?q='
-                + encodeURIComponent(q) + '&format=json&limit=1&accept-language=fr';
-            var data = await fetch(url, { headers: { 'Accept': 'application/json' } }).then(function (r) { return r.json(); });
-            if (data && data.length > 0) {
-                var place = data[0];
-                var lon   = parseFloat(parseFloat(place.lon).toFixed(2));
-                var lat   = parseFloat(parseFloat(place.lat).toFixed(2));
-                var label = place.display_name.split(',').slice(0, 2).join(', ');
-                document.getElementById('uph-mp-lat').value = lat;
-                document.getElementById('uph-mp-lon').value = lon;
-                if (res) res.textContent = '📍 ' + label + ' (' + lat + '°, ' + lon + '°)';
-            } else {
-                if (res) res.textContent = '⚠ Ville non trouvée';
-            }
-        } catch (e) {
-            if (res) res.textContent = '⚠ Erreur réseau';
-        }
-    }
-
-    // ── Affiche le résumé atomic_birth_data OU le mini-formulaire ───────────
-    function _uphShowCreateSection() {
-        var existDiv = document.getElementById('uph-mp-existing');
-        var miniDiv  = document.getElementById('uph-mp-mini');
-        if (!existDiv || !miniDiv) return;
-        var stored = null;
-        try { stored = JSON.parse(localStorage.getItem('atomic_birth_data') || 'null'); } catch (e) {}
-        if (stored && stored.birth_datetime && stored.lon !== undefined) {
-            var bdFull = stored.birth_datetime || '';
-            var bdDate = bdFull.split('T')[0] || '';
-            var bdTime = (bdFull.split('T')[1] || '12:00').slice(0, 5);
-            var p      = bdDate.split('-');
-            var dayStr = (p[2] || '?') + '/' + (p[1] || '?') + '/' + (p[0] || '?') + ' ' + bdTime;
-            var parts  = [];
-            if (stored.birth_place) parts.push('📍 ' + stored.birth_place);
-            else parts.push('📍 ' + parseFloat(stored.lat || 0).toFixed(2) + '°, ' + parseFloat(stored.lon).toFixed(2) + '°');
-            parts.push('📅 ' + dayStr);
-            parts.push('⚖ ' + parseFloat(stored.weight || 3.5).toFixed(1) + ' kg');
-            // KIN depuis la date de naissance stockée
-            var kinStored = _uphCalcKin(parseInt(p[0]), parseInt(p[1]), parseInt(p[2]));
-            if (kinStored) parts.push('✨ ' + _uphKinHtml(kinStored));
-            var summaryEl = document.getElementById('uph-mp-existing-summary');
-            if (summaryEl) summaryEl.innerHTML = parts.join('<br>');
-            // Pré-remplir la polarité si stockée
-            var polEl = document.getElementById('uph-mp-polarity');
-            if (polEl && stored.polarity !== undefined) polEl.value = String(stored.polarity);
-            var resEl = document.getElementById('uph-mp-result');
-            if (resEl) resEl.innerHTML = '';
-            existDiv.style.display = '';
-            miniDiv.style.display  = 'none';
-        } else {
-            existDiv.style.display = 'none';
-            miniDiv.style.display  = '';
-        }
-    }
-
-    // ── Rendu du résultat de création MULTIPASS ───────────────────────────────
-    function _uphShowMultipassResult(data, email, resultEl) {
-        if (!resultEl) return;
-        var npub = data.npub || data.pubkey || '';
-        var url  = data.url  || data.uplanet_home || '';
-        resultEl.innerHTML = '<div style="padding:8px 10px;border-radius:8px;margin-top:6px;'
-            + 'background:rgba(245,158,11,.06);border:1px solid rgba(245,158,11,.3);font-size:10px">'
-            + '<div style="color:#f59e0b;font-weight:700;margin-bottom:4px">✅ MULTIPASS créé !</div>'
-            + (email ? '<div style="color:rgba(255,255,255,.5)">📧 ' + email + '</div>' : '')
-            + (npub  ? '<div style="font-family:monospace;font-size:.6rem;color:rgba(255,255,255,.3);'
-                + 'word-break:break-all;margin-top:3px">' + npub + '</div>' : '')
-            + (url   ? '<a href="' + url + '" target="_blank" style="display:block;margin-top:8px;padding:7px;'
-                + 'border-radius:7px;background:rgba(245,158,11,.18);border:1px solid rgba(245,158,11,.4);'
-                + 'color:#f59e0b;text-align:center;font-weight:700;text-decoration:none">🎴 Voir mon MULTIPASS →</a>' : '')
-            + '</div>';
-    }
-
-    // ── Création MULTIPASS : assemblage SALT/PEPPER + PBKDF2 + POST /g1nostr ──
-    async function _uphDoCreate(email, bd, bt, birthLon, birthLat, conDt, conLon, conLat, weight, polarity, resultEl, errEl, btn) {
-        if (btn)   { btn.textContent = '⏳'; btn.disabled = true; }
-        if (errEl)  errEl.textContent = '';
-        if (resultEl) resultEl.innerHTML = _uphSpinnerHtml(1);
-        try {
-            var birthUnix = _uphDateToUtcUnix(bd, bt || '12:00', birthLon || 0);
-            var conUnix;
-            if (conDt) {
-                var cp = conDt.split('T');
-                conUnix = _uphDateToUtcUnix(cp[0], cp[1] ? cp[1].slice(0,5) : '00:00', conLon || birthLon || 0);
-            } else {
-                conUnix = _uphConceptionUnix(birthUnix, weight);
-            }
-            var latStr    = (birthLat !== null && birthLat !== undefined) ? parseFloat(birthLat).toFixed(2) : '0';
-            var lonStr    = (birthLon || 0).toFixed(2);
-            var conLatStr = (conLat !== null && conLat !== undefined) ? parseFloat(conLat).toFixed(2) : latStr;
-            var conLonStr = (conLon !== null && conLon !== undefined) ? parseFloat(conLon).toFixed(2) : lonStr;
-            // Format SALT/PEPPER identique à atomic.html
-            var saltRaw   = _uphUnixToUtcStr(birthUnix)
-                + '_' + latStr + '_' + lonStr
-                + '_' + String(polarity)
-                + '_' + parseFloat(weight).toFixed(1);
-            var pepperRaw = _uphUnixToUtcStr(conUnix)
-                + '_' + conLatStr + '_' + conLonStr
-                + '_' + parseFloat(weight).toFixed(1);
-            var stretched = await _uphPbkdf2Stretch(saltRaw, pepperRaw, function (step) {
-                if (resultEl) resultEl.innerHTML = _uphSpinnerHtml(step);
-            });
-
-            if (resultEl) resultEl.innerHTML = '<div style="text-align:center;padding:10px 0;font-size:10px;color:rgba(255,200,40,.7)">'
-                + '<div class="uph-spin" style="font-size:22px;margin-bottom:5px">🔮</div>'
-                + 'Création de votre identité… (30–60s)</div>';
-
-            var fd = new FormData();
-            fd.append('email', email);
-            fd.append('lang',  navigator.language ? navigator.language.slice(0, 2) : 'fr');
-            if (birthLat !== null && birthLat !== undefined) fd.append('lat', parseFloat(birthLat).toFixed(2));
-            if (birthLon) fd.append('lon', parseFloat(birthLon).toFixed(2));
-            fd.append('birth_datetime', bd + 'T' + (bt || '12:00'));
-            if (conDt) fd.append('conception_datetime', conDt);
-            if (weight !== 3.5) fd.append('birth_weight', parseFloat(weight).toFixed(1));
-            fd.append('polarity',    String(polarity));
-            fd.append('salt',        stretched.stretchedSalt);
-            fd.append('pepper',      stretched.stretchedPepper);
-            fd.append('utc_offset',  String(Math.round((birthLon || 0) / 15)));
-            fd.append('format', 'json');
-
-            var res  = await fetch(_apiUrl() + '/g1nostr', { method: 'POST', body: fd });
-            if (!res.ok) {
-                var err2 = await res.json().catch(function () { return { detail: 'HTTP ' + res.status }; });
-                throw new Error(err2.detail || 'HTTP ' + res.status);
-            }
-            var data = await res.json();
-            _uphShowMultipassResult(data, email, resultEl);
-            // Si le serveur retourne un nsec, activer l'identité directement
-            if (data.nsec) {
-                var NostrLib = window.NostrTools || window.Nostr;
-                if (NostrLib && NostrLib.nip19 && NostrLib.getPublicKey) {
-                    try {
-                        var decoded = NostrLib.nip19.decode(data.nsec);
-                        if (decoded && decoded.data) {
-                            var privHex = typeof decoded.data === 'string'
-                                ? decoded.data
-                                : Array.from(decoded.data).map(function (b) {
-                                    return ('0' + b.toString(16)).slice(-2);
-                                }).join('');
-                            var pubkey = NostrLib.getPublicKey(privHex);
-                            // Proposer un PIN pour chiffrer le nsec localement
-                            var enc_nsec = null;
-                            try {
-                                var pin = window.confirm('🔐 Protéger cette identité avec un PIN ?\n(permet de switcher entre identités sans re-dériver)')
-                                    ? prompt('Choisissez votre PIN (mémorisez-le, non récupérable) :')
-                                    : null;
-                                if (pin) enc_nsec = await _encryptNsec(privHex, pin);
-                            } catch (pe) { if(window.DEBUG) console.warn('[UPH] PIN encrypt:', pe); }
-                            _activateIdentity(email, pubkey, privHex, enc_nsec);
-                        }
-                    } catch (e) { if(window.DEBUG) console.warn('[UPH] nsec activation:', e); }
-                }
-            }
-        } catch (e) {
-            if (resultEl) resultEl.innerHTML = '';
-            if (errEl) errEl.textContent = e.message || 'Erreur création';
-        } finally {
-            if (btn) { btn.textContent = '✨ Créer mon MULTIPASS'; btn.disabled = false; }
-        }
-    }
-
-    // ── Création depuis le mini-formulaire ────────────────────────────────────
-    async function _uphCreateFromMiniForm() {
-        var errEl  = document.getElementById('uph-mp-mini-err');
-        var resEl  = document.getElementById('uph-mp-mini-result');
-        var btn    = document.getElementById('uph-mp-mini-btn');
-        var email  = ((document.getElementById('uph-mp-mini-email') || {}).value || '').trim();
-        if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-            if (errEl) errEl.textContent = 'Email requis et valide';
-            return;
-        }
-        var dd   = parseInt((document.getElementById('uph-mp-dd')   || {}).value);
-        var mm   = parseInt((document.getElementById('uph-mp-mm')   || {}).value);
-        var yyyy = parseInt((document.getElementById('uph-mp-yyyy') || {}).value);
-        var hh   = parseInt((document.getElementById('uph-mp-hh')   || {}).value);
-        var min  = parseInt((document.getElementById('uph-mp-min')  || {}).value);
-        if (!dd || !mm || !yyyy || yyyy < 1920 || yyyy > 2015) {
-            if (errEl) errEl.textContent = 'Date de naissance requise (JJ/MM/AAAA)';
-            return;
-        }
-        var latRaw = (document.getElementById('uph-mp-lat') || {}).value;
-        var lonRaw = (document.getElementById('uph-mp-lon') || {}).value;
-        if (!latRaw || !lonRaw) {
-            if (errEl) errEl.textContent = 'Recherchez votre lieu de naissance';
-            return;
-        }
-        var bd      = yyyy + '-' + String(mm).padStart(2, '0') + '-' + String(dd).padStart(2, '0');
-        var bt      = String(isNaN(hh) ? 12 : hh).padStart(2, '0') + ':' + String(isNaN(min) ? 0 : min).padStart(2, '0');
-        var weight  = parseFloat((document.getElementById('uph-mp-weight')   || {}).value) || 3.5;
-        var polarity = (document.getElementById('uph-mp-mini-polarity') || {}).value || '0';
-        await _uphDoCreate(email, bd, bt, parseFloat(lonRaw), parseFloat(latRaw),
-            null, null, null, weight, polarity, resEl, errEl, btn);
-    }
-
-    // ── Création depuis atomic_birth_data (localStorage) ─────────────────────
-    async function _uphCreateFromExisting() {
-        var errEl  = document.getElementById('uph-mp-err');
-        var resEl  = document.getElementById('uph-mp-result');
-        var btn    = document.getElementById('uph-mp-btn');
-        var email  = ((document.getElementById('uph-mp-email') || {}).value || '').trim();
-        if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-            if (errEl) errEl.textContent = 'Email requis et valide';
-            return;
-        }
-        var stored = null;
-        try { stored = JSON.parse(localStorage.getItem('atomic_birth_data') || 'null'); } catch (e) {}
-        if (!stored || !stored.birth_datetime) {
-            if (errEl) errEl.textContent = 'Données de naissance introuvables';
-            return;
-        }
-        var bdFull   = stored.birth_datetime;
-        var bd       = bdFull.split('T')[0];
-        var bt       = (bdFull.split('T')[1] || '12:00').slice(0, 5);
-        var weight   = parseFloat(stored.weight) || 3.5;
-        var birthLat = (stored.lat !== undefined) ? parseFloat(stored.lat) : null;
-        var birthLon = (stored.lon !== undefined) ? parseFloat(stored.lon) : 0;
-        var polarity = (document.getElementById('uph-mp-polarity') || {}).value || stored.polarity || '0';
-        var conDt    = stored.conception_datetime || null;
-        var conParts = (stored.conception_place || '').split(',');
-        var conLat   = (conParts.length >= 2) ? parseFloat(conParts[0]) : null;
-        var conLon   = (conParts.length >= 2) ? parseFloat(conParts[1]) : null;
-        await _uphDoCreate(email, bd, bt, birthLon, birthLat, conDt, conLon, conLat, weight, polarity, resEl, errEl, btn);
-    }
+    // ── Formulaire création MULTIPASS — délégué à atomic.html ───────────────
+    function _initLoginForm() { /* délégué à atomic.html */ }
 
     // ── Modal de connexion ────────────────────────────────────────────────────
     function _createModal() {
         var overlay = document.createElement('div');
         overlay.id = 'uph-moverlay';
 
-        // Section "données existantes" (lues depuis atomic_birth_data)
-        var existSection =
-            '<div id="uph-mp-existing" style="display:none">'
-            + '<div class="uph-mp-summary" id="uph-mp-existing-summary"></div>'
-            + '<div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">'
-            + '<span style="font-size:9px;color:rgba(255,255,255,.3);flex-shrink:0">Polarité</span>'
-            + '<select id="uph-mp-polarity" class="uph-pol-sel">'
-            + '<option value="0">☀ Onde Φ (Homme)</option><option value="1">🌙 Onde ♪ (Femme)</option>'
-            + '</select></div>'
-            + '<input id="uph-mp-email" type="email" placeholder="📧 votre@email.com" autocomplete="email">'
-            + '<span id="uph-mp-err" style="color:#f87171;font-size:9px;min-height:11px;display:block"></span>'
-            + '<div id="uph-mp-result"></div>'
-            + '<button id="uph-mp-btn" class="uph-mp-create-btn">✨ Créer mon MULTIPASS</button>'
-            + '<div style="text-align:center;margin-top:6px">'
-            + '<span id="uph-mp-reset" style="font-size:9px;color:rgba(255,255,255,.25);cursor:pointer;'
-            + 'text-decoration:underline;text-underline-offset:2px">Nouveau profil ↩</span></div>'
-            + '</div>';
-
-        // Section mini-formulaire (si pas de atomic_birth_data)
-        var miniSection =
-            '<div id="uph-mp-mini" style="display:none">'
-            + '<input id="uph-mp-mini-email" type="email" placeholder="📧 votre@email.com" autocomplete="email" style="margin-bottom:5px">'
-            + '<span style="display:block;font-size:9px;color:rgba(255,255,255,.3);margin-bottom:4px">⚓ Date de naissance (heure solaire locale)</span>'
-            + '<div class="uph-date-row">'
-            + '<input class="uph-date-seg" id="uph-mp-dd"   type="number" min="1"    max="31"   placeholder="JJ">'
-            + '<span class="uph-date-sep">/</span>'
-            + '<input class="uph-date-seg" id="uph-mp-mm"   type="number" min="1"    max="12"   placeholder="MM">'
-            + '<span class="uph-date-sep">/</span>'
-            + '<input class="uph-date-seg uph-date-yyyy" id="uph-mp-yyyy" type="number" min="1920" max="2015" placeholder="AAAA">'
-            + '<span class="uph-date-sep">·</span>'
-            + '<input class="uph-date-seg" id="uph-mp-hh"   type="number" min="0"    max="23"   placeholder="HH">'
-            + '<span class="uph-date-sep">:</span>'
-            + '<input class="uph-date-seg" id="uph-mp-min"  type="number" min="0"    max="59"   placeholder="MM">'
-            + '</div>'
-            + '<div id="uph-mp-kin" class="uph-kin-badge" style="display:none"></div>'
-            + '<span style="display:block;font-size:9px;color:rgba(255,255,255,.3);margin:4px 0 3px">📍 Lieu de naissance</span>'
-            + '<div style="display:flex;gap:0;margin-bottom:3px">'
-            + '<input id="uph-mp-city" type="text" placeholder="Paris, Fort-de-France…" style="flex:1">'
-            + '<button id="uph-mp-city-btn">🔍</button>'
-            + '</div>'
-            + '<div id="uph-mp-city-result" style="font-size:9px;color:rgba(0,255,204,.6);min-height:10px;margin-bottom:5px"></div>'
-            + '<input id="uph-mp-lat" type="hidden"><input id="uph-mp-lon" type="hidden">'
-            + '<div style="display:flex;gap:6px;margin-bottom:5px">'
-            + '<div style="flex:1"><span style="display:block;font-size:9px;color:rgba(255,255,255,.3);margin-bottom:3px">⚖ Poids (kg)</span>'
-            + '<input id="uph-mp-weight" type="number" step="0.1" min="0.5" max="6" value="3.5"></div>'
-            + '<div style="flex:1"><span style="display:block;font-size:9px;color:rgba(255,255,255,.3);margin-bottom:3px">Polarité</span>'
-            + '<select id="uph-mp-mini-polarity" class="uph-pol-sel">'
-            + '<option value="0">☀ Onde Φ</option><option value="1">🌙 Onde ♪</option>'
-            + '</select></div>'
-            + '</div>'
-            + '<span id="uph-mp-mini-err" style="color:#f87171;font-size:9px;min-height:11px;display:block"></span>'
-            + '<div id="uph-mp-mini-result"></div>'
-            + '<button id="uph-mp-mini-btn" class="uph-mp-create-btn">✨ Créer mon MULTIPASS</button>'
-            + '<div style="text-align:center;margin-top:5px;font-size:9px;color:rgba(255,255,255,.2)">'
-            + '→ profil complet sur <a href="atomic.html" style="color:rgba(0,255,204,.4)">Atomic</a></div>'
-            + '</div>';
-
         overlay.innerHTML =
             '<div id="uph-modal">'
             + '<button id="uph-mclose" title="Fermer">✕</button>'
             + '<div style="font-weight:700;color:rgba(255,255,255,.9);font-size:15px;margin-bottom:12px">🔑 Accès UPlanet</div>'
-            + '<button id="uph-mext-btn" style="display:none">⚡ Connecter via extension NOSTR</button>'
-            + '<div id="uph-saved-accounts"></div>'
+            + '<button id="uph-mext-btn">⚡ Connecter via extension NOSTR</button>'
             + '<hr class="uph-msep">'
-            + '<span class="uph-msection-title">✨ Nouvelle identité :</span>'
-            + existSection
-            + miniSection
+            + '<div style="text-align:center;padding:10px 0;font-size:11px;color:rgba(255,255,255,.45);line-height:1.6">'
+            + 'Pas encore d\'identité ?<br>'
+            + '<a href="atomic.html" style="color:rgba(0,255,204,.7);font-weight:600;text-decoration:none">⚛ Créer via ATOM4LOVE →</a><br>'
+            + '<span style="font-size:9px;color:rgba(255,255,255,.2)">puis importez votre nsec dans nos2x</span>'
+            + '</div>'
             + '</div>';
         document.body.appendChild(overlay);
 
@@ -1403,22 +744,7 @@
     function _openModal() {
         var overlay = document.getElementById('uph-moverlay');
         if (!overlay) return;
-        // Afficher/masquer le bouton extension selon disponibilité
-        var extBtn = document.getElementById('uph-mext-btn');
-        if (extBtn) {
-            var hasExt = typeof window.nostr !== 'undefined' && !window.nostr._isG1v1;
-            extBtn.style.display = hasExt ? '' : 'none';
-        }
-        _renderSavedAccounts();
-        _renderIdSwitcher();
-        _uphShowCreateSection();
         overlay.classList.add('open');
-        // Focus sur le premier champ email visible
-        setTimeout(function () {
-            var emailEl = document.getElementById('uph-mp-email')
-                       || document.getElementById('uph-mp-mini-email');
-            if (emailEl && !emailEl.value) emailEl.focus();
-        }, 100);
     }
 
     function _closeModal() {

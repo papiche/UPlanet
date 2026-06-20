@@ -221,6 +221,48 @@ const Phi2X = (function() {
         return birthUnix - (280 + (w - 3.5) * 4) * ORBITAL_DAY_S;
     }
 
+    /**
+     * Aimantation temporelle (Conception Snap) :
+     * part de la date théorique de conception, puis cherche dans une fenêtre
+     * ±windowDays le passage de pentagone dynamique le plus proche du lieu de conception.
+     * La conception "s'aimante" sur ce vortex optique → timestamp cosmiquement pur.
+     *
+     * @param {number} birthUnix    - Timestamp Unix de naissance
+     * @param {number} concLat      - Latitude du lieu de conception [degrés]
+     * @param {number} concLon      - Longitude du lieu de conception [degrés]
+     * @param {number} weightKg     - Poids de naissance (défaut 3.5 kg)
+     * @param {number} windowDays   - Fenêtre de recherche ±jours (défaut 14)
+     * @returns {{ snappedUnix: number, baseUnix: number, nearestPentagonId: number,
+     *             distKm: number, deltaDays: number }}
+     */
+    function computeConceptionSnap(birthUnix, concLat, concLon, weightKg = 3.5, windowDays = 14) {
+        const baseUnix  = computeConceptionUnix(birthUnix, weightKg);
+        const windowSec = windowDays * ORBITAL_DAY_S;
+        // Résolution : 1 heure (3600 s) — suffisant pour un vortex de 1704 km rayon
+        const step      = 3600;
+        let bestTs = baseUnix, bestDist = Infinity, bestPid = 0;
+
+        for (let dt = -windowSec; dt <= windowSec; dt += step) {
+            const ts   = baseUnix + dt;
+            const pens = getDynamicPentagons(ts);
+            for (let i = 0; i < pens.length; i++) {
+                const d = haversineKm(concLat, concLon, pens[i][0], pens[i][1]);
+                if (d < bestDist) {
+                    bestDist = d;
+                    bestTs   = ts;
+                    bestPid  = i;
+                }
+            }
+        }
+        return {
+            snappedUnix:      bestTs,
+            baseUnix,
+            nearestPentagonId: bestPid,
+            distKm:            bestDist,
+            deltaDays:         (bestTs - baseUnix) / ORBITAL_DAY_S,
+        };
+    }
+
     // ── Géométrie hexagonale (pointy-top, cohérent avec Phi2X_Math.gd) ────────
     const HEX_SIZE_KM = 1.0;
     const EARTH_R_KM  = 6371.0;
@@ -464,6 +506,48 @@ const Phi2X = (function() {
         };
     }
 
+    // ── Champ Cymatique a5l (Onde Stationnaire Sphérique) ───────────────────
+    /**
+     * Calcule l'amplitude du champ de résonance planétaire Ψ en un point GPS.
+     *
+     * La Terre est traitée comme une plaque de résonance sphérique : les 12 pôles
+     * icosaédriques sont des foyers d'émission vibratoire. Chaque foyer émet une
+     * onde atténuée exponentiellement (portée ~1500 km) et oscillante (cos).
+     * L'interférence de toutes les ondes crée un dessin cymatique continu.
+     *
+     * Unité de phase : distance angulaire (km / EARTH_R_KM) × WAVE_STRETCH.
+     * Amplitude Ψ ∈ [-12, 12] → normalisée en [0, 1] pour stockage a5l.
+     *
+     * @param {number} lat      - Latitude [degrés]
+     * @param {number} lon      - Longitude [degrés]
+     * @param {number} unixTs   - Timestamp Unix (fige la rotation des pôles)
+     * @returns {number} a5l_amplitude ∈ [0, 1]
+     */
+    function computeResonanceField(lat, lon, unixTs) {
+        const poles = getDynamicPentagons(unixTs);
+        let amplitude = 0;
+        for (let i = 0; i < poles.length; i++) {
+            const dist = haversineKm(lat, lon, poles[i][0], poles[i][1]);
+            // Phase angulaire : dist/EARTH_R_KM = arc en radians × WAVE_STRETCH
+            const phase = (dist / EARTH_R_KM) * WAVE_STRETCH;
+            amplitude  += Math.cos(phase) * Math.exp(-dist / 1500);
+        }
+        // Normalisation : amplitude théorique max = 12 (tous pôles à dist=0)
+        return (amplitude + 12) / 24;   // ∈ [0, 1]
+    }
+
+    /**
+     * Encode a5l en chaîne de tag NOSTR.
+     * Format : "a5l:<XXXX>" où XXXX = amplitude sur 4 chiffres hex (0000–FFFF).
+     * Quantification grossière sur 256 bins (octet haut) pour filtrage relay éventuel.
+     * @param {number} a5l_amplitude ∈ [0, 1]
+     * @returns {string}
+     */
+    function encodeA5lTag(a5l_amplitude) {
+        const v = Math.max(0, Math.min(1, a5l_amplitude));
+        return 'a5l:' + Math.round(v * 65535).toString(16).toUpperCase().padStart(4, '0');
+    }
+
     // ── Bonus : Nœuds Résonants ─────────────────────────────────────────────
     /**
      * Trouve les nTop lieux sur Terre où la grille émotionnelle de l'individu
@@ -505,7 +589,8 @@ const Phi2X = (function() {
         computeOmegaBio,
         calcKin, calcKinFromDate, calcKinFromNum,
         groupHarmonyScore,
-        computeConceptionUnix,
+        computeConceptionUnix, computeConceptionSnap,
+        computeResonanceField, encodeA5lTag,
         // Double Bang & sphère émotionnelle
         generateEmotionalSphere,
         moireResonance,

@@ -53,6 +53,12 @@ function detectUSPOTAPI() {
         determinedStationUrl   = `http://127.0.0.1:12345`;
         determinedRelay = `ws://127.0.0.1:7777`;
         determinedIpfsGateway = `http://127.0.0.1:8080`;
+    } else if (hostname.endsWith(".home")) {
+        // Station locale Astroport — domaine .home sans cert TLS valide pour u.home
+        determinedUpassportUrl = `http://127.0.0.1:54321`;
+        determinedStationUrl   = `http://127.0.0.1:12345`;
+        determinedRelay = `ws://127.0.0.1:7777`;
+        determinedIpfsGateway = `http://127.0.0.1:8080`;
     } else if (hostname.startsWith("ipfs.")) {
         const baseDomain = hostname.substring("ipfs.".length);
         determinedUpassportUrl = `${protocol}://u.${baseDomain}`;

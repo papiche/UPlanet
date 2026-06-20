@@ -1,0 +1,807 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>⚛ Constellation ATOM4LOVE</title>
+    <meta name="description" content="Carte de résonance phi2x — visualisation géographique des atomes ATOM4LOVE, nœuds cymatiques et pentagones icosaédriques.">
+    <script>try{var _t=localStorage.getItem('a4l_theme');if(_t&&_t!=='amber')document.documentElement.setAttribute('data-theme',_t)}catch(e){}</script>
+    <link rel="stylesheet" href="leaflet.css">
+    <link rel="stylesheet" href="uplanet-atomic.css">
+    <style>
+* { box-sizing: border-box; }
+html, body { margin:0; padding:0; height:100%; overflow:hidden;
+    background:#080602; color:#e0e0e0; font-family:system-ui,sans-serif; }
+
+#map { position:absolute; inset:0; z-index:1; }
+#map .leaflet-tile { filter:brightness(.45) invert(1) contrast(1.1) saturate(.3) hue-rotate(195deg); }
+#map .leaflet-control-attribution { display:none; }
+#map .leaflet-control-zoom { margin-top:58px !important; }
+
+/* ── Header ── */
+#header {
+    position:fixed; top:0; left:0; right:0; z-index:1000; height:48px;
+    background:rgba(8,6,2,.9); border-bottom:1px solid rgba(0,255,204,.12);
+    backdrop-filter:blur(10px);
+    display:flex; align-items:center; gap:8px; padding:0 12px;
+}
+.h-title { font-size:.88rem; font-weight:800; color:#00ffcc; flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.h-btn {
+    padding:5px 11px; border-radius:16px; cursor:pointer; font-size:.72rem;
+    font-weight:700; border:1px solid; white-space:nowrap; background:none;
+    transition:all .2s; flex-shrink:0;
+}
+.h-btn-teal { border-color:rgba(0,255,204,.3); color:#00ffcc; }
+.h-btn-teal:hover, .h-btn-teal.active { background:rgba(0,255,204,.12); border-color:rgba(0,255,204,.6); }
+.h-btn-dim  { border-color:rgba(255,255,255,.15); color:rgba(255,255,255,.55); }
+.h-btn-dim:hover  { background:rgba(255,255,255,.08); }
+
+/* ── Loading ── */
+#loading {
+    position:fixed; inset:0; z-index:2000; background:rgba(8,6,2,.92);
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px;
+}
+#loading.hidden { display:none; }
+.spinner { width:38px; height:38px; border-radius:50%;
+    border:3px solid rgba(0,255,204,.12); border-top-color:#00ffcc;
+    animation:spin .85s linear infinite; }
+@keyframes spin { to { transform:rotate(360deg); } }
+#load-msg { font-size:.82rem; color:rgba(255,255,255,.4); }
+
+/* ── Panel ── */
+#panel {
+    position:fixed; top:48px; right:0; bottom:0; width:270px; z-index:900;
+    background:rgba(8,6,2,.93); border-left:1px solid rgba(0,255,204,.1);
+    backdrop-filter:blur(12px);
+    display:flex; flex-direction:column;
+    transform:translateX(100%); transition:transform .22s ease;
+}
+#panel.open { transform:translateX(0); }
+#panel-head {
+    padding:10px 14px; border-bottom:1px solid rgba(255,255,255,.06);
+    font-size:.75rem; font-weight:700; color:#00ffcc;
+    display:flex; align-items:center; justify-content:space-between; flex-shrink:0;
+}
+#panel-head button { background:none; border:none; color:rgba(255,255,255,.35); cursor:pointer; font-size:.95rem; }
+#atom-list { flex:1; overflow-y:auto; padding:4px 0; }
+.atom-row {
+    padding:9px 12px; border-bottom:1px solid rgba(255,255,255,.04);
+    cursor:pointer; transition:background .12s; display:flex; align-items:center; gap:9px;
+}
+.atom-row:hover { background:rgba(0,255,204,.05); }
+.atom-dot { width:10px; height:10px; border-radius:50%; flex-shrink:0; border:1px solid rgba(255,255,255,.2); }
+.atom-row-name { font-size:.8rem; color:#e0e0e0; font-weight:600;
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1; }
+.atom-row-k { font-size:.72rem; font-weight:800; flex-shrink:0; }
+.atom-row-sub { font-size:.65rem; color:rgba(255,255,255,.3); }
+
+/* ── Popup ── */
+.atom-popup { min-width:210px; font-family:system-ui,sans-serif; color:#ddd; }
+.pop-head { display:flex; align-items:center; gap:9px; margin-bottom:10px; }
+.pop-av {
+    width:40px; height:40px; border-radius:50%; overflow:hidden; flex-shrink:0;
+    background:rgba(255,255,255,.08); border:2px solid rgba(0,255,204,.3);
+    display:flex; align-items:center; justify-content:center; font-size:1.2rem;
+}
+.pop-av img { width:100%; height:100%; object-fit:cover; }
+.pop-name { font-size:.88rem; font-weight:700; color:#fff; line-height:1.2; }
+.pop-sub  { font-size:.65rem; color:rgba(255,255,255,.35); margin-top:2px; }
+.pop-metrics {
+    background:rgba(0,0,0,.35); border-radius:7px; padding:7px 9px;
+    font-size:.68rem; color:rgba(255,255,255,.45); line-height:1.75;
+    font-family:monospace; margin-bottom:8px;
+}
+.pop-k { text-align:center; font-size:1.55rem; font-weight:900; line-height:1; }
+.pop-k-lbl { text-align:center; font-size:.58rem; color:rgba(255,255,255,.28);
+    text-transform:uppercase; letter-spacing:1.2px; margin:2px 0 9px; }
+.pop-btns { display:flex; gap:6px; }
+.pop-btn {
+    flex:1; padding:7px 4px; border-radius:7px; cursor:pointer; font-size:.72rem;
+    font-weight:700; text-align:center; border:none; text-decoration:none;
+    display:flex; align-items:center; justify-content:center; gap:3px;
+}
+.pop-dm    { background:rgba(0,255,204,.1); border:1px solid rgba(0,255,204,.3); color:#00ffcc; }
+.pop-match { background:rgba(245,158,11,.09); border:1px solid rgba(245,158,11,.3); color:#f59e0b; }
+
+/* ── DM Modal ── */
+#dm-modal {
+    position:fixed; inset:0; z-index:3000; background:rgba(0,0,0,.72);
+    display:none; align-items:center; justify-content:center; padding:16px;
+}
+#dm-modal.open { display:flex; }
+#dm-box {
+    background:#0f0d09; border:1px solid rgba(0,255,204,.22); border-radius:14px;
+    padding:20px 16px; width:100%; max-width:360px;
+}
+.dm-title { font-size:.88rem; font-weight:800; color:#00ffcc; margin-bottom:3px; }
+.dm-to    { font-size:.7rem; color:rgba(255,255,255,.3); margin-bottom:12px; }
+#dm-msg {
+    width:100%; min-height:88px; background:rgba(255,255,255,.04);
+    border:1px solid rgba(255,255,255,.1); border-radius:7px; color:#ddd;
+    padding:9px 11px; font-size:.83rem; resize:vertical; margin-bottom:10px;
+    font-family:system-ui,sans-serif;
+}
+#dm-msg:focus { border-color:#00ffcc; outline:none; }
+.dm-row { display:flex; gap:7px; }
+.btn-dm-send {
+    flex:1; padding:9px; border-radius:7px; cursor:pointer; font-size:.82rem;
+    font-weight:700; background:rgba(0,255,204,.13); border:1px solid rgba(0,255,204,.38);
+    color:#00ffcc; transition:background .15s;
+}
+.btn-dm-send:hover { background:rgba(0,255,204,.22); }
+.btn-dm-send:disabled { opacity:.4; cursor:default; }
+.btn-dm-cancel {
+    padding:9px 14px; border-radius:7px; cursor:pointer; font-size:.82rem;
+    background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.1);
+    color:rgba(255,255,255,.45);
+}
+#dm-st { font-size:.68rem; color:rgba(255,255,255,.3); margin-top:7px; text-align:center; min-height:.9rem; }
+
+/* ── Pentagon toggle ── */
+#penta-btn {
+    position:fixed; bottom:20px; left:14px; z-index:900; padding:8px 13px;
+    border-radius:18px; cursor:pointer; font-size:.72rem; font-weight:700;
+    background:rgba(8,6,2,.88); border:1px solid rgba(0,255,204,.22);
+    color:rgba(0,255,204,.65); backdrop-filter:blur(8px); transition:all .2s;
+}
+#penta-btn.active { background:rgba(0,255,204,.1); border-color:rgba(0,255,204,.55); color:#00ffcc; }
+
+/* ── Stats bar ── */
+#stats-bar {
+    position:fixed; bottom:16px; left:50%; transform:translateX(-50%);
+    z-index:900; font-size:.68rem; color:rgba(255,255,255,.3);
+    background:rgba(8,6,2,.8); border:1px solid rgba(255,255,255,.08);
+    border-radius:14px; padding:5px 14px; backdrop-filter:blur(6px);
+    white-space:nowrap;
+}
+
+/* ── Leaflet popup overrides ── */
+.leaflet-popup-content-wrapper {
+    background:#0f0d09 !important; border:1px solid rgba(0,255,204,.2) !important;
+    border-radius:12px !important; color:#ddd !important; box-shadow:0 4px 24px rgba(0,0,0,.6) !important;
+}
+.leaflet-popup-tip-container { display:none; }
+.leaflet-popup-close-button { color:rgba(255,255,255,.35) !important; font-size:15px !important; top:8px !important; right:10px !important; }
+.leaflet-popup-content { margin:14px !important; }
+
+/* ── Pulsing marker animation ── */
+@keyframes mp { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.75;transform:scale(1.25)} }
+
+/* ── Zone de recherche ── */
+#search-zone {
+    padding: 8px 12px; border-bottom: 1px solid rgba(255,255,255,.06); flex-shrink: 0;
+}
+#search-wrap { position: relative; }
+#search-input {
+    width: 100%; background: rgba(255,255,255,.05);
+    border: 1px solid rgba(255,255,255,.1); border-radius: 8px;
+    color: #e0e0e0; padding: 6px 28px 6px 10px; font-size: .78rem;
+    outline: none; transition: border-color .15s; font-family: system-ui,sans-serif;
+}
+#search-input:focus { border-color: rgba(0,255,204,.4); }
+#search-input::placeholder { color: rgba(255,255,255,.2); }
+#search-clear {
+    position: absolute; right: 7px; top: 50%; transform: translateY(-50%);
+    background: none; border: none; color: rgba(255,255,255,.3);
+    cursor: pointer; padding: 3px; display: none; font-size: .85rem; line-height: 1;
+}
+#search-hint {
+    font-size: .6rem; color: rgba(255,255,255,.2); margin-top: 3px; padding-left: 2px;
+}
+
+/* ── Zone de log ── */
+#log-zone {
+    border-top: 1px solid rgba(255,255,255,.04);
+    padding: 5px 10px; flex-shrink: 0; max-height: 78px; overflow-y: auto;
+    font-size: .58rem; font-family: monospace; color: rgba(255,255,255,.2); line-height: 1.55;
+}
+#log-zone::-webkit-scrollbar { width: 3px; }
+#log-zone::-webkit-scrollbar-thumb { background: rgba(255,255,255,.1); border-radius: 2px; }
+    </style>
+</head>
+<body>
+
+<div id="loading">
+    <div class="spinner"></div>
+    <div id="load-msg">Connexion au relay…</div>
+</div>
+
+<div id="map"></div>
+
+<div id="header">
+    <button class="h-btn h-btn-dim" onclick="location.href='atomic.html'" aria-label="Retour">← ⚛</button>
+    <span class="h-title">Constellation</span>
+    <button class="h-btn h-btn-teal" onclick="_togglePanel()">≡ <span id="atom-count">0</span></button>
+</div>
+
+<div id="panel">
+    <div id="panel-head">
+        <span>⚛ Atomes (<span id="panel-count">0</span>)</span>
+        <button onclick="_togglePanel()">✕</button>
+    </div>
+    <div id="search-zone">
+        <div id="search-wrap">
+            <input id="search-input" type="search" placeholder="Nom, ville, email, g1pub…"
+                   oninput="_filterPanel()" autocomplete="off" spellcheck="false">
+            <button id="search-clear" onclick="_clearSearch()" title="Effacer">✕</button>
+        </div>
+        <div id="search-hint">Tapez 3 caractères pour filtrer</div>
+    </div>
+    <div id="atom-list"></div>
+    <div id="log-zone"></div>
+</div>
+
+<button id="penta-btn" onclick="_togglePentagons()">⬟ Pentagones</button>
+<div id="stats-bar" id="stats-bar"></div>
+
+<!-- DM Modal -->
+<div id="dm-modal" onclick="_closeDm(event)">
+    <div id="dm-box" onclick="event.stopPropagation()">
+        <div class="dm-title">💌 Message privé (NIP-04)</div>
+        <div class="dm-to" id="dm-to"></div>
+        <textarea id="dm-msg" placeholder="Votre message — chiffré de bout en bout…"></textarea>
+        <div class="dm-row">
+            <button class="btn-dm-send" id="dm-send-btn" onclick="_sendDm()">⚡ Envoyer</button>
+            <button class="btn-dm-cancel" onclick="_closeDm()">Annuler</button>
+        </div>
+        <div id="dm-st"></div>
+    </div>
+</div>
+
+<script src="leaflet.js"></script>
+<script src="nacl-fast.min.js"></script>
+<script src="nostr.bundle.js"></script>
+<script src="phi2x.js"></script>
+<script>
+'use strict';
+
+// ── Relay ─────────────────────────────────────────────────────────────────────
+function _relayUrl() {
+    const h = location.hostname;
+    if (h.startsWith('ipfs.')) return 'wss://relay.' + h.slice(5);
+    if (h.startsWith('u.'))    return 'wss://relay.' + h.slice(2);
+    return 'wss://relay.copylaradio.com';
+}
+
+function _wsQuery(relay, filter, timeout) {
+    return new Promise(resolve => {
+        const evs = []; let ws;
+        const done = () => { try { ws && ws.readyState < 2 && ws.close(); } catch(_) {} resolve(evs); };
+        const t = setTimeout(done, timeout || 8000);
+        try {
+            ws = new WebSocket(relay);
+            const sub = 'a4lm-' + Math.random().toString(36).slice(2,7);
+            ws.onopen    = () => ws.send(JSON.stringify(['REQ', sub, filter]));
+            ws.onmessage = e => {
+                try {
+                    const m = JSON.parse(e.data);
+                    if (m[0]==='EVENT' && m[1]===sub) evs.push(m[2]);
+                    else if (m[0]==='EOSE') { clearTimeout(t); done(); }
+                } catch(_) {}
+            };
+            ws.onerror = ws.onclose = () => { clearTimeout(t); resolve(evs); };
+        } catch(_) { clearTimeout(t); resolve([]); }
+    });
+}
+
+function _publishToRelay(signed) {
+    return new Promise((resolve, reject) => {
+        const ws = new WebSocket(_relayUrl());
+        const t = setTimeout(() => { ws.close(); reject(new Error('timeout')); }, 6000);
+        ws.onopen = () => ws.send(JSON.stringify(['EVENT', signed]));
+        ws.onmessage = e => {
+            try {
+                const m = JSON.parse(e.data);
+                if (m[0] === 'OK') { clearTimeout(t); ws.close(); resolve(m); }
+            } catch(_) {}
+        };
+        ws.onerror = () => { clearTimeout(t); reject(new Error('erreur relay')); };
+        ws.onclose = () => { clearTimeout(t); resolve(null); };
+    });
+}
+
+// ── Décoder l'adresse a4l hex en lat/lon ─────────────────────────────────────
+// Inverse de geoTagA4L() dans phi2x.js (pointy-top hex, HEX_SIZE_KM=1, EARTH_R=6371)
+function _decodeA4l(tags) {
+    if (!tags) return null;
+    const hexTag = tags.find(function(t) { return t[0] === 'g' && /a4l:P\d+H[0-9a-fA-F]{8}/.test(t[1]); });
+    if (!hexTag) return null;
+    const m = hexTag[1].match(/P(\d+)H([0-9a-fA-F]{4})([0-9a-fA-F]{4})/i);
+    if (!m) return null;
+    const pid = parseInt(m[1]);
+    const q   = parseInt(m[2], 16) - 32768;
+    const r   = parseInt(m[3], 16) - 32768;
+    // Inversion : y = r*size*1.5 ; x = (q*size + y/3) * sqrt(3)
+    const y_km  = r * 1.5;  // HEX_SIZE_KM=1
+    const x_km  = (q + y_km / 3) * Math.sqrt(3);
+    const EARTH_R_KM = 6371.0;
+    const lat   = x_km / (EARTH_R_KM * Math.PI / 180);
+    const cosL  = Math.cos(lat * Math.PI / 180);
+    const lon   = Math.abs(cosL) > 0.001 ? y_km / (EARTH_R_KM * Math.PI / 180 * cosL) : 0;
+    if (isNaN(lat) || isNaN(lon) || lat < -90 || lat > 90 || lon < -180 || lon > 180) return null;
+    return { lat, lon, pentagonId: pid };
+}
+
+// ── Couleur issue de φ ────────────────────────────────────────────────────────
+function _phiHsl(phi, saturation, lightness) {
+    const hue = Math.round((phi / (2 * Math.PI)) * 360);
+    return 'hsl(' + hue + ',' + (saturation||72) + '%,' + (lightness||54) + '%)';
+}
+
+// ── State ─────────────────────────────────────────────────────────────────────
+var _atoms        = [];      // objets {pubkey, lat, lon, phi, omega, psi, pentagonId, profile, k, marker}
+var _myPhi        = null;    // personal_phase si connecté
+var _panelOpen    = false;
+var _pentaOn      = false;
+var _pentaLayers  = [];
+var _dmTarget     = null;    // {pubkey, name}
+var _searchQuery  = '';
+var _allMultipass = [];      // Kind 0 profiles avec tag NIP-39 g1pub (comme Zelkova)
+
+// ── Map ───────────────────────────────────────────────────────────────────────
+var map = L.map('map', { center:[20,10], zoom:2, zoomControl:true, attributionControl:false });
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom:18 }).addTo(map);
+
+// ── Pentagones ────────────────────────────────────────────────────────────────
+var PENTA_COLS = ['#00ffcc','#f59e0b','#a855f7','#3b82f6','#ef4444',
+                  '#10b981','#f97316','#8b5cf6','#06b6d4','#eab308','#ec4899','#6ee7b7'];
+
+function _drawPentagons() {
+    _pentaLayers.forEach(function(l) { map.removeLayer(l); });
+    _pentaLayers = [];
+    if (!_pentaOn) return;
+    var pens = Phi2X.getDynamicPentagons(Date.now() / 1000);
+    pens.forEach(function(p, i) {
+        var c = PENTA_COLS[i % PENTA_COLS.length];
+        _pentaLayers.push(
+            L.circle([p[0], p[1]], {
+                radius: 2200000, fillColor: c, fillOpacity: 0.04,
+                color: c, opacity: 0.18, weight: 1.5, dashArray: '5,9'
+            }).addTo(map)
+        );
+        _pentaLayers.push(
+            L.marker([p[0], p[1]], {
+                icon: L.divIcon({
+                    html: '<div style="color:' + c + ';font-size:.6rem;font-weight:800;white-space:nowrap;text-shadow:0 0 6px rgba(0,0,0,.9);pointer-events:none">⬟ P' + String(i).padStart(2,'0') + '</div>',
+                    className: '', iconAnchor: [18, 8]
+                }),
+                interactive: false
+            }).addTo(map)
+        );
+    });
+}
+
+function _togglePentagons() {
+    _pentaOn = !_pentaOn;
+    document.getElementById('penta-btn').classList.toggle('active', _pentaOn);
+    _drawPentagons();
+}
+
+// Rotation lente : redessiner toutes les 2 min
+setInterval(_drawPentagons, 120000);
+
+// ── Icône de marqueur ─────────────────────────────────────────────────────────
+function _mkIcon(phi, psi, k) {
+    var size = Math.round(9 + (psi || 0) * 13);
+    var col  = _phiHsl(phi);
+    var glw  = k !== null ? Math.round(5 + k * 18) : 5;
+    var bord = 'rgba(0,255,204,' + (k !== null ? (0.35 + k * 0.6).toFixed(2) : '0.35') + ')';
+    var anim = (k !== null && k > 0.9) ? 'animation:mp 1.6s ease-in-out infinite;' : '';
+    return L.divIcon({
+        html: '<div style="width:' + size + 'px;height:' + size + 'px;border-radius:50%;' +
+              'background:' + col + ';border:2px solid ' + bord + ';' +
+              'box-shadow:0 0 ' + glw + 'px ' + col + ';' + anim + '"></div>',
+        className: '', iconSize: [size, size], iconAnchor: [size>>1, size>>1]
+    });
+}
+
+// ── Popup ─────────────────────────────────────────────────────────────────────
+function _esc(s) { return String(s || '').replace(/[<>&"'`]/g, '').slice(0, 60); }
+
+function _buildPopup(atom) {
+    var p    = atom.profile || {};
+    var name = _esc(p.display_name || p.name || atom.pubkey.slice(0,8) + '…');
+    var pic  = p.picture ? '<img src="' + _esc(p.picture) + '" loading="lazy">' : '🌀';
+    var k    = (_myPhi !== null) ? Phi2X.computeResonanceK(_myPhi, atom.phi) : null;
+    var kPct = k !== null ? Math.round((k - 0.5) * 200) : null;
+    var kCol = k !== null ? (k > 0.85 ? '#00ffcc' : k > 0.70 ? '#f59e0b' : '#6b7280') : '#444';
+
+    var phiS   = (atom.phi   !== null && !isNaN(atom.phi))   ? atom.phi.toFixed(3)           : '—';
+    var omgS   = (atom.omega !== null && !isNaN(atom.omega)) ? atom.omega.toFixed(2) + ' Hz'  : '—';
+    var psiS   = (atom.psi   !== null && !isNaN(atom.psi))   ? Math.round(atom.psi * 100) + '%' : '—';
+    var penS   = 'P' + String(atom.pentagonId).padStart(2, '0');
+
+    // Lien match : atomic_match.html avec position de l'atome (lon seule suffit pour calcul)
+    // Note : sans date de naissance, on redirige vers la page de profil
+    var matchHref = 'atomic.html';
+
+    return '<div class="atom-popup">' +
+        '<div class="pop-head">' +
+            '<div class="pop-av">' + pic + '</div>' +
+            '<div><div class="pop-name">' + name + '</div>' +
+            '<div class="pop-sub">⬟ ' + penS + ' · φ=' + phiS + '</div></div>' +
+        '</div>' +
+        '<div class="pop-metrics">' +
+            'φ = ' + phiS + ' rad<br>' +
+            'ω = ' + omgS + '<br>' +
+            'Ψ = ' + psiS +
+        '</div>' +
+        (kPct !== null
+            ? '<div class="pop-k" style="color:' + kCol + '">' + kPct + '%</div>' +
+              '<div class="pop-k-lbl">Cohérence cosmique avec moi</div>'
+            : '<div class="pop-k-lbl" style="margin-bottom:9px">Connectez-vous pour voir la résonance</div>') +
+        '<div class="pop-btns">' +
+            '<button class="pop-btn pop-dm" onclick="_openDm(\'' + atom.pubkey + '\',\'' + name + '\')">💌 Message</button>' +
+            '<a class="pop-btn pop-match" href="' + matchHref + '">⚛ Mon profil</a>' +
+        '</div>' +
+    '</div>';
+}
+
+// ── Ajouter un atome ──────────────────────────────────────────────────────────
+function _addAtom(atom) {
+    // Jitter de ±~22m basé sur les 2 premiers octets de la pubkey (stable par pubkey)
+    var j0 = parseInt(atom.pubkey.slice(0, 2), 16) - 128;
+    var j1 = parseInt(atom.pubkey.slice(2, 4), 16) - 128;
+    var lat = atom.lat + j0 * 0.0002;
+    var lon = atom.lon + j1 * 0.0002;
+    atom.lat = lat; atom.lon = lon;  // stocker position finale
+
+    var k = (_myPhi !== null) ? Phi2X.computeResonanceK(_myPhi, atom.phi) : null;
+    atom.k = k;
+
+    var marker = L.marker([lat, lon], { icon: _mkIcon(atom.phi, atom.psi, k), riseOnHover: true })
+        .bindPopup(_buildPopup(atom), { maxWidth: 250, minWidth: 215 })
+        .addTo(map);
+    atom.marker = marker;
+    return marker;
+}
+
+// ── Panel latéral ─────────────────────────────────────────────────────────────
+function _renderPanel() {
+    var q = _searchQuery;
+    var visible = (q.length >= 3) ? _atoms.filter(function(a) {
+        var p = a.profile || {};
+        var hay = [p.name, p.display_name, p.city, p.email, p.g1pub, a.pubkey]
+            .filter(Boolean).join(' ').toLowerCase();
+        return hay.indexOf(q) !== -1;
+    }) : _atoms.slice();
+
+    var sorted = visible.sort(function(a, b) {
+        if (a.k !== null && b.k !== null) return b.k - a.k;
+        if (a.k !== null) return -1;
+        if (b.k !== null) return 1;
+        return (b.psi || 0) - (a.psi || 0);
+    });
+
+    var hint = document.getElementById('search-hint');
+    if (hint) {
+        hint.textContent = q.length >= 3
+            ? visible.length + ' résultat' + (visible.length !== 1 ? 's' : '')
+            : _atoms.length + ' atome' + (_atoms.length !== 1 ? 's' : '') + ' — tapez 3 chars pour filtrer';
+    }
+    document.getElementById('atom-count').textContent  = _atoms.length;
+    document.getElementById('panel-count').textContent = _atoms.length;
+
+    document.getElementById('atom-list').innerHTML = sorted.map(function(a) {
+        var p    = a.profile || {};
+        var name = _esc(p.display_name || p.name || a.pubkey.slice(0,8)+'…');
+        var city = p.city ? _esc(p.city) : '';
+        var col  = _phiHsl(a.phi);
+        var kPct = a.k !== null ? Math.round((a.k - 0.5) * 200) : null;
+        var kCol = a.k !== null ? (a.k > 0.85 ? '#00ffcc' : a.k > 0.70 ? '#f59e0b' : '#888') : '#888';
+        return '<div class="atom-row" onclick="_focusAtom(\'' + a.pubkey + '\')">' +
+            '<div class="atom-dot" style="background:' + col + '"></div>' +
+            '<div style="flex:1;overflow:hidden">' +
+                '<div class="atom-row-name">' + name + '</div>' +
+                '<div class="atom-row-sub">' + (city ? city + ' · ' : '') +
+                    'Ψ ' + Math.round((a.psi||0)*100) + '% · ⬟P' + String(a.pentagonId).padStart(2,'0') + '</div>' +
+            '</div>' +
+            (kPct !== null ? '<div class="atom-row-k" style="color:' + kCol + '">' + kPct + '%</div>' : '') +
+        '</div>';
+    }).join('');
+
+    // Stats bar
+    var total = _atoms.length;
+    var withK = _atoms.filter(function(a) { return a.k !== null; });
+    var avgK  = withK.length ? Math.round(withK.reduce(function(s,a){return s+(a.k-0.5)*200;},0) / withK.length) : null;
+    var sb = '⚛ ' + total + ' atomes';
+    if (avgK !== null) sb += ' · ⌀ résonance ' + avgK + '%';
+    document.getElementById('stats-bar').textContent = sb;
+}
+
+function _focusAtom(pubkey) {
+    var atom = _atoms.find(function(a) { return a.pubkey === pubkey; });
+    if (!atom || !atom.marker) return;
+    map.setView([atom.lat, atom.lon], Math.max(map.getZoom(), 5));
+    atom.marker.openPopup();
+    if (window.innerWidth < 700) _togglePanel();
+}
+
+function _togglePanel() {
+    _panelOpen = !_panelOpen;
+    document.getElementById('panel').classList.toggle('open', _panelOpen);
+}
+
+// ── Log & Recherche MULTIPASS ─────────────────────────────────────────────────
+function _log(msg) {
+    var el = document.getElementById('log-zone');
+    if (!el) return;
+    var ts = new Date().toISOString().slice(11, 19);
+    el.insertAdjacentHTML('beforeend', '<div>[' + ts + '] ' + msg + '</div>');
+    el.scrollTop = el.scrollHeight;
+}
+
+function _filterPanel() {
+    var q = (document.getElementById('search-input').value || '').trim().toLowerCase();
+    _searchQuery = q;
+    var clear = document.getElementById('search-clear');
+    if (clear) clear.style.display = q ? '' : 'none';
+    _renderPanel();
+}
+
+function _clearSearch() {
+    var inp = document.getElementById('search-input');
+    if (inp) inp.value = '';
+    _searchQuery = '';
+    var clear = document.getElementById('search-clear');
+    if (clear) clear.style.display = 'none';
+    _renderPanel();
+}
+
+async function _loadMultipassProfiles(relay) {
+    _log('Chargement MULTIPASS (Kind 0 + g1pub)…');
+    var evs = await _wsQuery(relay, { kinds: [0], limit: 500 }, 10000);
+    _allMultipass = [];
+    evs.forEach(function(ev) {
+        var hasG1pub = ev.tags && ev.tags.some(function(t) {
+            return t[0] === 'i' && t[1] && t[1].startsWith('g1pub:');
+        });
+        if (!hasG1pub) return;
+        var p = {};
+        try { p = JSON.parse(ev.content); } catch(_) {}
+        if (ev.tags) {
+            var emailTag = ev.tags.find(function(t) { return t[0]==='i' && t[1] && t[1].startsWith('email:'); });
+            var g1pubTag = ev.tags.find(function(t) { return t[0]==='i' && t[1] && t[1].startsWith('g1pub:'); });
+            if (emailTag) p.email = emailTag[1].slice(6);
+            if (g1pubTag) p.g1pub = g1pubTag[1].slice(6);
+        }
+        _allMultipass.push({ pubkey: ev.pubkey, profile: p });
+    });
+    _log(_allMultipass.length + ' MULTIPASS g1pub trouvés');
+    // Enrichir les atomes existants avec les données MULTIPASS manquantes
+    _allMultipass.forEach(function(mp) {
+        var atom = _atoms.find(function(a) { return a.pubkey === mp.pubkey; });
+        if (atom && atom.profile) {
+            if (!atom.profile.g1pub && mp.profile.g1pub) atom.profile.g1pub = mp.profile.g1pub;
+            if (!atom.profile.email && mp.profile.email) atom.profile.email = mp.profile.email;
+        }
+    });
+}
+
+// ── DM NIP-04 ─────────────────────────────────────────────────────────────────
+function _openDm(pubkey, name) {
+    _dmTarget = { pubkey: pubkey, name: name };
+    document.getElementById('dm-to').textContent = 'À : ' + name;
+    document.getElementById('dm-msg').value = '';
+    document.getElementById('dm-st').textContent = '';
+    document.getElementById('dm-modal').classList.add('open');
+    setTimeout(function() { document.getElementById('dm-msg').focus(); }, 80);
+}
+
+function _closeDm(e) {
+    if (e && e.target !== document.getElementById('dm-modal')) return;
+    document.getElementById('dm-modal').classList.remove('open');
+}
+
+async function _sendDm() {
+    if (!_dmTarget) return;
+    var msg = document.getElementById('dm-msg').value.trim();
+    if (!msg) return;
+    var st  = document.getElementById('dm-st');
+    var btn = document.getElementById('dm-send-btn');
+
+    if (!window.userPubkey) {
+        if (typeof window.connectNostr === 'function') {
+            btn.disabled = true; btn.textContent = '⏳…';
+            try { await window.connectNostr(false); } catch(_) {}
+            btn.disabled = false; btn.textContent = '⚡ Envoyer';
+            if (!window.userPubkey) { st.textContent = '⚠ Extension NOSTR requise (Alby, nos2x, Flamingo)'; return; }
+        } else {
+            st.textContent = '⚠ Connexion NOSTR requise'; return;
+        }
+    }
+
+    if (!window.nostr || typeof window.nostr.encrypt !== 'function') {
+        st.textContent = '⚠ Extension NOSTR avec NIP-04 requise'; return;
+    }
+
+    btn.disabled = true; btn.textContent = '⏳ Chiffrement…'; st.textContent = '';
+
+    try {
+        var cipher  = await window.nostr.encrypt(_dmTarget.pubkey, msg);
+        var evRaw   = {
+            kind: 4, content: cipher,
+            tags: [['p', _dmTarget.pubkey]],
+            created_at: Math.floor(Date.now() / 1000),
+            pubkey: window.userPubkey
+        };
+        var signed  = await window.nostr.signEvent(evRaw);
+        await _publishToRelay(signed);
+        st.textContent = '✅ Message envoyé !';
+        setTimeout(function() { document.getElementById('dm-modal').classList.remove('open'); }, 1400);
+    } catch(e) {
+        st.textContent = '⚠ ' + (e.message || String(e));
+    } finally {
+        btn.disabled = false; btn.textContent = '⚡ Envoyer';
+    }
+}
+
+// ── Connexion NOSTR ───────────────────────────────────────────────────────────
+async function _onConnected() {
+    var pubkey = window.userPubkey;
+    if (!pubkey) return;
+    _log('Connecté: ' + pubkey.slice(0, 8) + '…');
+
+    // Charger mon propre cert pour avoir φ
+    var myCerts = await _wsQuery(_relayUrl(),
+        { kinds:[30078], '#d':['atom4love'], authors:[pubkey], limit:1 }, 5000);
+    if (myCerts.length > 0) {
+        try {
+            var c = JSON.parse(myCerts[0].content);
+            var v = parseFloat(c.personal_phase);
+            if (!isNaN(v)) { _myPhi = v; _log('φ personnel: ' + v.toFixed(4)); }
+        } catch(_) {}
+    }
+
+    if (_myPhi !== null) {
+        _atoms.forEach(function(atom) {
+            atom.k = Phi2X.computeResonanceK(_myPhi, atom.phi);
+            if (atom.marker) {
+                atom.marker.setIcon(_mkIcon(atom.phi, atom.psi, atom.k));
+                atom.marker.setPopupContent(_buildPopup(atom));
+            }
+        });
+        _renderPanel();
+        _log('Résonance calculée pour ' + _atoms.length + ' atomes');
+    }
+}
+
+// Polling de secours si waitForConnection n'est pas disponible
+function _startPoll() {
+    var i = 0;
+    var t = setInterval(function() {
+        if (window.isNostrConnected && window.userPubkey) {
+            clearInterval(t);
+            _onConnected();
+        }
+        if (++i > 60) clearInterval(t);
+    }, 500);
+}
+
+// ── Chargement principal ──────────────────────────────────────────────────────
+function _setMsg(s) {
+    var el = document.getElementById('load-msg');
+    if (el) el.textContent = s;
+}
+function _hideLoad() { document.getElementById('loading').classList.add('hidden'); }
+
+async function _loadMap() {
+    var relay = _relayUrl();
+    _setMsg('Connexion à ' + relay.replace('wss://','') + '…');
+    _log('Relay: ' + relay.replace('wss://',''));
+
+    // 1. Kind 30078 d=atom4love
+    _setMsg('Chargement des atomes…');
+    var events = await _wsQuery(relay, { kinds:[30078], '#d':['atom4love'], limit:500 }, 14000);
+    _log(events.length + ' événements Kind 30078 reçus');
+
+    // 2. Dédupliquer par pubkey (plus récent)
+    var byPub = {};
+    events.forEach(function(ev) {
+        if (!byPub[ev.pubkey] || ev.created_at > byPub[ev.pubkey].created_at)
+            byPub[ev.pubkey] = ev;
+    });
+    var uniq = Object.values(byPub);
+    _log(uniq.length + ' atomes uniques');
+    _setMsg(uniq.length + ' atomes — chargement des profils…');
+
+    // 3. Batch fetch Kind 0 des auteurs des atoms
+    var pubkeys  = uniq.map(function(e) { return e.pubkey; });
+    var profiles = {};
+    if (pubkeys.length > 0) {
+        var k0evs = await _wsQuery(relay, { kinds:[0], authors:pubkeys }, 8000);
+        k0evs.forEach(function(e) {
+            if (!profiles[e.pubkey]) {
+                try {
+                    var p = JSON.parse(e.content);
+                    // Extraire email + g1pub depuis tags NIP-39 (comme Zelkova)
+                    if (e.tags) {
+                        var emailTag = e.tags.find(function(t) { return t[0]==='i' && t[1] && t[1].startsWith('email:'); });
+                        var g1pubTag = e.tags.find(function(t) { return t[0]==='i' && t[1] && t[1].startsWith('g1pub:'); });
+                        if (emailTag) p.email = emailTag[1].slice(6);
+                        if (g1pubTag) p.g1pub = g1pubTag[1].slice(6);
+                    }
+                    profiles[e.pubkey] = p;
+                } catch(_) {}
+            }
+        });
+        _log(Object.keys(profiles).length + ' profils Kind 0 chargés');
+    }
+
+    // 4. Charger tous les MULTIPASS en arrière-plan (enrichit les atoms + alimente la recherche)
+    _loadMultipassProfiles(relay);
+
+    // 5. Placer les marqueurs
+    _setMsg('Placement sur la carte…');
+    var placed = 0;
+    uniq.forEach(function(ev) {
+        var pos = _decodeA4l(ev.tags);
+        if (!pos) return;
+        var c = {};
+        try { c = JSON.parse(ev.content); } catch(_) {}
+        var phi   = parseFloat(c.personal_phase);
+        if (isNaN(phi)) return;
+        var omega = parseFloat(c.omega_bio);
+        var psi   = parseFloat(c.a5l_amplitude);
+        var atom  = {
+            pubkey:     ev.pubkey,
+            lat:        pos.lat, lon: pos.lon,
+            pentagonId: pos.pentagonId,
+            phi:        phi,
+            omega:      isNaN(omega) ? null : omega,
+            psi:        isNaN(psi)   ? 0    : psi,
+            profile:    profiles[ev.pubkey] || null,
+            k:          null, marker: null,
+            createdAt:  ev.created_at
+        };
+        _atoms.push(atom);
+        _addAtom(atom);
+        placed++;
+    });
+
+    _log(placed + ' atomes placés sur la carte');
+    _renderPanel();
+    _hideLoad();
+
+    // Ajuster la vue sur les atomes présents
+    if (_atoms.length > 0) {
+        var lats = _atoms.map(function(a){return a.lat;}),
+            lons = _atoms.map(function(a){return a.lon;});
+        try {
+            map.fitBounds(L.latLngBounds(
+                [Math.min.apply(null,lats)-4, Math.min.apply(null,lons)-4],
+                [Math.max.apply(null,lats)+4, Math.max.apply(null,lons)+4]
+            ), { padding:[50,50], maxZoom:7 });
+        } catch(_) {}
+    }
+
+    if (placed === 0) {
+        document.getElementById('stats-bar').textContent =
+            'Aucun atome ATOM4LOVE trouvé — publiez votre certificat depuis atomic.html';
+    }
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', function() {
+    _loadMap();
+});
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') document.getElementById('dm-modal').classList.remove('open');
+});
+</script>
+<script src="common.js"></script>
+<script src="uplanet-header.js"></script>
+<script src="uplanet-atomic.js"></script>
+<script>
+// Hook de connexion via UPH (uplanet-header.js → waitForConnection de common.js)
+if (typeof window.waitForConnection === 'function') {
+    window.waitForConnection(_onConnected);
+} else {
+    _startPoll();
+}
+if (window.isNostrConnected && window.userPubkey) {
+    _onConnected();
+}
+</script>
+</body>
+</html>

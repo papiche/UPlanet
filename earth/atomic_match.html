@@ -843,13 +843,16 @@ function _renderResult() {
         _rHint.style.display = (_latA === 0 && _lonA === 0) ? '' : 'none';
     }
 
-    // Lien de partage de A (les autres voient LEUR résonance avec MOI)
+    // Lien de partage de A — encodé en Base64 (même format que _shareMatchLink dans atomic.html)
+    // Les facteurs SALT critiques (poids, polarité) restent exclus
     const aDateStr = _vDateISO.replace(/-/g, '');
     const aTimeStr = _vTimeStr.replace(':', '');
-    const aShareP  = new URLSearchParams({ d: aDateStr, t: aTimeStr,
-        lo: parseFloat(aLo.toFixed(2)), la: parseFloat(aLa.toFixed(2)) });
-    if (_kinA) aShareP.set('k', _kinA.kin);
-    const _myShareUrl = `${base}atomic_match.html?${aShareP.toString()}`;
+    const _shareObj = { d: aDateStr, t: aTimeStr,
+        lo: parseFloat(aLo.toFixed(2)), la: parseFloat(aLa.toFixed(2)) };
+    if (_kinA) _shareObj.k = _kinA.kin;
+    const _shareB64 = btoa(unescape(encodeURIComponent(JSON.stringify(_shareObj))))
+        .replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+    const _myShareUrl = `${base}atomic_match.html?p=${_shareB64}`;
 
     // Décrypteur de relation KIN
     const kdBlock = document.getElementById('kin-decode-block');

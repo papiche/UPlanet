@@ -391,6 +391,7 @@
                         _cachePubkey(pk);
                         _refreshUI();
                         if (!_dataLoaded) { _dataLoaded = true; _loadAll(); }
+                        document.dispatchEvent(new CustomEvent('nostr:connected', { detail: { pubkey: pk } }));
                     }
                 }).catch(function (e) {
                     console.warn('[UPH] getPublicKey (fallback) erreur:', e.message || e);
@@ -413,6 +414,7 @@
                 _cachePubkey(pk);
                 _refreshUI();
                 if (!_dataLoaded) { _dataLoaded = true; _loadAll(); }
+                document.dispatchEvent(new CustomEvent('nostr:connected', { detail: { pubkey: pk } }));
             } else {
                 console.warn('[UPH] connectNostr retourné null/vide');
             }
@@ -433,7 +435,10 @@
                 pk = await window.nostr.getPublicKey();
                 if (pk) { _applyPubkey(pk); }
             }
-            if (pk) _cachePubkey(pk);
+            if (pk) {
+                _cachePubkey(pk);
+                document.dispatchEvent(new CustomEvent('nostr:connected', { detail: { pubkey: pk } }));
+            }
             _refreshUI();
             if (!_dataLoaded) { _dataLoaded = true; _loadAll(); }
         } catch (e) { /* refus utilisateur */ }
@@ -614,6 +619,7 @@
                 roamEl.title       = didLabel + (didLabel ? '\nsource: ' : 'source: ') + (d.source || '?');
                 roamEl.style.display = '';
             }
+            if (d.nostrns) window._uphNostrNS = d.nostrns; // "/ipns/k51..."
             if (email) {
                 window._uphEmail = email;
                 var nameEl = document.getElementById('uph-name');

@@ -284,6 +284,76 @@ Chacune appelle `initCarousel({...})` avec ses propres valeurs de rayon :
 
 ---
 
+## ATOM4LOVE — Système Phi2X
+
+### Fichiers
+
+| Fichier | Rôle |
+|---------|------|
+| `phi2x.js` | Moteur canonique de résonance — synchronisé avec `phi2x.py` (Astroport) et `Phi2X_Math.gd` (Godot) |
+| `uplanet-atomic.js` | Logique UI partagée aux pages atomic (thème, date-picker, helpers KIN) |
+| `uplanet-atomic.css` | Design system commun aux pages atomic |
+| `atomic.html` | Profil ATOM4LOVE : saisie naissance, calcul KIN Maya, inscription MULTIPASS, publication atom4love DID |
+| `atomic_match.html` | Page de résonance partagée : lien `?p=base64(JSON)` → calcul phi2x visiteur vs partageur |
+| `atomic_map.html` | Carte constellation des atomes (visualisation géographique) |
+| `atomic_choir.html` | Résonance de groupe (Harmonie N personnes) |
+| `atomic_help.html` | Référence Tzolkin / KIN Maya |
+
+**Stack de chargement atomic.html / atomic_match.html :**
+```html
+<script src="nacl-fast.min.js"></script>
+<script src="nostr.bundle.js"></script>
+<script src="phi2x.js"></script>
+<script src="common.js"></script>
+<script src="uplanet-header.js"></script>
+<script src="astro.js"></script>
+<script src="uplanet-atomic.js"></script>
+```
+
+### Moteur Phi2X (`phi2x.js`)
+
+`Phi2X` est un objet JS global exposant :
+
+| Fonction | Usage |
+|----------|-------|
+| `Phi2X.computePersonalPhase(birthUnix, lat, lon)` | Phase personnelle (rad) à partir de la naissance |
+| `Phi2X.computeResonanceK(phiA, phiB)` | Score de cohérence k ∈ [0, 1] entre deux phases |
+| `Phi2X.calcKin(year, month, day)` | Calcule le KIN Dreamspell Maya (1–260) |
+| `Phi2X.getDualElements(kinA, kinB)` | Archétype alchimique pour un duo |
+| `Phi2X.computeConceptionSnap(birthUnix, lat, lon)` | Phase de conception (pour le Double Bang) |
+| `Phi2X.groupHarmonyScore(phases[])` | Score de groupe N personnes |
+
+Score affiché = `Math.round((k - 0.5) * 200)` → 0–100%.
+
+### Inscription MULTIPASS depuis atomic.html
+
+1. Saisie date/heure/lieu de naissance → calcul KIN local (`phi2x.js`)
+2. Dérivation clé NOSTR via scrypt (N=4096, r=16, p=1) depuis email+password → `nsec` éphémère
+3. POST `/g1nostr` (UPassport) avec les paramètres MULTIPASS → reçoit `nsec`, `npub`, `g1pub`, SSSS
+4. Publication Kind 30078 `d=atom4love` (DID Atomique) sur NOSTR relay avec :
+   - Tags : `kin`, `phase`, `lat`, `lon`, `birth_date`, `conception_kin`
+   - Signé avec la clé NOSTR reçue
+5. Partage via lien `atomic_match.html?p=base64url(JSON)` contenant `{d, t, lo, la, k, n}`
+
+### Lien de partage atomic_match.html
+
+Format `?p=base64url(JSON)` :
+```json
+{ "d": "YYYYMMDD", "t": "HHMM", "lo": lon, "la": lat, "k": kin, "n": "prénom" }
+```
+Fallback anciens liens : `?d=...&lo=...&la=...&k=...&n=...`.
+
+L'affichage du score final est normalisé : `pctDisplay = Math.round((k - 0.5) * 200)`.
+
+### Kinds NOSTR ATOM4LOVE
+
+| Kind | Rôle |
+|------|------|
+| 30078 `d=atom4love` | DID Atomique : profil phi2x + KIN Maya (publié par atomic.html) |
+| 10600 | Analytics `resonance_share` — envoyé côté client via `window.uPlanetAnalytics` |
+
+---
+
 ## Sécurité — points d'attention
 
 - `userPrivateKey` ne doit jamais être stocké en `localStorage` — uniquement en mémoire volatile

@@ -114,9 +114,10 @@ const Phi2X = (function() {
      * @returns {number} φ_i en radians
      */
     function computePhaseFromForm(dateStr, timeStr, lon) {
-        const d = new Date(dateStr + 'T' + (timeStr || '12:00'));
-        if (isNaN(d)) return 0;
-        const unix      = d.getTime() / 1000;
+        const [y, mo, dd] = dateStr.split('-').map(Number);
+        const [hh, mm]    = (timeStr || '12:00').split(':').map(Number);
+        const unix = Date.UTC(y, mo - 1, dd, hh, mm) / 1000;
+        if (!isFinite(unix)) return 0;
         const solarCorr = (parseFloat(lon) || 0) / 360 * ORBITAL_DAY_S;
         const tAnn      = (unix % ORBITAL_YEAR_S) / ORBITAL_YEAR_S * TAU;
         const solar     = unix + solarCorr;
@@ -140,8 +141,13 @@ const Phi2X = (function() {
      * sex 0 = Φ-wave (65% eau) · sex 1 = Octave-wave (60% eau)
      */
     function computeOmegaBio(heightCm, weightKg, sex) {
-        const waterRatio = sex === 0 ? 0.65 : 0.60;
-        return F_WATER * (weightKg * waterRatio / 70);
+        // Watson formula for total body water (simplified, age-independent)
+        // ♂ Φ-wave : TBW = 0.1074·h + 0.3362·w − 5.0
+        // ♀ ♪-wave : TBW = 0.1069·h + 0.2466·w − 2.0
+        const waterKg = sex === 0
+            ? Math.max(0.1074 * heightCm + 0.3362 * weightKg - 5.0, 1)
+            : Math.max(0.1069 * heightCm + 0.2466 * weightKg - 2.0, 1);
+        return F_WATER * (waterKg / 70);
     }
 
     /**

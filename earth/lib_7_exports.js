@@ -112,20 +112,24 @@ function escapeHtml(text) {
 }
 
 // Sanitize HTML rendered from user content (e.g. markdown from NOSTR events).
-// Strips script/iframe/on* without requiring DOMPurify.
+// Strips script/iframe/on* and dangerous URL schemes without requiring DOMPurify.
+var _UNSAFE_URL = /^\s*(?:javascript|vbscript|data\s*:(?!image\/(png|jpe?g|gif|webp|svg\+xml)))/i;
 function sanitizeHtml(html) {
     if (!html) return '';
     var tmp = document.createElement('div');
     tmp.innerHTML = html;
-    var DANGEROUS = ['script','style','iframe','object','embed','form','base','link','meta'];
+    var DANGEROUS = ['script','style','iframe','object','embed','form','base','link','meta','svg','math'];
     DANGEROUS.forEach(function(tag) {
         tmp.querySelectorAll(tag).forEach(function(el) { el.remove(); });
     });
     tmp.querySelectorAll('*').forEach(function(el) {
         Array.from(el.attributes).forEach(function(attr) {
-            if (/^on/i.test(attr.name) ||
-                ((attr.name === 'href' || attr.name === 'src' || attr.name === 'action') &&
-                 /^\s*javascript:/i.test(attr.value))) {
+            var n = attr.name.toLowerCase();
+            var v = attr.value;
+            if (/^on/i.test(n)) { el.removeAttribute(attr.name); return; }
+            if ((n === 'href' || n === 'src' || n === 'action' || n === 'formaction' ||
+                 n === 'xlink:href' || n === 'data' || n === 'poster') &&
+                _UNSAFE_URL.test(v)) {
                 el.removeAttribute(attr.name);
             }
         });

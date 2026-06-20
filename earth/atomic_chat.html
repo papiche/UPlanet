@@ -704,7 +704,7 @@ function _renderMsgRow(m, peerPic) {
 async function _send() {
     if (!_peer || !_myPub) return;
     _detectEnc();
-    if (!_encMode) { alert('⚠ Extension NOSTR requise (Alby, nos2x, Flamingo…)'); return; }
+    if (!_encMode) { showNotification({ message: '⚠ Extension NOSTR requise (Alby, nos2x, Flamingo…)', type: 'warning' }); return; }
     var inp  = document.getElementById('chat-input');
     var text = inp.value.trim();
     if (!text) return;
@@ -744,7 +744,7 @@ function _onFileChosen(inp) {
 async function _uploadAndSend(file) {
     if (!_peer || !_myPub) return;
     _detectEnc();
-    if (!_encMode) { alert('⚠ Extension NOSTR requise pour chiffrer le message'); return; }
+    if (!_encMode) { showNotification({ message: '⚠ Extension NOSTR requise pour chiffrer le message', type: 'warning' }); return; }
 
     // Random 32-byte AES key
     var keyBytes = new Uint8Array(32);
@@ -783,7 +783,7 @@ async function _uploadAndSend(file) {
         _updateConvPreview(_peer, '📷 Image', true);
     } catch(e) {
         _hideProgress();
-        alert('⚠ Erreur envoi image : ' + (e.message || e));
+        showNotification({ message: '⚠ Erreur envoi image : ' + (e.message || e), type: 'error' });
     }
 }
 
@@ -926,14 +926,15 @@ async function _loadConstellationRelays() {
 
 function _testRelay(url) {
     return new Promise(function(resolve) {
-        var ws, t = setTimeout(function() {
-            try { ws.close(); } catch(_) {}
+        var ws;
+        var t = setTimeout(function() {
+            if (ws) { ws.onopen = ws.onerror = ws.onclose = null; try { ws.close(); } catch(_) {} }
             resolve(false);
         }, 3000);
         try {
             ws = new WebSocket(url);
-            ws.onopen  = function() { clearTimeout(t); ws.close(); resolve(true); };
-            ws.onerror = function() { clearTimeout(t); resolve(false); };
+            ws.onopen  = function() { clearTimeout(t); ws.onopen = ws.onerror = null; ws.close(); resolve(true); };
+            ws.onerror = function() { clearTimeout(t); ws.onerror = null; resolve(false); };
         } catch(_) { clearTimeout(t); resolve(false); }
     });
 }
@@ -989,7 +990,7 @@ async function _switchRelay(url) {
 function _connectCustomRelay() {
     var val = (document.getElementById('relay-custom-inp').value||'').trim();
     if (!val.startsWith('wss://') && !val.startsWith('ws://')) {
-        alert('L\'URL doit commencer par wss:// ou ws://'); return;
+        showNotification({ message: "L'URL doit commencer par wss:// ou ws://", type: 'warning' }); return;
     }
     if (!_constellRelays.includes(val)) _constellRelays.push(val);
     _switchRelay(val);
@@ -1141,7 +1142,16 @@ function _bytesToHex(b) {
 function _hideLoad()  { document.getElementById('loading').classList.add('hidden'); }
 function _setMsg(s)   { var el=document.getElementById('load-msg'); if(el) el.textContent=s; }
 function _showBtn()   { document.getElementById('btn-new').style.display=''; }
-function _autoRes(el) { el.style.height='auto'; el.style.height=Math.min(el.scrollHeight,110)+'px'; }
+// requestAnimationFrame évite un reflow par touche — une seule lecture scrollHeight par frame
+var _autoResAf = null;
+function _autoRes(el) {
+    if (_autoResAf) return;
+    _autoResAf = requestAnimationFrame(function() {
+        _autoResAf = null;
+        el.style.height = 'auto';
+        el.style.height = Math.min(el.scrollHeight, 110) + 'px';
+    });
+}
 
 // ── Connection callback ────────────────────────────────────────────────────────
 async function _onConnected() {

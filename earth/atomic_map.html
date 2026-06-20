@@ -7,6 +7,8 @@
     <meta name="description" content="Carte de résonance phi2x — visualisation géographique des atomes ATOM4LOVE, nœuds cymatiques et pentagones icosaédriques.">
     <script>try{var _t=localStorage.getItem('a4l_theme');if(_t&&_t!=='amber')document.documentElement.setAttribute('data-theme',_t)}catch(e){}</script>
     <link rel="stylesheet" href="leaflet.css">
+    <link rel="stylesheet" href="MarkerCluster.css">
+    <link rel="stylesheet" href="MarkerCluster.Default.css">
     <link rel="stylesheet" href="uplanet-atomic.css">
     <style>
 * { box-sizing: border-box; }
@@ -250,6 +252,7 @@ html, body { margin:0; padding:0; height:100%; overflow:hidden;
 </div>
 
 <script src="leaflet.js"></script>
+<script src="leaflet.markercluster.js"></script>
 <script src="nacl-fast.min.js"></script>
 <script src="nostr.bundle.js"></script>
 <script src="phi2x.js"></script>
@@ -269,7 +272,10 @@ function _relayUrl() {
 function _wsQuery(relay, filter, timeout) {
     return new Promise(resolve => {
         const evs = []; let ws;
-        const done = () => { try { ws && ws.readyState < 2 && ws.close(); } catch(_) {} resolve(evs); };
+        const done = () => {
+            if (ws) { ws.onopen = ws.onmessage = ws.onerror = ws.onclose = null; try { ws.readyState < 2 && ws.close(); } catch(_) {} }
+            resolve(evs);
+        };
         const t = setTimeout(done, timeout || 8000);
         try {
             ws = new WebSocket(relay);
@@ -282,7 +288,7 @@ function _wsQuery(relay, filter, timeout) {
                     else if (m[0]==='EOSE') { clearTimeout(t); done(); }
                 } catch(_) {}
             };
-            ws.onerror = ws.onclose = () => { clearTimeout(t); resolve(evs); };
+            ws.onerror = ws.onclose = () => { clearTimeout(t); done(); };
         } catch(_) { clearTimeout(t); resolve([]); }
     });
 }
@@ -290,12 +296,13 @@ function _wsQuery(relay, filter, timeout) {
 function _publishToRelay(signed) {
     return new Promise((resolve, reject) => {
         const ws = new WebSocket(_relayUrl());
-        const t = setTimeout(() => { ws.close(); reject(new Error('timeout')); }, 6000);
+        const _cleanup = (cb) => { ws.onopen = ws.onmessage = ws.onerror = ws.onclose = null; try { ws.readyState < 2 && ws.close(); } catch(_) {} cb(); };
+        const t = setTimeout(() => _cleanup(() => reject(new Error('timeout'))), 6000);
         ws.onopen = () => ws.send(JSON.stringify(['EVENT', signed]));
         ws.onmessage = e => {
             try {
                 const m = JSON.parse(e.data);
-                if (m[0] === 'OK') { clearTimeout(t); ws.close(); resolve(m); }
+                if (m[0] === 'OK') { clearTimeout(t); _cleanup(() => resolve(m)); }
             } catch(_) {}
         };
         ws.onerror = () => { clearTimeout(t); reject(new Error('erreur relay')); };
@@ -344,6 +351,15 @@ var _allMultipass = [];      // Kind 0 profiles avec tag NIP-39 g1pub (comme Zel
 // ── Map ───────────────────────────────────────────────────────────────────────
 var map = L.map('map', { center:[20,10], zoom:2, zoomControl:true, attributionControl:false });
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom:18 }).addTo(map);
+
+// MarkerCluster — regroupe les atomes proches pour éviter les milliers de <div> DOM sur mobile
+var _markerCluster = L.markerClusterGroup({
+    maxClusterRadius: 60,
+    spiderfyOnMaxZoom: true,
+    showCoverageOnHover: false,
+    chunkedLoading: true
+});
+_markerCluster.addTo(map);
 
 // ── Pentagones ────────────────────────────────────────────────────────────────
 var PENTA_COLS = ['#00ffcc','#f59e0b','#a855f7','#3b82f6','#ef4444',
@@ -487,8 +503,8 @@ function _addAtom(atom) {
     atom.k = k;
 
     var marker = L.marker([lat, lon], { icon: _mkIcon(atom.phi, atom.psi, k, _isConforme(atom)), riseOnHover: true })
-        .bindPopup(_buildPopup(atom), { maxWidth: 250, minWidth: 215 })
-        .addTo(map);
+        .bindPopup(_buildPopup(atom), { maxWidth: 250, minWidth: 215 });
+    _markerCluster.addLayer(marker);
     atom.marker = marker;
     return marker;
 }
@@ -591,7 +607,7 @@ function _clearSearch() {
 
 async function _loadMultipassProfiles(relay) {
     _log('Chargement MULTIPASS (Kind 0 + g1pub)…');
-    var evs = await _wsQuery(relay, { kinds: [0], limit: 500 }, 10000);
+    var evs = await _wsQuery(relay, { kinds: [0], limit: 2000 }, 10000);
     _allMultipass = [];
     evs.forEach(function(ev) {
         var hasG1pub = ev.tags && ev.tags.some(function(t) {
@@ -749,7 +765,7 @@ async function _loadMap() {
 
     // 1. Kind 30078 d=atom4love
     _setMsg('Chargement des atomes…');
-    var events = await _wsQuery(relay, { kinds:[30078], '#d':['atom4love'], limit:500 }, 14000);
+    var events = await _wsQuery(relay, { kinds:[30078], '#d':['atom4love'], limit:2000 }, 14000);
     _log(events.length + ' événements Kind 30078 reçus');
 
     // 2. Dédupliquer par pubkey (plus récent)
@@ -838,6 +854,32 @@ async function _loadMap() {
             'Aucun atome ATOM4LOVE trouvé — publiez votre certificat depuis atomic.html';
     }
 }
+
+// ── Filtrage géographique par viewport ───────────────────────────────────────
+// À zoom ≥ 4, seuls les atomes dans les bounds étendus (×2) sont dans le cluster.
+// À zoom < 4 (vue monde) tous les atomes sont affichés pour profiter du clustering.
+function _refreshMarkersByBounds() {
+    var zoom = map.getZoom();
+    if (zoom < 4) {
+        // Vue globale : tout afficher (MarkerCluster fait le travail de clustering)
+        _atoms.forEach(function(a) {
+            if (a.marker && !_markerCluster.hasLayer(a.marker)) _markerCluster.addLayer(a.marker);
+        });
+        return;
+    }
+    var b = map.getBounds();
+    var pad = 0.5; // 50% de padding au-delà des bords visibles
+    var sw = b.getSouthWest(), ne = b.getNorthEast();
+    var dlat = (ne.lat - sw.lat) * pad, dlon = (ne.lng - sw.lng) * pad;
+    _atoms.forEach(function(a) {
+        if (!a.marker) return;
+        var inBounds = a.lat >= sw.lat - dlat && a.lat <= ne.lat + dlat &&
+                       a.lon >= sw.lng - dlon && a.lon <= ne.lng + dlon;
+        if (inBounds && !_markerCluster.hasLayer(a.marker)) _markerCluster.addLayer(a.marker);
+        else if (!inBounds && _markerCluster.hasLayer(a.marker)) _markerCluster.removeLayer(a.marker);
+    });
+}
+map.on('moveend', _refreshMarkersByBounds);
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', function() {

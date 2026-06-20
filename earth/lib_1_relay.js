@@ -390,8 +390,43 @@ if (typeof window !== 'undefined') {
     window.RelayManager = RelayManager;
 }
 
+// ── fetchNostrEvents — utilitaire unifié pour requêtes NOSTR ──────────────
+/**
+ * Récupère des événements NOSTR via le relay actif avec SubQueue, timeout et dédup.
+ *
+ * Usage :
+ *   const evs = await fetchNostrEvents({ kinds:[0], authors:[pubkey] });
+ *   const evs = await fetchNostrEvents([filter1, filter2], { timeout: 5000 });
+ *
+ * @param {object|object[]} filters   - Filtre(s) NOSTR (NIP-01)
+ * @param {object}  [opts]
+ * @param {number}  [opts.timeout=8000]  - ms avant résolution avec les événements collectés
+ * @param {object}  [opts.relay]         - instance relay (défaut : window.nostrRelay)
+ * @param {Function}[opts.onEvent]       - callback par événement reçu (en plus de la dédup)
+ * @returns {Promise<object[]>}          - événements dédupliqués
+ */
+async function fetchNostrEvents(filters, opts) {
+    opts = opts || {};
+    var relay = opts.relay || window.nostrRelay;
+    if (!relay) return [];
+    var filterArr = Array.isArray(filters) ? filters : [filters];
+    var seen    = Object.create(null);
+    var deduped = [];
+    await SubscriptionQueue.createSubscription(relay, filterArr, {
+        timeout: typeof opts.timeout === 'number' ? opts.timeout : 8000,
+        onEvent: function(ev) {
+            if (!ev || !ev.id || seen[ev.id]) return;
+            seen[ev.id] = true;
+            deduped.push(ev);
+            if (opts.onEvent) opts.onEvent(ev);
+        }
+    });
+    return deduped;
+}
+
 // ── EXPORTS lib_1 vers window ──────────────────────────────────────────────
-window.ExtensionWrapper = ExtensionWrapper;
-window.RelayManager     = RelayManager;
+window.ExtensionWrapper   = ExtensionWrapper;
+window.RelayManager       = RelayManager;
+window.fetchNostrEvents   = fetchNostrEvents;
 
 })();

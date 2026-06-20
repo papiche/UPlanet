@@ -244,6 +244,34 @@
             backdrop-filter:blur(12px); pointer-events:none; display:none;
             box-shadow:0 4px 24px rgba(0,255,130,.15); transition:opacity .4s;
         }
+        /* ─ Wizard 4 étapes ─ */
+        .wz-indicator { display:flex; align-items:flex-start; gap:0; margin-bottom:6px; }
+        .wz-dot { display:flex; flex-direction:column; align-items:center; cursor:pointer; flex:1; gap:3px; }
+        .wz-num {
+            width:26px; height:26px; border-radius:50%;
+            display:flex; align-items:center; justify-content:center;
+            font-size:.72rem; font-weight:700;
+            background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.18);
+            color:rgba(255,255,255,.35); transition:all .3s;
+        }
+        .wz-dot.active .wz-num  { background:rgba(0,255,204,.2); border-color:rgba(0,255,204,.55); color:#00ffcc; box-shadow:0 0 8px rgba(0,255,204,.3); }
+        .wz-dot.done .wz-num    { background:rgba(0,255,204,.1); border-color:rgba(0,255,204,.3); color:rgba(0,255,204,.75); }
+        .wz-dot.locked .wz-num  { opacity:.4; cursor:default; }
+        .wz-lbl { font-size:.57rem; color:rgba(255,255,255,.3); text-align:center; letter-spacing:.2px; line-height:1.2; }
+        .wz-dot.active .wz-lbl { color:#00ffcc; }
+        .wz-dot.done .wz-lbl   { color:rgba(0,255,204,.6); }
+        .wz-connector { flex:0 0 14px; height:1px; background:rgba(255,255,255,.12); align-self:flex-start; margin-top:12px; }
+        .wz-nav { display:flex; gap:8px; }
+        .wz-btn-prev, .wz-btn-next {
+            flex:1; padding:9px 12px; border-radius:9px; cursor:pointer;
+            font-size:.82rem; font-weight:600; transition:all .2s;
+        }
+        .wz-btn-prev { background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.1); color:rgba(255,255,255,.6); }
+        .wz-btn-next { background:rgba(0,255,204,.12); border:1px solid rgba(0,255,204,.3); color:#00ffcc; }
+        .wz-btn-prev:hover { background:rgba(255,255,255,.09); }
+        .wz-btn-next:hover { background:rgba(0,255,204,.22); }
+        /* Progressive disclosure atom-b dans le wizard — toujours actif quand visible */
+        #wz-pane-3 .atom-b { opacity:1; pointer-events:auto; filter:none; }
     </style>
 </head>
 <body>
@@ -341,300 +369,375 @@
 
         <div class="tab-content">
 
-            <!-- ── PROFIL ── -->
+            <!-- ── PROFIL — Wizard 4 étapes ── -->
             <div class="tab-pane fade show active" id="tab-profil" role="tabpanel">
 
-                <!-- ── 1. ANCRAGE — Naissance (SALT) ── -->
-                <div class="border border-secondary rounded p-3 mb-3 atom-a">
-                    <div class="section-title">1. ⚓ Ancrage — Naissance <span style="font-size:.7rem;opacity:.6;font-weight:400">(ancre votre identité)</span></div>
-
-                    <!-- Bannière restauration UPH (visible si connecté + données sauvegardées) -->
-                    <div id="atom-a-restore-banner" style="display:none;margin-bottom:10px;
-                         padding:8px 12px;border-radius:8px;
-                         background:rgba(0,255,204,.07);border:1px solid rgba(0,255,204,.25)">
-                        <div style="display:flex;align-items:center;gap:8px">
-                            <span id="atom-a-restore-summary" style="flex:1;font-size:.78rem;color:rgba(255,255,255,.7)"></span>
-                            <button onclick="_doRestoreAtomA()" style="background:rgba(0,255,204,.15);
-                                border:1px solid rgba(0,255,204,.4);color:var(--primary);
-                                padding:3px 10px;border-radius:8px;cursor:pointer;
-                                font-size:.75rem;font-weight:600">↩ Restaurer</button>
-                            <button onclick="document.getElementById('atom-a-restore-banner').style.display='none'"
-                                style="background:none;border:none;color:rgba(255,255,255,.3);
-                                cursor:pointer;font-size:1.1rem;line-height:1">×</button>
-                        </div>
+                <!-- Indicateur d'étapes -->
+                <div class="wz-indicator" id="wz-indicator">
+                    <div class="wz-dot active" id="wz-dot-1" onclick="_wzGoTo(1)">
+                        <span class="wz-num">1</span>
+                        <span class="wz-lbl">Quand &amp; Où</span>
                     </div>
-
-                    <!-- Date segmentée : JJ / MM / AAAA -->
-                    <div class="date-seg-row mb-1">
-                        <div class="date-seg" style="width:52px">
-                            <label>Jour</label>
-                            <input type="number" id="birth-dd" min="1" max="31" placeholder="17"
-                                   oninput="_syncBirthDateFromSeg()">
-                        </div>
-                        <div class="date-seg-sep">/</div>
-                        <div class="date-seg" style="width:52px">
-                            <label>Mois</label>
-                            <input type="number" id="birth-mm" min="1" max="12" placeholder="04"
-                                   oninput="_syncBirthDateFromSeg()">
-                        </div>
-                        <div class="date-seg-sep">/</div>
-                        <div class="date-seg" style="flex:1">
-                            <label>Année</label>
-                            <input type="number" id="birth-yyyy" min="1920" max="2015" placeholder="1985"
-                                   oninput="_syncBirthDateFromSeg()">
-                        </div>
-                        <div class="date-seg-sep" style="padding-bottom:7px">·</div>
-                        <div class="date-seg" style="width:44px">
-                            <label>HH</label>
-                            <input type="number" id="birth-hh" min="0" max="23" placeholder="12"
-                                   oninput="_syncBirthDateFromSeg()">
-                        </div>
-                        <div class="date-seg-sep">:</div>
-                        <div class="date-seg" style="width:44px">
-                            <label>MM</label>
-                            <input type="number" id="birth-minseg" min="0" max="59" placeholder="00"
-                                   oninput="_syncBirthDateFromSeg()">
-                        </div>
+                    <div class="wz-connector"></div>
+                    <div class="wz-dot locked" id="wz-dot-2" onclick="_wzGoTo(2)">
+                        <span class="wz-num">2</span>
+                        <span class="wz-lbl">Incarnation</span>
                     </div>
-                    <div class="date-display" id="birth-date-display">— saisir la date de naissance —</div>
-                    <!-- Champs cachés compatibles avec le reste du code -->
-                    <input type="hidden" id="birth-date">
-                    <input type="hidden" id="birth-time">
-
-                    <div class="row g-2 mb-2 mt-2">
-                        <div class="col-6">
-                            <label class="form-label small text-secondary text-uppercase mb-1">Poids naissance (kg)</label>
-                            <input type="number" class="form-control form-control-sm" id="birth-weight"
-                                   placeholder="ex: 3.2" step="0.1" min="0.5" max="6"
-                                   oninput="calculateConception()" value="3.5">
-                        </div>
-                        <div class="col-6">
-                            <label class="form-label small text-secondary text-uppercase mb-1">Polarité</label>
-                            <select class="form-select form-select-sm" id="birth-polarity" oninput="calculateConception()">
-                                <option value="0">☀ Onde Φ (Homme)</option>
-                                <option value="1">🌙 Onde ♪ (Femme)</option>
-                            </select>
-                        </div>
+                    <div class="wz-connector"></div>
+                    <div class="wz-dot locked" id="wz-dot-3" onclick="_wzGoTo(3)">
+                        <span class="wz-num">3</span>
+                        <span class="wz-lbl">Singularité</span>
                     </div>
-                    <!-- Recherche ville de naissance -->
-                    <label class="form-label small text-secondary text-uppercase mb-1 mt-1">📍 Lieu de naissance</label>
-                    <div class="input-group input-group-sm mb-2">
-                        <input type="text" class="form-control" id="city-search"
-                               placeholder="Ville de naissance (ex: Paris, Fort-de-France…)"
-                               onkeydown="if(event.key==='Enter'){searchCity();event.preventDefault()}">
-                        <button class="btn btn-outline-secondary" type="button" onclick="searchCity()">🔍</button>
-                    </div>
-                    <div class="small mb-2" id="city-result" style="min-height:1rem;color:rgba(255,255,255,.45)"></div>
-                    <div id="birth-map"></div>
-                    <div class="d-flex align-items-center justify-content-between mt-2">
-                        <span class="small text-secondary" id="birth-location-label">Cliquez sur la carte ou cherchez une ville</span>
-                        <span class="small font-monospace fw-bold" id="birth-lon-display" style="color:var(--primary)"></span>
-                    </div>
-                    <!-- UTC auto-dérivé + adresse hexagonale a4l: -->
-                    <div class="mt-2 p-2 rounded" style="background:rgba(0,255,204,.06);font-size:.75rem">
-                        <span id="birth-utc-display" style="color:rgba(255,255,255,.6)">UTC : —</span>
-                        &nbsp;·&nbsp;
-                        <span id="birth-a4l-display" style="color:var(--primary);font-family:monospace">a4l : —</span>
-                    </div>
-                    <!-- Ancrage SALT — coordonnées exactes à noter pour récupération SSSS -->
-                    <div id="salt-anchor-block" style="display:none;margin-top:8px;padding:8px 10px;
-                         border-radius:8px;background:rgba(255,153,0,.06);border:1px solid rgba(255,153,0,.25)">
-                        <div style="font-size:.65rem;color:rgba(255,180,0,.7);text-transform:uppercase;
-                                    letter-spacing:1px;margin-bottom:4px">⚓ Coordonnées de récupération — à noter précieusement</div>
-                        <div style="font-family:monospace;font-size:.82rem;color:#ffb347;font-weight:600"
-                             id="salt-anchor-coords">—</div>
-                        <div style="font-size:.6rem;color:rgba(255,255,255,.35);margin-top:3px">
-                            Précision 0.01° (~1 km) · Fuseau solaire UTC<span id="salt-anchor-utc"></span>
-                        </div>
-                        <div style="font-size:.6rem;color:rgba(255,150,0,.5);margin-top:2px">
-                            ⚠ Indispensable pour la récupération de votre clé si perte d'appareil
-                        </div>
+                    <div class="wz-connector"></div>
+                    <div class="wz-dot locked" id="wz-dot-4" onclick="_wzGoTo(4)">
+                        <span class="wz-num">4</span>
+                        <span class="wz-lbl">Générer</span>
                     </div>
                 </div>
 
-                <!-- ── 2. SINGULARITÉ — Conception (PEPPER) ── -->
-                <div class="border rounded p-3 mb-3 atom-b">
-                    <div class="section-title" style="color:var(--secondary)">2. 🌀 Singularité — Conception <span style="font-size:.7rem;opacity:.6;font-weight:400">(trace originelle)</span></div>
+                <!-- ══ ÉTAPE 1 : Quand & Où ══ -->
+                <div class="wz-pane" id="wz-pane-1">
+                    <div class="border border-secondary rounded p-3 mb-2 atom-a">
+                        <div class="section-title">⚓ Ancrage de Naissance <span style="font-size:.7rem;opacity:.6;font-weight:400">(date · heure · lieu)</span></div>
 
-                    <!-- État par défaut : Harmonique calculée -->
-                    <div class="harmonic-display" id="harmonic-display">
-                        <div style="font-size:.68rem;color:rgba(0,255,204,.55);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:4px">🌀 Singularité Harmonique — calculée</div>
-                        <div id="harmonic-date-label" style="font-size:.92rem;font-family:monospace;color:#e0e0e0;font-weight:600">—</div>
-                        <div id="harmonic-kin-label" style="font-size:.72rem;color:rgba(255,255,255,.4);margin-top:2px">KIN — · — · —</div>
-                        <div style="font-size:.7rem;color:rgba(0,255,204,.5);margin-top:5px">🔐 Récupérable depuis votre carnet de santé</div>
-                    </div>
+                        <!-- Bannière restauration UPH -->
+                        <div id="atom-a-restore-banner" style="display:none;margin-bottom:10px;
+                             padding:8px 12px;border-radius:8px;
+                             background:rgba(0,255,204,.07);border:1px solid rgba(0,255,204,.25)">
+                            <div style="display:flex;align-items:center;gap:8px">
+                                <span id="atom-a-restore-summary" style="flex:1;font-size:.78rem;color:rgba(255,255,255,.7)"></span>
+                                <button onclick="_doRestoreAtomA()" style="background:rgba(0,255,204,.15);
+                                    border:1px solid rgba(0,255,204,.4);color:var(--primary);
+                                    padding:3px 10px;border-radius:8px;cursor:pointer;
+                                    font-size:.75rem;font-weight:600">↩ Restaurer</button>
+                                <button onclick="document.getElementById('atom-a-restore-banner').style.display='none'"
+                                    style="background:none;border:none;color:rgba(255,255,255,.3);
+                                    cursor:pointer;font-size:1.1rem;line-height:1">×</button>
+                            </div>
+                        </div>
 
-                    <!-- Bouton toggle Anomalie -->
-                    <button class="btn-override mt-3" id="btn-override-pepper"
-                            onclick="_toggleAnomaliePanel()">
-                        ⚡ Je connais ma date exacte — Saisir ma Singularité Historique →
-                    </button>
-
-                    <!-- Panneau Anomalie (caché par défaut) -->
-                    <div class="anomalie-panel" id="anomalie-panel" style="display:none">
-                        <div style="font-size:.68rem;color:rgba(249,115,22,.7);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:8px">⚡ Singularité Historique — override</div>
-
-                        <!-- Date segmentée conception -->
+                        <!-- Date segmentée -->
                         <div class="date-seg-row mb-1">
                             <div class="date-seg" style="width:52px">
                                 <label>Jour</label>
-                                <input type="number" id="con-dd" min="1" max="31" placeholder="11"
-                                       oninput="_syncConDateFromSeg()">
+                                <input type="number" id="birth-dd" min="1" max="31" placeholder="17"
+                                       oninput="_syncBirthDateFromSeg()">
                             </div>
                             <div class="date-seg-sep">/</div>
                             <div class="date-seg" style="width:52px">
                                 <label>Mois</label>
-                                <input type="number" id="con-mm" min="1" max="12" placeholder="07"
-                                       oninput="_syncConDateFromSeg()">
+                                <input type="number" id="birth-mm" min="1" max="12" placeholder="04"
+                                       oninput="_syncBirthDateFromSeg()">
                             </div>
                             <div class="date-seg-sep">/</div>
                             <div class="date-seg" style="flex:1">
                                 <label>Année</label>
-                                <input type="number" id="con-yyyy" min="1919" max="2015" placeholder="1984"
-                                       oninput="_syncConDateFromSeg()">
+                                <input type="number" id="birth-yyyy" min="1920" max="2015" placeholder="1985"
+                                       oninput="_syncBirthDateFromSeg()">
                             </div>
-                            <div class="date-seg-sep">·</div>
+                            <div class="date-seg-sep" style="padding-bottom:7px">·</div>
                             <div class="date-seg" style="width:44px">
                                 <label>HH</label>
-                                <input type="number" id="con-hh" min="0" max="23" placeholder="08"
-                                       oninput="_syncConDateFromSeg()">
+                                <input type="number" id="birth-hh" min="0" max="23" placeholder="12"
+                                       oninput="_syncBirthDateFromSeg()">
                             </div>
                             <div class="date-seg-sep">:</div>
                             <div class="date-seg" style="width:44px">
                                 <label>MM</label>
-                                <input type="number" id="con-minseg" min="0" max="59" placeholder="30"
-                                       oninput="_syncConDateFromSeg()">
+                                <input type="number" id="birth-minseg" min="0" max="59" placeholder="00"
+                                       oninput="_syncBirthDateFromSeg()">
                             </div>
                         </div>
-                        <div class="date-display" id="con-date-display">— saisir la date de conception —</div>
+                        <div class="date-display" id="birth-date-display">— saisir la date de naissance —</div>
+                        <input type="hidden" id="birth-date">
+                        <input type="hidden" id="birth-time">
 
-                        <!-- Jauge Delta -->
-                        <div id="delta-block" style="margin-top:10px;display:none">
-                            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-                                <span style="font-size:.7rem;color:rgba(255,255,255,.4)">Δ Temporel</span>
-                                <span id="delta-label" style="font-size:.78rem;font-weight:700;color:#f59e0b">— jours</span>
-                            </div>
-                            <div class="delta-meter">
-                                <div class="delta-needle" id="delta-needle" style="left:0%"></div>
-                            </div>
-                            <div style="display:flex;justify-content:space-between;font-size:.6rem;color:rgba(255,255,255,.2);margin-top:2px">
-                                <span>0j 🌀</span><span>15j 🌊</span><span>43j ⚡</span><span>70j+ 💫</span>
-                            </div>
-                            <div id="pepper-class-label" style="text-align:center;font-size:.78rem;font-weight:700;margin-top:6px;color:#f59e0b">—</div>
-                        </div>
-
-                        <div style="font-size:.7rem;color:rgba(249,115,22,.6);margin-top:8px;line-height:1.5">
-                            ⚠ Cette date est votre clé nsec2. Ne la perdez pas.
-                        </div>
-
-                        <!-- Lieu de conception -->
-                        <label class="form-label small text-secondary text-uppercase mb-1 mt-3">📍 Lieu de conception</label>
+                        <!-- Lieu de naissance -->
+                        <label class="form-label small text-secondary text-uppercase mb-1 mt-2">📍 Lieu de naissance</label>
                         <div class="input-group input-group-sm mb-2">
-                            <input type="text" class="form-control" id="con-city-search"
-                                   placeholder="Ville (défaut = lieu de naissance)…"
-                                   onkeydown="if(event.key==='Enter'){searchConceptionCity();event.preventDefault()}">
-                            <button class="btn btn-outline-secondary" type="button" onclick="searchConceptionCity()">🔍</button>
+                            <input type="text" class="form-control" id="city-search"
+                                   placeholder="Ville de naissance (ex: Paris, Fort-de-France…)"
+                                   onkeydown="if(event.key==='Enter'){searchCity();event.preventDefault()}">
+                            <button class="btn btn-outline-secondary" type="button" onclick="searchCity()">🔍</button>
                         </div>
-                        <div class="small mb-2" id="con-city-result" style="min-height:.8rem;color:rgba(255,255,255,.45)"></div>
-                        <div id="conception-map" style="display:none"></div>
-                        <div class="d-flex align-items-center justify-content-between mt-1">
-                            <span class="small text-secondary" id="con-location-label">Identique au lieu de naissance</span>
-                            <span class="small font-monospace fw-bold" id="con-lon-display" style="color:var(--secondary)"></span>
+                        <div class="small mb-2" id="city-result" style="min-height:1rem;color:rgba(255,255,255,.45)"></div>
+                        <div id="birth-map"></div>
+                        <div class="d-flex align-items-center justify-content-between mt-2">
+                            <span class="small text-secondary" id="birth-location-label">Cliquez sur la carte ou cherchez une ville</span>
+                            <span class="small font-monospace fw-bold" id="birth-lon-display" style="color:var(--primary)"></span>
                         </div>
-                        <div class="mt-2 p-2 rounded" style="background:rgba(249,115,22,.06);font-size:.72rem">
-                            <span id="con-utc-display" style="color:rgba(255,255,255,.55)">UTC : —</span>
+                        <div class="mt-2 p-2 rounded" style="background:rgba(0,255,204,.06);font-size:.75rem">
+                            <span id="birth-utc-display" style="color:rgba(255,255,255,.6)">UTC : —</span>
                             &nbsp;·&nbsp;
-                            <span id="con-a4l-display" style="color:var(--secondary);font-family:monospace">a4l : —</span>
+                            <span id="birth-a4l-display" style="color:var(--primary);font-family:monospace">a4l : —</span>
+                        </div>
+                        <div id="salt-anchor-block" style="display:none;margin-top:8px;padding:8px 10px;
+                             border-radius:8px;background:rgba(255,153,0,.06);border:1px solid rgba(255,153,0,.25)">
+                            <div style="font-size:.65rem;color:rgba(255,180,0,.7);text-transform:uppercase;
+                                        letter-spacing:1px;margin-bottom:4px">⚓ Coordonnées de récupération — à noter précieusement</div>
+                            <div style="font-family:monospace;font-size:.82rem;color:#ffb347;font-weight:600"
+                                 id="salt-anchor-coords">—</div>
+                            <div style="font-size:.6rem;color:rgba(255,255,255,.35);margin-top:3px">
+                                Précision 0.01° (~1 km) · Fuseau solaire UTC<span id="salt-anchor-utc"></span>
+                            </div>
+                            <div style="font-size:.6rem;color:rgba(255,150,0,.5);margin-top:2px">
+                                ⚠ Indispensable pour la récupération de votre clé si perte d'appareil
+                            </div>
                         </div>
                     </div>
-
-                    <!-- Badge PEPPER mode (toujours visible) -->
-                    <div id="pepper-badge" class="mt-2 p-2 rounded text-center"
-                         style="background:rgba(0,255,204,.04);border:1px solid rgba(0,255,204,.2);font-size:.72rem">
-                        <span style="color:#00ffcc;font-size:.72rem">🌀 Singularité Harmonique</span>
+                    <div class="wz-nav mt-2">
+                        <button class="wz-btn-next w-100" onclick="_wzNext()">Le Vaisseau →</button>
                     </div>
-
-                    <!-- Champs cachés compatibles avec le reste du code -->
-                    <input type="hidden" id="conception-date">
-                    <input type="hidden" id="conception-time">
-                    <input type="hidden" id="con-lat" value="">
-                    <input type="hidden" id="con-lon" value="">
                 </div>
 
-                <div id="kin-profil-content"></div>
+                <!-- ══ ÉTAPE 2 : Incarnation — Le Vaisseau ══ -->
+                <div class="wz-pane" id="wz-pane-2" style="display:none">
+                    <div class="border border-secondary rounded p-3 mb-2 atom-a">
+                        <div class="section-title">🧬 Le Vaisseau <span style="font-size:.7rem;opacity:.6;font-weight:400">(dimensions physiques · entropie clé)</span></div>
 
-                <!-- ── REJOINDRE LE RÉSEAU (MULTIPASS + atom4love) ── -->
-                <div class="border rounded p-3 mt-3"
-                     style="border-color:rgba(0,255,204,.28)!important;background:rgba(0,255,204,.03)">
-                    <div class="section-title mb-1" style="color:#00ffcc">⚛ Rejoindre le réseau</div>
-                    <p class="small text-secondary mb-2" style="font-size:.75rem">
-                        Publiez votre <strong>signature vibratoire</strong> sur le réseau décentralisé
-                        et optionnellement créez votre identité coopérative.
-                    </p>
+                        <!-- Données de naissance -->
+                        <div class="small text-uppercase mb-2" style="font-size:.62rem;letter-spacing:1px;color:rgba(0,255,204,.5)">▸ Données de naissance</div>
+                        <div class="row g-2 mb-3">
+                            <div class="col-4">
+                                <label class="form-label small text-secondary text-uppercase mb-1" style="font-size:.65rem">Poids (kg)</label>
+                                <input type="number" class="form-control form-control-sm" id="birth-weight"
+                                       placeholder="3.2" step="0.1" min="0.5" max="6"
+                                       oninput="calculateConception()" value="3.5">
+                                <div class="form-text" style="font-size:.6rem;color:rgba(255,255,255,.3)">0.5–6 kg</div>
+                            </div>
+                            <div class="col-4">
+                                <label class="form-label small text-secondary text-uppercase mb-1" style="font-size:.65rem">Taille (cm)</label>
+                                <input type="number" class="form-control form-control-sm" id="birth-height"
+                                       placeholder="50" step="1" min="30" max="65"
+                                       oninput="calculateConception()" value="50">
+                                <div class="form-text" style="font-size:.6rem;color:rgba(255,255,255,.3)">30–65 cm</div>
+                            </div>
+                            <div class="col-4">
+                                <label class="form-label small text-secondary text-uppercase mb-1" style="font-size:.65rem">Polarité</label>
+                                <select class="form-select form-select-sm" id="birth-polarity" oninput="calculateConception();_onBodyDimsChanged()">
+                                    <option value="0">☀ Φ (♂)</option>
+                                    <option value="1">🌙 ♪ (♀)</option>
+                                </select>
+                            </div>
+                        </div>
 
-                    <!-- Email -->
-                    <div class="mb-2">
-                        <label class="form-label small text-secondary text-uppercase mb-1">📧 Email</label>
-                        <input type="email" class="form-control form-control-sm" id="multipass-email"
-                               placeholder="votre@email.com" autocomplete="email">
-                        <div id="multipass-email-hint" class="mt-1"></div>
-                    </div>
-                    <div id="multipass-preview" class="small mb-2"
-                         style="line-height:1.9;color:rgba(255,255,255,.55);min-height:1.2rem"></div>
+                        <!-- Dimensions actuelles -->
+                        <div class="small text-uppercase mb-2" style="font-size:.62rem;letter-spacing:1px;color:rgba(0,255,204,.5)">▸ Dimensions actuelles <span style="font-size:.58rem;opacity:.6;text-transform:none;letter-spacing:0">— module l'onde &amp; l'audio</span></div>
+                        <div class="row g-2 mb-2">
+                            <div class="col-6">
+                                <label class="form-label small text-secondary text-uppercase mb-1" style="font-size:.65rem">Taille (cm)</label>
+                                <input type="number" class="form-control form-control-sm" id="current-height"
+                                       placeholder="170" step="1" min="100" max="220"
+                                       oninput="_onBodyDimsChanged()" value="170">
+                                <div class="form-text" style="font-size:.6rem;color:rgba(255,255,255,.3)">100–220 cm</div>
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label small text-secondary text-uppercase mb-1" style="font-size:.65rem">Poids (kg)</label>
+                                <input type="number" class="form-control form-control-sm" id="current-weight"
+                                       placeholder="70" step="0.5" min="30" max="200"
+                                       oninput="_onBodyDimsChanged()" value="70">
+                                <div class="form-text" style="font-size:.6rem;color:rgba(255,255,255,.3)">30–200 kg</div>
+                            </div>
+                        </div>
 
-                    <!-- Bloc PASS — affiché uniquement sur 409 MULTIPASS_EXISTS -->
-                    <div id="multipass-pass-block" style="display:none;margin-bottom:8px">
-                        <label class="form-label small text-secondary text-uppercase mb-1">🔑 Code PASS reçu par email</label>
-                        <input type="text" class="form-control form-control-sm font-monospace"
-                               id="multipass-pass-input" placeholder="XXXX" autocomplete="off" maxlength="20">
-                        <div class="small mt-1" style="color:rgba(255,200,80,.7)">
-                            Ce MULTIPASS existe déjà. Saisissez le code reçu lors de la création initiale.
+                        <!-- Indicateur ωbio live -->
+                        <div id="omega-bio-display" class="mt-2 p-2 rounded"
+                             style="background:rgba(0,255,204,.05);border:1px solid rgba(0,255,204,.12);font-size:.72rem">
+                            <span style="color:rgba(0,255,204,.5)">ω<sub>bio</sub> : </span>
+                            <span id="omega-bio-val" style="color:#00ffcc;font-family:monospace;font-weight:700">—</span>
+                            <span style="color:rgba(255,255,255,.35)"> Hz &nbsp;·&nbsp; Eau structurée : </span>
+                            <span id="water-kg-val" style="color:rgba(0,255,204,.7);font-family:monospace">—</span>
+                            <span style="color:rgba(255,255,255,.35)"> kg</span>
                         </div>
                     </div>
-
-                    <!-- Options -->
-                    <div class="mb-2 p-2 rounded"
-                         style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08)">
-                        <div class="form-check mb-2">
-                            <input class="form-check-input" type="checkbox" id="chk-constellation" checked>
-                            <label class="form-check-label small" for="chk-constellation">
-                                <span style="color:#00ffcc">📡 Diffuser sur la Constellation</span>
-                                <span class="text-secondary" style="font-size:.7rem"> — ouvert à tous · enrichit la base</span>
-                            </label>
-                        </div>
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" id="chk-multipass" disabled
-                                   title="Nécessite une contribution OpenCollective">
-                            <label class="form-check-label small" for="chk-multipass">
-                                <span style="color:rgba(245,158,11,.65)">✨ Créer mon MULTIPASS</span>
-                                <span class="text-secondary" style="font-size:.7rem"> — identité coopérative · nécessite OpenCollective</span>
-                            </label>
-                        </div>
+                    <div class="wz-nav mt-2">
+                        <button class="wz-btn-prev" onclick="_wzPrev()">← Quand &amp; Où</button>
+                        <button class="wz-btn-next" onclick="_wzNext()">Singularité →</button>
                     </div>
+                </div>
 
-                    <!-- Vérification OC — débloque le MULTIPASS -->
-                    <div id="oc-verify-block" class="mb-2">
-                        <button class="btn btn-sm w-100" id="btn-oc-verify"
-                                onclick="verifyOcMembership()"
-                                style="background:rgba(245,158,11,.06);border:1px solid rgba(245,158,11,.25);
-                                       color:rgba(245,158,11,.7);font-size:.75rem">
-                            🔍 Vérifier mon inscription OpenCollective → débloque le MULTIPASS
+                <!-- ══ ÉTAPE 3 : Singularité — Conception ══ -->
+                <div class="wz-pane" id="wz-pane-3" style="display:none">
+                    <div class="border rounded p-3 mb-2 atom-b">
+                        <div class="section-title" style="color:var(--secondary)">🌀 Singularité — Conception <span style="font-size:.7rem;opacity:.6;font-weight:400">(trace originelle)</span></div>
+
+                        <div class="harmonic-display" id="harmonic-display">
+                            <div style="font-size:.68rem;color:rgba(0,255,204,.55);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:4px">🌀 Singularité Harmonique — calculée</div>
+                            <div id="harmonic-date-label" style="font-size:.92rem;font-family:monospace;color:#e0e0e0;font-weight:600">—</div>
+                            <div id="harmonic-kin-label" style="font-size:.72rem;color:rgba(255,255,255,.4);margin-top:2px">KIN — · — · —</div>
+                            <div style="font-size:.7rem;color:rgba(0,255,204,.5);margin-top:5px">🔐 Récupérable depuis votre carnet de santé</div>
+                        </div>
+
+                        <button class="btn-override mt-3" id="btn-override-pepper" onclick="_toggleAnomaliePanel()">
+                            ⚡ Je connais ma date exacte — Saisir ma Singularité Historique →
                         </button>
-                        <div id="oc-status" class="small mt-1" style="min-height:1rem;font-size:.73rem"></div>
+
+                        <div class="anomalie-panel" id="anomalie-panel" style="display:none">
+                            <div style="font-size:.68rem;color:rgba(249,115,22,.7);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:8px">⚡ Singularité Historique — override</div>
+                            <div class="date-seg-row mb-1">
+                                <div class="date-seg" style="width:52px">
+                                    <label>Jour</label>
+                                    <input type="number" id="con-dd" min="1" max="31" placeholder="11"
+                                           oninput="_syncConDateFromSeg()">
+                                </div>
+                                <div class="date-seg-sep">/</div>
+                                <div class="date-seg" style="width:52px">
+                                    <label>Mois</label>
+                                    <input type="number" id="con-mm" min="1" max="12" placeholder="07"
+                                           oninput="_syncConDateFromSeg()">
+                                </div>
+                                <div class="date-seg-sep">/</div>
+                                <div class="date-seg" style="flex:1">
+                                    <label>Année</label>
+                                    <input type="number" id="con-yyyy" min="1919" max="2015" placeholder="1984"
+                                           oninput="_syncConDateFromSeg()">
+                                </div>
+                                <div class="date-seg-sep">·</div>
+                                <div class="date-seg" style="width:44px">
+                                    <label>HH</label>
+                                    <input type="number" id="con-hh" min="0" max="23" placeholder="08"
+                                           oninput="_syncConDateFromSeg()">
+                                </div>
+                                <div class="date-seg-sep">:</div>
+                                <div class="date-seg" style="width:44px">
+                                    <label>MM</label>
+                                    <input type="number" id="con-minseg" min="0" max="59" placeholder="30"
+                                           oninput="_syncConDateFromSeg()">
+                                </div>
+                            </div>
+                            <div class="date-display" id="con-date-display">— saisir la date de conception —</div>
+
+                            <div id="delta-block" style="margin-top:10px;display:none">
+                                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+                                    <span style="font-size:.7rem;color:rgba(255,255,255,.4)">Δ Temporel</span>
+                                    <span id="delta-label" style="font-size:.78rem;font-weight:700;color:#f59e0b">— jours</span>
+                                </div>
+                                <div class="delta-meter">
+                                    <div class="delta-needle" id="delta-needle" style="left:0%"></div>
+                                </div>
+                                <div style="display:flex;justify-content:space-between;font-size:.6rem;color:rgba(255,255,255,.2);margin-top:2px">
+                                    <span>0j 🌀</span><span>15j 🌊</span><span>43j ⚡</span><span>70j+ 💫</span>
+                                </div>
+                                <div id="pepper-class-label" style="text-align:center;font-size:.78rem;font-weight:700;margin-top:6px;color:#f59e0b">—</div>
+                            </div>
+
+                            <div style="font-size:.7rem;color:rgba(249,115,22,.6);margin-top:8px;line-height:1.5">
+                                ⚠ Cette date est votre clé nsec2. Ne la perdez pas.
+                            </div>
+
+                            <label class="form-label small text-secondary text-uppercase mb-1 mt-3">📍 Lieu de conception</label>
+                            <div class="input-group input-group-sm mb-2">
+                                <input type="text" class="form-control" id="con-city-search"
+                                       placeholder="Ville (défaut = lieu de naissance)…"
+                                       onkeydown="if(event.key==='Enter'){searchConceptionCity();event.preventDefault()}">
+                                <button class="btn btn-outline-secondary" type="button" onclick="searchConceptionCity()">🔍</button>
+                            </div>
+                            <div class="small mb-2" id="con-city-result" style="min-height:.8rem;color:rgba(255,255,255,.45)"></div>
+                            <div id="conception-map" style="display:none"></div>
+                            <div class="d-flex align-items-center justify-content-between mt-1">
+                                <span class="small text-secondary" id="con-location-label">Identique au lieu de naissance</span>
+                                <span class="small font-monospace fw-bold" id="con-lon-display" style="color:var(--secondary)"></span>
+                            </div>
+                            <div class="mt-2 p-2 rounded" style="background:rgba(249,115,22,.06);font-size:.72rem">
+                                <span id="con-utc-display" style="color:rgba(255,255,255,.55)">UTC : —</span>
+                                &nbsp;·&nbsp;
+                                <span id="con-a4l-display" style="color:var(--secondary);font-family:monospace">a4l : —</span>
+                            </div>
+                        </div>
+
+                        <div id="pepper-badge" class="mt-2 p-2 rounded text-center"
+                             style="background:rgba(0,255,204,.04);border:1px solid rgba(0,255,204,.2);font-size:.72rem">
+                            <span style="color:#00ffcc;font-size:.72rem">🌀 Singularité Harmonique</span>
+                        </div>
+
+                        <input type="hidden" id="conception-date">
+                        <input type="hidden" id="conception-time">
+                        <input type="hidden" id="con-lat" value="">
+                        <input type="hidden" id="con-lon" value="">
                     </div>
 
-                    <div id="cert-status" class="small mb-1"
-                         style="color:rgba(255,255,255,.35);min-height:1.1rem"></div>
-                    <div id="cert-nostr-hint" class="small mb-2"
-                         style="color:rgba(255,255,255,.3)">Détection clé de signature…</div>
-                    <button class="btn btn-sm w-100 fw-bold btn-cine" id="btn-publish-cert"
-                            onclick="publishIncarnationCert()"
-                            style="background:rgba(0,255,204,.12);border:1px solid rgba(0,255,204,.32);color:#00ffcc">
-                        ⚡ Rejoindre le réseau
-                    </button>
-                    <div id="multipass-result" class="mt-2" style="display:none"></div>
-                    <div class="text-center mt-1" style="font-size:.65rem;color:rgba(255,255,255,.25)">
-                        Requiert une extension de signature numérique (atom4love-ext, nos2x, nostr connect, …)
+                    <div id="kin-profil-content" class="mb-2"></div>
+
+                    <div class="wz-nav mt-2">
+                        <button class="wz-btn-prev" onclick="_wzPrev()">← Incarnation</button>
+                        <button class="wz-btn-next" onclick="_wzNext()">Générer →</button>
+                    </div>
+                </div>
+
+                <!-- ══ ÉTAPE 4 : Générer — Rejoindre le réseau ══ -->
+                <div class="wz-pane" id="wz-pane-4" style="display:none">
+                    <div class="border rounded p-3 mb-2"
+                         style="border-color:rgba(0,255,204,.28)!important;background:rgba(0,255,204,.03)">
+                        <div class="section-title mb-1" style="color:#00ffcc">⚛ Rejoindre le réseau</div>
+                        <p class="small text-secondary mb-2" style="font-size:.75rem">
+                            Publiez votre <strong>signature vibratoire</strong> sur le réseau décentralisé
+                            et optionnellement créez votre identité coopérative.
+                        </p>
+
+                        <div id="multipass-preview" class="small mb-2"
+                             style="line-height:1.9;color:rgba(255,255,255,.55);min-height:1.2rem"></div>
+
+                        <div class="mb-2">
+                            <label class="form-label small text-secondary text-uppercase mb-1">📧 Email</label>
+                            <input type="email" class="form-control form-control-sm" id="multipass-email"
+                                   placeholder="votre@email.com" autocomplete="email">
+                            <div id="multipass-email-hint" class="mt-1"></div>
+                        </div>
+
+                        <div id="multipass-pass-block" style="display:none;margin-bottom:8px">
+                            <label class="form-label small text-secondary text-uppercase mb-1">🔑 Code PASS reçu par email</label>
+                            <input type="text" class="form-control form-control-sm font-monospace"
+                                   id="multipass-pass-input" placeholder="XXXX" autocomplete="off" maxlength="20">
+                            <div class="small mt-1" style="color:rgba(255,200,80,.7)">
+                                Ce MULTIPASS existe déjà. Saisissez le code reçu lors de la création initiale.
+                            </div>
+                        </div>
+
+                        <div class="mb-2 p-2 rounded"
+                             style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08)">
+                            <div class="form-check mb-2">
+                                <input class="form-check-input" type="checkbox" id="chk-constellation" checked>
+                                <label class="form-check-label small" for="chk-constellation">
+                                    <span style="color:#00ffcc">📡 Diffuser sur la Constellation</span>
+                                    <span class="text-secondary" style="font-size:.7rem"> — ouvert à tous · enrichit la base</span>
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="chk-multipass" disabled
+                                       title="Nécessite une contribution OpenCollective">
+                                <label class="form-check-label small" for="chk-multipass">
+                                    <span style="color:rgba(245,158,11,.65)">✨ Créer mon MULTIPASS</span>
+                                    <span class="text-secondary" style="font-size:.7rem"> — identité coopérative · nécessite OpenCollective</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div id="oc-verify-block" class="mb-2">
+                            <button class="btn btn-sm w-100" id="btn-oc-verify"
+                                    onclick="verifyOcMembership()"
+                                    style="background:rgba(245,158,11,.06);border:1px solid rgba(245,158,11,.25);
+                                           color:rgba(245,158,11,.7);font-size:.75rem">
+                                🔍 Vérifier mon inscription OpenCollective → débloque le MULTIPASS
+                            </button>
+                            <div id="oc-status" class="small mt-1" style="min-height:1rem;font-size:.73rem"></div>
+                        </div>
+
+                        <div id="cert-status" class="small mb-1"
+                             style="color:rgba(255,255,255,.35);min-height:1.1rem"></div>
+                        <div id="cert-nostr-hint" class="small mb-2"
+                             style="color:rgba(255,255,255,.3)">Détection clé de signature…</div>
+                        <button class="btn btn-sm w-100 fw-bold btn-cine" id="btn-publish-cert"
+                                onclick="publishIncarnationCert()"
+                                style="background:rgba(0,255,204,.12);border:1px solid rgba(0,255,204,.32);color:#00ffcc">
+                            ⚡ Rejoindre le réseau
+                        </button>
+                        <div id="multipass-result" class="mt-2" style="display:none"></div>
+                        <div class="text-center mt-1" style="font-size:.65rem;color:rgba(255,255,255,.25)">
+                            Requiert une extension de signature numérique (atom4love-ext, nos2x, nostr connect, …)
+                        </div>
+                    </div>
+                    <div class="wz-nav mt-2">
+                        <button class="wz-btn-prev w-100" onclick="_wzPrev()">← Singularité</button>
                     </div>
                 </div>
 
@@ -1081,8 +1184,13 @@ window.calculateConception = function() {
         : null;
     renderKinProfil();
     updateMultipassPreview();
-    // Activation progressive du bloc Conception
-    document.querySelector('#tab-profil .atom-b')?.classList.add('is-active');
+    // Navigation wizard : débloquer les étapes suivantes dès que la naissance est renseignée
+    if (typeof _wzGoTo === 'function') {
+        ['wz-dot-2','wz-dot-3','wz-dot-4'].forEach(id => {
+            const d = document.getElementById(id);
+            if (d) d.classList.remove('locked');
+        });
+    }
     window.calculateMatch();
 };
 
@@ -1613,12 +1721,10 @@ window.calculateMatch = function() {
 
     // Orchestre Quantique — superposition A + B avec battements selon cohérence
     if (window.AudioOrchestra && AudioOrchestra.enabled) {
-        const wEl  = document.getElementById('birth-weight');
         const pEl  = document.getElementById('birth-polarity');
-        const w    = wEl ? parseFloat(wEl.value) || 3.5 : 3.5;
         const polA = pEl ? parseInt(pEl.value) : 0;
-        // ωbio des deux atomes (A depuis profil, B estimé depuis date uniquement)
-        const omA  = (typeof Phi2X !== 'undefined') ? Phi2X.computeOmegaBio(170, w, polA) : 10;
+        // ωbio depuis dimensions adultes (taille/poids actuels)
+        const omA  = (typeof Phi2X !== 'undefined') ? Phi2X.computeOmegaBio(_getAdultHeight(), _getAdultWeight(), polA) : 10;
         const omB  = omA * (1 + (deltaPhi % 1.0) * 0.2); // variation relative Δφ
         AudioOrchestra.playMatch(omA, polA, omB, polA, globalCoherenceScore);
     }
@@ -1761,12 +1867,10 @@ function renderKinProfil() {
 
     // Orchestre quantique — met à jour le son de profil si activé
     if (window.AudioOrchestra && AudioOrchestra.enabled && _cachedDoubleBang) {
-        const wEl  = document.getElementById('birth-weight');
         const pEl  = document.getElementById('birth-polarity');
-        const w    = wEl  ? parseFloat(wEl.value)  || 3.5 : 3.5;
-        const pol  = pEl  ? parseInt(pEl.value)          : 0;
+        const pol  = pEl  ? parseInt(pEl.value) : 0;
         const tone = kB ? kB.tone : 1;
-        const omegaBio = (typeof Phi2X !== 'undefined') ? Phi2X.computeOmegaBio(170, w, pol) : 10;
+        const omegaBio = (typeof Phi2X !== 'undefined') ? Phi2X.computeOmegaBio(_getAdultHeight(), _getAdultWeight(), pol) : 10;
         AudioOrchestra.playProfile(omegaBio, pol, tone);
     }
 }
@@ -1838,6 +1942,68 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 });
+
+// ── WIZARD — Navigation 4 étapes dans tab-profil ───────────────────────────
+let _wzCurrentStep = 1;
+
+function _wzGoTo(step) {
+    if (step < 1 || step > 4) return;
+    for (let i = 1; i <= 4; i++) {
+        const pane = document.getElementById('wz-pane-' + i);
+        if (pane) pane.style.display = i === step ? '' : 'none';
+    }
+    for (let i = 1; i <= 4; i++) {
+        const dot = document.getElementById('wz-dot-' + i);
+        if (!dot) continue;
+        dot.classList.remove('active','done','locked');
+        if (i === step)    dot.classList.add('active');
+        else if (i < step) dot.classList.add('done');
+        else               dot.classList.add('locked');
+    }
+    _wzCurrentStep = step;
+    if (step === 3 && document.getElementById('birth-date').value) {
+        calculateConception && calculateConception();
+    }
+    if (step === 4) { updateMultipassPreview && updateMultipassPreview(); }
+    // Met à jour l'indicateur ωbio à l'entrée en étape 2
+    if (step === 2) { typeof _onBodyDimsChanged === 'function' && _onBodyDimsChanged(); }
+    const body = document.querySelector('#atomic-panel .offcanvas-body');
+    if (body) body.scrollTop = 0;
+}
+
+function _wzNext() { _wzGoTo(_wzCurrentStep + 1); }
+function _wzPrev() { _wzGoTo(_wzCurrentStep - 1); }
+
+// Lecture des dimensions adultes actuelles (fallbacks si champs non encore saisis)
+function _getAdultHeight() {
+    const el = document.getElementById('current-height');
+    return el ? (parseFloat(el.value) || 170) : 170;
+}
+function _getAdultWeight() {
+    const el = document.getElementById('current-weight');
+    return el ? (parseFloat(el.value) || 70) : 70;
+}
+
+function _onBodyDimsChanged() {
+    if (typeof Phi2X === 'undefined') return;
+    const h   = _getAdultHeight();
+    const w   = _getAdultWeight();
+    const pol = parseInt(document.getElementById('birth-polarity')?.value || 0);
+    const om  = Phi2X.computeOmegaBio(h, w, pol);
+    // Calcul de l'eau structurée selon Watson (même formule que phi2x.js)
+    const waterKg = pol === 0
+        ? Math.max(0.1074 * h + 0.3362 * w - 5.0, 1)
+        : Math.max(0.1069 * h + 0.2466 * w - 2.0, 1);
+    const omEl = document.getElementById('omega-bio-val');
+    const wkEl = document.getElementById('water-kg-val');
+    if (omEl) omEl.textContent = om.toFixed(2);
+    if (wkEl) wkEl.textContent = waterKg.toFixed(1);
+    // Mise à jour audio si actif
+    if (window.AudioOrchestra && AudioOrchestra.enabled && _cachedDoubleBang) {
+        const tone = _cachedKinA ? _cachedKinA.tone : 1;
+        AudioOrchestra.playProfile(om, pol, tone);
+    }
+}
 
 // ── Orchestre Quantique — contrôle UI ──────────────────────────────────────
 window._toggleAudio = function() {
@@ -1944,7 +2110,10 @@ function updateMultipassPreview() {
     const conA4l = document.getElementById('con-a4l-display')?.textContent || '—';
     const conLoc = document.getElementById('con-location-label')?.textContent || '';
     lines.push(`🌱 Lieu de conception : ${conLoc} → <span style="color:var(--secondary)">${conA4l}</span>`);
-    lines.push(`⚖ ${weight} kg  |  ${polLabel}`);
+    const birthHeightPrev = parseFloat(document.getElementById('birth-height')?.value) || 50;
+    const curHeightPrev   = parseFloat(document.getElementById('current-height')?.value) || 170;
+    const curWeightPrev   = parseFloat(document.getElementById('current-weight')?.value) || 70;
+    lines.push(`⚖ Naissance : ${weight} kg / ${birthHeightPrev} cm  ·  Actuel : ${curWeightPrev} kg / ${curHeightPrev} cm  |  ${polLabel}`);
     if (_cachedKinA) lines.push(`✨ Kin : ${_cachedKinA.kin} · ${_cachedKinA.colorFr || _cachedKinA.color} ${_cachedKinA.glyphFr || _cachedKinA.glyph}`);
     el.innerHTML = lines.join('<br>') || '<span class="fst-italic">Complétez le profil ci-dessus.</span>';
 }
@@ -1966,11 +2135,18 @@ function _unixToUtcStr(unix) {
     ].join('');
 }
 
-// PBKDF2 dans un Web Worker Blob — le thread principal reste fluide pendant les 600k itérations
+// ── Worker crypto unifié : PBKDF2 (600k SHA-256) + Scrypt (N=4096) ───────────
+// Tout le calcul lourd tourne dans un Worker Blob → thread UI toujours fluide.
+// scrypt.min.js est chargé via importScripts depuis la même origine IPFS.
+const _SCRYPT_N = 4096, _SCRYPT_R = 16, _SCRYPT_P = 1, _SCRYPT_DKLEN = 32;
+
 function _pbkdf2StretchKey(rawSalt, rawPepper) {
     return new Promise(function(resolve, reject) {
+        var scryptUrl = new URL('scrypt.min.js', window.location.href).href;
         var code = [
+            'importScripts(' + JSON.stringify(scryptUrl) + ');',
             'self.onmessage = async function(e) {',
+            '  var msg = e.data;',
             '  var enc = new TextEncoder();',
             '  var domSalt = enc.encode("uplanet-a4l-v1");',
             '  async function stretch(input) {',
@@ -1981,10 +2157,11 @@ function _pbkdf2StretchKey(rawSalt, rawPepper) {
             '      .replace(/\\+/g,"-").replace(/\\//g,"_").replace(/=+$/,"");',
             '  }',
             '  try {',
-            '    var s = await stretch(e.data.rawSalt);',
-            '    var p = await stretch(e.data.rawPepper);',
-            '    self.postMessage({ok:true, stretchedSalt:s, stretchedPepper:p});',
-            '  } catch(err) { self.postMessage({ok:false, error:err.message}); }',
+            '    var s = await stretch(msg.rawSalt);',
+            '    var p = await stretch(msg.rawPepper);',
+            '    var key = scrypt.syncScrypt(enc.encode(p), enc.encode(s), msg.N, msg.r, msg.p, msg.dkLen);',
+            '    self.postMessage({ok:true, stretchedSalt:s, stretchedPepper:p, scryptKey:Array.from(key)});',
+            '  } catch(err) { self.postMessage({ok:false, error:String(err.message||err)}); }',
             '};'
         ].join('\n');
         var blob = new Blob([code], { type: 'application/javascript' });
@@ -1992,48 +2169,26 @@ function _pbkdf2StretchKey(rawSalt, rawPepper) {
         var w    = new Worker(url);
         w.onmessage = function(e) {
             w.terminate(); URL.revokeObjectURL(url);
-            if (e.data.ok) resolve({ stretchedSalt: e.data.stretchedSalt, stretchedPepper: e.data.stretchedPepper });
-            else reject(new Error(e.data.error || 'PBKDF2 worker failed'));
+            if (e.data.ok) resolve({
+                stretchedSalt:   e.data.stretchedSalt,
+                stretchedPepper: e.data.stretchedPepper,
+                scryptKey:       new Uint8Array(e.data.scryptKey)
+            });
+            else reject(new Error(e.data.error || 'crypto worker failed'));
         };
-        w.onerror = function(e) { w.terminate(); URL.revokeObjectURL(url); reject(new Error(e.message)); };
-        w.postMessage({ rawSalt: rawSalt, rawPepper: rawPepper });
+        w.onerror = function(e) { w.terminate(); URL.revokeObjectURL(url); reject(new Error(e.message || 'crypto worker error')); };
+        w.postMessage({ rawSalt: rawSalt, rawPepper: rawPepper, N: _SCRYPT_N, r: _SCRYPT_R, p: _SCRYPT_P, dkLen: _SCRYPT_DKLEN });
     });
 }
 
-// ── Dérivation locale des clés NOSTR (scrypt → ed25519) ─────────────────────
-// Même paramètres que keygen -t nostr : N=4096 r=16 p=1 dkLen=32
-// Entrée : stretchedSalt/stretchedPepper (sorties PBKDF2)
-// Sortie : { npub, nsec } disponibles immédiatement, avant retour serveur
-const _SCRYPT_N = 4096, _SCRYPT_R = 16, _SCRYPT_P = 1, _SCRYPT_DKLEN = 32;
-
-function _scryptPromise(password, salt) {
-    return new Promise((resolve, reject) => {
-        if (typeof scrypt === 'undefined') { reject(new Error('scrypt.min.js absent')); return; }
-        const enc = new TextEncoder();
-        const pw  = enc.encode(password);
-        const sl  = enc.encode(salt);
-        try {
-            const res = scrypt.scrypt(pw, sl, _SCRYPT_N, _SCRYPT_R, _SCRYPT_P, _SCRYPT_DKLEN);
-            if (res instanceof Promise) res.then(k => resolve(new Uint8Array(k))).catch(reject);
-            else scrypt.scrypt(pw, sl, _SCRYPT_N, _SCRYPT_R, _SCRYPT_P, _SCRYPT_DKLEN,
-                    (e, k) => e ? reject(e) : resolve(new Uint8Array(k)));
-        } catch(e) {
-            try { scrypt(pw, sl, _SCRYPT_N, _SCRYPT_R, _SCRYPT_P, _SCRYPT_DKLEN,
-                (e2, k) => e2 ? reject(e2) : resolve(new Uint8Array(k))); }
-            catch(e3) { reject(e3); }
-        }
-    });
-}
-
-async function _deriveNostrKeysLocally(stretchedSalt, stretchedPepper) {
+// Finalise la dérivation NOSTR : SHA256(scryptKey) → secp256k1 — native crypto.subtle
+async function _deriveNostrKeysLocally(workerResult) {
     const NostrLib = window.NostrTools || window.Nostr;
-    if (!NostrLib || typeof scrypt === 'undefined') return null;
+    if (!NostrLib || !workerResult || !workerResult.scryptKey) return null;
     try {
-        // Étape 1 : scrypt(password=stretchedPepper, salt=stretchedSalt) N=4096 r=16 p=1 → 32 bytes (ed25519 seed)
-        const ed25519Seed = await _scryptPromise(stretchedPepper, stretchedSalt);
-        // Étape 2 : SHA256(ed25519Seed) → secp256k1 private key — IDENTIQUE à keygen :
+        // SHA256(scryptKey) → secp256k1 private key — IDENTIQUE à keygen :
         //   secp256k1_seed = hashlib.sha256(ed25519_seed).digest()
-        const sha256buf = await crypto.subtle.digest('SHA-256', ed25519Seed);
+        const sha256buf = await crypto.subtle.digest('SHA-256', workerResult.scryptKey);
         const privHex = Array.from(new Uint8Array(sha256buf))
             .map(b => b.toString(16).padStart(2, '0')).join('');
         const pubHex  = NostrLib.getPublicKey(privHex);
@@ -2126,8 +2281,12 @@ async function createMultipass() {
     const lonStr        = birthLon.toFixed(2);
     const conLatStr     = conLat !== null ? conLat.toFixed(2) : latStr;
     const conLonStr     = conLon.toFixed(2);
-    const saltRaw       = `${birthDtUtc}_${latStr}_${lonStr}_${polarity}_${weight.toFixed(1)}`;
-    const pepperRaw     = `${conDtUtc}_${conLatStr}_${conLonStr}_${weight.toFixed(1)}`;
+    const birthHeightEl = document.getElementById('birth-height');
+    const curHeightEl   = document.getElementById('current-height');
+    const birthHeight   = birthHeightEl ? (parseFloat(birthHeightEl.value) || 50) : 50;
+    const curHeight     = curHeightEl   ? (parseFloat(curHeightEl.value)   || 170) : 170;
+    const saltRaw       = `${birthDtUtc}_${latStr}_${lonStr}_${polarity}_${weight.toFixed(1)}_${birthHeight.toFixed(0)}_${curHeight.toFixed(0)}`;
+    const pepperRaw     = `${conDtUtc}_${conLatStr}_${conLonStr}_${weight.toFixed(1)}_${birthHeight.toFixed(0)}`;
 
     const _cpPhrases = [
         ['⚛', 'Alignement des coordonnées quantiques…'],
@@ -2142,14 +2301,13 @@ async function createMultipass() {
         if (resultEl) resultEl.innerHTML = _progressHTML(_ph[0] + ' ' + _ph[1], '600 000 itérations SHA-256');
         if (btn) btn.textContent = _ph[0] + ' ' + _ph[1];
     }, 900);
-    const { stretchedSalt, stretchedPepper } = await _pbkdf2StretchKey(saltRaw, pepperRaw)
+    const _workerResult = await _pbkdf2StretchKey(saltRaw, pepperRaw)
         .catch(function(e) { clearInterval(_cpTimer); throw e; });
     clearInterval(_cpTimer);
 
-    // ── Phase 2 : scrypt → ed25519 (local, instantané) ───────────────────────
+    // ── Phase 2 : SHA256(scryptKey) → secp256k1 via crypto.subtle (non-bloquant)
     if (btn) btn.textContent = '🔐 Identité cosmique…';
-    if (resultEl) resultEl.innerHTML = _progressHTML('🔐 Sécurisation de l\'identité cosmique…', 'scrypt N=4096 · dérivation locale');
-    const localKeys = await _deriveNostrKeysLocally(stretchedSalt, stretchedPepper);
+    const localKeys = await _deriveNostrKeysLocally(_workerResult);
 
     if (localKeys) {
         // Afficher le npub immédiatement — l'identité est connue AVANT le serveur
@@ -2164,11 +2322,16 @@ async function createMultipass() {
     }
 
     try {
+        const _bhSave  = parseFloat(document.getElementById('birth-height')?.value)   || 50;
+        const _chSave  = parseFloat(document.getElementById('current-height')?.value) || 170;
+        const _cwSave  = parseFloat(document.getElementById('current-weight')?.value) || 70;
         localStorage.setItem('atomic_birth_data', JSON.stringify({
             birth_datetime: bd + (bt ? 'T' + bt : 'T12:00'),
             conception_datetime: cd + (ct ? 'T' + ct : 'T00:00'),
             birth_place: cityClean, conception_place: conceptionPlace,
-            lat: birthLat, lon: birthLon, weight, polarity, utc_offset: utcOffset, ts: Date.now()
+            lat: birthLat, lon: birthLon, weight, polarity, utc_offset: utcOffset,
+            birth_height: _bhSave, current_height: _chSave, current_weight: _cwSave,
+            ts: Date.now()
         }));
     } catch(e) { if(window.DEBUG) console.warn('[atomic] birth data storage:', e); }
 
@@ -2181,8 +2344,11 @@ async function createMultipass() {
     if (cd)              fd.append('conception_datetime', cd + (ct ? 'T' + ct : 'T00:00'));
     if (cityClean)       fd.append('birth_place',        cityClean);
     if (conceptionPlace) fd.append('conception_place',   conceptionPlace);
-    if (weight !== 3.5)  fd.append('birth_weight',       weight.toFixed(1));
-    if (polEl2)          fd.append('polarity',           polarity);
+    if (weight !== 3.5)  fd.append('birth_weight',  weight.toFixed(1));
+    const _bhFd = document.getElementById('birth-height');
+    const _bhFdVal = _bhFd ? (parseFloat(_bhFd.value) || 50) : 50;
+    if (_bhFdVal !== 50)  fd.append('birth_height', _bhFdVal.toFixed(0));
+    if (polEl2)          fd.append('polarity',      polarity);
     fd.append('salt',            stretchedSalt);
     fd.append('pepper',          stretchedPepper);
     fd.append('utc_offset',      String(utcOffset));
@@ -2245,14 +2411,13 @@ let _cachedG1pub  = null;   // g1pub UPassport /g1nostr — utilisé dans publis
 
 function _getRecommendedWallet() {
     var ua = navigator.userAgent;
-    if (/Mobi|Android|iPhone|iPad/i.test(ua)) {
-        return { isMobile: true };
+    if (/Android/i.test(ua)) {
+        return { name: 'Amber', url: 'https://github.com/greenart7c3/Amber/releases', icon: '🟠' };
     }
     if (/Firefox/i.test(ua)) {
-        return { name: 'nos2x-fox', url: 'https://addons.mozilla.org/fr/firefox/addon/nos2x-fox/', icon: '🦊', isMobile: false };
+        return { name: 'nos2x-fox', url: 'https://addons.mozilla.org/fr/firefox/addon/nos2x-fox/', icon: '🦊' };
     }
-    // Chrome / Edge / Brave / default → nos2x (atom4love-ext à venir)
-    return { name: 'nos2x', url: 'https://chrome.google.com/webstore/detail/nos2x/kpgefcfmnafjgpblomihpgmejjdanjjp', icon: '🧩', isMobile: false };
+    return { name: 'nos2x', url: 'https://chromewebstore.google.com/detail/nos2x/kpgefcfmnafjgpblomihpgmejjdanjjp', icon: '🧩' };
 }
 
 window._atomicCopyNsec = function() {
@@ -2276,28 +2441,8 @@ window._atomicRevealNsec = function() {
     if (rbtn) rbtn.textContent = revealed ? '👁' : '🙈';
 };
 
-window._atomicSaveWithPin = async function() {
-    var privHex = _vaultPrivHex;
-    if (!privHex) return;
-    var pin = prompt('🔐 Créez un code PIN (4 caractères min.)\nIl vous sera demandé pour vous connecter sur cet appareil.');
-    if (!pin || pin.length < 4) { if (pin !== null) alert('PIN trop court (4 caractères minimum).'); return; }
-    var pin2 = prompt('🔐 Confirmez votre PIN :');
-    if (pin !== pin2) { alert('Les PIN ne correspondent pas.'); return; }
-    try {
-        var enc = new TextEncoder();
-        var salt = crypto.getRandomValues(new Uint8Array(16));
-        var iv   = crypto.getRandomValues(new Uint8Array(12));
-        var rawKey = await crypto.subtle.importKey('raw', enc.encode(pin), 'PBKDF2', false, ['deriveKey']);
-        var aesKey = await crypto.subtle.deriveKey(
-            { name: 'PBKDF2', salt: salt, iterations: 200000, hash: 'SHA-256' },
-            rawKey, { name: 'AES-GCM', length: 256 }, false, ['encrypt']);
-        var ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv: iv }, aesKey, enc.encode(privHex));
-        var b64 = function(ab) { return btoa(String.fromCharCode.apply(null, new Uint8Array(ab))); };
-        localStorage.setItem('a4l_vault_nsec', JSON.stringify({ ct: b64(ct), iv: b64(iv.buffer), salt: b64(salt.buffer) }));
-        var pbtn = document.getElementById('vault-pin-btn');
-        if (pbtn) { pbtn.textContent = '✅ Clé sécurisée sur cet appareil !'; pbtn.disabled = true; pbtn.style.background = 'rgba(0,255,100,.18)'; pbtn.style.borderColor = 'rgba(0,255,100,.4)'; }
-    } catch(e) { alert('Erreur chiffrement : ' + (e.message || e)); }
-};
+// _atomicSaveWithPin supprimé — la clé privée ne doit jamais être stockée localement.
+// Seul le plugin navigateur NIP-07 (nos2x, Amber, Alby) gère le stockage sécurisé.
 
 function _renderMultipassResult(data, el, localKeys) {
     if (!el) return;
@@ -2341,17 +2486,12 @@ function _renderMultipassResult(data, el, localKeys) {
     if (localKeys && localKeys.nsec) {
         _vaultPrivHex = localKeys.privHex;
         var _w = _getRecommendedWallet();
-        var _step2 = _w.isMobile
-            ? '<button id="vault-pin-btn" onclick="_atomicSaveWithPin()" '
-              + 'style="display:block;width:100%;background:rgba(0,255,100,.12);border:1px solid rgba(0,255,100,.35);'
-              + 'color:#00ff88;border-radius:8px;padding:9px;font-size:.8rem;cursor:pointer;margin-top:4px">'
-              + '📱 Sécuriser avec un code PIN sur cet appareil</button>'
-            : '<a href="' + _w.url + '" target="_blank" rel="noopener" '
+        var _step2 = '<a href="' + _w.url + '" target="_blank" rel="noopener" '
               + 'style="display:block;text-align:center;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.2);'
               + 'color:#fff;text-decoration:none;padding:9px;border-radius:8px;font-size:.83rem">'
               + _w.icon + ' Installer ' + _w.name + '</a>'
               + '<div style="font-size:.65rem;color:#aaa;text-align:center;margin-top:6px">'
-              + 'Ouvrez l\'extension, choisissez <em>"Importer une clé"</em> et collez votre ADN.</div>';
+              + 'Ouvrez l\'application, choisissez <em>"Importer une clé"</em> et collez votre ADN Cosmique.</div>';
         _vHtml = '<div style="background:rgba(120,80,255,.1);border:1px solid rgba(120,80,255,.35);'
             + 'border-radius:10px;padding:13px;margin-top:12px">'
             + '<div style="color:#b464ff;font-size:.88rem;font-weight:700;margin-bottom:8px">🔒 Sécurisez votre ADN Cosmique</div>'
@@ -2375,9 +2515,8 @@ function _renderMultipassResult(data, el, localKeys) {
             + '<div style="background:rgba(0,0,0,.4);padding:10px;border-radius:8px;margin-bottom:10px">'
             + '<div style="font-size:.7rem;color:#aaa;margin-bottom:6px">Étape 2 — Protégez votre identité</div>'
             + _step2
-            + (_w.isMobile ? '' :
-                '<div style="margin-top:8px;font-size:.65rem;color:rgba(255,255,255,.25);line-height:1.5">'
-                + '🔜 <em>atom4love-ext</em> — extension UPlanet native (bientôt disponible)</div>')
+            + '<div style="margin-top:8px;font-size:.65rem;color:rgba(255,255,255,.25);line-height:1.5">'
+            + '🔜 <em>atom4love-ext</em> — extension UPlanet native (bientôt disponible)</div>'
             + '</div>'
             + '<div style="background:rgba(0,255,204,.05);border:1px solid rgba(0,255,204,.15);border-radius:8px;padding:10px;margin-bottom:10px">'
             + '<div style="font-size:.72rem;font-weight:700;color:#00ffcc;margin-bottom:5px">🚀 Rejoindre l\'Astroport <span style="font-size:.6rem;font-weight:400;color:rgba(255,255,255,.3)">(facultatif)</span></div>'
@@ -3480,14 +3619,15 @@ async function publishIncarnationCert() {
 
     // Phase avec pentagon offset Goldberg (requires lat) — plus précis que computePhaseFromForm
     const personal_phase = Phi2X.computePersonalPhase(birthUnix, birthLat, birthLon);
-    // ω_bio depuis le poids de naissance (0.5–6 kg → ω ∈ 2–24, compatible plage 0.1–50)
-    const omega_bio = Phi2X.computeOmegaBio(170, weight, polarity);
+    // ω_bio depuis poids ET taille de naissance (Watson formula → ω ∈ 2–25, plage 0.1–50)
+    const birthHeightCert = parseFloat(document.getElementById('birth-height')?.value) || 50;
+    const omega_bio = Phi2X.computeOmegaBio(birthHeightCert, weight, polarity);
 
     if (personal_phase < 0 || personal_phase >= 7) {
         _certStatus('⚠ Erreur calcul phase (' + personal_phase.toFixed(4) + ').', '#ff8888'); return;
     }
     if (omega_bio <= 0.1 || omega_bio >= 50) {
-        _certStatus('⚠ ω_bio hors plage (' + omega_bio.toFixed(4) + ') — poids attendu 0.5–6 kg.', '#ff8888'); return;
+        _certStatus('⚠ ω_bio hors plage (' + omega_bio.toFixed(4) + ') — poids 0.5–6 kg / taille 30–65 cm attendus.', '#ff8888'); return;
     }
 
     // KIN naissance (toujours disponible depuis _cachedKinA) et conception si calculé
@@ -3715,6 +3855,12 @@ function _doRestoreAtomA() {
         if (typeof window._syncBirthDateFromSeg === 'function') window._syncBirthDateFromSeg();
         var wEl = document.getElementById('birth-weight');
         if (wEl && d.weight) wEl.value = d.weight;
+        var bhEl = document.getElementById('birth-height');
+        if (bhEl && d.birth_height) bhEl.value = d.birth_height;
+        var chEl = document.getElementById('current-height');
+        if (chEl && d.current_height) chEl.value = d.current_height;
+        var cwEl = document.getElementById('current-weight');
+        if (cwEl && d.current_weight) cwEl.value = d.current_weight;
         var pEl = document.getElementById('birth-polarity');
         if (pEl && d.polarity != null) pEl.value = d.polarity;
         if (d.lat != null && d.lon != null) {

@@ -54,7 +54,10 @@
 
     function pushLog(level, args) {
         try {
-            const buf = JSON.parse(sessionStorage.getItem(LOG_KEY) || '[]');
+            // Nested try for JSON.parse: reset silently if storage is corrupted
+            let buf;
+            try { buf = JSON.parse(sessionStorage.getItem(LOG_KEY) || '[]'); }
+            catch (_) { buf = []; }
             const msg = scrub(Array.from(args).map(a => {
                 if (a instanceof Error) return `${a.name}: ${a.message}\n${a.stack || ''}`;
                 try { return typeof a === 'object' ? JSON.stringify(a, (key, value) => typeof value === "bigint" ? value.toString() : value) : String(a); }
@@ -63,7 +66,7 @@
             buf.push({ t: new Date().toISOString().slice(11, 23), l: level, m: msg });
             if (buf.length > MAX_LOGS) buf.splice(0, buf.length - MAX_LOGS);
             sessionStorage.setItem(LOG_KEY, JSON.stringify(buf));
-        } catch (_) { if(window.DEBUG) console.warn('[FB log] sessionStorage write:', _); }
+        } catch (_) { if(window.DEBUG) _orig.warn('[FB log] sessionStorage write:', _); }
     }
 
     console.log   = function (...a) { pushLog('LOG',  a); _orig.log(...a);   };

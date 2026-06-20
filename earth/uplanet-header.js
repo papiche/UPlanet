@@ -239,7 +239,8 @@
             + '<div id="uph-nav-profile">'
             + '<span class="uph-pname" id="uph-np-name"></span>'
             + '<span class="uph-pbal" id="uph-np-bal"></span>'
-            + '<span class="uph-plink" id="uph-np-link" style="display:none">Voir ZenCard →</span>'
+            + '<span class="uph-plink" id="uph-np-link" style="display:none">⚡ Historique ẑen →</span>'
+            + '<span class="uph-plink" id="uph-np-zcard" style="display:none">💳 ZenCard →</span>'
             + '</div>'
             + links
             + '</div>'
@@ -630,9 +631,11 @@
                 var zenEl = document.getElementById('uph-zen');
                 if (zenEl && zenEl.style.display !== 'none') {
                     zenEl.classList.add('linked');
-                    zenEl.title = (zenEl.textContent || '') + ' · Historique ZenCard';
+                    zenEl.title = (zenEl.textContent || '') + ' · Historique ẑen';
                     zenEl.onclick = function() {
-                        location.href = 'zencard.html?email=' + encodeURIComponent(email);
+                        var params = 'email=' + encodeURIComponent(email);
+                        if (window._uphG1Pub) params += '&g1pub=' + encodeURIComponent(window._uphG1Pub);
+                        location.href = 'multipass.html?' + params;
                     };
                 }
             }
@@ -658,14 +661,16 @@
             var zen = d.zen !== undefined ? d.zen : (d.ZEN !== undefined ? d.ZEN : null);
             if (zen !== null) {
                 window._uphZenBal = zen;
-                el.textContent = '⚡ ' + parseFloat(zen).toFixed(1) + ' ẐEN';
+                el.textContent = '⚡ ' + parseFloat(zen).toFixed(1) + ' ẑen';
                 el.style.display = '';
-                // Lien ZenCard si email disponible
+                // Lien MULTIPASS si email et g1pub disponibles
                 if (window._uphEmail) {
                     el.classList.add('linked');
-                    el.title = 'Ẑ ' + parseFloat(zen).toFixed(1) + ' · Voir historique ZenCard';
+                    el.title = 'Ẑ ' + parseFloat(zen).toFixed(1) + ' ẑen · Historique transactions';
                     el.onclick = function() {
-                        location.href = 'zencard.html?email=' + encodeURIComponent(window._uphEmail);
+                        var params = 'email=' + encodeURIComponent(window._uphEmail);
+                        if (window._uphG1Pub) params += '&g1pub=' + encodeURIComponent(window._uphG1Pub);
+                        location.href = 'multipass.html?' + params;
                     };
                 }
                 _updateNavProfile();
@@ -681,18 +686,27 @@
     function _updateNavProfile() {
         var block = document.getElementById('uph-nav-profile');
         if (!block) return;
-        var nameEl = document.getElementById('uph-np-name');
-        var balEl  = document.getElementById('uph-np-bal');
-        var lnkEl  = document.getElementById('uph-np-link');
-        var email  = window._uphEmail || '';
-        var bal    = window._uphZenBal;
+        var nameEl  = document.getElementById('uph-np-name');
+        var balEl   = document.getElementById('uph-np-bal');
+        var lnkEl   = document.getElementById('uph-np-link');
+        var zcEl    = document.getElementById('uph-np-zcard');
+        var email   = window._uphEmail || '';
+        var bal     = window._uphZenBal;
         if (!email && bal === undefined) return;
         block.style.display = 'flex';
         if (nameEl && email) nameEl.textContent = email;
-        if (balEl  && bal !== undefined) balEl.textContent = '⚡ ' + parseFloat(bal).toFixed(1) + ' ẐEN';
+        if (balEl  && bal !== undefined) balEl.textContent = '⚡ ' + parseFloat(bal).toFixed(1) + ' ẑen';
         if (lnkEl  && email) {
             lnkEl.style.display = '';
-            lnkEl.onclick = function() { location.href = 'zencard.html?email=' + encodeURIComponent(email); };
+            lnkEl.onclick = function() {
+                var params = 'email=' + encodeURIComponent(email);
+                if (window._uphG1Pub) params += '&g1pub=' + encodeURIComponent(window._uphG1Pub);
+                location.href = 'multipass.html?' + params;
+            };
+        }
+        if (zcEl && email) {
+            zcEl.style.display = '';
+            zcEl.onclick = function() { location.href = 'zencard.html?email=' + encodeURIComponent(email); };
         }
     }
 

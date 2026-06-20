@@ -3351,6 +3351,68 @@ async function publishIncarnationCert() {
 
     try {
         const pubkey    = await window.nostr.getPublicKey();
+
+        // ── Détection de divergence d'identité ────────────────────────────────
+        // _vaultPrivHex = clé dérivée depuis la naissance (scrypt → keygen a4l)
+        // pubkey        = clé de l'extension NOSTR connectée (UPH / nos2x)
+        // Clé conforme  = les deux coïncident + Kind 0 avec tag ["i","g1pub:..."]
+        // Clé hybridée  = clé externe non liée à la chaîne keygen naissance
+        if (_vaultPrivHex) {
+            const birthPubHex = NostrLib.getPublicKey(_vaultPrivHex);
+            if (birthPubHex && birthPubHex !== pubkey) {
+                // Récupérer l'ancien cert publié sous la clé UPH (si existant)
+                if (btn) btn.textContent = '🔍 Vérification…';
+                _certStatus('Lecture de l\'ancien certificat UPH…');
+                let oldCertInfo = '';
+                try {
+                    const relay = (typeof window.getRelayUrl === 'function')
+                        ? window.getRelayUrl()
+                        : ('wss://relay.' + location.hostname.replace(/^(ipfs\.|u\.)/, ''));
+                    const ws = new WebSocket(relay);
+                    const oldEvs = await new Promise(res => {
+                        const evs = []; const sub = 'id-chk-' + Math.random().toString(36).slice(2,7);
+                        const t = setTimeout(() => { try { ws.close(); } catch(_) {} res(evs); }, 4000);
+                        ws.onopen    = () => ws.send(JSON.stringify(['REQ', sub,
+                            { kinds:[30078], '#d':['atom4love'], authors:[pubkey], limit:1 }]));
+                        ws.onmessage = e => {
+                            try {
+                                const m = JSON.parse(e.data);
+                                if (m[0]==='EVENT') evs.push(m[2]);
+                                else if (m[0]==='EOSE') { clearTimeout(t); ws.close(); res(evs); }
+                            } catch(_) {}
+                        };
+                        ws.onerror = ws.onclose = () => { clearTimeout(t); res(evs); };
+                    });
+                    if (oldEvs.length > 0) {
+                        const oc = JSON.parse(oldEvs[0].content || '{}');
+                        oldCertInfo = '\n\n— Ancien cert UPH (sera remplacé) —\n' +
+                            'φ=' + (oc.personal_phase||'?') + '  ω=' + (oc.omega_bio||'?') +
+                            (oc.a5l_amplitude != null ? '  Ψ=' + oc.a5l_amplitude : '') +
+                            '\npublié le ' + new Date(oldEvs[0].created_at*1000).toLocaleDateString('fr');
+                    } else {
+                        oldCertInfo = '\n\n(Aucun cert existant sous la clé UPH)';
+                    }
+                } catch(_) { oldCertInfo = '\n\n(Impossible de lire l\'ancien cert)'; }
+
+                const ok = confirm(
+                    '⚠ Identités différentes !\n\n' +
+                    'Clé connectée (UPH) : ' + pubkey.slice(0,16)       + '…  ← sera publiée\n' +
+                    'Clé naissance a4l   : ' + birthPubHex.slice(0,16)  + '…  ← hybridée\n\n' +
+                    '— Nouveau cert à publier —\n' +
+                    'φ=' + personal_phase.toFixed(4) + '  ω=' + omega_bio.toFixed(2) +
+                    oldCertInfo + '\n\n' +
+                    'La clé UPH sera marquée "hybridée" sur la carte\n' +
+                    '(pas de tag g1pub — non vérifiable via keygen).\n\n' +
+                    'Continuer quand même ?'
+                );
+                if (!ok) {
+                    if (btn) { btn.textContent = '🌀 Publier ma signature'; btn.disabled = false; }
+                    _certStatus('⚠ Publication annulée — vérifiez votre connexion NOSTR.');
+                    return;
+                }
+            }
+        }
+
         const a4l_proof = await _sha256Hex(pubkey + ':' + A4L_PROOF_SALT);
 
         // Tag géographique NIP-52 : permet au relay de filtrer par pentagone local

@@ -380,16 +380,28 @@ function _togglePentagons() {
 // Rotation lente : redessiner toutes les 2 min
 setInterval(_drawPentagons, 120000);
 
+// ── Conformité a4l ────────────────────────────────────────────────────────────
+// Un atome est "conforme" si son Kind 0 contient un tag NIP-39 g1pub
+// (clé dérivée via UPassport keygen naissance→scrypt→secp256k1→G1→NOSTR).
+// Sans ce tag, la clé a été générée indépendamment ("hybridée").
+function _isConforme(atom) {
+    return !!(atom.profile && atom.profile.g1pub);
+}
+
 // ── Icône de marqueur ─────────────────────────────────────────────────────────
-function _mkIcon(phi, psi, k) {
+function _mkIcon(phi, psi, k, conforme) {
     var size = Math.round(9 + (psi || 0) * 13);
     var col  = _phiHsl(phi);
     var glw  = k !== null ? Math.round(5 + k * 18) : 5;
-    var bord = 'rgba(0,255,204,' + (k !== null ? (0.35 + k * 0.6).toFixed(2) : '0.35') + ')';
+    // Conforme = bordure teal, hybridé = bordure orange tiretée
+    var bord = conforme
+        ? 'rgba(0,255,204,' + (k !== null ? (0.35 + k * 0.6).toFixed(2) : '0.35') + ')'
+        : 'rgba(251,146,60,.65)';
+    var dash = conforme ? '' : 'border-style:dashed;';
     var anim = (k !== null && k > 0.9) ? 'animation:mp 1.6s ease-in-out infinite;' : '';
     return L.divIcon({
         html: '<div style="width:' + size + 'px;height:' + size + 'px;border-radius:50%;' +
-              'background:' + col + ';border:2px solid ' + bord + ';' +
+              'background:' + col + ';border:2px solid ' + bord + ';' + dash +
               'box-shadow:0 0 ' + glw + 'px ' + col + ';' + anim + '"></div>',
         className: '', iconSize: [size, size], iconAnchor: [size>>1, size>>1]
     });
@@ -406,20 +418,28 @@ function _buildPopup(atom) {
     var kPct = k !== null ? Math.round((k - 0.5) * 200) : null;
     var kCol = k !== null ? (k > 0.85 ? '#00ffcc' : k > 0.70 ? '#f59e0b' : '#6b7280') : '#444';
 
-    var phiS   = (atom.phi   !== null && !isNaN(atom.phi))   ? atom.phi.toFixed(3)           : '—';
-    var omgS   = (atom.omega !== null && !isNaN(atom.omega)) ? atom.omega.toFixed(2) + ' Hz'  : '—';
-    var psiS   = (atom.psi   !== null && !isNaN(atom.psi))   ? Math.round(atom.psi * 100) + '%' : '—';
-    var penS   = 'P' + String(atom.pentagonId).padStart(2, '0');
+    var phiS = (atom.phi   !== null && !isNaN(atom.phi))   ? atom.phi.toFixed(3)            : '—';
+    var omgS = (atom.omega !== null && !isNaN(atom.omega)) ? atom.omega.toFixed(2) + ' Hz'  : '—';
+    var psiS = (atom.psi   !== null && !isNaN(atom.psi))   ? Math.round(atom.psi * 100) + '%' : '—';
+    var penS = 'P' + String(atom.pentagonId).padStart(2, '0');
 
-    // Lien match : atomic_match.html avec position de l'atome (lon seule suffit pour calcul)
-    // Note : sans date de naissance, on redirige vers la page de profil
-    var matchHref = 'atomic.html';
+    var conforme = _isConforme(atom);
+    // Badge de conformité : 🔑 = clé dérivée via keygen (g1pub NIP-39 présent) / ⚠ = clé externe
+    var badge = conforme
+        ? '<span style="font-size:.6rem;background:rgba(0,255,204,.1);border:1px solid rgba(0,255,204,.3);' +
+          'color:#00ffcc;border-radius:8px;padding:1px 6px;margin-left:5px" title="Clé conforme a4l — dérivée via keygen naissance+UPassport">🔑 MULTIPASS</span>'
+        : '<span style="font-size:.6rem;background:rgba(251,146,60,.1);border:1px solid rgba(251,146,60,.3);' +
+          'color:#fb923c;border-radius:8px;padding:1px 6px;margin-left:5px" title="Clé externe non vérifiée — non liée à la chaîne keygen a4l">⚠ hybridé</span>';
 
     return '<div class="atom-popup">' +
         '<div class="pop-head">' +
             '<div class="pop-av">' + pic + '</div>' +
-            '<div><div class="pop-name">' + name + '</div>' +
-            '<div class="pop-sub">⬟ ' + penS + ' · φ=' + phiS + '</div></div>' +
+            '<div style="flex:1;min-width:0">' +
+                '<div class="pop-name" style="display:flex;align-items:center;flex-wrap:wrap;gap:2px">' +
+                    name + badge +
+                '</div>' +
+                '<div class="pop-sub">⬟ ' + penS + ' · φ=' + phiS + '</div>' +
+            '</div>' +
         '</div>' +
         '<div class="pop-metrics">' +
             'φ = ' + phiS + ' rad<br>' +
@@ -432,7 +452,7 @@ function _buildPopup(atom) {
             : '<div class="pop-k-lbl" style="margin-bottom:9px">Connectez-vous pour voir la résonance</div>') +
         '<div class="pop-btns">' +
             '<button class="pop-btn pop-dm" onclick="_openDm(\'' + atom.pubkey + '\',\'' + name + '\')">💌 Message</button>' +
-            '<a class="pop-btn pop-match" href="' + matchHref + '">⚛ Mon profil</a>' +
+            '<a class="pop-btn pop-match" href="atomic.html">⚛ Mon profil</a>' +
         '</div>' +
     '</div>';
 }
@@ -449,7 +469,7 @@ function _addAtom(atom) {
     var k = (_myPhi !== null) ? Phi2X.computeResonanceK(_myPhi, atom.phi) : null;
     atom.k = k;
 
-    var marker = L.marker([lat, lon], { icon: _mkIcon(atom.phi, atom.psi, k), riseOnHover: true })
+    var marker = L.marker([lat, lon], { icon: _mkIcon(atom.phi, atom.psi, k, _isConforme(atom)), riseOnHover: true })
         .bindPopup(_buildPopup(atom), { maxWidth: 250, minWidth: 215 })
         .addTo(map);
     atom.marker = marker;
@@ -489,10 +509,14 @@ function _renderPanel() {
         var col  = _phiHsl(a.phi);
         var kPct = a.k !== null ? Math.round((a.k - 0.5) * 200) : null;
         var kCol = a.k !== null ? (a.k > 0.85 ? '#00ffcc' : a.k > 0.70 ? '#f59e0b' : '#888') : '#888';
+        var conf = _isConforme(a);
+        var dotBorder = conf ? '' : 'border-style:dashed;border-color:rgba(251,146,60,.5);';
         return '<div class="atom-row" onclick="_focusAtom(\'' + a.pubkey + '\')">' +
-            '<div class="atom-dot" style="background:' + col + '"></div>' +
+            '<div class="atom-dot" style="background:' + col + ';' + dotBorder + '"></div>' +
             '<div style="flex:1;overflow:hidden">' +
-                '<div class="atom-row-name">' + name + '</div>' +
+                '<div class="atom-row-name">' + name +
+                    (conf ? '' : ' <span style="font-size:.55rem;color:#fb923c">⚠</span>') +
+                '</div>' +
                 '<div class="atom-row-sub">' + (city ? city + ' · ' : '') +
                     'Ψ ' + Math.round((a.psi||0)*100) + '% · ⬟P' + String(a.pentagonId).padStart(2,'0') + '</div>' +
             '</div>' +
@@ -657,7 +681,7 @@ async function _onConnected() {
         _atoms.forEach(function(atom) {
             atom.k = Phi2X.computeResonanceK(_myPhi, atom.phi);
             if (atom.marker) {
-                atom.marker.setIcon(_mkIcon(atom.phi, atom.psi, atom.k));
+                atom.marker.setIcon(_mkIcon(atom.phi, atom.psi, atom.k, _isConforme(atom)));
                 atom.marker.setPopupContent(_buildPopup(atom));
             }
         });

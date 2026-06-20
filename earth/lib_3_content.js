@@ -1543,6 +1543,8 @@ function renderComment(comment, repliesMap = null, depth = 0) {
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#x27;')
         .replace(/\n/g, '<br>');
 
     // Create a unique ID for this comment to update it later

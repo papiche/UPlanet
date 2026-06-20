@@ -9,6 +9,7 @@
     <script src="p5.min.js"></script>
     <link rel="stylesheet" href="bootstrap.min.css">
     <link rel="stylesheet" href="leaflet.css">
+    <link rel="stylesheet" href="core-theme.css">
     <link rel="stylesheet" href="uplanet-atomic.css">
     <style>
 
@@ -26,22 +27,9 @@
             border: 1px solid rgba(0,255,204,0.2); pointer-events: none; line-height: 1.5;
         }
 
-        /* Cluster de boutons coin haut-droit */
-        #top-right-cluster {
-            position: fixed; top: 12px; right: 12px; z-index: 1200;
-            display: flex; align-items: center; gap: 5px;
-        }
         @media (max-width: 420px) {
             .btn-lbl { display: none; }
-            #top-right-cluster a, #btn-audio-toggle { padding: 0 8px !important; }
         }
-        #menu-btn {
-            background: rgba(0,255,204,0.10); border: 1px solid rgba(0,255,204,0.28);
-            color: var(--primary); border-radius: 8px; width: 34px; height: 30px;
-            font-size: 15px; cursor: pointer; display: flex; align-items: center;
-            justify-content: center; padding: 0; transition: background .2s;
-        }
-        #menu-btn:hover { background: rgba(0,255,204,0.24); }
 
         /* Kin Maya dans Théorie */
         .kin-union-bar { height: 3px; border-radius: 2px; background: linear-gradient(90deg, var(--primary), var(--secondary)); margin: 6px 0; }
@@ -57,20 +45,22 @@
         #conception-map .leaflet-control-attribution { display:none; }
         .kin-resonance { border-radius: 8px; padding: 8px 10px; font-size: 0.78rem; line-height: 1.6; }
 
-        /* Panneau Offcanvas */
+        /* Panneau principal — plein écran entre header et bottom-nav */
         #atomic-panel {
-            width: min(460px, 97vw) !important;
-            background: rgba(10,12,22,0.97) !important;
-            border-left: 1px solid rgba(0,255,204,0.22) !important;
+            position: fixed; top: 48px; right: 0; bottom: 58px;
+            width: min(460px, 100vw);
+            overflow-y: auto; z-index: 1100;
+            background: rgba(10,12,22,0.94);
+            backdrop-filter: blur(14px);
+            border-left: 1px solid rgba(0,255,204,.1);
+            padding: 0.75rem 1rem 1rem;
+            box-shadow: -6px 0 40px rgba(0,0,0,.55);
+            transition: transform .25s ease, opacity .2s ease;
         }
-        #atomic-panel .offcanvas-header {
-            border-bottom: 1px solid rgba(255,255,255,0.08);
-            padding: 0.6rem 1rem;
+        /* Sur petit écran le panel prend toute la largeur */
+        @media (max-width: 500px) {
+            #atomic-panel { width: 100vw; border-left: none; }
         }
-        #atomic-panel .offcanvas-title {
-            color: var(--primary); letter-spacing: 2px; font-size: 0.95rem; font-weight: 700;
-        }
-        #atomic-panel .offcanvas-body { padding: 0.75rem 1rem 2rem; }
 
         /* Nav Tabs */
         .nav-tabs { border-bottom-color: rgba(255,255,255,0.1) !important; }
@@ -107,7 +97,9 @@
         .match-loc-btn .loc-name    { font-weight:600; color:#fff; font-size:.82rem; display:block; }
         .match-loc-btn .loc-sub     { font-size:.68rem; color:rgba(255,255,255,.35); margin-top:1px; display:block; }
         .match-loc-btn .loc-chevron { color:rgba(255,255,255,.25); font-size:.9rem; }
-        /* Modal carte MATCH */
+        /* Modal carte MATCH — z-index au-dessus du panel (1100) */
+        #match-loc-modal { z-index: 1300 !important; }
+        .modal-backdrop  { z-index: 1299 !important; }
         #match-loc-modal .modal-content {
             background:rgba(10,12,22,.97) !important;
             border:1px solid rgba(0,255,204,.2) !important; border-radius:14px !important;
@@ -197,44 +189,12 @@
         }
         .btn-cinematic { animation: cinematic-pulse 2.4s ease-in-out infinite; }
 
-        /* ─ Barre de navigation fixe en bas ─ */
-        #bottom-nav {
-            position: fixed; bottom: 0; left: 0; right: 0; z-index: 1300;
-            display: flex; justify-content: space-around; align-items: stretch;
-            background: rgba(6,8,18,.82); backdrop-filter: blur(16px);
-            border-top: 1px solid rgba(0,255,204,.12);
-            padding: 0; height: 58px;
-            box-shadow: 0 -4px 24px rgba(0,0,0,.5);
-        }
-        .bnav-btn {
-            flex: 1; display: flex; flex-direction: column;
-            align-items: center; justify-content: center; gap: 2px;
-            background: none; border: none; cursor: pointer;
-            color: rgba(255,255,255,.35); font-size: .6rem;
-            letter-spacing: .5px; text-transform: uppercase;
-            padding: 6px 4px; transition: color .2s, background .2s;
-            border-top: 2px solid transparent;
-        }
-        .bnav-btn .bnav-icon { font-size: 1.3rem; line-height: 1; }
-        .bnav-btn:hover { color: rgba(255,255,255,.7); background: rgba(255,255,255,.04); }
-        .bnav-btn.active {
-            color: #00ffcc;
-            border-top-color: #00ffcc;
-            background: rgba(0,255,204,.06);
-        }
-        /* Espace pour éviter que le contenu soit masqué par la barre */
-        .offcanvas-body { padding-bottom: 72px !important; }
-        /* ─ Unlock offcanvas — positionné au-dessus de la barre fixe ─ */
+        /* ─ Tabs verrouillés dans le panel ─ */
         #unlock-offcanvas { bottom: 58px !important; }
-        /* ─ Tabs / boutons verrouillés ─ */
         .tab-locked { opacity:.42 !important; }
         .tab-locked .lock-badge { font-size:.6em; vertical-align:middle; opacity:.7; }
         .tab-locked.tab-unlocked { opacity:1 !important; }
         .tab-locked.tab-unlocked .lock-badge { display:none; }
-        .bnav-locked { opacity:.45; }
-        .bnav-locked .bnav-lock { font-size:.6em; }
-        .bnav-locked.bnav-unlocked { opacity:1; }
-        .bnav-locked.bnav-unlocked .bnav-lock { display:none; }
         /* ─ Toast sécurité partage ─ */
         #security-toast {
             position:fixed; bottom:74px; left:50%; transform:translateX(-50%);
@@ -272,6 +232,13 @@
         .wz-btn-next:hover { background:rgba(0,255,204,.22); }
         /* Progressive disclosure atom-b dans le wizard — toujours actif quand visible */
         #wz-pane-3 .atom-b { opacity:1; pointer-events:auto; filter:none; }
+        /* Transitions wizard */
+        .wz-pane {
+            transition: opacity .22s ease, transform .22s ease;
+        }
+        .wz-pane.wz-hidden {
+            display: none;
+        }
     </style>
 </head>
 <body>
@@ -281,74 +248,20 @@
     <div id="hud-overlay">Initialisation...</div>
 </div>
 
-<!-- Cluster boutons haut-droite -->
-<div id="top-right-cluster">
-    <a href="atomic_help.html"
-       style="background:rgba(0,0,0,.6);border:1px solid rgba(255,255,255,.14);
-              color:rgba(255,255,255,.5);border-radius:8px;height:30px;
-              padding:0 10px;font-size:.72rem;font-weight:600;letter-spacing:.5px;
-              cursor:pointer;backdrop-filter:blur(8px);display:flex;align-items:center;
-              gap:4px;text-decoration:none;transition:all .25s;white-space:nowrap"
-       onmouseover="this.style.color='var(--primary)';this.style.borderColor='rgba(0,255,204,.4)'"
-       onmouseout="this.style.color='rgba(255,255,255,.5)';this.style.borderColor='rgba(255,255,255,.14)'">
-        📚 <span class="btn-lbl">Docs</span>
-    </a>
-    <button id="btn-audio-toggle" title="Orchestre Quantique" onclick="_toggleAudio()"
-            style="background:rgba(0,0,0,.6);border:1px solid rgba(255,255,255,.14);
-                   color:rgba(255,255,255,.5);border-radius:8px;height:30px;
-                   padding:0 10px;font-size:.78rem;cursor:pointer;backdrop-filter:blur(8px);
-                   transition:all .3s;letter-spacing:.5px;white-space:nowrap">
-        🔇 <span class="btn-lbl">Audio</span>
-    </button>
-    <button id="menu-btn" data-bs-toggle="offcanvas" data-bs-target="#atomic-panel" aria-label="Menu">☰</button>
-</div>
+<!-- Top Header fixe -->
+<header id="a4l-header">
+    <span class="a4l-header-title">⚛ ATOM4LOVE</span>
+    <button id="btn-cinema" title="Voir l'animation (replier le panel)" onclick="toggleCinematicMode()" class="h-btn h-btn-dim">⤢</button>
+    <button id="btn-theme-toggle" title="Changer de thème" onclick="_toggleTheme()" class="h-btn h-btn-dim">🌊</button>
+    <button id="btn-audio-toggle" title="Orchestre Quantique" onclick="_toggleAudio()" class="h-btn h-btn-dim">🔇 <span class="btn-lbl">Audio</span></button>
+    <a href="atomic_help.html" class="h-btn h-btn-dim" aria-label="Documentation" title="Documentation">📚</a>
+</header>
 
-<!-- Barre de navigation fixe en bas -->
-<nav id="bottom-nav" role="navigation" aria-label="Navigation principale">
-    <button class="bnav-btn active" id="bnav-profil" onclick="_bnavGo('tab-profil','bnav-profil')" aria-label="Empreinte">
-        <span class="bnav-icon">🌌</span>
-        <span>Empreinte</span>
-    </button>
-    <button class="bnav-btn" id="bnav-match" onclick="_bnavGo('tab-match','bnav-match')" aria-label="Résonance">
-        <span class="bnav-icon">💫</span>
-        <span>Résonance</span>
-    </button>
-    <button class="bnav-btn" id="bnav-aide" onclick="_bnavGo('tab-aide','bnav-aide')" aria-label="Théorie">
-        <span class="bnav-icon">📖</span>
-        <span>Théorie</span>
-    </button>
-    <button class="bnav-btn" id="bnav-radar" onclick="window.location.href='atomic_map.html'" aria-label="Constellation">
-        <span class="bnav-icon">🗺</span>
-        <span>Constellation</span>
-    </button>
-    <button class="bnav-btn bnav-locked" id="bnav-oracle" onclick="_bnavGo('tab-oracle','bnav-oracle')" aria-label="Oracle">
-        <span class="bnav-icon">🔮</span>
-        <span>Oracle <span class="bnav-lock">🔒</span></span>
-    </button>
-</nav>
 
-<!-- Switch de thème (coin haut-gauche) -->
-<button id="btn-theme-toggle" title="Changer de thème" onclick="_toggleTheme()"
-        style="position:fixed;top:14px;left:14px;z-index:1200;
-               background:rgba(0,0,0,.6);border:1px solid rgba(255,255,255,.15);
-               color:rgba(255,255,255,.55);border-radius:20px;padding:6px 11px;
-               font-size:.78rem;cursor:pointer;backdrop-filter:blur(8px);
-               transition:all .3s;letter-spacing:.5px">
-    🌊 Biolum
-</button>
+<!-- ── PANNEAU PRINCIPAL ────────────────────────────────────────── -->
+<div id="atomic-panel">
 
-<!-- ── PANNEAU OFFCANVAS ─────────────────────────────────────── -->
-<div class="offcanvas offcanvas-end" tabindex="-1" id="atomic-panel"
-     data-bs-scroll="true" data-bs-backdrop="false">
-
-    <div class="offcanvas-header">
-        <span class="offcanvas-title">⚛ ATOMIC VIBRATION</span>
-        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Fermer"></button>
-    </div>
-
-    <div class="offcanvas-body">
-
-        <!-- Nav Tabs Bootstrap -->
+        <!-- Nav Tabs Bootstrap — navigation interne du panel -->
         <ul class="nav nav-tabs nav-fill mb-3" id="atomicTabs" role="tablist">
             <li class="nav-item" role="presentation">
                 <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-profil" type="button" role="tab">🌌 Empreinte</button>
@@ -400,6 +313,18 @@
                     <div class="border border-secondary rounded p-3 mb-2 atom-a">
                         <div class="section-title">⚓ Ancrage de Naissance <span style="font-size:.7rem;opacity:.6;font-weight:400">(date · heure · lieu)</span></div>
 
+                        <!-- Bannière restauration NOSTR -->
+                        <div id="atom-a-nostr-banner" style="display:none;margin-bottom:10px;
+                             padding:8px 12px;border-radius:8px;
+                             background:rgba(80,160,255,.06);border:1px solid rgba(80,160,255,.22)">
+                            <div style="display:flex;align-items:center;gap:8px">
+                                <span id="atom-a-nostr-summary" style="flex:1;font-size:.78rem;color:rgba(255,255,255,.7)"></span>
+                                <button onclick="document.getElementById('atom-a-nostr-banner').style.display='none'"
+                                    style="background:none;border:none;color:rgba(255,255,255,.3);
+                                    cursor:pointer;font-size:1.1rem;line-height:1">×</button>
+                            </div>
+                        </div>
+
                         <!-- Bannière restauration UPH -->
                         <div id="atom-a-restore-banner" style="display:none;margin-bottom:10px;
                              padding:8px 12px;border-radius:8px;
@@ -419,33 +344,33 @@
                         <!-- Date segmentée -->
                         <div class="date-seg-row mb-1">
                             <div class="date-seg" style="width:52px">
-                                <label>Jour</label>
+                                <label for="birth-dd">Jour</label>
                                 <input type="number" id="birth-dd" min="1" max="31" placeholder="17"
-                                       oninput="_syncBirthDateFromSeg()">
+                                       aria-label="Jour de naissance" oninput="_syncBirthDateFromSeg()">
                             </div>
-                            <div class="date-seg-sep">/</div>
+                            <div class="date-seg-sep" aria-hidden="true">/</div>
                             <div class="date-seg" style="width:52px">
-                                <label>Mois</label>
+                                <label for="birth-mm">Mois</label>
                                 <input type="number" id="birth-mm" min="1" max="12" placeholder="04"
-                                       oninput="_syncBirthDateFromSeg()">
+                                       aria-label="Mois de naissance" oninput="_syncBirthDateFromSeg()">
                             </div>
-                            <div class="date-seg-sep">/</div>
-                            <div class="date-seg" style="flex:1">
-                                <label>Année</label>
+                            <div class="date-seg-sep" aria-hidden="true">/</div>
+                            <div class="date-seg" style="width:72px">
+                                <label for="birth-yyyy">Année</label>
                                 <input type="number" id="birth-yyyy" min="1920" max="2015" placeholder="1985"
-                                       oninput="_syncBirthDateFromSeg()">
+                                       aria-label="Année de naissance" oninput="_syncBirthDateFromSeg()">
                             </div>
-                            <div class="date-seg-sep" style="padding-bottom:7px">·</div>
+                            <div class="date-seg-sep" style="padding-bottom:7px" aria-hidden="true">·</div>
                             <div class="date-seg" style="width:44px">
-                                <label>HH</label>
+                                <label for="birth-hh">Heure</label>
                                 <input type="number" id="birth-hh" min="0" max="23" placeholder="12"
-                                       oninput="_syncBirthDateFromSeg()">
+                                       aria-label="Heure de naissance" oninput="_syncBirthDateFromSeg()">
                             </div>
-                            <div class="date-seg-sep">:</div>
+                            <div class="date-seg-sep" aria-hidden="true">:</div>
                             <div class="date-seg" style="width:44px">
-                                <label>MM</label>
+                                <label for="birth-minseg">Minutes</label>
                                 <input type="number" id="birth-minseg" min="0" max="59" placeholder="00"
-                                       oninput="_syncBirthDateFromSeg()">
+                                       aria-label="Minutes de naissance" oninput="_syncBirthDateFromSeg()">
                             </div>
                         </div>
                         <div class="date-display" id="birth-date-display">— saisir la date de naissance —</div>
@@ -491,7 +416,7 @@
                 </div>
 
                 <!-- ══ ÉTAPE 2 : Incarnation — Le Vaisseau ══ -->
-                <div class="wz-pane" id="wz-pane-2" style="display:none">
+                <div class="wz-pane wz-hidden" id="wz-pane-2">
                     <div class="border border-secondary rounded p-3 mb-2 atom-a">
                         <div class="section-title">🧬 Le Vaisseau <span style="font-size:.7rem;opacity:.6;font-weight:400">(dimensions physiques · entropie clé)</span></div>
 
@@ -557,7 +482,7 @@
                 </div>
 
                 <!-- ══ ÉTAPE 3 : Singularité — Conception ══ -->
-                <div class="wz-pane" id="wz-pane-3" style="display:none">
+                <div class="wz-pane wz-hidden" id="wz-pane-3">
                     <div class="border rounded p-3 mb-2 atom-b">
                         <div class="section-title" style="color:var(--secondary)">🌀 Singularité — Conception <span style="font-size:.7rem;opacity:.6;font-weight:400">(trace originelle)</span></div>
 
@@ -576,19 +501,19 @@
                             <div style="font-size:.68rem;color:rgba(249,115,22,.7);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:8px">⚡ Singularité Historique — override</div>
                             <div class="date-seg-row mb-1">
                                 <div class="date-seg" style="width:52px">
-                                    <label>Jour</label>
+                                    <label for="con-dd">Jour</label>
                                     <input type="number" id="con-dd" min="1" max="31" placeholder="11"
                                            oninput="_syncConDateFromSeg()">
                                 </div>
                                 <div class="date-seg-sep">/</div>
                                 <div class="date-seg" style="width:52px">
-                                    <label>Mois</label>
+                                    <label for="con-mm">Mois</label>
                                     <input type="number" id="con-mm" min="1" max="12" placeholder="07"
                                            oninput="_syncConDateFromSeg()">
                                 </div>
                                 <div class="date-seg-sep">/</div>
-                                <div class="date-seg" style="flex:1">
-                                    <label>Année</label>
+                                <div class="date-seg" style="width:72px">
+                                    <label for="con-yyyy">Année</label>
                                     <input type="number" id="con-yyyy" min="1919" max="2015" placeholder="1984"
                                            oninput="_syncConDateFromSeg()">
                                 </div>
@@ -665,7 +590,7 @@
                 </div>
 
                 <!-- ══ ÉTAPE 4 : Générer — Rejoindre le réseau ══ -->
-                <div class="wz-pane" id="wz-pane-4" style="display:none">
+                <div class="wz-pane wz-hidden" id="wz-pane-4">
                     <div class="border rounded p-3 mb-2"
                          style="border-color:rgba(0,255,204,.28)!important;background:rgba(0,255,204,.03)">
                         <div class="section-title mb-1" style="color:#00ffcc">⚛ Rejoindre le réseau</div>
@@ -975,8 +900,7 @@
             </div>
 
         </div><!-- /tab-content -->
-    </div><!-- /offcanvas-body -->
-</div><!-- /offcanvas -->
+</div><!-- /atomic-panel -->
 
 <!-- ── Offcanvas Débloquer fonctionnalités ── -->
 <div class="offcanvas offcanvas-bottom" tabindex="-1" id="unlock-offcanvas" aria-labelledby="unlock-oc-lbl"
@@ -1877,35 +1801,23 @@ function renderKinProfil() {
 
 // atomic_3D.html supprimé — visualisation intégrée directement dans le canvas WebGL
 
-// ── Mode Cinématique — masque le panneau pour voir l'animation ─────────────
+// ── Toggle panneau — affiche/masque le drawer pour voir l'animation ──────────
 let _isCinematic = false;
 window.toggleCinematicMode = function() {
     const panelEl = document.getElementById('atomic-panel');
-    const offcanvas = bootstrap.Offcanvas.getInstance(panelEl);
-    const hud = document.getElementById('hud-overlay');
-    if (!offcanvas) return;
-
-    offcanvas.hide();
-    _isCinematic = true;
-    if (hud) hud.innerHTML = `<div style="text-align:center">
-        <span style="color:#00ffcc;font-size:1.1rem">✨ Singularité Active</span><br>
-        <span style="font-size:.7rem;color:#888">Touchez l'écran pour revenir</span>
-    </div>`;
-
-    const returnLayer = document.createElement('div');
-    returnLayer.id = 'cinematic-return';
-    returnLayer.style.cssText = 'position:fixed;inset:0;z-index:1040;cursor:pointer;';
-    returnLayer.onclick = function() {
-        offcanvas.show();
-        returnLayer.remove();
-        _isCinematic = false;
-    };
-    document.body.appendChild(returnLayer);
+    const btn     = document.getElementById('btn-cinema');
+    if (!panelEl) return;
+    _isCinematic = !_isCinematic;
+    panelEl.style.display = _isCinematic ? 'none' : '';
+    if (btn) {
+        btn.textContent = _isCinematic ? '▶' : '⤢';
+        btn.title = _isCinematic ? 'Afficher le panneau' : 'Voir l\'animation (replier le panneau)';
+    }
 };
 
 // ── Barre navigation bas ───────────────────────────────────────────────────
 function _bnavGo(tabId, btnId) {
-    // Guard : tabs verrouillés → offcanvas d'explication, pas de switch
+    // Guard : tabs verrouillés → sheet d'explication
     if (['tab-radar','tab-oracle'].includes(tabId) && localStorage.getItem('a4l_multipass_ok') !== '1') {
         bootstrap.Offcanvas.getOrCreateInstance(document.getElementById('unlock-offcanvas')).show();
         return;
@@ -1913,9 +1825,6 @@ function _bnavGo(tabId, btnId) {
     // Activer l'onglet Bootstrap
     const tabEl = document.querySelector(`[data-bs-target="#${tabId}"]`);
     if (tabEl) bootstrap.Tab.getOrCreateInstance(tabEl).show();
-    // Ouvrir le panneau offcanvas si fermé
-    const panelEl = document.getElementById('atomic-panel');
-    if (panelEl) bootstrap.Offcanvas.getOrCreateInstance(panelEl).show();
     // Mettre à jour les indicateurs de la barre
     document.querySelectorAll('.bnav-btn').forEach(b => b.classList.remove('active'));
     const active = document.getElementById(btnId);
@@ -1948,10 +1857,33 @@ let _wzCurrentStep = 1;
 
 function _wzGoTo(step) {
     if (step < 1 || step > 4) return;
-    for (let i = 1; i <= 4; i++) {
-        const pane = document.getElementById('wz-pane-' + i);
-        if (pane) pane.style.display = i === step ? '' : 'none';
+    const prevStep = _wzCurrentStep;
+    const dir = step > prevStep ? 1 : -1;  // +1 = avancer, -1 = reculer
+
+    // Masquer l'ancienne pane avec slide-out
+    const outPane = document.getElementById('wz-pane-' + prevStep);
+    if (outPane && prevStep !== step) {
+        outPane.style.opacity = '0';
+        outPane.style.transform = 'translateX(' + (-dir * 22) + 'px)';
+        setTimeout(() => {
+            outPane.classList.add('wz-hidden');
+            outPane.style.transform = '';
+        }, 200);
     }
+
+    // Afficher la nouvelle pane avec slide-in
+    const inPane = document.getElementById('wz-pane-' + step);
+    if (inPane) {
+        inPane.classList.remove('wz-hidden');
+        inPane.style.opacity = '0';
+        inPane.style.transform = 'translateX(' + (dir * 22) + 'px)';
+        requestAnimationFrame(() => requestAnimationFrame(() => {
+            inPane.style.opacity = '1';
+            inPane.style.transform = 'none';
+        }));
+    }
+
+    // Mettre à jour les dots indicateurs
     for (let i = 1; i <= 4; i++) {
         const dot = document.getElementById('wz-dot-' + i);
         if (!dot) continue;
@@ -1965,10 +1897,8 @@ function _wzGoTo(step) {
         calculateConception && calculateConception();
     }
     if (step === 4) { updateMultipassPreview && updateMultipassPreview(); }
-    // Met à jour l'indicateur ωbio à l'entrée en étape 2
     if (step === 2) { typeof _onBodyDimsChanged === 'function' && _onBodyDimsChanged(); }
-    const body = document.querySelector('#atomic-panel .offcanvas-body');
-    if (body) body.scrollTop = 0;
+    document.getElementById('atomic-panel').scrollTop = 0;
 }
 
 function _wzNext() { _wzGoTo(_wzCurrentStep + 1); }
@@ -3884,6 +3814,65 @@ function _doRestoreAtomA() {
     }
 }
 
+// ── Pré-initialisation depuis le profil NOSTR connecté (UPH) ─────────────
+// Décoder le tag g hexagonal (identique à _decodeA4l dans atomic_map.html)
+function _decodeA4lHexTag(tags) {
+    if (!tags) return null;
+    var hexTag = null;
+    for (var i = 0; i < tags.length; i++) {
+        if (tags[i][0] === 'g' && /a4l:P\d+H[0-9a-fA-F]{8}/i.test(tags[i][1])) {
+            hexTag = tags[i]; break;
+        }
+    }
+    if (!hexTag) return null;
+    var m = hexTag[1].match(/P(\d+)H([0-9a-fA-F]{4})([0-9a-fA-F]{4})/i);
+    if (!m) return null;
+    var q = parseInt(m[2], 16) - 32768;
+    var r = parseInt(m[3], 16) - 32768;
+    var y_km  = r * 1.5;
+    var x_km  = (q + y_km / 3) * Math.sqrt(3);
+    var R = 6371.0;
+    var lat  = x_km / (R * Math.PI / 180);
+    var cosL = Math.cos(lat * Math.PI / 180);
+    var lon  = Math.abs(cosL) > 0.001 ? y_km / (R * Math.PI / 180 * cosL) : 0;
+    if (isNaN(lat) || isNaN(lon) || lat < -90 || lat > 90 || lon < -180 || lon > 180) return null;
+    return { lat: lat, lon: lon };
+}
+
+async function _preInitFromNostr(pubkey) {
+    if (!pubkey) return;
+    if (document.getElementById('birth-yyyy').value) return; // champs déjà remplis
+
+    var relay = _relayUrl();
+
+    // Email depuis UPH — disponible immédiatement, sans requête relay
+    var emailEl = document.getElementById('multipass-email');
+    if (emailEl && !emailEl.value && window._uphEmail) {
+        emailEl.value = window._uphEmail;
+        clearTimeout(_emailDetectTimer);
+        _emailDetectTimer = setTimeout(function() { _detectEmailOnRelay(window._uphEmail); }, 300);
+    }
+
+    try {
+        // Kind 30078 d=atom4love → coordonnées de naissance approximatives
+        var evs = await _wsQuery(relay, { kinds:[30078], '#d':['atom4love'], authors:[pubkey], limit:1 }, 5000);
+        if (!evs.length) return;
+
+        var pos = _decodeA4lHexTag(evs[0].tags);
+        if (!pos) return;
+
+        var nostrBanner  = document.getElementById('atom-a-nostr-banner');
+        var nostrSummary = document.getElementById('atom-a-nostr-summary');
+        var trySync = function() {
+            if (typeof _syncBirthLocation !== 'function') { setTimeout(trySync, 300); return; }
+            _syncBirthLocation(pos.lon, pos.lat);
+            if (nostrSummary) nostrSummary.textContent = '⚛ Lieu de naissance restauré depuis votre profil NOSTR (~1 km) · Renseignez la date pour continuer';
+            if (nostrBanner) nostrBanner.style.display = '';
+        };
+        trySync();
+    } catch(_) {}
+}
+
 // ── Hint de signature — mis à jour dynamiquement ──────────────────────────
 function _updateCertHint() {
     const el = document.getElementById('cert-nostr-hint');
@@ -3915,6 +3904,15 @@ document.addEventListener('DOMContentLoaded', () => {
         _checkRestoreAtomA();
         setTimeout(_updateCertHint, 400); // window.nostr peut être set par UPH
     };
+    // Pré-initialisation depuis le profil NOSTR connecté (UPH)
+    document.addEventListener('nostr:connected', function(e) {
+        var pk = (e && e.detail && e.detail.pubkey) || window.userPubkey;
+        if (pk && !localStorage.getItem('atomic_birth_data')) _preInitFromNostr(pk);
+    });
+    // UPH déjà connecté au moment du chargement de la page
+    if (window.userPubkey && !localStorage.getItem('atomic_birth_data')) {
+        setTimeout(function() { _preInitFromNostr(window.userPubkey); }, 800);
+    }
 });
 
 // ── RADAR — Découverte vibratoire (Kind 30078) ─────────────────
@@ -4338,5 +4336,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 })();
 </script>
 <div id="security-toast">🔒 Données sensibles expurgées · poids &amp; polarité exclus · 100% sûr</div>
+<script src="atomic-nav.js"></script>
+<script>AtomicNav.injectBottomNav({active:'profil'});</script>
 </body>
 </html>

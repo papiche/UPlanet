@@ -290,6 +290,11 @@ const AudioOrchestra = (function() {
         }
     });
 
+    // Déverrouille AudioContext sur le premier geste utilisateur (exigence iOS/Safari)
+    document.addEventListener('click', function _unlockAudio() {
+        if (_ctx && _ctx.state === 'suspended') _ctx.resume();
+    }, { once: true });
+
     return { enable, disable, stop, setVolume, toggleMute, playProfile, playMatch, getBeatFreq,
              get enabled() { return _enabled; },
              get muted()   { return _muted; },

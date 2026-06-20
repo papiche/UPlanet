@@ -20,24 +20,22 @@
     // mini:true → visible même sur mobile (<480px). Priorité : items essentiels.
     var NAV = [
         { e: '🌍', l: 'HOME',           h: 'index.html',             mini: true },
-        { sep: 'Identité' },
+        { sep: 'Identité 🪪' },
         { e: '💎', l: 'Atomic',         h: 'atomic.html',            mini: true },
         { e: '🌐', l: 'Roaming',        h: 'roaming.html' },
-        { sep: 'Station' },
+        { sep: 'Station 모' },
         { e: '♥️', l: 'Station',        h: 'economy.html',           mini: true },
         { e: '🌌', l: 'Swarm',          h: 'economy.Swarm.html' },
-        { sep: 'WoTx²' },
-        { e: '⚒️', l: 'Forge',          h: 'forge.html',             mini: true },
+        { sep: 'WoTx² ⛑️' },
         { e: '☁️', l: 'Skills',         h: 'skills.html' },
+        { e: '⚒️', l: 'Forge',          h: 'forge.html',             mini: true },
         { e: '📖', l: 'H2G2',           h: 'h2g2.html' },
+        { e: '🧑🏼‍🎓', l: 'MineLife',       h: 'minelife.html' },
         { e: '⚖️', l: 'Justice',        h: 'justice.html' },
-        { sep: 'Médias' },
-        { e: '📺', l: 'NOSTR Tube',     h: 'youtube.html',           mini: true },
-        { e: '🦋', l: 'Coracle',        h: 'https://coracle.copylaradio.com' },
         { sep: 'Communauté' },
+        { e: '🛈', l: 'uNation',        h: 'Unation.html' },
         { e: '🤝', l: 'Contribuer',     h: 'contribute-3D.html',     mini: true },
-        { e: '🛈', l: 'U.Nation',       h: 'Unation.html' },
-        { e: '🪙', l: 'Collectif Ẑen', h: 'https://opencollective.com/monnaie-libre' },
+        { e: '🪙', l: 'Collectif Ẑen',  h: 'https://opencollective.com/monnaie-libre' },
     ];
 
     var _page        = (location.pathname.split('/').pop() || 'index.html').replace(/[?#].*/, '');

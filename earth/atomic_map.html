@@ -9,6 +9,7 @@
     <link rel="stylesheet" href="leaflet.css">
     <link rel="stylesheet" href="MarkerCluster.css">
     <link rel="stylesheet" href="MarkerCluster.Default.css">
+    <link rel="stylesheet" href="core-theme.css">
     <link rel="stylesheet" href="uplanet-atomic.css">
     <style>
 * { box-sizing: border-box; }
@@ -20,34 +21,13 @@ html, body { margin:0; padding:0; height:100%; overflow:hidden;
 #map .leaflet-control-attribution { display:none; }
 #map .leaflet-control-zoom { margin-top:58px !important; }
 
-/* ── Header ── */
-#header {
-    position:fixed; top:0; left:0; right:0; z-index:1000; height:48px;
-    background:rgba(8,6,2,.9); border-bottom:1px solid rgba(0,255,204,.12);
-    backdrop-filter:blur(10px);
-    display:flex; align-items:center; gap:8px; padding:0 12px;
-}
-.h-title { font-size:.88rem; font-weight:800; color:#00ffcc; flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.h-btn {
-    padding:5px 11px; border-radius:16px; cursor:pointer; font-size:.72rem;
-    font-weight:700; border:1px solid; white-space:nowrap; background:none;
-    transition:all .2s; flex-shrink:0;
-}
-.h-btn-teal { border-color:rgba(0,255,204,.3); color:#00ffcc; }
-.h-btn-teal:hover, .h-btn-teal.active { background:rgba(0,255,204,.12); border-color:rgba(0,255,204,.6); }
-.h-btn-dim  { border-color:rgba(255,255,255,.15); color:rgba(255,255,255,.55); }
-.h-btn-dim:hover  { background:rgba(255,255,255,.08); }
-
+/* ── Header ── géré par #a4l-header de uplanet-atomic.css */
 /* ── Loading ── */
 #loading {
     position:fixed; inset:0; z-index:2000; background:rgba(8,6,2,.92);
     display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px;
 }
 #loading.hidden { display:none; }
-.spinner { width:38px; height:38px; border-radius:50%;
-    border:3px solid rgba(0,255,204,.12); border-top-color:#00ffcc;
-    animation:spin .85s linear infinite; }
-@keyframes spin { to { transform:rotate(360deg); } }
 #load-msg { font-size:.82rem; color:rgba(255,255,255,.4); }
 
 /* ── Panel ── */
@@ -65,6 +45,8 @@ html, body { margin:0; padding:0; height:100%; overflow:hidden;
     display:flex; align-items:center; justify-content:space-between; flex-shrink:0;
 }
 #panel-head button { background:none; border:none; color:rgba(255,255,255,.35); cursor:pointer; font-size:.95rem; }
+#sort-toggle { font-size:.82rem; padding:3px 7px; border:1px solid rgba(255,255,255,.12) !important; border-radius:10px; transition:all .2s; }
+#sort-toggle:hover { color:#00ffcc !important; border-color:rgba(0,255,204,.3) !important; }
 #atom-list { flex:1; overflow-y:auto; padding:4px 0; }
 .atom-row {
     padding:9px 12px; border-bottom:1px solid rgba(255,255,255,.04);
@@ -141,7 +123,7 @@ html, body { margin:0; padding:0; height:100%; overflow:hidden;
 
 /* ── Pentagon toggle ── */
 #penta-btn {
-    position:fixed; bottom:20px; left:14px; z-index:900; padding:8px 13px;
+    position:fixed; bottom:70px; left:14px; z-index:900; padding:8px 13px;
     border-radius:18px; cursor:pointer; font-size:.72rem; font-weight:700;
     background:rgba(8,6,2,.88); border:1px solid rgba(0,255,204,.22);
     color:rgba(0,255,204,.65); backdrop-filter:blur(8px); transition:all .2s;
@@ -150,7 +132,7 @@ html, body { margin:0; padding:0; height:100%; overflow:hidden;
 
 /* ── Stats bar ── */
 #stats-bar {
-    position:fixed; bottom:16px; left:50%; transform:translateX(-50%);
+    position:fixed; bottom:68px; left:50%; transform:translateX(-50%);
     z-index:900; font-size:.68rem; color:rgba(255,255,255,.3);
     background:rgba(8,6,2,.8); border:1px solid rgba(255,255,255,.08);
     border-radius:14px; padding:5px 14px; backdrop-filter:blur(6px);
@@ -204,22 +186,17 @@ html, body { margin:0; padding:0; height:100%; overflow:hidden;
 <body>
 
 <div id="loading">
-    <div class="spinner"></div>
+    <div class="a4l-spinner"></div>
     <div id="load-msg">Connexion au relay…</div>
 </div>
 
 <div id="map"></div>
 
-<div id="header">
-    <button class="h-btn h-btn-dim" onclick="location.href='atomic.html'" aria-label="Retour">← ⚛</button>
-    <span class="h-title">Constellation</span>
-    <button class="h-btn h-btn-dim" onclick="location.href='atomic_chat.html'" title="Messages privés">💬</button>
-    <button class="h-btn h-btn-teal" onclick="_togglePanel()">≡ <span id="atom-count">0</span></button>
-</div>
 
 <div id="panel">
     <div id="panel-head">
         <span>⚛ Atomes (<span id="panel-count">0</span>)</span>
+        <button id="sort-toggle" onclick="_cycleSortMode()" title="Changer le tri — Résonance / Proximité">⚡</button>
         <button onclick="_togglePanel()">✕</button>
     </div>
     <div id="search-zone">
@@ -267,6 +244,16 @@ function _relayUrl() {
     if (h.startsWith('ipfs.')) return 'wss://relay.' + h.slice(5);
     if (h.startsWith('u.'))    return 'wss://relay.' + h.slice(2);
     return 'wss://relay.copylaradio.com';
+}
+
+function _updateMapRelayBadge(state) {
+    var dot  = document.getElementById('map-r-dot');
+    var name = document.getElementById('map-r-name');
+    if (!dot || !name) return;
+    var url  = _relayUrl();
+    var host = url.replace(/^wss?:\/\//, '').replace(/\/.*$/, '');
+    name.textContent = host;
+    dot.className = 'a4l-relay-dot' + (state === 'ok' ? ' green' : state === 'err' ? ' red' : '');
 }
 
 function _wsQuery(relay, filter, timeout) {
@@ -346,11 +333,43 @@ var _pentaOn      = false;
 var _pentaLayers  = [];
 var _dmTarget     = null;    // {pubkey, name}
 var _searchQuery  = '';
+var _sortMode     = 'resonance'; // 'resonance' | 'proximity'
+var _homePos      = null;        // {lat, lon} — position GPS actuelle
 var _allMultipass = [];      // Kind 0 profiles avec tag NIP-39 g1pub (comme Zelkova)
 
 // ── Map ───────────────────────────────────────────────────────────────────────
-var map = L.map('map', { center:[20,10], zoom:2, zoomControl:true, attributionControl:false });
+// Centrage initial : GPS actuel → coordonnées de naissance → monde
+var _initCenter = [20, 10], _initZoom = 2;
+try {
+    var _bd = JSON.parse(localStorage.getItem('atomic_birth_data') || '{}');
+    if (_bd.lat && _bd.lon) { _initCenter = [parseFloat(_bd.lat), parseFloat(_bd.lon)]; _initZoom = 5; }
+} catch(e) {}
+var map = L.map('map', { center: _initCenter, zoom: _initZoom, zoomControl:true, attributionControl:false });
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom:18 }).addTo(map);
+// Recentrer sur le GPS Home actuel et afficher un marqueur de position
+var _homeMarker = null;
+if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(function(pos) {
+        var hlat = pos.coords.latitude, hlon = pos.coords.longitude;
+        map.setView([hlat, hlon], Math.max(map.getZoom(), 7), {animate: false});
+        // Marqueur "Ma position actuelle" distinct des atomes
+        var homeIcon = L.divIcon({
+            html: '<div style="width:16px;height:16px;border-radius:50%;' +
+                  'background:#00ffcc;border:3px solid #fff;' +
+                  'box-shadow:0 0 12px rgba(0,255,204,.8);' +
+                  'animation:mp 2s ease-in-out infinite"></div>',
+            iconSize: [16, 16], iconAnchor: [8, 8], className: ''
+        });
+        _homeMarker = L.marker([hlat, hlon], {icon: homeIcon, zIndexOffset: 1000})
+            .bindPopup('<div style="font-size:.82rem;font-weight:700;color:#00ffcc">📍 Ma position actuelle</div>' +
+                       '<div style="font-size:.68rem;color:#aaa;margin-top:3px">' +
+                       hlat.toFixed(4) + ', ' + hlon.toFixed(4) + '</div>', {maxWidth:180})
+            .addTo(map);
+        _homePos = {lat: hlat, lon: hlon};
+        // Re-rendre le panneau pour afficher les distances si des atomes sont déjà chargés
+        if (_atoms.length) _renderPanel();
+    }, null, {timeout: 8000, maximumAge: 60000});
+}
 
 // MarkerCluster — regroupe les atomes proches pour éviter les milliers de <div> DOM sur mobile
 var _markerCluster = L.markerClusterGroup({
@@ -398,6 +417,31 @@ function _togglePentagons() {
 
 // Rotation lente : redessiner toutes les 2 min
 setInterval(_drawPentagons, 120000);
+
+// ── Calcul de distance haversine ──────────────────────────────────────────────
+function _distKm(lat1, lon1, lat2, lon2) {
+    var R = 6371;
+    var dLat = (lat2 - lat1) * Math.PI / 180;
+    var dLon = (lon2 - lon1) * Math.PI / 180;
+    var a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+            Math.sin(dLon/2) * Math.sin(dLon/2);
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+function _fmtDist(km) {
+    if (km < 1)    return '<1 km';
+    if (km < 10)   return km.toFixed(1) + ' km';
+    if (km < 1000) return Math.round(km) + ' km';
+    return Math.round(km / 100) / 10 + ' Mm';
+}
+
+function _cycleSortMode() {
+    _sortMode = (_sortMode === 'resonance') ? 'proximity' : 'resonance';
+    var btn = document.getElementById('sort-toggle');
+    if (btn) btn.textContent = _sortMode === 'proximity' ? '📍' : '⚡';
+    _renderPanel();
+}
 
 // ── Conformité a4l ────────────────────────────────────────────────────────────
 // Niveaux de conformité (du plus fort au plus faible) :
@@ -519,18 +563,35 @@ function _renderPanel() {
         return hay.indexOf(q) !== -1;
     }) : _atoms.slice();
 
+    // Calculer la distance depuis la position Home si disponible
+    if (_homePos) {
+        visible.forEach(function(a) {
+            a.distKm = _distKm(_homePos.lat, _homePos.lon, a.lat, a.lon);
+        });
+    }
+
     var sorted = visible.sort(function(a, b) {
+        if (_sortMode === 'proximity' && _homePos) {
+            var da = a.distKm !== undefined ? a.distKm : Infinity;
+            var db = b.distKm !== undefined ? b.distKm : Infinity;
+            return da - db;
+        }
+        // mode résonance (défaut)
         if (a.k !== null && b.k !== null) return b.k - a.k;
         if (a.k !== null) return -1;
         if (b.k !== null) return 1;
         return (b.psi || 0) - (a.psi || 0);
     });
 
+    var sortLbl = _sortMode === 'proximity'
+        ? (_homePos ? '📍 proximité' : '⚡ résonance')
+        : '⚡ résonance';
+
     var hint = document.getElementById('search-hint');
     if (hint) {
         hint.textContent = q.length >= 3
-            ? visible.length + ' résultat' + (visible.length !== 1 ? 's' : '')
-            : _atoms.length + ' atome' + (_atoms.length !== 1 ? 's' : '') + ' — tapez 3 chars pour filtrer';
+            ? visible.length + ' résultat' + (visible.length !== 1 ? 's' : '') + ' · tri ' + sortLbl
+            : _atoms.length + ' atome' + (_atoms.length !== 1 ? 's' : '') + ' · tri ' + sortLbl;
     }
     document.getElementById('atom-count').textContent  = _atoms.length;
     document.getElementById('panel-count').textContent = _atoms.length;
@@ -544,6 +605,9 @@ function _renderPanel() {
         var kCol = a.k !== null ? (a.k > 0.85 ? '#00ffcc' : a.k > 0.70 ? '#f59e0b' : '#888') : '#888';
         var conf = _isConforme(a);
         var dotBorder = conf ? '' : 'border-style:dashed;border-color:rgba(251,146,60,.5);';
+        var distHtml = (a.distKm !== undefined)
+            ? '<span style="color:rgba(0,255,204,.55);font-size:.6rem;margin-left:3px">📍' + _fmtDist(a.distKm) + '</span>'
+            : '';
         return '<div class="atom-row" onclick="_focusAtom(\'' + a.pubkey + '\')">' +
             '<div class="atom-dot" style="background:' + col + ';' + dotBorder + '"></div>' +
             '<div style="flex:1;overflow:hidden">' +
@@ -551,7 +615,8 @@ function _renderPanel() {
                     (conf ? '' : ' <span style="font-size:.55rem;color:#fb923c">⚠</span>') +
                 '</div>' +
                 '<div class="atom-row-sub">' + (city ? city + ' · ' : '') +
-                    'Ψ ' + Math.round((a.psi||0)*100) + '% · ⬟P' + String(a.pentagonId).padStart(2,'0') + '</div>' +
+                    'Ψ ' + Math.round((a.psi||0)*100) + '% · ⬟P' + String(a.pentagonId).padStart(2,'0') +
+                    distHtml + '</div>' +
             '</div>' +
             (kPct !== null ? '<div class="atom-row-k" style="color:' + kCol + '">' + kPct + '%</div>' : '') +
         '</div>';
@@ -563,6 +628,10 @@ function _renderPanel() {
     var avgK  = withK.length ? Math.round(withK.reduce(function(s,a){return s+(a.k-0.5)*200;},0) / withK.length) : null;
     var sb = '⚛ ' + total + ' atomes';
     if (avgK !== null) sb += ' · ⌀ résonance ' + avgK + '%';
+    if (_homePos) {
+        var nearby50 = _atoms.filter(function(a) { return a.distKm !== undefined && a.distKm <= 50; }).length;
+        sb += ' · ' + nearby50 + ' à <50 km';
+    }
     document.getElementById('stats-bar').textContent = sb;
 }
 
@@ -762,10 +831,12 @@ async function _loadMap() {
     var relay = _relayUrl();
     _setMsg('Connexion à ' + relay.replace('wss://','') + '…');
     _log('Relay: ' + relay.replace('wss://',''));
+    _updateMapRelayBadge('pending');
 
     // 1. Kind 30078 d=atom4love
     _setMsg('Chargement des atomes…');
     var events = await _wsQuery(relay, { kinds:[30078], '#d':['atom4love'], limit:2000 }, 14000);
+    _updateMapRelayBadge(events.length > 0 ? 'ok' : 'err');
     _log(events.length + ' événements Kind 30078 reçus');
 
     // 2. Dédupliquer par pubkey (plus récent)
@@ -902,6 +973,18 @@ if (typeof window.waitForConnection === 'function') {
 if (window.isNostrConnected && window.userPubkey) {
     _onConnected();
 }
+</script>
+<script src="atomic-nav.js"></script>
+<script>
+AtomicNav.injectTopHeader({
+    title: 'Constellation',
+    centerHTML: '<div id="map-relay-badge" class="a4l-relay-badge" title="Relay NOSTR"><div id="map-r-dot" class="a4l-relay-dot"></div><span id="map-r-name" class="a4l-relay-name">relay</span></div>',
+    actions: [
+        {html: '<button class="h-btn h-btn-dim" onclick="location.href=\'atomic_chat.html\'" title="Messages">💬</button>'},
+        {html: '<button class="h-btn h-btn-teal" onclick="_togglePanel()">≡ <span id="atom-count">0</span></button>'}
+    ]
+});
+AtomicNav.injectBottomNav({active:'map'});
 </script>
 </body>
 </html>

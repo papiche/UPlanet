@@ -5,12 +5,13 @@
  * PRINCIPE DE FONCTIONNEMENT
  * ─────────────────────────────────────────────────────────────────────────────
  * BRO est l'IA de la station (bro_dm_daemon.sh). Il reçoit des DMs kind 4
- * (NIP-04, chiffrés), les traite via Ollama/RAG, et répond en kind 4.
+ * (NIP-44 v2 prioritaire, NIP-04 fallback), les traite via Ollama/RAG,
+ * et répond dans le même format.
  *
  * Ce module orchestre :
  *  1. Récupération du NODEHEX cible (local ou home station si roaming)
  *  2. Injection du widget HTML dans la page
- *  3. Envoi de DMs kind 4 chiffrés via window.nostr.nip04.encrypt
+ *  3. Envoi de DMs kind 4 chiffrés via window.nostr.nip44.encrypt (ou nip04)
  *  4. Abonnement aux réponses via WebSocket (REQ kind 4 from NODE to user)
  *
  * DÉTECTION DU NODE CIBLE
@@ -406,15 +407,15 @@
                     var pTag = (ev.tags || []).find(function (t) { return t[0] === 'p'; });
                     if (!pTag || pTag[1] !== _ctx.pubkeyHex) return;
 
-                    /* Déchiffrement : NIP-04 si ?iv= dans le contenu, NIP-44 sinon.
+                    /* Déchiffrement : détection automatique NIP-04 (?iv=) vs NIP-44.
                        Fallback croisé si la méthode principale échoue. */
                     var _isNip04 = ev.content.indexOf('?iv=') !== -1;
                     var _tryPrimary = _isNip04
-                        ? (w.nostr.nip04 ? function () { return w.nostr.nip04.decrypt(_ctx.nodeHex, ev.content); } : null)
-                        : (w.nostr.nip44 ? function () { return w.nostr.nip44.decrypt(_ctx.nodeHex, ev.content); } : null);
+                        ? (w.nostr && w.nostr.nip04 ? function () { return w.nostr.nip04.decrypt(_ctx.nodeHex, ev.content); } : null)
+                        : (w.nostr && w.nostr.nip44 ? function () { return w.nostr.nip44.decrypt(_ctx.nodeHex, ev.content); } : null);
                     var _tryFallback = _isNip04
-                        ? (w.nostr.nip44 ? function () { return w.nostr.nip44.decrypt(_ctx.nodeHex, ev.content); } : null)
-                        : (w.nostr.nip04 ? function () { return w.nostr.nip04.decrypt(_ctx.nodeHex, ev.content); } : null);
+                        ? (w.nostr && w.nostr.nip44 ? function () { return w.nostr.nip44.decrypt(_ctx.nodeHex, ev.content); } : null)
+                        : (w.nostr && w.nostr.nip04 ? function () { return w.nostr.nip04.decrypt(_ctx.nodeHex, ev.content); } : null);
 
                     if (!_tryPrimary && !_tryFallback) {
                         _warn('aucune méthode de déchiffrement disponible (nip04/nip44)');
@@ -475,18 +476,17 @@
             _appendMsg('sys', '⚠️ NODE non connecté');
             return Promise.resolve();
         }
-        /* Choisir NIP-04 (priorité) ou NIP-44 (fallback).
-           Le daemon détecte le chiffrement utilisé (?iv= → NIP-04) et répond
-           avec le même protocole, donc les deux chemins sont cohérents. */
+        /* NIP-44 v2 prioritaire (standard moderne) — NIP-04 en fallback si extension ancienne.
+           Le daemon détecte le format (?iv= → NIP-04, sinon NIP-44) et répond en miroir. */
         var _encFn, _encProto;
-        if (w.nostr && w.nostr.nip04 && w.nostr.nip04.encrypt) {
-            _encFn    = function () { return w.nostr.nip04.encrypt(_ctx.nodeHex, msg); };
-            _encProto = 'NIP-04';
-        } else if (w.nostr && w.nostr.nip44 && w.nostr.nip44.encrypt) {
+        if (w.nostr && w.nostr.nip44 && w.nostr.nip44.encrypt) {
             _encFn    = function () { return w.nostr.nip44.encrypt(_ctx.nodeHex, msg); };
             _encProto = 'NIP-44';
+        } else if (w.nostr && w.nostr.nip04 && w.nostr.nip04.encrypt) {
+            _encFn    = function () { return w.nostr.nip04.encrypt(_ctx.nodeHex, msg); };
+            _encProto = 'NIP-04';
         } else {
-            _appendMsg('sys', '⚠️ Extension NIP-07 sans support NIP-04/NIP-44');
+            _appendMsg('sys', '⚠️ Extension NIP-07 sans support NIP-44/NIP-04');
             return Promise.resolve();
         }
 
@@ -643,16 +643,16 @@
                 }
 
                 var _hasEnc = !!(w.nostr && (
-                    (w.nostr.nip04 && w.nostr.nip04.encrypt) ||
-                    (w.nostr.nip44 && w.nostr.nip44.encrypt)
+                    (w.nostr.nip44 && w.nostr.nip44.encrypt) ||
+                    (w.nostr.nip04 && w.nostr.nip04.encrypt)
                 ));
                 if (!_hasEnc) {
-                    _warn('NIP-04/NIP-44 absent sur window.nostr — extension incompatible');
-                    _appendMsg('sys', '⚠️ Extension NIP-07 sans support NIP-04/NIP-44');
+                    _warn('NIP-44/NIP-04 absent sur window.nostr — extension incompatible');
+                    _appendMsg('sys', '⚠️ Extension NIP-07 sans support NIP-44/NIP-04');
                     return;
                 }
 
-                var _encProto = (w.nostr.nip04 && w.nostr.nip04.encrypt) ? 'NIP-04' : 'NIP-44';
+                var _encProto = (w.nostr && w.nostr.nip44 && w.nostr.nip44.encrypt) ? 'NIP-44' : 'NIP-04';
 
                 /* Activer le bouton d'envoi */
                 var btn = document.getElementById(_WIDGET_ID + '-send');

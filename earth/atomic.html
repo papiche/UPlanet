@@ -97,37 +97,7 @@
         .match-loc-btn .loc-name    { font-weight:600; color:#fff; font-size:.82rem; display:block; }
         .match-loc-btn .loc-sub     { font-size:.68rem; color:rgba(255,255,255,.35); margin-top:1px; display:block; }
         .match-loc-btn .loc-chevron { color:rgba(255,255,255,.25); font-size:.9rem; }
-        /* Modal carte MATCH — z-index au-dessus du panel (1100) */
-        #match-loc-modal { z-index: 1300 !important; }
-        .modal-backdrop  { z-index: 1299 !important; }
-        #match-loc-modal .modal-content {
-            background:rgba(10,12,22,.97) !important;
-            border:1px solid rgba(0,255,204,.2) !important; border-radius:14px !important;
-        }
-        #match-loc-modal .modal-header { border-bottom:1px solid rgba(255,255,255,.08) !important; padding:.7rem 1rem; }
-        #match-loc-modal .modal-title  { color:var(--primary); font-size:.9rem; font-weight:700; letter-spacing:1px; }
-        #match-loc-modal .modal-body   { padding:.7rem 1rem 1rem; }
-        #match-loc-modal .btn-close    { filter:invert(1); }
-        #match-loc-search {
-            background:rgba(255,255,255,.05) !important; border:1px solid rgba(255,255,255,.15) !important;
-            color:#ddd !important; font-size:.88rem; border-radius:8px 0 0 8px;
-        }
-        #match-loc-search:focus { border-color:var(--primary) !important; box-shadow:none !important; outline:none; }
-        #match-loc-search-btn {
-            background:rgba(0,255,204,.12); border:1px solid rgba(0,255,204,.3) !important;
-            color:var(--primary); font-weight:700; border-radius:0 8px 8px 0;
-        }
-        #match-loc-result { font-size:.72rem; min-height:.9rem; color:rgba(255,255,255,.4); margin-top:4px; }
-        #match-loc-map    { height:260px; border-radius:10px; margin-top:8px; border:1px solid rgba(255,255,255,.08); }
-        #match-loc-map .leaflet-tile { filter:brightness(.55) invert(1) contrast(1.1) saturate(.4) hue-rotate(195deg); }
-        #match-loc-map .leaflet-control-attribution { display:none; }
-        .match-loc-confirm {
-            width:100%; margin-top:10px; padding:10px; border-radius:9px;
-            background:rgba(0,255,204,.12); border:1px solid rgba(0,255,204,.3);
-            color:#fff; font-weight:700; font-size:.88rem; cursor:pointer; transition:background .18s;
-        }
-        .match-loc-confirm:hover { background:rgba(0,255,204,.22); }
-        .match-loc-confirm:disabled { opacity:.35; cursor:default; }
+        /* Modal z-index — a4l-location-picker.js injecte ses propres règles */
 
         /* ─ Bloc Harmonique / Anomalie ─ */
         .harmonic-display {
@@ -233,6 +203,57 @@
         .wz-pane.wz-hidden {
             display: none;
         }
+        @keyframes wz-shake {
+            0%,100% { transform:translateX(0); }
+            20%      { transform:translateX(-5px); }
+            40%      { transform:translateX(5px); }
+            60%      { transform:translateX(-4px); }
+            80%      { transform:translateX(4px); }
+        }
+        .wz-shake { animation:wz-shake .42s ease; }
+        #wz-hint-toast {
+            position:fixed; bottom:80px; left:50%; transform:translateX(-50%);
+            z-index:2100; background:rgba(8,6,2,.95); border:1px solid rgba(0,255,204,.25);
+            border-radius:20px; padding:7px 18px; font-size:.78rem; color:rgba(255,255,255,.75);
+            pointer-events:none; opacity:0; transition:opacity .2s;
+        }
+        #wz-hint-toast.show { opacity:1; }
+        /* FAB cinématique — visible seulement en mode plein-canvas sur mobile */
+        #panel-fab {
+            display:none; position:fixed; bottom:80px; right:16px; z-index:1400;
+            width:48px; height:48px; border-radius:50%; align-items:center; justify-content:center;
+            background:rgba(0,255,204,.15); border:1px solid rgba(0,255,204,.4);
+            color:var(--primary); font-size:1.25rem; cursor:pointer;
+            box-shadow:0 2px 14px rgba(0,255,204,.18); transition:background .2s;
+        }
+        #panel-fab:hover { background:rgba(0,255,204,.28); }
+
+        /* Inputs date/heure natifs HTML5 — sélecteurs mobiles iOS/Android */
+        .a4l-date-input {
+            color-scheme: dark;
+            background: rgba(255,255,255,.05) !important;
+            border: 1px solid rgba(255,255,255,.13) !important;
+            color: #e0e0e0 !important;
+            font-size: .88rem;
+        }
+        .a4l-date-input:focus {
+            border-color: rgba(0,255,204,.5) !important;
+            box-shadow: none !important;
+            outline: none;
+        }
+        .a4l-date-input::-webkit-calendar-picker-indicator {
+            filter: invert(.8) hue-rotate(120deg);
+            opacity: .55; cursor: pointer;
+        }
+        /* Bouton CTA restauration prioritaire */
+        #restore-cta button {
+            width:100%; padding:13px 16px; border-radius:12px;
+            background:linear-gradient(135deg,rgba(0,255,204,.18),rgba(102,126,234,.12));
+            border:1.5px solid rgba(0,255,204,.45); color:#fff; cursor:pointer;
+            text-align:left; display:flex; align-items:center; gap:12px;
+            transition:background .2s; font-family:inherit;
+        }
+        #restore-cta button:hover { background:linear-gradient(135deg,rgba(0,255,204,.28),rgba(102,126,234,.2)); }
     </style>
 </head>
 <body>
@@ -241,6 +262,11 @@
 <div id="canvas-container">
     <div id="hud-overlay">Initialisation...</div>
 </div>
+
+<!-- FAB cinématique — réouvre le panneau fermé en mode plein-canvas -->
+<button id="panel-fab" title="Ouvrir le panneau" onclick="toggleCinematicMode()">▶</button>
+<!-- Hint toast pour étapes wizard verrouillées -->
+<div id="wz-hint-toast"></div>
 
 <!-- Top Header fixe -->
 <header id="a4l-header">
@@ -272,6 +298,17 @@
 
             <!-- ── PROFIL — Wizard 4 étapes ── -->
             <div class="tab-pane fade show active" id="tab-profil" role="tabpanel">
+
+                <!-- CTA restauration prioritaire — visible si profil détecté -->
+                <div id="restore-cta" style="display:none;margin-bottom:12px">
+                    <button onclick="_doRestoreAtomA()">
+                        <span style="font-size:1.6rem;flex-shrink:0">↩</span>
+                        <span>
+                            <span style="display:block;font-weight:800;font-size:.92rem;color:var(--primary)">S'identifier avec son ADN cosmique</span>
+                            <span style="display:block;font-size:.72rem;opacity:.7;margin-top:2px">Profil détecté · 1 clic pour restaurer votre Empreinte</span>
+                        </span>
+                    </button>
+                </div>
 
                 <!-- Indicateur d'étapes -->
                 <div class="wz-indicator" id="wz-indicator">
@@ -329,41 +366,20 @@
                             </div>
                         </div>
 
-                        <!-- Date segmentée -->
-                        <div class="date-seg-row mb-1">
-                            <div class="date-seg" style="width:52px">
-                                <label for="birth-dd">Jour</label>
-                                <input type="number" id="birth-dd" min="1" max="31" placeholder="17"
-                                       aria-label="Jour de naissance" oninput="_syncBirthDateFromSeg()">
+                        <!-- Date & heure natives HTML5 — molettes iOS/Android -->
+                        <div class="row g-2 mb-2">
+                            <div class="col-7">
+                                <label class="form-label small text-secondary text-uppercase mb-1" style="font-size:.65rem">📅 Date de naissance</label>
+                                <input type="date" id="birth-date" class="form-control form-control-sm a4l-date-input"
+                                       min="1920-01-01" max="2015-12-31" oninput="_onBirthNativeChanged()">
                             </div>
-                            <div class="date-seg-sep" aria-hidden="true">/</div>
-                            <div class="date-seg" style="width:52px">
-                                <label for="birth-mm">Mois</label>
-                                <input type="number" id="birth-mm" min="1" max="12" placeholder="04"
-                                       aria-label="Mois de naissance" oninput="_syncBirthDateFromSeg()">
-                            </div>
-                            <div class="date-seg-sep" aria-hidden="true">/</div>
-                            <div class="date-seg" style="width:72px">
-                                <label for="birth-yyyy">Année</label>
-                                <input type="number" id="birth-yyyy" min="1920" max="2015" placeholder="1985"
-                                       aria-label="Année de naissance" oninput="_syncBirthDateFromSeg()">
-                            </div>
-                            <div class="date-seg-sep" style="padding-bottom:7px" aria-hidden="true">·</div>
-                            <div class="date-seg" style="width:44px">
-                                <label for="birth-hh">Heure</label>
-                                <input type="number" id="birth-hh" min="0" max="23" placeholder="12"
-                                       aria-label="Heure de naissance" oninput="_syncBirthDateFromSeg()">
-                            </div>
-                            <div class="date-seg-sep" aria-hidden="true">:</div>
-                            <div class="date-seg" style="width:44px">
-                                <label for="birth-minseg">Minutes</label>
-                                <input type="number" id="birth-minseg" min="0" max="59" placeholder="00"
-                                       aria-label="Minutes de naissance" oninput="_syncBirthDateFromSeg()">
+                            <div class="col-5">
+                                <label class="form-label small text-secondary text-uppercase mb-1" style="font-size:.65rem">🕐 Heure <span style="opacity:.5;font-size:.6em;text-transform:none;font-weight:400">(opt.)</span></label>
+                                <input type="time" id="birth-time" class="form-control form-control-sm a4l-date-input"
+                                       oninput="_onBirthNativeChanged()">
                             </div>
                         </div>
                         <div class="date-display" id="birth-date-display">— saisir la date de naissance —</div>
-                        <input type="hidden" id="birth-date">
-                        <input type="hidden" id="birth-time">
 
                         <!-- Lieu de naissance -->
                         <label class="form-label small text-secondary text-uppercase mb-1 mt-2">📍 Lieu de naissance</label>
@@ -678,8 +694,7 @@
                             <input type="time" class="form-control form-control-sm" id="match-time-a" oninput="calculateMatch()">
                         </div>
                     </div>
-                    <button class="match-loc-btn" onclick="_openMatchLocModal('a')"
-                            data-bs-toggle="modal" data-bs-target="#match-loc-modal">
+                    <button class="match-loc-btn" onclick="_openLocA()">
                         <span class="loc-icon">📍</span>
                         <span class="loc-text">
                             <span class="loc-name" id="match-loc-name-a">Choisir mon lieu de naissance</span>
@@ -703,8 +718,7 @@
                             <input type="time" class="form-control form-control-sm" id="match-time-b" oninput="calculateMatch()">
                         </div>
                     </div>
-                    <button class="match-loc-btn" onclick="_openMatchLocModal('b')"
-                            data-bs-toggle="modal" data-bs-target="#match-loc-modal">
+                    <button class="match-loc-btn" onclick="_openLocB()">
                         <span class="loc-icon">📍</span>
                         <span class="loc-text">
                             <span class="loc-name" id="match-loc-name-b">Choisir le lieu de naissance</span>
@@ -857,35 +871,11 @@
 </div><!-- /atomic-panel -->
 
 
-<!-- ── Modal Lieu — MATCH ───────────────────────────────────────────────── -->
-<div class="modal fade" id="match-loc-modal" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog modal-dialog-centered" style="max-width:min(96vw,460px)">
-    <div class="modal-content" style="background:rgba(10,12,22,.97);border:1px solid rgba(0,255,204,.2);border-radius:14px">
-      <div class="modal-header" style="border-bottom:1px solid rgba(255,255,255,.08);padding:.7rem 1rem">
-        <span class="modal-title" id="match-loc-modal-title" style="color:var(--primary);font-size:.9rem;font-weight:700;letter-spacing:1px">📍 Lieu de naissance</span>
-        <button type="button" class="btn-close" style="filter:invert(1)" data-bs-dismiss="modal" aria-label="Fermer"></button>
-      </div>
-      <div class="modal-body" style="padding:.7rem 1rem 1rem">
-        <div class="input-group mb-1">
-          <input type="text" id="match-loc-search" class="form-control"
-                 placeholder="Ville, pays… (ex : Paris, Lyon, Montréal)"
-                 onkeydown="if(event.key==='Enter'){_matchLocSearch();event.preventDefault()}">
-          <button class="btn" id="match-loc-search-btn" type="button" onclick="_matchLocSearch()">🔍</button>
-        </div>
-        <div id="match-loc-result">Recherchez une ville ou cliquez sur la carte</div>
-        <div id="match-loc-map"></div>
-        <button class="match-loc-confirm" id="match-loc-confirm" onclick="_matchLocConfirm()" disabled>
-            ✅ Confirmer ce lieu
-        </button>
-      </div>
-    </div>
-  </div>
-</div>
-
 <!-- ── SCRIPTS ─────────────────────────────────────────────── -->
 <script src="scrypt.min.js"></script>
 <script src="nostr.bundle.js"></script>
 <script src="leaflet.js"></script>
+<script src="a4l-location-picker.js"></script>
 <script src="bootstrap.bundle.min.js"></script>
 <script>
 'use strict';
@@ -1224,24 +1214,21 @@ function _dateToUtcUnix(dateStr, timeStr, lonDeg) {
 }
 
 let _birthDebounce;
-window._syncBirthDateFromSeg = function() {
-    clearTimeout(_birthDebounce);
-    _birthDebounce = setTimeout(function() {
-        const r = _seg2hidden(
-            document.getElementById('birth-dd').value,
-            document.getElementById('birth-mm').value,
-            document.getElementById('birth-yyyy').value,
-            document.getElementById('birth-hh').value,
-            document.getElementById('birth-minseg').value
-        );
-        if (!r) { document.getElementById('birth-date-display').textContent = '— date invalide —'; return; }
-        document.getElementById('birth-date').value = r.date;
-        document.getElementById('birth-time').value = r.time;
-        const d = new Date(r.date + 'T' + r.time);
-        document.getElementById('birth-date-display').textContent = _fmtDateFR(d);
-        calculateConception();
-    }, 300);
+// Gestionnaire natif date/heure — remplace les 5 mini-inputs segmentés
+window._onBirthNativeChanged = function() {
+    var dateVal = (document.getElementById('birth-date') || {}).value || '';
+    var timeVal = (document.getElementById('birth-time') || {}).value || '12:00';
+    var disp    = document.getElementById('birth-date-display');
+    if (!dateVal) { if (disp) disp.textContent = '— saisir la date de naissance —'; return; }
+    var y = parseInt(dateVal.split('-')[0] || '0', 10);
+    if (y < 1920 || y > 2015) { if (disp) disp.textContent = '— date invalide (1920–2015) —'; return; }
+    if (disp && typeof _fmtDateFR === 'function') {
+        disp.textContent = _fmtDateFR(new Date(dateVal + 'T' + (timeVal || '12:00')));
+    }
+    if (typeof calculateConception === 'function') calculateConception();
 };
+// Rétrocompatibilité — appelé par _doRestoreAtomA et URL params
+window._syncBirthDateFromSeg = window._onBirthNativeChanged;
 
 let _conDebounce;
 window._syncConDateFromSeg = function() {
@@ -1726,6 +1713,7 @@ let _isCinematic = false;
 window.toggleCinematicMode = function() {
     const panelEl = document.getElementById('atomic-panel');
     const btn     = document.getElementById('btn-cinema');
+    const fab     = document.getElementById('panel-fab');
     if (!panelEl) return;
     _isCinematic = !_isCinematic;
     panelEl.style.display = _isCinematic ? 'none' : '';
@@ -1733,7 +1721,19 @@ window.toggleCinematicMode = function() {
         btn.textContent = _isCinematic ? '▶' : '⤢';
         btn.title = _isCinematic ? 'Afficher le panneau' : 'Voir l\'animation (replier le panneau)';
     }
+    if (fab) fab.style.display = _isCinematic ? 'flex' : 'none';
 };
+
+// ── Hint toast pour wizard étapes verrouillées ────────────────────────────
+var _wzHintTimer = null;
+function _wzShowHint(msg) {
+    var t = document.getElementById('wz-hint-toast');
+    if (!t) return;
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(_wzHintTimer);
+    _wzHintTimer = setTimeout(function() { t.classList.remove('show'); }, 2200);
+}
 
 // ── Barre navigation bas ───────────────────────────────────────────────────
 function _bnavGo(tabId, btnId) {
@@ -1762,6 +1762,16 @@ let _wzCurrentStep = 1;
 
 function _wzGoTo(step) {
     if (step < 1 || step > 4) return;
+    // Refuser si l'étape cible est encore verrouillée
+    const dotTarget = document.getElementById('wz-dot-' + step);
+    if (dotTarget && dotTarget.classList.contains('locked')) {
+        dotTarget.classList.remove('wz-shake');
+        void dotTarget.offsetWidth; // reflow pour relancer l'animation
+        dotTarget.classList.add('wz-shake');
+        setTimeout(function() { dotTarget.classList.remove('wz-shake'); }, 500);
+        _wzShowHint('Veuillez valider l\'étape précédente d\'abord');
+        return;
+    }
     const prevStep = _wzCurrentStep;
     const dir = step > prevStep ? 1 : -1;  // +1 = avancer, -1 = reculer
 
@@ -2517,88 +2527,39 @@ function windowResized() {
 
 
 // ── Modal Lieu MATCH ─────────────────────────────────────────────────────
-let _matchLocMap    = null;
-let _matchLocMarker = null;
-let _matchLocAtom   = 'a';     // atome en cours d'édition
-let _matchPendingLat = null;
-let _matchPendingLon = null;
-
-window._openMatchLocModal = function(atom) {
-    _matchLocAtom    = atom;
-    _matchPendingLat = null;
-    _matchPendingLon = null;
-    const titleAtom  = atom === 'a' ? 'Atome A — Vous' : 'Atome B — Partenaire';
-    const titleEl    = document.getElementById('match-loc-modal-title');
-    if (titleEl) titleEl.textContent = `📍 Lieu de naissance · ${titleAtom}`;
-    document.getElementById('match-loc-confirm').disabled = true;
-    document.getElementById('match-loc-result').textContent = 'Recherchez une ville ou cliquez sur la carte';
-    // Pré-centrer sur position existante si connue
-    const existLon = parseFloat(document.getElementById('match-lon-' + atom).value) || 0;
-    const existLat = parseFloat(document.getElementById('match-lat-' + atom).value) || 0;
-    if (_matchLocMap && (existLon !== 0 || existLat !== 0)) {
-        _matchLocMap.setView([existLat || 20, existLon], 5);
-    }
-};
-
-function _matchLocSetPending(lat, lon, label) {
-    _matchPendingLat = parseFloat(lat.toFixed(2));
-    _matchPendingLon = parseFloat(lon.toFixed(2));
-    if (_matchLocMarker) _matchLocMarker.setLatLng([_matchPendingLat, _matchPendingLon]);
-    else _matchLocMarker = L.marker([_matchPendingLat, _matchPendingLon]).addTo(_matchLocMap);
-    document.getElementById('match-loc-result').textContent =
-        '📍 ' + (label || `${_matchPendingLat.toFixed(2)}°, ${_matchPendingLon.toFixed(2)}°`);
-    document.getElementById('match-loc-confirm').disabled = false;
-}
-
-async function _matchLocSearch() {
-    const q   = (document.getElementById('match-loc-search').value || '').trim();
-    const lbl = document.getElementById('match-loc-result');
-    if (!q) return;
-    lbl.textContent = '🔍 Recherche…';
-    document.getElementById('match-loc-search-btn').disabled = true;
-    try {
-        const url  = 'https://nominatim.openstreetmap.org/search?q='
-                   + encodeURIComponent(q) + '&format=json&limit=1&accept-language=fr';
-        const data = await fetch(url, { headers:{ 'Accept':'application/json' } }).then(r => r.json());
-        if (data && data.length > 0) {
-            const p    = data[0];
-            const name = p.display_name.split(',').slice(0,3).join(', ');
-            _matchLocMap.setView([parseFloat(p.lat), parseFloat(p.lon)], 7);
-            _matchLocSetPending(parseFloat(p.lat), parseFloat(p.lon), name);
-        } else {
-            lbl.textContent = '⚠ Ville introuvable — cliquez sur la carte';
+// ── Location Picker — délègue à A4LLocationPicker (a4l-location-picker.js) ──
+window._openLocA = function() {
+    A4LLocationPicker.open({
+        title: '📍 Lieu de naissance · Atome A — Vous',
+        lat: parseFloat(document.getElementById('match-lat-a').value) || 0,
+        lon: parseFloat(document.getElementById('match-lon-a').value) || 0,
+        onConfirm: function(la, lo, lb) {
+            document.getElementById('match-lon-a').value = lo;
+            document.getElementById('match-lat-a').value = la;
+            document.getElementById('match-loc-name-a').textContent = lb;
+            document.getElementById('match-loc-sub-a').textContent = 'lat ' + la.toFixed(2) + ' · lon ' + lo.toFixed(2);
+            if (_birthMap && _birthMarker) {
+                _birthMarker.setLatLng([la, lo]);
+                if (typeof updateMultipassPreview === 'function') updateMultipassPreview();
+            }
+            window.calculateMatch();
         }
-    } catch(e) { lbl.textContent = '⚠ Erreur réseau'; }
-    finally { document.getElementById('match-loc-search-btn').disabled = false; }
-}
-
-function _matchLocConfirm() {
-    if (_matchPendingLat === null) return;
-    const atom = _matchLocAtom;
-    document.getElementById('match-lon-' + atom).value = _matchPendingLon;
-    document.getElementById('match-lat-' + atom).value = _matchPendingLat;
-    // Mettre à jour le bouton
-    const label = document.getElementById('match-loc-result').textContent.replace('📍 ', '');
-    document.getElementById('match-loc-name-' + atom).textContent = label;
-    document.getElementById('match-loc-sub-'  + atom).textContent =
-        `lat ${_matchPendingLat.toFixed(2)} · lon ${_matchPendingLon.toFixed(2)}`;
-    // Si Atome A → synchroniser aussi le profil (birth-map, lon-slider)
-    if (atom === 'a' && _birthMap && _birthMarker) {
-        _birthMarker.setLatLng([_matchPendingLat, _matchPendingLon]);
-        updateMultipassPreview();
-    }
-    bootstrap.Modal.getInstance(document.getElementById('match-loc-modal')).hide();
-    window.calculateMatch();
-}
-
-document.getElementById('match-loc-modal').addEventListener('shown.bs.modal', () => {
-    if (!_matchLocMap) {
-        _matchLocMap = L.map('match-loc-map', { center:[20,10], zoom:2, zoomControl:true, attributionControl:false });
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom:18 }).addTo(_matchLocMap);
-        _matchLocMap.on('click', e => _matchLocSetPending(e.latlng.lat, e.latlng.lng, null));
-    }
-    _matchLocMap.invalidateSize();
-});
+    });
+};
+window._openLocB = function() {
+    A4LLocationPicker.open({
+        title: '📍 Lieu de naissance · Atome B — Partenaire',
+        lat: parseFloat(document.getElementById('match-lat-b').value) || 0,
+        lon: parseFloat(document.getElementById('match-lon-b').value) || 0,
+        onConfirm: function(la, lo, lb) {
+            document.getElementById('match-lon-b').value = lo;
+            document.getElementById('match-lat-b').value = la;
+            document.getElementById('match-loc-name-b').textContent = lb;
+            document.getElementById('match-loc-sub-b').textContent = 'lat ' + la.toFixed(2) + ' · lon ' + lo.toFixed(2);
+            window.calculateMatch();
+        }
+    });
+};
 
 // ── PAUSE QUAND L'ONGLET N'EST PAS VISIBLE ────────────────────
 // Page Visibility API — arrête draw() à 0 fps, reprend dès le retour
@@ -3402,7 +3363,7 @@ async function publishIncarnationCert() {
         };
         _certStatus('🔑 Signature locale avec la clé vault (session éphémère)…', '#f59e0b');
     } else {
-        _certStatus('⚠ Aucune clé de signature — créez votre MULTIPASS ou installez nos2x/Alby/Flamingo.', '#ff8888');
+        _certStatus('⚠ Aucune clé de signature — installez nos2x pour y coller la clef de votre MULTIPASS.', '#ff8888');
         const btnR = document.getElementById('btn-publish-cert');
         if (btnR) { btnR.textContent = '⚡ Rejoindre le réseau'; btnR.disabled = false; }
         return;
@@ -3635,7 +3596,7 @@ function _checkRestoreAtomA() {
         var summary = document.getElementById('atom-a-restore-summary');
         if (!banner || !summary) return;
         // Ne pas re-afficher si les champs sont déjà remplis
-        if (document.getElementById('birth-yyyy').value) return;
+        if (document.getElementById('birth-date').value) return;
         var dt = new Date(d.birth_datetime);
         var dateStr = dt.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
         var placeStr = d.birth_place ? ' · ' + d.birth_place : '';
@@ -3650,13 +3611,13 @@ function _doRestoreAtomA() {
     try {
         var d = JSON.parse(raw);
         if (!d.birth_datetime) return;
-        var dt = new Date(d.birth_datetime);
-        document.getElementById('birth-dd').value      = dt.getDate();
-        document.getElementById('birth-mm').value      = dt.getMonth() + 1;
-        document.getElementById('birth-yyyy').value    = dt.getFullYear();
-        document.getElementById('birth-hh').value      = dt.getHours();
-        document.getElementById('birth-minseg').value  = String(dt.getMinutes()).padStart(2, '0');
-        if (typeof window._syncBirthDateFromSeg === 'function') window._syncBirthDateFromSeg();
+        var dt  = new Date(d.birth_datetime);
+        var _p2 = function(n) { return String(n).padStart(2, '0'); };
+        var bdEl = document.getElementById('birth-date');
+        var btEl = document.getElementById('birth-time');
+        if (bdEl) bdEl.value = dt.getFullYear() + '-' + _p2(dt.getMonth()+1) + '-' + _p2(dt.getDate());
+        if (btEl) btEl.value = _p2(dt.getHours()) + ':' + _p2(dt.getMinutes());
+        if (typeof window._onBirthNativeChanged === 'function') window._onBirthNativeChanged();
         var wEl = document.getElementById('birth-weight');
         if (wEl && d.weight) wEl.value = d.weight;
         var bhEl = document.getElementById('birth-height');
@@ -3715,7 +3676,7 @@ function _decodeA4lHexTag(tags) {
 
 async function _preInitFromNostr(pubkey) {
     if (!pubkey) return;
-    if (document.getElementById('birth-yyyy').value) return; // champs déjà remplis
+    if (document.getElementById('birth-date').value) return; // champs déjà remplis
 
     var relay = _relayUrl();
 
@@ -3977,25 +3938,32 @@ function _queryRelayFilter(relayUrl, filter) {
 })();
 
 // ── Pré-remplissage depuis atomic_match.html ─────────────────────────────
-document.addEventListener('DOMContentLoaded', () => {
-    const qp   = new URLSearchParams(location.search);
-    const dd   = qp.get('a-dd');
-    const mm   = qp.get('a-mm');
-    const yyyy = qp.get('a-yyyy');
-    if (!dd || !mm || !yyyy) return;
+document.addEventListener('DOMContentLoaded', function() {
+    var qp   = new URLSearchParams(location.search);
+    var dd   = qp.get('a-dd');
+    var mm   = qp.get('a-mm');
+    var yyyy = qp.get('a-yyyy');
+    if (dd && mm && yyyy) {
+        var _p2 = function(n) { return String(n).padStart(2, '0'); };
+        var bdEl = document.getElementById('birth-date');
+        var btEl = document.getElementById('birth-time');
+        if (bdEl) bdEl.value = yyyy + '-' + _p2(parseInt(mm,10)) + '-' + _p2(parseInt(dd,10));
+        var hh = qp.get('a-hh') || '12';
+        var mn = qp.get('a-mn')  || '00';
+        if (btEl) btEl.value = _p2(parseInt(hh,10)) + ':' + _p2(parseInt(mn,10));
+        if (typeof window._onBirthNativeChanged === 'function') window._onBirthNativeChanged();
+    }
 
-    const setV = (id, v) => { const el = document.getElementById(id); if (el && v !== null) el.value = v; };
-    setV('birth-dd',    dd);
-    setV('birth-mm',    mm);
-    setV('birth-yyyy',  yyyy);
-    setV('birth-hh',    qp.get('a-hh') || '12');
-    setV('birth-minseg', qp.get('a-mn') || '0');
-    if (typeof window._syncBirthDateFromSeg === 'function') window._syncBirthDateFromSeg();
-
-    const lo = parseFloat(qp.get('a-lo') || 0);
-    const la = parseFloat(qp.get('a-la') || 0);
+    var lo = parseFloat(qp.get('a-lo') || 0);
+    var la = parseFloat(qp.get('a-la') || 0);
     if ((lo !== 0 || la !== 0) && typeof _syncBirthLocation === 'function') {
         _syncBirthLocation(lo, la);
+    }
+
+    // Afficher le CTA de restauration si un profil est déjà enregistré
+    var restoreCta = document.getElementById('restore-cta');
+    if (restoreCta && localStorage.getItem('atomic_birth_data')) {
+        restoreCta.style.display = '';
     }
 });
 </script>

@@ -65,28 +65,7 @@
         .btn-location .loc-sub  { font-size:.7rem; color:rgba(255,255,255,.4); margin-top:1px; }
         .btn-location .loc-chevron { color:rgba(0,255,204,.5); font-size:.9rem; }
 
-        /* ── Modal Leaflet ── */
-        #loc-search-input {
-            background:rgba(255,255,255,.05) !important; border:1px solid rgba(255,255,255,.15) !important;
-            color:#ddd !important; font-size:.9rem; border-radius:8px 0 0 8px;
-        }
-        #loc-search-input:focus { border-color:var(--teal) !important; box-shadow:none !important; outline:none; }
-        #loc-search-btn {
-            background:rgba(0,255,204,.15); border:1px solid rgba(0,255,204,.3) !important;
-            color:var(--teal); font-weight:700; border-radius:0 8px 8px 0;
-        }
-        #loc-search-btn:hover { background:rgba(0,255,204,.3); }
-        #loc-result-label { font-size:.72rem; min-height:1rem; color:rgba(255,255,255,.4); margin-top:4px; }
-        #loc-map { height:280px; border-radius:10px; margin-top:8px; border:1px solid rgba(255,255,255,.08); }
-        #loc-map .leaflet-tile   { filter:brightness(.55) invert(1) contrast(1.1) saturate(.4) hue-rotate(195deg); }
-        #loc-map .leaflet-control-attribution { display:none; }
-        .btn-confirm-loc {
-            width:100%; margin-top:10px; padding:11px; border-radius:10px;
-            background:linear-gradient(135deg,rgba(0,255,204,.18),rgba(245,158,11,.1));
-            border:1px solid rgba(0,255,204,.35); color:#fff; font-weight:700;
-            font-size:.9rem; cursor:pointer; transition:background .18s;
-        }
-        .btn-confirm-loc:hover { background:linear-gradient(135deg,rgba(0,255,204,.3),rgba(245,158,11,.2)); }
+        /* ── Modal Leaflet — styles injectés par a4l-location-picker.js ── */
 
         /* ── Résultat ── */
         #result-block { display:none; }
@@ -180,6 +159,33 @@
         }
         .btn-geo:hover { background:rgba(0,255,204,.1); }
 
+        /* ── Inputs date/heure natifs (visiteur) ── */
+        .a4l-match-date {
+            color-scheme: dark;
+            background: rgba(255,255,255,.05) !important;
+            border: 1px solid rgba(255,255,255,.13) !important;
+            color: #e0e0e0 !important;
+            font-size: .88rem;
+        }
+        .a4l-match-date:focus { border-color: rgba(0,255,204,.5) !important; box-shadow: none !important; }
+        .a4l-match-date::-webkit-calendar-picker-indicator { filter: invert(.8) hue-rotate(120deg); opacity:.55; }
+
+        /* ── "Utiliser mon profil" button ── */
+        #btn-use-own-profile {
+            width:100%; padding:13px 16px; border-radius:12px; cursor:pointer;
+            background:linear-gradient(135deg,rgba(0,255,204,.18),rgba(102,126,234,.12));
+            border:1.5px solid rgba(0,255,204,.45); color:#fff;
+            text-align:left; display:flex; align-items:center; gap:12px;
+            margin-bottom:14px;
+        }
+
+        /* ── Flash de révélation ── */
+        #result-reveal-flash {
+            position:fixed; inset:0; background:#fff; z-index:9980;
+            pointer-events:none; opacity:0; transition:opacity .15s ease;
+        }
+        #result-reveal-flash.show { opacity:1; }
+
         /* ── Avantages utilisateurs ── */
         .benefits-grid {
             display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:16px;
@@ -202,6 +208,7 @@
 <body>
 
 <canvas id="bg-canvas"></canvas>
+<div id="result-reveal-flash"></div>
 
 <!-- Switch de thème (coin haut-gauche, partagé avec atomic.html) -->
 <button id="btn-theme-toggle" title="Changer de thème" onclick="_toggleTheme()"
@@ -239,21 +246,27 @@
             Ces données restent sur ton appareil — aucun envoi, aucun serveur.
         </p>
 
-        <div class="date-seg-row mb-1">
-            <div class="date-seg" style="width:50px"><label>Jour</label>
-                <input type="number" id="v-dd" min="1" max="31" placeholder="17" oninput="_syncVisitorDate()"></div>
-            <div class="date-seg-sep">/</div>
-            <div class="date-seg" style="width:50px"><label>Mois</label>
-                <input type="number" id="v-mm" min="1" max="12" placeholder="04" oninput="_syncVisitorDate()"></div>
-            <div class="date-seg-sep">/</div>
-            <div class="date-seg" style="flex:1"><label>Année</label>
-                <input type="number" id="v-yyyy" min="1920" max="2015" placeholder="1985" oninput="_syncVisitorDate()"></div>
-            <div class="date-seg-sep">·</div>
-            <div class="date-seg" style="width:42px"><label>HH</label>
-                <input type="number" id="v-hh" min="0" max="23" placeholder="12" oninput="_syncVisitorDate()"></div>
-            <div class="date-seg-sep">:</div>
-            <div class="date-seg" style="width:42px"><label>MM</label>
-                <input type="number" id="v-mn" min="0" max="59" placeholder="00" oninput="_syncVisitorDate()"></div>
+        <!-- CTA : utiliser son propre profil A4L (affiché si localStorage détecté) -->
+        <button id="btn-use-own-profile" style="display:none" onclick="_useOwnA4LProfile()">
+            <span style="font-size:1.6rem;flex-shrink:0">↩</span>
+            <span>
+                <span style="display:block;font-weight:800;font-size:.92rem;color:var(--primary)">Utiliser mon profil ATOM4LOVE</span>
+                <span style="display:block;font-size:.72rem;opacity:.7;margin-top:2px">Profil détecté · 1 clic pour pré-remplir</span>
+            </span>
+        </button>
+
+        <!-- Inputs natifs HTML5 — molettes iOS/Android -->
+        <div class="row g-2 mb-2">
+            <div class="col-7">
+                <label class="form-label small text-secondary text-uppercase mb-1" style="font-size:.65rem">📅 Date de naissance</label>
+                <input type="date" id="v-date" class="form-control form-control-sm a4l-match-date"
+                       min="1920-01-01" max="2015-12-31" oninput="_syncVisitorDate()">
+            </div>
+            <div class="col-5">
+                <label class="form-label small text-secondary text-uppercase mb-1" style="font-size:.65rem">🕐 Heure <span style="opacity:.5;font-size:.6em;text-transform:none;font-weight:400">(opt.)</span></label>
+                <input type="time" id="v-time" class="form-control form-control-sm a4l-match-date"
+                       oninput="_syncVisitorDate()">
+            </div>
         </div>
         <div class="date-display" id="v-date-display">— saisir ta date de naissance —</div>
 
@@ -267,7 +280,7 @@
                 <span style="color:rgba(0,255,204,.5)">›</span>
             </button>
             <button class="btn-location" id="btn-pick-location"
-                    data-bs-toggle="modal" data-bs-target="#loc-modal">
+                    onclick="_openVisitorLocPicker()">
                 <span class="loc-icon">📍</span>
                 <span class="loc-text">
                     <span class="loc-name" id="loc-btn-name">Choisir mon lieu de naissance</span>
@@ -386,33 +399,9 @@
 
 </div><!-- /page-content -->
 
-<!-- ── Modal Lieu de Naissance ───────────────────────────────────────── -->
-<div class="modal fade" id="loc-modal" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog modal-dialog-centered" style="max-width:min(96vw,480px)">
-    <div class="modal-content">
-      <div class="modal-header">
-        <span class="modal-title">📍 Lieu de naissance</span>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fermer"></button>
-      </div>
-      <div class="modal-body">
-        <div class="input-group">
-          <input type="text" id="loc-search-input" class="form-control"
-                 placeholder="Ville, pays… (ex : Paris, Lyon, Montréal)"
-                 onkeydown="if(event.key==='Enter'){_locSearch();event.preventDefault()}">
-          <button class="btn" id="loc-search-btn" type="button" onclick="_locSearch()">🔍</button>
-        </div>
-        <div id="loc-result-label">Recherchez une ville ou cliquez sur la carte</div>
-        <div id="loc-map"></div>
-        <button class="btn-confirm-loc" id="btn-confirm-loc" onclick="_confirmLocation()" disabled>
-            ✅ Confirmer ce lieu
-        </button>
-      </div>
-    </div>
-  </div>
-</div>
-
 <script src="bootstrap.bundle.min.js"></script>
 <script src="leaflet.js"></script>
+<script src="a4l-location-picker.js"></script>
 <script src="nacl-fast.min.js"></script>
 <script src="nostr.bundle.js"></script>
 <script src="phi2x.js"></script>
@@ -519,107 +508,94 @@ let _vDateISO = null;
 let _vTimeStr = '12:00';
 
 function _syncVisitorDate() {
-    const dd   = document.getElementById('v-dd').value;
-    const mm   = document.getElementById('v-mm').value;
-    const yyyy = document.getElementById('v-yyyy').value;
-    const hh   = document.getElementById('v-hh').value;
-    const mn   = document.getElementById('v-mn').value;
-    const disp = document.getElementById('v-date-display');
-    const btn  = document.getElementById('btn-compute');
-    if (!dd||!mm||!yyyy||parseInt(yyyy)<1920||parseInt(yyyy)>2015) {
-        disp.textContent = '— date invalide —'; _vDateISO = null; btn.disabled = true; btn.classList.remove('btn-ready'); return;
+    var dateVal = (document.getElementById('v-date') || {}).value || '';
+    var timeVal = (document.getElementById('v-time') || {}).value || '';
+    var disp = document.getElementById('v-date-display');
+    var btn  = document.getElementById('btn-compute');
+    if (!dateVal) {
+        disp.textContent = '— saisir ta date de naissance —';
+        _vDateISO = null; btn.disabled = true; btn.classList.remove('btn-ready'); return;
     }
-    const y = parseInt(yyyy), mo = parseInt(mm), d = parseInt(dd);
-    if (mo<1||mo>12||d<1||d>31) { disp.textContent = '— date invalide —'; _vDateISO = null; btn.disabled = true; btn.classList.remove('btn-ready'); return; }
-    _vDateISO = `${y}-${_fmt2(mo)}-${_fmt2(d)}`;
-    _vTimeStr = `${_fmt2(parseInt(hh)||12)}:${_fmt2(parseInt(mn)||0)}`;
-    const dt  = new Date(_vDateISO + 'T' + _vTimeStr);
-    disp.textContent = _fmtDateFR(dt);
-    const _canCompute = !!_bDateObj;
+    var y = parseInt(dateVal.split('-')[0] || '0', 10);
+    if (y < 1920 || y > 2015) {
+        disp.textContent = '— date invalide (1920–2015) —';
+        _vDateISO = null; btn.disabled = true; btn.classList.remove('btn-ready'); return;
+    }
+    _vDateISO = dateVal;
+    _vTimeStr = timeVal || '12:00';
+    var dt = new Date(_vDateISO + 'T' + _vTimeStr);
+    disp.textContent = typeof _fmtDateFR === 'function' ? _fmtDateFR(dt) : dateVal;
+    var _canCompute = !!_bDateObj;
     btn.disabled = !_canCompute;
     btn.classList.toggle('btn-ready', _canCompute);
 }
 
-// ── Carte Leaflet dans le modal ────────────────────────────────────────────
-let _locMap     = null;
-let _locMarker  = null;
-let _pendingLat = null;
-let _pendingLon = null;
+function _useOwnA4LProfile() {
+    try {
+        var raw = localStorage.getItem('atomic_birth_data');
+        if (!raw) return;
+        var d = JSON.parse(raw);
+        if (!d.birth_datetime) return;
+        var dt  = new Date(d.birth_datetime);
+        var _p2 = function(n) { return String(n).padStart(2, '0'); };
+        var vdEl = document.getElementById('v-date');
+        var vtEl = document.getElementById('v-time');
+        if (vdEl) vdEl.value = dt.getFullYear() + '-' + _p2(dt.getMonth()+1) + '-' + _p2(dt.getDate());
+        if (vtEl) vtEl.value = _p2(dt.getHours()) + ':' + _p2(dt.getMinutes());
+        _syncVisitorDate();
+        // Pré-remplir la géolocalisation si disponible
+        if (d.birth_lon !== undefined && d.birth_lat !== undefined) {
+            var lonEl = document.getElementById('v-lon');
+            var latEl = document.getElementById('v-lat');
+            if (lonEl) lonEl.value = d.birth_lon;
+            if (latEl) latEl.value = d.birth_lat;
+            var nameEl = document.getElementById('loc-btn-name');
+            var subEl  = document.getElementById('loc-btn-sub');
+            if (nameEl && d.birth_loc) nameEl.textContent = d.birth_loc;
+            if (subEl) subEl.textContent = 'lat ' + parseFloat(d.birth_lat).toFixed(2) + ' · lon ' + parseFloat(d.birth_lon).toFixed(2);
+        }
+    } catch(e) { console.warn('[A4L] _useOwnA4LProfile', e); }
+}
 
-function _initLocMap() {
-    if (_locMap) return;
-    _locMap = L.map('loc-map', { center: [20, 10], zoom: 2, zoomControl: true, attributionControl: false });
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18 }).addTo(_locMap);
-    _locMap.on('click', e => {
-        const { lat, lng } = e.latlng;
-        _setPendingLocation(lat, lng, null);
+function _scheduleResultReveal() {
+    var btn = document.getElementById('btn-compute');
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Calcul en cours…'; }
+    // Accélérer le Double Bang pendant 2s
+    var _accelEnd = Date.now() + 2000;
+    var _origAnim = window._dbAnimating;
+    if (typeof window._dbFrameBoost !== 'undefined') window._dbFrameBoost = true;
+    setTimeout(function() {
+        if (typeof window._dbFrameBoost !== 'undefined') window._dbFrameBoost = false;
+        // Flash blanc
+        var flash = document.getElementById('result-reveal-flash');
+        if (flash) {
+            flash.classList.add('show');
+            setTimeout(function() { flash.classList.remove('show'); }, 180);
+        }
+        // Haptic
+        if (navigator.vibrate) navigator.vibrate([40, 30, 80]);
+        // Révéler
+        _renderResult();
+        if (btn) { btn.disabled = false; btn.textContent = '🔄 Recalculer'; }
+    }, 2000);
+}
+
+// ── Location Picker — délègue à A4LLocationPicker (a4l-location-picker.js) ──
+function _openVisitorLocPicker() {
+    A4LLocationPicker.open({
+        lat: parseFloat(document.getElementById('v-lat').value) || 0,
+        lon: parseFloat(document.getElementById('v-lon').value) || 0,
+        onConfirm: function(la, lo, lb) {
+            document.getElementById('v-lat').value = la;
+            document.getElementById('v-lon').value = lo;
+            document.getElementById('loc-btn-name').textContent = lb || (la + '°, ' + lo + '°');
+            document.getElementById('loc-btn-sub').textContent  = 'lat ' + la.toFixed(2) + ' · lon ' + lo.toFixed(2);
+            _syncVisitorDate();
+        }
     });
 }
 
-function _setPendingLocation(lat, lon, label) {
-    _pendingLat = parseFloat(lat.toFixed(2));
-    _pendingLon = parseFloat(lon.toFixed(2));
-    if (_locMarker) _locMarker.setLatLng([_pendingLat, _pendingLon]);
-    else _locMarker = L.marker([_pendingLat, _pendingLon]).addTo(_locMap);
-    const lbl = label || `${_pendingLat.toFixed(2)}°N, ${_pendingLon.toFixed(2)}°E`;
-    document.getElementById('loc-result-label').textContent = '📍 ' + lbl;
-    document.getElementById('btn-confirm-loc').disabled = false;
-}
-
-async function _locSearch() {
-    const input = document.getElementById('loc-search-input');
-    const lbl   = document.getElementById('loc-result-label');
-    const q     = input.value.trim();
-    if (!q) return;
-    lbl.textContent = '🔍 Recherche…';
-    document.getElementById('loc-search-btn').disabled = true;
-    try {
-        const url  = 'https://nominatim.openstreetmap.org/search?q='
-                   + encodeURIComponent(q) + '&format=json&limit=1&accept-language=fr';
-        const data = await fetch(url, { headers:{ 'Accept':'application/json' } }).then(r => r.json());
-        if (data && data.length > 0) {
-            const place = data[0];
-            const lat   = parseFloat(place.lat);
-            const lon   = parseFloat(place.lon);
-            const name  = place.display_name.split(',').slice(0, 3).join(', ');
-            _locMap.setView([lat, lon], 7);
-            _setPendingLocation(lat, lon, name);
-        } else {
-            lbl.textContent = '⚠ Ville introuvable — cliquez sur la carte';
-        }
-    } catch(e) {
-        lbl.textContent = '⚠ Erreur réseau';
-    } finally {
-        document.getElementById('loc-search-btn').disabled = false;
-    }
-}
-
-function _confirmLocation() {
-    if (_pendingLat === null) return;
-    document.getElementById('v-lat').value = _pendingLat;
-    document.getElementById('v-lon').value = _pendingLon;
-
-    // Mettre à jour le bouton principal
-    const label = document.getElementById('loc-result-label').textContent.replace('📍 ', '');
-    document.getElementById('loc-btn-name').textContent = label || `${_pendingLat}°, ${_pendingLon}°`;
-    document.getElementById('loc-btn-sub').textContent  =
-        `lat ${_pendingLat.toFixed(2)} · lon ${_pendingLon.toFixed(2)}`;
-
-    bootstrap.Modal.getInstance(document.getElementById('loc-modal')).hide();
-    _syncVisitorDate(); // recalcule si date déjà remplie
-}
-
-// Initialiser la carte au premier affichage du modal
-document.getElementById('loc-modal').addEventListener('shown.bs.modal', () => {
-    _initLocMap();
-    _locMap.invalidateSize();
-    // Si déjà une position → recentrer
-    const existLon = parseFloat(document.getElementById('v-lon').value);
-    const existLat = parseFloat(document.getElementById('v-lat').value);
-    if (existLon !== 0 || existLat !== 0) {
-        _locMap.setView([existLat, existLon], 6);
-    }
-});
+// Location picker délégué à a4l-location-picker.js
 
 // ── Calcul résonance ──────────────────────────────────────────────────────
 let _matchResult  = null;
@@ -657,16 +633,14 @@ function _computeMatch() {
         // Archétype alchimique si les deux KINs sont disponibles
         _elemResult = (_kinA && _kinB) ? Phi2X.getDualElements(_kinA, _kinB) : null;
 
-        _renderResult();
+        _scheduleResultReveal();
     } catch(e) {
         console.error('[A4L match]', e);
         btn.disabled = false; btn.textContent = '🔮 Révéler notre résonance';
         const _errEl = document.getElementById('res-detail');
         if (_errEl) { _errEl.textContent = ''; const _s = document.createElement('span'); _s.style.color = '#ff8888'; _s.textContent = '⚠ Erreur : ' + (e.message || String(e)); _errEl.appendChild(_s); }
         document.getElementById('result-block').style.display='block';
-        return;
     }
-    btn.disabled = false; btn.textContent = '🔄 Recalculer';
 }
 
 function _renderResult() {
@@ -1116,6 +1090,12 @@ function _injectExtBadge(name, pubkey) {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
+    // Afficher le bouton "Utiliser mon profil" si profil A4L détecté
+    if (localStorage.getItem('atomic_birth_data')) {
+        var ownBtn = document.getElementById('btn-use-own-profile');
+        if (ownBtn) ownBtn.style.display = 'flex';
+    }
+
     // Preview phi2x avant le calcul — utilise les données de B si disponibles
     (function _startPreview() {
         const bUnix = (_bDateObj && !isNaN(_bDateObj))

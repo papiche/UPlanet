@@ -45,8 +45,6 @@ html, body { margin:0; padding:0; height:100%; overflow:hidden;
     display:flex; align-items:center; justify-content:space-between; flex-shrink:0;
 }
 #panel-head button { background:none; border:none; color:rgba(255,255,255,.35); cursor:pointer; font-size:.95rem; }
-#sort-toggle { font-size:.82rem; padding:3px 7px; border:1px solid rgba(255,255,255,.12) !important; border-radius:10px; transition:all .2s; }
-#sort-toggle:hover { color:#00ffcc !important; border-color:rgba(0,255,204,.3) !important; }
 #atom-list { flex:1; overflow-y:auto; padding:4px 0; }
 .atom-row {
     padding:9px 12px; border-bottom:1px solid rgba(255,255,255,.04);
@@ -121,14 +119,13 @@ html, body { margin:0; padding:0; height:100%; overflow:hidden;
 }
 #dm-st { font-size:.68rem; color:rgba(255,255,255,.3); margin-top:7px; text-align:center; min-height:.9rem; }
 
-/* ── Pentagon toggle ── */
+/* ── Pentagon toggle (intégré dans #panel-head) ── */
 #penta-btn {
-    position:fixed; bottom:70px; left:14px; z-index:900; padding:8px 13px;
-    border-radius:18px; cursor:pointer; font-size:.72rem; font-weight:700;
-    background:rgba(8,6,2,.88); border:1px solid rgba(0,255,204,.22);
-    color:rgba(0,255,204,.65); backdrop-filter:blur(8px); transition:all .2s;
+    padding:5px 10px; border-radius:12px; cursor:pointer; font-size:.72rem; font-weight:700;
+    background:rgba(255,255,255,.05); border:1px solid rgba(0,255,204,.2);
+    color:rgba(0,255,204,.65); transition:all .2s;
 }
-#penta-btn.active { background:rgba(0,255,204,.1); border-color:rgba(0,255,204,.55); color:#00ffcc; }
+#penta-btn.active { background:rgba(0,255,204,.1); border-color:rgba(0,255,204,.5); color:#00ffcc; }
 
 /* ── Stats bar ── */
 #stats-bar {
@@ -181,6 +178,48 @@ html, body { margin:0; padding:0; height:100%; overflow:hidden;
 }
 #log-zone::-webkit-scrollbar { width: 3px; }
 #log-zone::-webkit-scrollbar-thumb { background: rgba(255,255,255,.1); border-radius: 2px; }
+
+/* ── Bottom sheet (mobile ≤ 768px) ── */
+@media (max-width: 768px) {
+    #panel {
+        top: auto; right: 0; bottom: 0; left: 0; width: 100%;
+        height: 50vh; max-height: 50vh;
+        border-left: none; border-top: 1px solid rgba(0,255,204,.2);
+        border-radius: 16px 16px 0 0;
+        transform: translateY(100%);
+    }
+    #panel.open { transform: translateY(0); }
+}
+
+/* ── Segmented control Résonance / Proximité ── */
+#sort-seg {
+    display: inline-flex; border-radius: 10px; overflow: hidden;
+    border: 1px solid rgba(255,255,255,.12); flex-shrink: 0;
+}
+.sort-seg-btn {
+    padding: 3px 9px; font-size: .72rem; cursor: pointer;
+    background: none; border: none; color: rgba(255,255,255,.4);
+    transition: all .15s; white-space: nowrap;
+}
+.sort-seg-btn.active { background: rgba(0,255,204,.15); color: #00ffcc; }
+.sort-seg-btn:first-child { border-right: 1px solid rgba(255,255,255,.1); }
+
+/* ── MarkerCluster — override cyberpunk teal ── */
+.marker-cluster-small,
+.marker-cluster-medium,
+.marker-cluster-large {
+    background-color: rgba(0,40,35,.85) !important;
+    border: 1px solid rgba(0,255,204,.4) !important;
+    box-shadow: 0 0 10px rgba(0,255,204,.35), 0 0 22px rgba(0,255,204,.15) !important;
+}
+.marker-cluster-small div,
+.marker-cluster-medium div,
+.marker-cluster-large div {
+    background-color: rgba(0,255,204,.18) !important;
+    color: #00ffcc !important;
+    font-weight: 800 !important;
+    font-size: .78rem !important;
+}
     </style>
 </head>
 <body>
@@ -196,7 +235,11 @@ html, body { margin:0; padding:0; height:100%; overflow:hidden;
 <div id="panel">
     <div id="panel-head">
         <span>⚛ Atomes (<span id="panel-count">0</span>)</span>
-        <button id="sort-toggle" onclick="_cycleSortMode()" title="Changer le tri — Résonance / Proximité">⚡</button>
+        <button id="penta-btn" onclick="_togglePentagons()">⬟ Pentagones</button>
+        <div id="sort-seg">
+            <button class="sort-seg-btn active" id="sort-btn-resonance" onclick="_setSortMode('resonance')">⚡ Résonance</button>
+            <button class="sort-seg-btn" id="sort-btn-proximity" onclick="_setSortMode('proximity')">📍 Proximité</button>
+        </div>
         <button onclick="_togglePanel()">✕</button>
     </div>
     <div id="search-zone">
@@ -211,13 +254,12 @@ html, body { margin:0; padding:0; height:100%; overflow:hidden;
     <div id="log-zone"></div>
 </div>
 
-<button id="penta-btn" onclick="_togglePentagons()">⬟ Pentagones</button>
-<div id="stats-bar" id="stats-bar"></div>
+<div id="stats-bar"></div>
 
 <!-- DM Modal -->
 <div id="dm-modal" onclick="_closeDm(event)">
     <div id="dm-box" onclick="event.stopPropagation()">
-        <div class="dm-title">💌 Message privé (NIP-04)</div>
+        <div class="dm-title">💌 Message privé (NIP-44)</div>
         <div class="dm-to" id="dm-to"></div>
         <textarea id="dm-msg" placeholder="Votre message — chiffré de bout en bout…"></textarea>
         <div class="dm-row">
@@ -436,12 +478,15 @@ function _fmtDist(km) {
     return Math.round(km / 100) / 10 + ' Mm';
 }
 
-function _cycleSortMode() {
-    _sortMode = (_sortMode === 'resonance') ? 'proximity' : 'resonance';
-    var btn = document.getElementById('sort-toggle');
-    if (btn) btn.textContent = _sortMode === 'proximity' ? '📍' : '⚡';
+function _setSortMode(mode) {
+    _sortMode = (mode === 'proximity') ? 'proximity' : 'resonance';
+    var bR = document.getElementById('sort-btn-resonance');
+    var bP = document.getElementById('sort-btn-proximity');
+    if (bR) bR.classList.toggle('active', _sortMode === 'resonance');
+    if (bP) bP.classList.toggle('active', _sortMode === 'proximity');
     _renderPanel();
 }
+function _cycleSortMode() { _setSortMode(_sortMode === 'resonance' ? 'proximity' : 'resonance'); }
 
 // ── Conformité a4l ────────────────────────────────────────────────────────────
 // Niveaux de conformité (du plus fort au plus faible) :
@@ -704,12 +749,33 @@ async function _loadMultipassProfiles(relay) {
     });
 }
 
-// ── DM NIP-04 ─────────────────────────────────────────────────────────────────
+// ── DM NIP-44 (fallback NIP-04) ───────────────────────────────────────────────
+function _dmEncMode() {
+    if (window.nostr && window.nostr.nip44 && typeof window.nostr.nip44.encrypt === 'function') return 'nip44';
+    if (window.nostr && window.nostr.nip04 && typeof window.nostr.nip04.encrypt === 'function') return 'nip04';
+    if (window.nostr && typeof window.nostr.encrypt === 'function') return 'nip04-legacy';
+    return null;
+}
+
+async function _dmEncrypt(pubkey, text) {
+    var mode = _dmEncMode();
+    if (mode === 'nip44')       return window.nostr.nip44.encrypt(pubkey, text);
+    if (mode === 'nip04')       return window.nostr.nip04.encrypt(pubkey, text);
+    if (mode === 'nip04-legacy') return window.nostr.encrypt(pubkey, text);
+    throw new Error('Extension NOSTR requise (Alby, nos2x, Flamingo…)');
+}
+
 function _openDm(pubkey, name) {
     _dmTarget = { pubkey: pubkey, name: name };
     document.getElementById('dm-to').textContent = 'À : ' + name;
     document.getElementById('dm-msg').value = '';
     document.getElementById('dm-st').textContent = '';
+    // Mettre à jour le label selon le mode disponible
+    var titleEl = document.querySelector('#dm-box .dm-title');
+    if (titleEl) {
+        var mode = _dmEncMode();
+        titleEl.textContent = '💌 Message privé (' + (mode === 'nip44' ? 'NIP-44' : mode === 'nip04' ? 'NIP-04' : 'Non chiffré') + ')';
+    }
     document.getElementById('dm-modal').classList.add('open');
     setTimeout(function() { document.getElementById('dm-msg').focus(); }, 80);
 }
@@ -737,21 +803,21 @@ async function _sendDm() {
         }
     }
 
-    if (!window.nostr || typeof window.nostr.encrypt !== 'function') {
-        st.textContent = '⚠ Extension NOSTR avec NIP-04 requise'; return;
+    if (!_dmEncMode()) {
+        st.textContent = '⚠ Extension NOSTR requise (Alby, nos2x, Flamingo…)'; return;
     }
 
     btn.disabled = true; btn.textContent = '⏳ Chiffrement…'; st.textContent = '';
 
     try {
-        var cipher  = await window.nostr.encrypt(_dmTarget.pubkey, msg);
-        var evRaw   = {
+        var cipher = await _dmEncrypt(_dmTarget.pubkey, msg);
+        var evRaw  = {
             kind: 4, content: cipher,
             tags: [['p', _dmTarget.pubkey]],
             created_at: Math.floor(Date.now() / 1000),
             pubkey: window.userPubkey
         };
-        var signed  = await window.nostr.signEvent(evRaw);
+        var signed = await window.nostr.signEvent(evRaw);
         await _publishToRelay(signed);
         st.textContent = '✅ Message envoyé !';
         setTimeout(function() { document.getElementById('dm-modal').classList.remove('open'); }, 1400);

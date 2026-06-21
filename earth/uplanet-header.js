@@ -79,7 +79,7 @@
     }
 
     // ── Styles (scopés #uph) ───────────────────────────────────────────────────
-    var _CSS = '#uph{position:fixed;top:5px;left:50%;transform:translateX(-50%);z-index:9500;'
+    var _CSS = '#uph{position:fixed;top:5px;left:50%;transform:translateX(-50%);z-index:1200;'
         + 'display:flex;align-items:center;gap:5px;cursor:grab;'
         + 'background:rgba(7,7,15,.78);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);'
         + 'border:1px solid rgba(255,255,255,.1);border-radius:20px;'

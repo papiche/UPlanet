@@ -529,7 +529,44 @@ function _previewText(text) {
 function _renderEmptyConvs() {
     document.getElementById('conv-list').innerHTML =
         '<div class="empty-state"><div class="empty-icon">💬</div>' +
-        '<div class="empty-txt">Aucun message<br>Cliquez <b>+ DM</b> pour écrire</div></div>';
+        '<div class="empty-txt">Aucun message</div>' +
+        '<button onclick="_startBroLoveChat()" style="' +
+            'margin-top:14px;padding:11px 20px;border-radius:12px;cursor:pointer;' +
+            'background:linear-gradient(135deg,rgba(0,255,204,.18),rgba(102,126,234,.12));' +
+            'border:1.5px solid rgba(0,255,204,.45);color:#fff;font-size:.85rem;font-weight:700;' +
+        '">💌 Demander mon Analyse à BRO</button></div>';
+}
+
+function _stationUrl() {
+    var u = _upassportUrl();
+    return u.replace(':54321', ':12345').replace(/\/u\./, '/:12345/').replace('u.', '').replace(':54321', ':12345');
+}
+
+async function _startBroLoveChat() {
+    var btn = document.querySelector('#conv-list button');
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Recherche du BRO…'; }
+    try {
+        var stUrl = _upassportUrl().replace(':54321', ':12345').replace('/u.', '/').replace(/\/\/u\./, '//');
+        // URL station 12345 : remplace le sous-domaine u. par le domaine direct
+        var h = location.hostname;
+        if (h.startsWith('ipfs.'))      stUrl = 'http://' + h.slice(5) + ':12345';
+        else if (h.startsWith('u.'))    stUrl = 'http://' + h.slice(2) + ':12345';
+        else                            stUrl = 'http://' + h + ':12345';
+
+        var resp = await fetch(stUrl + '/12345.json', { signal: AbortSignal.timeout ? AbortSignal.timeout(5000) : undefined });
+        var json = await resp.json();
+        var nodeHex = json.NODEHEX || json.nodehex || json.ASTROPORT || '';
+        if (!nodeHex || !/^[0-9a-f]{64}$/i.test(nodeHex)) throw new Error('NODEHEX introuvable');
+
+        await _openChat(nodeHex.toLowerCase());
+        // Pré-remplir le message "LOVE"
+        var inp = document.getElementById('chat-input');
+        if (inp) { inp.value = 'LOVE'; inp.dispatchEvent(new Event('input')); inp.focus(); }
+    } catch(e) {
+        console.warn('[A4L chat] _startBroLoveChat:', e);
+        if (btn) { btn.disabled = false; btn.textContent = '💌 Demander mon Analyse à BRO'; }
+        alert('BRO introuvable : ' + (e.message || String(e)));
+    }
 }
 
 // ── Open chat ─────────────────────────────────────────────────────────────────
@@ -1126,6 +1163,41 @@ document.addEventListener('DOMContentLoaded', function() {
             setTimeout(_hideLoad, 3500);
         }
     }, 7000);
+
+    // ── Gestion du clavier virtuel mobile ────────────────────────────────────
+    var _chatInp = document.getElementById('chat-input');
+    var _ibar    = document.getElementById('input-bar');
+    if (_chatInp && _ibar) {
+        if ('visualViewport' in window) {
+            // Méthode précise : visualViewport signale le rétrécissement dû au clavier
+            window.visualViewport.addEventListener('resize', function() {
+                var vv    = window.visualViewport;
+                var kbH   = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+                var bnav  = document.getElementById('a4l-bottom-nav');
+                if (kbH > 80) {
+                    _ibar.style.bottom = kbH + 'px';
+                    if (bnav) bnav.style.display = 'none';
+                } else {
+                    _ibar.style.bottom = '58px';
+                    if (bnav) bnav.style.display = '';
+                }
+            });
+        } else {
+            // Fallback focus/blur pour les navigateurs sans visualViewport
+            _chatInp.addEventListener('focus', function() {
+                var bnav = document.getElementById('a4l-bottom-nav');
+                _ibar.style.bottom = '0';
+                if (bnav) bnav.style.display = 'none';
+            });
+            _chatInp.addEventListener('blur', function() {
+                setTimeout(function() {
+                    var bnav = document.getElementById('a4l-bottom-nav');
+                    _ibar.style.bottom = '58px';
+                    if (bnav) bnav.style.display = '';
+                }, 200);
+            });
+        }
+    }
 });
 </script>
 <script src="common.js"></script>

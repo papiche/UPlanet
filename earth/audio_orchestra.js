@@ -9,9 +9,9 @@
 const PHI = 1.6180339887;
 
 // ── Échelle de fréquences ────────────────────────────────────────────────────
-// ωbio ∈ [0.1, 49.9] Hz → on l'ancre sur la gamme audible (×11.25 ≈ base 110 Hz)
-// Ce facteur place le "centre" (ωbio=10) autour de 112 Hz (A2 grave).
-const AUDIBLE_SCALE = 11.25;
+// AUDIBLE_SCALE = 1 : ωbio (0.1–49.9 Hz) est utilisé directement en Hz,
+// ce qui ancre le son dans les infra-basses/sub-basses (mystique, profond, grave).
+const AUDIBLE_SCALE = 1;
 const BASE_GAIN     = 0.12;   // volume de base, faible pour ne pas surprendre
 
 // ── Note fondamentale → fréquence tempérée la plus proche ───────────────────
@@ -63,7 +63,7 @@ const AudioOrchestra = (function() {
         const now = _ctx.currentTime;
         const osc  = _ctx.createOscillator();
         const gain = _ctx.createGain();
-        osc.type          = waveType || 'sine';
+        osc.type          = waveType || 'triangle'; // triangle : harmoniques naturelles, plus chaud que sine
         osc.frequency.setValueAtTime(freq, now);
         gain.gain.setValueAtTime(gainVal, now);
 
@@ -104,12 +104,18 @@ const AudioOrchestra = (function() {
 
     function setVolume(v) {
         _volume = Math.max(0, Math.min(1, v));
-        if (_masterGain) _masterGain.gain.value = _muted ? 0 : _volume * BASE_GAIN;
+        if (_masterGain) {
+            _masterGain.gain.cancelScheduledValues(_ctx.currentTime);
+            _masterGain.gain.value = _muted ? 0 : _volume * BASE_GAIN;
+        }
     }
 
     function toggleMute() {
         _muted = !_muted;
-        if (_masterGain) _masterGain.gain.value = _muted ? 0 : _volume * BASE_GAIN;
+        if (_masterGain) {
+            _masterGain.gain.cancelScheduledValues(_ctx.currentTime);
+            _masterGain.gain.value = _muted ? 0 : _volume * BASE_GAIN;
+        }
         return _muted;
     }
 
@@ -138,24 +144,30 @@ const AudioOrchestra = (function() {
         const oscs  = [];
         const gains = [];
 
-        // Fondamentale
-        const v1 = _makeVoice(freqF, 1.0, 'sine', lfoHz, 0.3);
+        // Fondamentale (triangle pour un timbre plus chaud)
+        const v1 = _makeVoice(freqF, 1.0, 'triangle', lfoHz, 0.3);
         oscs.push(...v1.oscs); gains.push(...v1.gains);
 
         if (polarity === 0) {
             // Φ-Wave : harmonique d'or
-            const v2 = _makeVoice(freqF * PHI, 0.45, 'sine', lfoHz * PHI, 0.15);
+            const v2 = _makeVoice(freqF * PHI, 0.45, 'triangle', lfoHz * PHI, 0.15);
             oscs.push(...v2.oscs); gains.push(...v2.gains);
             // 2ème harmonique (3/2 · freqF ≈ quinte)
-            const v3 = _makeVoice(freqF * 1.5, 0.25, 'sine', 0, 0);
+            const v3 = _makeVoice(freqF * 1.5, 0.25, 'triangle', 0, 0);
             oscs.push(...v3.oscs); gains.push(...v3.gains);
         } else {
-            // Octave-Wave : empilage d'octaves
-            const v2 = _makeVoice(freqF * 2, 0.35, 'sine', lfoHz * 2, 0.15);
+            // Octave-Wave : harmoniques réduites pour ne pas percer l'oreille
+            const v2 = _makeVoice(freqF * 2, 0.15, 'triangle', lfoHz * 2, 0.10);
             oscs.push(...v2.oscs); gains.push(...v2.gains);
-            const v3 = _makeVoice(freqF * 4, 0.15, 'sine', 0, 0);
+            const v3 = _makeVoice(freqF * 4, 0.05, 'triangle', 0, 0);
             oscs.push(...v3.oscs); gains.push(...v3.gains);
         }
+
+        // Fondu d'entrée doux (3s) — attaque progressive, non brutale
+        const now = _ctx.currentTime;
+        _masterGain.gain.cancelScheduledValues(now);
+        _masterGain.gain.setValueAtTime(0, now);
+        _masterGain.gain.linearRampToValueAtTime(_muted ? 0 : _volume * BASE_GAIN, now + 3);
 
         _profileSrc = { oscs, gains, lfo: v1.lfo, lfoGain: v1.lfoGain };
     }

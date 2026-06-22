@@ -127,6 +127,14 @@ html, body { margin:0; padding:0; height:100%; overflow:hidden;
 }
 #penta-btn.active { background:rgba(0,255,204,.1); border-color:rgba(0,255,204,.5); color:#00ffcc; }
 
+/* ── Couche Home toggle ── */
+#home-btn {
+    padding:5px 10px; border-radius:12px; cursor:pointer; font-size:.72rem; font-weight:700;
+    background:rgba(255,255,255,.05); border:1px solid rgba(180,100,255,.2);
+    color:rgba(180,100,255,.65); transition:all .2s;
+}
+#home-btn.active { background:rgba(180,100,255,.1); border-color:rgba(180,100,255,.5); color:#b464ff; }
+
 /* ── Stats bar ── */
 #stats-bar {
     position:fixed; bottom:68px; left:50%; transform:translateX(-50%);
@@ -236,6 +244,7 @@ html, body { margin:0; padding:0; height:100%; overflow:hidden;
     <div id="panel-head">
         <span>⚛ Atomes (<span id="panel-count">0</span>)</span>
         <button id="penta-btn" onclick="_togglePentagons()">⬟ Pentagones</button>
+        <button id="home-btn" onclick="_toggleHomeLayer()">🏠 Home</button>
         <div id="sort-seg">
             <button class="sort-seg-btn active" id="sort-btn-resonance" onclick="_setSortMode('resonance')">⚡ Résonance</button>
             <button class="sort-seg-btn" id="sort-btn-proximity" onclick="_setSortMode('proximity')">📍 Proximité</button>
@@ -421,6 +430,72 @@ var _markerCluster = L.markerClusterGroup({
     chunkedLoading: true
 });
 _markerCluster.addTo(map);
+
+// ── Couche Home (d=atom4love-home) ───────────────────────────────────────────
+var _homeLayer    = L.layerGroup();   // marqueurs home (pentagon ~50 km)
+var _homeOn       = false;
+var _homeLoaded   = false;
+
+async function _loadHomeLayer() {
+    if (_homeLoaded) return;
+    _homeLoaded = true;
+    var relay = _relayUrl();
+    var evs = await _wsQuery(relay, { kinds:[30078], '#d':['atom4love-home'], limit:2000 }, 10000);
+    _log('Home layer : ' + evs.length + ' événements atom4love-home');
+
+    // Dédupliquer par pubkey (plus récent gagne)
+    var byPub = {};
+    evs.forEach(function(ev) {
+        if (!byPub[ev.pubkey] || ev.created_at > byPub[ev.pubkey].created_at) byPub[ev.pubkey] = ev;
+    });
+
+    // Index pubkeys avec un atom4love (naissance) pour croiser les données
+    var birthPubs = {};
+    _atoms.forEach(function(a) { birthPubs[a.pubkey] = a; });
+
+    Object.values(byPub).forEach(function(ev) {
+        // Tags lat/lon exacts requis (0.01° ≈ 1 km)
+        var latTag = ev.tags.find(function(t) { return t[0] === 'lat'; });
+        var lonTag = ev.tags.find(function(t) { return t[0] === 'lon'; });
+        if (!latTag || !lonTag) return;
+        var bLat = parseFloat(latTag[1]);
+        var bLon = parseFloat(lonTag[1]);
+        if (isNaN(bLat) || isNaN(bLon)) return;
+        // Micro-jitter (±0.005° ≈ ±500 m) pour éviter superposition exacte
+        var h = parseInt(ev.pubkey.slice(0, 4), 16);
+        var jLat = bLat + Math.sin(h) * 0.005;
+        var jLon = bLon + Math.cos(h) * 0.005;
+
+        // Icone maison violette — légèrement plus grande si aussi un atom naissance connu
+        var hasBirth = !!birthPubs[ev.pubkey];
+        var sz = hasBirth ? 12 : 9;
+        var icon = L.divIcon({
+            html: '<div style="width:' + sz + 'px;height:' + sz + 'px;border-radius:50%;' +
+                  'background:rgba(180,100,255,.8);border:1.5px solid #b464ff;' +
+                  'box-shadow:0 0 6px rgba(180,100,255,.6)"></div>',
+            className: '', iconAnchor: [sz/2, sz/2]
+        });
+        var m = L.marker([jLat, jLon], { icon: icon });
+        var label = hasBirth
+            ? '🏠🌍 ' + ev.pubkey.slice(0, 8) + '…'
+            : '🏠 ' + ev.pubkey.slice(0, 8) + '…';
+        m.bindTooltip(label, { direction: 'top', offset: [0, -6] });
+        _homeLayer.addLayer(m);
+    });
+    _log('Home layer : ' + _homeLayer.getLayers().length + ' marqueurs placés');
+}
+
+function _toggleHomeLayer() {
+    _homeOn = !_homeOn;
+    var btn = document.getElementById('home-btn');
+    if (btn) btn.classList.toggle('active', _homeOn);
+    if (_homeOn) {
+        _homeLayer.addTo(map);
+        _loadHomeLayer();  // charge si premier appel
+    } else {
+        map.removeLayer(_homeLayer);
+    }
+}
 
 // ── Pentagones ────────────────────────────────────────────────────────────────
 var PENTA_COLS = ['#00ffcc','#f59e0b','#a855f7','#3b82f6','#ef4444',

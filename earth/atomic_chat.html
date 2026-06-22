@@ -6,159 +6,80 @@
     <title>💬 Messages — UPlanet</title>
     <link rel="stylesheet" href="core-theme.css">
     <link rel="stylesheet" href="uplanet-atomic.css">
+    <link rel="stylesheet" href="a4l-chat-layout.css">
     <style>
-* { box-sizing: border-box; }
-html, body { margin:0; padding:0; height:100%; overflow:hidden; background:#080602; color:#e0e0e0; font-family:system-ui,sans-serif; }
-
-/* ── Header ── géré par #a4l-header de uplanet-atomic.css */
-
-/* ── Loading ── */
-#loading {
-    position:fixed; inset:0; z-index:2000; background:rgba(8,6,2,.96);
-    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px;
-}
+/* ── Loading overlay ── */
+#loading { position:fixed; inset:0; z-index:2000; background:rgba(8,6,2,.96); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; }
 #loading.hidden { display:none; }
 #load-msg { font-size:.78rem; color:rgba(255,255,255,.35); }
 
-/* ── Search bar ── */
-#search-wrap { padding:6px 12px 4px; background:rgba(8,6,2,1); display:none; }
-#search-wrap.visible { display:block; }
-#search-inp {
-    width:100%; background:rgba(255,255,255,.05);
-    border:1px solid rgba(255,255,255,.09); border-radius:18px;
-    padding:6px 14px; color:#e0e0e0; font-size:.79rem;
-    font-family:system-ui,sans-serif; outline:none;
-}
-#search-inp:focus { border-color:rgba(0,255,204,.25); }
-
-/* ── Conversation list ── */
-#view-list { position:fixed; inset:0; top:48px; overflow-y:auto; }
-.conv-item {
-    display:flex; align-items:center; gap:10px;
-    padding:11px 14px; border-bottom:1px solid rgba(255,255,255,.04);
-    cursor:pointer; transition:background .12s;
-}
-.conv-item:hover { background:rgba(0,255,204,.04); }
-.conv-av {
-    width:42px; height:42px; border-radius:50%; flex-shrink:0;
-    background:rgba(0,255,204,.08); border:1.5px solid rgba(0,255,204,.18);
-    display:flex; align-items:center; justify-content:center;
-    font-size:1.05rem; overflow:hidden;
-}
-.conv-av img { width:100%; height:100%; object-fit:cover; }
-.conv-body { flex:1; min-width:0; }
-.conv-name { font-size:.83rem; font-weight:700; color:#e0e0e0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.conv-preview { font-size:.71rem; color:rgba(255,255,255,.36); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:2px; }
-.conv-time { font-size:.64rem; color:rgba(255,255,255,.22); flex-shrink:0; }
-
-/* ── Chat thread ── */
-#view-chat { position:fixed; inset:0; top:48px; bottom:114px; overflow-y:auto; padding:10px 12px 8px; display:none; flex-direction:column; gap:6px; }
+/* Mobile : cacher #btn-sb-toggle sur desktop */
+@media (min-width:768px) { #btn-sb-toggle { display:none !important; } }
 
 /* ── Date separator ── */
-.date-sep { display:flex; align-items:center; gap:8px; padding:10px 4px; }
-.date-sep-line { flex:1; height:1px; background:rgba(255,255,255,.07); }
-.date-sep-text { font-size:.63rem; color:rgba(255,255,255,.22); flex-shrink:0; white-space:nowrap; }
+.date-sep { display:flex; justify-content:center; padding:8px 0; }
+.date-sep-text { font-size:.66rem; color:rgba(255,255,255,.4); background:rgba(255,255,255,.07); border-radius:12px; padding:3px 10px; }
 
-/* ── Messages ── */
-.msg-row { display:flex; gap:8px; align-items:flex-end; }
-.msg-row.me { flex-direction:row-reverse; }
-.msg-av { width:26px; height:26px; border-radius:50%; flex-shrink:0; background:rgba(255,255,255,.07); display:flex; align-items:center; justify-content:center; font-size:.72rem; overflow:hidden; }
+/* ── Messages — WA/TG style ── */
+.msg-row { display:flex; align-items:flex-end; margin-bottom:2px; }
+.msg-row.me   { flex-direction:row-reverse; padding-right:8px; }
+.msg-row.them { flex-direction:row; padding-left:8px; }
+.msg-row.group-start { margin-top:10px; }
+.msg-av { width:28px; height:28px; border-radius:50%; flex-shrink:0; background:rgba(0,255,204,.1); display:flex; align-items:center; justify-content:center; font-size:.75rem; overflow:hidden; margin-right:6px; visibility:hidden; }
 .msg-av img { width:100%; height:100%; object-fit:cover; }
-.msg-wrap { display:flex; flex-direction:column; max-width:76%; }
-.msg-row.me .msg-wrap { align-items:flex-end; }
-.msg-bubble {
-    max-width:100%; padding:8px 12px; border-radius:14px;
-    font-size:.81rem; line-height:1.46; word-break:break-word;
-}
-.msg-bubble.me   { background:rgba(0,255,204,.12); border:1px solid rgba(0,255,204,.22); border-bottom-right-radius:3px; }
-.msg-bubble.them { background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.09); border-bottom-left-radius:3px; }
-.msg-bubble.pending { opacity:.52; }
-.msg-bubble.error   { border-color:rgba(255,80,80,.4); background:rgba(255,80,80,.06); }
-.msg-time { font-size:.58rem; color:rgba(255,255,255,.2); margin-top:3px; display:flex; align-items:center; gap:4px; }
-.msg-tick { font-size:.6rem; color:rgba(255,255,255,.2); }
-.msg-tick.sent { color:rgba(0,255,204,.5); }
+.msg-row.them.group-last .msg-av { visibility:visible; }
+.msg-row.me .msg-av { display:none; }
+.msg-wrap { display:flex; flex-direction:column; max-width:82%; }
+.msg-row.me .msg-wrap   { align-items:flex-end; }
+.msg-row.them .msg-wrap { align-items:flex-start; }
 
-/* ── Image bubble ── */
+/* Bulles */
+.msg-bubble { max-width:100%; padding:7px 11px 4px; font-size:.84rem; line-height:1.46; word-break:break-word; position:relative; }
+.msg-bubble.me   { background:#1a3d2f; border-radius:14px 14px 4px 14px; color:#e5ffe5; }
+.msg-bubble.them { background:#1f2937; border-radius:14px 14px 14px 4px; color:#e8e8e8; }
+.msg-bubble.me.group-mid,.msg-bubble.me.group-first     { border-radius:14px; }
+.msg-bubble.them.group-mid,.msg-bubble.them.group-first { border-radius:14px; }
+.msg-bubble.pending { opacity:.55; }
+.msg-bubble.error   { background:rgba(180,30,30,.35) !important; }
+
+/* Meta heure/coches — flottant dans la bulle */
+.msg-meta { display:flex; align-items:center; justify-content:flex-end; gap:3px; float:right; margin-left:10px; margin-top:2px; margin-bottom:-1px; font-size:.62rem; color:rgba(255,255,255,.32); line-height:1.2; }
+.msg-bubble.me .msg-meta { color:rgba(180,230,200,.5); }
+.msg-tick { font-size:.68rem; }
+.msg-tick.sent { color:rgba(0,255,204,.65); }
+.msg-ttl-badge { font-size:.58rem; color:rgba(255,180,50,.6); margin-right:3px; }
+
+/* Markdown dans les bulles */
+.msg-bubble p  { margin:0 0 6px; }
+.msg-bubble p:last-child { margin-bottom:0; }
+.msg-bubble ul,.msg-bubble ol { margin:4px 0 6px 16px; padding:0; }
+.msg-bubble li { margin-bottom:2px; }
+.msg-bubble h1,.msg-bubble h2,.msg-bubble h3 { font-size:.88rem; font-weight:700; margin:6px 0 3px; color:#fff; }
+.msg-bubble strong { color:#fff; font-weight:700; }
+.msg-bubble em { opacity:.8; }
+.msg-bubble code { background:rgba(0,255,204,.1); border:1px solid rgba(0,255,204,.2); border-radius:4px; padding:1px 5px; font-size:.78rem; font-family:monospace; color:#00ffcc; }
+.msg-bubble pre { background:rgba(0,0,0,.4); border:1px solid rgba(255,255,255,.08); border-radius:7px; padding:8px 10px; overflow-x:auto; margin:5px 0; }
+.msg-bubble pre code { background:none; border:none; padding:0; font-size:.74rem; color:#ccc; }
+.msg-bubble a { color:#00ffcc; text-decoration:underline; word-break:break-all; }
+.msg-bubble a:hover { opacity:.78; }
+.msg-bubble blockquote { border-left:3px solid rgba(0,255,204,.4); margin:4px 0; padding:2px 8px; color:rgba(255,255,255,.55); font-style:italic; }
+.msg-bubble hr { border:none; border-top:1px solid rgba(255,255,255,.1); margin:6px 0; }
+
+/* Image bubble */
 .img-bubble { max-width:220px; min-width:100px; border-radius:10px; overflow:hidden; cursor:pointer; background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.08); }
 .img-bubble img { width:100%; display:block; max-height:260px; object-fit:cover; border-radius:10px; }
 .img-loading { padding:22px 14px; text-align:center; font-size:.71rem; color:rgba(255,255,255,.32); display:flex; flex-direction:column; align-items:center; gap:6px; }
 .img-error { padding:10px 12px; font-size:.71rem; color:rgba(255,80,80,.55); text-align:center; }
 
-/* ── Input bar ── */
-#input-bar {
-    position:fixed; bottom:58px; left:0; right:0; z-index:100;
-    display:none; align-items:flex-end; gap:6px;
-    padding:6px 8px; background:rgba(8,6,2,.96);
-    border-top:1px solid rgba(255,255,255,.07); backdrop-filter:blur(8px);
-}
-#chat-input {
-    flex:1; background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.11);
-    border-radius:18px; padding:8px 12px; color:#e0e0e0; font-size:.82rem;
-    resize:none; max-height:110px; font-family:system-ui,sans-serif;
-    outline:none; line-height:1.4; overflow-y:auto;
-}
-#chat-input:focus { border-color:rgba(0,255,204,.32); }
-.ib-btn {
-    padding:8px 10px; border-radius:50%; background:none; cursor:pointer;
-    border:1px solid rgba(255,255,255,.1); color:rgba(255,255,255,.45);
-    font-size:.95rem; flex-shrink:0; transition:all .15s; line-height:1;
-}
-.ib-btn:hover { background:rgba(255,255,255,.07); border-color:rgba(255,255,255,.2); color:#e0e0e0; }
-#btn-send {
-    padding:8px 14px; border-radius:18px; background:rgba(0,255,204,.12);
-    border:1px solid rgba(0,255,204,.32); color:#00ffcc; cursor:pointer;
-    font-size:.85rem; font-weight:700; flex-shrink:0; transition:background .15s;
-}
-#btn-send:hover { background:rgba(0,255,204,.22); }
-#btn-send:disabled { opacity:.38; cursor:default; }
-
-/* ── Upload progress ── */
-#upload-progress {
-    position:fixed; bottom:114px; left:0; right:0; z-index:98;
-    background:rgba(10,8,4,.97); padding:6px 14px;
-    display:none; align-items:center; gap:10px;
-    font-size:.71rem; color:rgba(255,255,255,.42);
-    border-top:1px solid rgba(255,255,255,.06);
-}
-#upload-progress.show { display:flex; }
-.prog-bar { flex:1; height:3px; background:rgba(255,255,255,.1); border-radius:2px; }
-.prog-fill { height:100%; background:#00ffcc; border-radius:2px; transition:width .2s; width:0; }
-
-/* ── Emoji panel ── */
-#emoji-panel {
-    position:fixed; bottom:114px; left:0; right:0; z-index:95;
-    background:rgba(10,8,4,.98); border-top:1px solid rgba(255,255,255,.08);
-    display:none; flex-direction:column; max-height:270px;
-}
-#emoji-panel.open { display:flex; }
-#emoji-cats {
-    display:flex; overflow-x:auto; gap:2px; padding:6px 8px 4px;
-    border-bottom:1px solid rgba(255,255,255,.06);
-    scrollbar-width:none;
-}
-#emoji-cats::-webkit-scrollbar { display:none; }
-.ecat { font-size:1.1rem; padding:4px 7px; border:none; background:none; cursor:pointer; border-radius:6px; flex-shrink:0; transition:background .1s; }
-.ecat.active { background:rgba(0,255,204,.15); }
-.ecat:hover  { background:rgba(255,255,255,.07); }
-#emoji-grid { flex:1; overflow-y:auto; display:flex; flex-wrap:wrap; padding:5px 7px; gap:1px; scrollbar-width:thin; scrollbar-color:rgba(255,255,255,.1) transparent; }
-.emj { font-size:1.45rem; padding:4px 5px; border:none; background:none; cursor:pointer; border-radius:4px; line-height:1; transition:background .1s; }
-.emj:hover { background:rgba(255,255,255,.1); }
-
-/* ── Lightbox ── */
+/* Lightbox */
 #lightbox { position:fixed; inset:0; z-index:3000; background:rgba(0,0,0,.92); display:none; align-items:center; justify-content:center; cursor:pointer; }
 #lightbox.open { display:flex; }
 #lbx-img { max-width:96vw; max-height:92vh; object-fit:contain; border-radius:6px; pointer-events:none; }
 #lbx-close { position:fixed; top:14px; right:16px; font-size:1.6rem; color:rgba(255,255,255,.6); cursor:pointer; z-index:1; }
 
-/* ── dm-inp → utiliser .a4l-input de uplanet-atomic.css ── */
-
-/* ── Relay picker ── */
+/* Relay picker */
 #relay-list { flex:1; overflow-y:auto; }
-.r-item {
-    display:flex; align-items:center; gap:10px;
-    padding:11px 16px; cursor:pointer; transition:background .12s;
-    border-bottom:1px solid rgba(255,255,255,.03);
-}
+.r-item { display:flex; align-items:center; gap:10px; padding:11px 16px; cursor:pointer; transition:background .12s; border-bottom:1px solid rgba(255,255,255,.03); }
 .r-item:hover { background:rgba(0,255,204,.04); }
 .r-item.current { background:rgba(0,255,204,.08); }
 .r-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; background:rgba(255,255,255,.2); }
@@ -166,71 +87,102 @@ html, body { margin:0; padding:0; height:100%; overflow:hidden; background:#0806
 .r-url { flex:1; font-size:.78rem; color:#e0e0e0; word-break:break-all; }
 .r-cur-tag { font-size:.62rem; color:rgba(0,255,204,.7); background:rgba(0,255,204,.1); padding:1px 6px; border-radius:8px; flex-shrink:0; }
 #relay-custom { padding:12px 16px 4px; display:flex; flex-direction:column; gap:6px; }
-#relay-custom-inp {
-    background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.1);
-    border-radius:8px; color:#e0e0e0; padding:8px 12px;
-    font-size:.78rem; font-family:system-ui,sans-serif; outline:none;
-}
+#relay-custom-inp { background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.1); border-radius:8px; color:#e0e0e0; padding:8px 12px; font-size:.78rem; font-family:system-ui,sans-serif; outline:none; }
 #relay-custom-inp:focus { border-color:rgba(0,255,204,.35); }
-#relay-custom-btn {
-    align-self:flex-end; padding:7px 16px; border-radius:8px;
-    background:rgba(0,255,204,.1); border:1px solid rgba(0,255,204,.3);
-    color:#00ffcc; cursor:pointer; font-size:.78rem; font-weight:700;
-}
+#relay-custom-btn { align-self:flex-end; padding:7px 16px; border-radius:8px; background:rgba(0,255,204,.1); border:1px solid rgba(0,255,204,.3); color:#00ffcc; cursor:pointer; font-size:.78rem; font-weight:700; }
 
-/* ── Enc badge ── */
-.enc-badge { font-size:.58rem; color:rgba(0,255,204,.55); background:rgba(0,255,204,.07); border:1px solid rgba(0,255,204,.18); border-radius:8px; padding:1px 5px; margin-left:5px; vertical-align:middle; }
+/* Enc badge */
+.enc-badge { font-size:.58rem; color:rgba(0,255,204,.55); background:rgba(0,255,204,.07); border:1px solid rgba(0,255,204,.18); border-radius:8px; padding:1px 5px; margin-left:4px; vertical-align:middle; }
 
-/* ── Empty / error states ── */
+/* Empty state dans les threads */
 .empty-state { display:flex; flex-direction:column; align-items:center; padding:60px 20px; gap:10px; text-align:center; }
 .empty-icon { font-size:2.8rem; }
-.empty-txt { color:rgba(255,255,255,.28); font-size:.83rem; }
+.empty-txt  { color:rgba(255,255,255,.28); font-size:.83rem; }
+
+/* Emoji panel internals */
+#emoji-cats { display:flex; overflow-x:auto; gap:2px; padding:6px 8px 4px; border-bottom:1px solid rgba(255,255,255,.06); scrollbar-width:none; }
+#emoji-cats::-webkit-scrollbar { display:none; }
+.ecat { font-size:1.1rem; padding:4px 7px; border:none; background:none; cursor:pointer; border-radius:6px; flex-shrink:0; transition:background .1s; }
+.ecat.active { background:rgba(0,255,204,.15); }
+.ecat:hover  { background:rgba(255,255,255,.07); }
+#emoji-grid { flex:1; overflow-y:auto; display:flex; flex-wrap:wrap; padding:5px 7px; gap:1px; scrollbar-width:thin; scrollbar-color:rgba(255,255,255,.1) transparent; }
+.emj { font-size:1.45rem; padding:4px 5px; border:none; background:none; cursor:pointer; border-radius:4px; line-height:1; transition:background .1s; }
+.emj:hover { background:rgba(255,255,255,.1); }
     </style>
 </head>
 <body>
 
+<!-- Overlay de chargement -->
 <div id="loading">
     <div class="a4l-spinner"></div>
     <div id="load-msg">Connexion au relay…</div>
 </div>
 
+<!-- ══════════════════════════════════════════════
+     Shell WA/TG : sidebar + main
+     ══════════════════════════════════════════════ -->
+<div id="app">
 
-<!-- ── Search bar (list view only) ── -->
-<div id="search-wrap">
-    <input id="search-inp" placeholder="🔍 Rechercher…" autocomplete="off"
-           oninput="_filterConvs(this.value)">
-</div>
+    <!-- Sidebar gauche (conversations + profil) — peuplée par ChatSidebar.init() -->
+    <aside id="sidebar"></aside>
 
-<!-- ── Conversation list ── -->
-<div id="view-list">
-    <div id="conv-list"></div>
-</div>
+    <!-- Overlay mobile pour fermer la sidebar -->
+    <div id="sidebar-overlay"></div>
 
-<!-- ── Chat thread ── -->
-<div id="view-chat"></div>
+    <!-- Zone principale de chat -->
+    <main id="main">
 
-<!-- ── Upload progress ── -->
-<div id="upload-progress">
-    <span id="up-label">Chiffrement…</span>
-    <div class="prog-bar"><div class="prog-fill" id="prog-fill"></div></div>
-    <span id="up-pct">0%</span>
-</div>
+        <!-- En-tête conversation (pair + actions) -->
+        <div id="chat-header">
+            <!-- Bouton retour (mobile seulement) -->
+            <button class="sb-icon-btn" id="btn-back-mobile" onclick="_back()">←</button>
+            <!-- Avatar pair -->
+            <div id="chat-peer-av">💬</div>
+            <!-- Infos pair -->
+            <div id="chat-peer-info">
+                <div id="chat-peer-name">–</div>
+                <div id="chat-peer-sub" style="font-size:.64rem;color:rgba(255,255,255,.3);margin-top:1px"></div>
+            </div>
+        </div>
 
-<!-- ── Emoji panel ── -->
-<div id="emoji-panel">
-    <div id="emoji-cats"></div>
-    <div id="emoji-grid"></div>
-</div>
+        <!-- État vide (aucune conversation sélectionnée) -->
+        <div id="no-chat">
+            <div id="no-chat-icon">💬</div>
+            <div id="no-chat-title">Sélectionnez une conversation</div>
+            <div id="no-chat-sub">ou démarrez un nouveau DM →</div>
+        </div>
 
-<!-- ── Input bar ── -->
-<div id="input-bar">
-    <button class="ib-btn" id="btn-attach" onclick="_attachFile()" title="Envoyer une image">📎</button>
-    <input type="file" id="file-inp" accept="image/*,video/*" style="display:none" onchange="_onFileChosen(this)">
-    <textarea id="chat-input" placeholder="Message…" rows="1"
-              oninput="_autoRes(this)"
-              onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();_send();}"></textarea>
-    <button class="ib-btn" id="btn-emoji" onclick="_toggleEmoji()" title="Émojis">😊</button>
-    <button id="btn-send" onclick="_send()">⚡</button>
+        <!-- Thread de messages -->
+        <div id="view-chat"></div>
+
+        <!-- Upload progress -->
+        <div id="upload-progress">
+            <span id="up-label">Chiffrement…</span>
+            <div class="prog-bar"><div class="prog-fill" id="prog-fill"></div></div>
+            <span id="up-pct">0%</span>
+        </div>
+
+        <!-- Emoji panel -->
+        <div id="emoji-panel">
+            <div id="emoji-cats"></div>
+            <div id="emoji-grid"></div>
+        </div>
+
+        <!-- Input bar -->
+        <div id="input-bar">
+            <button class="ib-btn" id="btn-attach" onclick="_attachFile()" title="Joindre une image">📎</button>
+            <input type="file" id="file-inp" accept="image/*,video/*" style="display:none" onchange="_onFileChosen(this)">
+            <div id="input-row">
+                <textarea id="chat-input" placeholder="Message…" rows="1"
+                          oninput="_autoRes(this)"
+                          onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();_send();}"></textarea>
+                <button class="ib-btn" id="btn-ttl" onclick="_cycleTTL()" title="Message éphémère">⏳<span class="ttl-label" id="ttl-label"></span></button>
+                <button class="ib-btn" id="btn-emoji" onclick="_toggleEmoji()" title="Émojis">😊</button>
+            </div>
+            <button id="btn-send" onclick="_send()">↑</button>
+        </div>
+
+    </main>
 </div>
 
 <!-- ── Lightbox ── -->
@@ -275,6 +227,17 @@ html, body { margin:0; padding:0; height:100%; overflow:hidden; background:#0806
     </div>
 </div>
 
+<script src="marked.min.js"></script>
+<script>
+// Configurer marked — liens toujours target=_blank rel=noopener
+if (typeof marked !== 'undefined') {
+    var _markedRenderer = new marked.Renderer();
+    _markedRenderer.link = function(href, title, text) {
+        return '<a href="'+href+'" target="_blank" rel="noopener"'+(title?' title="'+title+'"':'')+'>'+text+'</a>';
+    };
+    marked.setOptions({ renderer: _markedRenderer, breaks: true, gfm: true, mangle: false, headerIds: false });
+}
+</script>
 <script src="nostr.bundle.js"></script>
 <script>
 'use strict';
@@ -291,6 +254,41 @@ var _liveWs     = null;
 var _liveSub    = null;
 var _encMode    = null;
 var _constellRelays = [];
+
+// ── Éphémère (NIP-40) ─────────────────────────────────────────────────────────
+var _ttl = 0;   // 0 = permanent, 300 = 5min, 3600 = 1h, 86400 = 24h
+var _TTL_STEPS = [0, 300, 3600, 86400];
+var _TTL_LABELS = { 0: '', 300: '5min', 3600: '1h', 86400: '24h' };
+
+function _cycleTTL() {
+    var idx = _TTL_STEPS.indexOf(_ttl);
+    _ttl = _TTL_STEPS[(idx + 1) % _TTL_STEPS.length];
+    var btn    = document.getElementById('btn-ttl');
+    var lbl    = document.getElementById('ttl-label');
+    var send   = document.getElementById('btn-send');
+    var irow   = document.getElementById('input-row');
+    if (!btn) return;
+    if (_ttl > 0) {
+        btn.classList.add('active');
+        if (lbl)  lbl.textContent  = _TTL_LABELS[_ttl];
+        /* Glow ambre sur le bouton envoi — l'utilisateur voit que c'est éphémère */
+        if (send) send.classList.add('ephemeral');
+        if (irow) irow.classList.add('ephemeral');
+        if (send) send.title = 'Envoyer (éphémère ' + _TTL_LABELS[_ttl] + ')';
+    } else {
+        btn.classList.remove('active');
+        if (lbl)  lbl.textContent  = '';
+        if (send) { send.classList.remove('ephemeral'); send.title = ''; }
+        if (irow) irow.classList.remove('ephemeral');
+    }
+}
+
+function _fmtTTL(secs) {
+    if (!secs) return '';
+    if (secs < 3600) return Math.round(secs/60)+'m';
+    if (secs < 86400) return Math.round(secs/3600)+'h';
+    return Math.round(secs/86400)+'j';
+}
 
 // ── Emoji data ─────────────────────────────────────────────────────────────────
 var EMOJIS = {
@@ -489,7 +487,6 @@ async function _loadConvs() {
     _convItems = items;
     _renderConvList(items);
     _hideLoad(); _showBtn();
-    document.getElementById('search-wrap').classList.add('visible');
     _subscribeLive();
 }
 
@@ -509,14 +506,13 @@ function _renderConvList(items) {
         var av = c.profile.picture
             ? '<img src="'+_esc(c.profile.picture)+'" loading="lazy" onerror="this.parentNode.textContent=\'💬\'">'
             : '💬';
-        var preview = (c.isMe ? '↗ ' : '') + _trunc(_previewText(c.text), 52);
+        var preview = (c.isMe ? '✓ ' : '') + _trunc(_previewText(c.text), 50);
         return '<div class="conv-item" onclick="_openChat(\''+c.peer+'\')">' +
             '<div class="conv-av">'+av+'</div>' +
             '<div class="conv-body">' +
-                '<div class="conv-name">'+_esc(c.profile.name)+'</div>' +
-                '<div class="conv-preview">'+_esc(preview)+'</div>' +
+                '<div class="conv-top"><span class="conv-name">'+_esc(c.profile.name)+'</span><span class="conv-time">'+_fmt(c.time)+'</span></div>' +
+                '<div class="conv-bot"><span class="conv-preview">'+_esc(preview)+'</span></div>' +
             '</div>' +
-            '<div class="conv-time">'+_fmt(c.time)+'</div>' +
         '</div>';
     }).join('');
 }
@@ -574,17 +570,39 @@ async function _openChat(peerHex) {
     _peer     = peerHex;
     _peerProf = await _profile(peerHex);
     _detectEnc();
-    document.getElementById('search-wrap').classList.remove('visible');
-    document.getElementById('view-list').style.display = 'none';
-    document.getElementById('view-chat').style.display = 'flex';
-    document.getElementById('input-bar').style.display = 'flex';
-    document.getElementById('btn-new').style.display   = 'none';
-    var _bb = document.getElementById('btn-back'); if (_bb) _bb.style.display = '';
+
+    /* ── Afficher la zone de chat ── */
+    document.getElementById('chat-header').classList.add('visible');
+    document.getElementById('no-chat').style.display    = 'none';
+    document.getElementById('view-chat').style.display  = 'flex';
+    document.getElementById('input-bar').style.display  = 'flex';
+
+    /* ── En-tête conversation (dans #chat-header) ── */
+    var avEl   = document.getElementById('chat-peer-av');
+    var nmEl   = document.getElementById('chat-peer-name');
+    var subEl  = document.getElementById('chat-peer-sub');
     var encLabel = _encMode === 'nip44' ? 'NIP-44' : _encMode ? 'NIP-04' : '?';
-    var encBadge = '<span class="enc-badge">'+encLabel+'</span>';
-    document.getElementById('h-title').innerHTML =
-        '<a href="nostr_profile_viewer.html?hex='+peerHex+
-        (_myPub?'&origin='+_myPub:'')+'" target="_blank">'+_esc(_peerProf.name)+'</a>'+encBadge;
+    if (avEl) {
+        avEl.innerHTML = _peerProf.picture
+            ? '<img src="'+_esc(_peerProf.picture)+'" style="width:100%;height:100%;object-fit:cover" onerror="this.parentNode.textContent=\'💬\'">'
+            : '💬';
+    }
+    if (nmEl) nmEl.innerHTML = '<a href="nostr_profile_viewer.html?hex='+peerHex+(_myPub?'&origin='+_myPub:'')+'" target="_blank" style="color:inherit;text-decoration:none">'+_esc(_peerProf.name)+'</a><span class="enc-badge">'+encLabel+'</span>';
+    if (subEl) subEl.textContent = peerHex.slice(0,16)+'…';
+
+    /* ── Top header AtomicNav (mobile) ── */
+    var hTitle = document.getElementById('h-title');
+    if (hTitle) hTitle.textContent = _peerProf.name;
+    var _bb = document.getElementById('btn-back');      if (_bb) _bb.style.display = '';
+    var _sb = document.getElementById('btn-sb-toggle'); if (_sb) _sb.style.display = 'none';
+    var _bn = document.getElementById('btn-new');       if (_bn) _bn.style.display = 'none';
+
+    /* ── Sidebar — marquer la conv active, fermer sur mobile ── */
+    if (typeof ChatSidebar !== 'undefined') {
+        ChatSidebar.setActive(peerHex);
+        if (window.innerWidth < 768) ChatSidebar.close();
+    }
+
     document.getElementById('view-chat').innerHTML =
         '<div class="empty-state"><div class="a4l-spinner"></div></div>';
     await _loadMsgs();
@@ -602,7 +620,10 @@ async function _loadMsgs() {
     all.sort(function(a,b){return a.created_at-b.created_at;});
     _msgs = await Promise.all(all.map(async function(ev) {
         var text = await _decrypt(ev);
-        return {id:ev.id, isMe:ev.pubkey===_myPub, text:text, time:ev.created_at, sent:true};
+        // Lire le tag expiration (NIP-40) pour afficher le badge TTL
+        var expTag = (ev.tags || []).find(function(t){return t[0]==='expiration';});
+        var ttlRemaining = expTag ? (parseInt(expTag[1],10) - ev.created_at) : 0;
+        return {id:ev.id, isMe:ev.pubkey===_myPub, text:text, time:ev.created_at, sent:true, ttl:ttlRemaining>0?ttlRemaining:0};
     }));
     _renderMsgs();
 }
@@ -617,19 +638,20 @@ function _renderMsgs() {
     }
     var html = '';
     var lastDate = '';
-    _msgs.forEach(function(m) {
+    _msgs.forEach(function(m, i) {
         var dateStr = _fmtDate(m.time);
         if (dateStr !== lastDate) {
-            html += '<div class="date-sep"><div class="date-sep-line"></div>' +
-                '<div class="date-sep-text">'+_esc(dateStr)+'</div>' +
-                '<div class="date-sep-line"></div></div>';
+            html += '<div class="date-sep"><div class="date-sep-text">'+_esc(dateStr)+'</div></div>';
             lastDate = dateStr;
         }
-        html += _renderMsgRow(m, pic);
+        // Calcul du contexte de groupe (même sender consécutif)
+        var prevSame = i > 0 && _msgs[i-1].isMe === m.isMe && _fmtDate(_msgs[i-1].time) === dateStr;
+        var nextSame = i < _msgs.length-1 && _msgs[i+1].isMe === m.isMe && _fmtDate(_msgs[i+1].time) === dateStr;
+        var grp = prevSame && nextSame ? 'mid' : prevSame ? 'last' : nextSame ? 'first' : 'solo';
+        html += _renderMsgRow(m, pic, grp);
     });
     el.innerHTML = html;
     el.scrollTop = el.scrollHeight;
-    // Async: decrypt images that are pending
     _msgs.forEach(function(m) {
         try {
             var j = JSON.parse(m.text);
@@ -638,34 +660,71 @@ function _renderMsgs() {
     });
 }
 
-function _renderMsgRow(m, peerPic) {
+function _renderMd(text) {
+    // Utilise marked.js si disponible, sinon linkification simple
+    if (typeof marked !== 'undefined') {
+        try {
+            return marked.parse(text, {
+                breaks: true,
+                gfm: true,
+                mangle: false,
+                headerIds: false
+            });
+        } catch(_) {}
+    }
+    // Fallback : linkification basique + sauts de ligne
+    return _esc(text)
+        .replace(/https?:\/\/[^\s<>"]+/g, function(u) {
+            return '<a href="'+u+'" target="_blank" rel="noopener">'+u+'</a>';
+        })
+        .replace(/\n/g, '<br>');
+}
+
+function _renderMsgRow(m, peerPic, grp) {
+    grp = grp || 'solo';
     var side = m.isMe ? 'me' : 'them';
-    var cls  = m.pending ? ' pending' : (m.error ? ' error' : '');
-    var av   = m.isMe ? '🌀' : (peerPic
-        ? '<img src="'+_esc(peerPic)+'" loading="lazy" onerror="this.parentNode.textContent=\'💬\'">'
-        : '💬');
-    var tick = '';
-    if (m.isMe) tick = '<span class="msg-tick'+(m.sent?' sent':'')+'">'+( m.pending ? '⏳' : m.error ? '⚠' : '✓' )+'</span>';
+    var cls  = (m.pending ? ' pending' : m.error ? ' error' : '') + ' group-'+grp;
+    var isGroupStart = (grp === 'first' || grp === 'solo');
+    var isGroupLast  = (grp === 'last'  || grp === 'solo');
+    var rowCls = side + (isGroupStart ? ' group-start' : '') + (isGroupLast ? ' group-last' : '');
+
+    // Avatar — visible uniquement pour le dernier message reçu d'un groupe
+    var avHtml = '';
+    if (!m.isMe) {
+        var avContent = peerPic
+            ? '<img src="'+_esc(peerPic)+'" loading="lazy" onerror="this.parentNode.textContent=\'💬\'">'
+            : '💬';
+        avHtml = '<div class="msg-av">'+avContent+'</div>';
+    }
+
+    // Coche d'envoi
+    var tick = m.isMe
+        ? '<span class="msg-tick'+(m.sent?' sent':'')+'">'+( m.pending ? '⌛' : m.error ? '⚠' : '✓' )+'</span>'
+        : '';
+
+    // Badge TTL si le message est éphémère
+    var ttlBadge = m.ttl ? '<span class="msg-ttl-badge">⏳'+_fmtTTL(m.ttl)+'</span>' : '';
+
+    // Meta — heure + TTL + coche — flottée dans la bulle
+    var meta = '<span class="msg-meta">'+ttlBadge+_fmt(m.time)+tick+'</span>';
 
     var content;
     try {
         var j = JSON.parse(m.text);
         if (j._uenc_img) {
-            // Image bubble — content filled async by _decryptAndShowImg
             var cached = _imgCache[m.id];
             content = '<div class="img-bubble" id="ib-'+m.id+'">' + (
                 cached
                     ? '<img src="'+cached+'" onclick="_openLightbox(this.src)">'
                     : '<div class="img-loading"><div class="a4l-spinner" style="width:22px;height:22px;border-width:2px"></div>Déchiffrement…</div>'
-            ) + '</div>';
-        } else { content = _esc(m.text); }
-    } catch(_) { content = _esc(m.text); }
+            ) + '</div>' + meta;
+        } else { content = _renderMd(m.text) + meta; }
+    } catch(_) { content = _renderMd(m.text) + meta; }
 
-    return '<div class="msg-row '+side+'">' +
-        '<div class="msg-av">'+av+'</div>' +
+    return '<div class="msg-row '+rowCls+'">' +
+        avHtml +
         '<div class="msg-wrap">' +
             '<div class="msg-bubble '+side+cls+'">'+content+'</div>' +
-            '<div class="msg-time">'+_fmt(m.time)+tick+'</div>' +
         '</div>' +
     '</div>';
 }
@@ -683,15 +742,19 @@ async function _send() {
     // Close emoji panel if open
     document.getElementById('emoji-panel').classList.remove('open');
     var tmpId = 'tmp'+Date.now();
-    _msgs.push({id:tmpId, isMe:true, text:text, time:Math.floor(Date.now()/1000), pending:true});
+    var curTTL = _ttl;
+    _msgs.push({id:tmpId, isMe:true, text:text, time:Math.floor(Date.now()/1000), pending:true, ttl:curTTL});
     _renderMsgs();
     try {
         var cipher = await _encrypt(_peer, text);
-        var evRaw  = {kind:4, content:cipher, tags:[['p',_peer]], created_at:Math.floor(Date.now()/1000), pubkey:_myPub};
+        var nowTs  = Math.floor(Date.now()/1000);
+        var tags   = [['p', _peer]];
+        if (curTTL > 0) tags.push(['expiration', String(nowTs + curTTL)]);
+        var evRaw  = {kind:4, content:cipher, tags:tags, created_at:nowTs, pubkey:_myPub};
         var signed = await window.nostr.signEvent(evRaw);
         await _publish(signed);
         var idx = _msgs.findIndex(function(m){return m.id===tmpId;});
-        if (idx!==-1) _msgs[idx] = {id:signed.id, isMe:true, text:text, time:signed.created_at, sent:true};
+        if (idx!==-1) _msgs[idx] = {id:signed.id, isMe:true, text:text, time:signed.created_at, sent:true, ttl:curTTL};
     } catch(e) {
         var idx2 = _msgs.findIndex(function(m){return m.id===tmpId;});
         if (idx2!==-1) _msgs[idx2] = {id:tmpId, isMe:true, text:text+'  ⚠ '+(e.message||'erreur'), time:Math.floor(Date.now()/1000), error:true};
@@ -1066,13 +1129,17 @@ function _back() {
 function _backToList() {
     _peer = null; _peerProf = null;
     document.getElementById('emoji-panel').classList.remove('open');
-    document.getElementById('view-list').style.display = '';
-    document.getElementById('view-chat').style.display = 'none';
-    document.getElementById('input-bar').style.display = 'none';
-    document.getElementById('h-title').textContent = '💬 Messages';
-    document.getElementById('btn-new').style.display = '';
+    document.getElementById('chat-header').classList.remove('visible');
+    document.getElementById('no-chat').style.display    = '';
+    document.getElementById('view-chat').style.display  = 'none';
+    document.getElementById('input-bar').style.display  = 'none';
+    var hTitle = document.getElementById('h-title');
+    if (hTitle) hTitle.textContent = '💬 Messages';
+    var _bn = document.getElementById('btn-new'); if (_bn) _bn.style.display = '';
     var _bb = document.getElementById('btn-back'); if (_bb) _bb.style.display = 'none';
-    document.getElementById('search-wrap').classList.add('visible');
+    var _sb = document.getElementById('btn-sb-toggle'); if (_sb) _sb.style.display = '';
+    /* Sur mobile : ouvrir la sidebar pour accéder aux conversations */
+    if (typeof ChatSidebar !== 'undefined' && window.innerWidth < 768) ChatSidebar.open();
 }
 
 // ── Utils ─────────────────────────────────────────────────────────────────────
@@ -1111,7 +1178,7 @@ function _bytesToHex(b) {
 }
 function _hideLoad()  { document.getElementById('loading').classList.add('hidden'); }
 function _setMsg(s)   { var el=document.getElementById('load-msg'); if(el) el.textContent=s; }
-function _showBtn()   { document.getElementById('btn-new').style.display=''; }
+function _showBtn()   { var el=document.getElementById('btn-new'); if(el) el.style.display=''; }
 // requestAnimationFrame évite un reflow par touche — une seule lecture scrollHeight par frame
 var _autoResAf = null;
 function _autoRes(el) {
@@ -1133,6 +1200,43 @@ async function _onConnected() {
     }
     _detectEnc();
     _updateRelayBadge('');
+
+    /* ── Initialiser les widgets ── */
+    if (typeof ChatSidebar !== 'undefined') {
+        ChatSidebar.init();
+        /* Callbacks sidebar → fonctions de cette page */
+        ChatSidebar.onOpenConv(function(pk) { _openChat(pk); });
+        ChatSidebar.onNewDm(function()   { _openNewDm(); });
+        ChatSidebar.onSettings(function(){ if (typeof ChatSettings !== 'undefined') ChatSettings.open(); });
+        ChatSidebar.onProfile(function() { if (typeof ChatProfile  !== 'undefined') ChatProfile.open();  });
+        ChatSidebar.onSearch(function(q) { _filterConvs(q); });
+    }
+
+    if (typeof ChatSettings !== 'undefined') {
+        /* Connecter les fonctions relay/publish aux widgets */
+        ChatSettings.setRelayFn(function()  { return _relay(); });
+        ChatSettings.setQueryFn(function(f) { return _query(f, 6000); });
+        ChatSettings.setPublishFn(function(s) { return _publish(s); });
+        ChatSettings.onLoaded(function() {
+            var ttl = ChatSettings.get('defaultTtl');
+            if (ttl && _TTL_STEPS.indexOf(ttl) >= 0) { _ttl = 0; _cycleTTL(); _ttl = ttl; _cycleTTL(); }
+        });
+        ChatSettings.load(); /* Charger les paramètres chiffrés en arrière-plan */
+    }
+
+    if (typeof ChatProfile !== 'undefined') {
+        ChatProfile.setPublishFn(function(s) { return _publish(s); });
+        ChatProfile.onSaved(function(p) {
+            window._chatMyProfile = p;
+            if (typeof ChatSidebar !== 'undefined') ChatSidebar.updateMyProfile(p);
+        });
+        /* Charger le profil de l'utilisateur connecté */
+        _profile(_myPub).then(function(p) {
+            window._chatMyProfile = p;
+            if (typeof ChatSidebar !== 'undefined') ChatSidebar.updateMyProfile(p);
+        });
+    }
+
     await _loadConvs();
 }
 
@@ -1164,44 +1268,14 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }, 7000);
 
-    // ── Gestion du clavier virtuel mobile ────────────────────────────────────
-    var _chatInp = document.getElementById('chat-input');
-    var _ibar    = document.getElementById('input-bar');
-    if (_chatInp && _ibar) {
-        if ('visualViewport' in window) {
-            // Méthode précise : visualViewport signale le rétrécissement dû au clavier
-            window.visualViewport.addEventListener('resize', function() {
-                var vv    = window.visualViewport;
-                var kbH   = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
-                var bnav  = document.getElementById('a4l-bottom-nav');
-                if (kbH > 80) {
-                    _ibar.style.bottom = kbH + 'px';
-                    if (bnav) bnav.style.display = 'none';
-                } else {
-                    _ibar.style.bottom = '58px';
-                    if (bnav) bnav.style.display = '';
-                }
-            });
-        } else {
-            // Fallback focus/blur pour les navigateurs sans visualViewport
-            _chatInp.addEventListener('focus', function() {
-                var bnav = document.getElementById('a4l-bottom-nav');
-                _ibar.style.bottom = '0';
-                if (bnav) bnav.style.display = 'none';
-            });
-            _chatInp.addEventListener('blur', function() {
-                setTimeout(function() {
-                    var bnav = document.getElementById('a4l-bottom-nav');
-                    _ibar.style.bottom = '58px';
-                    if (bnav) bnav.style.display = '';
-                }, 200);
-            });
-        }
-    }
 });
 </script>
 <script src="common.js"></script>
 <script src="uplanet-header.js"></script>
+<!-- Widgets chat — doivent être chargés avant _onConnected -->
+<script src="a4l-chat-sidebar.js"></script>
+<script src="a4l-chat-profile.js"></script>
+<script src="a4l-chat-settings.js"></script>
 <script>
 if (typeof window.waitForConnection === 'function') {
     window.waitForConnection(_onConnected);
@@ -1219,7 +1293,9 @@ if (window.isNostrConnected && window.userPubkey) _onConnected();
 <script>
 AtomicNav.injectTopHeader({
     title: '',
-    centerHTML: '<button class="h-btn h-btn-dim" id="btn-back" onclick="_back()" style="display:none" aria-label="Retour">←</button><span class="h-title" id="h-title">💬 Messages</span>',
+    centerHTML: '<button class="h-btn h-btn-dim" id="btn-sb-toggle" onclick="if(typeof ChatSidebar!==\'undefined\')ChatSidebar.open()" aria-label="Conversations" title="Discussions">☰</button>' +
+                '<button class="h-btn h-btn-dim" id="btn-back" onclick="_back()" style="display:none" aria-label="Retour">←</button>' +
+                '<span class="h-title" id="h-title">💬 Messages</span>',
     actions: [
         {html: '<div id="relay-badge" class="a4l-relay-badge" onclick="_openRelayPicker()" title="Changer de relay"><div id="r-dot" class="a4l-relay-dot"></div><span id="r-name" class="a4l-relay-name">…</span></div>'},
         {html: '<button class="h-btn h-btn-teal" id="btn-new" onclick="_openNewDm()" style="display:none">+ DM</button>'}

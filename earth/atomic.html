@@ -245,6 +245,9 @@
             filter: invert(.8) hue-rotate(120deg);
             opacity: .55; cursor: pointer;
         }
+        /* UPH pill — doit passer au-dessus de #a4l-header (même z-index, DOM antérieur) */
+        #uph { z-index: 1250 !important; }
+
         /* Bouton CTA restauration prioritaire */
         #restore-cta button {
             width:100%; padding:13px 16px; border-radius:12px;
@@ -298,17 +301,6 @@
 
             <!-- ── PROFIL — Wizard 4 étapes ── -->
             <div class="tab-pane fade show active" id="tab-profil" role="tabpanel">
-
-                <!-- CTA restauration prioritaire — visible si profil détecté -->
-                <div id="restore-cta" style="display:none;margin-bottom:12px">
-                    <button onclick="_doRestoreAtomA()">
-                        <span style="font-size:1.6rem;flex-shrink:0">↩</span>
-                        <span>
-                            <span style="display:block;font-weight:800;font-size:.92rem;color:var(--primary)">S'identifier avec son ADN cosmique</span>
-                            <span style="display:block;font-size:.72rem;opacity:.7;margin-top:2px">Profil détecté · 1 clic pour restaurer votre Empreinte</span>
-                        </span>
-                    </button>
-                </div>
 
                 <!-- Indicateur d'étapes -->
                 <div class="wz-indicator" id="wz-indicator">
@@ -416,6 +408,16 @@
                     </div>
                     <div class="wz-nav mt-2">
                         <button class="wz-btn-next w-100" onclick="_wzNext()">Le Vaisseau →</button>
+                    </div>
+                    <!-- Raccourci Résonance — apparaît dès que date + lieu sont renseignés -->
+                    <div id="match-shortcut" style="display:none;margin-top:6px">
+                        <button onclick="_goToMatch()"
+                                style="width:100%;padding:9px 12px;border-radius:9px;cursor:pointer;
+                                       background:linear-gradient(135deg,rgba(0,255,204,.12),rgba(180,100,255,.12));
+                                       border:1px solid rgba(0,255,204,.35);color:#00ffcc;
+                                       font-size:.83rem;font-weight:700">
+                            💫 Calculer ma Résonance →
+                        </button>
                     </div>
                 </div>
 
@@ -649,6 +651,41 @@
                                 🔍 Vérifier mon inscription OpenCollective → débloque le MULTIPASS
                             </button>
                             <div id="oc-status" class="small mt-1" style="min-height:1rem;font-size:.73rem"></div>
+                        </div>
+
+                        <div id="home-location-block" class="mb-2 p-2 rounded"
+                             style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08)">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <label class="small text-secondary text-uppercase" style="font-size:.72rem">
+                                    🏠 Résidence actuelle <span style="color:rgba(255,255,255,.3)">(optionnel)</span>
+                                </label>
+                                <button id="btn-detect-home" onclick="_detectHomePosition()"
+                                        class="btn btn-sm py-0"
+                                        style="font-size:.7rem;background:rgba(0,255,204,.08);
+                                               border:1px solid rgba(0,255,204,.25);color:rgba(0,255,204,.8)">
+                                    🎯 Détecter
+                                </button>
+                            </div>
+                            <div class="row g-1">
+                                <div class="col-6">
+                                    <input type="number" step="0.01" id="home-lat-input"
+                                           placeholder="Lat (ex: 48.85)"
+                                           class="form-control form-control-sm"
+                                           oninput="_onHomeInputChange()"
+                                           style="font-size:.75rem">
+                                </div>
+                                <div class="col-6">
+                                    <input type="number" step="0.01" id="home-lon-input"
+                                           placeholder="Lon (ex: 2.35)"
+                                           class="form-control form-control-sm"
+                                           oninput="_onHomeInputChange()"
+                                           style="font-size:.75rem">
+                                </div>
+                            </div>
+                            <div id="home-location-status" class="mt-1"
+                                 style="font-size:.68rem;color:rgba(255,200,80,.55);min-height:.9rem">
+                                Affecte l'algorithme de rencontre — laissez vide pour ne pas publier de résidence.
+                            </div>
                         </div>
 
                         <div id="cert-status" class="small mb-1"
@@ -1226,6 +1263,7 @@ window._onBirthNativeChanged = function() {
         disp.textContent = _fmtDateFR(new Date(dateVal + 'T' + (timeVal || '12:00')));
     }
     if (typeof calculateConception === 'function') calculateConception();
+    _showMatchShortcut();
 };
 // Rétrocompatibilité — appelé par _doRestoreAtomA et URL params
 window._syncBirthDateFromSeg = window._onBirthNativeChanged;
@@ -1323,6 +1361,7 @@ function _syncBirthLocation(lon, lat) {
     }
     window.calculateMatch();
     updateMultipassPreview();
+    _showMatchShortcut();
 }
 
 function _syncConceptionLocation(lon, lat, userSet = true) {
@@ -1850,6 +1889,18 @@ function _onBodyDimsChanged() {
     }
 }
 
+// ── Raccourci Résonance — bouton apparu dès date + lieu renseignés ─────────
+function _showMatchShortcut() {
+    var bd  = document.getElementById('birth-date').value;
+    var btn = document.getElementById('match-shortcut');
+    if (btn) btn.style.display = (bd && _birthMarker) ? '' : 'none';
+}
+window._goToMatch = function() {
+    var tabEl = document.querySelector('[data-bs-target="#tab-match"]');
+    if (tabEl) bootstrap.Tab.getOrCreateInstance(tabEl).show();
+    window.calculateMatch();
+};
+
 // ── Orchestre Quantique — contrôle UI ──────────────────────────────────────
 window._toggleAudio = function() {
     const btn = document.getElementById('btn-audio-toggle');
@@ -2248,6 +2299,54 @@ function _keyPreviewHTML(npub, email) {
         + '<div class="small fw-bold mb-1" style="color:#00ffcc">🌟 Empreinte cosmique dérivée</div>'
         + '<div class="font-monospace" style="word-break:break-all;font-size:.58rem;color:rgba(0,255,204,.6)">'
         + npub + '</div></div>';
+}
+
+// ── Position de résidence (home) — choisie activement par l'utilisateur ──────
+// Ne jamais déduire la résidence depuis la naissance (règle UPlanet A4L).
+var _confirmedHomeLat = null;  // null = non renseignée → atom4love-home non publié
+var _confirmedHomeLon = null;
+
+function _detectHomePosition() {
+    var btn    = document.getElementById('btn-detect-home');
+    var status = document.getElementById('home-location-status');
+    if (!navigator.geolocation) {
+        if (status) status.textContent = '⚠ Géolocalisation non disponible sur cet appareil.';
+        return;
+    }
+    if (btn) { btn.disabled = true; btn.textContent = '⏳…'; }
+    navigator.geolocation.getCurrentPosition(
+        function(pos) {
+            var lat = Math.round(pos.coords.latitude  * 100) / 100;
+            var lon = Math.round(pos.coords.longitude * 100) / 100;
+            var latI = document.getElementById('home-lat-input');
+            var lonI = document.getElementById('home-lon-input');
+            if (latI) latI.value = lat.toFixed(2);
+            if (lonI) lonI.value = lon.toFixed(2);
+            _confirmedHomeLat = lat;
+            _confirmedHomeLon = lon;
+            if (status) status.textContent = '📍 Position confirmée (' + lat.toFixed(2) + ', ' + lon.toFixed(2) + ')';
+            if (btn) { btn.disabled = false; btn.textContent = '🎯 Détecter'; }
+        },
+        function() {
+            if (status) status.textContent = '⚠ Accès refusé — saisissez manuellement ou laissez vide.';
+            if (btn) { btn.disabled = false; btn.textContent = '🎯 Détecter'; }
+        },
+        { timeout: 10000, maximumAge: 60000 }
+    );
+}
+
+function _onHomeInputChange() {
+    var latV = parseFloat(document.getElementById('home-lat-input')?.value);
+    var lonV = parseFloat(document.getElementById('home-lon-input')?.value);
+    if (!isNaN(latV) && !isNaN(lonV)) {
+        _confirmedHomeLat = latV;
+        _confirmedHomeLon = lonV;
+        var status = document.getElementById('home-location-status');
+        if (status) status.textContent = '📍 Position manuelle (' + latV.toFixed(2) + ', ' + lonV.toFixed(2) + ')';
+    } else {
+        _confirmedHomeLat = null;
+        _confirmedHomeLon = null;
+    }
 }
 
 // ── Vault onboarding — ADN Cosmique (wallet detection + PIN mobile) ──────────
@@ -3555,11 +3654,109 @@ async function publishIncarnationCert() {
             window.uphSetA4lBadge(_clvl);
         }
 
+        // Événement compagnon home en arrière-plan — uniquement si l'utilisateur
+        // a confirmé sa position de résidence (jamais de fallback sur la naissance).
+        var _hLat = (typeof _confirmedHomeLat === 'number') ? _confirmedHomeLat : 0.0;
+        var _hLon = (typeof _confirmedHomeLon === 'number') ? _confirmedHomeLon : 0.0;
+        if (_hLat !== 0.0 || _hLon !== 0.0) {
+            _publishA4lCompanion(_signer, pubkey, a4l_proof, _hLat, _hLon, birthUnix, _geoTag)
+                .catch(function(e) { console.warn('[atomic] companion KO:', e); });
+        } else {
+            console.info('[atomic] atom4love-home ignoré — résidence non renseignée');
+        }
+
     } catch(e) {
         console.error('[atomic] Kind 30078 KO:', e);
         _certStatus('⚠ ' + (e.message || String(e)), '#ff6060');
         if (btn) { btn.textContent = '⚛ Réessayer'; btn.disabled = false; }
     }
+}
+
+// ── Helper NIP-44 : essaie l'extension puis nostr-tools vault ─────────────
+async function _nip44Try(recipientHex, plaintext) {
+    try {
+        if (window.nostr && window.nostr.nip44 && typeof window.nostr.nip44.encrypt === 'function') {
+            return await window.nostr.nip44.encrypt(recipientHex, plaintext);
+        }
+        if (_vaultPrivHex) {
+            const _nt = window.NostrTools || window.Nostr;
+            if (_nt && _nt.nip44 && typeof _nt.nip44.encrypt === 'function') {
+                return await _nt.nip44.encrypt(_vaultPrivHex, recipientHex, plaintext);
+            }
+        }
+    } catch(_e) { if (window.DEBUG) console.warn('[atomic] nip44Try:', _e); }
+    return null;
+}
+
+// ── Événements compagnons publiés après le cert principal ─────────────────
+// d=atom4love-home : pentagon public (~50 km) pour routage UMAP
+// d=atom4love-priv : données privées NIP-44 (clé UMAP + self)
+async function _publishA4lCompanion(signer, pubkey, a4l_proof, birthLat, birthLon, birthUnix, geoTag) {
+    // 1. d=atom4love-home — pentagon uniquement, contenu vide
+    try {
+        const homeEvt = {
+            kind: 30078,
+            created_at: Math.floor(Date.now() / 1000),
+            tags: [
+                ['d', 'atom4love-home'],
+                ['app', 'atom4love'],
+                ['a4l_proof', a4l_proof],
+                ['g', geoTag.penta],
+                ['lat', birthLat.toFixed(2)],
+                ['lon', birthLon.toFixed(2)],
+            ],
+            content: ''
+        };
+        await _publishEventToRelay(await signer.signEvent(homeEvt));
+        console.log('[atomic] atom4love-home publié (pentagon=' + geoTag.penta + ')');
+    } catch(e) { console.warn('[atomic] atom4love-home KO:', e); }
+
+    // 2. d=atom4love-priv — NIP-44 self + station UMAP
+    try {
+        const privData = JSON.stringify({
+            home_lat: birthLat, home_lon: birthLon,
+            birth_time_utc: birthUnix,
+            privacy_prefs: {}
+        });
+
+        // Récupérer le HEX UMAP depuis l'API UPassport
+        var umapHex = null;
+        try {
+            var _apiUrl = typeof window.getAPIUrl === 'function' ? window.getAPIUrl()
+                : (location.hostname === '127.0.0.1' ? 'http://127.0.0.1:54321' : '');
+            if (_apiUrl) {
+                var _geoR = await fetch(_apiUrl + '/api/umap/geolinks?lat=' + birthLat + '&lon=' + birthLon);
+                if (_geoR.ok) { var _geoD = await _geoR.json(); umapHex = (_geoD.umaps && _geoD.umaps.here) || null; }
+            }
+        } catch(_) {}
+
+        var stationCipher = umapHex ? await _nip44Try(umapHex, privData) : null;
+        var selfCipher    = await _nip44Try(pubkey, privData);
+
+        if (!stationCipher && !selfCipher) {
+            console.info('[atomic] atom4love-priv ignoré — NIP-44 indisponible');
+            return;
+        }
+
+        var privContent = JSON.stringify(Object.assign(
+            {},
+            stationCipher ? { station: stationCipher } : {},
+            selfCipher    ? { self: selfCipher }        : {}
+        ));
+
+        const privEvt = {
+            kind: 30078,
+            created_at: Math.floor(Date.now() / 1000),
+            tags: [
+                ['d', 'atom4love-priv'],
+                ['app', 'atom4love'],
+                ['a4l_proof', a4l_proof],
+            ],
+            content: privContent
+        };
+        await _publishEventToRelay(await signer.signEvent(privEvt));
+        console.log('[atomic] atom4love-priv publié (station=' + !!stationCipher + ' self=' + !!selfCipher + ')');
+    } catch(e) { console.warn('[atomic] atom4love-priv KO:', e); }
 }
 
 function _publishEventToRelay(event) {
@@ -3585,23 +3782,15 @@ function _publishEventToRelay(event) {
 }
 
 // ── Restauration Atom A depuis données MULTIPASS sauvegardées ─────────────
+// Restaure silencieusement sans bouton intermédiaire.
 function _checkRestoreAtomA() {
-    if (!window.userPubkey) return;
     var raw = localStorage.getItem('atomic_birth_data');
     if (!raw) return;
     try {
         var d = JSON.parse(raw);
         if (!d.birth_datetime || d.lat == null || d.lon == null) return;
-        var banner  = document.getElementById('atom-a-restore-banner');
-        var summary = document.getElementById('atom-a-restore-summary');
-        if (!banner || !summary) return;
-        // Ne pas re-afficher si les champs sont déjà remplis
-        if (document.getElementById('birth-date').value) return;
-        var dt = new Date(d.birth_datetime);
-        var dateStr = dt.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
-        var placeStr = d.birth_place ? ' · ' + d.birth_place : '';
-        summary.textContent = '📦 Données sauvegardées — ' + dateStr + placeStr;
-        banner.style.display = '';
+        if (document.getElementById('birth-date').value) return; // déjà rempli
+        _doRestoreAtomA();
     } catch (_) {}
 }
 
@@ -3676,17 +3865,18 @@ function _decodeA4lHexTag(tags) {
 
 async function _preInitFromNostr(pubkey) {
     if (!pubkey) return;
-    if (document.getElementById('birth-date').value) return; // champs déjà remplis
 
-    var relay = _relayUrl();
-
-    // Email depuis UPH — disponible immédiatement, sans requête relay
+    // Email depuis UPH — toujours pré-rempli, même si les coords de naissance existent déjà
     var emailEl = document.getElementById('multipass-email');
     if (emailEl && !emailEl.value && window._uphEmail) {
         emailEl.value = window._uphEmail;
         clearTimeout(_emailDetectTimer);
         _emailDetectTimer = setTimeout(function() { _detectEmailOnRelay(window._uphEmail); }, 300);
     }
+
+    if (document.getElementById('birth-date').value) return; // coords déjà remplies
+
+    var relay = _relayUrl();
 
     try {
         // Kind 30078 d=atom4love → coordonnées de naissance approximatives
@@ -3742,10 +3932,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // Pré-initialisation depuis le profil NOSTR connecté (UPH)
     document.addEventListener('nostr:connected', function(e) {
         var pk = (e && e.detail && e.detail.pubkey) || window.userPubkey;
-        if (pk && !localStorage.getItem('atomic_birth_data')) _preInitFromNostr(pk);
+        if (pk) _preInitFromNostr(pk);
     });
     // UPH déjà connecté au moment du chargement de la page
-    if (window.userPubkey && !localStorage.getItem('atomic_birth_data')) {
+    if (window.userPubkey) {
         setTimeout(function() { _preInitFromNostr(window.userPubkey); }, 800);
     }
 });
@@ -3960,10 +4150,11 @@ document.addEventListener('DOMContentLoaded', function() {
         _syncBirthLocation(lo, la);
     }
 
-    // Afficher le CTA de restauration si un profil est déjà enregistré
-    var restoreCta = document.getElementById('restore-cta');
-    if (restoreCta && localStorage.getItem('atomic_birth_data')) {
-        restoreCta.style.display = '';
+    // Auto-restaurer silencieusement si des données sont sauvegardées
+    if (localStorage.getItem('atomic_birth_data')) {
+        setTimeout(function() {
+            if (!document.getElementById('birth-date').value) _checkRestoreAtomA();
+        }, 250);
     }
 });
 </script>
@@ -4032,15 +4223,26 @@ function _updateEmailHint(state, data) {
             const station = (data.home_station || '').split(':')[0];
             const stDisp  = station ? station.slice(0,14)+'…' : '?';
             const nameStr = data.name ? ` · <span style="color:rgba(255,255,255,.6)">${data.name}</span>` : '';
-            hint.innerHTML =
-                `<div style="background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.3);`
-                +`border-radius:8px;padding:6px 10px;font-size:.72rem;color:#f59e0b;margin-top:4px">`
-                +`✅ MULTIPASS détecté${nameStr}<br>`
-                +`<span style="color:rgba(255,255,255,.35)">Station : ${stDisp}</span><br>`
-                +`<span style="color:rgba(255,200,80,.6)">Saisissez le code PASS reçu par email lors de la création.</span>`
-                +`</div>`;
-            if (passBlock) passBlock.style.display = '';
-            if (btn) btn.textContent = '🔑 Récupérer mon MULTIPASS';
+            if (window.nostr) {
+                // Extension NIP-07 active : info uniquement, pas de saisie de PASS requise
+                hint.innerHTML =
+                    `<div style="background:rgba(0,255,204,.06);border:1px solid rgba(0,255,204,.25);`
+                    +`border-radius:8px;padding:6px 10px;font-size:.72rem;color:#00ffcc;margin-top:4px">`
+                    +`🟢 MULTIPASS existant${nameStr}<br>`
+                    +`<span style="color:rgba(255,255,255,.35)">Station : ${stDisp}</span>`
+                    +`</div>`;
+                if (passBlock) passBlock.style.display = 'none';
+            } else {
+                hint.innerHTML =
+                    `<div style="background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.3);`
+                    +`border-radius:8px;padding:6px 10px;font-size:.72rem;color:#f59e0b;margin-top:4px">`
+                    +`✅ MULTIPASS détecté${nameStr}<br>`
+                    +`<span style="color:rgba(255,255,255,.35)">Station : ${stDisp}</span><br>`
+                    +`<span style="color:rgba(255,200,80,.6)">Saisissez le code PASS reçu par email lors de la création.</span>`
+                    +`</div>`;
+                if (passBlock) passBlock.style.display = '';
+                if (btn) btn.textContent = '🔑 Récupérer mon MULTIPASS';
+            }
             break;
         }
         case 'notfound':

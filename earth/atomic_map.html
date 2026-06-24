@@ -668,7 +668,6 @@ function _addAtom(atom) {
 
     var marker = L.marker([lat, lon], { icon: _mkIcon(atom.phi, atom.psi, k, _isConforme(atom)), riseOnHover: true })
         .bindPopup(_buildPopup(atom), { maxWidth: 250, minWidth: 215 });
-    _markerCluster.addLayer(marker);
     atom.marker = marker;
     return marker;
 }
@@ -1019,6 +1018,7 @@ async function _loadMap() {
     // 5. Placer les marqueurs
     _setMsg('Placement sur la carte…');
     var placed = 0;
+    var allMarkers = [];
     uniq.forEach(function(ev) {
         var pos = _decodeA4l(ev.tags);
         if (!pos) return;
@@ -1036,14 +1036,17 @@ async function _loadMap() {
             omega:      isNaN(omega) ? null : omega,
             psi:        isNaN(psi)   ? 0    : psi,
             profile:    profiles[ev.pubkey] || null,
-            certData:   c,               // contenu brut du Kind 30078 (g1pub, g1pub_proof…)
+            certData:   c,
             k:          null, marker: null,
             createdAt:  ev.created_at
         };
         _atoms.push(atom);
-        _addAtom(atom);
+        var m = _addAtom(atom);
+        if (m) allMarkers.push(m);
         placed++;
     });
+    // Ajout batch : le plugin reconstruit son QuadTree une seule fois pour N marqueurs
+    _markerCluster.addLayers(allMarkers);
 
     _log(placed + ' atomes placés sur la carte');
     _renderPanel();
@@ -1066,32 +1069,6 @@ async function _loadMap() {
             'Aucun atome ATOM4LOVE trouvé — publiez votre certificat depuis atomic.html';
     }
 }
-
-// ── Filtrage géographique par viewport ───────────────────────────────────────
-// À zoom ≥ 4, seuls les atomes dans les bounds étendus (×2) sont dans le cluster.
-// À zoom < 4 (vue monde) tous les atomes sont affichés pour profiter du clustering.
-function _refreshMarkersByBounds() {
-    var zoom = map.getZoom();
-    if (zoom < 4) {
-        // Vue globale : tout afficher (MarkerCluster fait le travail de clustering)
-        _atoms.forEach(function(a) {
-            if (a.marker && !_markerCluster.hasLayer(a.marker)) _markerCluster.addLayer(a.marker);
-        });
-        return;
-    }
-    var b = map.getBounds();
-    var pad = 0.5; // 50% de padding au-delà des bords visibles
-    var sw = b.getSouthWest(), ne = b.getNorthEast();
-    var dlat = (ne.lat - sw.lat) * pad, dlon = (ne.lng - sw.lng) * pad;
-    _atoms.forEach(function(a) {
-        if (!a.marker) return;
-        var inBounds = a.lat >= sw.lat - dlat && a.lat <= ne.lat + dlat &&
-                       a.lon >= sw.lng - dlon && a.lon <= ne.lng + dlon;
-        if (inBounds && !_markerCluster.hasLayer(a.marker)) _markerCluster.addLayer(a.marker);
-        else if (!inBounds && _markerCluster.hasLayer(a.marker)) _markerCluster.removeLayer(a.marker);
-    });
-}
-map.on('moveend', _refreshMarkersByBounds);
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', function() {

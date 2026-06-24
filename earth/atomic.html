@@ -2053,14 +2053,25 @@ function updateMultipassPreview() {
 // Format PEPPER : "YYYYMMDDHHMM_LAT_LON_WGT"    (UTC solaire)
 // Sortie : base64url 43 chars ≤ 56 chars (limite DISCO ssss-split)
 function _unixToUtcStr(unix) {
-    const d = new Date((unix || 0) * 1000);
-    return [
-        d.getUTCFullYear(),
-        String(d.getUTCMonth() + 1).padStart(2, '0'),
-        String(d.getUTCDate()).padStart(2, '0'),
-        String(d.getUTCHours()).padStart(2, '0'),
-        String(d.getUTCMinutes()).padStart(2, '0')
-    ].join('');
+    // Arithmétique pure — aucun new Date(), aucune dépendance timezone/moteur
+    // Utilisé comme SALT/PEPPER PBKDF2 : doit être 100 % déterministe inter-navigateurs
+    var s    = unix || 0;
+    var mm   = ((Math.floor(s / 60) % 60) + 60) % 60;
+    var hh   = ((Math.floor(s / 3600) % 24) + 24) % 24;
+    var days = Math.floor(s / 86400);
+    // Algo Gregorian proleptic (Howard Hinnant) : days depuis 1970-01-01 → date calendaire
+    var z   = days + 719468;
+    var era = Math.floor((z >= 0 ? z : z - 146096) / 146097);
+    var doe = z - era * 146097;
+    var yoe = Math.floor((doe - Math.floor(doe / 1460) + Math.floor(doe / 36524) - Math.floor(doe / 146096)) / 365);
+    var yr  = yoe + era * 400;
+    var doy = doe - (365 * yoe + Math.floor(yoe / 4) - Math.floor(yoe / 100));
+    var mp  = Math.floor((5 * doy + 2) / 153);
+    var dd  = doy - Math.floor((153 * mp + 2) / 5) + 1;
+    var mo  = mp < 10 ? mp + 3 : mp - 9;
+    if (mo <= 2) yr++;
+    return [yr, String(mo).padStart(2, '0'), String(dd).padStart(2, '0'),
+            String(hh).padStart(2, '0'), String(mm).padStart(2, '0')].join('');
 }
 
 // ── Worker crypto unifié : PBKDF2 (600k SHA-256) + Scrypt (N=4096) ───────────
@@ -2676,7 +2687,7 @@ document.getElementById('atomicTabs').addEventListener('shown.bs.tab', e => {
     currentMode = e.target.dataset.bsTarget.replace('#tab-', '');
     const hud = document.getElementById('hud-overlay');
     if      (currentMode === 'match')  { window.calculateMatch(); }
-    else if (currentMode === 'profil') { hud.innerHTML = 'Mode: PROFIL<br>Cycle Condensation'; renderKinProfil(); setTimeout(() => { initBirthMap(); initConceptionMap(); if (_birthMap) _birthMap.invalidateSize(); if (_conMap) _conMap.invalidateSize(); }, 120); }
+    else if (currentMode === 'profil') { hud.innerHTML = 'Mode: PROFIL<br>Cycle Condensation'; renderKinProfil(); setTimeout(() => { initBirthMap(); initConceptionMap(); if (_birthMap) _birthMap.invalidateSize(); if (_conMap) _conMap.invalidateSize(); }, 250); }
     else if (currentMode === 'radar')  { hud.innerHTML = 'Mode: RADAR<br>Résonance vibratoire'; }
     else                               { hud.innerHTML = 'Mode: THÉORIE<br>Sphère Géodésique'; renderKinTheorie(); }
 });
@@ -2723,15 +2734,25 @@ function projectLatLonToScreen(lat, lon, rotX, rotY, radius, cx, cy) {
     return { x: cx + x2 * radius, y: cy - y3 * radius, z: z3 };
 }
 
-// WebGL bloom : blending additif + halos concentriques (shadowBlur absent en WEBGL)
-function setGlow(colorStr, blurRadius) { /* no-op WebGL */ }
-function clearGlow()                   { /* no-op WebGL */ }
-// Halo bloom GPU : 3 cercles concentriques semi-transparents en mode ADD
+function setGlow(colorStr, blurRadius) {
+    drawingContext.shadowBlur = blurRadius;
+    drawingContext.shadowColor = colorStr;
+    drawingContext.shadowOffsetX = 0;
+    drawingContext.shadowOffsetY = 0;
+}
+function clearGlow() {
+    drawingContext.shadowBlur = 0;
+    drawingContext.shadowColor = 'transparent';
+}
+// Halo bloom 2D Canvas : shadowBlur natif + disque central
 function _glow3(x, y, r, g, b, alpha, size) {
-    noStroke();
-    fill(r, g, b, Math.min(255, alpha * 0.11)); ellipse(x, y, size * 5.5, size * 5.5);
-    fill(r, g, b, Math.min(255, alpha * 0.28)); ellipse(x, y, size * 2.8, size * 2.8);
-    fill(r, g, b, Math.min(255, alpha * 0.62)); ellipse(x, y, size * 1.4, size * 1.4);
+    drawingContext.shadowBlur = size * 3;
+    drawingContext.shadowColor = `rgba(${r},${g},${b},${(Math.min(255, alpha) / 255).toFixed(2)})`;
+    drawingContext.shadowOffsetX = 0;
+    drawingContext.shadowOffsetY = 0;
+    noStroke(); fill(r, g, b, Math.min(255, alpha * 0.62));
+    ellipse(x, y, size * 1.4, size * 1.4);
+    drawingContext.shadowBlur = 0;
 }
 
 // Variables caméra pour lerp du mode PROFIL
@@ -2741,7 +2762,7 @@ let _targetRotX = 0, _targetRotY = 0;
 // ── P5.JS ─────────────────────────────────────────────────────
 function setup() {
     const c = document.getElementById('canvas-container');
-    createCanvas(c.offsetWidth, c.offsetHeight, WEBGL).parent('canvas-container');
+    createCanvas(c.offsetWidth, c.offsetHeight).parent('canvas-container');
     buildIcosahedronMesh();
 
     // Atome B : date démo pour l'onglet Résonance (partenaire fictif — Paris)
@@ -2812,7 +2833,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
-// ── Capture Mandala (WebGL → PNG social card) ─────────────────────────────
+// ── Capture Mandala (Canvas 2D → PNG social card) ─────────────────────────
 window._requestCapture = function() {
     if (currentMode !== 'match') return;
     _captureRequested = true;
@@ -2820,12 +2841,12 @@ window._requestCapture = function() {
 
 // _doCapture → délègue à _A4L_captureCanvas (uplanet-atomic.js)
 function _doCapture() {
-    const webglEl = document.querySelector('#canvas-container canvas');
-    if (!webglEl) return;
+    const canvasEl = document.querySelector('#canvas-container canvas');
+    if (!canvasEl) return;
     const score   = typeof globalCoherenceScore !== 'undefined' ? globalCoherenceScore : 0;
     const kinANum = (_cachedKinA && _cachedKinA.kin) ? _cachedKinA.kin : null;
     const kinBNum = (_cachedKinB && _cachedKinB.kin) ? _cachedKinB.kin : null;
-    _A4L_captureCanvas(webglEl, score, kinANum, kinBNum);
+    _A4L_captureCanvas(canvasEl, score, kinANum, kinBNum);
 }
 
 // ── Tabs verrouillés — intercept via show.bs.tab ──────────────────────────
@@ -2833,17 +2854,17 @@ function _doCapture() {
 function getCanvasCenter() {
     const panel = document.getElementById('atomic-panel');
     const panelW = (panel && panel.classList.contains('show')) ? panel.offsetWidth : 0;
-    // WEBGL : (0,0) = centre du canvas → décaler visuellement pour le panneau
-    return { x: -panelW / 2, y: 0 };
+    // 2D : (0,0) = coin haut-gauche → centrer dans la zone visible hors panneau
+    return { x: width / 2 - panelW / 2, y: height / 2 };
 }
 
 function draw() {
     _calibratePerf();
     frameTime++;
-    // WEBGL : (0,0) = centre canvas → rect plein écran pour le fondu traîne
+    // Fondu traîne plein écran (origine haut-gauche en mode 2D)
     blendMode(BLEND); noStroke();
     fill(8, 6, 2, 42);
-    rect(-width/2, -height/2, width, height);
+    rect(0, 0, width, height);
     blendMode(ADD);
     if      (currentMode === 'profil')  drawProfileMode();
     else if (currentMode === 'match')   drawMatchMode();
@@ -3045,7 +3066,7 @@ function drawTheorieMode() {
         }
     }
 
-    // ─ Overlay Kin Union — halo pulsant (text() non dispo WEBGL sans loadFont) ───
+    // ─ Overlay Kin Union — halo pulsant ───
     if (_cachedKinA && _cachedKinB) {
         blendMode(BLEND); noStroke();
         fill(255, 200, 40, 50 + 25*excite); ellipse(cx, cy, 48 + 12*excite, 48 + 12*excite);
@@ -3338,13 +3359,13 @@ function drawMatchMode() {
     const speed    = kFact > 0.8 ? 0.012 : 0.035;         // harmonieux ou chaotique
     const manAlpha = 140 + kFact * 115;
 
-    // Bloom WebGL : halo ADD pré-mandala (remplace drawingContext.shadowBlur)
+    // Halo pré-mandala en mode ADD (profondeur visuelle)
     noStroke();
     fill(mixR, mixG, mixB_c, 16 + kFact * 38); ellipse(cx, cy, manR * 4.5, manR * 4.5);
     fill(mixR, mixG, mixB_c,  9 + kFact * 22); ellipse(cx, cy, manR * 7.5, manR * 7.5);
 
     push(); translate(cx, cy); rotate(frameTime * speed);
-    // strokeWeight fixe = 1 : le weight variable déclenche un recalcul buffers WEBGL à chaque frame
+    // strokeWeight 1 : trait fin pour la rhodonée
     stroke(mixR, mixG, mixB_c, manAlpha); strokeWeight(1); noFill();
     // Pas de CLOSE : la rhodonée est déjà périodique, CLOSE ajoutait un segment spurieux
     const step = _perfLevel === 0 ? 0.12 : _perfLevel === 1 ? 0.07 : 0.04;
@@ -3374,7 +3395,7 @@ function drawMatchMode() {
     noStroke(); fill(mixR, mixG, mixB_c, 210 + 45 * Math.sin(frameTime * 0.07));
     ellipse(cx, cy, pulse, pulse);
     if (_cachedKinA && _cachedKinB && kFact > 0.6) {
-        // KIN Union : petit halo central à la place du text() (WEBGL sans loadFont)
+        // KIN Union : halo de confirmation visuelle
         noStroke(); fill(255, 255, 255, 100 + kFact * 80);
         ellipse(cx, cy - manR * 0.55, 5 + kFact * 5, 5 + kFact * 5);
     }

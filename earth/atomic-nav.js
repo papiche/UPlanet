@@ -7,11 +7,12 @@
 'use strict';
 
 var NAV_PAGES = [
-    { id: 'profil', icon: '🌌', label: 'Profil',  href: 'atomic.html',       locked: false },
-    { id: 'map',    icon: '🗺️',  label: 'Carte',   href: 'atomic_map.html',   locked: false },
-    { id: 'chat',   icon: '💬', label: 'Chat',    href: 'atomic_chat.html',  locked: false },
-    { id: 'choir',  icon: '🌀', label: 'Chœur',   href: 'atomic_choir.html', locked: false },
-    { id: 'help',   icon: 'ℹ️',  label: 'Aide',    href: 'atomic_help.html',  locked: false },
+    { id: 'profil', icon: '🌌', label: 'Profil',  href: 'atomic.html',        locked: false },
+    { id: 'map',    icon: '🗺️',  label: 'Carte',   href: 'atomic_map.html',    locked: false },
+    { id: 'board',  icon: '🎴', label: 'Jeu',     href: 'atomic_board.html',  locked: false },
+    { id: 'chat',   icon: '💬', label: 'Chat',    href: 'atomic_chat.html',   locked: false },
+    { id: 'choir',  icon: '🌀', label: 'Chœur',   href: 'atomic_choir.html',  locked: false },
+    { id: 'help',   icon: 'ℹ️',  label: 'Aide',    href: 'atomic_help.html',   locked: false },
 ];
 
 function _detectPage() {
@@ -20,6 +21,7 @@ function _detectPage() {
     if (file === '' || file === 'index.html') return 'profil';
     if (file === 'atomic.html')       return 'profil';
     if (file === 'atomic_map.html')   return 'map';
+    if (file === 'atomic_board.html') return 'board';
     if (file === 'atomic_chat.html')  return 'chat';
     if (file === 'atomic_choir.html') return 'choir';
     if (file === 'atomic_help.html')  return 'help';

@@ -1,0 +1,1725 @@
+<!DOCTYPE html>
+<html lang="fr" data-bs-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>🎴 Qui est-ce ? — ATOM4LOVE</title>
+<script>try{var _t=localStorage.getItem('a4l_theme');if(_t&&_t!=='amber')document.documentElement.setAttribute('data-theme',_t)}catch(e){}</script>
+<link rel="stylesheet" href="core-theme.css">
+<link rel="stylesheet" href="uplanet-atomic.css">
+<style>
+/* ══ Reset & tokens ══════════════════════════════════════════════════════════ */
+*{box-sizing:border-box}
+html,body{
+    margin:0;padding:0;
+    background:#06050a;
+    color:#e2e0dc;
+    font-family:system-ui,-apple-system,sans-serif;
+    min-height:100dvh;
+    overflow-x:hidden
+}
+:root{
+    --teal:#00ffcc;
+    --amber:#f59e0b;
+    --void:#06050a;
+    --surface:rgba(255,255,255,.035);
+    --border:rgba(255,255,255,.07);
+    --muted:rgba(255,255,255,.3);
+    --c-red:#ef4444;--c-wht:#94a3b8;--c-blu:#60a5fa;--c-yel:#fbbf24;--c-grn:#34d399
+}
+
+/* ══ Canvas fond ═════════════════════════════════════════════════════════════ */
+#bg-canvas{position:fixed;inset:0;z-index:0;pointer-events:none}
+
+/* ══ Structure principale ════════════════════════════════════════════════════ */
+.page-wrap{
+    position:relative;z-index:1;
+    padding:96px 6px 200px
+}
+
+/* ══ Barre de filtres ════════════════════════════════════════════════════════ */
+#filter-bar{
+    position:sticky;top:48px;z-index:500;
+    display:flex;gap:5px;align-items:center;flex-wrap:wrap;
+    padding:8px 10px;
+    background:rgba(6,5,10,.94);
+    border-bottom:1px solid var(--border);
+    backdrop-filter:blur(14px);
+    -webkit-backdrop-filter:blur(14px)
+}
+.f-chip{
+    display:flex;align-items:center;gap:4px;
+    padding:5px 13px;border-radius:20px;
+    cursor:pointer;font-size:.7rem;font-weight:700;letter-spacing:.4px;
+    background:rgba(255,255,255,.04);
+    border:1px solid rgba(255,255,255,.1);
+    color:rgba(255,255,255,.45);
+    transition:all .18s;user-select:none;-webkit-user-select:none
+}
+.f-chip.active{
+    background:rgba(0,255,204,.1);
+    border-color:rgba(0,255,204,.38);
+    color:var(--teal)
+}
+.f-chip:hover:not(.active){background:rgba(255,255,255,.07);color:#fff}
+#f-search{
+    flex:1;min-width:80px;
+    padding:5px 12px;border-radius:16px;
+    background:rgba(255,255,255,.04);
+    border:1px solid rgba(255,255,255,.09);
+    color:#e2e0dc;font-size:.7rem;outline:none;
+    transition:border-color .15s
+}
+#f-search:focus{border-color:rgba(0,255,204,.35)}
+#f-search::placeholder{color:rgba(255,255,255,.22)}
+
+/* ══ Bandeau d'état ══════════════════════════════════════════════════════════ */
+#status-bar{
+    font-size:.65rem;color:var(--muted);
+    padding:5px 12px;
+    letter-spacing:.4px;text-align:center;
+    background:rgba(6,5,10,.6)
+}
+
+/* ══ Grille de cartes ════════════════════════════════════════════════════════ */
+#board{
+    display:grid;
+    grid-template-columns:repeat(auto-fill,minmax(122px,1fr));
+    gap:9px;
+    padding:6px 2px 0
+}
+
+/* ══ Carte flip 3D ═══════════════════════════════════════════════════════════ */
+.card-slot{
+    perspective:800px;
+    cursor:pointer;
+    animation:pop-in .35s cubic-bezier(.34,1.56,.64,1) both;
+    touch-action:none;
+    /* Léger jitter de rotation défini par JS via data-rot */
+    --rot:0deg
+}
+.card-slot.live-pop{
+    animation:live-pop .5s cubic-bezier(.34,1.56,.64,1) both
+}
+
+@keyframes pop-in{
+    0%{transform:scale(0) rotate(calc(var(--rot) - 8deg));opacity:0}
+    100%{transform:scale(1) rotate(var(--rot));opacity:1}
+}
+@keyframes live-pop{
+    0%{transform:scale(0) rotate(var(--rot));opacity:0;filter:drop-shadow(0 0 16px rgba(0,255,204,1))}
+    60%{filter:drop-shadow(0 0 8px rgba(0,255,204,.6))}
+    100%{transform:scale(1) rotate(var(--rot));opacity:1;filter:none}
+}
+
+.card-inner{
+    position:relative;
+    width:100%;aspect-ratio:.666; /* 2:3 portrait */
+    transform-style:preserve-3d;
+    transition:transform .5s cubic-bezier(.35,.1,.25,1);
+    /* Légère rotation persistante (tableau sur une table) */
+    transform:rotate(var(--rot))
+}
+.card-slot.flipped .card-inner{
+    transform:rotate(var(--rot)) rotateY(180deg)
+}
+
+.card-front,.card-back{
+    position:absolute;inset:0;
+    border-radius:11px;
+    backface-visibility:hidden;
+    -webkit-backface-visibility:hidden;
+    overflow:hidden;
+    display:flex;flex-direction:column;
+    align-items:center;justify-content:center
+}
+
+/* ── Face avant : mystère ── */
+.card-front{
+    background:var(--surface);
+    border:1px solid var(--border)
+}
+/* Halo de couleur KIN via variable CSS */
+.card-front::before{
+    content:'';
+    position:absolute;inset:0;border-radius:10px;
+    background:radial-gradient(ellipse 80% 70% at 50% 40%,var(--kin-glow,rgba(0,255,204,.18)),transparent 70%);
+    pointer-events:none
+}
+/* Motif Tzolkin : lignes croisées subtiles */
+.card-front::after{
+    content:'';
+    position:absolute;inset:0;border-radius:10px;
+    background:
+        repeating-linear-gradient(
+            0deg,
+            transparent,
+            transparent 11px,
+            rgba(255,255,255,.025) 11px,
+            rgba(255,255,255,.025) 12px
+        ),
+        repeating-linear-gradient(
+            90deg,
+            transparent,
+            transparent 11px,
+            rgba(255,255,255,.025) 11px,
+            rgba(255,255,255,.025) 12px
+        );
+    pointer-events:none
+}
+.cf-kin-emo{
+    font-size:2.6rem;line-height:1;
+    position:relative;z-index:1;
+    margin-bottom:3px;
+    filter:drop-shadow(0 0 8px var(--kin-glow,rgba(0,255,204,.5)))
+}
+.cf-color{
+    font-size:.6rem;font-weight:800;letter-spacing:1.8px;text-transform:uppercase;
+    color:var(--kin-col,var(--teal));
+    position:relative;z-index:1;margin-bottom:4px
+}
+.cf-mystery{
+    font-size:.52rem;font-weight:600;letter-spacing:2px;
+    color:rgba(255,255,255,.2);text-transform:uppercase;
+    position:relative;z-index:1
+}
+.cf-penta{
+    position:absolute;bottom:7px;left:0;right:0;text-align:center;
+    font-size:.5rem;font-family:monospace;
+    color:rgba(255,255,255,.18);z-index:1
+}
+/* Indicateur glissable */
+.cf-drag-hint{
+    position:absolute;top:6px;right:7px;
+    font-size:.55rem;color:rgba(255,255,255,.15);letter-spacing:-1px;z-index:1
+}
+/* Coin KIN numéro */
+.cf-kin-num{
+    position:absolute;top:7px;left:7px;
+    font-size:.52rem;font-weight:800;font-family:monospace;
+    color:rgba(255,255,255,.2);z-index:1
+}
+
+/* ── Face arrière : révélation ── */
+.card-back{
+    transform:rotateY(180deg);
+    background:rgba(6,5,10,.96);
+    border:1px solid rgba(0,255,204,.18)
+}
+.cb-avatar{
+    width:54px;height:54px;border-radius:50%;overflow:hidden;flex-shrink:0;
+    border:2px solid var(--kin-col,rgba(0,255,204,.4));
+    background:rgba(255,255,255,.05);
+    display:flex;align-items:center;justify-content:center;
+    margin-bottom:7px;
+    box-shadow:0 0 10px rgba(0,255,204,.12)
+}
+.cb-avatar img{width:100%;height:100%;object-fit:cover;display:block}
+.cb-name{
+    font-size:.72rem;font-weight:700;color:#fff;
+    text-align:center;padding:0 7px;
+    word-break:break-word;line-height:1.25;
+    max-width:100%
+}
+.cb-kin{
+    font-size:.58rem;color:var(--kin-col,var(--teal));
+    text-align:center;margin-top:3px;padding:0 4px;
+    line-height:1.3
+}
+.cb-score-wrap{margin-top:6px;text-align:center}
+.cb-score{
+    font-size:1.35rem;font-weight:900;line-height:1;
+    color:var(--teal)
+}
+.cb-score.no-k{
+    font-size:.6rem;font-weight:500;
+    color:rgba(255,255,255,.22);line-height:1.4
+}
+.cb-score-lbl{
+    font-size:.5rem;letter-spacing:1.2px;text-transform:uppercase;
+    color:rgba(255,255,255,.22);margin-top:1px
+}
+.cb-actions{
+    display:flex;gap:4px;margin-top:8px;padding:0 7px;width:100%
+}
+.cb-btn{
+    flex:1;padding:5px 2px;border-radius:6px;
+    cursor:pointer;font-size:.58rem;font-weight:700;
+    text-align:center;border:1px solid;white-space:nowrap;
+    transition:background .15s
+}
+.cb-btn-choir{
+    background:rgba(0,255,204,.08);
+    border-color:rgba(0,255,204,.25);color:var(--teal)
+}
+.cb-btn-choir:hover{background:rgba(0,255,204,.18)}
+.cb-btn-match{
+    background:rgba(245,158,11,.07);
+    border-color:rgba(245,158,11,.25);color:var(--amber)
+}
+.cb-btn-match:hover{background:rgba(245,158,11,.18)}
+
+/* ── États de glisser ── */
+.card-slot.dragging{opacity:.3;pointer-events:none}
+.card-slot.in-cauldron .card-inner{
+    box-shadow:0 0 0 2px var(--teal),0 0 14px rgba(0,255,204,.3)
+}
+
+/* ══ CHAUDRON ════════════════════════════════════════════════════════════════ */
+#cauldron{
+    position:fixed;bottom:58px;left:0;right:0;z-index:600;
+    padding:0 8px 2px;
+    pointer-events:none
+}
+#cauldron-panel{
+    border-radius:14px 14px 10px 10px;
+    border:1.5px dashed rgba(0,255,204,.2);
+    background:rgba(6,5,10,.95);
+    backdrop-filter:blur(16px);
+    -webkit-backdrop-filter:blur(16px);
+    padding:9px 10px 7px;
+    display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+    pointer-events:all;
+    transition:border-color .2s,box-shadow .2s,background .2s;
+    min-height:56px
+}
+#cauldron-panel.has-atoms{
+    border-color:rgba(0,255,204,.5);
+    box-shadow:0 -4px 32px rgba(0,255,204,.08)
+}
+#cauldron-panel.drag-over{
+    border-color:var(--teal);
+    background:rgba(0,255,204,.06);
+    box-shadow:0 -4px 40px rgba(0,255,204,.2)
+}
+#cdr-slots{display:flex;gap:5px;align-items:center;flex:1;flex-wrap:wrap}
+.cdr-mini{
+    width:34px;height:50px;border-radius:6px;flex-shrink:0;
+    display:flex;align-items:center;justify-content:center;
+    font-size:1.1rem;position:relative;cursor:pointer;
+    background:rgba(255,255,255,.05);
+    border:1px solid rgba(255,255,255,.12);
+    transition:border-color .15s
+}
+.cdr-mini:hover{border-color:rgba(239,68,68,.5)}
+.cdr-mini-rm{
+    position:absolute;top:-5px;right:-5px;
+    width:14px;height:14px;border-radius:50%;
+    background:#ef4444;color:#fff;
+    font-size:.5rem;font-weight:900;
+    display:flex;align-items:center;justify-content:center;
+    cursor:pointer;line-height:1
+}
+#cdr-empty-hint{
+    font-size:.65rem;color:rgba(255,255,255,.22);
+    padding:2px 4px;flex:1
+}
+#cdr-launch{
+    padding:9px 16px;border-radius:10px;
+    cursor:pointer;font-size:.75rem;font-weight:800;
+    background:linear-gradient(135deg,rgba(0,255,204,.18),rgba(245,158,11,.14));
+    border:1px solid rgba(0,255,204,.4);
+    color:var(--teal);
+    white-space:nowrap;flex-shrink:0;
+    opacity:0;pointer-events:none;
+    transition:opacity .2s,background .2s;
+    letter-spacing:.3px
+}
+#cdr-launch.show{opacity:1;pointer-events:all}
+#cdr-launch:hover{background:linear-gradient(135deg,rgba(0,255,204,.3),rgba(245,158,11,.22))}
+
+/* ══ Chargement ═══════════════════════════════════════════════════════════ */
+#loading{
+    position:fixed;inset:0;z-index:9000;
+    background:rgba(6,5,10,.97);
+    display:flex;flex-direction:column;
+    align-items:center;justify-content:center;gap:16px
+}
+#loading.gone{display:none}
+.ld-ring{
+    width:44px;height:44px;border-radius:50%;
+    border:3px solid rgba(0,255,204,.1);
+    border-top-color:var(--teal);
+    animation:spin .7s linear infinite
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+#ld-msg{font-size:.75rem;color:rgba(255,255,255,.35);letter-spacing:.5px}
+#ld-count{font-size:1.8rem;font-weight:900;color:var(--teal);line-height:1;font-family:monospace}
+
+/* ══ Badge live ══════════════════════════════════════════════════════════════ */
+#live-dot{
+    display:inline-block;width:7px;height:7px;border-radius:50%;
+    background:#ef4444;margin-right:5px;
+    animation:pulse-red 1.8s ease-in-out infinite
+}
+#live-dot.connected{background:var(--teal);animation:pulse-teal 2.5s ease-in-out infinite}
+@keyframes pulse-red{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(.75)}}
+@keyframes pulse-teal{0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(0,255,204,.4)}60%{box-shadow:0 0 0 4px rgba(0,255,204,0)}}
+
+/* ══ Badges de relation sociale ═════════════════════════════════════════════ */
+.cb-follow-badge{
+    display:inline-flex;align-items:center;gap:3px;
+    font-size:.5rem;font-weight:700;letter-spacing:.8px;text-transform:uppercase;
+    padding:2px 7px;border-radius:8px;margin-top:5px;
+    white-space:nowrap
+}
+.cb-follow-badge.bivalent{
+    background:rgba(0,255,204,.1);
+    border:1px solid rgba(0,255,204,.3);
+    color:var(--teal)
+}
+.cb-follow-badge.monovalent-out{
+    background:rgba(245,158,11,.08);
+    border:1px solid rgba(245,158,11,.25);
+    color:var(--amber)
+}
+.cb-follow-badge.monovalent-in{
+    background:rgba(255,255,255,.04);
+    border:1px solid rgba(255,255,255,.12);
+    color:rgba(255,255,255,.4)
+}
+.cb-follow-badge.n2{
+    background:rgba(96,165,250,.07);
+    border:1px solid rgba(96,165,250,.2);
+    color:#60a5fa
+}
+/* chips N1/N2 ont une teinte sociale distincte des chips géo */
+#f-n1.active{
+    background:rgba(0,255,204,.1);
+    border-color:rgba(0,255,204,.38);
+    color:var(--teal)
+}
+#f-n2.active{
+    background:rgba(96,165,250,.1);
+    border-color:rgba(96,165,250,.35);
+    color:#60a5fa
+}
+/* spinner inline pour N1/N2 en cours de chargement */
+.f-chip .sg-spin{
+    display:inline-block;width:7px;height:7px;border-radius:50%;
+    border:1.5px solid currentColor;border-top-color:transparent;
+    animation:spin .6s linear infinite;vertical-align:middle;margin-left:2px
+}
+
+/* ══ Canvas : fondu quand une carte est ouverte ══════════════════════════════ */
+#bg-canvas{transition:opacity .35s}
+body.card-open #bg-canvas{opacity:0}
+
+/* ══ Tooltip flyover ═════════════════════════════════════════════════════════ */
+[data-tip]{position:relative}
+[data-tip]::after{
+    content:attr(data-tip);
+    position:absolute;
+    bottom:calc(100% + 8px);left:50%;
+    transform:translateX(-50%);
+    background:rgba(6,5,10,.97);
+    border:1px solid rgba(0,255,204,.3);
+    color:#e2e0dc;
+    padding:5px 10px;border-radius:8px;
+    font-size:.6rem;font-weight:500;letter-spacing:.2px;
+    white-space:nowrap;pointer-events:none;
+    opacity:0;transition:opacity .18s;
+    z-index:900;
+    box-shadow:0 4px 16px rgba(0,0,0,.6)
+}
+[data-tip]:hover::after{opacity:1}
+/* flèche */
+[data-tip]::before{
+    content:'';position:absolute;bottom:calc(100% + 2px);left:50%;
+    transform:translateX(-50%);
+    border:5px solid transparent;border-top-color:rgba(0,255,204,.3);
+    pointer-events:none;opacity:0;transition:opacity .18s;z-index:901
+}
+[data-tip]:hover::before{opacity:1}
+/* mobile long-press : classe injectée par JS */
+[data-tip].tip-show::after,[data-tip].tip-show::before{opacity:1}
+
+/* ══ Boutons actions sociales (follow / mute) ════════════════════════════════ */
+.cb-social-row{
+    display:flex;gap:4px;margin-top:6px;padding:0 7px;width:100%;justify-content:center
+}
+.cb-soc-btn{
+    flex:1;padding:4px 2px;border-radius:6px;
+    cursor:pointer;font-size:.52rem;font-weight:700;
+    text-align:center;border:1px solid;white-space:nowrap;
+    transition:background .15s,color .15s;max-width:68px
+}
+.cb-soc-follow{
+    background:rgba(0,255,204,.07);
+    border-color:rgba(0,255,204,.25);color:var(--teal)
+}
+.cb-soc-follow:hover{background:rgba(0,255,204,.18)}
+.cb-soc-unfollow{
+    background:rgba(245,158,11,.07);
+    border-color:rgba(245,158,11,.25);color:var(--amber)
+}
+.cb-soc-unfollow:hover{background:rgba(245,158,11,.18)}
+.cb-soc-mute{
+    background:rgba(255,255,255,.04);
+    border-color:rgba(255,255,255,.12);color:rgba(255,255,255,.4)
+}
+.cb-soc-mute:hover{background:rgba(239,68,68,.1);border-color:rgba(239,68,68,.3);color:#ef4444}
+.cb-soc-unmute{
+    background:rgba(239,68,68,.08);
+    border-color:rgba(239,68,68,.25);color:#ef4444
+}
+.cb-soc-unmute:hover{background:rgba(239,68,68,.18)}
+
+/* ══ Séparateur de filtre et chips de tri ════════════════════════════════════ */
+.f-sep{
+    width:1px;height:18px;background:rgba(255,255,255,.12);
+    align-self:center;flex-shrink:0;margin:0 2px
+}
+#sort-friction.active{
+    background:rgba(239,68,68,.1);
+    border-color:rgba(239,68,68,.35);
+    color:#ef4444
+}
+#sort-resonance.active{
+    background:rgba(180,100,255,.1);
+    border-color:rgba(180,100,255,.35);
+    color:#b464ff
+}
+
+/* ══ Modal Laboratoire Φ² ═════════════════════════════════════════════════════ */
+#labo-modal{
+    position:fixed;inset:0;z-index:1400;
+    background:rgba(6,5,10,.78);
+    backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+    display:flex;align-items:center;justify-content:center;
+    padding:16px
+}
+#labo-modal.hidden{display:none}
+body.has-modal #bg-canvas{opacity:0}
+.labo-inner{
+    background:rgba(14,12,22,.98);
+    border:1px solid rgba(0,255,204,.2);
+    border-radius:18px;padding:24px 20px 20px;
+    max-width:340px;width:100%;
+    position:relative;text-align:center;
+    box-shadow:0 8px 48px rgba(0,0,0,.7)
+}
+.labo-close{
+    position:absolute;top:10px;right:12px;
+    background:none;border:none;color:rgba(255,255,255,.3);
+    font-size:1rem;cursor:pointer;padding:4px 8px;
+    transition:color .15s
+}
+.labo-close:hover{color:#fff}
+.labo-title{
+    font-size:.72rem;font-weight:800;letter-spacing:1.5px;
+    text-transform:uppercase;color:rgba(255,255,255,.4);
+    margin-bottom:16px
+}
+.labo-pair{
+    display:flex;align-items:center;justify-content:center;
+    gap:10px;margin-bottom:16px
+}
+.labo-atom{display:flex;flex-direction:column;align-items:center;gap:4px;flex:1}
+.labo-av{
+    width:52px;height:52px;border-radius:50%;object-fit:cover;
+    border:2px solid rgba(0,255,204,.25)
+}
+.labo-name{font-size:.7rem;font-weight:700;color:#e2e0dc;max-width:90px;word-break:break-word}
+.labo-kin{font-size:.6rem;color:rgba(255,255,255,.4)}
+.labo-x{font-size:1.1rem;color:rgba(255,255,255,.2);flex-shrink:0}
+.labo-score{
+    font-size:2.8rem;font-weight:900;line-height:1;
+    margin-bottom:4px
+}
+.labo-label{
+    font-size:.65rem;font-weight:700;letter-spacing:.6px;
+    text-transform:uppercase;margin-bottom:10px
+}
+.labo-union{
+    font-size:.62rem;color:rgba(255,255,255,.35);margin-bottom:14px
+}
+.labo-actions{display:flex;gap:8px;justify-content:center}
+.labo-btn{
+    padding:8px 18px;border-radius:10px;cursor:pointer;
+    font-size:.72rem;font-weight:700;
+    background:rgba(0,255,204,.08);
+    border:1px solid rgba(0,255,204,.25);
+    color:var(--teal);
+    transition:background .15s
+}
+.labo-btn:hover{background:rgba(0,255,204,.18)}
+
+/* ══ Responsive ══════════════════════════════════════════════════════════════ */
+@media(max-width:600px){
+    #board{grid-template-columns:repeat(auto-fill,minmax(clamp(80px,26vw,108px),1fr));gap:7px}
+    .page-wrap{padding:92px 4px 190px}
+    #filter-bar{gap:4px;padding:6px 8px;overflow-x:auto;flex-wrap:nowrap;-webkit-overflow-scrolling:touch}
+    #filter-bar::-webkit-scrollbar{display:none}
+    .f-chip{padding:4px 10px;font-size:.65rem;flex-shrink:0}
+    #f-search{min-width:70px;flex-shrink:1}
+    #cauldron{bottom:52px}
+    #cauldron-panel{min-height:48px;padding:7px 8px 5px}
+}
+@media(max-width:400px){
+    #board{grid-template-columns:repeat(auto-fill,minmax(80px,1fr));gap:5px}
+    .f-chip{padding:3px 7px;font-size:.6rem}
+    #f-search{font-size:.65rem}
+    .page-wrap{padding:88px 2px 185px}
+}
+/* Quand la nav bottom est plus petite (si atomicnav réduit sur mobile) */
+@media(min-width:601px){
+    #filter-bar{flex-wrap:wrap}
+    #board{grid-template-columns:repeat(auto-fill,minmax(120px,1fr))}
+}
+
+/* ══ Animation: réduction mouvement ═════════════════════════════════════════ */
+@media(prefers-reduced-motion:reduce){
+    .card-inner,.card-slot,.cdr-launch{transition:none}
+    .card-slot,.card-slot.live-pop{animation:none;opacity:1}
+    .ld-ring{animation:none;border-color:var(--teal)}
+    #live-dot,#live-dot.connected{animation:none}
+}
+</style>
+</head>
+<body>
+
+<canvas id="bg-canvas"></canvas>
+
+<!-- Chargement -->
+<div id="loading">
+    <div style="font-size:2.8rem">🎴</div>
+    <div id="ld-count">0</div>
+    <div class="ld-ring"></div>
+    <div id="ld-msg">Connexion au relay…</div>
+</div>
+
+<!-- Barre de filtres -->
+<div id="filter-bar">
+    <span id="live-dot" title="Relay NOSTR"></span>
+    <button class="f-chip active" id="f-p2p" onclick="_setFilter('p2p')"
+        data-tip="Relay local · triés par résonance Φ²">🌐 P2P</button>
+    <button class="f-chip" id="f-12p" onclick="_setFilter('12p')"
+        data-tip="Même pentagone icosaédrique">⬟ 12P</button>
+    <button class="f-chip" id="f-p21" onclick="_setFilter('p21')"
+        data-tip="Atomes à moins de 50 km">📍 P21</button>
+    <button class="f-chip" id="f-n1" onclick="_setFilter('n1')"
+        data-tip="Mes abonnements NOSTR · bivalents en tête">🤝 N1</button>
+    <button class="f-chip" id="f-n2" onclick="_setFilter('n2')"
+        data-tip="Amis de mes amis (2 sauts)">🔗 N2</button>
+    <button class="f-chip" id="f-all" onclick="_setFilter('all')"
+        data-tip="Tous les atomes · constellation + copylaradio">∞ Tout</button>
+    <span class="f-sep"></span>
+    <button class="f-chip active" id="sort-resonance" onclick="_setSortMode('resonance')"
+        data-tip="Trier par harmonie Φ² décroissante">💜 Harm</button>
+    <button class="f-chip" id="sort-friction" onclick="_setSortMode('friction')"
+        data-tip="Trier par friction créatrice Δφ≈π">🔥 Friction</button>
+    <input id="f-search" type="search" placeholder="Nom, KIN…" oninput="_applyFilter()" autocomplete="off" spellcheck="false">
+</div>
+
+<div id="status-bar">⚛ connexion…</div>
+
+<!-- Grille de cartes -->
+<div class="page-wrap">
+    <div id="board"></div>
+</div>
+
+<!-- Chaudron (zone de dépôt fixe) -->
+<div id="cauldron">
+    <div id="cauldron-panel"
+         ondragover="event.preventDefault();document.getElementById('cauldron-panel').classList.add('drag-over')"
+         ondragleave="document.getElementById('cauldron-panel').classList.remove('drag-over')"
+         ondrop="_onDrop(event)">
+        <div id="cdr-slots"></div>
+        <div id="cdr-empty-hint">Glissez 2 à 13 atomes ici</div>
+        <button id="cdr-clear" onclick="_emptyCauldron()" data-tip="Vider le chaudron" style="display:none;padding:8px 10px;border-radius:8px;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.25);color:#ef4444;cursor:pointer;font-size:.8rem;flex-shrink:0">🗑</button>
+        <button id="cdr-launch" onclick="_launch()">⚡ Révéler</button>
+    </div>
+</div>
+
+<!-- Modal Laboratoire Φ² -->
+<div id="labo-modal" class="hidden" onclick="_closeLabo()"></div>
+
+<!-- ════════════════════════ SCRIPTS ════════════════════════ -->
+<script src="phi2x.js"></script>
+<script src="kin-data.js"></script>
+<script>
+'use strict';
+/* ═══════════════════════════════════════════════════════════════════════════
+   CONSTANTES & ÉTAT
+   ═══════════════════════════════════════════════════════════════════════════ */
+var KIN_CSS  = ['#ef4444','#94a3b8','#60a5fa','#fbbf24','#34d399'];
+var KIN_EMO  = ['🔴','⚪','🔵','🟡','🟢'];
+
+var _atoms    = [];   // [{pubkey,certData,profile,phi,kin,k,lat,lon,pentagonId,psi}]
+var _profiles = {};   // pubkey → Kind 0 content
+var _selected = [];   // pubkeys dans le chaudron
+var _myPhi    = null;
+var _myPenta  = null;
+var _myLat    = null;
+var _myLon    = null;
+var _filter   = 'p2p';
+var _search   = '';
+var _ws       = null; // WebSocket live
+var _renderTimer = null;
+
+/* Graphe social NOSTR */
+var _myFollows   = new Set(); // pubkeys que je suis (mon Kind 3)
+var _myFollowers = new Set(); // pubkeys qui me suivent (Kind 3 avec #p=moi) → bivalence
+var _n2Follows   = new Set(); // union des follows de mes follows (hors N1)
+var _myMutes     = new Set(); // pubkeys que j'ai mute (Kind 10000)
+var _sgLoaded    = false;     // graphe social chargé au moins une fois
+var _sortMode    = 'resonance'; // 'resonance' | 'friction'
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   HELPERS
+   ═══════════════════════════════════════════════════════════════════════════ */
+function _esc(s){ return String(s||'').replace(/[<>&"'`]/g,'').slice(0,80); }
+
+function _relayUrl(){
+    if(typeof window.getRelayUrl==='function') return window.getRelayUrl();
+    var h=location.hostname;
+    if(h==='127.0.0.1'||h==='localhost') return 'ws://127.0.0.1:7777';
+    if(h.startsWith('ipfs.')) return 'wss://relay.'+h.slice(5);
+    if(h.startsWith('u.'))    return 'wss://relay.'+h.slice(2);
+    return 'wss://relay.copylaradio.com';
+}
+
+function _distKm(lat1,lon1,lat2,lon2){
+    var R=6371,dl=(lat2-lat1)*Math.PI/180,dL=(lon2-lon1)*Math.PI/180;
+    var a=Math.sin(dl/2)*Math.sin(dl/2)+
+          Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*
+          Math.sin(dL/2)*Math.sin(dL/2);
+    return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+}
+
+/* Avatar généré localement depuis la pubkey (pas de service externe) */
+function _genAvatar(pubkey,size){
+    size=size||54;
+    var hue=parseInt(pubkey.slice(0,3),16)%360;
+    var sat=45+parseInt(pubkey.slice(3,5),16)%25;
+    var d=size/4;
+    var rects='';
+    for(var row=0;row<4;row++){
+        for(var col=0;col<2;col++){
+            var bit=parseInt(pubkey.slice((row*4+col)*2,(row*4+col)*2+2)||'0',16)>100;
+            if(bit){
+                var x=col*d, sym=(3-col)*d;
+                rects+='<rect x="'+x+'" y="'+(row*d)+'" width="'+d+'" height="'+d+'" rx="1"/>';
+                if(col!==3-col) rects+='<rect x="'+sym+'" y="'+(row*d)+'" width="'+d+'" height="'+d+'" rx="1"/>';
+            }
+        }
+    }
+    var svg='<svg xmlns="http://www.w3.org/2000/svg" width="'+size+'" height="'+size+'">'
+        +'<rect width="'+size+'" height="'+size+'" fill="hsl('+hue+','+sat+'%,10%)"/>'
+        +'<g fill="hsl('+hue+','+sat+'%,58%)">'+rects+'</g></svg>';
+    return 'data:image/svg+xml;charset=utf-8,'+encodeURIComponent(svg);
+}
+
+/* Rotation déterministe depuis la pubkey (±2.5°) */
+function _cardRot(pubkey){
+    var v=parseInt(pubkey.slice(0,2),16)-128;
+    return (v*2.5/128).toFixed(2)+'deg';
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   GRAPHE SOCIAL — badge et qualification de liaison
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Retourne le type de liaison avec un pubkey donné :
+   'bivalent'       — je suis + il/elle me suit (liaison mutuelle)
+   'monovalent-out' — je suis uniquement (aller simple)
+   'monovalent-in'  — il/elle me suit uniquement (entrante, pas dans N1)
+   'n2'             — ami d'ami (hors N1)
+   null             — aucune relation
+*/
+function _linkType(pk){
+    var iFollow   = _myFollows.has(pk);
+    var theyFollow= _myFollowers.has(pk);
+    if(iFollow&&theyFollow)  return 'bivalent';
+    if(iFollow)              return 'monovalent-out';
+    if(theyFollow)           return 'monovalent-in';
+    if(_n2Follows.has(pk))   return 'n2';
+    return null;
+}
+
+var LINK_LABEL={
+    'bivalent':      {ico:'🤝', lbl:'Ami confirmé',   cls:'bivalent'},
+    'monovalent-out':{ico:'→',  lbl:'Je suis',         cls:'monovalent-out'},
+    'monovalent-in': {ico:'←',  lbl:'M\'abonne',       cls:'monovalent-in'},
+    'n2':            {ico:'🔗', lbl:'Ami d\'ami',       cls:'n2'}
+};
+
+function _followBadge(pk){
+    if(!_sgLoaded) return '';
+    var t=_linkType(pk);
+    if(!t) return '';
+    var d=LINK_LABEL[t];
+    return '<div class="cb-follow-badge '+d.cls+'">'+d.ico+' '+d.lbl+'</div>';
+}
+
+/* Génère les boutons follow/mute pour la face arrière d'une carte */
+function _socialActionsHtml(pk){
+    if(!_sgLoaded||!window.userPubkey||pk===window.userPubkey) return '';
+    var isFollowed=_myFollows.has(pk);
+    var isMuted=_myMutes.has(pk);
+    var fBtn=isFollowed
+        ? '<button class="cb-soc-btn cb-soc-unfollow" onclick="event.stopPropagation();_unfollowUser(\''+pk+'\')" title="Ne plus suivre">✗ Unfollow</button>'
+        : '<button class="cb-soc-btn cb-soc-follow"   onclick="event.stopPropagation();_followUser(\''+pk+'\')"   title="Suivre">+ Follow</button>';
+    var mBtn=isMuted
+        ? '<button class="cb-soc-btn cb-soc-unmute" onclick="event.stopPropagation();_unmuteUser(\''+pk+'\')" title="Réactiver">🔊 Unmute</button>'
+        : '<button class="cb-soc-btn cb-soc-mute"   onclick="event.stopPropagation();_muteUser(\''+pk+'\')"   title="Réduire au silence">🔇 Mute</button>';
+    return fBtn+mBtn;
+}
+
+/* Met à jour en place la rangée sociale + badge sans reconstruire la carte */
+function _updateCardSocialRow(pk){
+    document.querySelectorAll('.card-slot[data-pubkey="'+pk+'"]').forEach(function(slot){
+        var row=slot.querySelector('.cb-social-row');
+        if(row) row.innerHTML=_socialActionsHtml(pk);
+        var back=slot.querySelector('.card-back');
+        if(!back) return;
+        var oldBadge=back.querySelector('.cb-follow-badge');
+        var newBadgeHtml=_followBadge(pk);
+        if(oldBadge){
+            if(newBadgeHtml) oldBadge.outerHTML=newBadgeHtml;
+            else oldBadge.remove();
+        }else if(newBadgeHtml&&row){
+            row.insertAdjacentHTML('beforebegin',newBadgeHtml);
+        }
+    });
+}
+
+/* ─── Actions follow / unfollow / mute / unmute ──────────────────────────── */
+async function _followUser(pk){
+    if(!window.userPubkey||typeof window.publishNote!=='function') return;
+    try{
+        var myK3=await _wsQuery(_relayUrl(),{kinds:[3],authors:[window.userPubkey],limit:1},5000);
+        var ptags=myK3.length?myK3[0].tags.filter(function(t){return t[0]==='p'&&t[1];}):[];
+        if(!ptags.some(function(t){return t[1]===pk;})) ptags=ptags.concat([['p',pk]]);
+        await window.publishNote('',ptags,3);
+        _myFollows.add(pk);
+        _updateCardSocialRow(pk);
+        if(typeof AtomicNav!=='undefined') AtomicNav.showToast('✓ Vous suivez maintenant cet atome');
+    }catch(e){ if(typeof AtomicNav!=='undefined') AtomicNav.showToast('⚠ Erreur follow'); }
+}
+
+async function _unfollowUser(pk){
+    if(!window.userPubkey||typeof window.publishNote!=='function') return;
+    try{
+        var myK3=await _wsQuery(_relayUrl(),{kinds:[3],authors:[window.userPubkey],limit:1},5000);
+        var ptags=myK3.length?myK3[0].tags.filter(function(t){return t[0]==='p'&&t[1]&&t[1]!==pk;}):[];
+        await window.publishNote('',ptags,3);
+        _myFollows.delete(pk);
+        _updateCardSocialRow(pk);
+        if(typeof AtomicNav!=='undefined') AtomicNav.showToast('✓ Désabonné');
+    }catch(e){ if(typeof AtomicNav!=='undefined') AtomicNav.showToast('⚠ Erreur unfollow'); }
+}
+
+async function _muteUser(pk){
+    if(!window.userPubkey||typeof window.publishNote!=='function') return;
+    try{
+        var myK10=await _wsQuery(_relayUrl(),{kinds:[10000],authors:[window.userPubkey],limit:1},5000);
+        var ptags=myK10.length?myK10[0].tags.filter(function(t){return t[0]==='p'&&t[1];}):[];
+        if(!ptags.some(function(t){return t[1]===pk;})) ptags=ptags.concat([['p',pk]]);
+        await window.publishNote('',ptags,10000);
+        _myMutes.add(pk);
+        _updateCardSocialRow(pk);
+        if(typeof AtomicNav!=='undefined') AtomicNav.showToast('🔇 Atome réduit au silence');
+    }catch(e){ if(typeof AtomicNav!=='undefined') AtomicNav.showToast('⚠ Erreur mute'); }
+}
+
+async function _unmuteUser(pk){
+    if(!window.userPubkey||typeof window.publishNote!=='function') return;
+    try{
+        var myK10=await _wsQuery(_relayUrl(),{kinds:[10000],authors:[window.userPubkey],limit:1},5000);
+        var ptags=myK10.length?myK10[0].tags.filter(function(t){return t[0]==='p'&&t[1]&&t[1]!==pk;}):[];
+        await window.publishNote('',ptags,10000);
+        _myMutes.delete(pk);
+        _updateCardSocialRow(pk);
+        if(typeof AtomicNav!=='undefined') AtomicNav.showToast('🔊 Atome réactivé');
+    }catch(e){ if(typeof AtomicNav!=='undefined') AtomicNav.showToast('⚠ Erreur unmute'); }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   CONSTRUCTION DES OBJETS ATOME
+   ═══════════════════════════════════════════════════════════════════════════ */
+function _buildAtom(ev){
+    var certData={};
+    try{certData=JSON.parse(ev.content);}catch(_){}
+    var phi=parseFloat(certData.personal_phase||certData.phase||'NaN');
+    if(isNaN(phi)) phi=null;
+    var kin=null;
+    if(certData.birth_date&&Phi2X){try{kin=Phi2X.calcKinFromDate(certData.birth_date);}catch(_){}}
+    var lat=parseFloat(certData.birth_lat||certData.lat||'NaN');
+    var lon=parseFloat(certData.birth_lon||certData.lon||'NaN');
+    if(isNaN(lat)) lat=null; if(isNaN(lon)) lon=null;
+    var pentagonId=0;
+    if(lat!==null&&lon!==null&&Phi2X){try{pentagonId=Phi2X.getNearestPentagonId(lat,lon,Date.now()/1000);}catch(_){}}
+    var psi=phi!==null?Math.abs(Math.cos(phi)):null;
+    certData._created_at=ev.created_at||0;
+    return{pubkey:ev.pubkey,certData:certData,profile:null,
+           phi:phi,kin:kin,k:null,lat:lat,lon:lon,pentagonId:pentagonId,psi:psi};
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   RENDU DES CARTES
+   ═══════════════════════════════════════════════════════════════════════════ */
+function _makeCard(atom){
+    var kin=atom.kin;
+    var col=kin?KIN_CSS[kin.ci]:'#00ffcc';
+    var emo=kin?KIN_EMO[kin.ci]:'🌀';
+    var p=atom.profile||{};
+    var name=_esc(p.display_name||p.name||atom.pubkey.slice(0,8)+'…');
+    var kinNum=kin?kin.kin:'?';
+    var kinColor=kin?_esc(kin.colorFr||''):'';
+    var kinGlyph=kin?_esc(kin.glyphFr||''):'';
+    var penLbl='⬟P'+String(atom.pentagonId||0).padStart(2,'0');
+    var rot=_cardRot(atom.pubkey);
+
+    /* Score de résonance */
+    var kHtml;
+    if(atom.k!==null){
+        var kPct=Math.round((atom.k-.5)*200);
+        var kCol=atom.k>.85?'#00ffcc':atom.k>.70?'#f59e0b':'#94a3b8';
+        kHtml='<div class="cb-score" style="color:'+kCol+'">'+kPct+'%</div>'
+             +'<div class="cb-score-lbl">cohérence Φ²</div>';
+    }else{
+        kHtml='<div class="cb-score no-k">Connectez-vous<br>pour voir k</div>';
+    }
+
+    /* Avatar */
+    var avSrc;
+    if(p.picture&&p.picture.length>8&&!p.picture.includes('javascript')){
+        avSrc=_esc(p.picture);
+    }else{
+        avSrc=_genAvatar(atom.pubkey);
+    }
+    var fbSrc=_genAvatar(atom.pubkey);
+
+    var el=document.createElement('div');
+    el.className='card-slot';
+    el.dataset.pubkey=atom.pubkey;
+    el.draggable=true;
+    el.style.setProperty('--rot',rot);
+    el.style.setProperty('--kin-glow',col+'44');
+    el.style.setProperty('--kin-col',col);
+
+    el.innerHTML=
+        '<div class="card-inner">'+
+        /* FACE AVANT */
+        '<div class="card-front">'+
+        '  <div class="cf-kin-num">'+kinNum+'</div>'+
+        '  <div class="cf-drag-hint">⋮⋮</div>'+
+        '  <div class="cf-kin-emo">'+emo+'</div>'+
+        '  <div class="cf-color">'+kinColor+'</div>'+
+        '  <div class="cf-mystery">atome</div>'+
+        '  <div class="cf-penta">'+penLbl+'</div>'+
+        '</div>'+
+        /* FACE ARRIÈRE */
+        '<div class="card-back">'+
+        '  <div class="cb-avatar"><img src="'+avSrc+'" alt="" loading="lazy"'+
+        '    onerror="this.src=\''+fbSrc+'\'"></div>'+
+        '  <div class="cb-name">'+name+'</div>'+
+        '  <div class="cb-kin">'+emo+' KIN '+kinNum+'<br>'+kinGlyph+'</div>'+
+        '  <div class="cb-score-wrap">'+kHtml+'</div>'+
+        '  '+_followBadge(atom.pubkey)+
+        '  <div class="cb-social-row">'+_socialActionsHtml(atom.pubkey)+'</div>'+
+        '  <div class="cb-actions">'+
+        '    <button class="cb-btn cb-btn-choir" data-tip="Ajouter au Chœur" onclick="event.stopPropagation();_addToChoir(\''+atom.pubkey+'\')">🌀</button>'+
+        '    <button class="cb-btn cb-btn-match" data-tip="Match Φ² direct" onclick="event.stopPropagation();_quickMatch(\''+atom.pubkey+'\')">⚡ Φ²</button>'+
+        '  </div>'+
+        '</div>'+
+        '</div>';
+
+    el.addEventListener('click',function(){ _flipCard(el); });
+    el.addEventListener('dragstart',function(e){ _onDragStart(e,atom.pubkey); });
+    el.addEventListener('touchstart',_touchStart,{passive:false});
+    el.addEventListener('touchmove',_touchMove,{passive:false});
+    el.addEventListener('touchend',_touchEnd,{passive:false});
+    return el;
+}
+
+function _flipCard(el){
+    el.classList.toggle('flipped');
+    /* Cacher la spirale de fond quand au moins une carte est retournée */
+    document.body.classList.toggle('card-open',!!document.querySelector('.card-slot.flipped'));
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   DRAG & DROP — DESKTOP
+   ═══════════════════════════════════════════════════════════════════════════ */
+var _dragPk=null;
+function _onDragStart(e,pk){
+    _dragPk=pk;
+    e.dataTransfer.effectAllowed='move';
+    e.dataTransfer.setData('text/plain',pk);
+    setTimeout(function(){e.target.classList.add('dragging');},0);
+}
+document.addEventListener('dragend',function(){
+    document.querySelectorAll('.dragging').forEach(function(el){el.classList.remove('dragging');});
+    document.getElementById('cauldron-panel').classList.remove('drag-over');
+});
+function _onDrop(e){
+    e.preventDefault();
+    document.getElementById('cauldron-panel').classList.remove('drag-over');
+    var pk=_dragPk||e.dataTransfer.getData('text/plain');
+    _dragPk=null;
+    if(pk) _addToChoir(pk);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   DRAG & DROP — MOBILE (touch)
+   ═══════════════════════════════════════════════════════════════════════════ */
+var _touchPk=null,_touchGhost=null;
+function _touchStart(e){
+    _touchPk=e.currentTarget.dataset.pubkey;
+    var rect=e.currentTarget.getBoundingClientRect();
+    var g=e.currentTarget.cloneNode(true);
+    g.style.cssText='position:fixed;z-index:9999;width:'+rect.width+'px;height:'+rect.height+'px;'+
+        'top:'+rect.top+'px;left:'+rect.left+'px;opacity:.6;pointer-events:none;transition:none';
+    document.body.appendChild(g);
+    _touchGhost=g;
+    e.currentTarget.classList.add('dragging');
+}
+function _touchMove(e){
+    e.preventDefault();
+    if(!_touchGhost) return;
+    var t=e.touches[0];
+    var hw=parseInt(_touchGhost.style.width)/2;
+    var hh=parseInt(_touchGhost.style.height)/2;
+    _touchGhost.style.left=(t.clientX-hw)+'px';
+    _touchGhost.style.top=(t.clientY-hh)+'px';
+    var cr=document.getElementById('cauldron-panel').getBoundingClientRect();
+    document.getElementById('cauldron-panel').classList.toggle('drag-over',t.clientY>cr.top);
+}
+function _touchEnd(e){
+    document.querySelectorAll('.dragging').forEach(function(el){el.classList.remove('dragging');});
+    if(_touchGhost){_touchGhost.remove();_touchGhost=null;}
+    var t=e.changedTouches[0];
+    var cr=document.getElementById('cauldron-panel').getBoundingClientRect();
+    document.getElementById('cauldron-panel').classList.remove('drag-over');
+    if(t.clientY>cr.top&&_touchPk) _addToChoir(_touchPk);
+    _touchPk=null;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   CHAUDRON — gestion des sélections
+   ═══════════════════════════════════════════════════════════════════════════ */
+function _addToChoir(pk){
+    if(_selected.indexOf(pk)!==-1) return;
+    if(_selected.length>=13){
+        if(typeof AtomicNav!=='undefined') AtomicNav.showToast('Maximum 13 atomes');
+        return;
+    }
+    _selected.push(pk);
+    _syncCauldron();
+}
+function _removeFromChoir(pk){
+    _selected=_selected.filter(function(x){return x!==pk;});
+    _syncCauldron();
+}
+function _emptyCauldron(){
+    _selected=[];
+    _syncCauldron();
+}
+function _syncCauldron(){
+    var slots=document.getElementById('cdr-slots');
+    var hint=document.getElementById('cdr-empty-hint');
+    var btn=document.getElementById('cdr-launch');
+    var clr=document.getElementById('cdr-clear');
+    var panel=document.getElementById('cauldron-panel');
+    var n=_selected.length;
+
+    panel.classList.toggle('has-atoms',n>0);
+    hint.style.display=n?'none':'';
+    if(clr) clr.style.display=n>=2?'':'none';
+
+    /* Marquer les cartes sélectionnées dans le board */
+    document.querySelectorAll('.card-slot').forEach(function(el){
+        el.classList.toggle('in-cauldron',_selected.indexOf(el.dataset.pubkey)!==-1);
+    });
+
+    slots.innerHTML=_selected.map(function(pk){
+        var a=_atoms.find(function(x){return x.pubkey===pk;});
+        var emo=a&&a.kin?KIN_EMO[a.kin.ci]:'🌀';
+        var col=a&&a.kin?KIN_CSS[a.kin.ci]:'#00ffcc';
+        return '<div class="cdr-mini" style="border-color:'+col+'44;background:'+col+'08">'+
+            emo+
+            '<span class="cdr-mini-rm" onclick="event.stopPropagation();_removeFromChoir(\''+pk+'\')">✕</span>'+
+            '</div>';
+    }).join('');
+
+    if(n<2){ btn.textContent='⚡ Révéler'; btn.classList.remove('show'); }
+    else if(n===2){ btn.textContent='⚡ Match Φ²'; btn.classList.add('show'); }
+    else{ btn.textContent='🌀 Chœur ('+n+')'; btn.classList.add('show'); }
+
+    _updateStatus();
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   LANCEMENT
+   ═══════════════════════════════════════════════════════════════════════════ */
+function _launch(){
+    var n=_selected.length;
+    if(n<2) return;
+    if(n===2){
+        var a0=_atoms.find(function(x){return x.pubkey===_selected[0];});
+        var a1=_atoms.find(function(x){return x.pubkey===_selected[1];});
+        if(!a0||!a1){_toChoir();return;}
+
+        /* Si je suis l'un des deux → atomic_match.html avec MES données */
+        if(window.userPubkey&&(a0.pubkey===window.userPubkey||a1.pubkey===window.userPubkey)){
+            var me=a0.pubkey===window.userPubkey?a0:a1;
+            var peer=me===a0?a1:a0;
+            var c=peer.certData||{}, p=peer.profile||{};
+            var payload=JSON.stringify({
+                d:c.birth_date||'',t:c.birth_time||'1200',
+                lo:parseFloat(c.birth_lon||0),la:parseFloat(c.birth_lat||0),
+                k:peer.kin?peer.kin.kin:0,
+                n:_esc(p.display_name||p.name||peer.pubkey.slice(0,8)),
+                hex:peer.pubkey
+            });
+            var b64=btoa(unescape(encodeURIComponent(payload)))
+                .replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+            location.href='atomic_match.html?p='+b64+'&origin='+me.pubkey;
+            return;
+        }
+        /* Deux atomes tiers → Laboratoire in-board */
+        _showLaboModal(a0,a1);
+    }else{
+        _toChoir();
+    }
+}
+
+function _showLaboModal(a0,a1){
+    if(a0.phi===null||a1.phi===null||!Phi2X){
+        if(typeof AtomicNav!=='undefined') AtomicNav.showToast('⚠ Données Φ manquantes');
+        return;
+    }
+    var k=Phi2X.computeResonanceK(a0.phi,a1.phi);
+    var pct=Math.round((k-.5)*200);
+    var label=pct>=95?'Singularité':pct>=80?'Harmonie Élevée':pct>=50?'Cohérence Positive':'Friction Créatrice';
+    var col=pct>=95?'#b464ff':pct>=80?'#00ffcc':pct>=50?'#f59e0b':'#ef4444';
+    var unionKin=a0.kin&&a1.kin?((a0.kin.kin+a1.kin.kin-1)%260)+1:null;
+
+    function atomHtml(a){
+        var p=a.profile||{};
+        var name=_esc(p.display_name||p.name||a.pubkey.slice(0,8)+'…');
+        var fallback=_genAvatar(a.pubkey);
+        var av=(p.picture&&p.picture.length>8&&!p.picture.includes('javascript'))?_esc(p.picture):fallback;
+        return '<div class="labo-atom">'+
+            '<img src="'+av+'" onerror="this.src=\''+fallback+'\'" class="labo-av">'+
+            '<div class="labo-name">'+name+'</div>'+
+            (a.kin?'<div class="labo-kin">'+KIN_EMO[a.kin.ci]+' KIN '+a.kin.kin+'</div>':'')+
+            '</div>';
+    }
+
+    var modal=document.getElementById('labo-modal');
+    modal.innerHTML=
+        '<div class="labo-inner" onclick="event.stopPropagation()">'+
+        '<button class="labo-close" onclick="_closeLabo()">✕</button>'+
+        '<div class="labo-title">🧪 Laboratoire Φ²</div>'+
+        '<div class="labo-pair">'+atomHtml(a0)+
+            '<div class="labo-x">×</div>'+
+            atomHtml(a1)+
+        '</div>'+
+        '<div class="labo-score" style="color:'+col+'">'+pct+'%</div>'+
+        '<div class="labo-label" style="color:'+col+'">'+label+'</div>'+
+        (unionKin?'<div class="labo-union">KIN Union : '+unionKin+'</div>':'')+
+        '<div class="labo-actions">'+
+        '<button class="labo-btn" onclick="_closeLabo();_toChoir()">🌀 Voir le Chœur</button>'+
+        '</div>'+
+        '</div>';
+    modal.classList.remove('hidden');
+    document.body.classList.add('has-modal');
+}
+function _closeLabo(){
+    var modal=document.getElementById('labo-modal');
+    if(modal) modal.classList.add('hidden');
+    document.body.classList.remove('has-modal');
+}
+function _toChoir(){
+    var data=_selected.map(function(pk){
+        var a=_atoms.find(function(x){return x.pubkey===pk;});
+        if(!a)return null;
+        var c=a.certData||{};var p=a.profile||{};
+        return{n:_esc(p.display_name||p.name||pk.slice(0,8)),d:c.birth_date||'',lo:parseFloat(c.birth_lon||0),k:a.kin?a.kin.kin:0};
+    }).filter(Boolean);
+    var b64=btoa(unescape(encodeURIComponent(JSON.stringify(data))))
+        .replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+    location.href='atomic_choir.html?g='+b64;
+}
+
+function _quickMatch(pk){
+    /* Si connecté et seul dans le chaudron → m'ajouter + lancer direct */
+    if(_selected.length===0&&window.userPubkey&&window.userPubkey!==pk){
+        var me=_atoms.find(function(a){return a.pubkey===window.userPubkey;});
+        if(me) _addToChoir(window.userPubkey);
+    }
+    _addToChoir(pk);
+    if(_selected.length>=2) _launch();
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   FILTRE & RENDU DU BOARD
+   ═══════════════════════════════════════════════════════════════════════════ */
+var _allRelayLoaded=false;
+var _FALLBACK_RELAY='wss://relay.copylaradio.com';
+
+function _setSortMode(mode){
+    _sortMode=mode;
+    var r=document.getElementById('sort-resonance');
+    var f=document.getElementById('sort-friction');
+    if(r) r.classList.toggle('active',mode==='resonance');
+    if(f) f.classList.toggle('active',mode==='friction');
+    _scheduleRender();
+}
+
+function _setFilter(f){
+    /* N1/N2 nécessitent une connexion NOSTR */
+    if((f==='n1'||f==='n2')&&!window.userPubkey){
+        if(typeof AtomicNav!=='undefined') AtomicNav.showToast('🔐 Connexion NOSTR requise pour N1/N2');
+        return;
+    }
+    _filter=f;
+    ['p2p','12p','p21','n1','n2','all'].forEach(function(id){
+        var el=document.getElementById('f-'+id);
+        if(el) el.classList.toggle('active',id===f);
+    });
+    /* Graphe social si besoin */
+    if((f==='n1'||f==='n2')&&!_sgLoaded&&window.userPubkey){
+        _loadSocialGraph(_relayUrl());
+    }
+    /* Filtre "Tout" → charger aussi le relay constellation public */
+    if(f==='all'&&!_allRelayLoaded){
+        _allRelayLoaded=true;
+        _loadFromRelay(_FALLBACK_RELAY);
+    }
+    _applyFilter();
+}
+
+async function _loadFromRelay(relay){
+    if(relay===_relayUrl()) return; /* déjà chargé */
+    if(typeof AtomicNav!=='undefined') AtomicNav.showToast('🌐 Chargement '+relay.replace('wss://','')+'…');
+    var events=await _wsQuery(relay,{kinds:[30078],'#d':['atom4love'],limit:500},12000);
+    var added=0;
+    /* Profiles batch */
+    var newPks=[];
+    events.forEach(function(ev){
+        if(!_atoms.find(function(a){return a.pubkey===ev.pubkey;})) newPks.push(ev.pubkey);
+    });
+    if(newPks.length){
+        var k0=await _wsQuery(relay,{kinds:[0],authors:newPks},8000);
+        k0.forEach(function(e){if(!_profiles[e.pubkey])_profiles[e.pubkey]=_parseProfile(e.content);});
+    }
+    events.forEach(function(ev){
+        if(_atoms.find(function(a){return a.pubkey===ev.pubkey;})) return;
+        var atom=_buildAtom(ev);
+        atom.profile=_profiles[ev.pubkey]||null;
+        _atoms.push(atom); added++;
+    });
+    if(added){
+        _updateResonances();
+        _doRender();
+    }
+    if(typeof AtomicNav!=='undefined') AtomicNav.showToast('✓ +'+added+' atomes chargés');
+}
+function _applyFilter(){
+    _search=(document.getElementById('f-search').value||'').trim().toLowerCase();
+    _scheduleRender();
+}
+
+function _filteredAtoms(){
+    var arr=_atoms.slice();
+    /* Texte */
+    if(_search.length>=2){
+        arr=arr.filter(function(a){
+            var p=a.profile||{};
+            var hay=[p.name,p.display_name,a.kin&&a.kin.glyphFr,a.pubkey].filter(Boolean).join(' ').toLowerCase();
+            return hay.indexOf(_search)!==-1;
+        });
+    }
+    /* Pas de filtre : tout afficher */
+    if(_filter==='all'){
+        /* tri k desc uniquement */
+        arr.sort(function(a,b){
+            if(a.k!==null&&b.k!==null) return b.k-a.k;
+            if(a.k!==null) return -1; if(b.k!==null) return 1;
+            return(b.psi||0)-(a.psi||0);
+        });
+        return arr;
+    }
+    /* Filtre géographique */
+    if(_filter==='12p'&&_myPenta!==null){
+        arr=arr.filter(function(a){return a.pentagonId===_myPenta;});
+    }else if(_filter==='p21'&&_myLat!==null&&_myLon!==null){
+        arr=arr.filter(function(a){
+            if(a.lat===null||a.lon===null)return false;
+            return _distKm(_myLat,_myLon,a.lat,a.lon)<50;
+        });
+    /* Filtre social N1 : abonnements directs (bivalents + monovalents sortants) */
+    }else if(_filter==='n1'){
+        arr=arr.filter(function(a){return _myFollows.has(a.pubkey);});
+    /* Filtre social N2 : amis d'amis (hors N1) */
+    }else if(_filter==='n2'){
+        arr=arr.filter(function(a){
+            return _n2Follows.has(a.pubkey)&&!_myFollows.has(a.pubkey);
+        });
+    }
+    /* Tri */
+    arr.sort(function(a,b){
+        /* N1 : bivalents en premier, puis monovalents, puis le reste */
+        if(_filter==='n1'){
+            var ta=_linkType(a.pubkey), tb=_linkType(b.pubkey);
+            var rankLink=function(t){return t==='bivalent'?0:t==='monovalent-out'?1:2;};
+            var rl=rankLink(ta)-rankLink(tb);
+            if(rl!==0) return rl;
+        }
+        /* Mode friction Δφ≈π : tri k croissant (opposés en tête) */
+        if(_sortMode==='friction'){
+            if(a.k!==null&&b.k!==null) return a.k-b.k;
+            if(b.k!==null) return -1;
+            if(a.k!==null) return 1;
+            return 0;
+        }
+        /* Mode résonance (défaut) : k desc → psi desc */
+        if(a.k!==null&&b.k!==null) return b.k-a.k;
+        if(a.k!==null) return -1;
+        if(b.k!==null) return 1;
+        return(b.psi||0)-(a.psi||0);
+    });
+    return arr;
+}
+
+function _scheduleRender(){
+    clearTimeout(_renderTimer);
+    _renderTimer=setTimeout(_doRender,55);
+}
+
+function _doRender(){
+    var visible=_filteredAtoms();
+    var board=document.getElementById('board');
+    var visSet=new Set(visible.map(function(a){return a.pubkey;}));
+
+    /* Supprimer cartes hors filtre */
+    board.querySelectorAll('.card-slot').forEach(function(el){
+        if(!visSet.has(el.dataset.pubkey)) el.remove();
+    });
+
+    var toShow=visible.slice(0,60);
+    var existing={};
+    board.querySelectorAll('.card-slot').forEach(function(el){
+        existing[el.dataset.pubkey]=el;
+    });
+
+    var frag=document.createDocumentFragment();
+    toShow.forEach(function(atom){
+        var el=existing[atom.pubkey];
+        if(el){
+            /* Mettre à jour la résonance si disponible */
+            if(atom.k!==null){
+                var kPct=Math.round((atom.k-.5)*200);
+                var kCol=atom.k>.85?'#00ffcc':atom.k>.70?'#f59e0b':'#94a3b8';
+                var sc=el.querySelector('.cb-score');
+                if(sc&&!sc.classList.contains('no-k')){
+                    sc.textContent=kPct+'%';sc.style.color=kCol;
+                }
+            }
+            frag.appendChild(el);
+        }else{
+            frag.appendChild(_makeCard(atom));
+        }
+    });
+    board.appendChild(frag);
+    _updateStatus();
+}
+
+function _updateStatus(){
+    var visible=_filteredAtoms();
+    var total=_atoms.length;
+    var shown=Math.min(visible.length,60);
+    var sel=_selected.length;
+    var parts=['⚛ '+total+' atome'+(total!==1?'s':'')];
+    if(shown<visible.length) parts.push(shown+'/'+visible.length+' affichés');
+    else if(visible.length<total) parts.push(visible.length+' après filtre');
+    if(_sgLoaded&&(_filter==='n1'||_filter==='n2'||_filter==='p2p')){
+        var biv=0;
+        _atoms.forEach(function(a){if(_linkType(a.pubkey)==='bivalent')biv++;});
+        if(biv>0) parts.push('🤝 '+biv+' mutuel'+(biv>1?'s':''));
+    }
+    if(sel) parts.push(sel+' dans le chœur');
+    document.getElementById('status-bar').textContent=parts.join(' · ');
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   GRAPHE SOCIAL — chargement Kind 3
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Extrait les pubkeys des tags 'p' d'un événement Kind 3 */
+function _extractFollows(ev){
+    var set=new Set();
+    (ev.tags||[]).forEach(function(t){if(t[0]==='p'&&t[1]&&t[1].length===64)set.add(t[1]);});
+    return set;
+}
+
+/* Affiche un spinner sur le chip N1/N2 pendant le chargement */
+function _sgSpinner(on){
+    ['n1','n2'].forEach(function(id){
+        var el=document.getElementById('f-'+id);
+        if(!el) return;
+        var sp=el.querySelector('.sg-spin');
+        if(on&&!sp){
+            var s=document.createElement('span');s.className='sg-spin';el.appendChild(s);
+        }else if(!on&&sp){sp.remove();}
+    });
+}
+
+async function _loadSocialGraph(relay){
+    if(!window.userPubkey||_sgLoaded) return;
+    _sgSpinner(true);
+
+    /* 1. Mon Kind 3 → mes abonnements */
+    var myK3=await _wsQuery(relay,{kinds:[3],authors:[window.userPubkey],limit:1},6000);
+    if(myK3.length){
+        _myFollows=_extractFollows(myK3[0]);
+    }
+
+    /* 2. Kind 3 de mes follows → N2 (chunks de 50, compatible strfry NIP-101) */
+    if(_myFollows.size>0){
+        var followArr=Array.from(_myFollows).slice(0,150); /* max 3 chunks */
+        var byAuthor={};
+        for(var ci=0;ci<followArr.length;ci+=50){
+            var chunk=followArr.slice(ci,ci+50);
+            var k3chunk=await _wsQuery(relay,{kinds:[3],authors:chunk,limit:200},8000);
+            k3chunk.forEach(function(ev){
+                if(!byAuthor[ev.pubkey]||ev.created_at>byAuthor[ev.pubkey].created_at)
+                    byAuthor[ev.pubkey]=ev;
+            });
+        }
+        Object.values(byAuthor).forEach(function(ev){
+            _extractFollows(ev).forEach(function(pk){
+                if(!_myFollows.has(pk)&&pk!==window.userPubkey) _n2Follows.add(pk);
+            });
+        });
+    }
+
+    /* 3. Qui me suit ? Kind 3 avec #p = moi → liaisons bivalentes */
+    var followers=await _wsQuery(relay,{kinds:[3],'#p':[window.userPubkey],limit:500},7000);
+    followers.forEach(function(ev){_myFollowers.add(ev.pubkey);});
+
+    /* 4. Ma liste de mutes (Kind 10000 NIP-51) */
+    var myK10=await _wsQuery(relay,{kinds:[10000],authors:[window.userPubkey],limit:1},5000);
+    if(myK10.length){
+        (myK10[0].tags||[]).forEach(function(t){if(t[0]==='p'&&t[1]&&t[1].length===64)_myMutes.add(t[1]);});
+    }
+
+    _sgLoaded=true;
+    _sgSpinner(false);
+
+    /* Rafraîchir le board pour afficher les badges et re-filtrer */
+    /* Forcer la reconstruction des cartes (badges ont changé) */
+    document.getElementById('board').innerHTML='';
+    _doRender();
+    _updateStatus();
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   CHARGEMENT NOSTR
+   ═══════════════════════════════════════════════════════════════════════════ */
+function _wsQuery(relay,filter,timeout){
+    return new Promise(function(resolve){
+        var evs=[],ws,done=false;
+        var finish=function(){
+            if(done)return;done=true;
+            try{ws&&ws.readyState<2&&ws.close();}catch(_){}
+            resolve(evs);
+        };
+        var t=setTimeout(finish,timeout||10000);
+        try{
+            ws=new WebSocket(relay);
+            var sid='ab'+Math.random().toString(36).slice(2,7);
+            ws.onopen=function(){ws.send(JSON.stringify(['REQ',sid,filter]));};
+            ws.onmessage=function(e){
+                try{
+                    var m=JSON.parse(e.data);
+                    if(m[0]==='EVENT'&&m[1]===sid) evs.push(m[2]);
+                    else if(m[0]==='EOSE'){clearTimeout(t);finish();}
+                }catch(_){}
+            };
+            ws.onerror=ws.onclose=function(){clearTimeout(t);finish();};
+        }catch(_){clearTimeout(t);resolve([]);}
+    });
+}
+
+function _parseProfile(c){try{return JSON.parse(c);}catch(_){return{};}}
+
+async function _loadAll(){
+    var relay=_relayUrl();
+    var ld=function(s){var el=document.getElementById('ld-msg');if(el)el.textContent=s;};
+    ld('Connexion à '+relay.replace(/wss?:\/\//,'')+' …');
+
+    /* 1. Kind 30078 d=atom4love */
+    ld('Chargement des atomes…');
+    var events=await _wsQuery(relay,{kinds:[30078],'#d':['atom4love'],limit:500},12000);
+
+    /* Dédupliquer par pubkey */
+    var byPub={};
+    events.forEach(function(ev){
+        if(!byPub[ev.pubkey]||ev.created_at>byPub[ev.pubkey].created_at) byPub[ev.pubkey]=ev;
+    });
+    var uniq=Object.values(byPub);
+    document.getElementById('ld-count').textContent=uniq.length;
+
+    /* 2. Kind 0 profiles en batch */
+    var pks=uniq.map(function(e){return e.pubkey;});
+    if(pks.length>0){
+        ld(uniq.length+' atomes — profils…');
+        var k0=await _wsQuery(relay,{kinds:[0],authors:pks},8000);
+        k0.forEach(function(e){if(!_profiles[e.pubkey])_profiles[e.pubkey]=_parseProfile(e.content);});
+    }
+
+    /* 3. Construire les objets */
+    uniq.forEach(function(ev){
+        if(_atoms.find(function(a){return a.pubkey===ev.pubkey;})) return;
+        var atom=_buildAtom(ev);
+        atom.profile=_profiles[ev.pubkey]||null;
+        _atoms.push(atom);
+    });
+
+    /* 4. Résonance si déjà connecté */
+    if(window.userPubkey) await _loadMyPhi(relay);
+    _updateResonances();
+
+    /* Masquer loading */
+    var lov=document.getElementById('loading');
+    if(lov) lov.classList.add('gone');
+    _doRender();
+
+    /* 5. Écoute live */
+    _openLive(relay);
+    /* badge relay ok */
+    document.getElementById('live-dot').classList.add('connected');
+}
+
+async function _loadMyPhi(relay){
+    if(!window.userPubkey) return;
+    var certs=await _wsQuery(relay,{kinds:[30078],'#d':['atom4love'],authors:[window.userPubkey],limit:1},5000);
+    if(certs.length){
+        try{
+            var c=JSON.parse(certs[0].content);
+            var v=parseFloat(c.personal_phase||c.phase||'NaN');
+            if(!isNaN(v)) _myPhi=v;
+            var lat=parseFloat(c.birth_lat||c.lat||'NaN');
+            var lon=parseFloat(c.birth_lon||c.lon||'NaN');
+            if(!isNaN(lat)&&!isNaN(lon)){
+                _myLat=lat;_myLon=lon;
+                if(Phi2X) _myPenta=Phi2X.getNearestPentagonId(lat,lon,Date.now()/1000);
+            }
+        }catch(_){}
+    }
+    if(_myLat===null&&navigator.geolocation){
+        navigator.geolocation.getCurrentPosition(function(pos){
+            if(_myLat===null){_myLat=pos.coords.latitude;_myLon=pos.coords.longitude;}
+        });
+    }
+}
+
+function _updateResonances(){
+    if(_myPhi===null) return;
+    _atoms.forEach(function(a){
+        if(a.phi!==null) a.k=Phi2X.computeResonanceK(_myPhi,a.phi);
+    });
+    _scheduleRender();
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   SOUSCRIPTION LIVE
+   ═══════════════════════════════════════════════════════════════════════════ */
+function _openLive(relay){
+    if(_ws&&_ws.readyState<2) return;
+    try{
+        var ws=new WebSocket(relay);
+        var sid='live'+Math.random().toString(36).slice(2,7);
+        var since=Math.floor(Date.now()/1000)-15;
+        ws.onopen=function(){
+            ws.send(JSON.stringify(['REQ',sid,{kinds:[30078],'#d':['atom4love'],since:since}]));
+        };
+        ws.onmessage=function(e){
+            try{
+                var m=JSON.parse(e.data);
+                if(m[0]!=='EVENT'||m[1]!==sid) return;
+                var ev=m[2];
+                var exist=_atoms.find(function(a){return a.pubkey===ev.pubkey;});
+                if(exist){
+                    if((ev.created_at||0)>(exist.certData._created_at||0)){
+                        var upd=_buildAtom(ev);
+                        upd.profile=exist.profile;
+                        if(_myPhi!==null&&upd.phi!==null) upd.k=Phi2X.computeResonanceK(_myPhi,upd.phi);
+                        _atoms[_atoms.indexOf(exist)]=upd;
+                        _scheduleRender();
+                    }
+                    return;
+                }
+                /* Nouvel atome ! */
+                var atom=_buildAtom(ev);
+                atom.profile=_profiles[ev.pubkey]||null;
+                if(_myPhi!==null&&atom.phi!==null) atom.k=Phi2X.computeResonanceK(_myPhi,atom.phi);
+                _atoms.push(atom);
+                _fetchProfile1(relay,ev.pubkey,atom);
+                _showNewCard(atom);
+                if(typeof AtomicNav!=='undefined'){
+                    AtomicNav.showToast('✨ Nouvel atome '+(atom.kin?KIN_EMO[atom.kin.ci]+' KIN '+atom.kin.kin:'🌀'));
+                }
+                _updateStatus();
+            }catch(_){}
+        };
+        ws.onerror=ws.onclose=function(){
+            _ws=null;setTimeout(function(){_openLive(relay);},9000);
+        };
+        _ws=ws;
+    }catch(_){}
+}
+
+/* Applique un profil à un atome et met à jour la carte si affichée */
+function _applyProfile(pubkey,atom,pr){
+    _profiles[pubkey]=pr; atom.profile=pr;
+    var card=document.querySelector('.card-slot[data-pubkey="'+pubkey+'"]');
+    if(!card) return;
+    var nm=card.querySelector('.cb-name');
+    if(nm) nm.textContent=_esc(pr.display_name||pr.name||pubkey.slice(0,8)+'…');
+    var av=card.querySelector('.cb-avatar img');
+    if(av&&pr.picture&&pr.picture.length>8&&!pr.picture.includes('javascript'))
+        av.src=_esc(pr.picture);
+}
+
+/* Récupère un profil : file globale (common.js) si dispo, sinon WebSocket dédié */
+async function _fetchProfile1(relay,pubkey,atom){
+    /* Préférer window.fetchUserMetadata (common.js) : recycle la connexion existante */
+    if(typeof window.fetchUserMetadata==='function'){
+        try{
+            var pr=await window.fetchUserMetadata(pubkey);
+            if(pr) _applyProfile(pubkey,atom,pr);
+        }catch(_){}
+        return;
+    }
+    /* Fallback : une seule connexion courte avec timeout */
+    try{
+        var ws=new WebSocket(relay);
+        var sid='p1'+Math.random().toString(36).slice(2,6);
+        var done=false;
+        var finish=function(){if(done)return;done=true;try{ws.close();}catch(_){}};
+        var t=setTimeout(finish,5000);
+        ws.onopen=function(){ws.send(JSON.stringify(['REQ',sid,{kinds:[0],authors:[pubkey],limit:1}]));};
+        ws.onmessage=function(e){
+            try{
+                var m=JSON.parse(e.data);
+                if(m[0]==='EVENT'&&m[1]===sid){
+                    _applyProfile(pubkey,atom,_parseProfile(m[2].content));
+                    clearTimeout(t);finish();
+                }else if(m[0]==='EOSE'){clearTimeout(t);finish();}
+            }catch(_){}
+        };
+        ws.onerror=ws.onclose=function(){clearTimeout(t);done=true;};
+    }catch(_){}
+}
+
+function _showNewCard(atom){
+    var vis=_filteredAtoms();
+    if(!vis.find(function(a){return a.pubkey===atom.pubkey;})) return;
+    var board=document.getElementById('board');
+    if(board.querySelector('.card-slot[data-pubkey="'+atom.pubkey+'"]')) return;
+    var card=_makeCard(atom);
+    card.classList.remove('card-slot');
+    card.classList.add('card-slot','live-pop');
+    board.insertBefore(card,board.firstChild);
+    if(board.children.length>60) board.lastChild.remove();
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   INITIALISATION
+   ═══════════════════════════════════════════════════════════════════════════ */
+(function init(){
+    _loadAll();
+
+    /* Attendre la connexion NOSTR pour calculer k + charger le graphe social */
+    if(window.waitForConnection){
+        window.waitForConnection(async function(){
+            var relay=_relayUrl();
+            await _loadMyPhi(relay);
+            _updateResonances();
+            _loadSocialGraph(relay); /* non-bloquant */
+        });
+    }else{
+        var poll=0,t=setInterval(function(){
+            if(window.isNostrConnected&&window.userPubkey){
+                clearInterval(t);
+                var relay=_relayUrl();
+                _loadMyPhi(relay).then(function(){
+                    _updateResonances();
+                    _loadSocialGraph(relay);
+                });
+            }
+            if(++poll>80) clearInterval(t);
+        },400);
+    }
+
+    /* GPS pour filtre P21 */
+    if(navigator.geolocation){
+        navigator.geolocation.getCurrentPosition(function(pos){
+            if(_myLat===null){_myLat=pos.coords.latitude;_myLon=pos.coords.longitude;}
+        });
+    }
+
+    /* ─── Tooltips long-press mobile ─────────────────────────────────────── */
+    var _tipTimer=null,_tipTarget=null;
+    function _showMobileTip(el){
+        clearTimeout(_tipTimer);
+        if(_tipTarget&&_tipTarget!==el) _tipTarget.classList.remove('tip-show');
+        _tipTarget=el;
+        el.classList.add('tip-show');
+        setTimeout(function(){if(_tipTarget===el)el.classList.remove('tip-show');},2800);
+    }
+    document.addEventListener('touchstart',function(e){
+        var t=e.target.closest('[data-tip]');
+        if(!t) return;
+        _tipTimer=setTimeout(function(){_showMobileTip(t);},550);
+    },{passive:true});
+    document.addEventListener('touchend',function(){clearTimeout(_tipTimer);},{passive:true});
+    document.addEventListener('touchmove',function(){clearTimeout(_tipTimer);},{passive:true});
+
+})();
+</script>
+
+<!-- Fond étoilé (canvas particules) -->
+<script>
+(function(){
+    var c=document.getElementById('bg-canvas'),ctx=c.getContext('2d'),W,H,pts;
+    function resize(){
+        W=c.width=window.innerWidth;H=c.height=window.innerHeight;
+        pts=Array.from({length:40},function(){
+            return{x:Math.random()*W,y:Math.random()*H,
+                vx:(Math.random()-.5)*.18,vy:(Math.random()-.5)*.18,
+                r:Math.random()*.9+.2,a:Math.random()*.6+.07};
+        });
+    }
+    function draw(){
+        ctx.clearRect(0,0,W,H);
+        pts.forEach(function(p){
+            p.x+=p.vx;p.y+=p.vy;
+            if(p.x<0)p.x=W;if(p.x>W)p.x=0;if(p.y<0)p.y=H;if(p.y>H)p.y=0;
+            ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,6.28);
+            ctx.fillStyle='rgba(0,255,204,'+p.a+')';ctx.fill();
+        });
+        requestAnimationFrame(draw);
+    }
+    resize();window.addEventListener('resize',resize);draw();
+})();
+</script>
+
+<script src="nacl-fast.min.js"></script>
+<script src="nostr.bundle.js"></script>
+<script src="common.js"></script>
+<script src="uplanet-header.js"></script>
+<script src="atomic-nav.js"></script>
+<script>
+AtomicNav.injectTopHeader({title:'🎴 Qui est-ce ?'});
+AtomicNav.injectBottomNav({active:'board'});
+</script>
+</body>
+</html>

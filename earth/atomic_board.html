@@ -34,7 +34,7 @@ html,body{
 /* ══ Structure principale ════════════════════════════════════════════════════ */
 .page-wrap{
     position:relative;z-index:1;
-    padding:96px 6px 200px
+    padding:96px 6px 220px
 }
 
 /* ══ Barre de filtres ════════════════════════════════════════════════════════ */
@@ -84,9 +84,11 @@ html,body{
 /* ══ Grille de cartes ════════════════════════════════════════════════════════ */
 #board{
     display:grid;
-    grid-template-columns:repeat(auto-fill,minmax(122px,1fr));
-    gap:9px;
-    padding:6px 2px 0
+    grid-template-columns:repeat(auto-fill,minmax(100px,1fr));
+    gap:12px;
+    padding:6px 2px 0;
+    perspective:1400px;
+    perspective-origin:50% -10%
 }
 
 /* ══ Carte flip 3D ═══════════════════════════════════════════════════════════ */
@@ -95,8 +97,12 @@ html,body{
     cursor:pointer;
     animation:pop-in .35s cubic-bezier(.34,1.56,.64,1) both;
     touch-action:none;
-    /* Léger jitter de rotation défini par JS via data-rot */
-    --rot:0deg
+    --rot:0deg;
+    /* Charnière en bas comme dans le jeu physique */
+    transform-origin:bottom center;
+    transition:transform .45s cubic-bezier(.4,0,.2,1),
+               opacity .45s,
+               filter .45s
 }
 .card-slot.live-pop{
     animation:live-pop .5s cubic-bezier(.34,1.56,.64,1) both
@@ -200,97 +206,101 @@ html,body{
     color:rgba(255,255,255,.2);z-index:1
 }
 
-/* ── Face arrière : révélation ── */
+/* ── Face arrière : cadre plastique façon jeu de société ── */
 .card-back{
     transform:rotateY(180deg);
-    background:rgba(6,5,10,.96);
-    border:1px solid rgba(0,255,204,.18)
+    /* Le fond prend la couleur KIN — famille visuelle immédiate */
+    background:var(--kin-col,var(--teal));
+    border:none;
+    padding:4px;
+    border-radius:11px
+}
+.cb-inner-frame{
+    background:#0d0b18;
+    border-radius:7px;
+    height:100%;width:100%;
+    display:flex;flex-direction:column;
+    align-items:center;justify-content:center;
+    overflow:hidden;
+    padding:10px 6px 8px;
+    box-shadow:inset 0 0 14px rgba(0,0,0,.5)
 }
 .cb-avatar{
-    width:54px;height:54px;border-radius:50%;overflow:hidden;flex-shrink:0;
-    border:2px solid var(--kin-col,rgba(0,255,204,.4));
+    width:62px;height:62px;border-radius:50%;overflow:hidden;flex-shrink:0;
+    border:2px solid rgba(255,255,255,.18);
     background:rgba(255,255,255,.05);
     display:flex;align-items:center;justify-content:center;
-    margin-bottom:7px;
-    box-shadow:0 0 10px rgba(0,255,204,.12)
+    margin-bottom:7px
 }
 .cb-avatar img{width:100%;height:100%;object-fit:cover;display:block}
 .cb-name{
-    font-size:.72rem;font-weight:700;color:#fff;
-    text-align:center;padding:0 7px;
-    word-break:break-word;line-height:1.25;
+    font-size:.72rem;font-weight:800;color:#fff;
+    text-align:center;padding:0 4px;
+    word-break:break-word;line-height:1.2;
     max-width:100%
 }
-.cb-kin{
-    font-size:.58rem;color:var(--kin-col,var(--teal));
-    text-align:center;margin-top:3px;padding:0 4px;
-    line-height:1.3
+/* KIN badge compact */
+.cb-kin-badge{
+    display:inline-flex;align-items:center;gap:3px;
+    font-size:.6rem;font-weight:700;
+    background:rgba(255,255,255,.1);
+    border-radius:10px;padding:2px 8px;
+    margin-top:5px;color:rgba(255,255,255,.85)
 }
-.cb-score-wrap{margin-top:6px;text-align:center}
+/* Score de résonance — petit, discret */
 .cb-score{
-    font-size:1.35rem;font-weight:900;line-height:1;
-    color:var(--teal)
+    font-size:.8rem;font-weight:900;
+    color:var(--kin-col,var(--teal));
+    margin-top:4px;line-height:1
 }
-.cb-score.no-k{
-    font-size:.6rem;font-weight:500;
-    color:rgba(255,255,255,.22);line-height:1.4
-}
-.cb-score-lbl{
-    font-size:.5rem;letter-spacing:1.2px;text-transform:uppercase;
-    color:rgba(255,255,255,.22);margin-top:1px
-}
-.cb-actions{
-    display:flex;gap:4px;margin-top:8px;padding:0 7px;width:100%
-}
-.cb-btn{
-    flex:1;padding:5px 2px;border-radius:6px;
-    cursor:pointer;font-size:.58rem;font-weight:700;
-    text-align:center;border:1px solid;white-space:nowrap;
-    transition:background .15s
-}
-.cb-btn-choir{
-    background:rgba(0,255,204,.08);
-    border-color:rgba(0,255,204,.25);color:var(--teal)
-}
-.cb-btn-choir:hover{background:rgba(0,255,204,.18)}
-.cb-btn-match{
-    background:rgba(245,158,11,.07);
-    border-color:rgba(245,158,11,.25);color:var(--amber)
-}
-.cb-btn-match:hover{background:rgba(245,158,11,.18)}
+.cb-score.no-k{display:none}
 
+/* ── Carte éliminée (repliée en arrière comme dans le jeu) ── */
+.card-slot.eliminated{
+    transform:rotateX(70deg) scale(.88) rotate(var(--rot));
+    opacity:.12;
+    pointer-events:none;
+    filter:grayscale(90%)
+}
 /* ── États de glisser ── */
 .card-slot.dragging{opacity:.3;pointer-events:none}
 .card-slot.in-cauldron .card-inner{
     box-shadow:0 0 0 2px var(--teal),0 0 14px rgba(0,255,204,.3)
 }
 
-/* ══ CHAUDRON ════════════════════════════════════════════════════════════════ */
+/* ══ CHAUDRON — dock magnétique ══════════════════════════════════════════════ */
 #cauldron{
     position:fixed;bottom:58px;left:0;right:0;z-index:600;
-    padding:0 8px 2px;
+    padding:10px 10px 0;
+    background:linear-gradient(to bottom,rgba(15,17,26,.95),rgba(5,6,10,.99));
+    border-top:2px solid var(--teal);
+    box-shadow:0 -12px 40px rgba(0,255,204,.18);
+    backdrop-filter:blur(14px);
+    -webkit-backdrop-filter:blur(14px);
     pointer-events:none
 }
 #cauldron-panel{
-    border-radius:14px 14px 10px 10px;
-    border:1.5px dashed rgba(0,255,204,.2);
-    background:rgba(6,5,10,.95);
-    backdrop-filter:blur(16px);
-    -webkit-backdrop-filter:blur(16px);
-    padding:9px 10px 7px;
+    border:1.5px dashed rgba(255,255,255,.15);
+    border-radius:12px;
+    min-height:68px;
     display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+    padding:8px 10px;
     pointer-events:all;
-    transition:border-color .2s,box-shadow .2s,background .2s;
-    min-height:56px
+    background:rgba(0,0,0,.3);
+    transition:background .3s cubic-bezier(.4,0,.2,1),
+               border-color .3s,
+               transform .25s cubic-bezier(.4,0,.2,1),
+               box-shadow .3s
 }
 #cauldron-panel.has-atoms{
-    border-color:rgba(0,255,204,.5);
-    box-shadow:0 -4px 32px rgba(0,255,204,.08)
+    border-color:rgba(0,255,204,.4);
+    background:rgba(0,255,204,.04)
 }
 #cauldron-panel.drag-over{
+    background:rgba(0,255,204,.14);
     border-color:var(--teal);
-    background:rgba(0,255,204,.06);
-    box-shadow:0 -4px 40px rgba(0,255,204,.2)
+    transform:scale(1.012);
+    box-shadow:inset 0 0 24px rgba(0,255,204,.1)
 }
 #cdr-slots{display:flex;gap:5px;align-items:center;flex:1;flex-wrap:wrap}
 .cdr-mini{
@@ -311,7 +321,9 @@ html,body{
     cursor:pointer;line-height:1
 }
 #cdr-empty-hint{
-    font-size:.65rem;color:rgba(255,255,255,.22);
+    font-size:.68rem;font-weight:600;
+    letter-spacing:1.5px;text-transform:uppercase;
+    color:rgba(255,255,255,.3);
     padding:2px 4px;flex:1
 }
 #cdr-launch{
@@ -544,6 +556,13 @@ body.has-modal #bg-canvas{opacity:0}
     transition:background .15s
 }
 .labo-btn:hover{background:rgba(0,255,204,.18)}
+.labo-btn-primary{
+    background:rgba(0,255,204,.15);
+    border-color:rgba(0,255,204,.55);
+    color:#00ffcc;text-decoration:none;
+    display:inline-flex;align-items:center
+}
+.labo-btn-primary:hover{background:rgba(0,255,204,.28)}
 
 /* ══ Responsive ══════════════════════════════════════════════════════════════ */
 @media(max-width:600px){
@@ -593,20 +612,20 @@ body.has-modal #bg-canvas{opacity:0}
 <div id="filter-bar">
     <span id="live-dot" title="Relay NOSTR"></span>
     <button class="f-chip active" id="f-p2p" onclick="_setFilter('p2p')"
-        data-tip="Relay local · triés par résonance Φ²">🌐 P2P</button>
+        data-tip="Tous les atomes du relay · triés par résonance">🌐 Tous</button>
     <button class="f-chip" id="f-12p" onclick="_setFilter('12p')"
-        data-tip="Même pentagone icosaédrique">⬟ 12P</button>
+        data-tip="Dans mon pentagone icosaédrique ?">🌀 Pentagone</button>
     <button class="f-chip" id="f-p21" onclick="_setFilter('p21')"
-        data-tip="Atomes à moins de 50 km">📍 P21</button>
+        data-tip="À moins de 50 km de moi ?">📍 Proche</button>
     <button class="f-chip" id="f-n1" onclick="_setFilter('n1')"
-        data-tip="Mes abonnements NOSTR · bivalents en tête">🤝 N1</button>
+        data-tip="Dans mes contacts NOSTR ?">🤝 Contacts</button>
     <button class="f-chip" id="f-n2" onclick="_setFilter('n2')"
-        data-tip="Amis de mes amis (2 sauts)">🔗 N2</button>
+        data-tip="Ami d'un de mes amis ?">🔗 Réseau</button>
     <button class="f-chip" id="f-all" onclick="_setFilter('all')"
-        data-tip="Tous les atomes · constellation + copylaradio">∞ Tout</button>
+        data-tip="Tous les relais · constellation + copylaradio">∞ Relais</button>
     <span class="f-sep"></span>
     <button class="f-chip active" id="sort-resonance" onclick="_setSortMode('resonance')"
-        data-tip="Trier par harmonie Φ² décroissante">💜 Harm</button>
+        data-tip="Trier par harmonie Φ²">💜 Harm</button>
     <button class="f-chip" id="sort-friction" onclick="_setSortMode('friction')"
         data-tip="Trier par friction créatrice Δφ≈π">🔥 Friction</button>
     <input id="f-search" type="search" placeholder="Nom, KIN…" oninput="_applyFilter()" autocomplete="off" spellcheck="false">
@@ -626,7 +645,7 @@ body.has-modal #bg-canvas{opacity:0}
          ondragleave="document.getElementById('cauldron-panel').classList.remove('drag-over')"
          ondrop="_onDrop(event)">
         <div id="cdr-slots"></div>
-        <div id="cdr-empty-hint">Glissez 2 à 13 atomes ici</div>
+        <div id="cdr-empty-hint">Déposez 2 cartes · analyse en direct</div>
         <button id="cdr-clear" onclick="_emptyCauldron()" data-tip="Vider le chaudron" style="display:none;padding:8px 10px;border-radius:8px;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.25);color:#ef4444;cursor:pointer;font-size:.8rem;flex-shrink:0">🗑</button>
         <button id="cdr-launch" onclick="_launch()">⚡ Révéler</button>
     </div>
@@ -872,15 +891,14 @@ function _makeCard(atom){
     var penLbl='⬟P'+String(atom.pentagonId||0).padStart(2,'0');
     var rot=_cardRot(atom.pubkey);
 
-    /* Score de résonance */
+    /* Score de résonance — petit indicateur */
     var kHtml;
     if(atom.k!==null){
         var kPct=Math.round((atom.k-.5)*200);
         var kCol=atom.k>.85?'#00ffcc':atom.k>.70?'#f59e0b':'#94a3b8';
-        kHtml='<div class="cb-score" style="color:'+kCol+'">'+kPct+'%</div>'
-             +'<div class="cb-score-lbl">cohérence Φ²</div>';
+        kHtml='<div class="cb-score" style="color:'+kCol+'">'+kPct+'%</div>';
     }else{
-        kHtml='<div class="cb-score no-k">Connectez-vous<br>pour voir k</div>';
+        kHtml='<div class="cb-score no-k"></div>';
     }
 
     /* Avatar */
@@ -902,7 +920,7 @@ function _makeCard(atom){
 
     el.innerHTML=
         '<div class="card-inner">'+
-        /* FACE AVANT */
+        /* FACE AVANT — mystère */
         '<div class="card-front">'+
         '  <div class="cf-kin-num">'+kinNum+'</div>'+
         '  <div class="cf-drag-hint">⋮⋮</div>'+
@@ -911,18 +929,16 @@ function _makeCard(atom){
         '  <div class="cf-mystery">atome</div>'+
         '  <div class="cf-penta">'+penLbl+'</div>'+
         '</div>'+
-        /* FACE ARRIÈRE */
+        /* FACE ARRIÈRE — cadre plastique épuré */
         '<div class="card-back">'+
-        '  <div class="cb-avatar"><img src="'+avSrc+'" alt="" loading="lazy"'+
-        '    onerror="this.src=\''+fbSrc+'\'"></div>'+
-        '  <div class="cb-name">'+name+'</div>'+
-        '  <div class="cb-kin">'+emo+' KIN '+kinNum+'<br>'+kinGlyph+'</div>'+
-        '  <div class="cb-score-wrap">'+kHtml+'</div>'+
-        '  '+_followBadge(atom.pubkey)+
-        '  <div class="cb-social-row">'+_socialActionsHtml(atom.pubkey)+'</div>'+
-        '  <div class="cb-actions">'+
-        '    <button class="cb-btn cb-btn-choir" data-tip="Ajouter au Chœur" onclick="event.stopPropagation();_addToChoir(\''+atom.pubkey+'\')">🌀</button>'+
-        '    <button class="cb-btn cb-btn-match" data-tip="Match Φ² direct" onclick="event.stopPropagation();_quickMatch(\''+atom.pubkey+'\')">⚡ Φ²</button>'+
+        '  <div class="cb-inner-frame">'+
+        '    <div class="cb-avatar"><img src="'+avSrc+'" alt="" loading="lazy"'+
+        '      onerror="this.src=\''+fbSrc+'\'"></div>'+
+        '    <div class="cb-name">'+name+'</div>'+
+        '    <div class="cb-kin-badge">'+emo+' KIN '+kinNum+'</div>'+
+        '    '+_followBadge(atom.pubkey)+
+        '    '+kHtml+
+        '    <div class="cb-social-row">'+_socialActionsHtml(atom.pubkey)+'</div>'+
         '  </div>'+
         '</div>'+
         '</div>';
@@ -1046,7 +1062,7 @@ function _syncCauldron(){
     }).join('');
 
     if(n<2){ btn.textContent='⚡ Révéler'; btn.classList.remove('show'); }
-    else if(n===2){ btn.textContent='⚡ Match Φ²'; btn.classList.add('show'); }
+    else if(n===2){ btn.textContent='🧪 Labo Φ²'; btn.classList.add('show'); }
     else{ btn.textContent='🌀 Chœur ('+n+')'; btn.classList.add('show'); }
 
     _updateStatus();
@@ -1063,31 +1079,31 @@ function _launch(){
         var a1=_atoms.find(function(x){return x.pubkey===_selected[1];});
         if(!a0||!a1){_toChoir();return;}
 
-        /* Si je suis l'un des deux → atomic_match.html avec MES données */
+        /* Si je suis l'un des deux → modale avec lien vers le Match complet */
+        var matchUrl=null;
         if(window.userPubkey&&(a0.pubkey===window.userPubkey||a1.pubkey===window.userPubkey)){
             var me=a0.pubkey===window.userPubkey?a0:a1;
             var peer=me===a0?a1:a0;
-            var c=peer.certData||{}, p=peer.profile||{};
+            var c=peer.certData||{}, pp=peer.profile||{};
             var payload=JSON.stringify({
                 d:c.birth_date||'',t:c.birth_time||'1200',
                 lo:parseFloat(c.birth_lon||0),la:parseFloat(c.birth_lat||0),
                 k:peer.kin?peer.kin.kin:0,
-                n:_esc(p.display_name||p.name||peer.pubkey.slice(0,8)),
+                n:_esc(pp.display_name||pp.name||peer.pubkey.slice(0,8)),
                 hex:peer.pubkey
             });
             var b64=btoa(unescape(encodeURIComponent(payload)))
                 .replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
-            location.href='atomic_match.html?p='+b64+'&origin='+me.pubkey;
-            return;
+            matchUrl='atomic_match.html?p='+b64+'&origin='+me.pubkey;
         }
-        /* Deux atomes tiers → Laboratoire in-board */
-        _showLaboModal(a0,a1);
+        /* Toujours afficher la modale in-board (pas de redirect brutal) */
+        _showLaboModal(a0,a1,matchUrl);
     }else{
         _toChoir();
     }
 }
 
-function _showLaboModal(a0,a1){
+function _showLaboModal(a0,a1,matchUrl){
     if(a0.phi===null||a1.phi===null||!Phi2X){
         if(typeof AtomicNav!=='undefined') AtomicNav.showToast('⚠ Données Φ manquantes');
         return;
@@ -1110,6 +1126,10 @@ function _showLaboModal(a0,a1){
             '</div>';
     }
 
+    var actionsHtml=
+        '<button class="labo-btn" onclick="_closeLabo();_toChoir()">🌀 Chœur</button>'+
+        (matchUrl?'<a class="labo-btn labo-btn-primary" href="'+matchUrl+'">⚡ Match complet →</a>':'');
+
     var modal=document.getElementById('labo-modal');
     modal.innerHTML=
         '<div class="labo-inner" onclick="event.stopPropagation()">'+
@@ -1122,9 +1142,7 @@ function _showLaboModal(a0,a1){
         '<div class="labo-score" style="color:'+col+'">'+pct+'%</div>'+
         '<div class="labo-label" style="color:'+col+'">'+label+'</div>'+
         (unionKin?'<div class="labo-union">KIN Union : '+unionKin+'</div>':'')+
-        '<div class="labo-actions">'+
-        '<button class="labo-btn" onclick="_closeLabo();_toChoir()">🌀 Voir le Chœur</button>'+
-        '</div>'+
+        '<div class="labo-actions">'+actionsHtml+'</div>'+
         '</div>';
     modal.classList.remove('hidden');
     document.body.classList.add('has-modal');
@@ -1297,36 +1315,38 @@ function _doRender(){
     var board=document.getElementById('board');
     var visSet=new Set(visible.map(function(a){return a.pubkey;}));
 
-    /* Supprimer cartes hors filtre */
-    board.querySelectorAll('.card-slot').forEach(function(el){
-        if(!visSet.has(el.dataset.pubkey)) el.remove();
-    });
-
-    var toShow=visible.slice(0,60);
+    /* Inventorier les cartes existantes */
     var existing={};
     board.querySelectorAll('.card-slot').forEach(function(el){
         existing[el.dataset.pubkey]=el;
     });
 
-    var frag=document.createDocumentFragment();
-    toShow.forEach(function(atom){
-        var el=existing[atom.pubkey];
-        if(el){
-            /* Mettre à jour la résonance si disponible */
-            if(atom.k!==null){
+    /* Mise à jour : élimination physique OU réactivation — jamais de remove() */
+    Object.keys(existing).forEach(function(pk){
+        var el=existing[pk];
+        var elim=!visSet.has(pk);
+        el.classList.toggle('eliminated',elim);
+        if(!elim){
+            var atom=_atoms.find(function(x){return x.pubkey===pk;});
+            if(atom&&atom.k!==null){
                 var kPct=Math.round((atom.k-.5)*200);
                 var kCol=atom.k>.85?'#00ffcc':atom.k>.70?'#f59e0b':'#94a3b8';
                 var sc=el.querySelector('.cb-score');
-                if(sc&&!sc.classList.contains('no-k')){
-                    sc.textContent=kPct+'%';sc.style.color=kCol;
-                }
+                if(sc&&!sc.classList.contains('no-k')){sc.textContent=kPct+'%';sc.style.color=kCol;}
             }
-            frag.appendChild(el);
-        }else{
-            frag.appendChild(_makeCard(atom));
         }
     });
-    board.appendChild(frag);
+
+    /* Ajouter les nouveaux atomes pas encore dans le DOM */
+    var frag=document.createDocumentFragment();
+    _atoms.forEach(function(atom){
+        if(!existing[atom.pubkey]){
+            var card=_makeCard(atom);
+            card.classList.toggle('eliminated',!visSet.has(atom.pubkey));
+            frag.appendChild(card);
+        }
+    });
+    if(frag.childNodes.length) board.appendChild(frag);
     _updateStatus();
 }
 

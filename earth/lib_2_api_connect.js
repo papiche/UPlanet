@@ -14,6 +14,7 @@ var NIP42_AUTH_COOLDOWN = window.NIP42_AUTH_COOLDOWN;
 var CONNECTION_DEBOUNCE = window.CONNECTION_DEBOUNCE;
 var ExtensionWrapper    = window.ExtensionWrapper;
 var RelayManager        = window.RelayManager;
+var fetchNostrEvents    = window.fetchNostrEvents;
 // Legacy lets
 var upassportUrl    = NostrState.upassportUrl;
 var DEFAULT_RELAYS  = NostrState.DEFAULT_RELAYS;
@@ -1208,50 +1209,30 @@ async function checkRecentNIP42Auth(relayUrl, maxAgeHours = 24) {
         // Calculate timestamp for maxAgeHours ago
         const sinceTimestamp = Math.floor(Date.now() / 1000) - (maxAgeHours * 60 * 60);
 
-        // Subscribe to recent kind 22242 events from this pubkey
-        return new Promise((resolve) => {
-            const sub = nostrRelay.sub([
-                {
-                    kinds: [22242],
-                    authors: [userPubkey],
-                    since: sinceTimestamp,
-                    limit: 1
-                }
-            ]);
+        // Use fetchNostrEvents (SubscriptionQueue) — no direct sub() bypass
+        const events = await fetchNostrEvents(
+            { kinds: [22242], authors: [userPubkey], since: sinceTimestamp, limit: 1 },
+            { timeout: 2000, relay: window.nostrRelay }
+        );
 
-            let foundRecentAuth = false;
-            const timeout = setTimeout(() => {
-                sub.unsub();
-                _nip42CacheSet(userPubkey, relayUrl, foundRecentAuth);
-                resolve(foundRecentAuth);
-            }, 2000); // Reduced timeout from 3s to 2s for faster response
-
-            sub.on('event', (event) => {
-                // Verify this is a valid auth event for this relay
-                const relayTag = event.tags.find(tag => tag[0] === 'relay');
-                if (relayTag && relayTag[1]) {
-                    // Check if the relay URL matches (flexible matching)
-                    const relayUrlMatch = relayUrl.includes(relayTag[1]) || relayTag[1].includes(relayUrl);
-                    if (relayUrlMatch || !relayUrl || !relayTag[1]) {
-                        foundRecentAuth = true;
-                    }
-                } else {
-                    // No relay tag, accept it (some relays may not require it)
+        let foundRecentAuth = false;
+        for (const event of events) {
+            const relayTag = event.tags.find(tag => tag[0] === 'relay');
+            if (relayTag && relayTag[1]) {
+                const relayUrlMatch = relayUrl.includes(relayTag[1]) || relayTag[1].includes(relayUrl);
+                if (relayUrlMatch || !relayUrl || !relayTag[1]) {
                     foundRecentAuth = true;
+                    break;
                 }
-                clearTimeout(timeout);
-                sub.unsub();
-                _nip42CacheSet(userPubkey, relayUrl, true);
-                resolve(true);
-            });
+            } else {
+                // No relay tag — accept (some relays don't require it)
+                foundRecentAuth = true;
+                break;
+            }
+        }
 
-            sub.on('eose', () => {
-                clearTimeout(timeout);
-                sub.unsub();
-                _nip42CacheSet(userPubkey, relayUrl, foundRecentAuth);
-                resolve(foundRecentAuth);
-            });
-        });
+        _nip42CacheSet(userPubkey, relayUrl, foundRecentAuth);
+        return foundRecentAuth;
     } catch (error) {
         console.warn('⚠️ Error checking for recent NIP-42 auth:', error);
         return false; // If check fails, allow sending new auth

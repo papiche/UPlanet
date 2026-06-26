@@ -243,13 +243,14 @@ if (typeof marked !== 'undefined') {
 'use strict';
 
 // ── State ─────────────────────────────────────────────────────────────────────
-var _myPub      = null;
-var _peer       = null;
-var _peerProf   = null;
-var _msgs       = [];
-var _convItems  = [];     // sorted array for rendering
-var _profCache  = {};
-var _imgCache   = {};     // msgId → blobUrl
+var _myPub       = null;
+var _peer        = null;
+var _peerProf    = null;
+var _msgs        = [];
+var _convItems   = [];     // sorted array for rendering
+var _profCache   = {};
+var _imgCache    = {};     // msgId → blobUrl
+var _decryptCache = {};    // ev.id → decrypted plaintext (in-memory, session lifetime)
 var _liveWs     = null;
 var _liveSub    = null;
 var _encMode    = null;
@@ -447,6 +448,18 @@ async function _decrypt(ev) {
     return '🔒 [chiffré — extension NIP-44/04 requise]';
 }
 
+// ── Decrypt cache — évite de solliciter l'extension pour des messages déjà vus ─
+async function _cachedDecrypt(ev) {
+    if (_decryptCache[ev.id] !== undefined) return _decryptCache[ev.id];
+    var text = await _decrypt(ev);
+    // Ne pas cacher les erreurs transitoires (extension indisponible, destinataire absent)
+    if (text !== '[erreur: destinataire manquant]' &&
+        text !== '🔒 [chiffré — extension NIP-44/04 requise]') {
+        _decryptCache[ev.id] = text;
+    }
+    return text;
+}
+
 // ── Profile cache ──────────────────────────────────────────────────────────────
 async function _profile(hex) {
     if (_profCache[hex]) return _profCache[hex];
@@ -480,7 +493,7 @@ async function _loadConvs() {
     var items = await Promise.all(peers.map(async function(p) {
         var entry = byPeer[p];
         var prof  = await _profile(p);
-        var text  = await _decrypt(entry.ev);
+        var text  = await _cachedDecrypt(entry.ev);
         return {peer:p, profile:prof, text:text, time:entry.ev.created_at, isMe:entry.isMe};
     }));
     items.sort(function(a,b){return b.time-a.time;});
@@ -618,13 +631,19 @@ async function _loadMsgs() {
     var all = sent.concat(recv);
     var seen = {}; all = all.filter(function(e){if(seen[e.id])return false;seen[e.id]=1;return true;});
     all.sort(function(a,b){return a.created_at-b.created_at;});
-    _msgs = await Promise.all(all.map(async function(ev) {
-        var text = await _decrypt(ev);
-        // Lire le tag expiration (NIP-40) pour afficher le badge TTL
-        var expTag = (ev.tags || []).find(function(t){return t[0]==='expiration';});
-        var ttlRemaining = expTag ? (parseInt(expTag[1],10) - ev.created_at) : 0;
-        return {id:ev.id, isMe:ev.pubkey===_myPub, text:text, time:ev.created_at, sent:true, ttl:ttlRemaining>0?ttlRemaining:0};
-    }));
+    // Déchiffrement par lots de 5 — évite de saturer l'extension NOSTR (nos2x/Alby)
+    var BATCH = 5;
+    _msgs = [];
+    for (var bi = 0; bi < all.length; bi += BATCH) {
+        var chunk = all.slice(bi, bi + BATCH);
+        var decoded = await Promise.all(chunk.map(async function(ev) {
+            var text = await _cachedDecrypt(ev);
+            var expTag = (ev.tags || []).find(function(t){return t[0]==='expiration';});
+            var ttlRemaining = expTag ? (parseInt(expTag[1],10) - ev.created_at) : 0;
+            return {id:ev.id, isMe:ev.pubkey===_myPub, text:text, time:ev.created_at, sent:true, ttl:ttlRemaining>0?ttlRemaining:0};
+        }));
+        _msgs = _msgs.concat(decoded);
+    }
     _renderMsgs();
 }
 
@@ -664,15 +683,16 @@ function _renderMd(text) {
     // Utilise marked.js si disponible, sinon linkification simple
     if (typeof marked !== 'undefined') {
         try {
-            return marked.parse(text, {
+            var raw = marked.parse(text, {
                 breaks: true,
                 gfm: true,
                 mangle: false,
                 headerIds: false
             });
+            return (typeof sanitizeHtml === 'function') ? sanitizeHtml(raw) : raw;
         } catch(_) {}
     }
-    // Fallback : linkification basique + sauts de ligne
+    // Fallback : linkification basique + sauts de ligne (déjà échappé via _esc)
     return _esc(text)
         .replace(/https?:\/\/[^\s<>"]+/g, function(u) {
             return '<a href="'+u+'" target="_blank" rel="noopener">'+u+'</a>';
@@ -897,7 +917,12 @@ function _closeLightbox() {
 
 // ── Live subscription ──────────────────────────────────────────────────────────
 function _subscribeLive() {
-    if (_liveWs && _liveWs.readyState < 2) _liveWs.close();
+    if (_liveWs) {
+        _liveWs.onmessage = null;
+        _liveWs.onclose   = null;
+        _liveWs.onerror   = null;
+        if (_liveWs.readyState < 2) _liveWs.close();
+    }
     _liveWs = new WebSocket(_relay());
     _liveSub = 'live'+Math.random().toString(36).slice(2,6);
     _liveWs.onopen = function() {
@@ -914,7 +939,7 @@ function _subscribeLive() {
             var ev   = m[2];
             if (ev.pubkey === _myPub) return;
             var peer = ev.pubkey;
-            var text = await _decrypt(ev);
+            var text = await _cachedDecrypt(ev);
             if (!_profCache[peer]) await _profile(peer);
             // Update conv list
             var found = false;
@@ -1192,7 +1217,9 @@ function _autoRes(el) {
 
 // ── Connection callback ────────────────────────────────────────────────────────
 async function _onConnected() {
-    _myPub = window.userPubkey;
+    var newPub = window.userPubkey;
+    if (_myPub && _myPub !== newPub) _decryptCache = {}; // changement d'utilisateur
+    _myPub = newPub;
     if (!_myPub) {
         _setMsg('⚠ Aucune clé NOSTR — connectez-vous via l\'en-tête UPlanet');
         _hideLoad();

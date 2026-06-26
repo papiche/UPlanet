@@ -522,8 +522,8 @@ if (typeof window !== 'undefined') {
  * Strfry and other relays limit concurrent REQs per connection
  */
 var SubscriptionQueue = {
-    MAX_CONCURRENT: 2,  // Maximum concurrent subscriptions (conservative for strfry)
-    DELAY_BETWEEN: 300, // Delay between starting subscriptions (ms)
+    MAX_CONCURRENT: 4,  // Concurrent subscriptions — strfry tolère 4–5 REQs simultanés
+    DELAY_BETWEEN: 150, // Délai entre souscriptions (ms)
     activeCount: 0,
     queue: [],
 

@@ -657,6 +657,7 @@ body.has-modal #bg-canvas{opacity:0}
 <!-- ════════════════════════ SCRIPTS ════════════════════════ -->
 <script src="phi2x.js"></script>
 <script src="kin-data.js"></script>
+<script src="atomic-profile-db.js"></script>
 <script>
 'use strict';
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -879,6 +880,18 @@ function _buildAtom(ev){
 /* ═══════════════════════════════════════════════════════════════════════════
    RENDU DES CARTES
    ═══════════════════════════════════════════════════════════════════════════ */
+function _conformeLevel(atom){
+    var p=atom.profile||{};
+    var c=atom.certData||{};
+    var k0g=p.g1pub||'';
+    var cg=c.g1pub||'';
+    var cgp=c.g1pub_proof||'';
+    if(k0g&&cg&&k0g!==cg) return 0;  // fraude : discordance Kind 0 ≠ cert 30078
+    if(cg&&cgp)            return 2;  // preuve relay-validée
+    if(k0g||cg)            return 1;  // g1pub seul sans preuve
+    return 0;
+}
+
 function _makeCard(atom){
     var kin=atom.kin;
     var col=kin?KIN_CSS[kin.ci]:'#00ffcc';
@@ -890,6 +903,14 @@ function _makeCard(atom){
     var kinGlyph=kin?_esc(kin.glyphFr||''):'';
     var penLbl='⬟P'+String(atom.pentagonId||0).padStart(2,'0');
     var rot=_cardRot(atom.pubkey);
+
+    /* Badge de conformité A4L */
+    var clvl=_conformeLevel(atom);
+    var a4lBadge=clvl===2
+        ?'<div class="cb-a4l-badge" style="font-size:.55rem;color:#00ffcc;opacity:.85;text-align:center" title="Clé co-dérivée keygen — g1pub_proof relay-validé">🔑 MULTIPASS</div>'
+        :clvl===1
+        ?'<div class="cb-a4l-badge" style="font-size:.55rem;color:#eab308;opacity:.75;text-align:center" title="g1pub probable — sans preuve de co-dérivation">🟡 probable</div>'
+        :'';
 
     /* Score de résonance — petit indicateur */
     var kHtml;
@@ -936,6 +957,7 @@ function _makeCard(atom){
         '      onerror="this.src=\''+fbSrc+'\'"></div>'+
         '    <div class="cb-name">'+name+'</div>'+
         '    <div class="cb-kin-badge">'+emo+' KIN '+kinNum+'</div>'+
+        '    '+a4lBadge+
         '    '+_followBadge(atom.pubkey)+
         '    '+kHtml+
         '    <div class="cb-social-row">'+_socialActionsHtml(atom.pubkey)+'</div>'+
@@ -1223,8 +1245,12 @@ async function _loadFromRelay(relay){
         if(!_atoms.find(function(a){return a.pubkey===ev.pubkey;})) newPks.push(ev.pubkey);
     });
     if(newPks.length){
-        var k0=await _wsQuery(relay,{kinds:[0],authors:newPks},8000);
-        k0.forEach(function(e){if(!_profiles[e.pubkey])_profiles[e.pubkey]=_parseProfile(e.content);});
+        var _dbBatch1=window.A4LProfileDB?await Promise.all(newPks.map(function(pk){return window.A4LProfileDB.get(pk);})):newPks.map(function(){return null;});
+        var _toFetch1=newPks.filter(function(pk,i){if(_dbBatch1[i]){_profiles[pk]=_dbBatch1[i];return false;}return true;});
+        if(_toFetch1.length){
+            var k0=await _wsQuery(relay,{kinds:[0],authors:_toFetch1},8000);
+            k0.forEach(function(e){if(!_profiles[e.pubkey]){var pr=_parseProfile(e.content);_profiles[e.pubkey]=pr;if(window.A4LProfileDB)window.A4LProfileDB.set(e.pubkey,{name:pr.display_name||pr.name||e.pubkey.slice(0,8)+'…',picture:pr.picture||null});}});
+        }
     }
     events.forEach(function(ev){
         if(_atoms.find(function(a){return a.pubkey===ev.pubkey;})) return;
@@ -1443,6 +1469,20 @@ async function _loadSocialGraph(relay){
    CHARGEMENT NOSTR
    ═══════════════════════════════════════════════════════════════════════════ */
 function _wsQuery(relay,filter,timeout){
+    /* Déléguer à fetchNostrEvents (SubscriptionQueue) quand common.js est chargé
+       et que le relay demandé correspond au relay principal actif — évite les
+       bannissements "too many concurrent REQs" sur strfry. */
+    if(typeof window.fetchNostrEvents==='function'&&window.nostrRelay){
+        var activeUrl=(window.nostrRelay.url||window.nostrRelay._url||'').replace(/\/$/,'');
+        var reqUrl=relay.replace(/\/$/,'');
+        if(!activeUrl||activeUrl===reqUrl||reqUrl===_relayUrl().replace(/\/$/,'')){
+            return window.fetchNostrEvents(filter,{
+                timeout:timeout||10000,
+                relay:window.nostrRelay
+            });
+        }
+    }
+    /* Fallback WebSocket directe : relay alternatif ou common.js pas encore chargé */
     return new Promise(function(resolve){
         var evs=[],ws,done=false;
         var finish=function(){
@@ -1486,12 +1526,16 @@ async function _loadAll(){
     var uniq=Object.values(byPub);
     document.getElementById('ld-count').textContent=uniq.length;
 
-    /* 2. Kind 0 profiles en batch */
+    /* 2. Kind 0 profiles en batch (DB → réseau pour les manquants) */
     var pks=uniq.map(function(e){return e.pubkey;});
     if(pks.length>0){
         ld(uniq.length+' atomes — profils…');
-        var k0=await _wsQuery(relay,{kinds:[0],authors:pks},8000);
-        k0.forEach(function(e){if(!_profiles[e.pubkey])_profiles[e.pubkey]=_parseProfile(e.content);});
+        var _dbBatch2=window.A4LProfileDB?await Promise.all(pks.map(function(pk){return window.A4LProfileDB.get(pk);})):pks.map(function(){return null;});
+        var _toFetch2=pks.filter(function(pk,i){if(_dbBatch2[i]){_profiles[pk]=_dbBatch2[i];return false;}return true;});
+        if(_toFetch2.length){
+            var k0=await _wsQuery(relay,{kinds:[0],authors:_toFetch2},8000);
+            k0.forEach(function(e){if(!_profiles[e.pubkey]){var pr=_parseProfile(e.content);_profiles[e.pubkey]=pr;if(window.A4LProfileDB)window.A4LProfileDB.set(e.pubkey,{name:pr.display_name||pr.name||e.pubkey.slice(0,8)+'…',picture:pr.picture||null});}});
+        }
     }
 
     /* 3. Construire les objets */
@@ -1596,9 +1640,10 @@ function _openLive(relay){
     }catch(_){}
 }
 
-/* Applique un profil à un atome et met à jour la carte si affichée */
+/* Applique un profil à un atome, met à jour la carte et persiste en DB */
 function _applyProfile(pubkey,atom,pr){
     _profiles[pubkey]=pr; atom.profile=pr;
+    if(window.A4LProfileDB) window.A4LProfileDB.set(pubkey,{name:pr.display_name||pr.name||pubkey.slice(0,8)+'…',picture:pr.picture||null});
     var card=document.querySelector('.card-slot[data-pubkey="'+pubkey+'"]');
     if(!card) return;
     var nm=card.querySelector('.cb-name');
@@ -1608,8 +1653,12 @@ function _applyProfile(pubkey,atom,pr){
         av.src=_esc(pr.picture);
 }
 
-/* Récupère un profil : file globale (common.js) si dispo, sinon WebSocket dédié */
+/* Récupère un profil : DB → common.js → WebSocket dédié */
 async function _fetchProfile1(relay,pubkey,atom){
+    if(window.A4LProfileDB){
+        var dbHit=await window.A4LProfileDB.get(pubkey);
+        if(dbHit){ _applyProfile(pubkey,atom,dbHit); return; }
+    }
     /* Préférer window.fetchUserMetadata (common.js) : recycle la connexion existante */
     if(typeof window.fetchUserMetadata==='function'){
         try{

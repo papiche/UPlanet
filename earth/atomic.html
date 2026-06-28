@@ -99,6 +99,46 @@
         .match-loc-btn .loc-chevron { color:rgba(255,255,255,.25); font-size:.9rem; }
         /* Modal z-index — a4l-location-picker.js injecte ses propres règles */
 
+        /* ── Tooltips vocabulaire ésotérique ─────────────────────────────────── */
+        .a4l-tip {
+            cursor: help;
+            border-bottom: 1px dashed rgba(0,255,204,.35);
+            display: inline;
+        }
+        .a4l-tip-wrap {
+            position: relative;
+            display: inline;
+        }
+        .a4l-tip-wrap::after {
+            content: attr(data-tip);
+            position: absolute;
+            bottom: calc(100% + 8px);
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(8,6,2,.97);
+            border: 1px solid rgba(0,255,204,.28);
+            border-radius: 10px;
+            padding: 8px 12px;
+            font-size: .7rem;
+            font-weight: 400;
+            color: rgba(255,255,255,.82);
+            white-space: normal;
+            width: max-content;
+            max-width: 240px;
+            line-height: 1.55;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity .18s;
+            z-index: 9999;
+            text-align: left;
+            font-family: system-ui, sans-serif;
+            font-style: normal;
+            text-transform: none;
+            letter-spacing: 0;
+        }
+        .a4l-tip-wrap:hover::after,
+        .a4l-tip-wrap.tip-open::after { opacity: 1; }
+
         /* ─ Bloc Harmonique / Anomalie ─ */
         .harmonic-display {
             background:rgba(0,255,204,.05); border:1px solid rgba(0,255,204,.2);
@@ -321,7 +361,7 @@
                     <div class="wz-connector"></div>
                     <div class="wz-dot locked" id="wz-dot-4" onclick="_wzGoTo(4)">
                         <span class="wz-num">4</span>
-                        <span class="wz-lbl">Singularité</span>
+                        <span class="wz-lbl a4l-tip-wrap" data-tip="Votre Double Bang cosmique : la Terre était presque au même angle angulaire à votre naissance ET à votre conception. Moins d'1% des gens ont cette configuration.">Singularité</span>
                     </div>
                     <div class="wz-connector"></div>
                     <div class="wz-dot locked" id="wz-dot-5" onclick="_wzGoTo(5)">
@@ -351,36 +391,35 @@
                         <!-- GPS home + sélection station -->
                         <div id="home-location-block" class="mb-2 p-2 rounded"
                              style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08)">
-                            <div class="d-flex justify-content-between align-items-center mb-1">
-                                <label class="small text-secondary text-uppercase" style="font-size:.72rem">
-                                    🏠 Résidence actuelle <span style="color:rgba(255,255,255,.3)">(optionnel)</span>
-                                </label>
+                            <label class="small text-secondary text-uppercase d-block mb-2" style="font-size:.72rem">
+                                🏠 Résidence actuelle
+                            </label>
+                            <div class="d-flex gap-2 mb-2">
                                 <button id="btn-detect-home" onclick="_detectHomePosition()"
-                                        class="btn btn-sm py-0"
-                                        style="font-size:.7rem;background:rgba(0,255,204,.08);
-                                               border:1px solid rgba(0,255,204,.25);color:rgba(0,255,204,.8)">
-                                    🎯 Détecter
+                                        class="btn btn-sm flex-fill"
+                                        style="font-size:.75rem;background:rgba(0,255,204,.06);
+                                               border:1px solid rgba(0,255,204,.2);color:rgba(0,255,204,.8)">
+                                    🛰️ GPS
+                                </button>
+                                <button id="btn-pick-home" onclick="_openHomeLocPicker()"
+                                        class="btn btn-sm flex-fill"
+                                        style="font-size:.75rem;background:rgba(0,200,255,.06);
+                                               border:1px solid rgba(0,200,255,.2);color:rgba(0,200,255,.8)">
+                                    📍 Choisir sur la carte
                                 </button>
                             </div>
-                            <div class="row g-1">
-                                <div class="col-6">
-                                    <input type="number" step="0.01" id="home-lat-input"
-                                           placeholder="Lat (ex: 48.85)"
-                                           class="form-control form-control-sm"
-                                           oninput="_onHomeInputChange()"
-                                           style="font-size:.75rem">
-                                </div>
-                                <div class="col-6">
-                                    <input type="number" step="0.01" id="home-lon-input"
-                                           placeholder="Lon (ex: 2.35)"
-                                           class="form-control form-control-sm"
-                                           oninput="_onHomeInputChange()"
-                                           style="font-size:.75rem">
-                                </div>
+                            <div id="home-location-display"
+                                 style="font-size:.75rem;color:rgba(255,255,255,.35);padding:8px 10px;
+                                        border-radius:8px;background:rgba(0,0,0,.2);
+                                        border:1px solid rgba(255,255,255,.06);
+                                        min-height:2.2rem;display:flex;align-items:center">
+                                — saisir votre résidence actuelle —
                             </div>
+                            <input type="hidden" id="home-lat-input">
+                            <input type="hidden" id="home-lon-input">
                             <div id="home-location-status" class="mt-1"
                                  style="font-size:.68rem;color:rgba(255,200,80,.55);min-height:.9rem">
-                                Affecte l'algorithme de rencontre — laissez vide pour ne pas publier de résidence.
+                                Affecte l'algorithme de rencontre et sélectionne votre station.
                             </div>
                             <div id="home-station-status" class="mt-1"
                                  style="font-size:.68rem;color:rgba(0,200,255,.6);min-height:.9rem"></div>
@@ -491,12 +530,12 @@
                     </div>
                     <!-- Raccourci Résonance — apparaît dès que date + lieu sont renseignés -->
                     <div id="match-shortcut" style="display:none;margin-top:6px">
-                        <button onclick="_goToMatch()"
+                        <button id="btn-match-shortcut" onclick="window._shareMatchLink()"
                                 style="width:100%;padding:9px 12px;border-radius:9px;cursor:pointer;
                                        background:linear-gradient(135deg,rgba(0,255,204,.12),rgba(180,100,255,.12));
                                        border:1px solid rgba(0,255,204,.35);color:#00ffcc;
                                        font-size:.83rem;font-weight:700">
-                            💫 Calculer ma Résonance →
+                            💌 Copier mon lien de Résonance
                         </button>
                     </div>
                 </div>
@@ -554,7 +593,9 @@
                         <!-- Indicateur ωbio live -->
                         <div id="omega-bio-display" class="mt-2 p-2 rounded"
                              style="background:rgba(0,255,204,.05);border:1px solid rgba(0,255,204,.12);font-size:.72rem">
-                            <span style="color:rgba(0,255,204,.5)">ω<sub>bio</sub> : </span>
+                            <span class="a4l-tip-wrap" data-tip="Fréquence biologique calculée depuis votre heure de naissance. L'eau dans votre corps vibre à cette fréquence au moment de votre incarnation (~0.1–40 Hz).">
+                                <span class="a4l-tip" style="color:rgba(0,255,204,.5)">ω<sub>bio</sub></span>
+                            </span><span style="color:rgba(0,255,204,.5)"> : </span>
                             <span id="omega-bio-val" style="color:#00ffcc;font-family:monospace;font-weight:700">—</span>
                             <span style="color:rgba(255,255,255,.35)"> Hz &nbsp;·&nbsp; Eau structurée : </span>
                             <span id="water-kg-val" style="color:rgba(0,255,204,.7);font-family:monospace">—</span>
@@ -804,12 +845,20 @@
                     </div>
                     <div class="font-monospace small" id="match-details"
                          style="color:rgba(255,255,255,.4);text-align:left">En attente des données...</div>
-                    <button id="btn-capture" onclick="window._requestCapture()" title="Générer une image à partager"
-                            style="display:none;margin-top:8px;width:100%;background:rgba(255,255,255,.05);
-                                   border:1px solid rgba(255,255,255,.1);color:rgba(255,255,255,.45);
-                                   border-radius:8px;padding:7px;font-size:.74rem;cursor:pointer;transition:all .2s">
-                        📸 Capturer notre résonance
-                    </button>
+                    <div style="display:none;margin-top:8px;gap:6px;flex-direction:column" id="btn-capture-group">
+                        <button id="btn-capture" onclick="window._requestCapture()" title="Générer une image PNG à partager"
+                                style="width:100%;background:rgba(255,255,255,.05);
+                                       border:1px solid rgba(255,255,255,.1);color:rgba(255,255,255,.45);
+                                       border-radius:8px;padding:7px;font-size:.74rem;cursor:pointer;transition:all .2s">
+                            📸 Image PNG
+                        </button>
+                        <button id="btn-capture-video" onclick="window._captureVideo()" title="Enregistrer 5 secondes du mandala animé"
+                                style="width:100%;background:rgba(120,80,255,.08);
+                                       border:1px solid rgba(120,80,255,.25);color:rgba(180,140,255,.8);
+                                       border-radius:8px;padding:7px;font-size:.74rem;cursor:pointer;transition:all .2s">
+                            🎬 Vidéo 5s
+                        </button>
+                    </div>
                 </div>
 
                 <div id="kin-match-content"></div>
@@ -992,12 +1041,15 @@ let _cachedKinConception = null;  // ReturnType<Phi2X.calcKin> pour la date de c
 let _cachedElements      = null;  // { conceptionElement, birthElement, archetype, ... }
 
 function _calibratePerf() {
-    if (_perfCalibrated || frameTime < 120) return; // chauffe 2s
+    if (_perfCalibrated || frameTime < 120) return; // chauffe 2s (~4s à 30fps)
     _fpsSamples.push(frameRate());
     if (_fpsSamples.length >= 30) {
         const avg = _fpsSamples.reduce((a,b) => a+b) / 30;
-        _perfLevel = avg > 50 ? 2 : avg > 28 ? 1 : 0;
+        _perfLevel = avg > 24 ? 2 : avg > 14 ? 1 : 0;
         _perfCalibrated = true;
+        // Plafond adaptatif : réduit le CPU sur appareils faibles
+        if (_perfLevel === 1) frameRate(20);
+        else if (_perfLevel === 0) frameRate(12);
         console.log('[ATOMIC] Perf calibrée:', ['LOW','MED','HIGH'][_perfLevel], avg.toFixed(1)+'fps');
     }
 }
@@ -1588,6 +1640,24 @@ window.calculateMatch = function() {
     const k = Phi2X.computeResonanceK(phiA, phiB);
     globalCoherenceScore = (k - 0.5) * 200;
 
+    // Persist pour le bouton UPH "Partager mon test de résonance" (accessible depuis toutes les pages)
+    const _dateA = document.getElementById('match-date-a')?.value;
+    if (_dateA) {
+        const _kinA = _cachedKinA ? _cachedKinA.kin : null;
+        const _nmA  = (window.userPubkey && window.cachedProfile?.name) ? window.cachedProfile.name
+                    : (_kinA ? 'KIN ' + _kinA : 'Un Explorateur');
+        try {
+            localStorage.setItem('a4l_share_params', JSON.stringify({
+                d:  _dateA.replace(/-/g, ''),
+                t:  (document.getElementById('match-time-a')?.value || '12:00').replace(':', ''),
+                lo: parseFloat((parseFloat(document.getElementById('match-lon-a')?.value || 0)).toFixed(2)),
+                la: parseFloat((parseFloat(document.getElementById('match-lat-a')?.value || 0)).toFixed(2)),
+                k:  _kinA,
+                n:  _nmA,
+            }));
+        } catch(e) {}
+    }
+
     const color  = globalCoherenceScore > 85 ? '#00ffcc' : globalCoherenceScore > 50 ? '#ffaa00' : '#ff0055';
     const statut = globalCoherenceScore > 95 ? 'Singularité Parfaite (Vortex)'
                  : globalCoherenceScore > 80 ? 'Super-Cohérence (SDF Blend)'
@@ -1618,8 +1688,8 @@ window.calculateMatch = function() {
     renderKinMatch();
 
     // Afficher bouton capture quand score disponible
-    const _capBtn = el('btn-capture');
-    if (_capBtn && globalCoherenceScore > 0) _capBtn.style.display = '';
+    const _capBtn = el('btn-capture-group');
+    if (_capBtn && globalCoherenceScore > 0) _capBtn.style.display = 'flex';
 
     // Pulse audio si singularité et audio inactif
     const _btnAud = el('btn-audio-toggle');
@@ -1666,7 +1736,7 @@ function _kinCard(k, label, accentColor) {
         <div class="small fw-bold mb-1" style="color:${accentColor}">${label}</div>
         <div class="d-flex align-items-baseline gap-2">
             <span class="kin-num">${k.kin}</span>
-            <span class="kin-sub">Kin Maya</span>
+            <span class="kin-sub a4l-tip-wrap" data-tip="Votre position dans le calendrier sacré Maya Tzolkin (260 jours). Ce cycle mesure le temps cosmique, indépendamment des saisons.">Kin Maya</span>
         </div>
         <div class="kin-info">${k.color} <strong>${k.glyph}</strong> <span class="text-secondary">(${k.glyphFr})</span></div>
         <div class="kin-info">Tonalité <strong>${k.tone}</strong></div>
@@ -1692,7 +1762,7 @@ function renderKinMatch() {
         </div>`;
 
     let html = `<div class="kin-card mb-2">
-        <div class="small fw-bold mb-2" style="color:#f9a825">🌀 Kins Maya</div>
+        <div class="small fw-bold mb-2 a4l-tip-wrap" style="color:#f9a825" data-tip="Le Tzolkin est le calendrier sacré méso-américain de 260 jours. Chaque jour a un KIN unique : combinaison d'un Sceau solaire (archétype) et d'une Tonalité galactique (rythme).">🌀 Kins Maya</div>
         ${row(kA,'var(--primary)','A')}
         ${row(kB,'var(--secondary)','B')}`;
 
@@ -1745,7 +1815,7 @@ function renderKinProfil() {
             <div class="small fw-bold mb-1" style="color:rgba(255,0,255,0.8)">🌀 Kin de Conception (−280j)</div>
             <div class="d-flex align-items-baseline gap-2">
                 <span class="kin-num" style="font-size:1.6rem">${kC.kin}</span>
-                <span class="kin-sub">Singularité</span>
+                <span class="kin-sub a4l-tip-wrap" data-tip="Votre Kin de conception (−280 jours). Quand naissance et conception ont le même Kin, vous êtes en Singularité Pure — une configuration extrêmement rare.">Singularité</span>
             </div>
             <div class="kin-info">${kC.color} <strong>${kC.glyph}</strong> <span class="text-secondary">(${kC.glyphFr})</span> · ${kC.tone}</div>
             <div class="kin-keys">⚡ ${kC.keys[0]} · 🔥 ${kC.keys[1]} · ✨ ${kC.keys[2]}</div>
@@ -1756,7 +1826,7 @@ function renderKinProfil() {
                         : 'Polarité Singulière';
         html += `<div class="kin-resonance mt-2 p-2 rounded small text-secondary"
             style="background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.07)">
-            Naissance ↔ Conception · Distance Tzolkin : ${kinDistNC} — ${harmonie}
+            Naissance ↔ Conception · <span class="a4l-tip-wrap" data-tip="Nombre de jours entre vos deux Kins dans la roue du Tzolkin (0 = identiques, 130 = opposés). Plus la distance est faible, plus la résonance intérieure est forte.">Distance Tzolkin</span> : ${kinDistNC} — ${harmonie}
         </div>`;
 
         // ── Nature Alchimique (Double Bang Conception × Naissance) ──────────
@@ -2468,11 +2538,28 @@ async function _wzStep1Next() {
 var _confirmedHomeLat = null;  // null = non renseignée → atom4love-home non publié
 var _confirmedHomeLon = null;
 
-function _detectHomePosition() {
-    var btn    = document.getElementById('btn-detect-home');
+function _setHomeLocation(lat, lon, label) {
+    _confirmedHomeLat = lat;
+    _confirmedHomeLon = lon;
+    var latI = document.getElementById('home-lat-input');
+    var lonI = document.getElementById('home-lon-input');
+    if (latI) latI.value = lat.toFixed(2);
+    if (lonI) lonI.value = lon.toFixed(2);
+    var disp = document.getElementById('home-location-display');
+    if (disp) {
+        disp.textContent = (label ? label + ' · ' : '') + 'lat ' + lat.toFixed(2) + '° · lon ' + lon.toFixed(2) + '°';
+        disp.style.color = 'rgba(0,255,204,.8)';
+    }
     var status = document.getElementById('home-location-status');
+    if (status) status.textContent = '';
+    _resolveNearestStation(lat, lon);
+}
+
+function _detectHomePosition() {
+    var btn = document.getElementById('btn-detect-home');
     if (!navigator.geolocation) {
-        if (status) status.textContent = '⚠ Géolocalisation non disponible sur cet appareil.';
+        var st = document.getElementById('home-location-status');
+        if (st) st.textContent = '⚠ Géolocalisation non disponible sur cet appareil.';
         return;
     }
     if (btn) { btn.disabled = true; btn.textContent = '⏳…'; }
@@ -2480,36 +2567,36 @@ function _detectHomePosition() {
         function(pos) {
             var lat = Math.round(pos.coords.latitude  * 100) / 100;
             var lon = Math.round(pos.coords.longitude * 100) / 100;
-            var latI = document.getElementById('home-lat-input');
-            var lonI = document.getElementById('home-lon-input');
-            if (latI) latI.value = lat.toFixed(2);
-            if (lonI) lonI.value = lon.toFixed(2);
-            _confirmedHomeLat = lat;
-            _confirmedHomeLon = lon;
-            if (status) status.textContent = '📍 Position confirmée (' + lat.toFixed(2) + ', ' + lon.toFixed(2) + ')';
-            if (btn) { btn.disabled = false; btn.textContent = '🎯 Détecter'; }
-            _resolveNearestStation(lat, lon);
+            _setHomeLocation(lat, lon, '🛰️ GPS');
+            if (btn) { btn.disabled = false; btn.textContent = '🛰️ GPS'; }
         },
         function() {
-            if (status) status.textContent = '⚠ Accès refusé — saisissez manuellement ou laissez vide.';
-            if (btn) { btn.disabled = false; btn.textContent = '🎯 Détecter'; }
+            var st = document.getElementById('home-location-status');
+            if (st) st.textContent = '⚠ Accès GPS refusé — utilisez la carte.';
+            if (btn) { btn.disabled = false; btn.textContent = '🛰️ GPS'; }
         },
         { timeout: 10000, maximumAge: 60000 }
     );
 }
 
+function _openHomeLocPicker() {
+    if (typeof A4LLocationPicker === 'undefined') return;
+    A4LLocationPicker.open({
+        title: '🏠 Résidence actuelle',
+        lat: _confirmedHomeLat || 0,
+        lon: _confirmedHomeLon || 0,
+        onConfirm: function(la, lo, lb) {
+            _setHomeLocation(la, lo, lb || null);
+        }
+    });
+}
+
 function _onHomeInputChange() {
+    // Conservé pour compatibilité — les inputs sont désormais hidden
     var latV = parseFloat(document.getElementById('home-lat-input')?.value);
     var lonV = parseFloat(document.getElementById('home-lon-input')?.value);
-    if (!isNaN(latV) && !isNaN(lonV)) {
-        _confirmedHomeLat = latV;
-        _confirmedHomeLon = lonV;
-        var status = document.getElementById('home-location-status');
-        if (status) status.textContent = '📍 Position manuelle (' + latV.toFixed(2) + ', ' + lonV.toFixed(2) + ')';
-    } else {
-        _confirmedHomeLat = null;
-        _confirmedHomeLon = null;
-    }
+    if (!isNaN(latV) && !isNaN(lonV)) _setHomeLocation(latV, lonV, null);
+    else { _confirmedHomeLat = null; _confirmedHomeLon = null; }
 }
 
 // ── Vault onboarding — ADN Cosmique (wallet detection + PIN mobile) ──────────
@@ -2779,6 +2866,7 @@ let _targetRotX = 0, _targetRotY = 0;
 function setup() {
     const c = document.getElementById('canvas-container');
     createCanvas(c.offsetWidth, c.offsetHeight).parent('canvas-container');
+    frameRate(30); // plafond 30fps — l'icosaèdre ne gagne rien à 60fps
     buildIcosahedronMesh();
 
     // Atome B : date démo pour l'onglet Résonance (partenaire fictif — Paris)
@@ -2839,13 +2927,21 @@ document.addEventListener('visibilitychange', () => {
     if (document.hidden) noLoop();
     else                 loop();
 });
-// Pause aussi quand le panneau offcanvas masque complètement le canvas
-// (optionnel mais économise la CPU sur mobile)
+// Pause aussi quand le canvas sort du viewport (IntersectionObserver)
+// + quand le panneau offcanvas le masque sur mobile
 document.addEventListener('DOMContentLoaded', () => {
     const panel = document.getElementById('atomic-panel');
     if (panel) {
         panel.addEventListener('shown.bs.offcanvas',  () => { if (window.innerWidth < 768) noLoop(); });
         panel.addEventListener('hidden.bs.offcanvas', () => { if (!document.hidden) loop(); });
+    }
+
+    const canvasContainer = document.getElementById('canvas-container');
+    if (canvasContainer && 'IntersectionObserver' in window) {
+        new IntersectionObserver(entries => {
+            if (entries[0].intersectionRatio === 0) noLoop();
+            else if (!document.hidden)              loop();
+        }, { threshold: 0 }).observe(canvasContainer);
     }
 });
 
@@ -2853,6 +2949,35 @@ document.addEventListener('DOMContentLoaded', () => {
 window._requestCapture = function() {
     if (currentMode !== 'match') return;
     _captureRequested = true;
+};
+
+// ── Export vidéo mandala (5s, MediaRecorder → .webm) ──────────────────────
+window._captureVideo = function() {
+    const canvasEl = document.querySelector('#canvas-container canvas');
+    if (!canvasEl) return;
+    if (!window.MediaRecorder) { alert('MediaRecorder non supporté sur ce navigateur.'); return; }
+
+    const btn = document.getElementById('btn-capture-video');
+    if (btn) { btn.disabled = true; btn.textContent = '⏺ 5s…'; }
+
+    const stream = canvasEl.captureStream(30);
+    const chunks = [];
+    const rec = new MediaRecorder(stream, { mimeType: MediaRecorder.isTypeSupported('video/webm;codecs=vp9') ? 'video/webm;codecs=vp9' : 'video/webm' });
+    rec.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
+    rec.onstop = function() {
+        const blob = new Blob(chunks, { type: 'video/webm' });
+        const url  = URL.createObjectURL(blob);
+        const a    = document.createElement('a');
+        const score = typeof globalCoherenceScore !== 'undefined' ? Math.round(globalCoherenceScore) : 0;
+        a.download = `mandala-phi2x-${score}pct.webm`;
+        a.href = url;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 10000);
+        if (btn) { btn.disabled = false; btn.textContent = '🎬 Vidéo 5s'; }
+    };
+
+    rec.start();
+    setTimeout(() => rec.stop(), 5000);
 };
 
 // _doCapture → délègue à _A4L_captureCanvas (uplanet-atomic.js)
@@ -2875,6 +3000,7 @@ function getCanvasCenter() {
 }
 
 function draw() {
+    if (document.hidden) return; // safety net — tab en arrière-plan, 0 CPU
     _calibratePerf();
     frameTime++;
     // Fondu traîne plein écran (origine haut-gauche en mode 2D)
@@ -3437,11 +3563,14 @@ const A4L_PROOF_SALT = 'ATOM4LOVE_ALPHA';
 // Sécurité : seuls date, heure approx et longitude-ville sont encodés.
 // Poids et polarité (facteurs SALT critiques) ne sont JAMAIS dans le lien.
 window._shareMatchLink = function() {
-    const dStr = document.getElementById('match-date-a').value;
-    const tStr = document.getElementById('match-time-a').value;
+    // Fallback sur birth-date/birth-time si le tab Match n'a pas encore été visité
+    const dStr = document.getElementById('match-date-a').value
+              || document.getElementById('birth-date')?.value || '';
+    const tStr = document.getElementById('match-time-a').value
+              || document.getElementById('birth-time')?.value || '';
     const lon  = parseFloat(document.getElementById('match-lon-a').value) || 0;
     if (!dStr) {
-        const _sBtn = document.getElementById('btn-share-match');
+        const _sBtn = document.getElementById('btn-share-match') || document.getElementById('btn-match-shortcut');
         if (_sBtn) {
             const _prev = _sBtn.textContent;
             _sBtn.textContent = '⚠ Renseigne d\'abord ta date de naissance';
@@ -3467,7 +3596,8 @@ window._shareMatchLink = function() {
     const _rawP = JSON.stringify(Object.assign({ d, t, lo: loV, la: laV, n: displayName }, kin ? { k: kin } : {}));
     const _b64P = btoa(unescape(encodeURIComponent(_rawP))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
     const base = location.href.replace(/\/[^/]*$/, '/').replace(/atomic\.html.*$/, '');
-    const url  = `${base}atomic_match.html?p=${_b64P}`;
+    const hexParam = window.userPubkey ? `&hex=${window.userPubkey}` : '';
+    const url  = `${base}atomic_match.html?p=${_b64P}${hexParam}`;
 
     // Texte viral pré-formaté
     const kinInfo  = kin ? ` (KIN ${kin} · ${_cachedKinA?.glyphFr || ''})` : '';
@@ -4041,12 +4171,24 @@ function _decodeA4lHexTag(tags) {
 async function _preInitFromNostr(pubkey) {
     if (!pubkey) return;
 
-    // Email depuis UPH — toujours pré-rempli, même si les coords de naissance existent déjà
+    // Email depuis UPH — le Kind 0 peut arriver après ce délai, donc on réessaie jusqu'à 10s
     var emailEl = document.getElementById('multipass-email');
-    if (emailEl && !emailEl.value && window._uphEmail) {
-        emailEl.value = window._uphEmail;
-        clearTimeout(_emailDetectTimer);
-        _emailDetectTimer = setTimeout(function() { _detectEmailOnRelay(window._uphEmail); }, 300);
+    if (emailEl && !emailEl.value) {
+        var _applyUphEmail = function() {
+            if (!emailEl.value && window._uphEmail) {
+                emailEl.value = window._uphEmail;
+                clearTimeout(_emailDetectTimer);
+                _emailDetectTimer = setTimeout(function() { _detectEmailOnRelay(window._uphEmail); }, 300);
+                return true;
+            }
+            return false;
+        };
+        if (!_applyUphEmail()) {
+            var _emailRetries = 0;
+            var _emailWait = setInterval(function() {
+                if (_applyUphEmail() || ++_emailRetries >= 20) clearInterval(_emailWait);
+            }, 500);
+        }
     }
 
     if (document.getElementById('birth-date').value) return; // coords déjà remplies

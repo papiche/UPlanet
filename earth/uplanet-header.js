@@ -36,6 +36,7 @@
         { e: '🛈', l: 'uNation',        h: 'Unation.html' },
         { e: '🤝', l: 'Contribuer',     h: 'contribute-3D.html',     mini: true },
         { e: '🪙', l: 'Collectif Ẑen',  h: 'https://opencollective.com/monnaie-libre' },
+        { e: '💬', l: 'Coracle',        h: 'https://coracle.copylaradio.com', mini: true },
     ];
 
     var _page        = (location.pathname.split('/').pop() || 'index.html').replace(/[?#].*/, '');
@@ -226,7 +227,12 @@
         + '.uph-id-dot{font-size:8px;flex-shrink:0;color:rgba(255,255,255,.35)}'
         + '.uph-id-item.active .uph-id-dot{color:#86efac}'
         + '.uph-id-label{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
-        + '.uph-id-locked{font-size:9px;flex-shrink:0;opacity:.5}';
+        + '.uph-id-locked{font-size:9px;flex-shrink:0;opacity:.5}'
+        + '#uph-a4l-share{width:100%;background:rgba(0,255,204,.08);border:1px solid rgba(0,255,204,.28);'
+        + 'color:#00ffcc;border-radius:9px;padding:7px 10px;font-size:10.5px;cursor:pointer;'
+        + 'font-weight:600;font-family:system-ui,sans-serif;text-align:left;display:none;'
+        + 'margin-top:4px;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
+        + '#uph-a4l-share:hover{background:rgba(0,255,204,.18)}';
 
     // ── HTML ───────────────────────────────────────────────────────────────────
     function _html() {
@@ -256,6 +262,7 @@
             + '<span class="uph-plink" id="uph-np-link" style="display:none">⚡ Historique ẑen →</span>'
             + '<span class="uph-plink" id="uph-np-zcard" style="display:none">💳 ZenCard →</span>'
             + '</div>'
+            + '<button id="uph-a4l-share">💌 Partager mon test de résonance</button>'
             + links
             + '</div>'
             + '<span class="uph-sep"></span>'
@@ -316,6 +323,13 @@
         // Bouton accès → modal
         document.getElementById('uph-access-btn').addEventListener('click', _openModal);
         _createModal();
+
+        // Bouton partage résonance — visible si params a4l stockés depuis atomic.html
+        var a4lShareBtn = document.getElementById('uph-a4l-share');
+        if (a4lShareBtn) {
+            _checkA4lShare();
+            a4lShareBtn.addEventListener('click', function(e) { e.stopPropagation(); _handleA4lShare(); });
+        }
 
         // ── Persistence inter-pages via sessionStorage ──────────────────────
         var cached = _getCachedPubkey();
@@ -580,9 +594,12 @@
                 console.log('[UPH] g1pub trouvé dans kind 0:', meta.g1pub.slice(0, 8)+'…');
                 window._uphG1Pub = meta.g1pub;
                 _loadBalance(meta.g1pub);
+                // Badge A4L niveau 1 : g1pub NIP-39 présent (level 2 laissé aux pages qui chargent Kind 30078)
+                if (typeof uphSetA4lBadge === 'function') uphSetA4lBadge(1);
             } else {
                 console.warn('[UPH] g1pub absent du profil kind 0 — compte non MULTIPASS (calculé localement).',
                     'Champs disponibles:', Object.keys(meta).join(', '));
+                if (typeof uphSetA4lBadge === 'function') uphSetA4lBadge(0);
             }
         } catch (e) {
             console.warn('[UPH] _loadProfile erreur:', e.message || e);
@@ -865,6 +882,51 @@
         if (h.startsWith('u.'))    return p + '://u.' + h.slice(2);
         // relay.* = WebSocket strfry uniquement, pas de pages HTML
         return 'https://u.copylaradio.com';
+    }
+
+    // ── Partage test de résonance depuis UPH (accessible toutes pages) ────────
+    function _checkA4lShare() {
+        var btn = document.getElementById('uph-a4l-share');
+        if (!btn) return;
+        try {
+            var raw = localStorage.getItem('a4l_share_params');
+            if (raw) {
+                var p = JSON.parse(raw);
+                var kin = p.k ? ' · KIN ' + p.k : '';
+                btn.textContent = '💌 Tester ma résonance' + kin;
+                btn.style.display = '';
+            } else {
+                btn.style.display = 'none';
+            }
+        } catch(e) { btn.style.display = 'none'; }
+    }
+
+    function _handleA4lShare() {
+        var raw;
+        try { raw = JSON.parse(localStorage.getItem('a4l_share_params')); } catch(e) { return; }
+        if (!raw || !raw.d) return;
+        var b64 = btoa(unescape(encodeURIComponent(JSON.stringify(raw))))
+            .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+        var pubkey = (window.NostrState && window.NostrState.userPubkey) || window.userPubkey || '';
+        var hexParam = pubkey ? '&hex=' + pubkey : '';
+        var base = location.href.replace(/\/[^/]*$/, '/').replace(/atomic\.html.*$/, '');
+        var url  = base + 'atomic_match.html?p=' + b64 + hexParam;
+        var kin  = raw.k ? ' (KIN ' + raw.k + ')' : '';
+        var msg  = '🌌 J\'ai calculé mon empreinte vibratoire sur ATOM4LOVE' + kin
+            + '.\n\nDécouvre notre taux de résonance 💫\n\n👇';
+        if (navigator.share) {
+            navigator.share({ title: '✨ Notre Résonance ATOM4LOVE', text: msg + '\n' + url, url: url })
+                .catch(function(){});
+            return;
+        }
+        var btn = document.getElementById('uph-a4l-share');
+        if (navigator.clipboard) {
+            navigator.clipboard.writeText(url).then(function() {
+                if (btn) { var prev = btn.textContent; btn.textContent = '✅ Lien copié !'; setTimeout(function(){ btn.textContent = prev; }, 2500); }
+            }).catch(function() { if (btn) prompt('Votre lien de résonance :', url); });
+        } else if (btn) {
+            prompt('Votre lien de résonance :', url);
+        }
     }
 
     // ── Boot ───────────────────────────────────────────────────────────────────

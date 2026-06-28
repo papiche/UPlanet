@@ -395,7 +395,13 @@ var NostrState = {
     // Constants
     NIP42_AUTH_COOLDOWN: 60000, // 1 minute cooldown
     CONNECTION_DEBOUNCE: 1000,   // 1 second debounce
-    MAX_CONNECTION_WAIT: 30      // 30 seconds max wait
+    MAX_CONNECTION_WAIT: 30,     // 30 seconds max wait
+
+    // UPlanet Header state (set by uplanet-header.js)
+    uphG1Pub: null,
+    uphEmail: '',
+    uphZenBal: null,
+    uphNostrNS: ''
 };
 
 // Legacy variables for backward compatibility (deprecated, use NostrState)
@@ -480,6 +486,28 @@ if (typeof window !== 'undefined') {
             NostrState.DEFAULT_RELAYS = val;
             syncLegacyVariables();
         },
+        configurable: true
+    });
+
+    // UPlanet Header variables — proxies vers NostrState pour éviter des globals flottantes
+    Object.defineProperty(window, '_uphG1Pub', {
+        get: () => NostrState.uphG1Pub,
+        set: (val) => { NostrState.uphG1Pub = val; },
+        configurable: true
+    });
+    Object.defineProperty(window, '_uphEmail', {
+        get: () => NostrState.uphEmail,
+        set: (val) => { NostrState.uphEmail = val; },
+        configurable: true
+    });
+    Object.defineProperty(window, '_uphZenBal', {
+        get: () => NostrState.uphZenBal,
+        set: (val) => { NostrState.uphZenBal = val; },
+        configurable: true
+    });
+    Object.defineProperty(window, '_uphNostrNS', {
+        get: () => NostrState.uphNostrNS,
+        set: (val) => { NostrState.uphNostrNS = val; },
         configurable: true
     });
 
@@ -906,5 +934,36 @@ window.wrapRelayWithQueue   = wrapRelayWithQueue;
 window.NIP42_AUTH_COOLDOWN  = NIP42_AUTH_COOLDOWN;
 window.CONNECTION_DEBOUNCE  = CONNECTION_DEBOUNCE;
 window.nostrTools           = nostrTools;
+
+// ── Lifecycle WebSocket — économie batterie ────────────────────────────────
+(function() {
+    var _visHideTimer = null;
+
+    function _closeNostrRelay() {
+        var relay = NostrState.nostrRelay;
+        if (relay && relay.readyState !== WebSocket.CLOSED && relay.readyState !== WebSocket.CLOSING) {
+            try { relay.close(); } catch(e) {}
+        }
+        if (window.SubscriptionQueue && typeof window.SubscriptionQueue.reset === 'function') {
+            window.SubscriptionQueue.reset();
+        }
+        NostrState.isNostrConnected = false;
+    }
+
+    // pagehide : fermeture immédiate (navigation, rechargement, onglet fermé)
+    window.addEventListener('pagehide', function() {
+        clearTimeout(_visHideTimer);
+        _closeNostrRelay();
+    });
+
+    // visibilitychange : fermeture différée de 30s si la page passe en arrière-plan
+    document.addEventListener('visibilitychange', function() {
+        if (document.hidden) {
+            _visHideTimer = setTimeout(_closeNostrRelay, 30000);
+        } else {
+            clearTimeout(_visHideTimer);
+        }
+    });
+})();
 
 })();

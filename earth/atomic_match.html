@@ -396,6 +396,26 @@
             </div>
         </div>
 
+        <!-- Notifier l'émetteur du lien via nsec éphémère (NIP-40) -->
+        <div id="result-notify-block" style="display:none;margin-top:14px;
+             background:rgba(120,80,255,.04);border:1px solid rgba(120,80,255,.18);
+             border-radius:14px;padding:14px 16px">
+            <div style="font-size:.78rem;font-weight:700;color:#a78bfa;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:8px">
+                📨 Notifier <span id="notify-name-label">l'émetteur</span>
+            </div>
+            <p style="font-size:.75rem;color:rgba(255,255,255,.45);margin-bottom:10px">
+                Envoie ton score anonymement — une nsec jetable signe un message éphémère (7 jours) sur NOSTR. Aucune date de naissance transmise.
+            </p>
+            <button id="btn-notify-sharer" class="btn-compute"
+                    style="margin-top:0;font-size:.88rem;padding:11px;
+                           background:linear-gradient(135deg,rgba(120,80,255,.18),rgba(0,255,204,.08));
+                           border-color:rgba(120,80,255,.4)"
+                    onclick="_notifySharer()">
+                📨 Envoyer mon résultat à <span class="notify-name-inline">—</span>
+            </button>
+            <div id="notify-status" style="font-size:.72rem;color:rgba(255,255,255,.4);margin-top:8px;text-align:center"></div>
+        </div>
+
         <!-- CTA : créer son profil complet -->
         <div class="cta-block" style="padding-top:12px">
             <a class="btn-cta" id="cta-link" href="atomic.html"
@@ -415,6 +435,9 @@
 <script src="phi2x.js"></script>
 <script>
 'use strict';
+
+// _hexM : pubkey hex du partageur (depuis URL ?hex=) — partagé entre les deux blocs script
+var _hexM = '';
 
 // ── Données Atome B (depuis URL) ──────────────────────────────────────────
 // Décodage URL — nouveau format ?p=base64(JSON) avec fallback anciens liens ?d=...&lo=...
@@ -493,16 +516,17 @@ if (!_bDate || !_bDateObj) {
         <div style="font-size:2.8rem;margin-bottom:12px">🔗</div>
         <div class="invite-name" style="color:var(--teal)">Aucun partenaire détecté</div>
         <div class="invite-sub" style="margin-top:8px;line-height:1.7;color:rgba(255,255,255,.55)">
-            Cette page nécessite un lien partagé par un autre explorateur.<br>
-            Crée ton profil, puis partage <strong style="color:#fff">ton lien unique</strong> depuis l'onglet MATCH.
+            Cette page s'ouvre via un lien partagé par un autre explorateur.<br>
+            Crée ton profil sur ATOM4LOVE, puis partage <strong style="color:#fff">ton lien unique</strong>.
         </div>
-        <div style="margin-top:24px;width:100%;max-width:720px;margin-left:auto;margin-right:auto">
-            <iframe src="atomic.html"
-                style="width:100%;height:820px;border:1px solid rgba(0,255,204,.2);
-                       border-radius:16px;background:#0a0a0a"
-                title="Créer mon profil ATOM4LOVE"
-                loading="lazy">
-            </iframe>
+        <div style="margin-top:28px">
+            <a href="atomic.html"
+               style="display:inline-block;padding:12px 28px;border-radius:12px;
+                      background:linear-gradient(135deg,rgba(0,255,204,.14),rgba(180,100,255,.1));
+                      border:1px solid rgba(0,255,204,.4);color:#00ffcc;
+                      font-weight:700;font-size:.95rem;text-decoration:none">
+                💎 Créer mon profil ATOM4LOVE →
+            </a>
         </div>`;
     // Masquer le formulaire de matching — aucun calcul possible sans partenaire
     const card = document.querySelector('.section-card');
@@ -775,6 +799,17 @@ function _renderResult() {
         document.getElementById('reveal-nostr-block').style.display = 'block';
         _updatePublishBtn();
     }
+
+    // Bloc notification éphémère — visible uniquement si la pubkey du sharer est dans l'URL
+    if (_hexM) {
+        var nb = document.getElementById('result-notify-block');
+        if (nb) {
+            nb.style.display = 'block';
+            document.querySelectorAll('#notify-name-label, .notify-name-inline').forEach(function(el) {
+                el.textContent = bNameSafe || 'l\'émetteur';
+            });
+        }
+    }
 }
 
 // ── Publication NOSTR de la révélation (Kind 1) ───────────────────────────
@@ -904,6 +939,90 @@ function _drawDoubleBang(phiA, phiB, k) {
         _dbAnim = requestAnimationFrame(frame);
     }
     _dbAnim = requestAnimationFrame(frame);
+}
+
+// ── Notification éphémère à l'émetteur du lien (nsec jetable + NIP-40) ──────
+// Publie un Kind 1 signé avec une nsec jetable, tagué #p=sharer, TTL 7 jours.
+// L'émetteur retrouve son résultat via n'importe quel client NOSTR (notification).
+async function _notifySharer() {
+    if (!_matchResult || !_hexM) return;
+    var btn = document.getElementById('btn-notify-sharer');
+    var st  = document.getElementById('notify-status');
+    btn.disabled = true; btn.textContent = '⏳ Envoi en cours…';
+
+    try {
+        // 1. Keypair jetable (secp256k1 via nostr.bundle.js)
+        var privBytes = new Uint8Array(32);
+        crypto.getRandomValues(privBytes);
+        var privHex = Array.from(privBytes).map(function(b){ return b.toString(16).padStart(2,'0'); }).join('');
+        var pubHex  = window.NostrTools.getPublicKey(privHex);
+
+        // 2. Contenu — score seul, pas de date de naissance
+        var pct     = Math.round((_matchResult.k - 0.5) * 200);
+        var kinTxt  = _kinA ? ' · KIN ' + _kinA.kin + ' T' + _kinA.tone : '';
+        var content = '🌀 Votre lien ATOM4LOVE a été utilisé — résonance calculée : ' + pct + '%' + kinTxt
+                    + '\n📐 Réponse anonyme · aucune date de naissance transmise.';
+
+        // 3. Construire et signer l'événement (compatible nostr-tools v1 et v2)
+        var ts   = Math.floor(Date.now() / 1000);
+        var tmpl = {
+            kind:       1,
+            pubkey:     pubHex,
+            created_at: ts,
+            tags: [
+                ['p', _hexM],
+                ['t', 'phi2x:result'],
+                ['expiration', String(ts + 604800)] // NIP-40 : 7 jours
+            ],
+            content: content
+        };
+        var signed = typeof window.NostrTools.finalizeEvent === 'function'
+            ? window.NostrTools.finalizeEvent(tmpl, privBytes)
+            : window.NostrTools.finishEvent(tmpl, privHex);
+
+        // 4. Publier sur le relay
+        await _publishEphemeralEvent(signed);
+
+        btn.textContent = '✅ Résultat envoyé !';
+        if (st) st.textContent = 'Message éphémère publié · expirera dans 7 jours';
+        setTimeout(function() { btn.disabled = true; btn.textContent = '✅ Déjà envoyé'; }, 3000);
+
+    } catch(e) {
+        console.error('[A4L notify]', e);
+        btn.disabled = false;
+        btn.textContent = '📨 Envoyer mon résultat';
+        if (st) st.textContent = '⚠ ' + (e.message || String(e));
+    }
+}
+
+function _publishEphemeralEvent(event) {
+    return new Promise(function(resolve, reject) {
+        // Préférer la connexion existante de common.js
+        if (window.nostrRelay && window.nostrRelay.readyState === 1 /* OPEN */) {
+            try { window.nostrRelay.send(JSON.stringify(['EVENT', event])); resolve(); return; } catch(_) {}
+        }
+        // Fallback : connexion directe courte
+        var relay = (typeof window.getRelayUrl === 'function')
+            ? window.getRelayUrl()
+            : (function() {
+                var h = location.hostname;
+                if (h.indexOf('ipfs.') === 0) return 'wss://relay.' + h.slice(5);
+                if (h.indexOf('u.')   === 0) return 'wss://relay.' + h.slice(2);
+                return 'wss://relay.copylaradio.com';
+            })();
+        var ws   = new WebSocket(relay);
+        var done = false;
+        var t    = setTimeout(function() {
+            if (!done) { done = true; try { ws.close(); } catch(_) {} reject(new Error('timeout')); }
+        }, 6000);
+        ws.onopen = function() {
+            ws.send(JSON.stringify(['EVENT', event]));
+            setTimeout(function() { clearTimeout(t); done = true; try { ws.close(); } catch(_) {} resolve(); }, 1000);
+        };
+        ws.onerror = ws.onclose = function() {
+            if (!done) { done = true; clearTimeout(t); resolve(); } // résoudre silencieusement
+        };
+    });
 }
 
 // ── Page Visibility API — stoppe les animations quand l'onglet est caché ─────
@@ -1040,8 +1159,10 @@ if (_bLoInt !== 0) {
 _syncVisitorDate();
 </script>
 <script src="common.js"></script>
+<script src="uplanet-header.js"></script>
 <script src="astro.js"></script>
 <script src="uplanet-atomic.js"></script>
+<script src="atomic-profile-db.js"></script>
 <script>
 // Mettre à jour le bouton quand la connexion change
 if (typeof window.waitForConnection === 'function') {
@@ -1054,7 +1175,7 @@ if (typeof window.waitForConnection === 'function') {
 'use strict';
 
 const _qpM    = new URLSearchParams(location.search);
-const _hexM   = (_qpM.get('hex')    || '').replace(/[^0-9a-f]/gi,'').slice(0,64);
+_hexM         = (_qpM.get('hex')    || '').replace(/[^0-9a-f]/gi,'').slice(0,64); // affecte le var global
 const _origM  = (_qpM.get('origin') || '').replace(/[^0-9a-f]/gi,'').slice(0,64);
 // _params, _bDate etc. déjà définis dans le bloc précédent
 
@@ -1065,6 +1186,15 @@ function _relayUrlM() {
     return 'wss://relay.copylaradio.com';
 }
 function _wsQueryM(relay, filter, timeout) {
+    /* Déléguer à fetchNostrEvents (SubscriptionQueue) si common.js est chargé
+       et que le relay principal est actif — évite la prolifération de WebSockets. */
+    if (typeof window.fetchNostrEvents === 'function' && window.nostrRelay) {
+        return window.fetchNostrEvents(filter, {
+            timeout: timeout || 5000,
+            relay: window.nostrRelay
+        });
+    }
+    /* Fallback WebSocket directe */
     return new Promise(resolve => {
         const evs = []; let ws;
         const done = () => { try { ws && ws.close(); } catch(_) {} resolve(evs); };

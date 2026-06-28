@@ -239,6 +239,7 @@ if (typeof marked !== 'undefined') {
 }
 </script>
 <script src="nostr.bundle.js"></script>
+<script src="atomic-profile-db.js"></script>
 <script>
 'use strict';
 
@@ -460,9 +461,13 @@ async function _cachedDecrypt(ev) {
     return text;
 }
 
-// ── Profile cache ──────────────────────────────────────────────────────────────
+// ── Profile cache (mémoire → IndexedDB → NOSTR) ───────────────────────────────
 async function _profile(hex) {
     if (_profCache[hex]) return _profCache[hex];
+    if (window.A4LProfileDB) {
+        var cached = await window.A4LProfileDB.get(hex);
+        if (cached) { _profCache[hex] = cached; return cached; }
+    }
     var evs = await _query({kinds:[0], authors:[hex], limit:1}, 4000);
     if (evs.length) {
         try {
@@ -471,6 +476,7 @@ async function _profile(hex) {
         } catch(_) {}
     }
     if (!_profCache[hex]) _profCache[hex] = {name: hex.slice(0,8)+'…', picture:null};
+    if (window.A4LProfileDB) window.A4LProfileDB.set(hex, _profCache[hex]);
     return _profCache[hex];
 }
 

@@ -572,18 +572,18 @@ function _cycleSortMode() { _setSortMode(_sortMode === 'resonance' ? 'proximity'
 
 // ── Conformité a4l ────────────────────────────────────────────────────────────
 // Niveaux de conformité (du plus fort au plus faible) :
-//   2 — CONFORME  : cert 30078 contient g1pub + g1pub_proof valide ET concorde avec Kind 0 NIP-39
-//   1 — PROBABLE  : Kind 0 a un g1pub NIP-39 mais le cert 30078 n'a pas de g1pub_proof
-//   0 — HYBRIDE   : aucune preuve de co-dérivation keygen
+//   2 — CONFORME  : cert 30078 contient g1pub_proof relay-validé (co-dérivation keygen confirmée)
+//   1 — PROBABLE  : g1pub présent dans cert ou Kind 0, mais sans preuve de co-dérivation
+//   0 — HYBRIDE   : aucune preuve, ou discordance détectée (fraude potentielle)
 function _conformeLevel(atom) {
     var p   = atom.profile  || {};
     var c   = atom.certData || {};   // contenu du Kind 30078
     var k0g = p.g1pub       || '';   // g1pub du Kind 0 NIP-39
     var cg  = c.g1pub       || '';   // g1pub embarqué dans le cert 30078
     var cgp = c.g1pub_proof || '';   // preuve croisée dans le cert
-    if (cg && cgp && k0g && cg === k0g) return 2;  // concordance totale
-    if (cg && cgp)                      return 2;  // preuve présente, Kind 0 non chargé
-    if (k0g)                            return 1;  // Kind 0 g1pub seul (probable)
+    if (k0g && cg && k0g !== cg)        return 0;  // fraude : discordance Kind 0 ≠ cert 30078
+    if (cg && cgp)                      return 2;  // preuve relay-validée (concordance ou Kind 0 non chargé)
+    if (k0g || cg)                      return 1;  // g1pub seul sans preuve de co-dérivation
     return 0;
 }
 function _isConforme(atom) { return _conformeLevel(atom) >= 1; }

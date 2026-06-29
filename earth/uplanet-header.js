@@ -26,6 +26,7 @@
         { sep: 'Station 모' },
         { e: '♥️', l: 'Station',        h: 'economy.html',           mini: true },
         { e: '🌌', l: 'Swarm',          h: 'economy.Swarm.html' },
+        { e: '📡', l: 'Relay Admin',    h: 'nostr_admin.html' },
         { sep: 'WoTx² ⛑️' },
         { e: '☁️', l: 'Skills',         h: 'skills.html' },
         { e: '⚒️', l: 'Forge',          h: 'forge.html',             mini: true },

@@ -264,6 +264,42 @@
   }
   .relay-profile-item:hover { border-color: var(--accent); background: rgba(79,142,247,.06); }
 
+  /* ── JSON Modal ── */
+  .json-modal-overlay {
+    position: fixed; inset: 0; z-index: 9500;
+    background: rgba(0,0,0,.78); backdrop-filter: blur(3px);
+    display: flex; align-items: center; justify-content: center; padding: 20px;
+  }
+  .json-modal {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    width: 100%; max-width: 900px; max-height: 85vh;
+    display: flex; flex-direction: column;
+    box-shadow: 0 20px 60px rgba(0,0,0,.65);
+  }
+  .json-modal-header {
+    display: flex; align-items: center; gap: 10px;
+    padding: 12px 18px; border-bottom: 1px solid var(--border); flex-shrink: 0;
+  }
+  .json-modal-title { font-size: .82rem; font-weight: 600; flex: 1; font-family: var(--mono); color: var(--text2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .json-modal-body { overflow-y: auto; padding: 16px; flex: 1; }
+  .json-modal-body pre { margin: 0; font-family: var(--mono); font-size: .76rem; line-height: 1.55; color: var(--text); white-space: pre-wrap; word-break: break-all; }
+  .json-modal-footer { padding: 9px 18px; border-top: 1px solid var(--border); display: flex; gap: 8px; align-items: center; flex-shrink: 0; flex-wrap: wrap; }
+  .btn-close-modal { background: none; border: none; color: var(--text2); cursor: pointer; font-size: 1.2rem; padding: 0 4px; line-height: 1; }
+  .btn-close-modal:hover { color: var(--text); }
+  .btn-ev-view { background: none; border: none; cursor: pointer; font-size: .9rem; padding: 2px 6px; color: var(--text2); border-radius: 4px; transition: all .1s; }
+  .btn-ev-view:hover { background: var(--surface2); color: var(--accent); }
+
+  /* ── Ops log ── */
+  .ops-log { margin: 12px 0 0; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; max-height: 230px; overflow-y: auto; }
+  .ops-log-header { padding: 6px 12px; border-bottom: 1px solid var(--border); font-size: .72rem; color: var(--text2); font-weight: 600; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; background: var(--surface); }
+  .ops-entry { padding: 3px 12px; border-bottom: 1px solid rgba(42,51,71,.4); font-family: var(--mono); font-size: .73rem; display: flex; gap: 8px; align-items: baseline; }
+  .ops-entry:last-child { border-bottom: none; }
+  .ops-entry.ok  { color: #68d391; }
+  .ops-entry.err { color: #fc8181; }
+  .ops-entry.warn { color: #f6e05e; }
+  .ops-entry.info { color: var(--text2); }
+  .ops-ts { font-size: .67rem; color: var(--text2); flex-shrink: 0; }
+
   /* ── Responsive ── */
   @media (max-width: 680px) {
     .events-table th:nth-child(4),
@@ -333,6 +369,9 @@
       <div class="profile-hex" id="prof-hexval">—</div>
       <div class="profile-about" id="prof-about"></div>
       <div class="profile-actions">
+        <button class="btn-query" id="btn-prof-viewer" style="padding:5px 14px;font-size:.78rem" onclick="openProfileViewer()">
+          👁 Voir profil
+        </button>
         <button class="btn-del-local" id="btn-del-local" disabled onclick="deleteProfileLocal()">
           🗑️ Supprimer du relay local
         </button>
@@ -354,11 +393,20 @@
     <div class="events-wrap" style="margin:0">
       <table class="events-table">
         <thead><tr>
-          <th>Kind</th><th>ID</th><th>Date</th><th>D-tag</th><th>Contenu</th>
+          <th>Kind</th><th>ID</th><th>Date</th><th>D-tag</th><th>Contenu</th><th style="width:32px"></th>
         </tr></thead>
         <tbody id="prof-events-tbody"></tbody>
       </table>
     </div>
+  </div>
+
+  <!-- Journal des opérations admin -->
+  <div id="ops-log" style="display:none" class="ops-log">
+    <div class="ops-log-header">
+      📋 Journal des opérations
+      <button onclick="clearOpsLog()" style="background:none;border:none;color:var(--text2);cursor:pointer;font-size:.75rem;padding:0">✕ Effacer</button>
+    </div>
+    <div id="ops-log-body"></div>
   </div>
 </div>
 </div>
@@ -447,6 +495,7 @@
         <th>Date</th>
         <th>D-tag</th>
         <th>Contenu</th>
+        <th style="width:32px"></th>
       </tr>
     </thead>
     <tbody id="events-tbody"></tbody>
@@ -666,7 +715,7 @@ function renderEvents() {
     empty.style.display = 'none'; bar.style.display = 'flex'; wrap.style.display = '';
     document.getElementById('results-count').textContent = _events.length + ' événement(s)';
     document.getElementById('chk-all').checked = false;
-    document.getElementById('events-tbody').innerHTML = _events.map(function(ev) {
+    document.getElementById('events-tbody').innerHTML = _events.map(function(ev, i) {
         var sel = _selected.has(ev.id);
         return '<tr class="'+(sel?'selected':'')+'">' +
             '<td><input type="checkbox" data-id="'+ev.id+'" '+(sel?'checked':'')+' onchange="onRowCheck(this)"></td>' +
@@ -676,7 +725,8 @@ function renderEvents() {
                 ev.pubkey.slice(0,6)+'…'+ev.pubkey.slice(-4)+'</span></td>' +
             '<td class="ev-date">'+fmtDate(ev.created_at)+'</td>' +
             '<td class="ev-dtag">'+escHtml(getDtag(ev))+'</td>' +
-            '<td class="ev-content">'+contentPreview(ev)+'</td></tr>';
+            '<td class="ev-content">'+contentPreview(ev)+'</td>' +
+            '<td><button class="btn-ev-view" onclick="showEventModal(_events['+i+']);event.stopPropagation()" title="Voir JSON">👁</button></td></tr>';
     }).join('');
     updateSelUI();
 }
@@ -785,13 +835,14 @@ function renderProfileEvents() {
     var wrap = document.getElementById('profile-events-wrap');
     if (_profEvents.length === 0) { wrap.style.display = 'none'; return; }
     wrap.style.display = '';
-    document.getElementById('prof-events-tbody').innerHTML = _profEvents.map(function(ev) {
+    document.getElementById('prof-events-tbody').innerHTML = _profEvents.map(function(ev, i) {
         return '<tr>'+
             '<td><span class="'+kindClass(ev.kind)+'">'+ev.kind+'</span></td>'+
             '<td><span class="ev-id" title="'+ev.id+'">'+ev.id.slice(0,8)+'…</span></td>'+
             '<td class="ev-date">'+fmtDate(ev.created_at)+'</td>'+
             '<td class="ev-dtag">'+escHtml(getDtag(ev))+'</td>'+
-            '<td class="ev-content">'+contentPreview(ev)+'</td></tr>';
+            '<td class="ev-content">'+contentPreview(ev)+'</td>'+
+            '<td><button class="btn-ev-view" onclick="showEventModal(_profEvents['+i+'])" title="Voir JSON">👁</button></td></tr>';
     }).join('');
 }
 
@@ -811,8 +862,11 @@ async function deleteProfileLocal() {
     try {
         var data = await adminDelete(_profEvents.map(function(ev){return ev.id;}));
         showToast('Suppression locale : '+data.deleted+' événement(s)', 'ok');
+        opsLog([{type:'ok', text:'✓ Suppression locale : '+data.deleted+' / '+_profEvents.length+' événement(s) supprimé(s)'}]);
         _resetProfileButtons();
-    } catch(e) { if (e.message !== '403') showToast('Erreur: '+e.message,'err'); }
+    } catch(e) {
+        if (e.message !== '403') { showToast('Erreur: '+e.message,'err'); opsLog([{type:'err', text:'✗ Suppression locale : '+e.message}]); }
+    }
     finally { btn.disabled = false; btn.textContent = '🗑️ Supprimer du relay local'; }
 }
 async function deleteProfileKind(kindNum) {
@@ -825,8 +879,11 @@ async function deleteProfileKind(kindNum) {
     try {
         var data = await adminDelete(targets.map(function(e){return e.id;}));
         showToast(data.deleted+' événement(s) Kind '+kindNum+' supprimé(s)','ok');
+        opsLog([{type:'ok', text:'✓ Kind '+kindNum+' purgé : '+data.deleted+' / '+targets.length+' événement(s)'}]);
         loadProfile();
-    } catch(e) { if (e.message !== '403') showToast('Erreur: '+e.message,'err'); }
+    } catch(e) {
+        if (e.message !== '403') { showToast('Erreur: '+e.message,'err'); opsLog([{type:'err', text:'✗ Purge Kind '+kindNum+' : '+e.message}]); }
+    }
     finally { btn.disabled = false; btn.textContent = '🧹 Purger ses DMs (Kind 4)'; }
 }
 async function deleteProfileConstellation() {
@@ -839,11 +896,26 @@ async function deleteProfileConstellation() {
             method:'POST', headers:{'Content-Type':'application/json'},
             body: JSON.stringify({ uplanetname:_uph, author:_profHex })
         });
+        var nodes = data.constellation_nodes || [];
         showToast('Local: '+(data.local_deleted?'OK':'échec')+
-            ' · Constellation: '+data.nodes_notified+'/'+(data.constellation_nodes||[]).length+' NODEs',
+            ' · Constellation: '+data.nodes_notified+'/'+nodes.length+' NODEs',
             data.local_deleted?'ok':'warn');
+        // Journal détaillé
+        var entries = [];
+        entries.push({type: data.local_deleted?'ok':'err', text: (data.local_deleted?'✓':'✗')+' Suppression locale strfry'});
+        if (data.warning) entries.push({type:'warn', text: '⚠ '+data.warning});
+        if (nodes.length === 0) entries.push({type:'info', text: '— Aucun NODE constellation trouvé dans ~/.zen/tmp/swarm/*/HEX'});
+        nodes.forEach(function(n) {
+            entries.push({type: n.ok?'ok':'err', text: (n.ok?'✓':'✗')+' NODE '+n.node+(n.error?' — '+n.error:'')});
+        });
+        opsLog(entries);
         _resetProfileButtons();
-    } catch(e) { if (e.message !== '403') showToast('Erreur: '+e.message,'err'); }
+    } catch(e) {
+        if (e.message !== '403') {
+            showToast('Erreur: '+e.message,'err');
+            opsLog([{type:'err', text:'✗ Constellation delete : '+e.message}]);
+        }
+    }
     finally { btn.textContent = '🌐 Supprimer de la constellation'; }
 }
 
@@ -860,6 +932,85 @@ async function loadRelayProfiles() {
     } catch(e) { if (e.message !== '403') showToast('Erreur: '+e.message,'err'); }
     finally { btn.disabled = false; btn.textContent = '📋 Charger les profils du relay'; }
 }
+// ── JSON Modal ────────────────────────────────────────────────────────────
+var _modalEvent = null;
+
+function showEventModal(ev) {
+    _modalEvent = ev;
+    var kindEl = document.getElementById('jm-kind');
+    kindEl.className = kindClass(ev.kind);
+    kindEl.textContent = ev.kind;
+    document.getElementById('jm-title').textContent = ev.id.slice(0,12)+'… · '+ev.pubkey.slice(0,10)+'…';
+    document.getElementById('jm-json').textContent = JSON.stringify(ev, null, 2);
+    // Bouton "Voir profil" uniquement si kind 0 (profil)
+    document.getElementById('jm-viewer-btn').style.display = (ev.kind === 0) ? '' : 'none';
+    document.getElementById('jm-copy-fb').style.display = 'none';
+    document.getElementById('json-modal-overlay').style.display = 'flex';
+}
+
+function closeModal() {
+    document.getElementById('json-modal-overlay').style.display = 'none';
+    _modalEvent = null;
+}
+
+function copyModalJson() {
+    var text = document.getElementById('jm-json').textContent;
+    var fb = document.getElementById('jm-copy-fb');
+    var done = function() { fb.style.display=''; setTimeout(function(){ fb.style.display='none'; }, 2000); };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done).catch(function() {
+            var ta = document.createElement('textarea'); ta.value = text;
+            document.body.appendChild(ta); ta.select(); document.execCommand('copy');
+            document.body.removeChild(ta); done();
+        });
+    } else {
+        var ta = document.createElement('textarea'); ta.value = text;
+        document.body.appendChild(ta); ta.select(); document.execCommand('copy');
+        document.body.removeChild(ta); done();
+    }
+}
+
+function openViewer() {
+    if (!_modalEvent) return;
+    window.open('nostr_profile_viewer.html?hex=' + _modalEvent.pubkey, '_blank');
+}
+
+function openAuthorFromModal() {
+    if (!_modalEvent) return;
+    closeModal();
+    openProfile(_modalEvent.pubkey);
+}
+
+function openProfileViewer() {
+    if (_profHex) window.open('nostr_profile_viewer.html?hex=' + _profHex, '_blank');
+}
+
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') closeModal();
+});
+
+// ── Journal des opérations ─────────────────────────────────────────────
+function opsLog(entries) {
+    var panel = document.getElementById('ops-log');
+    var body = document.getElementById('ops-log-body');
+    if (!panel || !body) return;
+    var ts = new Date().toLocaleTimeString('fr-FR', {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+    var html = entries.map(function(e) {
+        return '<div class="ops-entry '+(e.type||'info')+'">'+
+            '<span class="ops-ts">['+ts+']</span>'+
+            '<span>'+escHtml(e.text)+'</span>'+
+        '</div>';
+    }).join('');
+    body.insertAdjacentHTML('afterbegin', html);
+    panel.style.display = '';
+}
+
+function clearOpsLog() {
+    var body = document.getElementById('ops-log-body');
+    if (body) body.innerHTML = '';
+    document.getElementById('ops-log').style.display = 'none';
+}
+
 function renderRelayProfiles() {
     var container = document.getElementById('relay-profiles-list');
     if (!container) return;
@@ -878,17 +1029,39 @@ function renderRelayProfiles() {
         var pic = meta.picture
             ? '<img src="'+escHtml(meta.picture)+'" style="width:32px;height:32px;border-radius:50%;object-fit:cover;flex-shrink:0" onerror="this.style.display=\'none\'">'
             : '<span style="font-size:1.1rem">👤</span>';
-        return '<div class="relay-profile-item" onclick="openProfile(\''+ev.pubkey+'\')" title="'+ev.pubkey+'">'+
-            '<div style="display:flex;align-items:center;gap:8px">'+
+        return '<div class="relay-profile-item" title="'+ev.pubkey+'">'+
+            '<div style="display:flex;align-items:center;gap:8px;cursor:pointer" onclick="openProfile(\''+ev.pubkey+'\')">'+
             '<div style="width:32px;height:32px;flex-shrink:0;display:flex;align-items:center;justify-content:center">'+pic+'</div>'+
-            '<div style="min-width:0">'+
+            '<div style="min-width:0;flex:1">'+
             '<div style="font-weight:600;font-size:.83rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+name+'</div>'+
             '<div style="font-size:.7rem;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+
                 (about||'<span style="font-family:var(--mono)">'+shortKey+'</span>')+
-            '</div></div></div></div>';
+            '</div></div>'+
+            '<a href="nostr_profile_viewer.html?hex='+ev.pubkey+'" target="_blank" title="Voir profil" onclick="event.stopPropagation()" style="color:var(--text2);font-size:.85rem;padding:3px 5px;text-decoration:none;flex-shrink:0" onmouseover="this.style.color=\'var(--accent)\'" onmouseout="this.style.color=\'var(--text2)\'">👁</a>'+
+            '</div></div>';
     }).join('');
 }
 </script>
+<!-- Modal JSON viewer -->
+<div id="json-modal-overlay" class="json-modal-overlay" style="display:none" onclick="if(event.target===this)closeModal()">
+  <div class="json-modal">
+    <div class="json-modal-header">
+      <span id="jm-kind"></span>
+      <span class="json-modal-title" id="jm-title"></span>
+      <button class="btn-close-modal" onclick="closeModal()" title="Fermer (Echap)">✕</button>
+    </div>
+    <div class="json-modal-body">
+      <pre id="jm-json"></pre>
+    </div>
+    <div class="json-modal-footer">
+      <button class="btn-query" style="padding:5px 13px;font-size:.78rem" onclick="copyModalJson()">📋 Copier JSON</button>
+      <button class="btn-query" id="jm-viewer-btn" style="padding:5px 13px;font-size:.78rem;display:none" onclick="openViewer()">👁 Voir profil</button>
+      <button class="btn-query" id="jm-author-btn" style="padding:5px 13px;font-size:.78rem" onclick="openAuthorFromModal()">🔍 Tous ses événements</button>
+      <span id="jm-copy-fb" style="font-size:.78rem;color:var(--ok);display:none;margin-left:4px">✓ Copié !</span>
+    </div>
+  </div>
+</div>
+
 <script src="nacl-fast.min.js"></script>
 <script src="nostr.bundle.js"></script>
 <script src="common.js"></script>

@@ -1,0 +1,1057 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NOSTR Admin — Relay local</title>
+<link rel="stylesheet" href="bootstrap.min.css">
+<style>
+  :root {
+    --bg: #0e1117;
+    --surface: #161b27;
+    --surface2: #1e2535;
+    --border: #2a3347;
+    --accent: #4f8ef7;
+    --accent2: #7c5cfc;
+    --danger: #e53e3e;
+    --warn: #d69e2e;
+    --ok: #38a169;
+    --text: #d1d5db;
+    --text2: #8892a4;
+    --mono: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+  }
+  * { box-sizing: border-box; }
+  body { background: var(--bg); color: var(--text); font-family: system-ui, sans-serif; margin: 0; min-height: 100vh; padding-top: 48px; }
+
+  /* ── Header ── */
+  .adm-header {
+    background: linear-gradient(135deg, #1a1f30 0%, #0e1117 100%);
+    border-bottom: 1px solid var(--border);
+    padding: 14px 20px;
+    display: flex; align-items: center; gap: 14px;
+  }
+  .adm-header h1 { font-size: 1.05rem; font-weight: 700; margin: 0; color: #fff; letter-spacing: .02em; }
+  .adm-header .badge-relay { font-size: .68rem; background: var(--surface2); border: 1px solid var(--border); color: var(--text2); padding: 2px 9px; border-radius: 20px; }
+
+  /* ── Auth panel ── */
+  .auth-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 20px;
+    margin: 16px;
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  }
+  .auth-panel label { font-size: .82rem; color: var(--text2); white-space: nowrap; }
+  .auth-panel input {
+    flex: 1; min-width: 260px;
+    background: var(--bg); border: 1px solid var(--border); border-radius: 7px;
+    color: var(--text); padding: 7px 12px; font-family: var(--mono); font-size: .82rem;
+    outline: none;
+  }
+  .auth-panel input:focus { border-color: var(--accent); }
+  .auth-panel input.error { border-color: var(--danger); }
+  .auth-panel input.ok { border-color: var(--ok); }
+  .auth-status { font-size: .78rem; white-space: nowrap; }
+
+  /* ── Filters ── */
+  .filter-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 20px;
+    margin: 0 16px 12px;
+  }
+  .filter-panel label { font-size: .78rem; color: var(--text2); display: block; margin-bottom: 3px; }
+  .filter-panel input, .filter-panel select {
+    background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+    color: var(--text); padding: 6px 10px; font-size: .82rem; width: 100%; outline: none;
+  }
+  .filter-panel input:focus, .filter-panel select:focus { border-color: var(--accent); }
+  .kind-btns { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 4px; }
+  .kind-btn {
+    font-size: .72rem; padding: 3px 9px; border-radius: 5px; border: 1px solid var(--border);
+    background: var(--surface2); color: var(--text2); cursor: pointer; transition: all .12s;
+    font-family: var(--mono);
+  }
+  .kind-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .kind-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .btn-query {
+    background: linear-gradient(135deg, var(--accent) 0%, var(--accent2) 100%);
+    color: #fff; border: none; border-radius: 7px;
+    padding: 8px 20px; font-size: .85rem; font-weight: 600; cursor: pointer;
+    transition: opacity .15s; white-space: nowrap;
+  }
+  .btn-query:hover { opacity: .88; }
+  .btn-query:disabled { opacity: .45; cursor: not-allowed; }
+
+  /* ── Results ── */
+  .results-bar {
+    padding: 8px 20px;
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    margin: 0 16px 0;
+    border-radius: 10px 10px 0 0;
+  }
+  .results-count { font-size: .8rem; color: var(--text2); }
+  .btn-delete-sel {
+    background: var(--danger); color: #fff; border: none; border-radius: 6px;
+    padding: 5px 14px; font-size: .8rem; cursor: pointer; transition: opacity .15s;
+  }
+  .btn-delete-sel:hover { opacity: .84; }
+  .btn-delete-sel:disabled { opacity: .4; cursor: not-allowed; }
+
+  /* ── Table ── */
+  .events-wrap {
+    margin: 0 16px 16px;
+    border: 1px solid var(--border);
+    border-top: none;
+    border-radius: 0 0 10px 10px;
+    overflow: hidden;
+  }
+  .events-table { width: 100%; border-collapse: collapse; font-size: .8rem; }
+  .events-table th {
+    background: var(--surface2); color: var(--text2); font-weight: 600; font-size: .72rem;
+    padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  .events-table td {
+    padding: 7px 10px; border-bottom: 1px solid rgba(42,51,71,.5);
+    vertical-align: top;
+  }
+  .events-table tr:last-child td { border-bottom: none; }
+  .events-table tr:hover td { background: rgba(79,142,247,.04); }
+  .events-table tr.selected td { background: rgba(229,62,62,.15); border-bottom-color: rgba(229,62,62,.4); }
+
+  .ev-id { font-family: var(--mono); color: var(--text2); font-size: .72rem; }
+  .ev-kind { display: inline-block; padding: 2px 7px; border-radius: 4px; font-family: var(--mono); font-size: .72rem; font-weight: 700; }
+  .ev-pub { font-family: var(--mono); color: var(--text2); font-size: .72rem; cursor: pointer; }
+  .ev-pub:hover { color: var(--accent); }
+  .ev-date { color: var(--text2); font-size: .72rem; white-space: nowrap; }
+  .ev-dtag { font-family: var(--mono); color: var(--accent2); font-size: .72rem; }
+  .ev-content { color: var(--text); max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ev-tags { color: var(--text2); font-size: .7rem; }
+
+  /* Kind color badges */
+  .k0   { background: rgba(56,161,105,.18); color: #68d391; }
+  .k1   { background: rgba(79,142,247,.18); color: #90c4f9; }
+  .k4   { background: rgba(214,158,46,.18); color: #f6c05d; }
+  .k5   { background: rgba(229,62,62,.2);  color: #fc8181; }
+  .k7   { background: rgba(237,100,166,.18); color: #f687b3; }
+  .k30078 { background: rgba(124,92,252,.2); color: #b794f4; }
+  .k30503 { background: rgba(56,161,105,.22); color: #9ae6b4; }
+  .k30505 { background: rgba(49,130,206,.22); color: #90cdf4; }
+  .kother { background: rgba(160,174,192,.1); color: #a0aec0; }
+
+  /* ── Tabs ── */
+  .adm-tabs { display: flex; gap: 0; margin: 12px 16px 0; }
+  .adm-tab {
+    padding: 8px 20px; font-size: .83rem; font-weight: 600; cursor: pointer;
+    background: var(--surface2); border: 1px solid var(--border); color: var(--text2);
+    border-bottom: none; border-radius: 8px 8px 0 0; transition: all .15s;
+    user-select: none;
+  }
+  .adm-tab.active { background: var(--surface); color: var(--text); border-bottom: 1px solid var(--surface); margin-bottom: -1px; z-index: 1; }
+  .adm-tab-body { border-top: 1px solid var(--border); }
+
+  /* ── Profile view ── */
+  .profile-panel {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 0 10px 10px 10px; padding: 16px 20px; margin: 0 16px 12px;
+  }
+  .profile-search { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }
+  .profile-search input {
+    flex: 1; min-width: 260px;
+    background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+    color: var(--text); padding: 7px 12px; font-family: var(--mono); font-size: .82rem; outline: none;
+  }
+  .profile-search input:focus { border-color: var(--accent); }
+  .profile-card {
+    background: var(--surface2); border: 1px solid var(--border); border-radius: 10px;
+    padding: 14px 16px; margin-bottom: 14px; display: flex; gap: 14px; align-items: flex-start;
+  }
+  .profile-avatar {
+    width: 52px; height: 52px; border-radius: 50%; overflow: hidden; flex-shrink: 0;
+    background: var(--border); display: flex; align-items: center; justify-content: center;
+    font-size: 1.3rem;
+  }
+  .profile-avatar img { width: 100%; height: 100%; object-fit: cover; }
+  .profile-info { flex: 1; min-width: 0; }
+  .profile-name { font-weight: 700; font-size: .95rem; margin-bottom: 3px; }
+  .profile-hex { font-family: var(--mono); font-size: .7rem; color: var(--text2); word-break: break-all; }
+  .profile-about { font-size: .8rem; color: var(--text2); margin-top: 5px; }
+  .profile-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+  .btn-del-local {
+    background: rgba(229,62,62,.18); border: 1px solid rgba(229,62,62,.4); color: #fc8181;
+    padding: 6px 14px; border-radius: 6px; font-size: .8rem; cursor: pointer; transition: all .15s;
+  }
+  .btn-del-local:hover { background: rgba(229,62,62,.35); }
+  .btn-del-local:disabled { opacity: .4; cursor: not-allowed; }
+  .btn-del-constellation {
+    background: rgba(124,92,252,.18); border: 1px solid rgba(124,92,252,.4); color: #b794f4;
+    padding: 6px 14px; border-radius: 6px; font-size: .8rem; cursor: pointer; transition: all .15s;
+  }
+  .btn-del-constellation:hover { background: rgba(124,92,252,.35); }
+  .btn-del-constellation:disabled { opacity: .4; cursor: not-allowed; }
+
+  /* ── Empty / loading states ── */
+  .state-empty {
+    text-align: center; padding: 60px 20px; color: var(--text2); font-size: .88rem;
+  }
+  .state-empty .icon { font-size: 2.2rem; margin-bottom: 10px; }
+
+  /* ── Notification toast ── */
+  #toast {
+    position: fixed; bottom: 24px; right: 24px; z-index: 9999;
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 10px; padding: 12px 18px; font-size: .83rem;
+    box-shadow: 0 8px 32px rgba(0,0,0,.5);
+    transform: translateY(12px); opacity: 0; transition: all .2s;
+    max-width: 340px;
+  }
+  #toast.show { transform: translateY(0); opacity: 1; }
+  #toast.t-ok   { border-left: 3px solid var(--ok); }
+  #toast.t-err  { border-left: 3px solid var(--danger); }
+  #toast.t-warn { border-left: 3px solid var(--warn); }
+
+  /* ── UPH captain panel ── */
+  .uph-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 20px;
+    margin: 0 16px 8px;
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    font-size: .8rem;
+  }
+  .uph-ext { color: var(--text2); }
+  .uph-pubkey { font-family: var(--mono); color: var(--accent); }
+  .uph-captain-ok {
+    background: rgba(56,161,105,.18); border: 1px solid rgba(56,161,105,.4);
+    color: #68d391; border-radius: 20px; padding: 2px 10px; font-weight: 700;
+  }
+  .uph-captain-warn {
+    background: rgba(214,158,46,.18); border: 1px solid rgba(214,158,46,.4);
+    color: #f6c05d; border-radius: 20px; padding: 2px 10px;
+  }
+  .btn-uph {
+    background: var(--surface2); border: 1px solid var(--border); color: var(--text2);
+    border-radius: 6px; padding: 4px 12px; font-size: .78rem; cursor: pointer;
+    transition: all .15s;
+  }
+  .btn-uph:hover { border-color: var(--accent); color: var(--accent); }
+  .btn-del-kind {
+    background: rgba(214,158,46,.18); border: 1px solid rgba(214,158,46,.4); color: #f6c05d;
+    padding: 6px 14px; border-radius: 6px; font-size: .8rem; cursor: pointer; transition: all .15s;
+  }
+  .btn-del-kind:hover { background: rgba(214,158,46,.35); }
+  .btn-del-kind:disabled { opacity: .4; cursor: not-allowed; }
+
+  /* ── Relay profiles list ── */
+  .relay-profiles-panel {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 8px; padding: 10px 12px; margin-bottom: 12px;
+  }
+  .relay-profiles-panel h4 { font-size: .8rem; color: var(--text2); margin: 0 0 8px; font-weight: 600; }
+  .relay-profiles-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 6px;
+    max-height: 260px; overflow-y: auto;
+  }
+  .relay-profile-item {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 7px;
+    padding: 8px 10px; cursor: pointer; transition: all .13s;
+  }
+  .relay-profile-item:hover { border-color: var(--accent); background: rgba(79,142,247,.06); }
+
+  /* ── Responsive ── */
+  @media (max-width: 680px) {
+    .events-table th:nth-child(4),
+    .events-table td:nth-child(4) { display: none; }
+    .events-table th:nth-child(5),
+    .events-table td:nth-child(5) { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="adm-header">
+  <span style="font-size:1.4rem">⚡</span>
+  <h1>NOSTR Admin</h1>
+  <span class="badge-relay" id="relay-badge">relay local</span>
+  <span class="badge-relay" id="api-url-badge" style="margin-left:auto; font-size:.65rem; word-break:break-all;"></span>
+</div>
+
+<!-- Auth -->
+<div class="auth-panel">
+  <label for="uph-input">🔑 UPLANETNAME</label>
+  <input type="password" id="uph-input" placeholder="64 caractères hex (contenu de ~/.ipfs/swarm.key)" autocomplete="off" maxlength="64">
+  <span class="auth-status" id="auth-status"></span>
+</div>
+
+<!-- UPH Captain Verification -->
+<div class="uph-panel" id="uph-panel">
+  <span class="uph-ext" id="uph-ext-status">🔌 Vérification extension NOSTR…</span>
+  <span id="uph-captain-badge" style="display:none"></span>
+  <button class="btn-uph" id="btn-uph-connect" style="display:none" onclick="connectUPH()">⚡ Identifier comme Capitaine</button>
+</div>
+
+<!-- Tabs -->
+<div class="adm-tabs">
+  <div class="adm-tab active" id="tab-query" onclick="switchTab('query')">🔍 Requête</div>
+  <div class="adm-tab" id="tab-profile" onclick="switchTab('profile')">👤 Profil</div>
+</div>
+
+<!-- Profile panel -->
+<div id="pane-profile" style="display:none">
+<div class="profile-panel">
+  <!-- Liste des profils présents sur le relay -->
+  <div class="relay-profiles-panel">
+    <h4>Profils présents sur ce relay</h4>
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+      <button class="btn-query" id="btn-load-relay-profiles" onclick="loadRelayProfiles()" style="padding:5px 14px;font-size:.78rem;">
+        📋 Charger les profils du relay
+      </button>
+      <span style="font-size:.75rem;color:var(--text2)">Cliquez sur un profil pour le sélectionner</span>
+    </div>
+    <div class="relay-profiles-grid" id="relay-profiles-list">
+      <div style="color:var(--text2);font-size:.8rem;padding:4px 0">Cliquez "Charger" pour voir les profils disponibles.</div>
+    </div>
+  </div>
+
+  <!-- Sélection manuelle par pubkey -->
+  <div class="profile-search">
+    <label style="font-size:.82rem;color:var(--text2);white-space:nowrap">Pubkey hex</label>
+    <input type="text" id="prof-hex" placeholder="64 chars hex — ou cliquez sur un profil ci-dessus" maxlength="64">
+    <button class="btn-query" id="btn-load-profile" onclick="loadProfile()">Charger</button>
+  </div>
+
+  <div id="profile-card" style="display:none" class="profile-card">
+    <div class="profile-avatar" id="prof-avatar">👤</div>
+    <div class="profile-info">
+      <div class="profile-name" id="prof-name">—</div>
+      <div class="profile-hex" id="prof-hexval">—</div>
+      <div class="profile-about" id="prof-about"></div>
+      <div class="profile-actions">
+        <button class="btn-del-local" id="btn-del-local" disabled onclick="deleteProfileLocal()">
+          🗑️ Supprimer du relay local
+        </button>
+        <button class="btn-del-constellation" id="btn-del-constellation" disabled onclick="deleteProfileConstellation()">
+          🌐 Supprimer de la constellation
+        </button>
+        <button class="btn-del-kind" id="btn-del-dms" disabled onclick="deleteProfileKind(4)">
+          🧹 Purger ses DMs (Kind 4)
+        </button>
+        <span id="prof-evcount" style="font-size:.75rem;color:var(--text2);align-self:center"></span>
+      </div>
+    </div>
+  </div>
+
+  <div id="profile-events-wrap" style="display:none">
+    <div style="padding:8px 0 6px; font-size:.78rem; color:var(--text2); font-weight:600">
+      Événements associés à ce profil
+    </div>
+    <div class="events-wrap" style="margin:0">
+      <table class="events-table">
+        <thead><tr>
+          <th>Kind</th><th>ID</th><th>Date</th><th>D-tag</th><th>Contenu</th>
+        </tr></thead>
+        <tbody id="prof-events-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- Filters -->
+<div id="pane-query">
+<div class="filter-panel">
+  <div class="row g-2 align-items-end">
+    <div class="col-12">
+      <label>Kind — sélection rapide</label>
+      <div class="kind-btns">
+        <button class="kind-btn" data-kind="">Tous</button>
+        <button class="kind-btn" data-kind="0">0 · Profil</button>
+        <button class="kind-btn" data-kind="1">1 · Note</button>
+        <button class="kind-btn" data-kind="4">4 · DM chiffré</button>
+        <button class="kind-btn" data-kind="5">5 · Suppression</button>
+        <button class="kind-btn" data-kind="7">7 · Réaction</button>
+        <button class="kind-btn" data-kind="30078">30078 · Paramétrable</button>
+        <button class="kind-btn" data-kind="30503">30503 · Skills WoTx²</button>
+        <button class="kind-btn" data-kind="30505">30505 · Objets WoTx²</button>
+      </div>
+    </div>
+    <div class="col-sm-6 col-lg-3">
+      <label for="f-kind">Kind (manuel)</label>
+      <input type="text" id="f-kind" placeholder="ex: 30078">
+    </div>
+    <div class="col-sm-6 col-lg-3">
+      <label for="f-author">Auteur (pubkey hex)</label>
+      <input type="text" id="f-author" placeholder="64 chars hex">
+    </div>
+    <div class="col-sm-6 col-lg-2">
+      <label for="f-dtag">D-tag</label>
+      <input type="text" id="f-dtag" placeholder="ex: atom4love">
+    </div>
+    <div class="col-sm-6 col-lg-2">
+      <label for="f-limit">Limite</label>
+      <select id="f-limit">
+        <option value="20">20</option>
+        <option value="50" selected>50</option>
+        <option value="100">100</option>
+        <option value="200">200</option>
+        <option value="500">500</option>
+      </select>
+    </div>
+    <div class="col-sm-6 col-lg-1" style="display:flex;align-items:flex-end">
+      <button class="btn-query w-100" id="btn-query" onclick="doQuery()">🔍 Requêter</button>
+    </div>
+  </div>
+  <div class="row g-2 mt-1">
+    <div class="col-sm-6 col-lg-3">
+      <label for="f-since">Depuis (date)</label>
+      <input type="datetime-local" id="f-since">
+    </div>
+    <div class="col-sm-6 col-lg-3">
+      <label for="f-until">Jusqu'à (date)</label>
+      <input type="datetime-local" id="f-until">
+    </div>
+    <div class="col-sm-6 col-lg-3">
+      <label for="f-ptag">P-tag (pubkey)</label>
+      <input type="text" id="f-ptag" placeholder="pubkey hex mentionnée">
+    </div>
+    <div class="col-sm-6 col-lg-3">
+      <label for="f-ttag">T-tag (hashtag)</label>
+      <input type="text" id="f-ttag" placeholder="ex: UPlanet,atom4love">
+    </div>
+  </div>
+</div>
+
+<!-- Results bar -->
+<div class="results-bar" id="results-bar" style="display:none">
+  <input type="checkbox" id="chk-all" title="Tout sélectionner / désélectionner" onchange="toggleAll(this.checked)">
+  <span class="results-count" id="results-count">0 événement(s)</span>
+  <button class="btn-delete-sel" id="btn-del-sel" disabled onclick="deleteSelected()">🗑️ Supprimer la sélection (0)</button>
+  <button class="btn-delete-sel" id="btn-purge-filter" onclick="purgeFilter()" style="background:#8b0000; margin-left:auto;" title="Supprime TOUS les résultats affichés">☢️ Purger ces résultats</button>
+</div>
+
+<!-- Events table -->
+<div class="events-wrap" id="events-wrap" style="display:none">
+  <table class="events-table">
+    <thead>
+      <tr>
+        <th style="width:32px"></th>
+        <th>Kind</th>
+        <th>ID</th>
+        <th>Auteur</th>
+        <th>Date</th>
+        <th>D-tag</th>
+        <th>Contenu</th>
+      </tr>
+    </thead>
+    <tbody id="events-tbody"></tbody>
+  </table>
+</div>
+
+<!-- Empty state -->
+<div class="state-empty" id="state-empty">
+  <div class="icon">⚡</div>
+  <div>Entrez votre UPLANETNAME et lancez une requête pour visualiser les événements NOSTR du relay local.</div>
+</div>
+
+</div><!-- /pane-query -->
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<script>
+// ── URL auto-détection (pattern economy.html) ─────────────────────────────
+function getAPIUrl() {
+    var cur = new URL(window.location.href);
+    var api = new URL(cur.origin);
+    if (cur.hostname.startsWith('ipfs.')) api.hostname = api.hostname.replace('ipfs.', 'u.');
+    if (cur.port === '8080' || cur.port !== '') api.port = '54321';
+    return api.toString().replace(/\/+$/, '');
+}
+
+var _apiUrl = getAPIUrl();
+document.getElementById('api-url-badge').textContent = _apiUrl;
+
+// ── Toast ────────────────────────────────────────────────────────────────
+var _toastTimer = null;
+function showToast(msg, type) {
+    var t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = 'show t-' + (type || 'ok');
+    clearTimeout(_toastTimer);
+    _toastTimer = setTimeout(function() { t.className = ''; }, 3500);
+}
+
+// ── Auth input ───────────────────────────────────────────────────────────
+var _uph = '';
+document.getElementById('uph-input').addEventListener('input', function() {
+    var v = this.value.trim();
+    _uph = v;
+    var st = document.getElementById('auth-status');
+    if (!v) { st.textContent = ''; this.className = ''; return; }
+    var valid = /^[0-9a-fA-F]{64}$/.test(v);
+    if (valid) {
+        this.className = 'ok';
+        st.innerHTML = '<span style="color:var(--ok)">✓ format valide</span>';
+    } else {
+        this.className = 'error';
+        st.innerHTML = '<span style="color:var(--danger)">✗ 64 chars hex attendus (actuel: ' + v.length + ')</span>';
+    }
+});
+
+// ── Kind quick-select ────────────────────────────────────────────────────
+document.querySelectorAll('.kind-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+        document.querySelectorAll('.kind-btn').forEach(function(b) { b.classList.remove('active'); });
+        this.classList.add('active');
+        document.getElementById('f-kind').value = this.dataset.kind;
+    });
+});
+// Active "Tous" par défaut
+document.querySelector('.kind-btn[data-kind=""]').classList.add('active');
+
+// ── Kind badge style ─────────────────────────────────────────────────────
+function kindClass(k) {
+    var m = {0:'k0',1:'k1',4:'k4',5:'k5',7:'k7',30078:'k30078',30503:'k30503',30505:'k30505'};
+    return 'ev-kind ' + (m[k] || 'kother');
+}
+
+// ── Date helpers ─────────────────────────────────────────────────────────
+function fmtDate(ts) {
+    var d = new Date(ts * 1000);
+    var pad = function(n) { return n < 10 ? '0'+n : n; };
+    return pad(d.getDate()) + '/' + pad(d.getMonth()+1) + '/' + d.getFullYear() + ' ' +
+           pad(d.getHours()) + ':' + pad(d.getMinutes());
+}
+function datetimeToTs(s) { return s ? Math.floor(new Date(s).getTime() / 1000) : null; }
+
+// ── D-tag extractor ──────────────────────────────────────────────────────
+function getDtag(ev) {
+    if (!ev.tags) return '';
+    for (var i = 0; i < ev.tags.length; i++) {
+        if (ev.tags[i][0] === 'd') return ev.tags[i][1] || '';
+    }
+    return '';
+}
+
+// ── Content preview ──────────────────────────────────────────────────────
+function contentPreview(ev) {
+    var c = ev.content || '';
+    if (ev.kind === 4) return '[DM chiffré]';
+    if (c.startsWith('{')) {
+        try { var obj = JSON.parse(c); return (obj.name || obj.about || JSON.stringify(obj)).slice(0,80); }
+        catch(e) {}
+    }
+    return c.slice(0, 100).replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+// ── State ────────────────────────────────────────────────────────────────
+var _events = [];
+var _selected = new Set();
+
+// ── Query ────────────────────────────────────────────────────────────────
+async function doQuery() {
+    if (!/^[0-9a-fA-F]{64}$/.test(_uph)) {
+        showToast('UPLANETNAME invalide (64 chars hex requis)', 'err');
+        document.getElementById('uph-input').focus();
+        return;
+    }
+    var btn = document.getElementById('btn-query');
+    btn.disabled = true; btn.textContent = '⏳…';
+
+    var params = new URLSearchParams({ uplanetname: _uph });
+    var kind = document.getElementById('f-kind').value.trim();
+    var author = document.getElementById('f-author').value.trim();
+    var dtag = document.getElementById('f-dtag').value.trim();
+    var ptag = document.getElementById('f-ptag').value.trim();
+    var ttag = document.getElementById('f-ttag').value.trim();
+    var limit = document.getElementById('f-limit').value;
+    var since = datetimeToTs(document.getElementById('f-since').value);
+    var until = datetimeToTs(document.getElementById('f-until').value);
+
+    if (kind)   params.set('kind', kind);
+    if (author) params.set('author', author);
+    if (dtag)   params.set('tag_d', dtag);
+    if (ptag)   params.set('tag_p', ptag);
+    if (ttag)   params.set('tag_t', ttag);
+    if (limit)  params.set('limit', limit);
+    if (since)  params.set('since', since);
+    if (until)  params.set('until', until);
+
+    try {
+        var resp = await fetch(_apiUrl + '/api/nostr/admin/events?' + params.toString());
+        if (resp.status === 403) {
+            showToast('UPLANETNAME incorrect — accès refusé', 'err');
+            document.getElementById('uph-input').classList.add('error');
+            document.getElementById('auth-status').innerHTML = '<span style="color:var(--danger)">✗ Accès refusé par le serveur</span>';
+            return;
+        }
+        if (!resp.ok) {
+            var err = await resp.json().catch(function() { return {detail: resp.statusText}; });
+            showToast('Erreur: ' + (err.detail || resp.statusText), 'err');
+            return;
+        }
+        var data = await resp.json();
+        _events = data.events || [];
+        _selected.clear();
+        renderEvents();
+        showToast(_events.length + ' événement(s) récupéré(s)', _events.length > 0 ? 'ok' : 'warn');
+        document.getElementById('uph-input').classList.remove('error');
+        document.getElementById('uph-input').classList.add('ok');
+        document.getElementById('auth-status').innerHTML = '<span style="color:var(--ok)">✓ Authentifié</span>';
+    } catch(e) {
+        showToast('Erreur réseau: ' + (e.message || e), 'err');
+    } finally {
+        btn.disabled = false; btn.textContent = '🔍 Requêter';
+    }
+}
+
+// ── Render events table ──────────────────────────────────────────────────
+function renderEvents() {
+    var tbody = document.getElementById('events-tbody');
+    var bar = document.getElementById('results-bar');
+    var wrap = document.getElementById('events-wrap');
+    var empty = document.getElementById('state-empty');
+
+    if (_events.length === 0) {
+        bar.style.display = 'none';
+        wrap.style.display = 'none';
+        empty.innerHTML = '<div class="icon">🔍</div><div>Aucun événement trouvé pour ces filtres.</div>';
+        empty.style.display = '';
+        return;
+    }
+
+    empty.style.display = 'none';
+    bar.style.display = 'flex';
+    wrap.style.display = '';
+    document.getElementById('results-count').textContent = _events.length + ' événement(s)';
+    document.getElementById('chk-all').checked = false;
+
+    tbody.innerHTML = _events.map(function(ev, i) {
+        var dtag = getDtag(ev);
+        var sel = _selected.has(ev.id);
+        return '<tr class="' + (sel ? 'selected' : '') + '" data-idx="' + i + '">' +
+            '<td><input type="checkbox" data-id="' + ev.id + '" ' + (sel ? 'checked' : '') +
+                ' onchange="onRowCheck(this)"></td>' +
+            '<td><span class="' + kindClass(ev.kind) + '">' + ev.kind + '</span></td>' +
+            '<td><span class="ev-id" title="' + ev.id + '">' + ev.id.slice(0, 8) + '…</span></td>' +
+            '<td><span class="ev-pub" title="' + ev.pubkey + ' — clic: voir profil" onclick="openProfile(\'' + ev.pubkey + '\')">' +
+                ev.pubkey.slice(0,6) + '…' + ev.pubkey.slice(-4) + '</span></td>' +
+            '<td class="ev-date">' + fmtDate(ev.created_at) + '</td>' +
+            '<td class="ev-dtag">' + escHtml(dtag) + '</td>' +
+            '<td class="ev-content">' + contentPreview(ev) + '</td>' +
+        '</tr>';
+    }).join('');
+
+    updateSelUI();
+}
+
+function escHtml(s) {
+    return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ── Selection ────────────────────────────────────────────────────────────
+function onRowCheck(chk) {
+    var id = chk.dataset.id;
+    var tr = chk.closest('tr');
+    if (chk.checked) { _selected.add(id); tr.classList.add('selected'); }
+    else { _selected.delete(id); tr.classList.remove('selected'); }
+    updateSelUI();
+}
+
+function toggleAll(checked) {
+    _events.forEach(function(ev) {
+        if (checked) _selected.add(ev.id);
+        else _selected.delete(ev.id);
+    });
+    document.querySelectorAll('#events-tbody input[type=checkbox]').forEach(function(chk) {
+        chk.checked = checked;
+        chk.closest('tr').classList.toggle('selected', checked);
+    });
+    updateSelUI();
+}
+
+function updateSelUI() {
+    var n = _selected.size;
+    var btn = document.getElementById('btn-del-sel');
+    btn.disabled = n === 0;
+    btn.innerHTML = '🗑️ Supprimer la sélection (' + n + ')';
+}
+
+function setAuthorFilter(pubkey) {
+    document.getElementById('f-author').value = pubkey;
+}
+
+// ── Delete ───────────────────────────────────────────────────────────────
+async function deleteSelected() {
+    if (_selected.size === 0) return;
+    if (!confirm('Supprimer définitivement ' + _selected.size + ' événement(s) du relay local ?\n\nCette action est IRRÉVERSIBLE.')) return;
+
+    var btn = document.getElementById('btn-del-sel');
+    btn.disabled = true; btn.textContent = '⏳ Suppression…';
+
+    try {
+        var resp = await fetch(_apiUrl + '/api/nostr/admin/delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ uplanetname: _uph, ids: Array.from(_selected) })
+        });
+        if (resp.status === 403) {
+            showToast('UPLANETNAME incorrect — accès refusé', 'err');
+            return;
+        }
+        if (!resp.ok) {
+            var err = await resp.json().catch(function() { return {detail: resp.statusText}; });
+            showToast('Erreur: ' + (err.detail || resp.statusText), 'err');
+            return;
+        }
+        var data = await resp.json();
+        showToast(data.deleted + ' événement(s) supprimé(s)', 'ok');
+        // Remove deleted events from local state
+        var deletedIds = new Set(data.ids || []);
+        _events = _events.filter(function(ev) { return !deletedIds.has(ev.id); });
+        _selected.clear();
+        renderEvents();
+    } catch(e) {
+        showToast('Erreur réseau: ' + (e.message || e), 'err');
+    } finally {
+        updateSelUI();
+    }
+}
+
+// ── Purge all filtered results ───────────────────────────────────────────
+async function purgeFilter() {
+    if (_events.length === 0) return;
+    if (!confirm('Supprimer du relay local TOUS les ' + _events.length + ' événement(s) affichés ?\n(IRRÉVERSIBLE)')) return;
+    var btn = document.getElementById('btn-purge-filter');
+    btn.disabled = true; btn.textContent = '⏳ Purge…';
+    try {
+        var ids = _events.map(function(ev) { return ev.id; });
+        var resp = await fetch(_apiUrl + '/api/nostr/admin/delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ uplanetname: _uph, ids: ids })
+        });
+        if (resp.status === 403) { showToast('UPLANETNAME incorrect', 'err'); return; }
+        if (!resp.ok) throw new Error(resp.statusText);
+        var data = await resp.json();
+        showToast(data.deleted + ' événement(s) purgé(s)', 'ok');
+        doQuery();
+    } catch(e) {
+        showToast('Erreur de purge : ' + (e.message || e), 'err');
+    } finally {
+        btn.disabled = false; btn.textContent = '☢️ Purger ces résultats';
+    }
+}
+
+// ── Enter on auth input triggers query ──────────────────────────────────
+document.getElementById('uph-input').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') doQuery();
+});
+
+// ── Click auteur dans le tableau → ouvre la vue profil ───────────────────
+function setAuthorFilter(pubkey) {
+    document.getElementById('f-author').value = pubkey;
+    document.getElementById('prof-hex').value = pubkey;
+}
+
+function openProfile(pubkey) {
+    document.getElementById('f-author').value = pubkey;
+    document.getElementById('prof-hex').value = pubkey;
+    switchTab('profile');
+    loadProfile();
+}
+
+// ── Onglets ─────────────────────────────────────────────────────────────
+function switchTab(tab) {
+    var isQuery = tab === 'query';
+    document.getElementById('tab-query').classList.toggle('active', isQuery);
+    document.getElementById('tab-profile').classList.toggle('active', !isQuery);
+    document.getElementById('pane-query').style.display = isQuery ? '' : 'none';
+    document.getElementById('pane-profile').style.display = isQuery ? 'none' : '';
+}
+
+// ── Profile view ────────────────────────────────────────────────────────
+var _profHex = '';
+var _profEvents = [];
+
+document.getElementById('prof-hex').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') loadProfile();
+});
+
+async function loadProfile() {
+    var hex = document.getElementById('prof-hex').value.trim();
+    if (!/^[0-9a-fA-F]{64}$/.test(hex)) {
+        showToast('Pubkey hex invalide (64 chars requis)', 'warn');
+        return;
+    }
+    if (!/^[0-9a-fA-F]{64}$/.test(_uph)) {
+        showToast('UPLANETNAME requis', 'err');
+        return;
+    }
+    _profHex = hex;
+    var btn = document.getElementById('btn-load-profile');
+    btn.disabled = true; btn.textContent = '⏳…';
+
+    try {
+        // Charger kind 0 (profil) + tous les events de cet auteur
+        var params0 = new URLSearchParams({ uplanetname: _uph, kind: '0', author: hex, limit: '1' });
+        var paramsAll = new URLSearchParams({ uplanetname: _uph, author: hex, limit: '500' });
+
+        var [r0, rAll] = await Promise.all([
+            fetch(_apiUrl + '/api/nostr/admin/events?' + params0.toString()),
+            fetch(_apiUrl + '/api/nostr/admin/events?' + paramsAll.toString())
+        ]);
+
+        if (r0.status === 403 || rAll.status === 403) {
+            showToast('UPLANETNAME incorrect — accès refusé', 'err');
+            return;
+        }
+
+        var d0 = r0.ok ? await r0.json() : {events: []};
+        var dAll = rAll.ok ? await rAll.json() : {events: []};
+
+        _profEvents = dAll.events || [];
+
+        // Afficher la carte profil
+        var cardEl = document.getElementById('profile-card');
+        cardEl.style.display = 'flex';
+        document.getElementById('prof-hexval').textContent = hex;
+        document.getElementById('btn-del-local').disabled = false;
+        document.getElementById('btn-del-constellation').disabled = false;
+        document.getElementById('btn-del-dms').disabled = _profEvents.filter(function(e){return e.kind===4;}).length === 0;
+        document.getElementById('prof-evcount').textContent = _profEvents.length + ' événement(s)';
+
+        var prof = (d0.events && d0.events.length > 0) ? d0.events[0] : null;
+        if (prof) {
+            var meta = {};
+            try { meta = JSON.parse(prof.content); } catch(e) {}
+            document.getElementById('prof-name').textContent = meta.name || meta.display_name || hex.slice(0,16) + '…';
+            document.getElementById('prof-about').textContent = (meta.about || '').slice(0, 160);
+            var avatarEl = document.getElementById('prof-avatar');
+            if (meta.picture) {
+                avatarEl.innerHTML = '<img src="' + escHtml(meta.picture) + '" onerror="this.style.display=\'none\'">';
+            } else {
+                avatarEl.textContent = (meta.name || '👤').slice(0, 2);
+            }
+        } else {
+            document.getElementById('prof-name').textContent = hex.slice(0,16) + '…';
+            document.getElementById('prof-about').textContent = '(aucun profil Kind 0 sur ce relay)';
+            document.getElementById('prof-avatar').textContent = '👤';
+        }
+
+        // Afficher les events dans le mini-tableau
+        renderProfileEvents();
+        showToast(_profEvents.length + ' événement(s) chargé(s)', 'ok');
+    } catch(e) {
+        showToast('Erreur: ' + (e.message || e), 'err');
+    } finally {
+        btn.disabled = false; btn.textContent = 'Charger';
+    }
+}
+
+function renderProfileEvents() {
+    var tbody = document.getElementById('prof-events-tbody');
+    var wrap = document.getElementById('profile-events-wrap');
+    if (_profEvents.length === 0) {
+        wrap.style.display = 'none';
+        return;
+    }
+    wrap.style.display = '';
+    tbody.innerHTML = _profEvents.map(function(ev) {
+        var dtag = getDtag(ev);
+        return '<tr>' +
+            '<td><span class="' + kindClass(ev.kind) + '">' + ev.kind + '</span></td>' +
+            '<td><span class="ev-id" title="' + ev.id + '">' + ev.id.slice(0,8) + '…</span></td>' +
+            '<td class="ev-date">' + fmtDate(ev.created_at) + '</td>' +
+            '<td class="ev-dtag">' + escHtml(dtag) + '</td>' +
+            '<td class="ev-content">' + contentPreview(ev) + '</td>' +
+        '</tr>';
+    }).join('');
+}
+
+async function deleteProfileLocal() {
+    if (!_profHex || _profEvents.length === 0) return;
+    if (!confirm('Supprimer les ' + _profEvents.length + ' événement(s) de ce profil du relay LOCAL ?\n(IRRÉVERSIBLE)')) return;
+    var btn = document.getElementById('btn-del-local');
+    btn.disabled = true; btn.textContent = '⏳ Suppression…';
+    try {
+        var ids = _profEvents.map(function(ev) { return ev.id; });
+        var resp = await fetch(_apiUrl + '/api/nostr/admin/delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ uplanetname: _uph, ids: ids })
+        });
+        if (resp.status === 403) { showToast('UPLANETNAME incorrect', 'err'); return; }
+        if (!resp.ok) throw new Error(resp.statusText);
+        var data = await resp.json();
+        showToast('Suppression locale : ' + data.deleted + ' événement(s) supprimé(s)', 'ok');
+        _profEvents = [];
+        renderProfileEvents();
+        document.getElementById('prof-evcount').textContent = '0 événement(s)';
+        document.getElementById('btn-del-local').disabled = true;
+        document.getElementById('btn-del-constellation').disabled = true;
+        document.getElementById('btn-del-dms').disabled = true;
+    } catch(e) {
+        showToast('Erreur: ' + (e.message || e), 'err');
+    } finally {
+        btn.disabled = false; btn.textContent = '🗑️ Supprimer du relay local';
+    }
+}
+
+async function deleteProfileKind(kindNum) {
+    if (!_profHex) return;
+    var targets = _profEvents.filter(function(e) { return e.kind === kindNum; });
+    if (targets.length === 0) { showToast('Aucun événement Kind ' + kindNum + ' pour ce profil', 'warn'); return; }
+    if (!confirm('Supprimer les ' + targets.length + ' événement(s) Kind ' + kindNum + ' de ce profil ?\n(IRRÉVERSIBLE)')) return;
+    var btn = document.getElementById('btn-del-dms');
+    btn.disabled = true; btn.textContent = '⏳…';
+    try {
+        var ids = targets.map(function(e) { return e.id; });
+        var resp = await fetch(_apiUrl + '/api/nostr/admin/delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ uplanetname: _uph, ids: ids })
+        });
+        if (resp.status === 403) { showToast('UPLANETNAME incorrect', 'err'); return; }
+        if (!resp.ok) throw new Error(resp.statusText);
+        var data = await resp.json();
+        showToast(data.deleted + ' événement(s) Kind ' + kindNum + ' supprimé(s)', 'ok');
+        loadProfile();
+    } catch(e) {
+        showToast('Erreur: ' + (e.message || e), 'err');
+    } finally {
+        btn.disabled = false; btn.textContent = '🧹 Purger ses DMs (Kind 4)';
+    }
+}
+
+async function deleteProfileConstellation() {
+    if (!_profHex) return;
+    if (!confirm('Supprimer ce profil de TOUS les relays de la constellation ?\n\nCela envoie un DM BRO à chaque NODE connu.\nIRRÉVERSIBLE.')) return;
+    var btn = document.getElementById('btn-del-constellation');
+    btn.disabled = true; btn.textContent = '⏳ Envoi constellation…';
+    try {
+        var resp = await fetch(_apiUrl + '/api/nostr/admin/constellation_delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ uplanetname: _uph, author: _profHex })
+        });
+        if (resp.status === 403) { showToast('UPLANETNAME incorrect', 'err'); return; }
+        var data = await resp.json();
+        var msg = 'Local: ' + (data.local_deleted ? 'OK' : 'échec') +
+            ' · Constellation: ' + data.nodes_notified + '/' + (data.constellation_nodes || []).length + ' NODEs notifiés';
+        showToast(msg, data.local_deleted ? 'ok' : 'warn');
+        _profEvents = [];
+        renderProfileEvents();
+        document.getElementById('prof-evcount').textContent = '0 événement(s)';
+        document.getElementById('btn-del-local').disabled = true;
+        document.getElementById('btn-del-constellation').disabled = true;
+    } catch(e) {
+        showToast('Erreur: ' + (e.message || e), 'err');
+    } finally {
+        btn.textContent = '🌐 Supprimer de la constellation';
+    }
+}
+
+// ── Captain verification (UPH via NOSTR extension NIP-07) ─────────────
+var _captainHex = '';
+var _userPubkey = '';
+
+function initUPH() {
+    var extStatus = document.getElementById('uph-ext-status');
+    var connectBtn = document.getElementById('btn-uph-connect');
+    if (typeof window.nostr === 'undefined') {
+        extStatus.innerHTML = '🔌 Extension NOSTR non détectée <small style="color:var(--text2)">(Alby, nos2x, Flamingo…)</small>';
+        return;
+    }
+    extStatus.innerHTML = '⚡ Extension NOSTR détectée';
+    connectBtn.style.display = '';
+}
+
+async function connectUPH() {
+    var extStatus = document.getElementById('uph-ext-status');
+    var badge = document.getElementById('uph-captain-badge');
+    var connectBtn = document.getElementById('btn-uph-connect');
+    try {
+        _userPubkey = await window.nostr.getPublicKey();
+        extStatus.innerHTML = '⚡ <span class="uph-pubkey">' + _userPubkey.slice(0,12) + '…' + _userPubkey.slice(-6) + '</span>';
+        var resp = await fetch(_apiUrl + '/api/nostr/admin/captain_info');
+        if (!resp.ok) throw new Error('captain_info indisponible');
+        var info = await resp.json();
+        _captainHex = info.captain_hex || info.node_hex || '';
+        if (_captainHex && _userPubkey === _captainHex) {
+            badge.innerHTML = '⚓ Capitaine';
+            badge.className = 'uph-captain-ok';
+            badge.style.display = '';
+            connectBtn.style.display = 'none';
+            showToast('⚓ Bienvenue Capitaine !', 'ok');
+        } else if (_captainHex) {
+            badge.innerHTML = '⚠️ Non-capitaine';
+            badge.className = 'uph-captain-warn';
+            badge.style.display = '';
+            showToast('Clé différente du capitaine de cette station', 'warn');
+        }
+    } catch(e) {
+        extStatus.innerHTML = '⚡ Extension: <span style="color:var(--danger)">' + (e.message || e).slice(0,60) + '</span>';
+    }
+}
+
+setTimeout(initUPH, 400);
+
+// ── Liste des profils (Kind 0) présents sur le relay ─────────────────
+var _relayProfiles = [];
+
+async function loadRelayProfiles() {
+    if (!/^[0-9a-fA-F]{64}$/.test(_uph)) return;
+    var btn = document.getElementById('btn-load-relay-profiles');
+    if (btn) { btn.disabled = true; btn.textContent = '⏳…'; }
+    try {
+        var params = new URLSearchParams({ uplanetname: _uph, kind: '0', limit: '200' });
+        var resp = await fetch(_apiUrl + '/api/nostr/admin/events?' + params.toString());
+        if (!resp.ok) return;
+        var data = await resp.json();
+        _relayProfiles = data.events || [];
+        renderRelayProfiles();
+        showToast(_relayProfiles.length + ' profil(s) trouvé(s) sur le relay', 'ok');
+    } catch(e) {
+        showToast('Erreur: ' + (e.message || e), 'err');
+    } finally {
+        if (btn) { btn.disabled = false; btn.textContent = '📋 Charger les profils du relay'; }
+    }
+}
+
+function renderRelayProfiles() {
+    var container = document.getElementById('relay-profiles-list');
+    if (!container) return;
+    if (_relayProfiles.length === 0) {
+        container.innerHTML = '<div style="color:var(--text2);font-size:.8rem;padding:10px 0">Aucun profil Kind 0 sur ce relay.</div>';
+        return;
+    }
+    container.innerHTML = _relayProfiles.map(function(ev) {
+        var meta = {};
+        try { meta = JSON.parse(ev.content); } catch(e) {}
+        var name = escHtml(meta.name || meta.display_name || ev.pubkey.slice(0,12) + '…');
+        var about = escHtml((meta.about || '').slice(0, 60));
+        var pic = meta.picture
+            ? '<img src="' + escHtml(meta.picture) + '" style="width:32px;height:32px;border-radius:50%;object-fit:cover;flex-shrink:0" onerror="this.style.display=\'none\'">'
+            : '<span style="font-size:1.1rem">👤</span>';
+        return '<div class="relay-profile-item" onclick="openProfile(\'' + ev.pubkey + '\')" title="' + ev.pubkey + '">' +
+            '<div style="display:flex;align-items:center;gap:8px">' +
+            '<div style="width:32px;height:32px;flex-shrink:0;display:flex;align-items:center;justify-content:center">' + pic + '</div>' +
+            '<div style="min-width:0">' +
+            '<div style="font-weight:600;font-size:.83rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + name + '</div>' +
+            '<div style="font-size:.7rem;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' +
+                (about || '<span style="font-family:var(--mono)">' + ev.pubkey.slice(0,20) + '…</span>') +
+            '</div></div></div>' +
+        '</div>';
+    }).join('');
+}
+</script>
+<script src="uplanet-header.js"></script>
+</body>
+</html>

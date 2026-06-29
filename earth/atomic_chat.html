@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>💬 Messages — UPlanet</title>
+    <!-- Anti-FOUC : applique thème/font/compact AVANT le premier rendu CSS -->
+    <script>try{var _t=localStorage.getItem('a4l_theme');if(_t)document.documentElement.setAttribute('data-theme',_t);var _f=localStorage.getItem('a4l_font');if(_f)document.documentElement.setAttribute('data-font',_f);if(localStorage.getItem('a4l_compact')==='1')document.documentElement.setAttribute('data-compact','1')}catch(e){}</script>
     <link rel="stylesheet" href="core-theme.css">
     <link rel="stylesheet" href="uplanet-atomic.css">
     <link rel="stylesheet" href="a4l-chat-layout.css">
@@ -64,6 +66,14 @@
 .msg-bubble a:hover { opacity:.78; }
 .msg-bubble blockquote { border-left:3px solid rgba(0,255,204,.4); margin:4px 0; padding:2px 8px; color:rgba(255,255,255,.55); font-style:italic; }
 .msg-bubble hr { border:none; border-top:1px solid rgba(255,255,255,.1); margin:6px 0; }
+
+/* Bouton supprimer (NIP-09) — apparaît au survol de la ligne */
+.msg-delete-btn { display:none; background:none; border:none; cursor:pointer; color:rgba(255,80,80,.4); font-size:.72rem; padding:3px 5px; flex-shrink:0; align-self:flex-end; margin-bottom:5px; border-radius:50%; transition:color .12s,background .12s; line-height:1; }
+.msg-row.me:hover .msg-delete-btn { display:block; }
+.msg-delete-btn:hover { color:rgba(255,80,80,1); background:rgba(255,80,80,.12); }
+
+/* Conv "Notes personnelles" */
+.conv-av-notes { font-size:1.15rem; }
 
 /* Image bubble */
 .img-bubble { max-width:220px; min-width:100px; border-radius:10px; overflow:hidden; cursor:pointer; background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.08); }
@@ -483,8 +493,11 @@ async function _profile(hex) {
 // ── Conversation list ──────────────────────────────────────────────────────────
 async function _loadConvs() {
     _setMsg('Chargement des messages…');
-    var sent = await _query({kinds:[4], authors:[_myPub], limit:300}, 10000);
-    var recv = await _query({kinds:[4], '#p':[_myPub],    limit:300}, 10000);
+    var [sent, recv, selfEvs] = await Promise.all([
+        _query({kinds:[4], authors:[_myPub], limit:300}, 10000),
+        _query({kinds:[4], '#p':[_myPub],    limit:300}, 10000),
+        _query({kinds:[4], authors:[_myPub], '#p':[_myPub], limit:5}, 5000)
+    ]);
     var byPeer = {};
     function _track(ev, isMe) {
         var peer = isMe ? ((ev.tags||[]).find(function(t){return t[0]==='p';})||[])[1] : ev.pubkey;
@@ -494,15 +507,20 @@ async function _loadConvs() {
     }
     sent.forEach(function(e){_track(e,true);}); recv.forEach(function(e){_track(e,false);});
     var peers = Object.keys(byPeer);
-    if (!peers.length) { _renderEmptyConvs(); _hideLoad(); _showBtn(); return; }
     _setMsg('Déchiffrement des aperçus…');
-    var items = await Promise.all(peers.map(async function(p) {
+    var items = peers.length ? await Promise.all(peers.map(async function(p) {
         var entry = byPeer[p];
         var prof  = await _profile(p);
         var text  = await _cachedDecrypt(entry.ev);
         return {peer:p, profile:prof, text:text, time:entry.ev.created_at, isMe:entry.isMe};
-    }));
+    })) : [];
     items.sort(function(a,b){return b.time-a.time;});
+    // Notes personnelles — toujours épinglées en haut
+    selfEvs.sort(function(a,b){return b.created_at-a.created_at;});
+    var selfText = selfEvs.length ? await _cachedDecrypt(selfEvs[0]) : '';
+    var selfTime = selfEvs.length ? selfEvs[0].created_at : 0;
+    items.unshift({peer:_myPub, profile:{name:'📝 Notes personnelles', picture:null},
+                   text:selfText||'Vos notes personnelles', time:selfTime, isMe:true, isSelf:true});
     _convItems = items;
     _renderConvList(items);
     _hideLoad(); _showBtn();
@@ -522,10 +540,15 @@ function _renderConvList(items) {
     var el = document.getElementById('conv-list');
     if (!items.length) { _renderEmptyConvs(); return; }
     el.innerHTML = items.map(function(c) {
-        var av = c.profile.picture
-            ? '<img src="'+_esc(c.profile.picture)+'" loading="lazy" onerror="this.parentNode.textContent=\'💬\'">'
-            : '💬';
-        var preview = (c.isMe ? '✓ ' : '') + _trunc(_previewText(c.text), 50);
+        var av;
+        if (c.isSelf) {
+            av = '<span class="conv-av-notes">📝</span>';
+        } else if (c.profile.picture) {
+            av = '<img src="'+_esc(c.profile.picture)+'" loading="lazy" onerror="this.parentNode.textContent=\'💬\'">';
+        } else {
+            av = '💬';
+        }
+        var preview = (c.isMe && !c.isSelf ? '✓ ' : '') + _trunc(_previewText(c.text), 50);
         return '<div class="conv-item" onclick="_openChat(\''+c.peer+'\')">' +
             '<div class="conv-av">'+av+'</div>' +
             '<div class="conv-body">' +
@@ -587,7 +610,9 @@ async function _startBroLoveChat() {
 // ── Open chat ─────────────────────────────────────────────────────────────────
 async function _openChat(peerHex) {
     _peer     = peerHex;
-    _peerProf = await _profile(peerHex);
+    _peerProf = (peerHex === _myPub)
+        ? {name:'📝 Notes personnelles', picture:null}
+        : await _profile(peerHex);
     _detectEnc();
 
     /* ── Afficher la zone de chat ── */
@@ -630,12 +655,19 @@ async function _openChat(peerHex) {
 
 async function _loadMsgs() {
     if (!_peer || !_myPub) return;
-    var [sent, recv] = await Promise.all([
-        _query({kinds:[4], authors:[_myPub], '#p':[_peer], limit:100}, 8000),
-        _query({kinds:[4], authors:[_peer],  '#p':[_myPub], limit:100}, 8000)
-    ]);
-    var all = sent.concat(recv);
-    var seen = {}; all = all.filter(function(e){if(seen[e.id])return false;seen[e.id]=1;return true;});
+    var all;
+    if (_peer === _myPub) {
+        // Notes personnelles : author=self ET #p=self
+        all = await _query({kinds:[4], authors:[_myPub], '#p':[_myPub], limit:100}, 8000);
+        var seen0 = {}; all = all.filter(function(e){if(seen0[e.id])return false;seen0[e.id]=1;return true;});
+    } else {
+        var [sent, recv] = await Promise.all([
+            _query({kinds:[4], authors:[_myPub], '#p':[_peer], limit:100}, 8000),
+            _query({kinds:[4], authors:[_peer],  '#p':[_myPub], limit:100}, 8000)
+        ]);
+        all = sent.concat(recv);
+        var seen1 = {}; all = all.filter(function(e){if(seen1[e.id])return false;seen1[e.id]=1;return true;});
+    }
     all.sort(function(a,b){return a.created_at-b.created_at;});
     // Déchiffrement par lots de 5 — évite de saturer l'extension NOSTR (nos2x/Alby)
     var BATCH = 5;
@@ -747,7 +779,12 @@ function _renderMsgRow(m, peerPic, grp) {
         } else { content = _renderMd(m.text) + meta; }
     } catch(_) { content = _renderMd(m.text) + meta; }
 
+    var delBtn = (m.isMe && !m.pending && !m.error)
+        ? '<button class="msg-delete-btn" onclick="_deleteMsg(\''+m.id+'\')" title="Supprimer (NIP-09)">✕</button>'
+        : '';
+
     return '<div class="msg-row '+rowCls+'">' +
+        (m.isMe ? delBtn : '') +
         avHtml +
         '<div class="msg-wrap">' +
             '<div class="msg-bubble '+side+cls+'">'+content+'</div>' +
@@ -787,6 +824,22 @@ async function _send() {
     } finally {
         btn.disabled = false; _renderMsgs();
         _updateConvPreview(_peer, text, true);
+    }
+}
+
+// ── Delete message (NIP-09 / Kind 5) ─────────────────────────────────────────
+async function _deleteMsg(msgId) {
+    if (!window.nostr) { showNotification({message:'Extension NOSTR requise', type:'warning'}); return; }
+    if (!confirm('Supprimer ce message ?')) return;
+    try {
+        var ev = {kind:5, tags:[['e',msgId]], content:'', created_at:Math.floor(Date.now()/1000), pubkey:_myPub};
+        var signed = await window.nostr.signEvent(ev);
+        await _publish(signed);
+        _msgs = _msgs.filter(function(m){return m.id !== msgId;});
+        _renderMsgs();
+        showNotification({message:'Message supprimé', type:'success'});
+    } catch(e) {
+        showNotification({message:'Erreur suppression : '+(e.message||e), type:'error'});
     }
 }
 
@@ -943,27 +996,33 @@ function _subscribeLive() {
             var m = JSON.parse(e.data);
             if (m[0]!=='EVENT' || m[1]!==_liveSub) return;
             var ev   = m[2];
-            if (ev.pubkey === _myPub) return;
-            var peer = ev.pubkey;
+            var isSelfMsg = ev.pubkey === _myPub && (ev.tags||[]).some(function(t){return t[0]==='p'&&t[1]===_myPub;});
+            if (ev.pubkey === _myPub && !isSelfMsg) return;
+            var peer = isSelfMsg ? _myPub : ev.pubkey;
             var text = await _cachedDecrypt(ev);
             if (!_profCache[peer]) await _profile(peer);
-            // Update conv list
+            // Mise à jour aperçu conv
             var found = false;
             for (var i=0; i<_convItems.length; i++) {
                 if (_convItems[i].peer===peer) {
-                    _convItems[i].text = text; _convItems[i].time = ev.created_at; _convItems[i].isMe = false;
+                    _convItems[i].text = text; _convItems[i].time = ev.created_at; _convItems[i].isMe = isSelfMsg;
                     found = true; break;
                 }
             }
-            if (!found) _convItems.unshift({peer:peer, profile:_profCache[peer]||{name:peer.slice(0,8)+'…',picture:null}, text:text, time:ev.created_at, isMe:false});
-            _convItems.sort(function(a,b){return b.time-a.time;});
+            if (!found && !isSelfMsg) {
+                _convItems.unshift({peer:peer, profile:_profCache[peer]||{name:peer.slice(0,8)+'…',picture:null}, text:text, time:ev.created_at, isMe:false});
+            }
+            _convItems.sort(function(a,b){
+                if (a.isSelf) return -1; if (b.isSelf) return 1; return b.time-a.time;
+            });
             _renderConvList(_convItems);
             if (_peer===peer) {
                 if (!_msgs.find(function(msg){return msg.id===ev.id;})) {
-                    _msgs.push({id:ev.id, isMe:false, text:text, time:ev.created_at, sent:true});
+                    _msgs.push({id:ev.id, isMe:isSelfMsg, text:text, time:ev.created_at, sent:true});
                     _renderMsgs();
                 }
             }
+            if (!isSelfMsg) _playNotifBeep();
         } catch(_) {}
     };
     _liveWs.onerror = function() { _updateRelayBadge('error'); };
@@ -1068,7 +1127,9 @@ function _updateConvPreview(peer, text, isMe) {
             break;
         }
     }
-    _convItems.sort(function(a,b){return b.time-a.time;});
+    _convItems.sort(function(a,b){
+        if (a.isSelf) return -1; if (b.isSelf) return 1; return b.time-a.time;
+    });
 }
 
 // ── Emoji picker ──────────────────────────────────────────────────────────────
@@ -1171,6 +1232,21 @@ function _backToList() {
     var _sb = document.getElementById('btn-sb-toggle'); if (_sb) _sb.style.display = '';
     /* Sur mobile : ouvrir la sidebar pour accéder aux conversations */
     if (typeof ChatSidebar !== 'undefined' && window.innerWidth < 768) ChatSidebar.open();
+}
+
+// ── Notification sonore (Web Audio API) ─────────────────────────────────────
+function _playNotifBeep() {
+    if (typeof ChatSettings !== 'undefined' && !ChatSettings.get('notifSound')) return;
+    try {
+        var ctx = new (window.AudioContext || window.webkitAudioContext)();
+        var osc = ctx.createOscillator();
+        var gain = ctx.createGain();
+        osc.connect(gain); gain.connect(ctx.destination);
+        osc.type = 'sine'; osc.frequency.setValueAtTime(880, ctx.currentTime);
+        gain.gain.setValueAtTime(0.1, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.22);
+        osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.22);
+    } catch(e) {}
 }
 
 // ── Utils ─────────────────────────────────────────────────────────────────────

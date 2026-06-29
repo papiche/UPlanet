@@ -110,6 +110,15 @@ function stopMatrix() {
     }
 }
 
+function startMatrix() {
+    if (animationRunning) return;
+    if (!canvas || !ctx) return;
+    canvas.style.opacity = '0.15';
+    canvas.style.transition = 'opacity 0.6s ease';
+    animationRunning = true;
+    requestAnimationFrame(drawMatrix);
+}
+
 function enterOwnProfileMode() {
     var container = document.querySelector('.terminal-container');
     if (container && !container.classList.contains('own-profile')) {
@@ -119,10 +128,30 @@ function enterOwnProfileMode() {
     if (followBtns) followBtns.style.display = 'none';
 }
 
+function exitOwnProfileMode() {
+    var container = document.querySelector('.terminal-container');
+    if (container) container.classList.remove('own-profile');
+    var followBtns = document.getElementById('follow-button-container');
+    if (followBtns) followBtns.style.display = '';
+    startMatrix();
+}
+
 function checkOwnProfileMatrix() {
     const hk = window.hexKey;
     const up = window.userPubkey;
-    if (hk && up && hk === up) { stopMatrix(); enterOwnProfileMode(); return true; }
+    if (!hk || !up) return false;
+    if (hk === up) {
+        stopMatrix();
+        enterOwnProfileMode();
+        // Injecter le formulaire d'édition si le profil est déjà rendu mais que
+        // userPubkey n'était pas encore disponible lors du rendu initial
+        if (!document.getElementById('npv-publish-bar') && window._lastProfileData) {
+            var pc = document.getElementById('profile-content');
+            if (pc) _injectProfileEditForm(pc, window._lastProfileData);
+        }
+        return true;
+    }
+    exitOwnProfileMode();
     return false;
 }
 
@@ -203,6 +232,8 @@ function goToInitial()     { const p = getURLParams(); if (p.origin)   loadProfi
 
 function loadProfile(hex, action = 'click') {
     npvLog.log(`loadProfile → ${hex.substring(0,12)}… (action: ${action})`);
+    // Quitter le mode own-profile immédiatement si on navigue vers un autre profil
+    if (window.userPubkey && hex !== window.userPubkey) exitOwnProfileMode();
     updateURLParams(hex, action);
     window.hexKey = hex;
     updateNavigationButtonsFromURL();
@@ -710,9 +741,9 @@ async function fetchNostrMessages(hex, nostrRelayUrl) {
     try {
         const relay = NostrTools.relayInit(nostrRelayUrl);
         await relay.connect();
-        const now       = Math.floor(Date.now() / 1000);
-        const oneWeekAgo = now - (7 * 24 * 3600);
-        const sub = relay.sub([{ kinds: [1, 30023], authors: [hex], since: oneWeekAgo, limit: 50 }]);
+        const now         = Math.floor(Date.now() / 1000);
+        const thirtyDaysAgo = now - (30 * 24 * 3600);
+        const sub = relay.sub([{ kinds: [1, 30023], authors: [hex], since: thirtyDaysAgo, limit: 50 }]);
         const messages = [];
         return new Promise(function (resolve, reject) {
             const timeout = setTimeout(function () {
@@ -920,6 +951,229 @@ async function likeMessage(messageId, authorPubkey, heartButton) {
 }
 
 // ================================================================
+// PROFILE EDIT FORM (own profile only)
+// ================================================================
+function _injectProfileEditForm(container, profileData) {
+    var nostr = getNostrExtension();
+    if (!nostr) return;
+
+    // Pending changes map : field → new value
+    var changes = {};
+
+    // ── Publish bar ──────────────────────────────────────────────
+    var bar = document.createElement('div');
+    bar.id = 'npv-publish-bar';
+    bar.style.display = 'none';
+    bar.innerHTML = '<button id="npv-publish-btn">🚀 Publier les modifications</button>'
+                  + '<span id="npv-publish-status"></span>';
+    container.insertBefore(bar, container.firstChild);
+
+    var publishBtn    = bar.querySelector('#npv-publish-btn');
+    var publishStatus = bar.querySelector('#npv-publish-status');
+
+    function markChanged(field, newVal) {
+        var orig = String(profileData[field] || '');
+        if (newVal !== orig) changes[field] = newVal;
+        else delete changes[field];
+        bar.style.display = Object.keys(changes).length > 0 ? 'flex' : 'none';
+        publishStatus.textContent = '';
+        publishBtn.disabled = false;
+    }
+
+    publishBtn.addEventListener('click', async function () {
+        publishBtn.disabled = true;
+        publishStatus.textContent = '⏳…';
+        publishStatus.style.color = 'var(--terminal-cyan)';
+        try {
+            var myPub   = await nostr.getPublicKey();
+            var myRelay = relayUrl || await getRelayURL();
+            var merged  = Object.assign({}, profileData, changes);
+            Object.keys(merged).forEach(function (k) { if (merged[k] === '') delete merged[k]; });
+            var ev = {
+                kind: 0,
+                pubkey: myPub,
+                created_at: Math.floor(Date.now() / 1000),
+                tags: [],
+                content: JSON.stringify(merged)
+            };
+            var signed = await nostr.signEvent(ev);
+            var rc = NostrTools.relayInit(myRelay);
+            await rc.connect();
+            await rc.publish(signed);
+            rc.close();
+            publishStatus.textContent = '✅ Publié !';
+            publishStatus.style.color = 'var(--terminal-green)';
+            changes = {};
+            setTimeout(function () { displayNostrData(); }, 1500);
+        } catch (err) {
+            publishStatus.textContent = '❌ ' + (err.message || String(err));
+            publishStatus.style.color = 'var(--terminal-red)';
+            publishBtn.disabled = false;
+        }
+    });
+
+    // ── Generic in-place edit helper ────────────────────────────
+    function makeEditable(el, field, useTextarea) {
+        if (!el) return;
+
+        var origDisplayHTML = el.innerHTML;   // saved BEFORE appending editBtn
+
+        var editBtn = document.createElement('button');
+        editBtn.className = 'npv-edit-btn';
+        editBtn.title = 'Modifier';
+        editBtn.innerHTML = '✎';
+        el.appendChild(editBtn);
+
+        editBtn.addEventListener('click', function (e) {
+            e.preventDefault(); e.stopPropagation();
+            var curRaw = el.dataset.npvRaw || '';
+
+            var inp = document.createElement(useTextarea ? 'textarea' : 'input');
+            inp.className = 'npv-edit-input';
+            if (!useTextarea) inp.type = 'text';
+            inp.value = curRaw;
+
+            var ok  = document.createElement('button');
+            ok.className  = 'npv-edit-ok';  ok.innerHTML = '✓'; ok.title = 'Valider';
+            var cancel = document.createElement('button');
+            cancel.className = 'npv-edit-cancel'; cancel.innerHTML = '✗'; cancel.title = 'Annuler';
+            var actions = document.createElement('span');
+            actions.className = 'npv-edit-actions';
+            actions.appendChild(ok); actions.appendChild(cancel);
+
+            el.innerHTML = '';
+            el.appendChild(inp);
+            el.appendChild(actions);
+            if (useTextarea) { inp.style.minHeight = '60px'; inp.style.width = '100%'; }
+            inp.focus();
+
+            function closeEdit(save) {
+                if (save) {
+                    var v = inp.value.trim();
+                    el.dataset.npvRaw = v;
+                    if (useTextarea) {
+                        el.innerHTML = v
+                            ? makeLinksClickable(v.replace(/</g,'&lt;').replace(/>/g,'&gt;'))
+                            : '<em style="opacity:0.5">—</em>';
+                    } else if (field === 'website' || field === 'picture' || field === 'banner') {
+                        el.innerHTML = v
+                            ? '<a href="' + v.replace(/"/g,'&quot;') + '" target="_blank" rel="noopener noreferrer">'
+                              + (v.length > 40 ? v.slice(0,40)+'…' : v.replace(/</g,'&lt;')) + '</a>'
+                            : '<em style="opacity:0.5">—</em>';
+                    } else {
+                        el.innerHTML = v.replace(/</g,'&lt;') || '<em style="opacity:0.5">—</em>';
+                    }
+                    origDisplayHTML = el.innerHTML; // nouvelle référence si nouvel annulation
+                    markChanged(field, v);
+                } else {
+                    el.innerHTML = origDisplayHTML;
+                }
+                el.appendChild(editBtn);
+            }
+
+            ok.addEventListener('click',     function () { closeEdit(true);  });
+            cancel.addEventListener('click', function () { closeEdit(false); });
+        });
+    }
+
+    // ── Image URL helper (banner / avatar) ──────────────────────
+    // Le bouton est inséré APRÈS l'élément image (pas dedans) pour éviter overflow:hidden
+    function makeImageUrlEditable(anchorEl, field) {
+        if (!anchorEl) return;
+
+        var toggleBtn = document.createElement('button');
+        toggleBtn.className = 'npv-img-edit-btn';
+        toggleBtn.textContent = '✎ ' + (field === 'picture' ? "Modifier l'avatar" : "Modifier la bannière");
+        anchorEl.insertAdjacentElement('afterend', toggleBtn);
+
+        var row = null;
+
+        function applyImageChange(v) {
+            if (field === 'picture') {
+                var picEl = document.getElementById('npv-picture');
+                if (!picEl) return;
+                picEl.dataset.npvRaw = v;
+                if (picEl.tagName === 'IMG') {
+                    if (v) { picEl.src = v; }
+                } else if (v) {
+                    var newImg = document.createElement('img');
+                    newImg.id = 'npv-picture'; newImg.src = v; newImg.alt = 'Profile';
+                    newImg.className = picEl.className;
+                    newImg.dataset.npvRaw = v;
+                    newImg.addEventListener('click', function() { openImageModal(v); });
+                    picEl.parentNode.replaceChild(newImg, picEl);
+                }
+            } else {
+                var banDiv = document.getElementById('npv-banner');
+                if (!banDiv) return;
+                banDiv.dataset.npvRaw = v;
+                var banImg = banDiv.querySelector('img');
+                if (v) {
+                    if (banImg) { banImg.src = v; }
+                    else {
+                        banImg = document.createElement('img');
+                        banImg.src = v; banImg.alt = 'Banner';
+                        banImg.addEventListener('error', function() { banDiv.classList.add('no-image'); });
+                        banDiv.appendChild(banImg);
+                        banDiv.classList.remove('no-image');
+                    }
+                } else {
+                    if (banImg) banImg.remove();
+                    banDiv.classList.add('no-image');
+                }
+            }
+        }
+
+        toggleBtn.addEventListener('click', function () {
+            if (row) { row.remove(); row = null; toggleBtn.style.opacity = ''; return; }
+            toggleBtn.style.opacity = '1';
+
+            var srcEl = field === 'picture'
+                ? document.getElementById('npv-picture')
+                : document.getElementById('npv-banner');
+            var curRaw = (srcEl && srcEl.dataset.npvRaw) || '';
+
+            row = document.createElement('div');
+            row.className = 'npv-url-row';
+            row.style.flexWrap = 'nowrap';
+
+            var preview = document.createElement('img');
+            preview.className = 'npv-url-preview';
+            if (curRaw) { preview.src = curRaw; preview.style.display = 'block'; }
+            else { preview.style.display = 'none'; }
+
+            var inp = document.createElement('input');
+            inp.type = 'url'; inp.value = curRaw; inp.placeholder = 'https://…';
+            inp.addEventListener('input', function () {
+                var v = inp.value.trim();
+                preview.src = v; preview.style.display = v ? 'block' : 'none';
+            });
+
+            var ok = document.createElement('button');
+            ok.className = 'npv-edit-ok'; ok.innerHTML = '✓'; ok.title = 'Valider';
+            ok.addEventListener('click', function () {
+                var v = inp.value.trim();
+                applyImageChange(v);
+                markChanged(field, v);
+                row.remove(); row = null; toggleBtn.style.opacity = '';
+            });
+
+            row.appendChild(preview); row.appendChild(inp); row.appendChild(ok);
+            toggleBtn.insertAdjacentElement('afterend', row);
+            inp.focus();
+        });
+    }
+
+    // ── Apply to each editable element ──────────────────────────
+    makeEditable(document.getElementById('npv-name'),    'name',    false);
+    makeEditable(document.getElementById('npv-about'),   'about',   true);
+    makeEditable(document.getElementById('npv-website'), 'website', false);
+
+    makeImageUrlEditable(document.getElementById('npv-picture-container'), 'picture');
+    makeImageUrlEditable(document.getElementById('npv-banner'),            'banner');
+}
+
+// ================================================================
 // MAIN DISPLAY FUNCTION
 // ================================================================
 async function displayNostrData() {
@@ -947,29 +1201,38 @@ async function displayNostrData() {
         profileContainerDiv.classList.remove('loading');
         let profileHTML = '';
 
+        const _esc = (v) => (v||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
+        const isOwnProfile = hexKey === window.userPubkey;
+
         // Banner
-        if (profileData.banner) {
-            profileHTML += `<div class="profile-banner" onclick="openImageModal('${profileData.banner}')" title="Click to enlarge banner">
-                <img src="${profileData.banner}" alt="Banner" onerror="this.parentElement.classList.add('no-image')">
+        const bannerRaw = profileData.banner || '';
+        if (bannerRaw) {
+            profileHTML += `<div id="npv-banner" class="profile-banner" data-npv-raw="${_esc(bannerRaw)}" onclick="openImageModal('${bannerRaw}')" title="Click to enlarge banner">
+                <img src="${bannerRaw}" alt="Banner" onerror="this.parentElement.classList.add('no-image')">
             </div>`;
         } else {
-            profileHTML += `<div class="profile-banner no-image" title="No banner"></div>`;
+            profileHTML += `<div id="npv-banner" class="profile-banner no-image" data-npv-raw="" title="No banner"></div>`;
         }
 
         // Picture
-        profileHTML += `<div class="profile-picture-container">`;
+        profileHTML += `<div id="npv-picture-container" class="profile-picture-container">`;
         if (profileData.picture) {
-            profileHTML += `<img src="${profileData.picture}" alt="Profile" class="profile-picture"
+            profileHTML += `<img id="npv-picture" src="${profileData.picture}" alt="Profile" class="profile-picture"
+                data-npv-raw="${_esc(profileData.picture)}"
                 onclick="openImageModal('${profileData.picture}')" title="Click to enlarge">`;
         } else {
             const initials = (profileData.name || profileData.display_name || 'N/A').substring(0, 2).toUpperCase();
-            profileHTML += `<div class="profile-picture no-image">${initials}</div>`;
+            profileHTML += `<div id="npv-picture" class="profile-picture no-image" data-npv-raw="">${initials}</div>`;
         }
         profileHTML += `</div>`;
 
         // Name & about
-        profileHTML += `<h3>${(profileData.name || profileData.display_name || 'N/A').replace(/</g, '&lt;')}</h3>`;
-        profileHTML += `<p>${makeLinksClickable((profileData.about || 'No description.').replace(/</g, '&lt;').replace(/>/g, '&gt;'))}</p>`;
+        // data-npv-raw = valeur réelle du champ (vide si absent), pas le fallback d'affichage
+        const rawName  = (profileData.name || profileData.display_name || '');
+        const rawAbout = (profileData.about || '');
+        const dispName = rawName || 'N/A';
+        profileHTML += `<h3 id="npv-name" data-npv-raw="${_esc(rawName)}">${dispName.replace(/</g,'&lt;')}</h3>`;
+        profileHTML += `<p id="npv-about" data-npv-raw="${_esc(rawAbout)}">${makeLinksClickable(rawAbout.replace(/</g,'&lt;').replace(/>/g,'&gt;')) || '<em style="opacity:0.5">Pas de description.</em>'}</p>`;
 
         const ipfsGw = window.IPFS_GATEWAY || 'https://ipfs.copylaradio.com';
 
@@ -985,16 +1248,20 @@ async function displayNostrData() {
 
         // --- 1. SOCIAL & LIENS ---
         let socialFields = '';
-        if (profileData.website)  socialFields += `<div class="profile-field"><strong>🌐 uDRIVE:</strong> ${makeLink(profileData.website, true)}</div>`;
-        // if (profileData.nip05)    socialFields += `<div class="profile-field"><strong>✅ NIP-05:</strong> ${profileData.nip05.replace(/</g, '&lt;')}</div>`;
-        if (profileData.email)    socialFields += `<div class="profile-field"><strong>✉️ Email:</strong> <a href="mailto:${profileData.email}">${profileData.email}</a></div>`;
-        if (profileData.github)   socialFields += `<div class="profile-field"><strong>🐙 GitHub:</strong> ${makeLink(profileData.github, true)}</div>`;
-        if (profileData.twitter)  socialFields += `<div class="profile-field"><strong>🐦 Twitter:</strong> ${makeLink(profileData.twitter, true)}</div>`;
-        if (profileData.mastodon) socialFields += `<div class="profile-field"><strong>🐘 Mastodon:</strong> ${makeLink(profileData.mastodon, true)}</div>`;
-        if (profileData.telegram) socialFields += `<div class="profile-field"><strong>✈️ Telegram:</strong> ${makeLink(profileData.telegram, true)}</div>`;
-        if (profileData.bot === true || profileData.bot === "true") socialFields += `<div class="profile-field"><strong>🤖 Bot:</strong> Oui</div>`;
-        
-        if (socialFields) categoriesHTML += `<div class="profile-group"><h4>Réseaux & Contacts</h4>${socialFields}</div>`;
+        // Site web — toujours affiché pour son propre profil (éditable), conditionnel pour les autres
+        if (profileData.website || isOwnProfile) {
+            const wsVal = profileData.website || '';
+            const wsDisp = wsVal ? makeLink(wsVal, true) : '<em style="opacity:0.5">—</em>';
+            socialFields += `<div class="profile-field"><strong>🌐 Site web :</strong> <span id="npv-website" data-npv-raw="${_esc(wsVal)}">${wsDisp}</span></div>`;
+        }
+        if (profileData.email)    socialFields += `<div class="profile-field"><strong>✉️ Email :</strong> <a href="mailto:${profileData.email}">${profileData.email}</a></div>`;
+        if (profileData.github)   socialFields += `<div class="profile-field"><strong>🐙 GitHub :</strong> ${makeLink(profileData.github, true)}</div>`;
+        if (profileData.twitter)  socialFields += `<div class="profile-field"><strong>🐦 Twitter :</strong> ${makeLink(profileData.twitter, true)}</div>`;
+        if (profileData.mastodon) socialFields += `<div class="profile-field"><strong>🐘 Mastodon :</strong> ${makeLink(profileData.mastodon, true)}</div>`;
+        if (profileData.telegram) socialFields += `<div class="profile-field"><strong>✈️ Telegram :</strong> ${makeLink(profileData.telegram, true)}</div>`;
+        if (profileData.bot === true || profileData.bot === "true") socialFields += `<div class="profile-field"><strong>🤖 Bot :</strong> Oui</div>`;
+
+        if (socialFields) categoriesHTML += `<div class="profile-group" id="npv-social-group"><h4>Réseaux & Contacts</h4>${socialFields}</div>`;
 
         // --- 2. CRYPTO & G1 ---
         let cryptoFields = '';
@@ -1110,6 +1377,15 @@ async function displayNostrData() {
 
         profileContentDiv.innerHTML = profileHTML;
         npvLog.log('✓ Profil rendu dans le DOM');
+
+        // Mémoriser profileData pour l'injection différée (userPubkey peut arriver après le rendu)
+        window._lastProfileData = profileData;
+
+        // Formulaire d'édition — si userPubkey déjà connu, injection immédiate ;
+        // sinon checkOwnProfileMatrix() s'en charge quand userPubkey arrive
+        if (hexKey === window.userPubkey) {
+            _injectProfileEditForm(profileContentDiv, profileData);
+        }
 
         // Balance MULTIPASS : fetch non-bloquant, mise à jour du placeholder après rendu
         if (profileData.g1pub) {

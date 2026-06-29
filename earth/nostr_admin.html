@@ -293,7 +293,7 @@
 <div class="uph-panel" id="uph-panel">
   <span class="uph-ext" id="uph-ext-status">🔌 Vérification extension NOSTR…</span>
   <span id="uph-captain-badge" style="display:none"></span>
-  <button class="btn-uph" id="btn-uph-connect" style="display:none" onclick="connectUPH()">⚡ Identifier comme Capitaine</button>
+  <button class="btn-uph" id="btn-uph-connect" style="display:none" onclick="typeof window.connectNostr==='function'&&window.connectNostr()">⚡ Identifier comme Capitaine</button>
 </div>
 
 <!-- Tabs -->
@@ -465,44 +465,99 @@
 <div id="toast"></div>
 
 <script>
-// ── URL auto-détection (pattern economy.html) ─────────────────────────────
-function getAPIUrl() {
-    var cur = new URL(window.location.href);
-    var api = new URL(cur.origin);
+// ── État global ───────────────────────────────────────────────────────────
+var _events = [], _selected = new Set();
+var _profHex = '', _profEvents = [], _relayProfiles = [];
+var _captainHex = '', _userPubkey = '', _uph = '';
+var _toastTimer = null;
+
+// ── URL UPassport — IIFE immédiate, mise à jour par lib_2 via UPlanetReady
+// NB: lib_2 exporte window.getAPIUrl() avec le même nom → on ne redéfinit pas
+var _apiUrl = (function() {
+    var cur = new URL(window.location.href), api = new URL(cur.origin);
     if (cur.hostname.startsWith('ipfs.')) api.hostname = api.hostname.replace('ipfs.', 'u.');
     if (cur.port === '8080' || cur.port !== '') api.port = '54321';
     return api.toString().replace(/\/+$/, '');
-}
-
-var _apiUrl = getAPIUrl();
+})();
 document.getElementById('api-url-badge').textContent = _apiUrl;
 
-// ── Toast ────────────────────────────────────────────────────────────────
-var _toastTimer = null;
+window.addEventListener('UPlanetReady', function() {
+    // Synchronise _apiUrl avec NostrState.upassportUrl (lib_2 détection fiable)
+    if (typeof window.getAPIUrl === 'function') {
+        var detected = window.getAPIUrl();
+        if (detected) { _apiUrl = detected; document.getElementById('api-url-badge').textContent = _apiUrl; }
+    }
+    // Vérifie si déjà connecté (session persistée par le header)
+    var pk = window.NostrState && window.NostrState.userPubkey;
+    if (pk) _checkCaptain(pk);
+    // Révèle le bouton de connexion si extension présente mais pas encore connectée
+    var btn = document.getElementById('btn-uph-connect');
+    if (btn && typeof window.nostr !== 'undefined' && !pk) btn.style.display = '';
+});
+
+// ── Notifications — délègue à window.showNotification (lib_2) si disponible
 function showToast(msg, type) {
+    if (typeof window.showNotification === 'function') {
+        var m = { ok: 'success', err: 'error', warn: 'warning' };
+        window.showNotification({ message: msg, type: m[type] || 'info', duration: 3500 });
+        return;
+    }
     var t = document.getElementById('toast');
+    if (!t) return;
     t.textContent = msg;
     t.className = 'show t-' + (type || 'ok');
     clearTimeout(_toastTimer);
     _toastTimer = setTimeout(function() { t.className = ''; }, 3500);
 }
 
-// ── Auth input ───────────────────────────────────────────────────────────
-var _uph = '';
+// ── Escape HTML — délègue à window.escapeHtml (lib_7) si disponible ──────
+function escHtml(s) {
+    return typeof window.escapeHtml === 'function'
+        ? window.escapeHtml(s)
+        : (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ── Auth UPLANETNAME ──────────────────────────────────────────────────────
 document.getElementById('uph-input').addEventListener('input', function() {
-    var v = this.value.trim();
-    _uph = v;
+    var v = this.value.trim(); _uph = v;
     var st = document.getElementById('auth-status');
     if (!v) { st.textContent = ''; this.className = ''; return; }
-    var valid = /^[0-9a-fA-F]{64}$/.test(v);
-    if (valid) {
-        this.className = 'ok';
-        st.innerHTML = '<span style="color:var(--ok)">✓ format valide</span>';
-    } else {
-        this.className = 'error';
-        st.innerHTML = '<span style="color:var(--danger)">✗ 64 chars hex attendus (actuel: ' + v.length + ')</span>';
-    }
+    var ok = /^[0-9a-fA-F]{64}$/.test(v);
+    this.className = ok ? 'ok' : 'error';
+    st.innerHTML = ok
+        ? '<span style="color:var(--ok)">✓ format valide</span>'
+        : '<span style="color:var(--danger)">✗ 64 chars hex attendus (' + v.length + ')</span>';
 });
+document.getElementById('uph-input').addEventListener('keydown', function(e) { if (e.key === 'Enter') doQuery(); });
+
+// ── Captain check — déclenché par nostr:connected (header uplanet-header.js)
+// Pas d'appel direct à window.nostr.getPublicKey() : on réutilise la connexion du header
+document.addEventListener('nostr:connected', function(e) {
+    var pk = (e.detail && e.detail.pubkey) || (window.NostrState && window.NostrState.userPubkey);
+    if (pk) _checkCaptain(pk);
+});
+
+function _checkCaptain(pubkey) {
+    _userPubkey = pubkey;
+    var extStatus = document.getElementById('uph-ext-status');
+    var connectBtn = document.getElementById('btn-uph-connect');
+    if (extStatus) extStatus.innerHTML = '⚡ <span class="uph-pubkey">' + pubkey.slice(0,12) + '…' + pubkey.slice(-6) + '</span>';
+    if (connectBtn) connectBtn.style.display = 'none';
+    fetch(_apiUrl + '/api/nostr/admin/captain_info')
+        .then(function(r) { return r.ok ? r.json() : null; })
+        .then(function(info) {
+            if (!info) return;
+            _captainHex = info.captain_hex || info.node_hex || '';
+            var badge = document.getElementById('uph-captain-badge');
+            if (!badge) return;
+            if (_captainHex && pubkey === _captainHex) {
+                badge.innerHTML = '⚓ Capitaine'; badge.className = 'uph-captain-ok'; badge.style.display = '';
+                showToast('⚓ Bienvenue Capitaine !', 'ok');
+            } else if (_captainHex) {
+                badge.innerHTML = '⚠️ Non-capitaine'; badge.className = 'uph-captain-warn'; badge.style.display = '';
+            }
+        }).catch(function() {});
+}
 
 // ── Kind quick-select ────────────────────────────────────────────────────
 document.querySelectorAll('.kind-btn').forEach(function(btn) {
@@ -512,100 +567,87 @@ document.querySelectorAll('.kind-btn').forEach(function(btn) {
         document.getElementById('f-kind').value = this.dataset.kind;
     });
 });
-// Active "Tous" par défaut
 document.querySelector('.kind-btn[data-kind=""]').classList.add('active');
 
-// ── Kind badge style ─────────────────────────────────────────────────────
+// ── Helpers ──────────────────────────────────────────────────────────────
 function kindClass(k) {
     var m = {0:'k0',1:'k1',4:'k4',5:'k5',7:'k7',30078:'k30078',30503:'k30503',30505:'k30505'};
     return 'ev-kind ' + (m[k] || 'kother');
 }
-
-// ── Date helpers ─────────────────────────────────────────────────────────
 function fmtDate(ts) {
-    var d = new Date(ts * 1000);
-    var pad = function(n) { return n < 10 ? '0'+n : n; };
-    return pad(d.getDate()) + '/' + pad(d.getMonth()+1) + '/' + d.getFullYear() + ' ' +
-           pad(d.getHours()) + ':' + pad(d.getMinutes());
+    var d = new Date(ts * 1000), p = function(n) { return n < 10 ? '0'+n : n; };
+    return p(d.getDate())+'/'+p(d.getMonth()+1)+'/'+d.getFullYear()+' '+p(d.getHours())+':'+p(d.getMinutes());
 }
 function datetimeToTs(s) { return s ? Math.floor(new Date(s).getTime() / 1000) : null; }
-
-// ── D-tag extractor ──────────────────────────────────────────────────────
 function getDtag(ev) {
     if (!ev.tags) return '';
-    for (var i = 0; i < ev.tags.length; i++) {
-        if (ev.tags[i][0] === 'd') return ev.tags[i][1] || '';
-    }
+    for (var i = 0; i < ev.tags.length; i++) { if (ev.tags[i][0] === 'd') return ev.tags[i][1] || ''; }
     return '';
 }
-
-// ── Content preview ──────────────────────────────────────────────────────
 function contentPreview(ev) {
     var c = ev.content || '';
     if (ev.kind === 4) return '[DM chiffré]';
     if (c.startsWith('{')) {
-        try { var obj = JSON.parse(c); return (obj.name || obj.about || JSON.stringify(obj)).slice(0,80); }
-        catch(e) {}
+        try { var o = JSON.parse(c); return escHtml((o.name || o.about || JSON.stringify(o)).slice(0,80)); } catch(e) {}
     }
-    return c.slice(0, 100).replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    return escHtml(c.slice(0, 100));
 }
 
-// ── State ────────────────────────────────────────────────────────────────
-var _events = [];
-var _selected = new Set();
+// ── API helpers — centralise gestion 403 + erreurs ───────────────────────
+async function apiFetch(url, opts) {
+    var resp = await fetch(url, opts);
+    if (resp.status === 403) {
+        showToast('UPLANETNAME incorrect — accès refusé', 'err');
+        document.getElementById('uph-input').classList.add('error');
+        document.getElementById('auth-status').innerHTML = '<span style="color:var(--danger)">✗ Accès refusé</span>';
+        throw new Error('403');
+    }
+    if (!resp.ok) {
+        var err = await resp.json().catch(function() { return {detail: resp.statusText}; });
+        throw new Error(err.detail || resp.statusText);
+    }
+    return resp.json();
+}
+async function adminDelete(ids) {
+    return apiFetch(_apiUrl + '/api/nostr/admin/delete', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ uplanetname: _uph, ids: ids })
+    });
+}
 
 // ── Query ────────────────────────────────────────────────────────────────
 async function doQuery() {
     if (!/^[0-9a-fA-F]{64}$/.test(_uph)) {
         showToast('UPLANETNAME invalide (64 chars hex requis)', 'err');
-        document.getElementById('uph-input').focus();
-        return;
+        document.getElementById('uph-input').focus(); return;
     }
     var btn = document.getElementById('btn-query');
     btn.disabled = true; btn.textContent = '⏳…';
-
     var params = new URLSearchParams({ uplanetname: _uph });
     var kind = document.getElementById('f-kind').value.trim();
     var author = document.getElementById('f-author').value.trim();
     var dtag = document.getElementById('f-dtag').value.trim();
     var ptag = document.getElementById('f-ptag').value.trim();
     var ttag = document.getElementById('f-ttag').value.trim();
-    var limit = document.getElementById('f-limit').value;
     var since = datetimeToTs(document.getElementById('f-since').value);
     var until = datetimeToTs(document.getElementById('f-until').value);
-
     if (kind)   params.set('kind', kind);
     if (author) params.set('author', author);
     if (dtag)   params.set('tag_d', dtag);
     if (ptag)   params.set('tag_p', ptag);
     if (ttag)   params.set('tag_t', ttag);
-    if (limit)  params.set('limit', limit);
+    params.set('limit', document.getElementById('f-limit').value);
     if (since)  params.set('since', since);
     if (until)  params.set('until', until);
-
     try {
-        var resp = await fetch(_apiUrl + '/api/nostr/admin/events?' + params.toString());
-        if (resp.status === 403) {
-            showToast('UPLANETNAME incorrect — accès refusé', 'err');
-            document.getElementById('uph-input').classList.add('error');
-            document.getElementById('auth-status').innerHTML = '<span style="color:var(--danger)">✗ Accès refusé par le serveur</span>';
-            return;
-        }
-        if (!resp.ok) {
-            var err = await resp.json().catch(function() { return {detail: resp.statusText}; });
-            showToast('Erreur: ' + (err.detail || resp.statusText), 'err');
-            return;
-        }
-        var data = await resp.json();
-        _events = data.events || [];
-        _selected.clear();
-        renderEvents();
+        var data = await apiFetch(_apiUrl + '/api/nostr/admin/events?' + params.toString());
+        _events = data.events || []; _selected.clear(); renderEvents();
         showToast(_events.length + ' événement(s) récupéré(s)', _events.length > 0 ? 'ok' : 'warn');
-        document.getElementById('uph-input').classList.remove('error');
-        document.getElementById('uph-input').classList.add('ok');
+        var inp = document.getElementById('uph-input');
+        inp.classList.remove('error'); inp.classList.add('ok');
         document.getElementById('auth-status').innerHTML = '<span style="color:var(--ok)">✓ Authentifié</span>';
     } catch(e) {
-        showToast('Erreur réseau: ' + (e.message || e), 'err');
+        if (e.message !== '403') showToast('Erreur réseau: ' + e.message, 'err');
     } finally {
         btn.disabled = false; btn.textContent = '🔍 Requêter';
     }
@@ -613,445 +655,243 @@ async function doQuery() {
 
 // ── Render events table ──────────────────────────────────────────────────
 function renderEvents() {
-    var tbody = document.getElementById('events-tbody');
     var bar = document.getElementById('results-bar');
     var wrap = document.getElementById('events-wrap');
     var empty = document.getElementById('state-empty');
-
     if (_events.length === 0) {
-        bar.style.display = 'none';
-        wrap.style.display = 'none';
+        bar.style.display = 'none'; wrap.style.display = 'none';
         empty.innerHTML = '<div class="icon">🔍</div><div>Aucun événement trouvé pour ces filtres.</div>';
-        empty.style.display = '';
-        return;
+        empty.style.display = ''; return;
     }
-
-    empty.style.display = 'none';
-    bar.style.display = 'flex';
-    wrap.style.display = '';
+    empty.style.display = 'none'; bar.style.display = 'flex'; wrap.style.display = '';
     document.getElementById('results-count').textContent = _events.length + ' événement(s)';
     document.getElementById('chk-all').checked = false;
-
-    tbody.innerHTML = _events.map(function(ev, i) {
-        var dtag = getDtag(ev);
+    document.getElementById('events-tbody').innerHTML = _events.map(function(ev) {
         var sel = _selected.has(ev.id);
-        return '<tr class="' + (sel ? 'selected' : '') + '" data-idx="' + i + '">' +
-            '<td><input type="checkbox" data-id="' + ev.id + '" ' + (sel ? 'checked' : '') +
-                ' onchange="onRowCheck(this)"></td>' +
-            '<td><span class="' + kindClass(ev.kind) + '">' + ev.kind + '</span></td>' +
-            '<td><span class="ev-id" title="' + ev.id + '">' + ev.id.slice(0, 8) + '…</span></td>' +
-            '<td><span class="ev-pub" title="' + ev.pubkey + ' — clic: voir profil" onclick="openProfile(\'' + ev.pubkey + '\')">' +
-                ev.pubkey.slice(0,6) + '…' + ev.pubkey.slice(-4) + '</span></td>' +
-            '<td class="ev-date">' + fmtDate(ev.created_at) + '</td>' +
-            '<td class="ev-dtag">' + escHtml(dtag) + '</td>' +
-            '<td class="ev-content">' + contentPreview(ev) + '</td>' +
-        '</tr>';
+        return '<tr class="'+(sel?'selected':'')+'">' +
+            '<td><input type="checkbox" data-id="'+ev.id+'" '+(sel?'checked':'')+' onchange="onRowCheck(this)"></td>' +
+            '<td><span class="'+kindClass(ev.kind)+'">'+ev.kind+'</span></td>' +
+            '<td><span class="ev-id" title="'+ev.id+'">'+ev.id.slice(0,8)+'…</span></td>' +
+            '<td><span class="ev-pub" title="'+ev.pubkey+' — clic: voir profil" onclick="openProfile(\''+ev.pubkey+'\')">'+
+                ev.pubkey.slice(0,6)+'…'+ev.pubkey.slice(-4)+'</span></td>' +
+            '<td class="ev-date">'+fmtDate(ev.created_at)+'</td>' +
+            '<td class="ev-dtag">'+escHtml(getDtag(ev))+'</td>' +
+            '<td class="ev-content">'+contentPreview(ev)+'</td></tr>';
     }).join('');
-
     updateSelUI();
-}
-
-function escHtml(s) {
-    return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
 // ── Selection ────────────────────────────────────────────────────────────
 function onRowCheck(chk) {
-    var id = chk.dataset.id;
     var tr = chk.closest('tr');
-    if (chk.checked) { _selected.add(id); tr.classList.add('selected'); }
-    else { _selected.delete(id); tr.classList.remove('selected'); }
+    if (chk.checked) { _selected.add(chk.dataset.id); tr.classList.add('selected'); }
+    else { _selected.delete(chk.dataset.id); tr.classList.remove('selected'); }
     updateSelUI();
 }
-
 function toggleAll(checked) {
-    _events.forEach(function(ev) {
-        if (checked) _selected.add(ev.id);
-        else _selected.delete(ev.id);
-    });
+    _events.forEach(function(ev) { if (checked) _selected.add(ev.id); else _selected.delete(ev.id); });
     document.querySelectorAll('#events-tbody input[type=checkbox]').forEach(function(chk) {
-        chk.checked = checked;
-        chk.closest('tr').classList.toggle('selected', checked);
+        chk.checked = checked; chk.closest('tr').classList.toggle('selected', checked);
     });
     updateSelUI();
 }
-
 function updateSelUI() {
-    var n = _selected.size;
-    var btn = document.getElementById('btn-del-sel');
-    btn.disabled = n === 0;
-    btn.innerHTML = '🗑️ Supprimer la sélection (' + n + ')';
-}
-
-function setAuthorFilter(pubkey) {
-    document.getElementById('f-author').value = pubkey;
+    var n = _selected.size, btn = document.getElementById('btn-del-sel');
+    btn.disabled = n === 0; btn.innerHTML = '🗑️ Supprimer la sélection (' + n + ')';
 }
 
 // ── Delete ───────────────────────────────────────────────────────────────
 async function deleteSelected() {
     if (_selected.size === 0) return;
-    if (!confirm('Supprimer définitivement ' + _selected.size + ' événement(s) du relay local ?\n\nCette action est IRRÉVERSIBLE.')) return;
-
+    if (!confirm('Supprimer définitivement '+_selected.size+' événement(s) ?\n\nIRRÉVERSIBLE.')) return;
     var btn = document.getElementById('btn-del-sel');
     btn.disabled = true; btn.textContent = '⏳ Suppression…';
-
     try {
-        var resp = await fetch(_apiUrl + '/api/nostr/admin/delete', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ uplanetname: _uph, ids: Array.from(_selected) })
-        });
-        if (resp.status === 403) {
-            showToast('UPLANETNAME incorrect — accès refusé', 'err');
-            return;
-        }
-        if (!resp.ok) {
-            var err = await resp.json().catch(function() { return {detail: resp.statusText}; });
-            showToast('Erreur: ' + (err.detail || resp.statusText), 'err');
-            return;
-        }
-        var data = await resp.json();
+        var data = await adminDelete(Array.from(_selected));
         showToast(data.deleted + ' événement(s) supprimé(s)', 'ok');
-        // Remove deleted events from local state
-        var deletedIds = new Set(data.ids || []);
-        _events = _events.filter(function(ev) { return !deletedIds.has(ev.id); });
-        _selected.clear();
-        renderEvents();
-    } catch(e) {
-        showToast('Erreur réseau: ' + (e.message || e), 'err');
-    } finally {
-        updateSelUI();
-    }
+        var done = new Set(data.ids || []);
+        _events = _events.filter(function(ev) { return !done.has(ev.id); });
+        _selected.clear(); renderEvents();
+    } catch(e) { if (e.message !== '403') showToast('Erreur: '+e.message,'err'); }
+    finally { updateSelUI(); }
 }
-
-// ── Purge all filtered results ───────────────────────────────────────────
 async function purgeFilter() {
     if (_events.length === 0) return;
-    if (!confirm('Supprimer du relay local TOUS les ' + _events.length + ' événement(s) affichés ?\n(IRRÉVERSIBLE)')) return;
+    if (!confirm('Supprimer TOUS les '+_events.length+' événement(s) affichés ?\nIRRÉVERSIBLE.')) return;
     var btn = document.getElementById('btn-purge-filter');
     btn.disabled = true; btn.textContent = '⏳ Purge…';
     try {
-        var ids = _events.map(function(ev) { return ev.id; });
-        var resp = await fetch(_apiUrl + '/api/nostr/admin/delete', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ uplanetname: _uph, ids: ids })
-        });
-        if (resp.status === 403) { showToast('UPLANETNAME incorrect', 'err'); return; }
-        if (!resp.ok) throw new Error(resp.statusText);
-        var data = await resp.json();
-        showToast(data.deleted + ' événement(s) purgé(s)', 'ok');
-        doQuery();
-    } catch(e) {
-        showToast('Erreur de purge : ' + (e.message || e), 'err');
-    } finally {
-        btn.disabled = false; btn.textContent = '☢️ Purger ces résultats';
-    }
+        var data = await adminDelete(_events.map(function(ev){ return ev.id; }));
+        showToast(data.deleted + ' événement(s) purgé(s)', 'ok'); doQuery();
+    } catch(e) { if (e.message !== '403') showToast('Erreur: '+e.message,'err'); }
+    finally { btn.disabled = false; btn.textContent = '☢️ Purger ces résultats'; }
 }
 
-// ── Enter on auth input triggers query ──────────────────────────────────
-document.getElementById('uph-input').addEventListener('keydown', function(e) {
-    if (e.key === 'Enter') doQuery();
-});
-
-// ── Click auteur dans le tableau → ouvre la vue profil ───────────────────
-function setAuthorFilter(pubkey) {
-    document.getElementById('f-author').value = pubkey;
-    document.getElementById('prof-hex').value = pubkey;
+// ── Navigation ───────────────────────────────────────────────────────────
+function switchTab(tab) {
+    var q = tab === 'query';
+    document.getElementById('tab-query').classList.toggle('active', q);
+    document.getElementById('tab-profile').classList.toggle('active', !q);
+    document.getElementById('pane-query').style.display = q ? '' : 'none';
+    document.getElementById('pane-profile').style.display = q ? 'none' : '';
 }
-
 function openProfile(pubkey) {
     document.getElementById('f-author').value = pubkey;
     document.getElementById('prof-hex').value = pubkey;
-    switchTab('profile');
-    loadProfile();
-}
-
-// ── Onglets ─────────────────────────────────────────────────────────────
-function switchTab(tab) {
-    var isQuery = tab === 'query';
-    document.getElementById('tab-query').classList.toggle('active', isQuery);
-    document.getElementById('tab-profile').classList.toggle('active', !isQuery);
-    document.getElementById('pane-query').style.display = isQuery ? '' : 'none';
-    document.getElementById('pane-profile').style.display = isQuery ? 'none' : '';
+    switchTab('profile'); loadProfile();
 }
 
 // ── Profile view ────────────────────────────────────────────────────────
-var _profHex = '';
-var _profEvents = [];
-
-document.getElementById('prof-hex').addEventListener('keydown', function(e) {
-    if (e.key === 'Enter') loadProfile();
-});
+document.getElementById('prof-hex').addEventListener('keydown', function(e) { if (e.key==='Enter') loadProfile(); });
 
 async function loadProfile() {
     var hex = document.getElementById('prof-hex').value.trim();
-    if (!/^[0-9a-fA-F]{64}$/.test(hex)) {
-        showToast('Pubkey hex invalide (64 chars requis)', 'warn');
-        return;
-    }
-    if (!/^[0-9a-fA-F]{64}$/.test(_uph)) {
-        showToast('UPLANETNAME requis', 'err');
-        return;
-    }
+    if (!/^[0-9a-fA-F]{64}$/.test(hex)) { showToast('Pubkey hex invalide', 'warn'); return; }
+    if (!/^[0-9a-fA-F]{64}$/.test(_uph)) { showToast('UPLANETNAME requis', 'err'); return; }
     _profHex = hex;
     var btn = document.getElementById('btn-load-profile');
     btn.disabled = true; btn.textContent = '⏳…';
-
     try {
-        // Charger kind 0 (profil) + tous les events de cet auteur
-        var params0 = new URLSearchParams({ uplanetname: _uph, kind: '0', author: hex, limit: '1' });
-        var paramsAll = new URLSearchParams({ uplanetname: _uph, author: hex, limit: '500' });
-
-        var [r0, rAll] = await Promise.all([
-            fetch(_apiUrl + '/api/nostr/admin/events?' + params0.toString()),
-            fetch(_apiUrl + '/api/nostr/admin/events?' + paramsAll.toString())
+        var p0 = new URLSearchParams({ uplanetname:_uph, kind:'0', author:hex, limit:'1' });
+        var pA = new URLSearchParams({ uplanetname:_uph, author:hex, limit:'500' });
+        var [d0, dA] = await Promise.all([
+            apiFetch(_apiUrl+'/api/nostr/admin/events?'+p0),
+            apiFetch(_apiUrl+'/api/nostr/admin/events?'+pA)
         ]);
-
-        if (r0.status === 403 || rAll.status === 403) {
-            showToast('UPLANETNAME incorrect — accès refusé', 'err');
-            return;
-        }
-
-        var d0 = r0.ok ? await r0.json() : {events: []};
-        var dAll = rAll.ok ? await rAll.json() : {events: []};
-
-        _profEvents = dAll.events || [];
-
-        // Afficher la carte profil
-        var cardEl = document.getElementById('profile-card');
-        cardEl.style.display = 'flex';
-        document.getElementById('prof-hexval').textContent = hex;
+        _profEvents = dA.events || [];
+        document.getElementById('profile-card').style.display = 'flex';
+        // Affiche npub via lib_3 si disponible, sinon hex tronqué
+        var displayKey = typeof window.hexToNpub === 'function' ? window.hexToNpub(hex) : hex.slice(0,20)+'…';
+        var hexEl = document.getElementById('prof-hexval');
+        hexEl.textContent = displayKey; hexEl.title = hex;
         document.getElementById('btn-del-local').disabled = false;
         document.getElementById('btn-del-constellation').disabled = false;
-        document.getElementById('btn-del-dms').disabled = _profEvents.filter(function(e){return e.kind===4;}).length === 0;
+        document.getElementById('btn-del-dms').disabled = !_profEvents.some(function(e){return e.kind===4;});
         document.getElementById('prof-evcount').textContent = _profEvents.length + ' événement(s)';
-
-        var prof = (d0.events && d0.events.length > 0) ? d0.events[0] : null;
-        if (prof) {
-            var meta = {};
-            try { meta = JSON.parse(prof.content); } catch(e) {}
-            document.getElementById('prof-name').textContent = meta.name || meta.display_name || hex.slice(0,16) + '…';
-            document.getElementById('prof-about').textContent = (meta.about || '').slice(0, 160);
-            var avatarEl = document.getElementById('prof-avatar');
-            if (meta.picture) {
-                avatarEl.innerHTML = '<img src="' + escHtml(meta.picture) + '" onerror="this.style.display=\'none\'">';
-            } else {
-                avatarEl.textContent = (meta.name || '👤').slice(0, 2);
-            }
-        } else {
-            document.getElementById('prof-name').textContent = hex.slice(0,16) + '…';
-            document.getElementById('prof-about').textContent = '(aucun profil Kind 0 sur ce relay)';
-            document.getElementById('prof-avatar').textContent = '👤';
-        }
-
-        // Afficher les events dans le mini-tableau
+        var prof = d0.events && d0.events[0] ? d0.events[0] : null;
+        var meta = {}; if (prof) { try { meta = JSON.parse(prof.content); } catch(e) {} }
+        document.getElementById('prof-name').textContent = meta.name || meta.display_name || hex.slice(0,16)+'…';
+        document.getElementById('prof-about').textContent = (meta.about || (prof?'':'(aucun profil Kind 0 sur ce relay)')).slice(0,160);
+        var av = document.getElementById('prof-avatar');
+        if (meta.picture) av.innerHTML = '<img src="'+escHtml(meta.picture)+'" onerror="this.style.display=\'none\'">';
+        else av.textContent = (meta.name||'👤').slice(0,2);
         renderProfileEvents();
         showToast(_profEvents.length + ' événement(s) chargé(s)', 'ok');
-    } catch(e) {
-        showToast('Erreur: ' + (e.message || e), 'err');
-    } finally {
-        btn.disabled = false; btn.textContent = 'Charger';
-    }
+    } catch(e) { if (e.message !== '403') showToast('Erreur: '+e.message,'err'); }
+    finally { btn.disabled = false; btn.textContent = 'Charger'; }
 }
 
 function renderProfileEvents() {
-    var tbody = document.getElementById('prof-events-tbody');
     var wrap = document.getElementById('profile-events-wrap');
-    if (_profEvents.length === 0) {
-        wrap.style.display = 'none';
-        return;
-    }
+    if (_profEvents.length === 0) { wrap.style.display = 'none'; return; }
     wrap.style.display = '';
-    tbody.innerHTML = _profEvents.map(function(ev) {
-        var dtag = getDtag(ev);
-        return '<tr>' +
-            '<td><span class="' + kindClass(ev.kind) + '">' + ev.kind + '</span></td>' +
-            '<td><span class="ev-id" title="' + ev.id + '">' + ev.id.slice(0,8) + '…</span></td>' +
-            '<td class="ev-date">' + fmtDate(ev.created_at) + '</td>' +
-            '<td class="ev-dtag">' + escHtml(dtag) + '</td>' +
-            '<td class="ev-content">' + contentPreview(ev) + '</td>' +
-        '</tr>';
+    document.getElementById('prof-events-tbody').innerHTML = _profEvents.map(function(ev) {
+        return '<tr>'+
+            '<td><span class="'+kindClass(ev.kind)+'">'+ev.kind+'</span></td>'+
+            '<td><span class="ev-id" title="'+ev.id+'">'+ev.id.slice(0,8)+'…</span></td>'+
+            '<td class="ev-date">'+fmtDate(ev.created_at)+'</td>'+
+            '<td class="ev-dtag">'+escHtml(getDtag(ev))+'</td>'+
+            '<td class="ev-content">'+contentPreview(ev)+'</td></tr>';
     }).join('');
 }
 
+function _resetProfileButtons() {
+    _profEvents = []; renderProfileEvents();
+    document.getElementById('prof-evcount').textContent = '0 événement(s)';
+    ['btn-del-local','btn-del-constellation','btn-del-dms'].forEach(function(id) {
+        document.getElementById(id).disabled = true;
+    });
+}
+
 async function deleteProfileLocal() {
-    if (!_profHex || _profEvents.length === 0) return;
-    if (!confirm('Supprimer les ' + _profEvents.length + ' événement(s) de ce profil du relay LOCAL ?\n(IRRÉVERSIBLE)')) return;
+    if (!_profHex || !_profEvents.length) return;
+    if (!confirm('Supprimer les '+_profEvents.length+' événement(s) du relay LOCAL ?\nIRRÉVERSIBLE.')) return;
     var btn = document.getElementById('btn-del-local');
     btn.disabled = true; btn.textContent = '⏳ Suppression…';
     try {
-        var ids = _profEvents.map(function(ev) { return ev.id; });
-        var resp = await fetch(_apiUrl + '/api/nostr/admin/delete', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ uplanetname: _uph, ids: ids })
-        });
-        if (resp.status === 403) { showToast('UPLANETNAME incorrect', 'err'); return; }
-        if (!resp.ok) throw new Error(resp.statusText);
-        var data = await resp.json();
-        showToast('Suppression locale : ' + data.deleted + ' événement(s) supprimé(s)', 'ok');
-        _profEvents = [];
-        renderProfileEvents();
-        document.getElementById('prof-evcount').textContent = '0 événement(s)';
-        document.getElementById('btn-del-local').disabled = true;
-        document.getElementById('btn-del-constellation').disabled = true;
-        document.getElementById('btn-del-dms').disabled = true;
-    } catch(e) {
-        showToast('Erreur: ' + (e.message || e), 'err');
-    } finally {
-        btn.disabled = false; btn.textContent = '🗑️ Supprimer du relay local';
-    }
+        var data = await adminDelete(_profEvents.map(function(ev){return ev.id;}));
+        showToast('Suppression locale : '+data.deleted+' événement(s)', 'ok');
+        _resetProfileButtons();
+    } catch(e) { if (e.message !== '403') showToast('Erreur: '+e.message,'err'); }
+    finally { btn.disabled = false; btn.textContent = '🗑️ Supprimer du relay local'; }
 }
-
 async function deleteProfileKind(kindNum) {
     if (!_profHex) return;
-    var targets = _profEvents.filter(function(e) { return e.kind === kindNum; });
-    if (targets.length === 0) { showToast('Aucun événement Kind ' + kindNum + ' pour ce profil', 'warn'); return; }
-    if (!confirm('Supprimer les ' + targets.length + ' événement(s) Kind ' + kindNum + ' de ce profil ?\n(IRRÉVERSIBLE)')) return;
+    var targets = _profEvents.filter(function(e){return e.kind===kindNum;});
+    if (!targets.length) { showToast('Aucun Kind '+kindNum+' pour ce profil','warn'); return; }
+    if (!confirm('Supprimer les '+targets.length+' événement(s) Kind '+kindNum+' ?\nIRRÉVERSIBLE.')) return;
     var btn = document.getElementById('btn-del-dms');
     btn.disabled = true; btn.textContent = '⏳…';
     try {
-        var ids = targets.map(function(e) { return e.id; });
-        var resp = await fetch(_apiUrl + '/api/nostr/admin/delete', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ uplanetname: _uph, ids: ids })
-        });
-        if (resp.status === 403) { showToast('UPLANETNAME incorrect', 'err'); return; }
-        if (!resp.ok) throw new Error(resp.statusText);
-        var data = await resp.json();
-        showToast(data.deleted + ' événement(s) Kind ' + kindNum + ' supprimé(s)', 'ok');
+        var data = await adminDelete(targets.map(function(e){return e.id;}));
+        showToast(data.deleted+' événement(s) Kind '+kindNum+' supprimé(s)','ok');
         loadProfile();
-    } catch(e) {
-        showToast('Erreur: ' + (e.message || e), 'err');
-    } finally {
-        btn.disabled = false; btn.textContent = '🧹 Purger ses DMs (Kind 4)';
-    }
+    } catch(e) { if (e.message !== '403') showToast('Erreur: '+e.message,'err'); }
+    finally { btn.disabled = false; btn.textContent = '🧹 Purger ses DMs (Kind 4)'; }
 }
-
 async function deleteProfileConstellation() {
     if (!_profHex) return;
-    if (!confirm('Supprimer ce profil de TOUS les relays de la constellation ?\n\nCela envoie un DM BRO à chaque NODE connu.\nIRRÉVERSIBLE.')) return;
+    if (!confirm('Supprimer ce profil de TOUS les relays de la constellation ?\nDM BRO envoyé à chaque NODE — IRRÉVERSIBLE.')) return;
     var btn = document.getElementById('btn-del-constellation');
     btn.disabled = true; btn.textContent = '⏳ Envoi constellation…';
     try {
-        var resp = await fetch(_apiUrl + '/api/nostr/admin/constellation_delete', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ uplanetname: _uph, author: _profHex })
+        var data = await apiFetch(_apiUrl+'/api/nostr/admin/constellation_delete', {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({ uplanetname:_uph, author:_profHex })
         });
-        if (resp.status === 403) { showToast('UPLANETNAME incorrect', 'err'); return; }
-        var data = await resp.json();
-        var msg = 'Local: ' + (data.local_deleted ? 'OK' : 'échec') +
-            ' · Constellation: ' + data.nodes_notified + '/' + (data.constellation_nodes || []).length + ' NODEs notifiés';
-        showToast(msg, data.local_deleted ? 'ok' : 'warn');
-        _profEvents = [];
-        renderProfileEvents();
-        document.getElementById('prof-evcount').textContent = '0 événement(s)';
-        document.getElementById('btn-del-local').disabled = true;
-        document.getElementById('btn-del-constellation').disabled = true;
-    } catch(e) {
-        showToast('Erreur: ' + (e.message || e), 'err');
-    } finally {
-        btn.textContent = '🌐 Supprimer de la constellation';
-    }
+        showToast('Local: '+(data.local_deleted?'OK':'échec')+
+            ' · Constellation: '+data.nodes_notified+'/'+(data.constellation_nodes||[]).length+' NODEs',
+            data.local_deleted?'ok':'warn');
+        _resetProfileButtons();
+    } catch(e) { if (e.message !== '403') showToast('Erreur: '+e.message,'err'); }
+    finally { btn.textContent = '🌐 Supprimer de la constellation'; }
 }
 
-// ── Captain verification (UPH via NOSTR extension NIP-07) ─────────────
-var _captainHex = '';
-var _userPubkey = '';
-
-function initUPH() {
-    var extStatus = document.getElementById('uph-ext-status');
-    var connectBtn = document.getElementById('btn-uph-connect');
-    if (typeof window.nostr === 'undefined') {
-        extStatus.innerHTML = '🔌 Extension NOSTR non détectée <small style="color:var(--text2)">(Alby, nos2x, Flamingo…)</small>';
-        return;
-    }
-    extStatus.innerHTML = '⚡ Extension NOSTR détectée';
-    connectBtn.style.display = '';
-}
-
-async function connectUPH() {
-    var extStatus = document.getElementById('uph-ext-status');
-    var badge = document.getElementById('uph-captain-badge');
-    var connectBtn = document.getElementById('btn-uph-connect');
-    try {
-        _userPubkey = await window.nostr.getPublicKey();
-        extStatus.innerHTML = '⚡ <span class="uph-pubkey">' + _userPubkey.slice(0,12) + '…' + _userPubkey.slice(-6) + '</span>';
-        var resp = await fetch(_apiUrl + '/api/nostr/admin/captain_info');
-        if (!resp.ok) throw new Error('captain_info indisponible');
-        var info = await resp.json();
-        _captainHex = info.captain_hex || info.node_hex || '';
-        if (_captainHex && _userPubkey === _captainHex) {
-            badge.innerHTML = '⚓ Capitaine';
-            badge.className = 'uph-captain-ok';
-            badge.style.display = '';
-            connectBtn.style.display = 'none';
-            showToast('⚓ Bienvenue Capitaine !', 'ok');
-        } else if (_captainHex) {
-            badge.innerHTML = '⚠️ Non-capitaine';
-            badge.className = 'uph-captain-warn';
-            badge.style.display = '';
-            showToast('Clé différente du capitaine de cette station', 'warn');
-        }
-    } catch(e) {
-        extStatus.innerHTML = '⚡ Extension: <span style="color:var(--danger)">' + (e.message || e).slice(0,60) + '</span>';
-    }
-}
-
-setTimeout(initUPH, 400);
-
-// ── Liste des profils (Kind 0) présents sur le relay ─────────────────
-var _relayProfiles = [];
-
+// ── Profils du relay ─────────────────────────────────────────────────────
 async function loadRelayProfiles() {
-    if (!/^[0-9a-fA-F]{64}$/.test(_uph)) return;
+    if (!/^[0-9a-fA-F]{64}$/.test(_uph)) { showToast('UPLANETNAME requis','err'); return; }
     var btn = document.getElementById('btn-load-relay-profiles');
-    if (btn) { btn.disabled = true; btn.textContent = '⏳…'; }
+    btn.disabled = true; btn.textContent = '⏳…';
     try {
-        var params = new URLSearchParams({ uplanetname: _uph, kind: '0', limit: '200' });
-        var resp = await fetch(_apiUrl + '/api/nostr/admin/events?' + params.toString());
-        if (!resp.ok) return;
-        var data = await resp.json();
+        var data = await apiFetch(_apiUrl+'/api/nostr/admin/events?'+new URLSearchParams({uplanetname:_uph,kind:'0',limit:'200'}));
         _relayProfiles = data.events || [];
         renderRelayProfiles();
-        showToast(_relayProfiles.length + ' profil(s) trouvé(s) sur le relay', 'ok');
-    } catch(e) {
-        showToast('Erreur: ' + (e.message || e), 'err');
-    } finally {
-        if (btn) { btn.disabled = false; btn.textContent = '📋 Charger les profils du relay'; }
-    }
+        showToast(_relayProfiles.length+' profil(s) trouvé(s)','ok');
+    } catch(e) { if (e.message !== '403') showToast('Erreur: '+e.message,'err'); }
+    finally { btn.disabled = false; btn.textContent = '📋 Charger les profils du relay'; }
 }
-
 function renderRelayProfiles() {
     var container = document.getElementById('relay-profiles-list');
     if (!container) return;
-    if (_relayProfiles.length === 0) {
+    if (!_relayProfiles.length) {
         container.innerHTML = '<div style="color:var(--text2);font-size:.8rem;padding:10px 0">Aucun profil Kind 0 sur ce relay.</div>';
         return;
     }
     container.innerHTML = _relayProfiles.map(function(ev) {
-        var meta = {};
-        try { meta = JSON.parse(ev.content); } catch(e) {}
-        var name = escHtml(meta.name || meta.display_name || ev.pubkey.slice(0,12) + '…');
-        var about = escHtml((meta.about || '').slice(0, 60));
+        var meta = {}; try { meta = JSON.parse(ev.content); } catch(e) {}
+        var name = escHtml(meta.name || meta.display_name || ev.pubkey.slice(0,12)+'…');
+        var about = escHtml((meta.about||'').slice(0,60));
+        // Utilise window.hexToNpub (lib_3) si disponible
+        var shortKey = typeof window.hexToNpub === 'function'
+            ? window.hexToNpub(ev.pubkey).slice(0,20)+'…'
+            : ev.pubkey.slice(0,20)+'…';
         var pic = meta.picture
-            ? '<img src="' + escHtml(meta.picture) + '" style="width:32px;height:32px;border-radius:50%;object-fit:cover;flex-shrink:0" onerror="this.style.display=\'none\'">'
+            ? '<img src="'+escHtml(meta.picture)+'" style="width:32px;height:32px;border-radius:50%;object-fit:cover;flex-shrink:0" onerror="this.style.display=\'none\'">'
             : '<span style="font-size:1.1rem">👤</span>';
-        return '<div class="relay-profile-item" onclick="openProfile(\'' + ev.pubkey + '\')" title="' + ev.pubkey + '">' +
-            '<div style="display:flex;align-items:center;gap:8px">' +
-            '<div style="width:32px;height:32px;flex-shrink:0;display:flex;align-items:center;justify-content:center">' + pic + '</div>' +
-            '<div style="min-width:0">' +
-            '<div style="font-weight:600;font-size:.83rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + name + '</div>' +
-            '<div style="font-size:.7rem;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' +
-                (about || '<span style="font-family:var(--mono)">' + ev.pubkey.slice(0,20) + '…</span>') +
-            '</div></div></div>' +
-        '</div>';
+        return '<div class="relay-profile-item" onclick="openProfile(\''+ev.pubkey+'\')" title="'+ev.pubkey+'">'+
+            '<div style="display:flex;align-items:center;gap:8px">'+
+            '<div style="width:32px;height:32px;flex-shrink:0;display:flex;align-items:center;justify-content:center">'+pic+'</div>'+
+            '<div style="min-width:0">'+
+            '<div style="font-weight:600;font-size:.83rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+name+'</div>'+
+            '<div style="font-size:.7rem;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+
+                (about||'<span style="font-family:var(--mono)">'+shortKey+'</span>')+
+            '</div></div></div></div>';
     }).join('');
 }
 </script>
+<script src="nacl-fast.min.js"></script>
+<script src="nostr.bundle.js"></script>
+<script src="common.js"></script>
 <script src="uplanet-header.js"></script>
 </body>
 </html>

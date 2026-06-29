@@ -2789,7 +2789,25 @@ async function searchCity() {
 document.getElementById('atomicTabs').addEventListener('shown.bs.tab', e => {
     currentMode = e.target.dataset.bsTarget.replace('#tab-', '');
     const hud = document.getElementById('hud-overlay');
-    if      (currentMode === 'match')  { window.calculateMatch(); }
+    if      (currentMode === 'match')  {
+        // Synchroniser le profil utilisateur (Empreinte) → Atome A
+        var _bd = document.getElementById('birth-date')?.value;
+        var _bt = document.getElementById('birth-time')?.value;
+        var _maA = document.getElementById('match-date-a');
+        var _mtA = document.getElementById('match-time-a');
+        if (_bd && _maA) _maA.value = _bd;
+        if (_mtA) _mtA.value = _bt || '12:00';
+        // Sync position : _syncBirthLocation est déjà appelé depuis Empreinte,
+        // mais on s'assure que match-loc-name-a reflète la position courante
+        var _lonA = parseFloat(document.getElementById('match-lon-a')?.value || 0);
+        var _latA = parseFloat(document.getElementById('match-lat-a')?.value || 0);
+        if ((_lonA || _latA) && document.getElementById('match-loc-name-a')?.textContent.startsWith('Choisir')) {
+            document.getElementById('match-loc-name-a').textContent =
+                (_latA >= 0 ? '+' : '') + _latA.toFixed(2) + '°N · ' +
+                (_lonA >= 0 ? '+' : '') + _lonA.toFixed(2) + '°E';
+        }
+        window.calculateMatch();
+    }
     else if (currentMode === 'profil') { hud.innerHTML = 'Mode: PROFIL<br>Cycle Condensation'; renderKinProfil(); setTimeout(() => { initBirthMap(); initConceptionMap(); if (_birthMap) _birthMap.invalidateSize(); if (_conMap) _conMap.invalidateSize(); }, 250); }
     else if (currentMode === 'radar')  { hud.innerHTML = 'Mode: RADAR<br>Résonance vibratoire'; }
     else                               { hud.innerHTML = 'Mode: THÉORIE<br>Sphère Géodésique'; renderKinTheorie(); }
@@ -2872,7 +2890,9 @@ function setup() {
     // Atome B : date démo pour l'onglet Résonance (partenaire fictif — Paris)
     document.getElementById('match-date-b').value = '1972-03-21';
     document.getElementById('match-time-b').value = '20:12';
-    document.getElementById('match-lon-a').value  = '0';
+    // Ne pas écraser match-lon-a si déjà défini (peut venir de _syncBirthLocation)
+    if (!parseFloat(document.getElementById('match-lon-a').value || 0))
+        document.getElementById('match-lon-a').value = '0';
     document.getElementById('match-lon-b').value  = '2.35';   // Paris
     window.updateLonVisuel('a');
     window.updateLonVisuel('b');

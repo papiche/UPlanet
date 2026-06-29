@@ -443,7 +443,8 @@
             };
 
             ws.onclose = function () {
-                _log('WS abonnement fermé');
+                _log('WS abonnement fermé — retry dans 8s');
+                setTimeout(_subscribe, 8000);
             };
 
         } catch (e) {

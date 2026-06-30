@@ -1116,6 +1116,7 @@ async function deleteProfileLocal() {
             document.getElementById('btn-del-local').disabled = true;
             document.getElementById('btn-del-constellation').disabled = true;
         }
+        if (_relayProfiles.length > 0) loadRelayProfiles();
     } catch(e) {
         if (e.message !== '403') { showToast('Erreur: '+e.message,'err'); opsLog([{type:'err', text:'✗ Suppression locale : '+e.message}]); }
     }
@@ -1133,18 +1134,22 @@ async function deleteProfileKind(kindNum) {
         showToast(data.deleted+' événement(s) Kind '+kindNum+' supprimé(s)','ok');
         opsLog([{type:'ok', text:'✓ Kind '+kindNum+' purgé : '+data.deleted+' / '+targets.length+' événement(s)'}]);
         loadProfile();
+        if (_relayProfiles.length > 0) loadRelayProfiles();
     } catch(e) {
         if (e.message !== '403') { showToast('Erreur: '+e.message,'err'); opsLog([{type:'err', text:'✗ Purge Kind '+kindNum+' : '+e.message}]); }
     }
     finally { btn.disabled = false; btn.textContent = '🧹 Purger ses DMs (Kind 4)'; }
 }
 async function deleteProfileConstellation() {
-    if (!_profHex) return;
-    if (!confirm('Supprimer ce profil de TOUS les relays de la constellation ?\nDM BRO envoyé à chaque NODE — IRRÉVERSIBLE.')) return;
+    // Source de vérité : grille (_selectedPubkeys) → sinon _profHexes → sinon _profHex
+    var authors = _selectedPubkeys.size > 0
+        ? Array.from(_selectedPubkeys)
+        : (_profHexes.length > 0 ? _profHexes : (_profHex ? [_profHex] : []));
+    if (authors.length === 0) { showToast('Aucun profil sélectionné', 'warn'); return; }
+    if (!confirm('Supprimer '+authors.length+' profil(s) de TOUS les relays de la constellation ?\nDM BRO envoyé à chaque NODE — IRRÉVERSIBLE.')) return;
     var btn = document.getElementById('btn-del-constellation');
     btn.disabled = true; btn.textContent = '⏳ Envoi constellation…';
     try {
-        var authors = _profHexes.length > 0 ? _profHexes : [_profHex];
         var data = await apiFetch(_apiUrl+'/api/nostr/admin/constellation_delete', {
             method:'POST', headers:{'Content-Type':'application/json'},
             body: JSON.stringify({ uplanetname:_uph, authors:authors })
@@ -1155,7 +1160,7 @@ async function deleteProfileConstellation() {
             data.local_deleted?'ok':'warn');
         // Journal détaillé
         var entries = [];
-        entries.push({type: data.local_deleted?'ok':'err', text: (data.local_deleted?'✓':'✗')+' Suppression locale strfry'});
+        entries.push({type: data.local_deleted?'ok':'err', text: (data.local_deleted?'✓':'✗')+' Suppression locale strfry — '+authors.length+' auteur(s)'});
         if (data.warning) entries.push({type:'warn', text: '⚠ '+data.warning});
         if (nodes.length === 0) entries.push({type:'info', text: '— Aucun NODE constellation trouvé dans ~/.zen/tmp/swarm/*/HEX'});
         nodes.forEach(function(n) {
@@ -1163,6 +1168,8 @@ async function deleteProfileConstellation() {
         });
         opsLog(entries);
         _resetProfileButtons();
+        clearProfileSelection();
+        if (_relayProfiles.length > 0) loadRelayProfiles();
     } catch(e) {
         if (e.message !== '403') {
             showToast('Erreur: '+e.message,'err');

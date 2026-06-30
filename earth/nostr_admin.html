@@ -638,7 +638,7 @@ function toggleTheme() {
 
 // ── État global ───────────────────────────────────────────────────────────
 var _events = [], _selected = new Set();
-var _profHex = '', _profEvents = [], _relayProfiles = [];
+var _profHex = '', _profHexes = [], _profEvents = [], _relayProfiles = [];
 var _selectedPubkeys = new Set();
 var _captainHex = '', _userPubkey = '', _uph = '';
 var _profSelected = new Set();
@@ -956,7 +956,7 @@ async function loadProfile() {
         _profEvents = allEvents.filter(function(ev) {
             if (seen.has(ev.id)) return false; seen.add(ev.id); return true;
         });
-        _profHex = targets[0];
+        _profHex = targets[0]; _profHexes = targets;
 
         document.getElementById('profile-card').style.display = 'flex';
         document.getElementById('btn-del-local').disabled = false;
@@ -1144,9 +1144,10 @@ async function deleteProfileConstellation() {
     var btn = document.getElementById('btn-del-constellation');
     btn.disabled = true; btn.textContent = '⏳ Envoi constellation…';
     try {
+        var authors = _profHexes.length > 0 ? _profHexes : [_profHex];
         var data = await apiFetch(_apiUrl+'/api/nostr/admin/constellation_delete', {
             method:'POST', headers:{'Content-Type':'application/json'},
-            body: JSON.stringify({ uplanetname:_uph, author:_profHex })
+            body: JSON.stringify({ uplanetname:_uph, authors:authors })
         });
         var nodes = data.constellation_nodes || [];
         showToast('Local: '+(data.local_deleted?'OK':'échec')+

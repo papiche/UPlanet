@@ -334,6 +334,10 @@
     padding: 8px 10px; cursor: pointer; transition: all .13s;
   }
   .relay-profile-item:hover { border-color: var(--accent); background: rgba(79,142,247,.06); }
+  .relay-profile-item.rp-selected {
+    border-color: var(--accent); background: rgba(79,142,247,.14);
+    box-shadow: 0 0 0 1px var(--accent);
+  }
 
   /* ── JSON Modal ── */
   .json-modal-overlay {
@@ -426,11 +430,13 @@
   <!-- Liste des profils présents sur le relay -->
   <div class="relay-profiles-panel">
     <h4>Profils présents sur ce relay</h4>
-    <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
       <button class="btn-query" id="btn-load-relay-profiles" onclick="loadRelayProfiles()" style="padding:5px 14px;font-size:.78rem;">
         📋 Charger les profils du relay
       </button>
-      <span style="font-size:.75rem;color:var(--text2)">Cliquez sur un profil pour le sélectionner</span>
+      <span style="font-size:.75rem;color:var(--text2)">Clic = sélectionner / reclic = désélectionner</span>
+      <span id="rp-sel-badge" style="display:none;font-size:.72rem;background:rgba(79,142,247,.15);border:1px solid rgba(79,142,247,.35);color:var(--accent);border-radius:10px;padding:1px 8px"></span>
+      <button id="btn-rp-clear-sel" style="display:none;background:none;border:1px solid var(--border);color:var(--text2);border-radius:6px;padding:1px 7px;font-size:.72rem;cursor:pointer" onclick="clearProfileSelection()">✕ Tout désélectionner</button>
     </div>
     <div class="relay-profiles-grid" id="relay-profiles-list">
       <div style="color:var(--text2);font-size:.8rem;padding:4px 0">Cliquez "Charger" pour voir les profils disponibles.</div>
@@ -450,6 +456,8 @@
       <div class="profile-name" id="prof-name">—</div>
       <div class="profile-hex" id="prof-hexval">—</div>
       <div class="profile-about" id="prof-about"></div>
+      <div id="prof-email" style="display:none;font-size:.78rem;color:var(--text2);margin-top:4px"></div>
+      <div id="prof-bot"   style="display:none;font-size:.72rem;margin-top:3px"></div>
       <div class="profile-actions">
         <button class="btn-query" id="btn-prof-viewer" style="padding:5px 14px;font-size:.78rem" onclick="openProfileViewer()">
           👁 Voir profil
@@ -631,6 +639,7 @@ function toggleTheme() {
 // ── État global ───────────────────────────────────────────────────────────
 var _events = [], _selected = new Set();
 var _profHex = '', _profEvents = [], _relayProfiles = [];
+var _selectedPubkeys = new Set();
 var _captainHex = '', _userPubkey = '', _uph = '';
 var _profSelected = new Set();
 var _toastTimer = null;
@@ -909,6 +918,8 @@ function switchTab(tab) {
 function openProfile(pubkey) {
     document.getElementById('f-author').value = pubkey;
     document.getElementById('prof-hex').value = pubkey;
+    _selectedPubkeys.add(pubkey);
+    updateProfileGridUI();
     switchTab('profile'); loadProfile();
 }
 
@@ -916,51 +927,105 @@ function openProfile(pubkey) {
 document.getElementById('prof-hex').addEventListener('keydown', function(e) { if (e.key==='Enter') loadProfile(); });
 
 async function loadProfile() {
-    var hex = document.getElementById('prof-hex').value.trim();
-    if (!/^[0-9a-fA-F]{64}$/.test(hex)) { showToast('Pubkey hex invalide', 'warn'); return; }
     if (!/^[0-9a-fA-F]{64}$/.test(_uph)) { showToast('UPLANETNAME requis', 'err'); return; }
-    _profHex = hex;
+    var manualHex = document.getElementById('prof-hex').value.trim();
+    var targets = Array.from(_selectedPubkeys);
+    if (targets.length === 0 && /^[0-9a-fA-F]{64}$/.test(manualHex)) targets = [manualHex];
+    if (targets.length === 0) { showToast('Sélectionnez des profils ou saisissez une pubkey', 'warn'); return; }
+
     var btn = document.getElementById('btn-load-profile');
     btn.disabled = true; btn.textContent = '⏳…';
     try {
-        var p0 = new URLSearchParams({ uplanetname:_uph, kind:'0', author:hex, limit:'1' });
-        var pA = new URLSearchParams({ uplanetname:_uph, author:hex, limit:'500' });
-        var [d0, dA] = await Promise.all([
-            apiFetch(_apiUrl+'/api/nostr/admin/events?'+p0),
-            apiFetch(_apiUrl+'/api/nostr/admin/events?'+pA)
-        ]);
-        _profEvents = dA.events || [];
+        var allEvents = [], profileMetas = [];
+        for (var i = 0; i < targets.length; i++) {
+            var hex = targets[i];
+            var p0 = new URLSearchParams({ uplanetname:_uph, kind:'0', author:hex, limit:'1' });
+            var pA = new URLSearchParams({ uplanetname:_uph, author:hex, limit:'500' });
+            var results = await Promise.all([
+                apiFetch(_apiUrl+'/api/nostr/admin/events?'+p0),
+                apiFetch(_apiUrl+'/api/nostr/admin/events?'+pA)
+            ]);
+            var d0 = results[0], dA = results[1];
+            allEvents = allEvents.concat(dA.events || []);
+            var prof = d0.events && d0.events[0] ? d0.events[0] : null;
+            var meta = {}; if (prof) { try { meta = JSON.parse(prof.content); } catch(err) {} }
+            profileMetas.push({ hex: hex, meta: meta, hasKind0: !!prof, event: prof });
+        }
+        // Dédoublonnage par ID
+        var seen = new Set();
+        _profEvents = allEvents.filter(function(ev) {
+            if (seen.has(ev.id)) return false; seen.add(ev.id); return true;
+        });
+        _profHex = targets[0];
+
         document.getElementById('profile-card').style.display = 'flex';
-        // Affiche npub via lib_3 si disponible, sinon hex tronqué
-        var displayKey = typeof window.hexToNpub === 'function' ? window.hexToNpub(hex) : hex.slice(0,20)+'…';
-        var hexEl = document.getElementById('prof-hexval');
-        hexEl.textContent = displayKey; hexEl.title = hex;
         document.getElementById('btn-del-local').disabled = false;
         document.getElementById('btn-del-constellation').disabled = false;
         document.getElementById('btn-del-dms').disabled = !_profEvents.some(function(e){return e.kind===4;});
         document.getElementById('prof-evcount').textContent = _profEvents.length + ' événement(s)';
-        var prof = d0.events && d0.events[0] ? d0.events[0] : null;
-        var meta = {}; if (prof) { try { meta = JSON.parse(prof.content); } catch(e) {} }
-        document.getElementById('prof-name').textContent = meta.name || meta.display_name || hex.slice(0,16)+'…';
-        document.getElementById('prof-about').textContent = (meta.about || (prof?'':'(aucun profil Kind 0 sur ce relay)')).slice(0,160);
-        var av = document.getElementById('prof-avatar');
-        if (meta.picture) av.innerHTML = '<img src="'+escHtml(meta.picture)+'" onerror="this.style.display=\'none\'">';
-        else av.textContent = (meta.name||'👤').slice(0,2);
+
+        // Réinitialiser email/bot (masqués par défaut)
+        document.getElementById('prof-email').style.display = 'none';
+        document.getElementById('prof-bot').style.display = 'none';
+
+        if (targets.length === 1) {
+            var m = profileMetas[0].meta, h = targets[0];
+            var ev0 = profileMetas[0].event;
+            var displayKey = typeof window.hexToNpub === 'function' ? window.hexToNpub(h) : h.slice(0,20)+'…';
+            var hexEl = document.getElementById('prof-hexval');
+            hexEl.textContent = displayKey; hexEl.title = h;
+            document.getElementById('prof-name').textContent = m.name || m.display_name || h.slice(0,16)+'…';
+            document.getElementById('prof-about').textContent = (m.about || (profileMetas[0].hasKind0 ? '' : '(aucun profil Kind 0 sur ce relay)')).slice(0,160);
+            var av = document.getElementById('prof-avatar');
+            if (m.picture) av.innerHTML = '<img src="'+escHtml(m.picture)+'" onerror="this.style.display=\'none\'">';
+            else av.textContent = (m.name||'👤').slice(0,2);
+            document.getElementById('btn-prof-viewer').style.display = '';
+
+            // Email : NIP-39 tag ["i","email:…",""] en priorité, puis meta.email
+            var email = '';
+            if (ev0 && ev0.tags) {
+                ev0.tags.forEach(function(tag) {
+                    if (!email && tag[0] === 'i' && typeof tag[1] === 'string' && tag[1].indexOf('email:') === 0)
+                        email = tag[1].slice(6);
+                });
+            }
+            if (!email && m.email) email = m.email;
+            if (email) {
+                var emailEl = document.getElementById('prof-email');
+                emailEl.innerHTML = '✉️ <a href="mailto:'+escHtml(email)+'" style="color:var(--accent);text-decoration:none">'+escHtml(email)+'</a>';
+                emailEl.style.display = '';
+            }
+
+            // Bot indicator
+            var isBot = m.bot === true || m.bot === 'true' || m.bot === 1;
+            if (typeof m.bot !== 'undefined') {
+                var botEl = document.getElementById('prof-bot');
+                botEl.textContent = isBot ? '🤖 bot : true' : '👤 bot : false';
+                botEl.style.color = isBot ? 'var(--warn)' : 'var(--text2)';
+                botEl.style.display = '';
+            }
+        } else {
+            document.getElementById('prof-avatar').textContent = '👥';
+            document.getElementById('prof-name').textContent = targets.length + ' profils sélectionnés';
+            document.getElementById('prof-hexval').textContent = profileMetas.map(function(p){ return p.meta.name || p.meta.display_name || p.hex.slice(0,8)+'…'; }).join(', ');
+            document.getElementById('prof-about').textContent = '';
+            document.getElementById('btn-prof-viewer').style.display = 'none';
+        }
+
         renderProfileEvents();
-        showToast(_profEvents.length + ' événement(s) chargé(s)', 'ok');
+        showToast(_profEvents.length + ' événement(s) chargé(s) — '+targets.length+' profil(s)', 'ok');
     } catch(e) { if (e.message !== '403') showToast('Erreur: '+e.message,'err'); }
     finally { btn.disabled = false; btn.textContent = 'Charger'; }
 }
 
 function renderProfileEvents() {
     var wrap = document.getElementById('profile-events-wrap');
-    _profSelected.clear(); updateProfSelUI();
-    if (_profEvents.length === 0) { wrap.style.display = 'none'; return; }
+    _profSelected.clear();
+    if (_profEvents.length === 0) { wrap.style.display = 'none'; updateProfSelUI(); return; }
     wrap.style.display = '';
-    document.getElementById('chk-prof-all').checked = false;
     document.getElementById('prof-events-tbody').innerHTML = _profEvents.map(function(ev, i) {
-        return '<tr data-idx="'+i+'">'+
-            '<td><input type="checkbox" data-id="'+ev.id+'" onchange="onProfRowCheck(this)"></td>'+
+        return '<tr data-idx="'+i+'" class="selected">'+
+            '<td><input type="checkbox" data-id="'+ev.id+'" checked onchange="onProfRowCheck(this)"></td>'+
             '<td><span class="'+kindClass(ev.kind)+'">'+ev.kind+'</span></td>'+
             '<td><span class="ev-id" title="'+ev.id+'">'+ev.id.slice(0,8)+'…</span></td>'+
             '<td class="ev-date">'+fmtDate(ev.created_at)+'</td>'+
@@ -968,6 +1033,10 @@ function renderProfileEvents() {
             '<td class="ev-content">'+contentPreview(ev)+'</td>'+
             '<td><button class="btn-ev-view" onclick="showEventModal(_profEvents['+i+'])" title="Voir JSON">👁</button></td></tr>';
     }).join('');
+    // Présélectionner tous les événements
+    _profEvents.forEach(function(ev) { _profSelected.add(ev.id); });
+    document.getElementById('chk-prof-all').checked = true;
+    updateProfSelUI();
 }
 
 function onProfRowCheck(chk) {
@@ -1194,6 +1263,28 @@ function clearOpsLog() {
     document.getElementById('ops-log').style.display = 'none';
 }
 
+function toggleProfileSelect(hex) {
+    if (_selectedPubkeys.has(hex)) _selectedPubkeys.delete(hex);
+    else _selectedPubkeys.add(hex);
+    updateProfileGridUI();
+}
+
+function updateProfileGridUI() {
+    var n = _selectedPubkeys.size;
+    document.querySelectorAll('.relay-profile-item[data-pubkey]').forEach(function(el) {
+        el.classList.toggle('rp-selected', _selectedPubkeys.has(el.dataset.pubkey));
+    });
+    var badge = document.getElementById('rp-sel-badge');
+    var clearBtn = document.getElementById('btn-rp-clear-sel');
+    if (badge) { badge.style.display = n > 0 ? '' : 'none'; badge.textContent = n + ' sélectionné' + (n > 1 ? 's' : ''); }
+    if (clearBtn) clearBtn.style.display = n > 0 ? '' : 'none';
+}
+
+function clearProfileSelection() {
+    _selectedPubkeys.clear();
+    updateProfileGridUI();
+}
+
 function renderRelayProfiles() {
     var container = document.getElementById('relay-profiles-list');
     if (!container) return;
@@ -1205,24 +1296,42 @@ function renderRelayProfiles() {
         var meta = {}; try { meta = JSON.parse(ev.content); } catch(e) {}
         var name = escHtml(meta.name || meta.display_name || ev.pubkey.slice(0,12)+'…');
         var about = escHtml((meta.about||'').slice(0,60));
-        // Utilise window.hexToNpub (lib_3) si disponible
         var shortKey = typeof window.hexToNpub === 'function'
             ? window.hexToNpub(ev.pubkey).slice(0,20)+'…'
             : ev.pubkey.slice(0,20)+'…';
         var pic = meta.picture
             ? '<img src="'+escHtml(meta.picture)+'" style="width:32px;height:32px;border-radius:50%;object-fit:cover;flex-shrink:0" onerror="this.style.display=\'none\'">'
             : '<span style="font-size:1.1rem">👤</span>';
-        return '<div class="relay-profile-item" title="'+name+' — '+ev.pubkey+'">'+
-            '<div style="display:flex;align-items:center;gap:8px;cursor:pointer" onclick="openProfile(\''+ev.pubkey+'\')">'+
+        // Email NIP-39 ["i","email:…",""] ou meta.email
+        var email = '';
+        if (ev.tags) ev.tags.forEach(function(tag) {
+            if (!email && tag[0] === 'i' && typeof tag[1] === 'string' && tag[1].indexOf('email:') === 0)
+                email = tag[1].slice(6);
+        });
+        if (!email && meta.email) email = meta.email;
+        var emailHtml = email
+            ? '<div style="font-size:.67rem;color:var(--accent);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px">✉️ '+escHtml(email)+'</div>'
+            : '';
+        // Bot indicator
+        var isBot = meta.bot === true || meta.bot === 'true' || meta.bot === 1;
+        var botHtml = (typeof meta.bot !== 'undefined')
+            ? '<span style="font-size:.63rem;padding:0 4px;border-radius:4px;margin-left:3px;'+(isBot?'color:var(--warn);background:rgba(214,158,46,.12)':'color:var(--text2);background:rgba(160,174,192,.08)')+'">'+( isBot?'🤖 bot':'👤')+'</span>'
+            : '';
+        var isSel = _selectedPubkeys.has(ev.pubkey);
+        return '<div class="relay-profile-item'+(isSel?' rp-selected':'')+'" data-pubkey="'+ev.pubkey+'" title="'+name+' — clic pour sélectionner" onclick="toggleProfileSelect(\''+ev.pubkey+'\')">'+
+            '<div style="display:flex;align-items:center;gap:8px">'+
             '<div style="width:32px;height:32px;flex-shrink:0;display:flex;align-items:center;justify-content:center">'+pic+'</div>'+
             '<div style="min-width:0;flex:1">'+
-            '<div style="font-weight:600;font-size:.83rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+name+'</div>'+
+            '<div style="font-weight:600;font-size:.83rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+name+botHtml+'</div>'+
             '<div style="font-size:.7rem;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+
                 (about||'<span style="font-family:var(--mono)">'+shortKey+'</span>')+
-            '</div></div>'+
+            '</div>'+
+            emailHtml+
+            '</div>'+
             '<a href="nostr_profile_viewer.html?hex='+ev.pubkey+'" target="_blank" title="Voir profil" onclick="event.stopPropagation()" style="color:var(--text2);font-size:.85rem;padding:3px 5px;text-decoration:none;flex-shrink:0" onmouseover="this.style.color=\'var(--accent)\'" onmouseout="this.style.color=\'var(--text2)\'">👁</a>'+
             '</div></div>';
     }).join('');
+    updateProfileGridUI();
 }
 </script>
 <!-- Modal JSON viewer -->

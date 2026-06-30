@@ -656,10 +656,12 @@ async function fetchNostrProfile(hex, nostrRelayUrl) {
                 clearTimeout(timeout);
                 try {
                     profileData = JSON.parse(event.content);
+                    // Stocker les tags bruts pour les préserver lors d'une republication
+                    profileData._rawTags = (event.tags && Array.isArray(event.tags)) ? event.tags : [];
                     if (event.tags && Array.isArray(event.tags)) {
                         event.tags.forEach(function (tag) {
                             if (tag.length >= 2 && tag[0] === 'i') {
-                                // Sépare la clé de la valeur au premier ':' 
+                                // Sépare la clé de la valeur au premier ':'
                                 const colonIndex = tag[1].indexOf(':');
                                 if (colonIndex > 0) {
                                     const key = tag[1].substring(0, colonIndex);
@@ -988,23 +990,27 @@ function _injectProfileEditForm(container, profileData) {
             var myPub   = await nostr.getPublicKey();
             var myRelay = relayUrl || await getRelayURL();
             var merged  = Object.assign({}, profileData, changes);
+            var savedTags = merged._rawTags || [];   // tags #i d'origine à préserver
+            delete merged._rawTags;                  // ne pas inclure dans le content JSON
             Object.keys(merged).forEach(function (k) { if (merged[k] === '') delete merged[k]; });
             var ev = {
                 kind: 0,
                 pubkey: myPub,
                 created_at: Math.floor(Date.now() / 1000),
-                tags: [],
+                tags: savedTags,
                 content: JSON.stringify(merged)
             };
             var signed = await nostr.signEvent(ev);
+            npvLog.log('publish kind 0 → relay:', myRelay, 'id:', signed.id && signed.id.slice(0,12));
             var rc = NostrTools.relayInit(myRelay);
             await rc.connect();
             await rc.publish(signed);
             rc.close();
-            publishStatus.textContent = '✅ Publié !';
+            npvLog.log('publish kind 0 ✅ accepté par strfry, id:', signed.id && signed.id.slice(0,12));
+            publishStatus.textContent = '✅ Publié ! Rechargement…';
             publishStatus.style.color = 'var(--terminal-green)';
             changes = {};
-            setTimeout(function () { displayNostrData(); }, 1500);
+            setTimeout(function () { displayNostrData(); }, 3000);
         } catch (err) {
             publishStatus.textContent = '❌ ' + (err.message || String(err));
             publishStatus.style.color = 'var(--terminal-red)';

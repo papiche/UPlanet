@@ -81,7 +81,7 @@
     }
 
     // ── Styles (scopés #uph) ───────────────────────────────────────────────────
-    var _CSS = '#uph{position:fixed;top:5px;left:50%;transform:translateX(-50%);z-index:1200;'
+    var _CSS = '#uph{position:fixed;top:5px;left:50%;transform:translateX(-50%);z-index:9995;'
         + 'display:flex;align-items:center;gap:5px;cursor:grab;'
         + 'background:rgba(7,7,15,.78);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);'
         + 'border:1px solid rgba(255,255,255,.1);border-radius:20px;'
@@ -97,7 +97,7 @@
         + '#uph-nav-panel{position:absolute;top:calc(100% + 7px);left:0;'
         + 'background:rgba(7,7,18,.96);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);'
         + 'border:1px solid rgba(255,255,255,.11);border-radius:13px;'
-        + 'padding:6px;display:flex;flex-direction:column;gap:2px;min-width:162px;z-index:9600;'
+        + 'padding:6px;display:flex;flex-direction:column;gap:2px;min-width:162px;z-index:9996;'
         + 'max-height:min(70vh,420px);overflow-y:auto;overflow-x:hidden}'
         + '#uph-nav-panel.uph-h{display:none}'
         + '#uph-nav-panel a{color:rgba(255,255,255,.82);text-decoration:none;'
@@ -173,7 +173,7 @@
         + 'color:rgba(255,255,255,.75);border-radius:11px;padding:2px 10px;font-size:10.5px;'
         + 'cursor:pointer;font-weight:500;flex-shrink:0}'
         + '#uph-access-btn:hover{background:rgba(255,255,255,.15)}'
-        + '#uph-moverlay{display:none;position:fixed;inset:0;z-index:9800;background:rgba(0,0,0,.72);backdrop-filter:blur(5px);-webkit-backdrop-filter:blur(5px);align-items:center;justify-content:center}'
+        + '#uph-moverlay{display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.72);backdrop-filter:blur(5px);-webkit-backdrop-filter:blur(5px);align-items:center;justify-content:center}'
         + '#uph-moverlay.open{display:flex}'
         + '#uph-modal{background:rgba(8,8,22,.97);border:1px solid rgba(255,255,255,.12);border-radius:18px;'
         + 'padding:20px;width:340px;max-width:92vw;max-height:88vh;overflow-y:auto;'
@@ -765,6 +765,13 @@
             + '<div style="font-weight:700;color:rgba(255,255,255,.9);font-size:15px;margin-bottom:12px">🔑 Accès UPlanet</div>'
             + '<button id="uph-mext-btn">⚡ Connecter via extension NOSTR</button>'
             + '<hr class="uph-msep">'
+            + '<div style="margin-bottom:12px">'
+            + '<label style="font-size:10px;color:rgba(255,255,255,.5);display:block;margin-bottom:4px">📱 Connexion mobile (clé nsec)</label>'
+            + '<input type="password" id="uph-nsec-input" placeholder="Coller votre clé nsec1…" autocomplete="off" spellcheck="false">'
+            + '<button id="uph-nsec-btn" style="margin-top:6px">🔐 Connecter avec nsec</button>'
+            + '<span id="uph-nsec-err"></span>'
+            + '</div>'
+            + '<hr class="uph-msep">'
             + '<div style="text-align:center;padding:10px 0;font-size:11px;color:rgba(255,255,255,.45);line-height:1.6">'
             + 'Pas encore d\'identité ?<br>'
             + '<a href="atomic.html" style="color:rgba(0,255,204,.7);font-weight:600;text-decoration:none">⚛ Créer via ATOM4LOVE →</a><br>'
@@ -781,6 +788,107 @@
             extBtn.addEventListener('click', async function () {
                 _closeModal();
                 await _handleConnect();
+            });
+        }
+
+        // ── Connexion manuelle par clé nsec (mobile sans extension) ────────────
+        var nsecBtn = document.getElementById('uph-nsec-btn');
+        if (nsecBtn) {
+            nsecBtn.addEventListener('click', function () {
+                var input  = document.getElementById('uph-nsec-input');
+                var errEl  = document.getElementById('uph-nsec-err');
+                var nsec   = input ? input.value.trim() : '';
+                if (errEl) errEl.textContent = '';
+                if (!nsec) { if (errEl) errEl.textContent = 'Veuillez coller votre clé nsec1…'; return; }
+
+                try {
+                    var nt = window.NostrTools || window.Nostr;
+                    if (!nt || !nt.nip19) throw new Error('NostrTools non chargé');
+
+                    var decoded = nt.nip19.decode(nsec);
+                    if (decoded.type !== 'nsec') throw new Error('Format invalide — nsec1… attendu');
+
+                    // decoded.data est un Uint8Array → hex
+                    var privHex = Array.from(decoded.data)
+                        .map(function(b) { return b.toString(16).padStart(2, '0'); }).join('');
+                    var pubHex  = nt.getPublicKey(privHex);
+
+                    // Mettre à jour l'état NOSTR global
+                    var ns = window.NostrState || (window.NostrState = {});
+                    ns.userPrivateKey   = privHex;
+                    ns.userPubkey       = pubHex;
+                    ns.isNostrConnected = true;
+                    window.userPrivateKey   = privHex;
+                    window.userPubkey       = pubHex;
+                    window.isNostrConnected = true;
+                    if (typeof window.syncLegacyVariables === 'function') window.syncLegacyVariables();
+
+                    // Polyfill window.nostr pour les pages qui signent directement
+                    // (atomic_chat.html, atomic_map.html, etc.) — priorité à l'extension si déjà là
+                    if (typeof window.nostr === 'undefined' || !window.nostr) {
+                        (function (priv, pub) {
+                            window.nostr = {
+                                getPublicKey: function () { return Promise.resolve(pub); },
+                                signEvent: function (ev) {
+                                    try {
+                                        var _nt = window.NostrTools || window.Nostr;
+                                        return Promise.resolve(_nt.finishEvent(ev, priv));
+                                    } catch (e) { return Promise.reject(e); }
+                                },
+                                // NIP-44 v2 : encrypt(pubkey, plaintext) / decrypt(pubkey, ciphertext)
+                                // nostr.bundle.js expose nip44.encrypt(conversationKey, text) →
+                                // on dérive la conversationKey en interne via utils.v2.getConversationKey
+                                nip44: {
+                                    encrypt: function (pk, text) {
+                                        try {
+                                            var _nt = window.NostrTools || window.Nostr;
+                                            if (!_nt || !_nt.nip44) return Promise.reject(new Error('nip44 N/A'));
+                                            var ck = _nt.nip44.utils.v2.getConversationKey(priv, pk);
+                                            return Promise.resolve(_nt.nip44.encrypt(ck, text));
+                                        } catch (e) { return Promise.reject(e); }
+                                    },
+                                    decrypt: function (pk, ciph) {
+                                        try {
+                                            var _nt = window.NostrTools || window.Nostr;
+                                            if (!_nt || !_nt.nip44) return Promise.reject(new Error('nip44 N/A'));
+                                            var ck = _nt.nip44.utils.v2.getConversationKey(priv, pk);
+                                            return Promise.resolve(_nt.nip44.decrypt(ck, ciph));
+                                        } catch (e) { return Promise.reject(e); }
+                                    }
+                                },
+                                nip04: {
+                                    encrypt: function (pk, text) {
+                                        try {
+                                            var _nt = window.NostrTools || window.Nostr;
+                                            if (!_nt || !_nt.nip04) return Promise.reject(new Error('nip04 N/A'));
+                                            return Promise.resolve(_nt.nip04.encrypt(priv, pk, text));
+                                        } catch (e) { return Promise.reject(e); }
+                                    },
+                                    decrypt: function (pk, ciph) {
+                                        try {
+                                            var _nt = window.NostrTools || window.Nostr;
+                                            if (!_nt || !_nt.nip04) return Promise.reject(new Error('nip04 N/A'));
+                                            return Promise.resolve(_nt.nip04.decrypt(priv, pk, ciph));
+                                        } catch (e) { return Promise.reject(e); }
+                                    }
+                                }
+                            };
+                        }(privHex, pubHex));
+                    }
+
+                    // Effacer l'input pour ne pas laisser la clé dans le DOM
+                    if (input) input.value = '';
+
+                    _closeModal();
+                    _applyPubkey(pubHex);
+                    _cachePubkey(pubHex);
+                    _refreshUI();
+                    if (!_dataLoaded) { _dataLoaded = true; _loadAll(); }
+                    document.dispatchEvent(new CustomEvent('nostr:connected', { detail: { pubkey: pubHex } }));
+
+                } catch (e) {
+                    if (errEl) errEl.textContent = 'Clé invalide : ' + (e.message || e);
+                }
             });
         }
 

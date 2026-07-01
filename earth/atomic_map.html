@@ -1079,7 +1079,10 @@ async function _loadMap() {
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', function() {
-    _loadMap();
+    _loadMap().catch(function(e) {
+        console.warn('[atomic_map] _loadMap erreur:', e && e.message || e);
+        _hideLoad();
+    });
 });
 document.addEventListener('keydown', function(e) {
     if (e.key === 'Escape') document.getElementById('dm-modal').classList.remove('open');
@@ -1098,6 +1101,10 @@ if (typeof window.waitForConnection === 'function') {
 if (window.isNostrConnected && window.userPubkey) {
     _onConnected();
 }
+// Connexion tardive après saisie nsec dans UPH
+document.addEventListener('nostr:connected', function(e) {
+    if (e.detail && e.detail.pubkey) _onConnected();
+});
 </script>
 <script src="atomic-nav.js"></script>
 <script>

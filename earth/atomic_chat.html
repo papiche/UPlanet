@@ -1386,17 +1386,27 @@ document.addEventListener('DOMContentLoaded', function() {
 <script src="a4l-chat-profile.js"></script>
 <script src="a4l-chat-settings.js"></script>
 <script>
-if (typeof window.waitForConnection === 'function') {
-    window.waitForConnection(_onConnected);
+// Sur mobile sans extension NOSTR et sans session active : débloquer immédiatement
+// _onConnected() gère le cas pubkey absent → affiche message + _hideLoad()
+if (!window.nostr && !window.userPubkey && !sessionStorage.getItem('uph_pubkey')) {
+    _onConnected();
 } else {
-    (function() {
-        var _p = setInterval(function() {
-            if (window.isNostrConnected && window.userPubkey) { clearInterval(_p); _onConnected(); }
-        }, 500);
-        setTimeout(function(){clearInterval(_p);}, 30000);
-    })();
+    if (typeof window.waitForConnection === 'function') {
+        window.waitForConnection(_onConnected);
+    } else {
+        (function() {
+            var _p = setInterval(function() {
+                if (window.isNostrConnected && window.userPubkey) { clearInterval(_p); _onConnected(); }
+            }, 500);
+            setTimeout(function(){clearInterval(_p);}, 30000);
+        })();
+    }
+    if (window.isNostrConnected && window.userPubkey) _onConnected();
 }
-if (window.isNostrConnected && window.userPubkey) _onConnected();
+// Connexion tardive après saisie nsec dans UPH (mobile)
+document.addEventListener('nostr:connected', function(e) {
+    if (e.detail && e.detail.pubkey) _onConnected();
+});
 </script>
 <script src="atomic-nav.js"></script>
 <script>

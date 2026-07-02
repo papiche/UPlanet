@@ -932,6 +932,7 @@ async function toggleUserFollow(targetPubkey, options = {}) {
  * Applique le thème dynamique basé sur l'heure de la journée
  */
 function applyDynamicTheme() {
+    if (document.documentElement.hasAttribute('data-no-dynamic-theme')) return;
     const hour = new Date().getHours();
     const root = document.documentElement;
 

@@ -11,12 +11,12 @@
             --gold:#FFD700; --gold-dim:#b89a00;
             --mv:  #9B30FF; --mv-dk: #4A0E4E;
             --cy:  #00ccff;
-            --bg:  #021a11; --tbg: #010a06;
-            --glass: rgba(2,122,72,.14);
+            --mz-bg:  #021a11; --tbg: #010a06;
+            --mz-glass: rgba(2,122,72,.14);
             --bdr:  rgba(0,201,104,.28);
         }
         html,body{scroll-behavior:smooth}
-        body{background:var(--bg);color:#e0f2e9;font-family:'Segoe UI',system-ui,sans-serif}
+        body{background:var(--mz-bg);color:#e0f2e9;font-family:'Segoe UI',system-ui,sans-serif}
         body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
             background:radial-gradient(circle at 12% 55%,rgba(155,48,255,.07),transparent 28%),
                        radial-gradient(circle at 88% 28%,rgba(0,201,104,.07),transparent 28%)}
@@ -27,7 +27,7 @@
         .hero h1 .pu{color:var(--mv);text-shadow:0 0 20px rgba(155,48,255,.5)}
         .hero .lead{color:var(--em);font-style:italic;max-width:580px;margin:0 auto;font-size:1rem}
         /* ── PILIERS ── */
-        .pilier{background:var(--glass);border:1px solid var(--bdr);border-radius:14px;
+        .pilier{background:var(--mz-glass);border:1px solid var(--bdr);border-radius:14px;
                 padding:1.6rem;height:100%;position:relative;overflow:hidden;
                 transition:transform .3s,box-shadow .3s,border-color .3s;
                 text-decoration:none;color:inherit;display:block}
@@ -658,6 +658,47 @@ kp = <span class="kw">nacl.sign</span><br>
                     <!-- ══ PANE 4 : Terminal crypto ════════════════════════════════ -->
                     <div class="wz-pane wz-hidden" id="wp4">
                         <div id="term-out" class="mb-2">Pipeline prêt.</div>
+
+                        <!-- ── Coffre nsec : révéler/copier + extension NIP-07 ────────── -->
+                        <div id="vault-box" class="hidden" style="background:rgba(155,48,255,.08);
+                             border:1px solid rgba(155,48,255,.3);border-radius:10px;padding:13px;margin-bottom:10px">
+                            <div style="color:#c78bff;font-size:.82rem;font-weight:700;margin-bottom:8px">
+                                🔒 Sécurise ta clé nsec
+                            </div>
+                            <p style="font-size:.72rem;color:#ddd;margin-bottom:10px;line-height:1.5">
+                                Cette clé est le seul moyen de prouver que tu es toi.
+                                <span style="color:#ff5566">Ne la montre à personne.</span>
+                            </p>
+                            <div style="background:rgba(0,0,0,.4);padding:10px;border-radius:8px;margin-bottom:8px">
+                                <div style="font-size:.68rem;color:#aaa;margin-bottom:6px">Étape 1 — Copie ta clé nsec</div>
+                                <div style="display:flex;gap:5px">
+                                    <input type="password" id="vault-nsec-input" readonly
+                                           style="flex:1;background:transparent;border:1px solid #555;color:#fff;
+                                                  border-radius:6px;padding:5px 8px;font-size:.65rem;font-family:monospace">
+                                    <button id="vault-reveal-btn" onclick="_mizRevealNsec()" title="Afficher/masquer"
+                                            style="background:rgba(255,255,255,.1);color:#ccc;border:1px solid #555;
+                                                   border-radius:6px;padding:5px 8px;font-size:.8rem;cursor:pointer">👁</button>
+                                    <button id="vault-copy-btn" onclick="_mizCopyNsec()"
+                                            style="background:#b464ff;color:#fff;border:none;border-radius:6px;
+                                                   padding:5px 10px;font-size:.72rem;cursor:pointer;white-space:nowrap">📋 Copier</button>
+                                </div>
+                            </div>
+                            <div style="background:rgba(0,0,0,.4);padding:10px;border-radius:8px" id="vault-wallet-step">
+                                <div style="font-size:.68rem;color:#aaa;margin-bottom:6px">Étape 2 — Colle-la dans ton extension NOSTR</div>
+                                <!-- rempli par _mizRenderWallet() selon le navigateur détecté -->
+                            </div>
+                        </div>
+
+                        <!-- ── Inscription réelle NOSTR + délégation /g1nostr ─────────── -->
+                        <button id="btn-register" class="wz-forge hidden mb-2" onclick="_mizRegister()">
+                            🌐 Inscrire mon MULTIPASS (délégation /g1nostr) →
+                        </button>
+                        <div id="register-result" class="mb-2"></div>
+                        <div id="register-pass-block" class="hidden mb-2">
+                            <label class="wz-label">🔑 Code PASS (MULTIPASS déjà existant)</label>
+                            <input type="text" id="register-pass-input" class="form-control wz-input">
+                        </div>
+
                         <a href="atomic.html" id="btn-a4l"
                            class="btn-cta mv hidden">
                             🧬 Continuer vers ATOM4LOVE →
@@ -856,6 +897,11 @@ function _wz1(restart) {
         document.getElementById('btn-a4l').classList.add('hidden');
         document.getElementById('btn-zk').classList.add('hidden');
         document.getElementById('btn-retry').classList.add('hidden');
+        document.getElementById('vault-box').classList.add('hidden');
+        document.getElementById('btn-register').classList.add('hidden');
+        document.getElementById('register-result').innerHTML = '';
+        document.getElementById('register-pass-block').classList.add('hidden');
+        document.getElementById('register-pass-input').value = '';
     }
     _showPane(1);
 }
@@ -982,6 +1028,125 @@ function _updatePepperFormula() {
     document.getElementById('pepper-formula').textContent = p || '— remplir les champs —';
 }
 
+// ── Détection extension NOSTR selon navigateur [atomic.html _getRecommendedWallet()] ──
+function _getRecommendedWallet() {
+    var ua = navigator.userAgent;
+    if (/Android/i.test(ua)) {
+        return { name: 'Amber', url: 'https://github.com/greenart7c3/Amber/releases', icon: '🟠' };
+    }
+    if (/Firefox/i.test(ua)) {
+        return { name: 'nos2x-fox', url: 'https://addons.mozilla.org/fr/firefox/addon/nos2x-fox/', icon: '🦊' };
+    }
+    return { name: 'nos2x', url: 'https://chromewebstore.google.com/detail/nos2x/kpgefcfmnafjgpblomihpgmejjdanjjp', icon: '🧩' };
+}
+
+function _mizRenderWallet() {
+    var w = _getRecommendedWallet();
+    document.getElementById('vault-wallet-step').innerHTML =
+        '<a href="' + w.url + '" target="_blank" rel="noopener" '
+        + 'style="display:block;text-align:center;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.2);'
+        + 'color:#fff;text-decoration:none;padding:9px;border-radius:8px;font-size:.8rem">'
+        + w.icon + ' Installer ' + w.name + '</a>'
+        + '<div style="font-size:.62rem;color:#aaa;text-align:center;margin-top:6px">'
+        + 'Ouvre l\'extension, choisis <em>"Importer une clé"</em> et colle ton nsec.</div>';
+}
+
+// ── Coffre nsec : révéler / copier [atomic.html _atomicRevealNsec/_atomicCopyNsec] ──
+function _mizRevealNsec() {
+    var inp  = document.getElementById('vault-nsec-input');
+    var rbtn = document.getElementById('vault-reveal-btn');
+    if (!inp) return;
+    var revealed = inp.type === 'text';
+    inp.type = revealed ? 'password' : 'text';
+    if (rbtn) rbtn.textContent = revealed ? '👁' : '🙈';
+}
+function _mizCopyNsec() {
+    var inp = document.getElementById('vault-nsec-input');
+    if (!inp) return;
+    inp.type = 'text';
+    inp.select();
+    try { document.execCommand('copy'); } catch (_) {}
+    if (navigator.clipboard) navigator.clipboard.writeText(inp.value).catch(function() {});
+    setTimeout(function() { inp.type = 'password'; }, 300);
+    var cbtn = document.getElementById('vault-copy-btn');
+    if (cbtn) { cbtn.textContent = '✅ Copié'; setTimeout(function() { cbtn.textContent = '📋 Copier'; }, 2200); }
+}
+
+// ── Inscription réelle NOSTR + délégation /g1nostr [atomic.html calculateConception()] ──
+// Déclenchée uniquement par un clic explicite — jamais automatiquement, pour ne pas
+// créer de vrai MULTIPASS à chaque essai du pipeline pédagogique.
+var _mizCtx = null;   // { email, stretchedSalt, stretchedPepper, npub, ...biométrie }
+
+async function _mizRegister() {
+    if (!_mizCtx) return;
+    var btn        = document.getElementById('btn-register');
+    var resultEl    = document.getElementById('register-result');
+    var passBlock   = document.getElementById('register-pass-block');
+    var passInput   = document.getElementById('register-pass-input');
+    var passCode    = (passInput && passBlock.classList.contains('hidden') === false) ? (passInput.value || '').trim() : '';
+
+    var apiUrl = (typeof window.getAPIUrl === 'function' ? window.getAPIUrl()
+        : (location.hostname === '127.0.0.1' || location.hostname === 'localhost')
+          ? 'http://127.0.0.1:54321' : 'https://u.copylaradio.com');
+
+    btn.textContent = '🌐 Inscription en cours…'; btn.disabled = true;
+    resultEl.innerHTML = '';
+
+    var fd = new FormData();
+    fd.append('email', _mizCtx.email);
+    fd.append('lang',  navigator.language ? navigator.language.slice(0, 2) : 'fr');
+    if (_mizCtx.lat !== 0) fd.append('lat', _mizCtx.lat.toFixed(2));
+    if (_mizCtx.lon !== 0) fd.append('lon', _mizCtx.lon.toFixed(2));
+    fd.append('birth_datetime', _mizCtx.birthDatetime);
+    fd.append('conception_datetime', _mizCtx.conceptionDatetime);
+    fd.append('birth_weight', _mizCtx.weight.toFixed(1));
+    fd.append('birth_height', String(_mizCtx.birthHeight));
+    fd.append('current_height', String(_mizCtx.currentHeight));
+    fd.append('polarity', _mizCtx.polarity);
+    fd.append('salt',   _mizCtx.stretchedSalt);
+    fd.append('pepper', _mizCtx.stretchedPepper);
+    fd.append('utc_offset', String(_mizCtx.lon !== 0 ? Math.round(_mizCtx.lon / 15) : 0));
+    fd.append('format', 'json');
+    if (passCode) fd.append('pass_code', passCode);
+
+    try {
+        var res  = await fetch(apiUrl + '/g1nostr', { method: 'POST', body: fd });
+        var json = await res.json().catch(function() { return {}; });
+
+        if (res.status === 409) {
+            var err = json.error || '';
+            if (err === 'IDENTITY_CONFLICT') {
+                resultEl.innerHTML = '<div class="small p-2 rounded" style="background:rgba(180,0,255,.08);'
+                    + 'border:1px solid rgba(180,0,255,.3);color:#cc88ff">'
+                    + '🔮 Ces données biométriques appartiennent déjà à une autre identité sur la constellation.</div>';
+            } else {
+                passBlock.classList.remove('hidden');
+                if (passInput) passInput.focus();
+                resultEl.innerHTML = '<div class="small p-2 rounded" style="background:rgba(245,158,11,.08);'
+                    + 'border:1px solid rgba(245,158,11,.3);color:#f59e0b">'
+                    + '🔑 Ce MULTIPASS existe déjà (sur cette station ou ailleurs dans la constellation).<br>'
+                    + '<span style="font-size:.7rem;color:rgba(255,255,255,.45)">Saisis le code PASS reçu par email, puis réessaie.</span></div>';
+            }
+            return;
+        }
+        if (!res.ok) throw new Error(json.detail || json.error || 'HTTP ' + res.status);
+
+        resultEl.innerHTML = '<div class="small p-2 rounded" style="background:rgba(0,255,100,.06);'
+            + 'border:1px solid rgba(0,255,100,.25);color:#00ff88">'
+            + '✅ MULTIPASS inscrit sur le réseau NOSTR.<br>'
+            + '<span style="font-size:.68rem;color:rgba(255,255,255,.5);word-break:break-all">npub : ' + (json.npub || _mizCtx.npub) + '</span>'
+            + (json.uplanet_home ? '<br><a href="' + json.uplanet_home + '" target="_blank" style="color:#00ffcc;font-size:.7rem">→ Ouvrir mon espace UPlanet</a>' : '')
+            + '</div>';
+        btn.classList.add('hidden');
+
+    } catch (e) {
+        resultEl.innerHTML = '<div class="small p-2 rounded" style="background:rgba(255,0,0,.08);'
+            + 'border:1px solid rgba(255,0,0,.2);color:#ff8888">⚠ ' + (e.message || String(e)) + '</div>';
+    } finally {
+        if (!btn.classList.contains('hidden')) { btn.textContent = '🌐 Inscrire mon MULTIPASS (délégation /g1nostr) →'; btn.disabled = false; }
+    }
+}
+
 // ── Pipeline crypto principal ─────────────────────────────────────────────────
 async function _runPipeline() {
     var email   = (document.getElementById('inp-email').value || '').trim();
@@ -1101,6 +1266,20 @@ async function _runPipeline() {
     await tType('>', 0);
     await tType('>  MULTIPASS complet (biométrie) → atomic.html', 10, 'hi');
     await tType('>  Wallet ẐEN → Ẑelkova ci-dessous', 10);
+
+    // ── Révéler le coffre nsec + le bouton d'inscription réelle ─────────────
+    if (nsec) {
+        _mizCtx = {
+            email: email, npub: npub,
+            stretchedSalt: wr.ss, stretchedPepper: wr.sp,
+            lat: _lat, lon: _lon, weight: _w, birthHeight: _bh, currentHeight: _ch,
+            polarity: _pol, birthDatetime: _bd + 'T' + _bt, conceptionDatetime: _cd + 'T' + _ct
+        };
+        document.getElementById('vault-nsec-input').value = nsec;
+        _mizRenderWallet();
+        document.getElementById('vault-box').classList.remove('hidden');
+        document.getElementById('btn-register').classList.remove('hidden');
+    }
 
     document.getElementById('btn-a4l').classList.remove('hidden');
     $zk.classList.remove('hidden');

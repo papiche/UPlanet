@@ -72,6 +72,22 @@
 .msg-row.me:hover .msg-delete-btn { display:block; }
 .msg-delete-btn:hover { color:rgba(255,80,80,1); background:rgba(255,80,80,.12); }
 
+/* Sélection multiple */
+#btn-select-mode.active { color:#00ffcc; background:rgba(0,255,204,.14); border-radius:50%; }
+.msg-select-chk { align-self:flex-end; margin-bottom:9px; width:17px; height:17px; accent-color:#00ffcc; cursor:pointer; flex-shrink:0; }
+
+/* Mode sélection — affichage compact */
+#view-chat.select-mode .msg-bubble { padding:5px 9px 3px; font-size:.78rem; line-height:1.35; }
+#view-chat.select-mode .msg-row { margin-bottom:0; }
+#view-chat.select-mode .msg-row.group-start { margin-top:5px; }
+#view-chat.select-mode .msg-av { width:22px; height:22px; font-size:.62rem; }
+#view-chat.select-mode .date-sep { padding:4px 0; }
+#view-chat.select-mode .date-sep-text { font-size:.6rem; padding:2px 8px; }
+#view-chat.select-mode .msg-wrap { max-width:78%; }
+#view-chat.select-mode .img-bubble { max-width:160px; min-width:80px; }
+#view-chat.select-mode .img-bubble img { max-height:140px; }
+#btn-select-all { font-size:.68rem; padding:4px 8px; border-radius:8px; border:1px solid rgba(255,255,255,.15); background:none; color:rgba(255,255,255,.55); cursor:pointer; }
+
 /* Conv "Notes personnelles" */
 .conv-av-notes { font-size:1.15rem; }
 
@@ -80,6 +96,7 @@
 .img-bubble img { width:100%; display:block; max-height:260px; object-fit:cover; border-radius:10px; }
 .img-loading { padding:22px 14px; text-align:center; font-size:.71rem; color:rgba(255,255,255,.32); display:flex; flex-direction:column; align-items:center; gap:6px; }
 .img-error { padding:10px 12px; font-size:.71rem; color:rgba(255,80,80,.55); text-align:center; }
+.img-caption { font-size:.71rem; color:rgba(255,255,255,.58); padding:5px 9px 7px; line-height:1.35; border-top:1px solid rgba(255,255,255,.07); word-break:break-word; }
 
 /* Lightbox */
 #lightbox { position:fixed; inset:0; z-index:3000; background:rgba(0,0,0,.92); display:none; align-items:center; justify-content:center; cursor:pointer; }
@@ -153,6 +170,10 @@
                 <div id="chat-peer-name">–</div>
                 <div id="chat-peer-sub" style="font-size:.64rem;color:rgba(255,255,255,.3);margin-top:1px"></div>
             </div>
+            <!-- Sélection multiple / suppression -->
+            <button class="sb-icon-btn" id="btn-select-mode" onclick="_toggleSelectMode()" title="Sélectionner des messages">☑️</button>
+            <button id="btn-select-all" onclick="_toggleSelectAll()" style="display:none" title="Tout sélectionner / désélectionner">☐ Tout</button>
+            <button class="sb-icon-btn" id="btn-delete-sel" onclick="_deleteSelected()" style="display:none;color:#ff5a5a" title="Supprimer la sélection">🗑️ <span id="sel-count">0</span></button>
         </div>
 
         <!-- État vide (aucune conversation sélectionnée) -->
@@ -266,6 +287,13 @@ var _liveWs     = null;
 var _liveSub    = null;
 var _encMode    = null;
 var _constellRelays = [];
+var _nodeHex       = null;   // Hex pubkey NODE de la station (12345.json → NODEHEX)
+var _captainHex    = null;   // Hex pubkey NOSTR du capitaine (12345.json → captainHEX)
+
+// ── Sélection multiple / suppression ────────────────────────────────────────
+var _selectMode = false;
+var _selectedIds = new Set();
+var _allSelected = false;
 
 // ── Éphémère (NIP-40) ─────────────────────────────────────────────────────────
 var _ttl = 0;   // 0 = permanent, 300 = 5min, 3600 = 1h, 86400 = 24h
@@ -515,12 +543,30 @@ async function _loadConvs() {
         return {peer:p, profile:prof, text:text, time:entry.ev.created_at, isMe:entry.isMe};
     })) : [];
     items.sort(function(a,b){return b.time-a.time;});
-    // Notes personnelles — toujours épinglées en haut
+
+    // NODE — canal station (NODEHEX) — épinglé en 2ème position, visible uniquement pour le capitaine
+    // Le capitaine est détecté via captainHEX (12345.json) comparé au _myPub connecté
+    var _isCapitaine = _captainHex && _myPub && _captainHex === _myPub;
+    if (_nodeHex && _isCapitaine) {
+        var nodeIdx = items.findIndex(function(c) { return c.peer === _nodeHex; });
+        var nodeExisting = nodeIdx >= 0 ? items.splice(nodeIdx, 1)[0] : null;
+        var nodeProf = Object.assign({}, nodeExisting ? nodeExisting.profile : {name:'⚡ NODE', picture:null}, {name:'⚡ NODE'});
+        items.unshift({
+            peer:    _nodeHex,
+            profile: nodeProf,
+            text:    nodeExisting ? nodeExisting.text : '⚡ Station UPlanet',
+            time:    nodeExisting ? nodeExisting.time : 0,
+            isMe:    nodeExisting ? nodeExisting.isMe : false,
+            isNode:  true
+        });
+    }
+
+    // BRO — canal MULTIPASS (self-DM) — toujours épinglé en 1ère position
     selfEvs.sort(function(a,b){return b.created_at-a.created_at;});
     var selfText = selfEvs.length ? await _cachedDecrypt(selfEvs[0]) : '';
     var selfTime = selfEvs.length ? selfEvs[0].created_at : 0;
-    items.unshift({peer:_myPub, profile:{name:'📝 Notes personnelles', picture:null},
-                   text:selfText||'Vos notes personnelles', time:selfTime, isMe:true, isSelf:true});
+    items.unshift({peer:_myPub, profile:{name:'🤖 BRO', picture:null},
+                   text:selfText||'💬 Votre assistant BRO', time:selfTime, isMe:true, isSelf:true});
     _convItems = items;
     _renderConvList(items);
     _hideLoad(); _showBtn();
@@ -572,7 +618,24 @@ function _renderEmptyConvs() {
             'margin-top:14px;padding:11px 20px;border-radius:12px;cursor:pointer;' +
             'background:linear-gradient(135deg,rgba(0,255,204,.18),rgba(102,126,234,.12));' +
             'border:1.5px solid rgba(0,255,204,.45);color:#fff;font-size:.85rem;font-weight:700;' +
-        '">💌 Demander mon Analyse à BRO</button></div>';
+        '">🤖 Ouvrir BRO</button></div>';
+}
+
+async function _fetchNodeHex() {
+    try {
+        var h = location.hostname;
+        var stUrl;
+        if (h === '127.0.0.1' || h === 'localhost') stUrl = 'http://127.0.0.1:12345';
+        else if (h.startsWith('ipfs.')) stUrl = 'http://' + h.slice(5) + ':12345';
+        else if (h.startsWith('u.'))    stUrl = 'http://' + h.slice(2) + ':12345';
+        else                            stUrl = 'http://' + h + ':12345';
+        var resp = await fetch(stUrl + '/12345.json', { signal: AbortSignal.timeout ? AbortSignal.timeout(4000) : undefined });
+        var json = await resp.json();
+        var hex  = json.NODEHEX || json.nodehex || json.ASTROPORT || '';
+        if (hex && /^[0-9a-f]{64}$/i.test(hex)) _nodeHex = hex.toLowerCase();
+        var capHex = json.captainHEX || '';
+        if (capHex && /^[0-9a-f]{64}$/i.test(capHex)) _captainHex = capHex.toLowerCase();
+    } catch(_) {}
 }
 
 function _stationUrl() {
@@ -581,38 +644,22 @@ function _stationUrl() {
 }
 
 async function _startBroLoveChat() {
-    var btn = document.querySelector('#conv-list button');
-    if (btn) { btn.disabled = true; btn.textContent = '⏳ Recherche du BRO…'; }
-    try {
-        var stUrl = _upassportUrl().replace(':54321', ':12345').replace('/u.', '/').replace(/\/\/u\./, '//');
-        // URL station 12345 : remplace le sous-domaine u. par le domaine direct
-        var h = location.hostname;
-        if (h.startsWith('ipfs.'))      stUrl = 'http://' + h.slice(5) + ':12345';
-        else if (h.startsWith('u.'))    stUrl = 'http://' + h.slice(2) + ':12345';
-        else                            stUrl = 'http://' + h + ':12345';
-
-        var resp = await fetch(stUrl + '/12345.json', { signal: AbortSignal.timeout ? AbortSignal.timeout(5000) : undefined });
-        var json = await resp.json();
-        var nodeHex = json.NODEHEX || json.nodehex || json.ASTROPORT || '';
-        if (!nodeHex || !/^[0-9a-f]{64}$/i.test(nodeHex)) throw new Error('NODEHEX introuvable');
-
-        await _openChat(nodeHex.toLowerCase());
-        // Pré-remplir le message "LOVE"
-        var inp = document.getElementById('chat-input');
-        if (inp) { inp.value = 'LOVE'; inp.dispatchEvent(new Event('input')); inp.focus(); }
-    } catch(e) {
-        console.warn('[A4L chat] _startBroLoveChat:', e);
-        if (btn) { btn.disabled = false; btn.textContent = '💌 Demander mon Analyse à BRO'; }
-        alert('BRO introuvable : ' + (e.message || String(e)));
-    }
+    if (!_myPub) return;
+    // BRO = le MULTIPASS connecté (self-DM)
+    await _openChat(_myPub);
+    var inp = document.getElementById('chat-input');
+    if (inp) { inp.value = 'LOVE'; inp.dispatchEvent(new Event('input')); inp.focus(); }
 }
 
 // ── Open chat ─────────────────────────────────────────────────────────────────
 async function _openChat(peerHex) {
     _peer     = peerHex;
-    _peerProf = (peerHex === _myPub)
-        ? {name:'📝 Notes personnelles', picture:null}
-        : await _profile(peerHex);
+    if (peerHex === _myPub) {
+        _peerProf = {name:'🤖 BRO', picture:null};
+    } else {
+        _peerProf = await _profile(peerHex);
+        if (peerHex === _nodeHex) _peerProf = Object.assign({}, _peerProf, {name:'⚡ NODE'});
+    }
     _detectEnc();
 
     /* ── Afficher la zone de chat ── */
@@ -717,6 +764,19 @@ function _renderMsgs() {
     });
 }
 
+// Détecte une URL image dans le texte et rend un bloc image inline + caption
+var _IMG_URL_RE = /https?:\/\/[^\s#]+\.(?:jpg|jpeg|png|gif|webp|JPG|JPEG|PNG|GIF|WEBP)(?:[?][^\s#]*)?/;
+function _renderWithInlineImage(text, meta) {
+    var m = text.match(_IMG_URL_RE);
+    if (m) {
+        var imgUrl  = m[0];
+        var caption = text.replace(imgUrl, '').trim();
+        var capHtml = caption ? '<div class="img-caption">' + _renderMd(caption) + '</div>' : '';
+        return '<div class="img-bubble"><img src="' + _esc(imgUrl) + '" onclick="_openLightbox(this.src)" loading="lazy" onerror="this.parentNode.innerHTML=\'<div class=img-error>⚠ Image indisponible</div>\'">' + capHtml + '</div>' + meta;
+    }
+    return _renderMd(text) + meta;
+}
+
 function _renderMd(text) {
     // Utilise marked.js si disponible, sinon linkification simple
     if (typeof marked !== 'undefined') {
@@ -771,25 +831,134 @@ function _renderMsgRow(m, peerPic, grp) {
         var j = JSON.parse(m.text);
         if (j._uenc_img) {
             var cached = _imgCache[m.id];
+            var hint = (j._uenc_img.hint || '').trim();
+            var captionHtml = hint ? '<div class="img-caption">'+_esc(hint)+'</div>' : '';
             content = '<div class="img-bubble" id="ib-'+m.id+'">' + (
                 cached
                     ? '<img src="'+cached+'" onclick="_openLightbox(this.src)">'
                     : '<div class="img-loading"><div class="a4l-spinner" style="width:22px;height:22px;border-width:2px"></div>Déchiffrement…</div>'
-            ) + '</div>' + meta;
-        } else { content = _renderMd(m.text) + meta; }
-    } catch(_) { content = _renderMd(m.text) + meta; }
+            ) + captionHtml + '</div>' + meta;
+        } else { content = _renderWithInlineImage(m.text, meta); }
+    } catch(_) { content = _renderWithInlineImage(m.text, meta); }
 
-    var delBtn = (m.isMe && !m.pending && !m.error)
+    // Sélectionnable : mes propres messages, OU (canal NODE uniquement) les
+    // messages reçus de NODE — jamais les messages d'un autre pair tiers.
+    var selectable = !m.pending && !m.error && (m.isMe || _peer === _nodeHex);
+    var checkboxHtml = (_selectMode && selectable)
+        ? '<input type="checkbox" class="msg-select-chk" data-id="'+m.id+'" '+(_selectedIds.has(m.id)?'checked':'')+' onchange="_onMsgCheck(this)">'
+        : '';
+
+    var delBtn = (m.isMe && !m.pending && !m.error && !_selectMode)
         ? '<button class="msg-delete-btn" onclick="_deleteMsg(\''+m.id+'\')" title="Supprimer (NIP-09)">✕</button>'
         : '';
 
     return '<div class="msg-row '+rowCls+'">' +
+        checkboxHtml +
         (m.isMe ? delBtn : '') +
         avHtml +
         '<div class="msg-wrap">' +
             '<div class="msg-bubble '+side+cls+'">'+content+'</div>' +
         '</div>' +
     '</div>';
+}
+
+// ── Sélection multiple / suppression ─────────────────────────────────────────
+function _toggleSelectMode() {
+    _selectMode = !_selectMode;
+    _selectedIds.clear();
+    _allSelected = false;
+    document.getElementById('btn-select-mode').classList.toggle('active', _selectMode);
+    var vc = document.getElementById('view-chat');
+    if (vc) vc.classList.toggle('select-mode', _selectMode);
+    _updateSelUI();
+    _renderMsgs();
+}
+
+function _toggleSelectAll() {
+    var selectable = _msgs.filter(function(m) {
+        return !m.pending && !m.error && (m.isMe || _peer === _nodeHex);
+    });
+    _allSelected = !_allSelected;
+    if (_allSelected) {
+        selectable.forEach(function(m) { _selectedIds.add(m.id); });
+    } else {
+        _selectedIds.clear();
+    }
+    _updateSelUI();
+    _renderMsgs();
+}
+
+function _onMsgCheck(chk) {
+    if (chk.checked) _selectedIds.add(chk.dataset.id);
+    else _selectedIds.delete(chk.dataset.id);
+    _updateSelUI();
+}
+
+function _updateSelUI() {
+    var btn    = document.getElementById('btn-delete-sel');
+    var cnt    = document.getElementById('sel-count');
+    var btnAll = document.getElementById('btn-select-all');
+    if (!btn) return;
+    btn.style.display = _selectMode && _selectedIds.size > 0 ? '' : 'none';
+    if (cnt) cnt.textContent = _selectedIds.size;
+    if (btnAll) {
+        btnAll.style.display = _selectMode ? '' : 'none';
+        var selectable = _msgs.filter(function(m) {
+            return !m.pending && !m.error && (m.isMe || _peer === _nodeHex);
+        });
+        var allChecked = selectable.length > 0 && selectable.every(function(m) { return _selectedIds.has(m.id); });
+        btnAll.textContent = allChecked ? '☑ Tout' : '☐ Tout';
+        _allSelected = allChecked;
+    }
+}
+
+async function _deleteSelected() {
+    if (_selectedIds.size === 0) return;
+    if (!confirm('Supprimer définitivement '+_selectedIds.size+' message(s) ?\n\nIRRÉVERSIBLE.')) return;
+    var ids = Array.from(_selectedIds);
+    var myIds   = ids.filter(function(id){ var m=_msgs.find(function(x){return x.id===id;}); return m && m.isMe; });
+    var nodeIds = ids.filter(function(id){ var m=_msgs.find(function(x){return x.id===id;}); return m && !m.isMe; });
+
+    var okCount = 0, errMsgs = [];
+
+    // ── Mes propres messages : un SEUL kind5 pour tous, signé localement ──
+    if (myIds.length) {
+        try {
+            if (!window.nostr) throw new Error('Extension NOSTR requise');
+            var tags = myIds.map(function(id){ return ['e', id]; });
+            var ev = {kind:5, tags:tags, content:'', created_at:Math.floor(Date.now()/1000), pubkey:_myPub};
+            var signed = await window.nostr.signEvent(ev);
+            await _publish(signed);
+            okCount += myIds.length;
+        } catch(e) { errMsgs.push('Mes messages: '+(e.message||e)); }
+    }
+
+    // ── Messages de NODE : le navigateur n'a pas la clé NODE — l'API UPassport
+    // vérifie (auth NIP-42/22242 + capitaine + scope NODE→moi) et supprime elle-même ──
+    if (nodeIds.length) {
+        try {
+            var resp = await fetch(_upassportUrl()+'/api/nostr/dm/delete_node_messages', {
+                method:'POST', headers:{'Content-Type':'application/json'},
+                body: JSON.stringify({ids: nodeIds, npub: _myPub})
+            });
+            var data = await resp.json();
+            if (!resp.ok) throw new Error(data.detail || data.error || resp.statusText);
+            okCount += data.deleted || 0;
+        } catch(e) { errMsgs.push('Messages NODE: '+(e.message||e)); }
+    }
+
+    _msgs = _msgs.filter(function(m){ return !_selectedIds.has(m.id); });
+    _selectedIds.clear();
+    _selectMode = false;
+    _allSelected = false;
+    document.getElementById('btn-select-mode').classList.remove('active');
+    var vc = document.getElementById('view-chat');
+    if (vc) vc.classList.remove('select-mode');
+    _updateSelUI();
+    _renderMsgs();
+
+    if (errMsgs.length) showNotification({message:'Suppression partielle — '+errMsgs.join(' · '), type:'warning'});
+    else showNotification({message:okCount+' message(s) supprimé(s)', type:'success'});
 }
 
 // ── Send text ─────────────────────────────────────────────────────────────────
@@ -855,10 +1024,44 @@ function _onFileChosen(inp) {
 
 async function _uploadAndSend(file) {
     if (!_peer || !_myPub) return;
+    var _hintText = (document.getElementById('chat-input').value || '').trim();
+    document.getElementById('chat-input').value = '';
+
+    // ── Canal BRO (self-DM) : upload public + UN SEUL message texte ──────────
+    // Le responder BRO (UPlanet_IA_Responder.sh) lit des URLs IPFS dans le texte.
+    // On évite le double-message (JSON chiffré + hint) qui provoque 2 réponses BRO.
+    if (_peer === _myPub) {
+        _showProgress(0, 'Envoi vers BRO…');
+        try {
+            var fdBro = new FormData();
+            fdBro.append('file', file, file.name);
+            var resBro = await _xhrUpload(_upassportUrl() + '/api/upload/image', fdBro, function(pct) {
+                _showProgress(pct, 'Upload IPFS…');
+            });
+            _hideProgress();
+            if (!resBro || (!resBro.url && !resBro.local_url)) throw new Error('Réponse invalide du serveur');
+            // Préférer local_url (avec extension) : regex BRO exige .jpg/.png/etc.
+            // http://127.0.0.1:54321/uploads/xxxx.jpg est accessible depuis le serveur
+            var broImgUrl = resBro.local_url
+                ? (_upassportUrl() + resBro.local_url)
+                : resBro.url;
+            // Un seul message : hint (commande) + URL accessible par BRO
+            var broMsg = (_hintText ? _hintText + '\n' : '') + broImgUrl;
+            var inp2 = document.getElementById('chat-input');
+            inp2.value = broMsg;
+            inp2.style.height = '';
+            await _send();
+        } catch(e) {
+            _hideProgress();
+            showNotification({ message: '⚠ Erreur envoi image BRO : ' + (e.message || e), type: 'error' });
+        }
+        return;
+    }
+
+    // ── Autres DMs : upload chiffré AES-GCM ──────────────────────────────────
     _detectEnc();
     if (!_encMode) { showNotification({ message: '⚠ Extension NOSTR requise pour chiffrer le message', type: 'warning' }); return; }
 
-    // Random 32-byte AES key
     var keyBytes = new Uint8Array(32);
     crypto.getRandomValues(keyBytes);
     var keyHex = _bytesToHex(keyBytes);
@@ -875,16 +1078,14 @@ async function _uploadAndSend(file) {
         });
         _hideProgress();
         if (!result || !result.cid) throw new Error('Réponse invalide du serveur');
-        var _hintText = (document.getElementById('chat-input').value || '').trim();
         var imgPayload = JSON.stringify({_uenc_img: {
             cid:      result.cid,
             enc_key:  keyHex,
             enc_type: 'aes256gcm',
             iv:       result.iv_hex,
             filename: file.name,
-            hint:     _hintText   // texte tapé par l'utilisateur (#plant, #cure, …)
+            hint:     _hintText
         }});
-        document.getElementById('chat-input').value = '';
         var tmpId = 'tmp'+Date.now();
         _msgs.push({id:tmpId, isMe:true, text:imgPayload, time:Math.floor(Date.now()/1000), pending:true});
         _renderMsgs();
@@ -896,6 +1097,13 @@ async function _uploadAndSend(file) {
         if (idx!==-1) _msgs[idx] = {id:signed.id, isMe:true, text:imgPayload, time:signed.created_at, sent:true};
         _renderMsgs();
         _updateConvPreview(_peer, '📷 Image', true);
+        // Envoyer le hint comme message texte accompagnateur (visible par le destinataire)
+        if (_hintText) {
+            var hintInp = document.getElementById('chat-input');
+            hintInp.value = _hintText;
+            hintInp.style.height = '';
+            await _send();
+        }
     } catch(e) {
         _hideProgress();
         showNotification({ message: '⚠ Erreur envoi image : ' + (e.message || e), type: 'error' });
@@ -960,7 +1168,9 @@ async function _decryptAndShowImg(msgId, imgObj) {
 function _updateImgBubble(msgId, blobUrl) {
     var el = document.getElementById('ib-'+msgId);
     if (!el) return;
-    el.innerHTML = '<img src="'+blobUrl+'" onclick="_openLightbox(this.src)" loading="lazy">';
+    var caption = el.querySelector('.img-caption');
+    var captionHtml = caption ? caption.outerHTML : '';
+    el.innerHTML = '<img src="'+blobUrl+'" onclick="_openLightbox(this.src)" loading="lazy">' + captionHtml;
 }
 function _updateImgBubbleError(msgId, msg) {
     var el = document.getElementById('ib-'+msgId);
@@ -1016,7 +1226,9 @@ function _subscribeLive() {
                 _convItems.unshift({peer:peer, profile:_profCache[peer]||{name:peer.slice(0,8)+'…',picture:null}, text:text, time:ev.created_at, isMe:false});
             }
             _convItems.sort(function(a,b){
-                if (a.isSelf) return -1; if (b.isSelf) return 1; return b.time-a.time;
+                if (a.isSelf) return -1; if (b.isSelf) return 1;
+                if (a.isNode) return -1; if (b.isNode) return 1;
+                return b.time-a.time;
             });
             _renderConvList(_convItems);
             if (_peer===peer) {
@@ -1312,6 +1524,8 @@ async function _onConnected() {
     }
     _detectEnc();
     _updateRelayBadge('');
+    // Récupérer la clé NODE de la station (canal capitaine)
+    await _fetchNodeHex();
 
     /* ── Initialiser les widgets ── */
     if (typeof ChatSidebar !== 'undefined') {

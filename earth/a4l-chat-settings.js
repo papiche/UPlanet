@@ -138,6 +138,17 @@
                     '</div>' +
                 '</div>' +
 
+                /* ── Cookies des sources surveillées par BRO ── */
+                '<div class="setting-row">' +
+                    '<div>' +
+                        '<div class="setting-label">🍪 Cookies BRO</div>' +
+                        '<div class="setting-desc">Déposer/gérer les cookies des sources surveillées (Mastodon, forums…)</div>' +
+                    '</div>' +
+                    '<div class="setting-ctl">' +
+                        '<a href="cookie.html" class="btn-panel-save" style="display:inline-block;text-decoration:none;padding:6px 14px;font-size:.8rem">Ouvrir →</a>' +
+                    '</div>' +
+                '</div>' +
+
                 '<div id="st-status" style="font-size:.72rem;min-height:1rem;color:rgba(0,255,204,.7);margin-top:4px"></div>' +
                 '<button class="btn-panel-save" onclick="ChatSettings.save()">💾 Sauvegarder</button>' +
                 '<div style="text-align:center;margin-top:10px">' +

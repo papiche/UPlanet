@@ -183,7 +183,7 @@
             <button class="ib-btn" id="btn-attach" onclick="_attachFile()" title="Joindre une image">📎</button>
             <input type="file" id="file-inp" accept="image/*,video/*" style="display:none" onchange="_onFileChosen(this)">
             <div id="input-row">
-                <textarea id="chat-input" placeholder="Message…" rows="1"
+                <textarea id="chat-input" placeholder="Message… (📎 image + #plant / #cure pour BRO)" rows="1"
                           oninput="_autoRes(this)"
                           onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();_send();}"></textarea>
                 <button class="ib-btn" id="btn-ttl" onclick="_cycleTTL()" title="Message éphémère">⏳<span class="ttl-label" id="ttl-label"></span></button>
@@ -875,13 +875,16 @@ async function _uploadAndSend(file) {
         });
         _hideProgress();
         if (!result || !result.cid) throw new Error('Réponse invalide du serveur');
+        var _hintText = (document.getElementById('chat-input').value || '').trim();
         var imgPayload = JSON.stringify({_uenc_img: {
             cid:      result.cid,
             enc_key:  keyHex,
             enc_type: 'aes256gcm',
             iv:       result.iv_hex,
-            filename: file.name
+            filename: file.name,
+            hint:     _hintText   // texte tapé par l'utilisateur (#plant, #cure, …)
         }});
+        document.getElementById('chat-input').value = '';
         var tmpId = 'tmp'+Date.now();
         _msgs.push({id:tmpId, isMe:true, text:imgPayload, time:Math.floor(Date.now()/1000), pending:true});
         _renderMsgs();

@@ -724,12 +724,28 @@ async function _loadMsgs() {
         var decoded = await Promise.all(chunk.map(async function(ev) {
             var text = await _cachedDecrypt(ev);
             var expTag = (ev.tags || []).find(function(t){return t[0]==='expiration';});
-            var ttlRemaining = expTag ? (parseInt(expTag[1],10) - ev.created_at) : 0;
-            return {id:ev.id, isMe:ev.pubkey===_myPub, text:text, time:ev.created_at, sent:true, ttl:ttlRemaining>0?ttlRemaining:0};
+            var expAt = expTag ? parseInt(expTag[1], 10) : 0;
+            var ttlRemaining = expAt ? Math.max(0, expAt - ev.created_at) : 0;
+            return {id:ev.id, isMe:ev.pubkey===_myPub, text:text, time:ev.created_at, sent:true, ttl:ttlRemaining, expAt:expAt};
         }));
         _msgs = _msgs.concat(decoded);
     }
+    // Filtrer les messages déjà expirés
+    var nowTs = Math.floor(Date.now() / 1000);
+    _msgs = _msgs.filter(function(m) { return !m.expAt || m.expAt > nowTs; });
     _renderMsgs();
+    // Planifier l'auto-suppression des messages éphémères encore valides
+    _msgs.forEach(function(m) {
+        if (m.expAt && m.expAt > nowTs) {
+            var delay = (m.expAt - nowTs) * 1000;
+            (function(id, d) {
+                setTimeout(function() {
+                    _msgs = _msgs.filter(function(x) { return x.id !== id; });
+                    if (_peer) _renderMsgs();
+                }, d);
+            })(m.id, delay);
+        }
+    });
 }
 
 // ── Render messages with date separators ──────────────────────────────────────
@@ -820,8 +836,14 @@ function _renderMsgRow(m, peerPic, grp) {
         ? '<span class="msg-tick'+(m.sent?' sent':'')+'">'+( m.pending ? '⌛' : m.error ? '⚠' : '✓' )+'</span>'
         : '';
 
-    // Badge TTL si le message est éphémère
-    var ttlBadge = m.ttl ? '<span class="msg-ttl-badge">⏳'+_fmtTTL(m.ttl)+'</span>' : '';
+    // Badge TTL si le message est éphémère — affiche le temps restant
+    var ttlBadge = '';
+    if (m.expAt) {
+        var remTTL = Math.max(0, m.expAt - Math.floor(Date.now() / 1000));
+        if (remTTL > 0) ttlBadge = '<span class="msg-ttl-badge">⏳'+_fmtTTL(remTTL)+'</span>';
+    } else if (m.ttl) {
+        ttlBadge = '<span class="msg-ttl-badge">⏳'+_fmtTTL(m.ttl)+'</span>';
+    }
 
     // Meta — heure + TTL + coche — flottée dans la bulle
     var meta = '<span class="msg-meta">'+ttlBadge+_fmt(m.time)+tick+'</span>';
@@ -1233,8 +1255,24 @@ function _subscribeLive() {
             _renderConvList(_convItems);
             if (_peer===peer) {
                 if (!_msgs.find(function(msg){return msg.id===ev.id;})) {
-                    _msgs.push({id:ev.id, isMe:isSelfMsg, text:text, time:ev.created_at, sent:true});
-                    _renderMsgs();
+                    var expTagLive = (ev.tags||[]).find(function(t){return t[0]==='expiration';});
+                    var expAtLive  = expTagLive ? parseInt(expTagLive[1], 10) : 0;
+                    var ttlLive    = expAtLive ? Math.max(0, expAtLive - ev.created_at) : 0;
+                    var nowLive    = Math.floor(Date.now() / 1000);
+                    if (expAtLive && expAtLive <= nowLive) { /* déjà expiré — ignorer */ } else {
+                        var liveMsg = {id:ev.id, isMe:isSelfMsg, text:text, time:ev.created_at, sent:true, ttl:ttlLive, expAt:expAtLive};
+                        _msgs.push(liveMsg);
+                        _renderMsgs();
+                        if (expAtLive) {
+                            var remLive = Math.max(0, (expAtLive - nowLive) * 1000);
+                            (function(id, d) {
+                                setTimeout(function() {
+                                    _msgs = _msgs.filter(function(x){ return x.id !== id; });
+                                    if (_peer) _renderMsgs();
+                                }, d);
+                            })(ev.id, remLive);
+                        }
+                    }
                 }
             }
             if (!isSelfMsg) _playNotifBeep();
@@ -1513,13 +1551,17 @@ function _autoRes(el) {
 }
 
 // ── Connection callback ────────────────────────────────────────────────────────
+var _onConnectedRunning = false;
 async function _onConnected() {
+    if (_onConnectedRunning) return;
+    _onConnectedRunning = true;
     var newPub = window.userPubkey;
     if (_myPub && _myPub !== newPub) _decryptCache = {}; // changement d'utilisateur
     _myPub = newPub;
     if (!_myPub) {
         _setMsg('⚠ Aucune clé NOSTR — connectez-vous via l\'en-tête UPlanet');
         _hideLoad();
+        _onConnectedRunning = false;
         return;
     }
     _detectEnc();
@@ -1564,6 +1606,7 @@ async function _onConnected() {
     }
 
     await _loadConvs();
+    _onConnectedRunning = false;
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────────
@@ -1610,6 +1653,7 @@ if (!window.nostr && !window.userPubkey && !sessionStorage.getItem('uph_pubkey')
 } else {
     if (typeof window.waitForConnection === 'function') {
         window.waitForConnection(_onConnected);
+        // waitForConnection gère déjà le cas "déjà connecté" — pas d'appel supplémentaire
     } else {
         (function() {
             var _p = setInterval(function() {
@@ -1617,8 +1661,8 @@ if (!window.nostr && !window.userPubkey && !sessionStorage.getItem('uph_pubkey')
             }, 500);
             setTimeout(function(){clearInterval(_p);}, 30000);
         })();
+        if (window.isNostrConnected && window.userPubkey) _onConnected();
     }
-    if (window.isNostrConnected && window.userPubkey) _onConnected();
 }
 // Connexion tardive après saisie nsec dans UPH (mobile)
 document.addEventListener('nostr:connected', function(e) {

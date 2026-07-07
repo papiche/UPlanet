@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<title>UPlanet Ẑen - Révèle ton Art (ZINE du Mouvement)</title>
+<meta charset="utf-8" />
+<meta http-equiv="X-UA-Compatible" content="IE=edge" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+
+<!-- STYLES -->
+<style>
+  /* --- BASE --- */
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background-color: #f0f0f0; }
+
+  /* --- PANNEAU DE CONTRÔLE (Invisible à l'impression) --- */
+  .print-wizard {
+    background: #1a1209; color: #f5f0e8; text-align: center; padding: 15px;
+    border-bottom: 4px solid #c8a83c; position: sticky; top: 0; z-index: 1000;
+  }
+  .print-wizard h2 { margin-top: 0; color: #c8a83c; font-family: monospace; font-size: 1.5rem; }
+  .step-panel { max-width: 600px; margin: 0 auto; padding: 10px; background: rgba(45,90,27,0.25); border-radius: 8px; border: 1px solid #2d5a1b; }
+  .wizard-btn { background: #c8a83c; color: #1a1209; font-weight: bold; font-size: 1rem; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; margin-top: 10px; transition: 0.3s; }
+  .wizard-btn:hover { background: #fff; box-shadow: 0 0 10px #fff; }
+  .warning-text { color: #e8a020; font-size: 0.9rem; margin: 8px 0; }
+
+  /* --- CONTENEUR ÉCRAN --- */
+  .document-container {
+    display: flex; flex-direction: column; align-items: center; gap: 40px; padding: 40px 0;
+  }
+
+  /* --- ZINE (RECTO) --- */
+  #recto-content {
+    width: 297mm; height: 210mm; /* Aspect A4 Paysage sur écran */
+    background: #f5f0e8;
+    display: grid;
+    grid-template-columns: repeat(4, 25%);
+    grid-template-rows: repeat(2, 50%);
+    grid-template-areas:
+      "page-5 page-4 page-3 page-2"
+      "page-6 page-7 page-8 page-1";
+    box-shadow: 0 0 15px rgba(0,0,0,0.2);
+    overflow: hidden;
+  }
+
+  .zine-page {
+    width: 100%; height: 100%;
+    padding: 5mm;
+    border: 1px dashed #c8a83c;
+    display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center;
+    font-size: 9pt;
+    overflow: hidden;
+    color: #1a1209;
+  }
+
+  /* Rotation parfaite autour du centre absolu de la case */
+  .page-1 { grid-area: page-1; }
+  .page-2 { grid-area: page-2; transform: rotate(180deg); transform-origin: center center; }
+  .page-3 { grid-area: page-3; transform: rotate(180deg); transform-origin: center center; }
+  .page-4 { grid-area: page-4; transform: rotate(180deg); transform-origin: center center; }
+  .page-5 { grid-area: page-5; transform: rotate(180deg); transform-origin: center center; }
+  .page-6 { grid-area: page-6; }
+  .page-7 { grid-area: page-7; }
+  .page-8 { grid-area: page-8; }
+
+  .zine-page h2, .zine-page h3 { color: #2d5a1b; margin-bottom: 6px; font-size: 11pt; width: 100%; }
+  .zine-page p { margin: 4px 0; line-height: 1.3; width: 100%; }
+  .zine-page ul, .zine-page ol { width: 100%; text-align: left; padding-left: 15px; margin: 5px 0; }
+  .zine-page li { margin-bottom: 3px; }
+
+  .full-img { max-width: 90%; max-height: 32mm; object-fit: contain; margin: 5px auto; }
+  .zine-highlight { background: rgba(45,90,27,0.08); padding: 5px; border-radius: 4px; border: 1px solid rgba(45,90,27,0.3); }
+  .cover-emblem { font-size: 28pt; margin-bottom: 4px; }
+  .zine-page.page-1 { background: #2d5a1b; color: #f5f0e8; }
+  .zine-page.page-1 h2 { color: #c8a83c; }
+  .zine-page.page-8 { background: #1a1209; color: #f5f0e8; }
+  .zine-page.page-8 h3 { color: #c8a83c; }
+
+  /* --- VERSO : DÉCLARATION DE TALENT --- */
+  #verso-content {
+    width: 210mm; height: 297mm; /* Aspect A4 Portrait sur écran */
+    padding: 12mm 15mm;
+    background: #f5f0e8; border: 3px solid #2d5a1b;
+    position: relative; box-sizing: border-box; box-shadow: 0 0 15px rgba(0,0,0,0.2);
+    overflow: hidden;
+  }
+  #verso-content::before {
+    content: ""; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    width: 80%; height: 80%;
+    background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><path fill="%232d5a1b" opacity="0.05" d="M50 8c-2 12-14 16-14 30 0 8 6 14 14 14s14-6 14-14c0-14-12-18-14-30zM50 52v40M35 70l15-10 15 10M32 84l18-12 18 12"/></svg>');
+    background-repeat: no-repeat; background-position: center; background-size: contain; z-index: 0;
+  }
+  .verso-inner { position: relative; z-index: 1; color: #1a1209; line-height: 1.35; font-size: 10pt; }
+  .verso-inner h1 { text-align: center; color: #2d5a1b; border-bottom: 2px solid #c8a83c; padding-bottom: 5px; margin-bottom: 10px; font-size: 16pt; text-transform: uppercase; }
+  .verso-inner h2 { color: #8b4513; font-size: 12pt; margin-top: 12px; margin-bottom: 4px; }
+  .verso-intro { font-style: italic; font-size: 9.3pt; background: rgba(200,168,60,0.12); border-left: 3px solid #c8a83c; padding: 8px 10px; margin-bottom: 10px; }
+  .form-group { margin-bottom: 8px; }
+  .form-line { border-bottom: 1px dotted #333; display: inline-block; min-width: 150px; }
+  .checkbox-group { margin: 8px 0; }
+  .checkbox-group label { display: block; margin-bottom: 4px; }
+  .signatures { display: flex; justify-content: space-between; margin-top: 16px; }
+  .signature-box { width: 45%; border: 1px solid #2d5a1b; height: 70px; padding: 10px; text-align: center; color: #555; background: rgba(45,90,27,0.03); }
+  .footer-instructions { text-align: center; margin-top: 14px; font-weight: bold; color: #8b4513; border-top: 1px dashed #ccc; padding-top: 10px; font-size: 9pt; }
+
+  /* =========================================
+     MAGIE CSS POUR L'IMPRESSION SANS BUGS
+     ========================================= */
+  @media print {
+    .no-print { display: none !important; }
+
+    html, body { width: 100% !important; height: 100% !important; margin: 0 !important; padding: 0 !important; background: #fff !important; }
+    .document-container { display: block !important; padding: 0 !important; gap: 0 !important; width: 100%; height: 100%; }
+
+    #recto-content, #verso-content {
+      width: 100% !important;
+      height: 100% !important;
+      box-shadow: none !important;
+      margin: 0 !important;
+      border-color: #ccc !important;
+    }
+
+    body.step1-active #verso-content { display: none !important; }
+    body.step2-active #recto-content { display: none !important; }
+  }
+</style>
+</head>
+<body>
+
+<!-- PANNEAU INTERACTIF (Caché à l'impression) -->
+<div class="print-wizard no-print">
+  <h2>🌿 Imprime le ZINE du Mouvement</h2>
+  <div style="margin-bottom:8px;">
+    <a href="miz.html" style="color:#c8a83c;font-size:0.82rem;text-decoration:none;
+       border:1px solid #c8a83c;border-radius:4px;padding:3px 10px;
+       background:rgba(200,168,60,0.08);letter-spacing:.5px">
+      🔑 Forger ton MULTIPASS → miz.html
+    </a>
+  </div>
+  <div id="panel-step-1" class="step-panel">
+    <p><strong>Étape 1 : Imprimer le Zine (Le Recto)</strong></p>
+    <p style="font-size: 0.8rem; margin-top:5px;">Astuce : Laissez l'échelle à 100% et Marges sur "Aucune".</p>
+    <button class="wizard-btn" onclick="printFront()">🖨️ Imprimer la Face 1</button>
+  </div>
+  <div id="panel-step-2" class="step-panel" style="display: none;">
+    <p><strong>Étape 2 : Imprimer la Déclaration de Talent (Le Verso)</strong></p>
+    <p class="warning-text">⚠️ Replacez la feuille imprimée dans le bac de l'imprimante dans le bon sens.</p>
+    <button class="wizard-btn" onclick="printBack()">🖨️ Imprimer la Face 2</button>
+    <br><br>
+    <button style="background: transparent; color:#aaa; border:1px solid #aaa; cursor:pointer; padding:5px; border-radius:3px;" onclick="resetWizard()">↺ Recommencer</button>
+  </div>
+</div>
+
+<div class="document-container">
+
+  <!-- ==================== RECTO (LE ZINE PAYSAGE) ==================== -->
+  <main id="recto-content">
+    <header class="zine-page page-1">
+      <div class="cover-emblem">🌾</div>
+      <h2 style="color:#c8a83c;">RÉVÈLE TON ART</h2>
+      <p style="font-family: monospace; font-weight:bold;">LE NOUVEAU<br>RITE DE PASSAGE</p>
+      <p style="font-size: 7.5pt; opacity:.8;">UPlanet Ẑen · Astroport.ONE</p>
+    </header>
+
+    <section class="zine-page page-2">
+      <h3>On nous a coupés du vivant</h3>
+      <p>Le système marchand a fait de nous des <strong>acheteurs de solutions</strong> plutôt que des inventeurs de gestes simples.</p>
+      <p>Un rideau plongé dans l'eau devant une fenêtre ouverte au vent rafraîchit une pièce sans électricité. Nos grands-parents le savaient. Ce savoir n'a pas disparu : il dort, remplacé par un objet à acheter.</p>
+    </section>
+
+    <section class="zine-page page-3">
+      <h3>L'IA, mémoire retrouvée</h3>
+      <p>Ce que la marchandisation a effacé de nos gestes quotidiens, l'intelligence artificielle l'a gardé dans ses mémoires.</p>
+      <p>Utilisée comme un <strong>commun</strong>, elle nous rend les savoirs simples oubliés — et les associe aux technologies libres modernes (IPFS, Ğ1, capteurs, impression 3D).</p>
+    </section>
+
+    <section class="zine-page page-4">
+      <h3>Le Nouveau Rite de Passage</h3>
+      <p>Il ne s'agit plus de <strong>« trouver un métier »</strong> pour gagner de quoi vivre.</p>
+      <div class="zine-highlight">
+        <p style="font-weight:bold; color:#2d5a1b;">Le rite de passage devient :<br>révéler ton art aux gens.</p>
+      </div>
+      <p style="font-size:8pt;">Ce que tu sais faire de tes mains devient un talent reconnu dans une toile de confiance — pas un CV à vendre.</p>
+    </section>
+
+    <section class="zine-page page-5">
+      <h3>3 Savoirs à Transmettre</h3>
+      <ul>
+        <li><strong>🏠 Bâtir</strong> — dômes, kerterres, flexyourtes : se loger sans dette</li>
+        <li><strong>⚡ Énergie</strong> — solaire, BHEA, stockage : produire, conserver, distribuer</li>
+        <li><strong>🌳 Forêt-Jardin</strong> — agroforesterie, permaculture : se nourrir et terraformer</li>
+      </ul>
+    </section>
+
+    <section class="zine-page page-6">
+      <h3>Terraformer la Terre</h3>
+      <p>Chaque collectif qui bâtit un habitat, plante une forêt-jardin, installe un réacteur solaire, est une graine de terraformation.</p>
+      <p>Nous ne réparons pas la Terre depuis un bureau — nous la réensauvageons de nos mains, reliés en réseau par IPFS et NOSTR.</p>
+    </section>
+
+    <section class="zine-page page-7">
+      <h3>Rejoins un collectif UPlanet Ẑen</h3>
+      <ol>
+        <li><strong>Forge</strong> ton MULTIPASS (identité souveraine).</li>
+        <li><strong>Trouve ou fonde</strong> un Astroport près de chez toi.</li>
+        <li><strong>Déclare ton art</strong> dans la toile de confiance.</li>
+        <li><strong>Transmets et bâtis</strong> avec les autres Astronautes.</li>
+      </ol>
+    </section>
+
+    <footer class="zine-page page-8">
+      <h3 style="color:#c8a83c;">LE MOUVEMENT<br>COMMENCE AVEC TOI</h3>
+      <img style="width: 50px; margin:5px auto; background:#f5f0e8; padding:3px; border-radius:4px;" src="https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=https://u.copylaradio.com/earth/miz.html" alt="QR Code MULTIPASS">
+      <p style="font-size: 7.5pt;">Astroport.ONE · Ğ1 · UPlanet Ẑen</p>
+      <p style="font-weight: bold; color: #c8a83c; font-size: 8pt; margin-top:5px;">⬇️ DÉPLIEZ POUR RÉVÉLER TON ART ⬇️</p>
+    </footer>
+  </main>
+
+  <!-- ==================== VERSO (DÉCLARATION DE TALENT) ==================== -->
+  <div id="verso-content">
+    <div class="verso-inner">
+      <h1>Déclaration de Talent — Rite de Passage</h1>
+      <p class="verso-intro">
+        Le système marchand nous a isolés d'innovations simples — comme un rideau mouillé devant une fenêtre au vent, qui rafraîchit sans électricité. Ces gestes ne sont pas perdus : ils dorment dans la mémoire du monde, que l'intelligence artificielle peut nous aider à retrouver et associer aux technologies libres d'aujourd'hui.
+        Le rite de passage n'est plus de trouver un métier pour gagner de l'argent : c'est de <strong>révéler ton art aux gens</strong>, pour qu'hommes, femmes et enfants sachent bâtir leurs habitats, produire, conserver et distribuer l'énergie, développer une forêt comestible pour se nourrir — et terraformer la Terre.
+      </p>
+
+      <h2>1. Qui es-tu ?</h2>
+      <div class="form-group">
+        Nom / Pseudo : <span class="form-line" style="width: 55%;"></span><br>
+        Clé publique Ğ1 / NOSTR (facultatif) : <span class="form-line" style="width: 55%;"></span><br>
+        Astroport / lieu le plus proche (ou à fonder) : <span class="form-line" style="width: 50%;"></span>
+      </div>
+
+      <h2>2. Quel art révèles-tu ?</h2>
+      <div class="checkbox-group">
+        <label>[ &nbsp; ] 🏠 Habitat (dôme, kerterre, flexyourte, bio-construction)</label>
+        <label>[ &nbsp; ] ⚡ Énergie (solaire, réacteur BHEA, stockage, bricolage électrique)</label>
+        <label>[ &nbsp; ] 🌳 Forêt-Jardin (agroforesterie, permaculture, plantes comestibles)</label>
+        <label>[ &nbsp; ] 💧 Eau (récupération, filtration, toilettes sèches)</label>
+        <label>[ &nbsp; ] 🩺 Santé & Soin (savoirs simples, remèdes, entretien du corps)</label>
+        <label>[ &nbsp; ] 🚲 Mobilité légère (vélomobile, réparation, autonomie)</label>
+        <label>[ &nbsp; ] Autre : <span class="form-line" style="width: 55%;"></span></label>
+      </div>
+
+      <h2>3. Ce que je sais déjà faire</h2>
+      <p style="border-bottom: 1px dotted #999; height: 16px;"></p>
+      <p style="border-bottom: 1px dotted #999; height: 16px;"></p>
+
+      <h2>4. Ce que je veux apprendre</h2>
+      <p style="border-bottom: 1px dotted #999; height: 16px;"></p>
+      <p style="border-bottom: 1px dotted #999; height: 16px;"></p>
+
+      <h2>5. Mon engagement</h2>
+      <p>Je m'engage à transmettre ce que j'apprends — sans le vendre, en le partageant dans la toile de confiance Ğ1 / UPlanet — et à participer, selon mes moyens, à un collectif Astroport Ẑen.</p>
+
+      <p style="margin-top: 12px;">Fait à <span class="form-line" style="width: 140px;"></span>, le <span class="form-line" style="width: 100px;"></span>.</p>
+
+      <div class="signatures">
+        <div class="signature-box">
+          <strong>Signature</strong><br>
+          <span style="font-size: 0.7em;">(Lu et voulu)</span>
+        </div>
+        <div class="signature-box">
+          <strong>Astronaute témoin</strong><br>
+          <span style="font-size: 0.7em;">(Astroport d'accueil)</span>
+        </div>
+      </div>
+
+      <div class="footer-instructions">
+        📸 MODE D'EMPLOI : Découpe le Zine. Remplis cette déclaration, prends-la en photo et publie-la (NOSTR) ou envoie-la à un Astroport du réseau UPlanet !
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- SCRIPT GESTION DYNAMIQUE DE L'IMPRESSION -->
+<script>
+  const pageStyle = document.createElement('style');
+  document.head.appendChild(pageStyle);
+  let currentPrintStep = 0;
+
+  function printFront() {
+    currentPrintStep = 1;
+    pageStyle.innerHTML = '@page { size: A4 landscape; margin: 0; }';
+    document.body.classList.add('step1-active');
+    document.body.classList.remove('step2-active');
+    setTimeout(() => { window.print(); }, 100);
+  }
+
+  function printBack() {
+    currentPrintStep = 2;
+    pageStyle.innerHTML = '@page { size: A4 portrait; margin: 0; }';
+    document.body.classList.add('step2-active');
+    document.body.classList.remove('step1-active');
+    setTimeout(() => { window.print(); }, 100);
+  }
+
+  function resetWizard() {
+    currentPrintStep = 0;
+    document.body.classList.remove('step1-active', 'step2-active');
+    document.getElementById('panel-step-1').style.display = 'block';
+    document.getElementById('panel-step-2').style.display = 'none';
+  }
+
+  window.addEventListener('afterprint', (event) => {
+    if (currentPrintStep === 1) {
+      document.getElementById('panel-step-1').style.display = 'none';
+      document.getElementById('panel-step-2').style.display = 'block';
+    }
+    else if (currentPrintStep === 2) {
+      document.body.classList.remove('step1-active', 'step2-active');
+      alert("Impression terminée ! Ton art est révélé.");
+    }
+  });
+</script>
+
+</body>
+</html>

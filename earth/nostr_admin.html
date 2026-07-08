@@ -464,6 +464,20 @@
   .tc-tag { display:inline-block; background:var(--surface2); border-radius:4px; padding:1px 6px; font-size:.68rem; margin:2px 2px 0 0; }
   .tc-select-bar { display:flex; align-items:center; gap:10px; padding:7px 12px; border-bottom:1px solid var(--border); background:var(--surface2); }
 
+  /* ── BRO Mémoire (admin) ── */
+  .mem-admin-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(230px,1fr)); gap:10px; padding:12px 16px; }
+  .mem-account-card { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:10px 12px; cursor:pointer; transition:border-color .15s; }
+  .mem-account-card:hover { border-color:var(--accent); }
+  .mem-account-email { font-size:.82rem; font-weight:600; word-break:break-all; }
+  .mem-account-hex { font-family:var(--mono); font-size:.65rem; color:var(--text2); margin-top:3px; word-break:break-all; }
+  .mem-stat-line { font-size:.76rem; color:var(--text2); padding:5px 0; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; gap:10px; }
+  .mem-stat-line:last-child { border-bottom:none; }
+  .mem-stat-line b { color:var(--text); }
+  .mem-reset-row { display:flex; justify-content:flex-end; margin-top:4px; }
+  .mem-regen-row { display:flex; justify-content:flex-end; gap:6px; margin-top:4px; }
+  .btn-regen { background:rgba(96,165,250,.14); border:1px solid rgba(96,165,250,.35); color:#60a5fa; border-radius:4px; padding:2px 9px; font-size:.7rem; cursor:pointer; }
+  .btn-regen:hover { background:rgba(96,165,250,.28); }
+
   /* ── Responsive ── */
   @media (max-width: 680px) {
     .events-table th:nth-child(4),
@@ -503,6 +517,7 @@
   <div class="adm-tab active" id="tab-query" onclick="switchTab('query')">🔍 Requête</div>
   <div class="adm-tab" id="tab-profile" onclick="switchTab('profile')">👤 Profil</div>
   <div class="adm-tab" id="tab-tree" onclick="switchTab('tree')">🌳 Arbre</div>
+  <div class="adm-tab" id="tab-memory" onclick="switchTab('memory')">🧠 Mémoire</div>
 </div>
 
 <!-- Profile panel -->
@@ -614,6 +629,26 @@
       <button class="btn-del-local" id="btn-tree-del-sel" disabled onclick="deleteTreeSelected()" style="margin-left:auto;padding:3px 10px;font-size:.74rem">📍 Supprimer sélection</button>
     </div>
     <div id="tree-panel-body" class="tree-card-grid"></div>
+  </div>
+</div>
+
+<!-- BRO Mémoire (capitaine uniquement) -->
+<div id="pane-memory" style="display:none">
+  <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 16px 4px">
+    <button class="btn-query" id="btn-load-multipass" onclick="loadMultipassList()" style="padding:6px 18px;font-size:.82rem;white-space:nowrap">📋 Charger les comptes MULTIPASS</button>
+    <span id="mem-list-status" style="font-size:.75rem;color:var(--text2)"></span>
+  </div>
+  <div id="mem-empty" class="state-empty">
+    <div class="icon">🧠</div>
+    <div>Chargez la liste des MULTIPASS de la station pour voir l'état de leurs mémoires (fichiers, JSONL, Qdrant) et les cookies liés (NOSTR kind 31903).</div>
+  </div>
+  <div id="mem-grid" class="mem-admin-grid" style="display:none"></div>
+  <div id="mem-detail-panel" style="display:none" class="tree-kind-panel">
+    <div class="tree-panel-header">
+      <span class="tree-panel-title" id="mem-detail-title">—</span>
+      <button style="background:none;border:none;color:var(--text2);cursor:pointer;font-size:1rem;line-height:1;padding:0 4px" onclick="closeMemDetail()">✕</button>
+    </div>
+    <div id="mem-detail-body" style="padding:12px 16px;"></div>
   </div>
 </div>
 
@@ -1027,7 +1062,7 @@ async function purgeFilter() {
 
 // ── Navigation ───────────────────────────────────────────────────────────
 function switchTab(tab) {
-    ['query', 'profile', 'tree'].forEach(function(t) {
+    ['query', 'profile', 'tree', 'memory'].forEach(function(t) {
         var tabEl  = document.getElementById('tab-'  + t);
         var paneEl = document.getElementById('pane-' + t);
         if (tabEl)  tabEl.classList.toggle('active', t === tab);
@@ -1965,6 +2000,157 @@ async function deleteSingleTreeEvent(evId) {
         if (rem.length > 0) showKindPanel(savedKind, savedName);
     } catch(e) {
         if (e.message !== '403') showToast('Erreur suppression : ' + e.message, 'err');
+    }
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// BRO MÉMOIRE — vue admin (capitaine uniquement) : état des mémoires
+// (fichiers, JSONL, Qdrant) de chaque MULTIPASS de la station + reset.
+// ══════════════════════════════════════════════════════════════════════════
+var _multipassAccounts = [];
+
+async function loadMultipassList() {
+    if (!/^[0-9a-fA-F]{64}$/.test(_uph)) { showToast('UPLANETNAME requis', 'err'); return; }
+    var btn = document.getElementById('btn-load-multipass');
+    btn.disabled = true; btn.textContent = '⏳…';
+    try {
+        var data = await apiFetch(_apiUrl + '/api/nostr/admin/multipass_list?' + new URLSearchParams({ uplanetname: _uph }));
+        _multipassAccounts = data.accounts || [];
+        renderMultipassGrid();
+        document.getElementById('mem-list-status').textContent = _multipassAccounts.length + ' compte(s)';
+        showToast(_multipassAccounts.length + ' compte(s) MULTIPASS trouvé(s)', _multipassAccounts.length > 0 ? 'ok' : 'warn');
+    } catch(e) {
+        if (e.message !== '403') showToast('Erreur réseau : ' + e.message, 'err');
+    } finally {
+        btn.disabled = false; btn.textContent = '📋 Charger les comptes MULTIPASS';
+    }
+}
+
+function renderMultipassGrid() {
+    var empty = document.getElementById('mem-empty');
+    var grid  = document.getElementById('mem-grid');
+    if (_multipassAccounts.length === 0) { empty.style.display = ''; grid.style.display = 'none'; return; }
+    empty.style.display = 'none'; grid.style.display = '';
+    grid.innerHTML = _multipassAccounts.map(function(a) {
+        return '<div class="mem-account-card" onclick="openMemDetail(' + JSON.stringify(a.email) + ',' + JSON.stringify(a.hex || '') + ')">' +
+            '<div class="mem-account-email">👤 ' + escHtml(a.email) + '</div>' +
+            '<div class="mem-account-hex">' + (a.hex ? escHtml(a.hex.slice(0, 16)) + '…' : 'hex inconnu') + '</div>' +
+        '</div>';
+    }).join('');
+}
+
+async function openMemDetail(email, hex) {
+    var panel = document.getElementById('mem-detail-panel');
+    var body  = document.getElementById('mem-detail-body');
+    document.getElementById('mem-detail-title').textContent = '🧠 ' + email;
+    panel.style.display = '';
+    body.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text2)">⏳ Chargement…</div>';
+    panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+    try {
+        var statusP = apiFetch(_apiUrl + '/api/nostr/admin/memory_status?' + new URLSearchParams({ uplanetname: _uph, email: email }));
+        var cookiesP = hex
+            ? apiFetch(_apiUrl + '/api/nostr/admin/events?' + new URLSearchParams({ uplanetname: _uph, kind: '31903', author: hex, limit: '1' })).catch(function() { return { events: [] }; })
+            : Promise.resolve({ events: [] });
+        var results = await Promise.all([statusP, cookiesP]);
+        var status = results[0];
+        var cookieEvents = results[1].events || [];
+        var cookieDomains = [];
+        if (cookieEvents[0]) {
+            try {
+                var manifest = JSON.parse(cookieEvents[0].content || '{}');
+                cookieDomains = Object.keys(manifest).filter(function(d) { return d[0] !== '_'; });
+            } catch(e) {}
+        }
+        body.innerHTML = renderMemDetail(email, hex, status, cookieDomains);
+    } catch(e) {
+        if (e.message !== '403') body.innerHTML = '<div style="color:var(--danger);padding:14px">Erreur : ' + escHtml(e.message) + '</div>';
+    }
+}
+
+function closeMemDetail() {
+    document.getElementById('mem-detail-panel').style.display = 'none';
+}
+
+function renderMemDetail(email, hex, s, cookieDomains) {
+    function line(label, value) {
+        return '<div class="mem-stat-line"><span>' + label + '</span><b>' + escHtml(String(value)) + '</b></div>';
+    }
+    function resetBtn(scope, label) {
+        return '<div class="mem-reset-row"><button class="tc-del-btn" onclick="resetMemory(' +
+            JSON.stringify(email) + ',' + JSON.stringify(hex) + ',' + JSON.stringify(scope) + ',this)">🗑 ' + label + '</button></div>';
+    }
+    var html = '';
+    if (s.can_regenerate_from_mastodon) {
+        html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;' +
+            'border:1px solid rgba(96,165,250,.35);border-radius:6px;padding:10px 12px;margin-bottom:14px;' +
+            'background:rgba(96,165,250,.08);font-size:.76rem;color:var(--text2)">' +
+            '<span>🐘 Cookie Mastodon détecté — relire les propres posts et réapprendre le profil LifeOS immédiatement.</span>' +
+            '<button class="btn-regen" onclick="regenerateLifeos(' + JSON.stringify(email) + ',this)">🔄 Régénérer depuis Mastodon</button>' +
+            '</div>';
+    }
+    html += '<div style="margin-bottom:14px"><h5 style="font-size:.8rem;color:var(--text2);margin:0 0 4px">💬 Conversations</h5>' +
+        line('Messages', s.conversations.message_count) + line('Slots actifs', s.conversations.slots_present.length) +
+        line('Taille', Math.round(s.conversations.size_bytes / 1024) + ' Ko') + line('Points Qdrant', s.conversations.qdrant_points) +
+        resetBtn('conversations', 'Réinitialiser') + '</div>';
+    html += '<div style="margin-bottom:14px"><h5 style="font-size:.8rem;color:var(--text2);margin:0 0 4px">🤖 Mémoire BRO (#rec)</h5>' +
+        line('Souvenirs', s.bro_memory.message_count) + line('Points Qdrant', s.bro_memory.qdrant_points) +
+        resetBtn('bro_memory', 'Réinitialiser') + '</div>';
+    html += '<div style="margin-bottom:14px"><h5 style="font-size:.8rem;color:var(--text2);margin:0 0 4px">🎭 Persona</h5>' +
+        line('Traits', s.persona.message_count) + line('Points Qdrant', s.persona.qdrant_points) +
+        resetBtn('persona', 'Réinitialiser') + '</div>';
+    html += '<div style="margin-bottom:14px"><h5 style="font-size:.8rem;color:var(--text2);margin:0 0 4px">💕 MUSE / LOVE</h5>' +
+        line('Souvenirs', s.love.memories_count) + line('Dialogues', s.love.dialog_count) +
+        line('Matchs', s.love.matches_count) + line('Profil', s.love.has_profile ? 'déclaré' : 'non renseigné') +
+        line('Points Qdrant', s.love.qdrant_points) + resetBtn('love', 'Réinitialiser') + '</div>';
+    html += '<div style="margin-bottom:14px"><h5 style="font-size:.8rem;color:var(--text2);margin:0 0 4px">🧾 Préférences apprises (identity)</h5>' +
+        line('Lignes', s.identity.preferences_lines) + line('Historique', s.identity.preferences_history_entries) +
+        resetBtn('identity_learned', 'Réinitialiser') + '</div>';
+    if (cookieDomains.length) {
+        html += '<div style="margin-bottom:14px"><h5 style="font-size:.8rem;color:var(--text2);margin:0 0 4px">🍪 Cookies liés (NOSTR kind 31903)</h5>' +
+            '<div style="font-size:.78rem;color:var(--text)">' + cookieDomains.map(escHtml).join(', ') + '</div></div>';
+    }
+    html += '<div style="border-top:1px solid var(--border);padding-top:10px;text-align:right">' +
+        '<button class="tc-del-btn" style="background:rgba(220,38,38,.28)" onclick="resetMemory(' +
+        JSON.stringify(email) + ',' + JSON.stringify(hex) + ',\'all\',this)">⚠️ Tout réinitialiser</button></div>';
+    return html;
+}
+
+async function resetMemory(email, hex, scope, btnEl) {
+    if (!confirm('Réinitialiser la mémoire « ' + scope + ' » de ' + email + ' ? Cette action est irréversible.')) return;
+    btnEl.disabled = true; var savedText = btnEl.textContent; btnEl.textContent = '⏳…';
+    try {
+        var data = await apiFetch(_apiUrl + '/api/nostr/admin/memory_reset', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ uplanetname: _uph, email: email, scope: scope })
+        });
+        showToast((data.deleted || []).length + ' élément(s) réinitialisé(s) pour ' + email, 'ok');
+        opsLog([{ type: 'ok', text: 'memory_reset ' + scope + ' → ' + email }]);
+        openMemDetail(email, hex);
+    } catch(e) {
+        btnEl.disabled = false; btnEl.textContent = savedText;
+        if (e.message !== '403') showToast('Erreur : ' + e.message, 'err');
+    }
+}
+
+async function regenerateLifeos(email, btnEl) {
+    btnEl.disabled = true; var savedText = btnEl.textContent; btnEl.textContent = '⏳ Lecture Mastodon (peut prendre 30s)…';
+    try {
+        var data = await apiFetch(_apiUrl + '/api/nostr/admin/memory_regenerate', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ uplanetname: _uph, email: email })
+        });
+        if (data.ok) {
+            showToast('Profil LifeOS régénéré depuis ' + (data.own_posts_found || 0) + ' post(s) Mastodon', 'ok');
+            opsLog([{ type: 'ok', text: 'memory_regenerate mastodon → ' + email }]);
+        } else {
+            showToast('Régénération échouée : ' + (data.error || '?'), 'err');
+            opsLog([{ type: 'err', text: 'memory_regenerate mastodon → ' + email + ' : ' + (data.error || '?') }]);
+        }
+    } catch(e) {
+        if (e.message !== '403') showToast('Erreur : ' + e.message, 'err');
+    } finally {
+        btnEl.disabled = false; btnEl.textContent = savedText;
     }
 }
 </script>

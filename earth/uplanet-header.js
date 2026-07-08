@@ -38,6 +38,7 @@
         { e: '🤝', l: 'Contribuer',     h: 'contribute-3D.html',     mini: true },
         { e: '🪙', l: 'Collectif Ẑen',  h: 'https://opencollective.com/monnaie-libre' },
         { e: '💬', l: 'Coracle',        h: 'https://coracle.copylaradio.com', mini: true },
+        { e: '📱', l: '/e/OS',          h: 'eos_installer.html' },
     ];
 
     var _page        = (location.pathname.split('/').pop() || 'index.html').replace(/[?#].*/, '');

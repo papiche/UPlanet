@@ -1947,15 +1947,8 @@ kp = <span class="kw">nacl.sign</span><br>
                             </div>
                         </div>
 
-                        <!-- ── Inscription réelle NOSTR + délégation /g1nostr ─────────── -->
-                        <button id="btn-register" class="wz-forge hidden mb-2" onclick="_mizRegister()">
-                            🌐 Inscrire mon MULTIPASS (délégation /g1nostr) →
-                        </button>
+                        <!-- ── Simulation pédagogique uniquement — inscription réelle sur atomic.html ── -->
                         <div id="register-result" class="mb-2"></div>
-                        <div id="register-pass-block" class="hidden mb-2">
-                            <label class="wz-label">🔑 Code PASS (MULTIPASS déjà existant)</label>
-                            <input type="text" id="register-pass-input" class="form-control wz-input">
-                        </div>
 
                         <a href="atomic.html" id="btn-a4l"
                            class="btn-cta mv hidden">
@@ -2180,10 +2173,7 @@ function _wz1(restart) {
         document.getElementById('btn-zk').classList.add('hidden');
         document.getElementById('btn-retry').classList.add('hidden');
         document.getElementById('vault-box').classList.add('hidden');
-        document.getElementById('btn-register').classList.add('hidden');
         document.getElementById('register-result').innerHTML = '';
-        document.getElementById('register-pass-block').classList.add('hidden');
-        document.getElementById('register-pass-input').value = '';
     }
     _showPane(1);
 }
@@ -2354,82 +2344,6 @@ function _mizCopyNsec() {
     if (cbtn) { cbtn.textContent = '✅ Copié'; setTimeout(function() { cbtn.textContent = '📋 Copier'; }, 2200); }
 }
 
-// ── Inscription réelle NOSTR + délégation /g1nostr [atomic.html calculateConception()] ──
-// Déclenchée uniquement par un clic explicite — jamais automatiquement, pour ne pas
-// créer de vrai MULTIPASS à chaque essai du pipeline pédagogique.
-var _mizCtx = null;   // { email, stretchedSalt, stretchedPepper, npub, ...biométrie }
-
-async function _mizRegister() {
-    if (!_mizCtx) return;
-    if (_isDemoEmail) return;
-    var btn        = document.getElementById('btn-register');
-    var resultEl    = document.getElementById('register-result');
-    var passBlock   = document.getElementById('register-pass-block');
-    var passInput   = document.getElementById('register-pass-input');
-    var passCode    = (passInput && passBlock.classList.contains('hidden') === false) ? (passInput.value || '').trim() : '';
-
-    var apiUrl = (typeof window.getAPIUrl === 'function' ? window.getAPIUrl()
-        : (location.hostname === '127.0.0.1' || location.hostname === 'localhost')
-          ? 'http://127.0.0.1:54321' : 'https://u.copylaradio.com');
-
-    btn.textContent = '🌐 Inscription en cours…'; btn.disabled = true;
-    resultEl.innerHTML = '';
-
-    var fd = new FormData();
-    fd.append('email', _mizCtx.email);
-    fd.append('lang',  navigator.language ? navigator.language.slice(0, 2) : 'fr');
-    if (_mizCtx.lat !== 0) fd.append('lat', _mizCtx.lat.toFixed(2));
-    if (_mizCtx.lon !== 0) fd.append('lon', _mizCtx.lon.toFixed(2));
-    fd.append('birth_datetime', _mizCtx.birthDatetime);
-    fd.append('conception_datetime', _mizCtx.conceptionDatetime);
-    fd.append('birth_weight', _mizCtx.weight.toFixed(1));
-    fd.append('birth_height', String(_mizCtx.birthHeight));
-    fd.append('current_height', String(_mizCtx.currentHeight));
-    fd.append('polarity', _mizCtx.polarity);
-    fd.append('salt',   _mizCtx.stretchedSalt);
-    fd.append('pepper', _mizCtx.stretchedPepper);
-    fd.append('utc_offset', String(_mizCtx.lon !== 0 ? Math.round(_mizCtx.lon / 15) : 0));
-    fd.append('format', 'json');
-    if (passCode) fd.append('pass_code', passCode);
-
-    try {
-        var res  = await fetch(apiUrl + '/g1nostr', { method: 'POST', body: fd });
-        var json = await res.json().catch(function() { return {}; });
-
-        if (res.status === 409) {
-            var err = json.error || '';
-            if (err === 'IDENTITY_CONFLICT') {
-                resultEl.innerHTML = '<div class="small p-2 rounded" style="background:rgba(180,0,255,.08);'
-                    + 'border:1px solid rgba(180,0,255,.3);color:#cc88ff">'
-                    + '🔮 Ces données biométriques appartiennent déjà à une autre identité sur la constellation.</div>';
-            } else {
-                passBlock.classList.remove('hidden');
-                if (passInput) passInput.focus();
-                resultEl.innerHTML = '<div class="small p-2 rounded" style="background:rgba(245,158,11,.08);'
-                    + 'border:1px solid rgba(245,158,11,.3);color:#f59e0b">'
-                    + '🔑 Ce MULTIPASS existe déjà (sur cette station ou ailleurs dans la constellation).<br>'
-                    + '<span style="font-size:.7rem;color:rgba(255,255,255,.45)">Saisis le code PASS reçu par email, puis réessaie.</span></div>';
-            }
-            return;
-        }
-        if (!res.ok) throw new Error(json.detail || json.error || 'HTTP ' + res.status);
-
-        resultEl.innerHTML = '<div class="small p-2 rounded" style="background:rgba(0,255,100,.06);'
-            + 'border:1px solid rgba(0,255,100,.25);color:#00ff88">'
-            + '✅ MULTIPASS inscrit sur le réseau NOSTR.<br>'
-            + '<span style="font-size:.68rem;color:rgba(255,255,255,.5);word-break:break-all">npub : ' + (json.npub || _mizCtx.npub) + '</span>'
-            + (json.uplanet_home ? '<br><a href="' + json.uplanet_home + '" target="_blank" style="color:#00ffcc;font-size:.7rem">→ Ouvrir mon espace UPlanet</a>' : '')
-            + '</div>';
-        btn.classList.add('hidden');
-
-    } catch (e) {
-        resultEl.innerHTML = '<div class="small p-2 rounded" style="background:rgba(255,0,0,.08);'
-            + 'border:1px solid rgba(255,0,0,.2);color:#ff8888">⚠ ' + (e.message || String(e)) + '</div>';
-    } finally {
-        if (!btn.classList.contains('hidden')) { btn.textContent = '🌐 Inscrire mon MULTIPASS (délégation /g1nostr) →'; btn.disabled = false; }
-    }
-}
-
 // ── Pipeline crypto principal ─────────────────────────────────────────────────
 async function _runPipeline() {
     var email   = (document.getElementById('inp-email').value || '').trim();
@@ -2550,26 +2464,25 @@ async function _runPipeline() {
     await tType('>  MULTIPASS complet (biométrie) → atomic.html', 10, 'hi');
     await tType('>  Wallet ẐEN → Ẑelkova ci-dessous', 10);
 
-    // ── Révéler le coffre nsec + le bouton d'inscription réelle ─────────────
+    // ── Révéler le coffre nsec — l'inscription réelle se fait sur atomic.html ─
+    // (jamais ici : miz.html est purement pédagogique, ne crée aucun MULTIPASS)
     if (nsec) {
-        _mizCtx = {
-            email: email, npub: npub,
-            stretchedSalt: wr.ss, stretchedPepper: wr.sp,
-            lat: _lat, lon: _lon, weight: _w, birthHeight: _bh, currentHeight: _ch,
-            polarity: _pol, birthDatetime: _bd + 'T' + _bt, conceptionDatetime: _cd + 'T' + _ct
-        };
         document.getElementById('vault-nsec-input').value = nsec;
         _mizRenderWallet();
         document.getElementById('vault-box').classList.remove('hidden');
-        if (_isDemoEmail) {
-            var resultEl = document.getElementById('register-result');
-            if (resultEl) resultEl.innerHTML = '<div class="small p-2 rounded mt-2" style="'
-                + 'background:rgba(255,150,0,.07);border:1px solid rgba(255,150,0,.3);color:#ffaa44">'
-                + '🎲 Adresse de démonstration — pipeline pédagogique uniquement.<br>'
-                + '<span style="font-size:.7rem;color:rgba(255,255,255,.4);">'
-                + 'Utilise ton vrai email pour créer un MULTIPASS réel sur le réseau.</span></div>';
-        } else {
-            document.getElementById('btn-register').classList.remove('hidden');
+        var resultEl = document.getElementById('register-result');
+        if (resultEl) {
+            resultEl.innerHTML = _isDemoEmail
+                ? '<div class="small p-2 rounded mt-2" style="'
+                    + 'background:rgba(255,150,0,.07);border:1px solid rgba(255,150,0,.3);color:#ffaa44">'
+                    + '🎲 Adresse de démonstration — pipeline pédagogique uniquement.<br>'
+                    + '<span style="font-size:.7rem;color:rgba(255,255,255,.4);">'
+                    + 'Utilise ton vrai email et continue vers ATOM4LOVE pour un MULTIPASS réel.</span></div>'
+                : '<div class="small p-2 rounded mt-2" style="'
+                    + 'background:rgba(0,200,255,.07);border:1px solid rgba(0,200,255,.3);color:#66ccff">'
+                    + 'ℹ️ Cette simulation ne crée aucun MULTIPASS.<br>'
+                    + '<span style="font-size:.7rem;color:rgba(255,255,255,.4);">'
+                    + 'Clique sur « Continuer vers ATOM4LOVE » ci-dessous pour l\'inscription réelle.</span></div>';
         }
     }
 

@@ -2226,19 +2226,6 @@ async function _deriveNostrKeysLocally(workerResult) {
     }
 }
 
-// ── ω_bio publié : quantification 2 Hz + bruit local (non réversible) ──────────
-// Empêche l'inférence exacte du poids depuis le Kind 30078 public.
-// Le bruit est stocké en localStorage pour la cohérence multi-sessions sur le même appareil.
-function _publishableOmega(omegaBio) {
-    let noise = parseFloat(localStorage.getItem('a4l_omega_noise') || 'x');
-    if (isNaN(noise)) {
-        noise = Math.random() * 2.0; // [0, 2) Hz, une seule fois par appareil
-        try { localStorage.setItem('a4l_omega_noise', noise.toFixed(4)); } catch (_) { if(window.DEBUG) console.warn('[atomic] omega noise storage:', _); }
-    }
-    const coarse = Math.floor(omegaBio / 2) * 2; // bucket 2 Hz
-    return parseFloat(Math.max(0.1, Math.min(49.9, coarse + noise)).toFixed(2));
-}
-
 async function createMultipass() {
     const email = (document.getElementById('multipass-email')?.value || '').trim();
     if (!email) {
@@ -2375,8 +2362,8 @@ async function createMultipass() {
     const _bhFdVal = _bhFd ? (parseFloat(_bhFd.value) || 50) : 50;
     if (_bhFdVal !== 50)  fd.append('birth_height', _bhFdVal.toFixed(0));
     if (polEl2)          fd.append('polarity',      polarity);
-    fd.append('salt',            stretchedSalt);
-    fd.append('pepper',          stretchedPepper);
+    fd.append('salt',            _workerResult.stretchedSalt);
+    fd.append('pepper',          _workerResult.stretchedPepper);
     fd.append('utc_offset',      String(utcOffset));
     fd.append('con_utc_offset',  String(conUtcOffset));
     fd.append('format',          'json');
@@ -2679,6 +2666,21 @@ function _renderMultipassResult(data, el, localKeys) {
     var _vHtml = '';
     if (localKeys && localKeys.nsec) {
         _vaultPrivHex = localKeys.privHex;
+        // Connecte automatiquement UPH avec l'identité qui vient d'être créée
+        // — permet d'enchaîner immédiatement sur l'activation ATOM4LOVE (qui
+        // exige désormais une connexion UPH réelle) sans extension/reload.
+        if (!window.nostr) {
+            var _nlBridge = window.NostrTools || window.Nostr;
+            if (_nlBridge && typeof _nlBridge.finishEvent === 'function') {
+                window.nostr = {
+                    getPublicKey: function() { return Promise.resolve(localKeys.pubHex); },
+                    signEvent: function(ev) {
+                        return Promise.resolve(_nlBridge.finishEvent(Object.assign({}, ev), localKeys.privHex));
+                    }
+                };
+            }
+        }
+        if (window.uphSetPubkey) window.uphSetPubkey(localKeys.pubHex);
         var _w = _getRecommendedWallet();
         var _step2 = '<a href="' + _w.url + '" target="_blank" rel="noopener" '
               + 'style="display:block;text-align:center;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.2);'
@@ -3575,10 +3577,6 @@ function drawWave(nx, ny, nr, ng, nb, t) {
     }
 }
 
-// ── ATOM4LOVE — Certificat d'Incarnation (Kind 30078) ────────────────────────
-
-const A4L_PROOF_SALT = 'ATOM4LOVE_ALPHA';
-
 // ── Partage Match ──────────────────────────────────────────────────────────
 // Sécurité : seuls date, heure approx et longitude-ville sont encodés.
 // Poids et polarité (facteurs SALT critiques) ne sont JAMAIS dans le lien.
@@ -3660,12 +3658,6 @@ window._copyShareLink = function() {
     });
 };
 
-async function _sha256Hex(str) {
-    const buf  = new TextEncoder().encode(str);
-    const hash = await crypto.subtle.digest('SHA-256', buf);
-    return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2,'0')).join('');
-}
-
 function _certStatus(msg, color) {
     const el = document.getElementById('cert-status');
     if (el) { el.textContent = msg; el.style.color = color || 'rgba(255,255,255,.4)'; }
@@ -3726,44 +3718,10 @@ async function verifyOcMembership() {
     }
 }
 
-/* ─── Diffusion vers les relais constellation (serveur-side) ─────────────── */
-async function _publishToConstellation(event) {
-    _certStatus('📡 Diffusion vers la constellation…');
-    const apiUrl = _resolvedUspot ||
-        (typeof window.getAPIUrl === 'function' ? window.getAPIUrl()
-        : (location.hostname === '127.0.0.1' ? 'http://127.0.0.1:54321' : ''));
-    if (!apiUrl) return;
-    try {
-        const signal = typeof AbortSignal.timeout === 'function'
-            ? AbortSignal.timeout(20000) : undefined;
-        const resp = await fetch(apiUrl + '/constellation_register', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ event }),
-            signal
-        });
-        if (resp.ok) {
-            const d = await resp.json();
-            const n = d.published_count || 0, t = d.total_peers || 0;
-            _certStatus(
-                t === 0 ? '✅ Publié · Constellation non disponible sur cette station'
-                        : `✅ Diffusé sur ${n}/${t} relais de la constellation`,
-                '#00ffcc'
-            );
-        }
-    } catch(e) {
-        _certStatus('✅ Publié localement · Constellation : ' + (e.message || 'non disponible'), '#f59e0b');
-    }
-}
-
 async function publishIncarnationCert() {
-    // ── Étape 0 : lire les options ────────────────────────────────────────────
-    // Constellation : libre pour tous (enrichit la base de données)
-    const doConstellation = !!(document.getElementById('chk-constellation')?.checked);
-    // MULTIPASS : réservé aux donateurs OC vérifiés
-    const doMultipass     = !!(document.getElementById('chk-multipass')?.checked && _ocVerified);
-
-    // Créer le MULTIPASS si demandé et OC vérifié (avant signature NOSTR)
+    // ── Étape 0 : MULTIPASS réservé aux donateurs OC vérifiés (création d'une
+    // IDENTITÉ — fonctionnalité séparée de l'activation ATOM4LOVE ci-dessous) ─
+    const doMultipass = !!(document.getElementById('chk-multipass')?.checked && _ocVerified);
     if (doMultipass) {
         _certStatus('✨ Création du MULTIPASS…');
         const btnC = document.getElementById('btn-publish-cert');
@@ -3771,25 +3729,23 @@ async function publishIncarnationCert() {
         try { await createMultipass(); } catch(_e) { /* non-bloquant */ }
     }
 
-    // ── Résolution du signataire ──────────────────────────────────────────────
-    // Priorité : extension NIP-07 (nos2x/Alby) > clé vault locale (_vaultPrivHex)
-    // La clé vault est disponible après createMultipass() — signature sans extension
-    const _NL = window.NostrTools || window.Nostr;
-    let _signer;
-    let _signerIsVault = false;
-    if (window.nostr) {
-        _signer = window.nostr;
-    } else if (_vaultPrivHex && _NL && typeof _NL.finishEvent === 'function') {
-        _signerIsVault = true;
-        _signer = {
-            getPublicKey: () => Promise.resolve(_NL.getPublicKey(_vaultPrivHex)),
-            signEvent:    (ev) => Promise.resolve(_NL.finishEvent({ ...ev }, _vaultPrivHex))
-        };
-        _certStatus('🔑 Signature locale avec la clé vault (session éphémère)…', '#f59e0b');
-    } else {
-        _certStatus('⚠ Aucune clé de signature — installez nos2x pour y coller la clef de votre MULTIPASS.', '#ff8888');
-        const btnR = document.getElementById('btn-publish-cert');
-        if (btnR) { btnR.textContent = '⚡ Rejoindre le réseau'; btnR.disabled = false; }
+    // ── ATOM4LOVE exige un MULTIPASS déjà connecté via UPH ────────────────────
+    // Signer un profil au nom d'un pubkey sans MULTIPASS enregistré n'a plus de
+    // sens : le serveur exige désormais une preuve NIP-42 vérifiable rattachée
+    // à un compte connu. La clé "vault" éphémère (dérivée de la naissance mais
+    // jamais connectée) n'est plus acceptée pour cette étape.
+    const btn = document.getElementById('btn-publish-cert');
+    const connected = !!((window.NostrState && window.NostrState.isNostrConnected && window.NostrState.userPubkey)
+        || (window.isNostrConnected && window.userPubkey));
+    if (!connected || !window.nostr) {
+        _certStatus('⚠ Connectez-vous avec un MULTIPASS existant (bandeau en haut) avant d\'activer ATOM4LOVE.', '#ff8888');
+        if (window.uphOpenLogin) window.uphOpenLogin();
+        if (btn) { btn.textContent = '⚡ Rejoindre le réseau'; btn.disabled = false; }
+        return;
+    }
+    const email = window._uphEmail || (document.getElementById('multipass-email')?.value || '').trim();
+    if (!email) {
+        _certStatus('⚠ Aucun email associé à votre MULTIPASS connecté — impossible d\'activer ATOM4LOVE.', '#ff8888');
         return;
     }
 
@@ -3802,308 +3758,73 @@ async function publishIncarnationCert() {
 
     const weight   = wEl  ? parseFloat(wEl.value)  || 3.5 : 3.5;
     const polarity = polEl ? parseInt(polEl.value)         : 0;
-    const birthLat = parseFloat(_birthMarker.getLatLng().lat.toFixed(2)); // SALT : 0.01°
+    const birthLat = parseFloat(_birthMarker.getLatLng().lat.toFixed(2));
     const birthLon = parseFloat(parseFloat(document.getElementById('match-lon-a').value || 0).toFixed(2));
-    const birthUnix = _dateToUtcUnix(bd, bt, birthLon); // UTC déterministe (offset solaire)
+    const cd = document.getElementById('conception-date')?.value || '';
+    const ct = document.getElementById('conception-time')?.value || '';
+    const loc = document.getElementById('birth-location-label')?.textContent || '';
+    const birthPlace = (loc && loc !== 'Cliquez sur la carte ou cherchez une ville' && loc !== 'Aucune sélection') ? loc : '';
 
-    // Phase avec pentagon offset Goldberg (requires lat) — plus précis que computePhaseFromForm
-    const personal_phase = Phi2X.computePersonalPhase(birthUnix, birthLat, birthLon);
-    // ω_bio depuis poids ET taille de naissance (Watson formula → ω ∈ 2–25, plage 0.1–50)
-    const birthHeightCert = parseFloat(document.getElementById('birth-height')?.value) || 50;
-    const omega_bio = Phi2X.computeOmegaBio(birthHeightCert, weight, polarity);
-
-    if (personal_phase < 0 || personal_phase >= 7) {
-        _certStatus('⚠ Erreur calcul phase (' + personal_phase.toFixed(4) + ').', '#ff8888'); return;
-    }
-    if (omega_bio <= 0.1 || omega_bio >= 50) {
-        _certStatus('⚠ ω_bio hors plage (' + omega_bio.toFixed(4) + ') — poids 0.5–6 kg / taille 30–65 cm attendus.', '#ff8888'); return;
-    }
-
-    // KIN naissance (toujours disponible depuis _cachedKinA) et conception si calculé
-    const kin_birth_val = _cachedKinA || null;
-    const kin_conc_val  = _cachedKinConception || null;
-    const elems         = (kin_birth_val && kin_conc_val)
-        ? Phi2X.getDualElements(kin_conc_val, kin_birth_val)
-        : (kin_birth_val ? Phi2X.getDualElements(kin_birth_val, kin_birth_val) : null);
-
-    const btn = document.getElementById('btn-publish-cert');
-    if (btn) { btn.textContent = '⏳ Connexion…'; btn.disabled = true; }
-    _certStatus('Connexion à votre clé de signature…');
+    if (btn) { btn.textContent = '⏳ Challenge…'; btn.disabled = true; }
+    _certStatus('Obtention du challenge d\'authentification…');
 
     try {
-        const pubkey    = await _signer.getPublicKey();
+        const apiUrl = _resolvedUspot ||
+            (typeof window.getAPIUrl === 'function' ? window.getAPIUrl()
+            : (location.hostname === '127.0.0.1' || location.hostname === 'localhost')
+              ? 'http://127.0.0.1:54321' : '');
 
-        // ── Détection de divergence d'identité ────────────────────────────────
-        // _vaultPrivHex = clé dérivée depuis la naissance (scrypt → keygen a4l)
-        // pubkey        = clé du signataire actif (extension ou vault local)
-        // Clé conforme  = les deux coïncident + Kind 0 avec tag ["i","g1pub:..."]
-        // Clé hybridée  = clé externe non liée à la chaîne keygen naissance
-        if (_vaultPrivHex && !_signerIsVault) {
-            const birthPubHex = (_NL || window.NostrTools || window.Nostr).getPublicKey(_vaultPrivHex);
-            if (birthPubHex && birthPubHex !== pubkey) {
-                // Récupérer l'ancien cert publié sous la clé UPH (si existant)
-                if (btn) btn.textContent = '🔍 Vérification…';
-                _certStatus('Lecture de l\'ancien certificat UPH…');
-                let oldCertInfo = '';
-                try {
-                    const relay = (typeof window.getRelayUrl === 'function')
-                        ? window.getRelayUrl()
-                        : ('wss://relay.' + location.hostname.replace(/^(ipfs\.|u\.)/, ''));
-                    const ws = new WebSocket(relay);
-                    const oldEvs = await new Promise(res => {
-                        const evs = []; const sub = 'id-chk-' + Math.random().toString(36).slice(2,7);
-                        const t = setTimeout(() => { try { ws.close(); } catch(_) {} res(evs); }, 4000);
-                        ws.onopen    = () => ws.send(JSON.stringify(['REQ', sub,
-                            { kinds:[30078], '#d':['atom4love'], authors:[pubkey], limit:1 }]));
-                        ws.onmessage = e => {
-                            try {
-                                const m = JSON.parse(e.data);
-                                if (m[0]==='EVENT') evs.push(m[2]);
-                                else if (m[0]==='EOSE') { clearTimeout(t); ws.close(); res(evs); }
-                            } catch(_) {}
-                        };
-                        ws.onerror = ws.onclose = () => { clearTimeout(t); res(evs); };
-                    });
-                    if (oldEvs.length > 0) {
-                        const oc = JSON.parse(oldEvs[0].content || '{}');
-                        oldCertInfo = '\n\n— Ancien cert UPH (sera remplacé) —\n' +
-                            'φ=' + (oc.personal_phase||'?') + '  ω=' + (oc.omega_bio||'?') +
-                            (oc.a5l_amplitude != null ? '  Ψ=' + oc.a5l_amplitude : '') +
-                            '\npublié le ' + new Date(oldEvs[0].created_at*1000).toLocaleDateString('fr');
-                    } else {
-                        oldCertInfo = '\n\n(Aucun cert existant sous la clé UPH)';
-                    }
-                } catch(_) { oldCertInfo = '\n\n(Impossible de lire l\'ancien cert)'; }
-
-                const ok = confirm(
-                    '⚠ Identités différentes !\n\n' +
-                    'Clé connectée (UPH) : ' + pubkey.slice(0,16)       + '…  ← sera publiée\n' +
-                    'Clé naissance a4l   : ' + birthPubHex.slice(0,16)  + '…  ← hybridée\n\n' +
-                    '— Nouveau cert à publier —\n' +
-                    'φ=' + personal_phase.toFixed(4) + '  ω=' + omega_bio.toFixed(2) +
-                    oldCertInfo + '\n\n' +
-                    'La clé UPH sera marquée "hybridée" sur la carte\n' +
-                    '(pas de tag g1pub — non vérifiable via keygen).\n\n' +
-                    'Continuer quand même ?'
-                );
-                if (!ok) {
-                    if (btn) { btn.textContent = '🌀 Publier ma signature'; btn.disabled = false; }
-                    _certStatus('⚠ Publication annulée — vérifiez votre connexion NOSTR.');
-                    return;
-                }
-            }
+        // ── Étape 1 : challenge NIP-42 scopé à la clé principale du compte ────
+        const chRes  = await fetch(apiUrl + '/atom4love/challenge?email=' + encodeURIComponent(email));
+        const chJson = await chRes.json().catch(() => ({}));
+        if (!chRes.ok) {
+            throw new Error(chJson.detail || chJson.message || ('Challenge indisponible (' + chRes.status + ')'));
         }
 
-        const a4l_proof = await _sha256Hex(pubkey + ':' + A4L_PROOF_SALT);
-
-        // ── Preuve de conformité keygen a4l ───────────────────────────────────
-        // g1pub_proof = sha256(nostr_pubkey + ':' + g1pub + ':' + SALT)
-        // Prouve que le publisher connaît BOTH clés issues du même keygen.
-        // Le relay vérifie que g1pub 30078 == g1pub Kind 0 NIP-39 du même pubkey.
-        // Sources du g1pub (priorité décroissante) :
-        //   1. UPH cachedProfile — Kind 0 déjà chargé à la connexion, immédiat
-        //   2. _cachedG1pub     — retourné par UPassport /g1nostr (session MULTIPASS)
-        const _uphG1pub = (window.cachedProfile && window.cachedProfile.g1pub)
-            ? window.cachedProfile.g1pub : null;
-        const _g1pub = _uphG1pub || _cachedG1pub || null;
-        const _g1pub_proof = _g1pub
-            ? await _sha256Hex(pubkey + ':' + _g1pub + ':' + A4L_PROOF_SALT)
-            : null;
-
-        // Tag géographique NIP-52 : permet au relay de filtrer par pentagone local
-        const _geoTag       = Phi2X.geoTagA4L(birthLat, birthLon, birthUnix);
-
-        // Champ cymatique a5l : amplitude Ψ du champ d'onde planétaire à la naissance
-        const _a5lAmplitude = Phi2X.computeResonanceField(birthLat, birthLon, birthUnix);
-        const _a5lTag       = Phi2X.encodeA5lTag(_a5lAmplitude);
-
-        const certContent = {
-            personal_phase: parseFloat(personal_phase.toFixed(6)),
-            // ω_bio publié : quantifié 2 Hz + bruit local — non réversible au poids exact
-            omega_bio:      _publishableOmega(omega_bio),
-            // Champ cymatique : amplitude Ψ du ventre d'onde planétaire à la naissance
-            a5l_amplitude:  parseFloat(_a5lAmplitude.toFixed(6)),
-        };
-        if (_g1pub)       certContent.g1pub       = _g1pub;
-        if (_g1pub_proof) certContent.g1pub_proof = _g1pub_proof;
-        if (kin_birth_val)  certContent.kin_birth      = kin_birth_val;
-        if (kin_conc_val)   certContent.kin_conception  = kin_conc_val;
-        if (elems) {
-            certContent.element_birth      = elems.birthKey;
-            certContent.element_conception = elems.conceptionKey;
-            certContent.archetype          = elems.archetype;
-        }
-        certContent.pepper_type = _pepperMode;
-        if (_pepperMode === 'anomalie') certContent.pepper_delta_jours = _pepperDeltaDays;
-
-        const tags = [
-            ['d', 'atom4love'],
-            ['app', 'atom4love'],
-            ['a4l_proof', a4l_proof],
-            ['g', _geoTag.penta],   // ex: "a4l:P05" — filtre géo pentagon
-            ['g', _geoTag.hex],     // ex: "a4l:P05H3F2A12B8" — adresse hexagonale
-            ['a5l', _a5lTag],       // ex: "a5l:9F3C" — ventre d'onde cymatique (naissance)
-        ];
-        // Tag g1pub pour cross-vérification rapide par le relay sans parser le content
-        if (_g1pub)       tags.push(['g1pub', _g1pub]);
-        if (_g1pub_proof) tags.push(['g1pub_proof', _g1pub_proof]);
-
-        const event = {
-            kind: 30078,
-            created_at: Math.floor(Date.now() / 1000),
-            tags,
-            content: JSON.stringify(certContent)
-        };
-
+        // ── Étape 2 : signer un event kind 22242 avec la clé UPH connectée ────
         if (btn) btn.textContent = '✍ Signature…';
-        _certStatus(_signerIsVault ? '✍ Signature locale (vault)…' : 'Signature en cours…');
-        const signed = await _signer.signEvent(event);
+        _certStatus('Signature de la preuve d\'identité…');
+        const authEvent = await window.nostr.signEvent({
+            kind: 22242,
+            pubkey: window.userPubkey,
+            created_at: Math.floor(Date.now() / 1000),
+            tags: [['challenge', chJson.challenge]],
+            content: '',
+        });
 
-        if (btn) btn.textContent = '📡 Publication…';
-        _certStatus('Transmission au réseau…');
-        await _publishEventToRelay(signed);
+        // ── Étape 3 : activation — le serveur calcule Phi²/KIN et publie ──────
+        // (clé LOVE dédiée .secret.love, kind 30078 d=atom4love, tags géo/a5l)
+        if (btn) btn.textContent = '📡 Activation…';
+        _certStatus('Activation ATOM4LOVE…');
+        const fd = new FormData();
+        fd.append('email',          email);
+        fd.append('birth_datetime', bd + (bt ? 'T' + bt : 'T12:00'));
+        fd.append('birth_lat',      String(birthLat));
+        fd.append('birth_lon',      String(birthLon));
+        fd.append('birth_weight',   String(weight));
+        fd.append('polarity',       String(polarity));
+        fd.append('auth_event',     JSON.stringify(authEvent));
+        if (cd)         fd.append('conception_datetime', cd + (ct ? 'T' + ct : 'T00:00'));
+        if (birthPlace) fd.append('birth_place', birthPlace);
 
-        // Diffusion constellation si checkbox cochée + OC vérifié
-        if (doConstellation) {
-            await _publishToConstellation(signed);
-        } else {
-            _certStatus('✅ Empreinte vibratoire publiée — bienvenue dans le réseau', '#00ffcc');
+        const actRes  = await fetch(apiUrl + '/atom4love/activate', { method: 'POST', body: fd });
+        const actJson = await actRes.json().catch(() => ({}));
+        if (!actRes.ok || !actJson.activated) {
+            throw new Error(actJson.message || actJson.detail || ('HTTP ' + actRes.status));
         }
+
+        const phaseStr = actJson.personal_phase != null ? actJson.personal_phase.toFixed(4) : '?';
+        _certStatus('✅ ATOM4LOVE activé — φ=' + phaseStr + '  Kin=' + (actJson.kin_num || '?'), '#00ffcc');
         if (btn) { btn.textContent = '✅ Republier'; btn.style.borderColor = 'rgba(0,255,204,.6)'; btn.disabled = false; }
-        console.log('[atomic] Kind 30078 publié :', signed.id,
-            '| φ=', personal_phase.toFixed(4), '| ω=', omega_bio.toFixed(4));
+        console.log('[atomic] ATOM4LOVE activé pour', email, actJson);
 
-        // Mettre à jour le badge de conformité a4l dans UPH
-        if (window.uphSetA4lBadge) {
-            var _clvl = (_g1pub && _g1pub_proof) ? 2 : (_g1pub ? 1 : 0);
-            window.uphSetA4lBadge(_clvl);
-        }
-
-        // Événement compagnon home en arrière-plan — uniquement si l'utilisateur
-        // a confirmé sa position de résidence (jamais de fallback sur la naissance).
-        var _hLat = (typeof _confirmedHomeLat === 'number') ? _confirmedHomeLat : 0.0;
-        var _hLon = (typeof _confirmedHomeLon === 'number') ? _confirmedHomeLon : 0.0;
-        if (_hLat !== 0.0 || _hLon !== 0.0) {
-            _publishA4lCompanion(_signer, pubkey, a4l_proof, _hLat, _hLon, birthUnix, _geoTag)
-                .catch(function(e) { console.warn('[atomic] companion KO:', e); });
-        } else {
-            console.info('[atomic] atom4love-home ignoré — résidence non renseignée');
-        }
+        if (window.uphSetA4lBadge) window.uphSetA4lBadge(2);
 
     } catch(e) {
-        console.error('[atomic] Kind 30078 KO:', e);
+        console.error('[atomic] ATOM4LOVE activation KO:', e);
         _certStatus('⚠ ' + (e.message || String(e)), '#ff6060');
         if (btn) { btn.textContent = '⚛ Réessayer'; btn.disabled = false; }
     }
-}
-
-// ── Helper NIP-44 : essaie l'extension puis nostr-tools vault ─────────────
-async function _nip44Try(recipientHex, plaintext) {
-    try {
-        if (window.nostr && window.nostr.nip44 && typeof window.nostr.nip44.encrypt === 'function') {
-            return await window.nostr.nip44.encrypt(recipientHex, plaintext);
-        }
-        if (_vaultPrivHex) {
-            const _nt = window.NostrTools || window.Nostr;
-            if (_nt && _nt.nip44 && typeof _nt.nip44.encrypt === 'function') {
-                return await _nt.nip44.encrypt(_vaultPrivHex, recipientHex, plaintext);
-            }
-        }
-    } catch(_e) { if (window.DEBUG) console.warn('[atomic] nip44Try:', _e); }
-    return null;
-}
-
-// ── Événements compagnons publiés après le cert principal ─────────────────
-// d=atom4love-home : pentagon public (~50 km) pour routage UMAP
-// d=atom4love-priv : données privées NIP-44 (clé UMAP + self)
-async function _publishA4lCompanion(signer, pubkey, a4l_proof, birthLat, birthLon, birthUnix, geoTag) {
-    // 1. d=atom4love-home — pentagon uniquement, contenu vide
-    try {
-        const homeEvt = {
-            kind: 30078,
-            created_at: Math.floor(Date.now() / 1000),
-            tags: [
-                ['d', 'atom4love-home'],
-                ['app', 'atom4love'],
-                ['a4l_proof', a4l_proof],
-                ['g', geoTag.penta],
-                ['lat', birthLat.toFixed(2)],
-                ['lon', birthLon.toFixed(2)],
-            ],
-            content: ''
-        };
-        await _publishEventToRelay(await signer.signEvent(homeEvt));
-        console.log('[atomic] atom4love-home publié (pentagon=' + geoTag.penta + ')');
-    } catch(e) { console.warn('[atomic] atom4love-home KO:', e); }
-
-    // 2. d=atom4love-priv — NIP-44 self + station UMAP
-    try {
-        const privData = JSON.stringify({
-            home_lat: birthLat, home_lon: birthLon,
-            birth_time_utc: birthUnix,
-            privacy_prefs: {}
-        });
-
-        // Récupérer le HEX UMAP depuis l'API UPassport
-        var umapHex = null;
-        try {
-            var _apiUrl = typeof window.getAPIUrl === 'function' ? window.getAPIUrl()
-                : (location.hostname === '127.0.0.1' ? 'http://127.0.0.1:54321' : '');
-            if (_apiUrl) {
-                var _geoR = await fetch(_apiUrl + '/api/umap/geolinks?lat=' + birthLat + '&lon=' + birthLon);
-                if (_geoR.ok) { var _geoD = await _geoR.json(); umapHex = (_geoD.umaps && _geoD.umaps.here) || null; }
-            }
-        } catch(_) {}
-
-        var stationCipher = umapHex ? await _nip44Try(umapHex, privData) : null;
-        var selfCipher    = await _nip44Try(pubkey, privData);
-
-        if (!stationCipher && !selfCipher) {
-            console.info('[atomic] atom4love-priv ignoré — NIP-44 indisponible');
-            return;
-        }
-
-        var privContent = JSON.stringify(Object.assign(
-            {},
-            stationCipher ? { station: stationCipher } : {},
-            selfCipher    ? { self: selfCipher }        : {}
-        ));
-
-        const privEvt = {
-            kind: 30078,
-            created_at: Math.floor(Date.now() / 1000),
-            tags: [
-                ['d', 'atom4love-priv'],
-                ['app', 'atom4love'],
-                ['a4l_proof', a4l_proof],
-            ],
-            content: privContent
-        };
-        await _publishEventToRelay(await signer.signEvent(privEvt));
-        console.log('[atomic] atom4love-priv publié (station=' + !!stationCipher + ' self=' + !!selfCipher + ')');
-    } catch(e) { console.warn('[atomic] atom4love-priv KO:', e); }
-}
-
-function _publishEventToRelay(event) {
-    return new Promise((resolve, reject) => {
-        const relayUrl = typeof window.getRelayUrl === 'function'
-            ? window.getRelayUrl()
-            : (location.hostname === '127.0.0.1' ? 'ws://127.0.0.1:7777'
-               : 'wss://relay.' + location.hostname.replace(/^(ipfs\.|u\.)/, ''));
-        const ws = new WebSocket(relayUrl);
-        const timer = setTimeout(() => { ws.close(); reject(new Error('Timeout relay 8s')); }, 8000);
-        ws.onopen    = () => ws.send(JSON.stringify(['EVENT', event]));
-        ws.onmessage = (ev) => {
-            try {
-                const msg = JSON.parse(ev.data);
-                if (msg[0] === 'OK') {
-                    clearTimeout(timer); ws.close();
-                    msg[2] ? resolve(msg) : reject(new Error(msg[3] || 'Relay rejected'));
-                }
-            } catch (_) { if(window.DEBUG) console.warn('[atomic] relay publish parse:', _); }
-        };
-        ws.onerror = () => { clearTimeout(timer); reject(new Error('WebSocket error')); };
-    });
 }
 
 // ── Restauration Atom A depuis données MULTIPASS sauvegardées ─────────────

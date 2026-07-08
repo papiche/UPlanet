@@ -15,6 +15,19 @@ function _safeUrl(url) {
     try { var u = new URL(url); return /^https?:$/.test(u.protocol) ? url : ''; } catch(e) { return ''; }
 }
 
+// Fallback local : lib_7_exports.js exporte window.escapeHtml mais se charge de façon
+// asynchrone via common.js. On définit ici une version de secours pour les catch() rapides
+// (ex : échec WebSocket avant que lib_7 n'ait fini de charger).
+function escapeHtml(text) {
+    if (typeof window.escapeHtml === 'function' && window.escapeHtml !== escapeHtml) {
+        return window.escapeHtml(text);
+    }
+    if (!text) return '';
+    var div = document.createElement('div');
+    div.textContent = String(text);
+    return div.innerHTML;
+}
+
 // ================================================================
 // LOGGING UTILITY
 // ================================================================
@@ -600,7 +613,8 @@ async function getRelayURL() {
         npvLog.log('getRelayURL → local ws://127.0.0.1:7777 (fallback)');
         return 'ws://127.0.0.1:7777';
     }
-    const relayName = currentUrl.hostname.replace('ipfs.', 'relay.');
+    // Remplace le premier sous-domaine (ipfs., u., www., etc.) par relay.
+    const relayName = currentUrl.hostname.replace(/^[^.]+\./, 'relay.');
     npvLog.log(`getRelayURL → wss://${relayName} (hostname fallback)`);
     return `wss://${relayName}`;
 }

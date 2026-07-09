@@ -42,6 +42,9 @@ window.initCarousel = function(opts) {
 
     function goTo(idx) { current = idx; apply(); resetAuto(); }
 
+    window.rotate = rotate;
+    window.goTo   = goTo;
+
     function resetAuto() {
         clearInterval(timer);
         timer = setInterval(function() { rotate(1); }, interval);

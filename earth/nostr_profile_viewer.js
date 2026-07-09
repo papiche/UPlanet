@@ -1651,32 +1651,51 @@ async function displayNostrData() {
 // INIT: load profile on page ready
 // ================================================================
 (function () {
-    const hexKey = window.hexKey;
+    function _startWithHex(hexKey) {
+        window.hexKey = hexKey;
+        initialHex = hexKey;
+        const currentParams = new URLSearchParams(window.location.search);
+        currentParams.set('hex', hexKey);
+        if (!currentParams.has('origin')) currentParams.set('origin', hexKey);
+        window.history.replaceState({ hex: hexKey, action: 'initial' }, '', window.location.pathname + '?' + currentParams.toString());
+        displayNostrData();
+
+        let _matrixChecks = 0;
+        const _matrixTimer = setInterval(function () {
+            if (checkOwnProfileMatrix() || ++_matrixChecks > 12) clearInterval(_matrixTimer);
+        }, 500);
+    }
+
+    let hexKey = window.hexKey;
+
     if (!hexKey) {
-        ['profile-content','messages-content','analytics-content'].forEach(function (id) {
-            const el = document.getElementById(id);
-            if (el) el.textContent = 'HEX key not provided in URL.';
-        });
-        ['profile-container','messages-container','analytics-container'].forEach(function (id) {
-            const el = document.getElementById(id);
-            if (el) el.classList.remove('loading');
-        });
+        // Fallback 1 : utilisateur déjà connecté via UPH / common.js
+        hexKey = (window.NostrState && window.NostrState.userPubkey)
+              || window.userPubkey
+              || '';
+        // Fallback 2 : cache sessionStorage de uplanet-header.js ('uph_pubkey')
+        if (!hexKey) {
+            try { hexKey = sessionStorage.getItem('uph_pubkey') || ''; } catch (e) {}
+        }
+    }
+
+    if (hexKey) {
+        _startWithHex(hexKey);
         return;
     }
-    // set initial hex for back-navigation
-    initialHex = hexKey;
-    const currentParams = new URLSearchParams(window.location.search);
-    if (!currentParams.has('origin')) {
-        currentParams.set('origin', hexKey);
-        window.history.replaceState({ hex: hexKey, action: 'initial' }, '', window.location.pathname + '?' + currentParams.toString());
-    }
-    displayNostrData();
 
-    // userPubkey arrive en asynchrone (common.js) — surveiller pendant 6s
-    let _matrixChecks = 0;
-    const _matrixTimer = setInterval(function () {
-        if (checkOwnProfileMatrix() || ++_matrixChecks > 12) clearInterval(_matrixTimer);
-    }, 500);
+    // Aucune clé disponible : attendre la connexion UPH
+    ['profile-content','messages-content','analytics-content'].forEach(function (id) {
+        const el = document.getElementById(id);
+        if (el) el.textContent = '⏳ En attente de connexion NOSTR…';
+    });
+
+    document.addEventListener('nostr:connected', function handler(e) {
+        const pk = e.detail && e.detail.pubkey;
+        if (!pk || window.hexKey) return;
+        document.removeEventListener('nostr:connected', handler);
+        _startWithHex(pk);
+    });
 })();
 
 // ================================================================

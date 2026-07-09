@@ -19,16 +19,17 @@
     // Entrées avec `sep` = séparateur/titre de section (pas de lien)
     // mini:true → visible même sur mobile (<480px). Priorité : items essentiels.
     var NAV = [
-        { e: '🌍', l: 'HOME',           h: 'index.html',             mini: true },
+        { e: '🌍', l: 'UPlanet',        h: 'index.html',             mini: true },
         { sep: 'Identité 🪪' },
-        { e: '💬', l: 'Coracle',        h: 'https://coracle.copylaradio.com', mini: true },
+        { e: '🫵', l: 'Profile',        h: 'nostr_profile_viewer.html', mini:true },
         { e: '💎', l: 'Atomic',         h: 'atomic.html',            mini: true },
-        { e: '🍪', l: 'Cookies',        h: 'cookie.html', mini:true },
-        { e: '😎', l: 'BRO Admin',      h: 'bro.html', mini:true },
+        { e: '💬', l: 'Coracle',        h: 'https://coracle.copylaradio.com', mini: true },
         { sep: 'Station 모' },
+        { e: '📡', l: 'NODE Admin',     h: 'nostr_admin.html' },
         { e: '♥️', l: 'Station',        h: 'economy.html',           mini: true },
         { e: '🌌', l: 'Swarm',          h: 'economy.Swarm.html' },
-        { e: '📡', l: 'NODE Admin',     h: 'nostr_admin.html' },
+        { e: '😎', l: 'BRO Admin',      h: 'mailjet.html', mini:true },
+        { e: '🍪', l: 'Cookies',        h: 'cookie.html', mini:true },
         { sep: 'WoTx² ⛑️' },
         { e: '☁️', l: 'Skills',         h: 'skills.html' },
         { e: '⚒️', l: 'Forge',          h: 'forge.html',             mini: true },
@@ -38,9 +39,9 @@
         { sep: 'Communauté' },
         { e: '👥', l: 'Collectif Ẑen',  h: 'https://opencollective.com/monnaie-libre' , mini: true },
         { e: '🤝', l: 'Contribuer',     h: 'contribute-3D.html',     mini: true },
-        { e: '🍙', l: 'Made In Zion',   h: 'miz.html' ,          mini: true },
         { e: '🛈', l: 'uNation',        h: 'Unation.html' ,          mini: true },
-        { sep: 'Smartphone' },
+        { e: '🍙', l: 'Made In Zion',   h: 'miz.html' ,          mini: true },
+        { sep: 'Matos' },
         { e: '📱', l: '/e/OS',          h: 'eos_installer.html', mini: true },
     ];
 

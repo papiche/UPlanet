@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="fr" data-bs-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>⚛️ LE VORTEX — ATOM4LOVE LIVE</title>
+    <script src="p5.min.js"></script>
+    <script src="phi2x.js"></script>
+    <script src="kin-data.js"></script>
+    <script src="audio_orchestra.js"></script>
+    <link rel="stylesheet" href="core-theme.css">
+    <link rel="stylesheet" href="uplanet-atomic.css">
+    <style>
+        html, body {
+            margin: 0; padding: 0; width: 100%; height: 100dvh;
+            overflow: hidden; background: #040308;
+            font-family: 'Courier New', Courier, monospace;
+        }
+        #canvas-container {
+            position: fixed; inset: 0; z-index: 1;
+        }
+        #ui-overlay {
+            position: absolute; inset: 0; z-index: 10;
+            pointer-events: none; display: flex; flex-direction: column;
+            justify-content: space-between; padding: 24px;
+        }
+        .hud-panel {
+            background: rgba(7, 7, 15, 0.75);
+            border: 1px solid rgba(0, 255, 204, 0.2);
+            border-radius: 12px; padding: 14px 20px;
+            color: var(--teal, #00ffcc); font-size: 0.85rem;
+            backdrop-filter: blur(8px); pointer-events: auto;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+        }
+        .header-panel { display: flex; justify-content: space-between; align-items: center; }
+        .footer-panel { display: flex; justify-content: space-between; align-items: flex-end; }
+        h1 {
+            font-size: 1.4rem; font-weight: 900; letter-spacing: 3px; margin: 0;
+            background: linear-gradient(45deg, #00ffcc, #b464ff);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        }
+        .stats-num { font-size: 1.8rem; font-weight: bold; color: #fff; }
+        .match-alert-box {
+            position: fixed; top: 100px; left: 50%; transform: translateX(-50%);
+            z-index: 100; pointer-events: none; text-align: center;
+            opacity: 0; transform: translateX(-50%) translateY(0px);
+            transition: opacity 0.5s ease, transform 0.5s ease;
+        }
+        .match-alert-box.show { opacity: 1; transform: translateX(-50%) translateY(10px); }
+        .match-alert-content {
+            background: linear-gradient(135deg, rgba(180, 100, 255, 0.9), rgba(0, 255, 204, 0.9));
+            border: 2px solid #fff; box-shadow: 0 0 30px rgba(0, 255, 204, 0.6);
+            padding: 16px 32px; border-radius: 20px; color: #fff;
+        }
+        .match-alert-title { font-size: 1.4rem; font-weight: 900; letter-spacing: 2px; }
+        .match-alert-names { font-size: 1.1rem; font-weight: bold; margin-top: 6px; }
+    </style>
+</head>
+<body>
+
+<div id="canvas-container"></div>
+
+<div id="ui-overlay">
+    <!-- Header HUD -->
+    <div class="hud-panel header-panel">
+        <div>
+            <h1>⚛ ATOM4LOVE — VORTEX LIVE</h1>
+            <div style="font-size: 10px; color: rgba(255,255,255,.45); margin-top: 2px;">
+                Réseau Local Décentralisé · Constellation active
+            </div>
+        </div>
+        <div style="text-align: right;">
+            <div style="font-size: 9px; text-transform: uppercase; color: rgba(255,255,255,0.3);">Relais local (:7777)</div>
+            <div id="relay-status" style="color: #ff5252; font-weight: bold;">● DÉCONNECTÉ</div>
+        </div>
+    </div>
+
+    <!-- Match Alert central -->
+    <div class="match-alert-box" id="match-alert">
+        <div class="match-alert-content">
+            <div class="match-alert-title">✨ SINGULARITÉ CRÉATRICE DETECTION ✨</div>
+            <div class="match-alert-names" id="match-names">A × B</div>
+            <div style="font-size: 0.8rem; opacity: 0.9; margin-top: 4px;" id="match-score-lbl">Cohérence : 98.7%</div>
+        </div>
+    </div>
+
+    <!-- Footer HUD -->
+    <div class="hud-panel footer-panel">
+        <div>
+            <div class="stats-num" id="total-atoms">0</div>
+            <div style="font-size: 9px; text-transform: uppercase; color: rgba(255,255,255,0.3)">Atomes dans la pièce</div>
+        </div>
+        <div style="text-align: center; max-width: 280px;">
+            <div style="font-size: 11px; color: #fff; font-weight: bold;">Scanner le QR Code d'entrée</div>
+            <div style="font-size: 9px; color: rgba(255,255,255,0.4); margin-top: 3px;">
+                Connectez-vous au WiFi <strong style="color: var(--teal)">ZICMAMA</strong> pour calibrer votre signature
+            </div>
+        </div>
+        <div style="text-align: right;">
+            <div class="stats-num" id="total-matches">0</div>
+            <div style="font-size: 9px; text-transform: uppercase; color: rgba(255,255,255,0.3)">Interférences (>85%)</div>
+        </div>
+    </div>
+</div>
+
+<script>
+'use strict';
+
+const ATOMS_IN_ROOM = [];
+const KIN_COLORS = [[239, 68, 68], [210, 210, 240], [96, 165, 250], [251, 191, 36], [52, 211, 153]];
+
+// Connexion au proxy strfry local (re-routé vers le port 7777 par soundspot-strfry-proxy.service)
+const RELAY_URL = "ws://" + window.location.hostname + ":7777";
+
+let ws;
+function connectRelay() {
+    ws = new WebSocket(RELAY_URL);
+    const statusEl = document.getElementById('relay-status');
+
+    ws.onopen = () => {
+        statusEl.textContent = "● CONNECTÉ";
+        statusEl.style.color = "#00ffcc";
+        
+        // S'abonner aux signatures ATOM4LOVE du festival (kind 30078)
+        const since = Math.floor(Date.now() / 1000) - 21600; // 6 heures de buffer
+        ws.send(JSON.stringify(["REQ", "vortex_sub", {
+            kinds: [30078],
+            "#d": ["atom4love"],
+            since: since
+        }]));
+
+        if (window.AudioOrchestra) {
+            AudioOrchestra.enable();
+            AudioOrchestra.setVolume(0.35);
+        }
+    };
+
+    ws.onmessage = (e) => {
+        try {
+            const msg = JSON.parse(e.data);
+            if (msg[0] === "EVENT") {
+                const ev = msg[2];
+                addAtom(ev);
+            }
+        } catch (_) {}
+    };
+
+    ws.onclose = () => {
+        statusEl.textContent = "● DÉCONNECTÉ";
+        statusEl.style.color = "#ff5252";
+        setTimeout(connectRelay, 5000);
+    };
+}
+
+function addAtom(ev) {
+    if (ATOMS_IN_ROOM.find(a => a.pubkey === ev.pubkey)) return;
+
+    try {
+        const payload = JSON.parse(ev.content);
+        const phi = parseFloat(payload.personal_phase);
+        if (isNaN(phi)) return;
+
+        const name = payload.birth_place ? payload.birth_place.split(',')[0] : "Explorateur";
+        const omega = parseFloat(payload.omega_bio) || 12.0;
+        
+        let kin = null;
+        if (payload.birth_date && window.Phi2X) {
+            kin = Phi2X.calcKinFromDate(payload.birth_date);
+        }
+
+        const atom = {
+            pubkey: ev.pubkey,
+            name: name,
+            phi: phi,
+            omega: omega,
+            kin: kin,
+            x: random(width * 0.15, width * 0.85),
+            y: random(height * 0.15, height * 0.85),
+            vx: random(-0.4, 0.4),
+            vy: random(-0.4, 0.4),
+            size: 24,
+            pulse: random(0, TWO_PI)
+        };
+
+        ATOMS_IN_ROOM.push(atom);
+        document.getElementById('total-atoms').textContent = ATOMS_IN_ROOM.length;
+
+        // Effet sonore d'arrivée
+        if (window.AudioOrchestra && AudioOrchestra.enabled) {
+            AudioOrchestra.playProfile(omega, 0, kin ? kin.tone : 1);
+        }
+
+    } catch (e) {
+        console.warn("Échec parsing Event 30078", e);
+    }
+}
+
+function setup() {
+    const container = document.getElementById('canvas-container');
+    const canvas = createCanvas(container.offsetWidth, container.offsetHeight);
+    canvas.parent('canvas-container');
+    frameRate(30);
+    connectRelay();
+}
+
+function windowResized() {
+    const container = document.getElementById('canvas-container');
+    resizeCanvas(container.offsetWidth, container.offsetHeight);
+}
+
+function draw() {
+    blendMode(BLEND);
+    background(4, 3, 8, 30);
+    blendMode(ADD);
+
+    let matchCount = 0;
+    const cx = width / 2;
+    const cy = height / 2;
+
+    // Forces d'attraction
+    for (let i = 0; i < ATOMS_IN_ROOM.length; i++) {
+        let a = ATOMS_IN_ROOM[i];
+        for (let j = i + 1; j < ATOMS_IN_ROOM.length; j++) {
+            let b = ATOMS_IN_ROOM[j];
+
+            let k = Phi2X.computeResonanceK(a.phi, b.phi);
+            let distNodes = dist(a.x, a.y, b.x, b.y);
+
+            if (k > 0.85) {
+                matchCount++;
+                let targetDist = map(k, 0.85, 1, 280, 50);
+                let force = (targetDist - distNodes) * 0.00035 * k;
+
+                let dx = b.x - a.x;
+                let dy = b.y - a.y;
+                let len = Math.hypot(dx, dy) || 1;
+
+                a.vx += (dx / len) * force;
+                a.vy += (dy / len) * force;
+                b.vx -= (dx / len) * force;
+                b.vy -= (dy / len) * force;
+
+                let alpha = map(k, 0.85, 1, 25, 240);
+                if (k > 0.95) {
+                    stroke(255, 215, 0, alpha);
+                    strokeWeight(3.5 + sin(frameCount * 0.25) * 1.5);
+                    line(a.x, a.y, b.x, b.y);
+                    triggerMatchAlert(a, b, k);
+                } else {
+                    stroke(0, 255, 204, alpha);
+                    strokeWeight(1.2);
+                    line(a.x, a.y, b.x, b.y);
+                }
+            }
+        }
+
+        // Ramener doucement vers le centre
+        a.vx += (cx - a.x) * 0.00004;
+        a.vy += (cy - a.y) * 0.00004;
+
+        a.x += a.vx;
+        a.y += a.vy;
+        a.vx *= 0.93;
+        a.vy *= 0.93;
+
+        a.x = Math.max(30, Math.min(width - 30, a.x));
+        a.y = Math.max(30, Math.min(height - 30, a.y));
+    }
+
+    document.getElementById('total-matches').textContent = matchCount;
+
+    // Rendu graphique des atomes
+    for (let a of ATOMS_IN_ROOM) {
+        a.pulse += 0.06;
+        let col = a.kin ? KIN_COLORS[a.kin.ci] : [0, 255, 204];
+
+        noFill();
+        stroke(col[0], col[1], col[2], 40);
+        strokeWeight(1.5);
+        ellipse(a.x, a.y, a.size + sin(a.pulse) * 9);
+
+        noStroke();
+        fill(col[0], col[1], col[2], 220);
+        ellipse(a.x, a.y, a.size);
+
+        fill(255, 255, 255, 210);
+        textAlign(CENTER);
+        textSize(11);
+        text(a.name, a.x, a.y - 18);
+
+        if (a.kin) {
+            fill(col[0], col[1], col[2], 180);
+            textSize(9);
+            text("KIN " + a.kin.kin, a.x, a.y + 20);
+        }
+    }
+}
+
+let alertTimer = 0;
+function triggerMatchAlert(a, b, k) {
+    if (Date.now() - alertTimer < 15000) return; // Cooldown 15s
+    alertTimer = Date.now();
+
+    const box = document.getElementById('match-alert');
+    const names = document.getElementById('match-names');
+    const score = document.getElementById('match-score-lbl');
+
+    names.textContent = `${a.name} × ${b.name}`;
+    score.textContent = `Taux de Cohérence Cosmique : ${(k * 100).toFixed(1)}%`;
+
+    box.classList.add('show');
+    
+    if (window.AudioOrchestra && AudioOrchestra.enabled) {
+        AudioOrchestra.playMatch(a.omega, 0, b.omega, 1, k * 100);
+    }
+
+    setTimeout(() => { box.classList.remove('show'); }, 6000);
+}
+</script>
+</body>
+</html>

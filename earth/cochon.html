@@ -6,9 +6,12 @@
   <title>🐷 - Bienvenue sur UPlanet ORIGIN un Cyber Espace 100% Libre... AGPL only? rejoins nous !</title>
   <script type="module" src="model-viewer.min.js"></script>
   <!-- Nostr Library -->
+  <script src="nacl-fast.min.js"></script>
   <script src="nostr.bundle.js"></script>
   <!-- Common JavaScript (NOSTR, IPFS, API) -->
   <script src="common.js"></script>
+  <!-- En-tête UPlanet : fournit la modale de connexion window.uphOpenLogin() -->
+  <script src="uplanet-header.js"></script>
   <!-- Feedback module -->
   <script src="feedback.js"></script>
   <style>
@@ -122,6 +125,10 @@
       display: none; justify-content: center; align-items: center; z-index: 2000;
     }
     #qr-modal.active { display: flex; }
+
+    /* --- Commentaires Nostr, intégrés inline (widget partagé displayComments()) --- */
+    #nostr-comments { margin-top: 30px; border-top: 1px solid rgba(255, 51, 153, 0.25); padding-top: 20px; text-align: left; }
+
     .modal-content {
       background: var(--panel); border: 3px solid var(--pink); padding: 30px;
       text-align: center; border-radius: 20px; box-shadow: 0 0 50px var(--pink); position: relative;
@@ -167,6 +174,105 @@
     @keyframes cc { 0%,100%{box-shadow:0 0 5px 1px rgba(0,255,204,.35)} 50%{box-shadow:0 0 16px 6px rgba(0,255,204,.9)} }
     @keyframes yy { 0%,100%{box-shadow:0 0 5px 1px rgba(255,215,0,.3)}  50%{box-shadow:0 0 16px 6px rgba(255,215,0,.85)} }
     @keyframes twinkle { 0%,100%{opacity:.12} 50%{opacity:.65} }
+
+    /* uplanet-header.js n'est chargé ici que pour sa modale de connexion
+       (window.uphOpenLogin) — le bandeau standard casserait la mise en page
+       immersive du Cyber Cochon. */
+    #uph { display: none !important; }
+
+    /* --- Étapes "Comment participer ?" (cartes claires, icônes emoji) --- */
+    #nostr-steps { margin-top: 26px; }
+    #nostr-steps h4 { color: var(--accent); margin: 0 0 4px 0; font-family: monospace; font-size: .95rem; }
+    #nostr-steps .steps-lede { font-size: .78rem; color: #9ab; margin: 0 0 14px 0; }
+    .steps-row { display: flex; align-items: stretch; gap: 6px; flex-wrap: wrap; }
+    .step-card {
+      background: rgba(255,255,255,0.035); border: 1px solid rgba(255,255,255,0.09);
+      color: inherit; cursor: pointer; padding: 12px 8px 10px; border-radius: 10px;
+      display: flex; flex-direction: column; align-items: center; gap: 5px;
+      flex: 1 1 90px; min-width: 84px; text-decoration: none; font-family: var(--font);
+      transition: transform .2s ease, background .2s ease, border-color .2s ease;
+    }
+    .step-card:hover { transform: translateY(-3px); background: rgba(255,255,255,0.07); border-color: rgba(0,255,204,0.35); }
+    .step-card .step-num {
+      font-family: monospace; font-size: .62rem; color: var(--pink); font-weight: bold; letter-spacing: .5px;
+    }
+    .step-card .step-ico { font-size: 1.7rem; line-height: 1; }
+    .step-card .step-label { font-size: .74rem; font-weight: 600; text-align: center; color: #fff; line-height: 1.25; }
+    .step-card .step-sub { font-size: .64rem; text-align: center; color: #8ab; line-height: 1.2; }
+    .step-card.step-highlight { border-color: rgba(255,215,0,0.4); background: rgba(255,215,0,0.06); }
+    .step-card.step-highlight .step-num { color: var(--yellow); }
+    .step-arrow { color: rgba(255,255,255,0.2); font-size: 1.1rem; align-self: center; flex: 0 0 auto; }
+    @media (max-width: 480px) { .step-arrow { display: none; } }
+
+    /* --- Bootstrapper Arbor : objectif de capacité de la constellation --- */
+    #bootstrap-arbor {
+      margin-top: 26px; padding: 16px 18px; border-radius: 10px;
+      background: linear-gradient(135deg, rgba(255,215,0,0.07), rgba(0,255,204,0.04));
+      border: 1px solid rgba(255,215,0,0.3);
+    }
+    #bootstrap-arbor h4 { color: var(--yellow); margin: 0 0 8px 0; font-family: monospace; font-size: .95rem; }
+    #bootstrap-arbor p { font-size: .8rem; color: #ccd; line-height: 1.55; margin: 0 0 10px 0; }
+    .ba-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 8px; margin: 12px 0; }
+    .ba-cell {
+      background: rgba(0,0,0,.3); border: 1px solid rgba(255,255,255,.08); border-radius: 8px;
+      padding: 8px 6px; text-align: center;
+    }
+    .ba-cell .ba-num { font-family: monospace; font-weight: bold; font-size: 1.1rem; color: var(--yellow); display: block; }
+    .ba-cell .ba-label { font-size: .62rem; color: #9ab; line-height: 1.25; display: block; margin-top: 2px; }
+    #bootstrap-arbor .ba-note { font-size: .72rem; color: #789; font-style: italic; margin-top: 8px; }
+    #bootstrap-arbor .ba-links { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+    #bootstrap-arbor .ba-links a {
+      display: inline-flex; align-items: center; padding: 5px 12px;
+      background: rgba(255,215,0,.1); border: 1px solid rgba(255,215,0,.35);
+      border-radius: 12px; color: #ffe9a8; text-decoration: none; font-size: .78rem;
+      transition: background .2s ease, border-color .2s ease;
+    }
+    #bootstrap-arbor .ba-links a:hover { background: rgba(255,215,0,.22); border-color: var(--yellow); color: #fff; }
+
+    /* --- Univers Applicatif (résumé texte, complément de la nébuleuse 3D) --- */
+    #univers { margin-top: 26px; border-top: 1px solid rgba(255, 51, 153, 0.25); padding-top: 18px; }
+    #univers h4 { color: var(--accent); margin: 0 0 8px 0; font-family: monospace; font-size: 1rem; }
+    #univers .univers-lede { font-size: .85rem; color: #b7bdd6; margin: 0 0 16px 0; line-height: 1.55; }
+    .univers-cats { display: flex; flex-direction: column; gap: 14px; }
+    .univers-cat .uc-label {
+      display: block; font-size: .78rem; font-weight: 700; letter-spacing: .3px;
+      color: #fff; margin-bottom: 7px;
+    }
+    .univers-cat .uc-links { display: flex; flex-wrap: wrap; gap: 6px; }
+    .univers-cat a {
+      display: inline-flex; align-items: center; padding: 4px 11px;
+      font-size: .76rem; color: #cfe; text-decoration: none;
+      background: rgba(0, 255, 204, 0.07); border: 1px solid rgba(0, 255, 204, 0.22);
+      border-radius: 12px; transition: background .2s ease, border-color .2s ease, color .2s ease;
+      white-space: nowrap;
+    }
+    .univers-cat a:hover { background: rgba(0, 255, 204, 0.18); border-color: var(--accent); color: #fff; }
+    .univers-hint { font-size: .74rem; color: #8895b8; margin-top: 16px; font-style: italic; line-height: 1.4; }
+
+    /* --- Reality Shifting Engine (ATOM4LOVE / SEX.MIZ) --- */
+    #reality-shift {
+      margin-top: 26px; padding: 16px 18px; border-radius: 10px;
+      background: linear-gradient(135deg, rgba(255,51,153,0.08), rgba(0,255,204,0.05));
+      border: 1px solid rgba(255,51,153,0.3);
+    }
+    #reality-shift h4 { color: var(--pink); margin: 0 0 8px 0; font-family: monospace; font-size: .95rem; text-shadow: 0 0 8px rgba(255,51,153,.4); }
+    #reality-shift p { font-size: .82rem; color: #ccd; line-height: 1.55; margin: 0 0 8px 0; }
+    #reality-shift .rs-flow {
+      display: flex; align-items: center; justify-content: center; gap: 8px; margin: 12px 0;
+      font-family: monospace; font-size: .78rem; flex-wrap: wrap;
+    }
+    #reality-shift .rs-flow .rs-tag {
+      padding: 3px 10px; border-radius: 10px; font-weight: bold;
+    }
+    #reality-shift .rs-flow .rs-arrow { color: rgba(255,255,255,.3); }
+    #reality-shift .rs-links { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+    #reality-shift .rs-links a {
+      display: inline-flex; align-items: center; padding: 5px 12px;
+      background: rgba(255,51,153,.12); border: 1px solid rgba(255,51,153,.35);
+      border-radius: 12px; color: #ffd6ec; text-decoration: none; font-size: .78rem;
+      transition: background .2s ease, border-color .2s ease;
+    }
+    #reality-shift .rs-links a:hover { background: rgba(255,51,153,.25); border-color: var(--pink); color: #fff; }
   </style>
 </head>
 <body>
@@ -193,21 +299,96 @@
       <a href="entrance.html" class="btn-entrance">🌍 C'est quoi UPlanet ?</a>
     </div>
 
-    <!-- Section commentaires Nostr -->
-    <div id="nostr-comments">
-      <h4>📡 Laisser un commentaire Nostr</h4>
-      <div id="cochon-nostr-status" style="font-size:.85rem; color:var(--muted,#8ab); margin-bottom:8px; display:none;"></div>
-      <div id="cochon-logged-out">
-        <p style="color:#8ab; font-size:.9rem; margin:0 0 8px 0;">Connectez-vous avec votre extension Nostr pour commenter.</p>
-        <button class="btn-nostr-connect" id="cochon-login-btn" onclick="cochonHandleLogin()">🔑 Connexion Nostr</button>
+    <!-- Reality Shifting Engine : ATOM4LOVE (dream_vector) + SEX.MIZ -->
+    <div id="reality-shift">
+      <h4>🌀 Reality Shifting Engine</h4>
+      <p>
+        <b>ATOM4LOVE</b> calcule votre résonance réelle (Φ², KIN) et compare vos <b>dream_vector</b> — les balises
+        de votre Réalité Choisie (lieu, valeurs, mode de vie). L'écart mesuré (Bifurcation Relativiste) dit si deux
+        atomes convergent ou divergent — pas au hasard, par le calcul.
+      </p>
+      <div class="rs-flow">
+        <span class="rs-tag" style="background:rgba(255,255,255,.08); color:#ccd;">CR</span>
+        <span class="rs-arrow">— scripting →</span>
+        <span class="rs-tag" style="background:rgba(0,255,204,.15); color:var(--accent);">DR</span>
+        <span class="rs-arrow">— via —</span>
+        <span class="rs-tag" style="background:rgba(255,51,153,.15); color:var(--pink);">SEX.MIZ</span>
       </div>
-      <div id="cochon-logged-in" style="display:none;">
-        <div id="cochon-user-label" style="font-size:.8rem; color:#8ab; margin-bottom:6px;"></div>
-        <textarea class="nostr-comment-input" id="cochon-message" rows="3" placeholder="Votre commentaire sur le Cyber Cochon..."></textarea>
-        <button class="btn-nostr-send" id="cochon-send-btn" onclick="cochonSendComment()">Envoyer ✈️</button>
+      <p style="font-size:.76rem; color:#9ab;">CR = Réalité Actuelle · DR = Réalité Désirée · le protocole SEX.MIZ sert de focalisation consciente de l'intention vers la DR.</p>
+      <div class="rs-links">
+        <a href="atomic_dream.html" target="_blank">💭 Écrire mon dream_vector</a>
+        <a href="sex.html" target="_blank">🌀 Protocole SEX.MIZ</a>
+        <a href="sex_help.html" target="_blank">📖 Vocabulaire du Shift</a>
       </div>
-      <div id="cochon-comments-list" style="margin-top:16px;"></div>
     </div>
+
+    <!-- Étapes pour rejoindre la conversation Nostr et la constellation -->
+    <div id="nostr-steps">
+      <h4>🛤️ Comment participer ?</h4>
+      <p class="steps-lede">Du premier commentaire jusqu'à devenir un rouage de la constellation.</p>
+      <div class="steps-row">
+        <a class="step-card" href="https://github.com/fiatjaf/nos2x" target="_blank" rel="noopener" title="Installer nos2x (signe sans exposer vos clés)">
+          <span class="step-num">01</span>
+          <span class="step-ico">🧩</span>
+          <span class="step-label">Extension</span>
+          <span class="step-sub">nos2x</span>
+        </a>
+        <span class="step-arrow">→</span>
+        <button class="step-card" onclick="connectNostr(true)" title="Se connecter avec votre identité Nostr">
+          <span class="step-num">02</span>
+          <span class="step-ico">🔑</span>
+          <span class="step-label">Se connecter</span>
+          <span class="step-sub">Clé publique</span>
+        </button>
+        <span class="step-arrow">→</span>
+        <button class="step-card" onclick="document.getElementById('nostr-comments')?.scrollIntoView({behavior:'smooth'})" title="Écrire votre commentaire">
+          <span class="step-num">03</span>
+          <span class="step-ico">💬</span>
+          <span class="step-label">Commenter</span>
+          <span class="step-sub">Ici même</span>
+        </button>
+        <span class="step-arrow">→</span>
+        <a class="step-card" href="entrance.html" target="_blank" title="Explorer tout l'écosystème UPlanet">
+          <span class="step-num">04</span>
+          <span class="step-ico">🌍</span>
+          <span class="step-label">Explorer</span>
+          <span class="step-sub">UPlanet</span>
+        </a>
+      </div>
+
+    </div>
+
+    <!-- Objectif : capacité nécessaire pour bootstraper une constellation autonome -->
+    <div id="bootstrap-arbor">
+      <h4>🖥️ Bootstrapper Arbor — Objectif de Constellation</h4>
+      <p>
+        Chaque station (NODE) sert de <b>50 à 2 000 utilisateurs</b> selon la charge vidéo/image
+        de leur uDRIVE. Un GPU Hub (Armateur) se divise en <b>24 parts</b>, chacune allouée à un
+        Satellite de <b>2 To</b> — assez pour faire tourner localement les modèles Ollama de BRO
+        (questions, RAG) <i>et</i> ceux d'ARBOR (auto-amélioration encadrée du canal LOVE et du
+        prompt de commandes).
+      </p>
+      <div class="ba-grid">
+        <div class="ba-cell"><span class="ba-num">1 + 24</span><span class="ba-label">Stations Astroport<br>(1 Hub + 24 Satellites)</span></div>
+        <div class="ba-cell"><span class="ba-num">≥24 Go</span><span class="ba-label">VRAM du Hub GPU</span></div>
+        <div class="ba-cell"><span class="ba-num">~6 000</span><span class="ba-label">Utilisateurs<br>(estimation réaliste)</span></div>
+        <div class="ba-cell"><span class="ba-num">48 To</span><span class="ba-label">Stockage constellation<br>(24 × 2 To)</span></div>
+      </div>
+      <p class="ba-note">
+        💡 Estimation, pas une garantie contractuelle — 1 200 à 48 000 utilisateurs selon l'intensité
+        d'usage réelle des 24 Satellites. Claude (API) vient en complément d'Ollama pour les tâches
+        d'auto-évolution les plus exigeantes du code — c'est un budget ẐEN (poste R&D du 3×1/3), pas
+        du GPU supplémentaire à héberger. Vision 2027 : 100 constellations ≈ 2 500 stations Astroport
+        et 2 400 Go de VRAM en réseau.
+      </p>
+      <div class="ba-links">
+        <a href="contribute.html" target="_blank">🖥️ Parrainer Infra et Code</a>
+        <a href="Unation.html" target="_blank">✨ 100% AGPL</a>
+      </div>
+    </div>
+
+    <!-- Commentaires Nostr — intégrés inline (widget partagé displayComments()) -->
+    <div id="nostr-comments"></div>
   </div>
 
   <div class="model-section">
@@ -245,6 +426,7 @@
       <p style="color: var(--yellow); font-family: monospace; margin: 10px 0;">https://qo-op.com</p>
     </div>
   </div>
+
 
   <div id="toast">Bzzzz... Génération du ticket ! 🖨️</div>
   <audio id="homer-audio" preload="none"></audio>
@@ -364,6 +546,15 @@
       {e:'💬', n:'Coracle Social',       d:'Messagerie Nostr souveraine\nCommunauté décentralisée',      c:'c', x:25, y:35, l:'{coracle}'},
       {e:'💰', n:'Zelkova Wallet',       d:'Portefeuille ẐEN mobile\nPayez & recevez librement',          c:'y', x:70, y:60, l:'{zelkova}'},
       {e:'🏴', n:'Devenir Capitaine',    d:'Gérez votre station\nRejoignez la constellation',             c:'p', x:55, y:25, l:'{earth}/contribute-3D-dev.html'},
+      {e:'🔨', n:'Forge WoTx²',          d:'Craft de compétences & objets\nRecettes collectives entre pairs', c:'y', x:30, y:47, l:'{earth}/forge.html'},
+      {e:'📦', n:'Objets Communs',       d:'Inventaire partagé\nDurabilité & réparabilité',             c:'y', x:62, y:37, l:'{earth}/objects.html'},
+      {e:'⚖️', n:'Médiation WoTx²',      d:'Justice pair-à-pair\nRésolution des conflits',              c:'y', x:15, y:52, l:'{earth}/justice.html'},
+      {e:'📘', n:'Guide Terraformeur',   d:'Catalogue coopératif\nHabitat, culture, soin, transport',   c:'y', x:38, y:78, l:'{earth}/h2g2.html'},
+      {e:'💭', n:'Rêves Communs',        d:'ATOM4LOVE dream_vector\nBifurcation Relativiste',           c:'p', x:8,  y:22, l:'{earth}/atomic_dream.html'},
+      {e:'🌀', n:'Chœur des Nœuds',      d:'Résonance de groupe\nExtase synchrone ATOM4LOVE',           c:'p', x:92, y:48, l:'{earth}/atomic_choir.html'},
+      {e:'🏕️', n:'Académie Made In Zion', d:'4 Piliers de l\'autonomie\nMoteur, Mouvement, Oasis, Vaisseau', c:'y', x:57, y:66, l:'{earth}/miz-academie.html'},
+      {e:'🌳', n:'Forêt-Jardin',         d:'Financement participatif\nCommun nourricier',               c:'y', x:23, y:88, l:'{earth}/crowdfunding.html'},
+      {e:'🪙', n:'Pile ou Face',         d:'Jeu ẐEN entre membres\nPractice ou Live',                    c:'c', x:80, y:88, l:'{earth}/coinflip.html'},
     ];
 
     const COL = {
@@ -371,7 +562,8 @@
       c:{bg:'rgba(0,255,204,.2)',   bd:'#00ffcc', an:'cc', lb:'#00ffcc'},
       y:{bg:'rgba(255,215,0,.15)', bd:'#ffd700', an:'yy', lb:'#ffd700'},
     };
-    const LINES = [[0,10],[10,1],[1,11],[11,2],[3,5],[5,12],[4,6],[6,8],[8,9],[9,13],[9,14],[0,5],[17,3],[18,9],[19,8],[0,17],[17,19]];
+    const LINES = [[0,10],[10,1],[1,11],[11,2],[3,5],[5,12],[4,6],[6,8],[8,9],[9,13],[9,14],[0,5],[17,3],[18,9],[19,8],[0,17],[17,19],
+                   [12,20],[20,21],[20,22],[20,23],[9,26],[0,24],[24,25],[10,27],[9,27],[1,28]];
     let homerTracks = [];
 
     async function loadHomer() {
@@ -494,91 +686,13 @@
 
     loadHomer().then(buildNebula);
 
-    // ─── NOSTR COMMENTAIRES ───────────────────────────────────────────────────
-    const cochonLoginBtn   = document.getElementById('cochon-login-btn');
-    const cochonLoggedOut  = document.getElementById('cochon-logged-out');
-    const cochonLoggedIn   = document.getElementById('cochon-logged-in');
-    const cochonUserLabel  = document.getElementById('cochon-user-label');
-    const cochonStatus     = document.getElementById('cochon-nostr-status');
-
-    function cochonSetStatus(msg, color) {
-      cochonStatus.textContent = msg;
-      cochonStatus.style.color = color || '#8ab';
-      cochonStatus.style.display = msg ? 'block' : 'none';
-    }
-
-    async function cochonHandleLogin() {
-      cochonLoginBtn.disabled = true;
-      cochonLoginBtn.textContent = 'Connexion…';
-      const pubkey = typeof ensureNostrConnection === 'function'
-        ? await ensureNostrConnection()
-        : null;
-      if (pubkey) {
-        const name = typeof getUserDisplayName === 'function'
-          ? await getUserDisplayName(pubkey)
-          : pubkey.slice(0, 10) + '…';
-        cochonUserLabel.textContent = '🔑 Connecté : ' + name;
-        cochonLoggedOut.style.display = 'none';
-        cochonLoggedIn.style.display  = 'block';
-        cochonLoadComments();
-      } else {
-        cochonLoginBtn.disabled = false;
-        cochonLoginBtn.textContent = '🔑 Connexion Nostr';
-        cochonSetStatus('Extension Nostr introuvable ou refusée.', '#f88');
-      }
-    }
-
-    async function cochonSendComment() {
-      const textarea = document.getElementById('cochon-message');
-      const sendBtn  = document.getElementById('cochon-send-btn');
-      const text     = textarea.value.trim();
-      if (!text) return;
-      sendBtn.disabled = true;
-      sendBtn.textContent = 'Envoi…';
-      try {
-        const pubkey = typeof ensureNostrConnection === 'function'
-          ? await ensureNostrConnection() : null;
-        if (!pubkey) throw new Error('Non connecté');
-        // Tag la page actuelle
-        const tags = [['r', window.location.href]];
-        const ok = typeof publishNote === 'function'
-          ? await publishNote(text, tags)
-          : false;
-        if (ok) {
-          textarea.value = '';
-          cochonSetStatus('✅ Commentaire publié !', '#6fd17a');
-          setTimeout(() => cochonSetStatus(''), 4000);
-          cochonLoadComments();
-        } else {
-          cochonSetStatus('Erreur lors de la publication.', '#f88');
-        }
-      } catch (e) {
-        cochonSetStatus('Erreur : ' + e.message, '#f88');
-      } finally {
-        sendBtn.disabled = false;
-        sendBtn.textContent = 'Envoyer ✈️';
-      }
-    }
-
-    async function cochonLoadComments() {
-      const list = document.getElementById('cochon-comments-list');
-      if (!list) return;
-      if (typeof displayComments === 'function') {
-        displayComments('cochon-comments-list');
-      }
-    }
-
-    document.addEventListener('DOMContentLoaded', () => {
-      // Vérifier si extension Nostr disponible
-      setTimeout(() => {
-        if (typeof window.nostr === 'undefined' || typeof window.nostr.getPublicKey !== 'function') {
-          cochonLoginBtn.disabled = true;
-          cochonLoginBtn.textContent = 'Extension Nostr requise';
-        }
-      }, 500);
-      // Charger les commentaires existants sans connexion
-      cochonLoadComments();
-    });
+    // ─── NOSTR COMMENTAIRES — intégré inline (widget partagé) ────────────────
+    // displayComments()/submitComment()/connectAndComment() (lib_3_content.js)
+    // ciblent toutes par défaut #nostr-comments — ne jamais lui passer un
+    // autre id ici : après connexion ou envoi, ces fonctions rechargent
+    // #nostr-comments elles-mêmes, sans argument (sinon deux widgets
+    // désynchronisés, le bug précédent).
+    if (typeof displayComments === 'function') displayComments();
   </script>
 <script src="app_switch.js"></script>
 </body>

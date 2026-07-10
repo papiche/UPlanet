@@ -12,6 +12,7 @@ var NAV_PAGES = [
     { id: 'board',  icon: '🎴', label: 'Jeu',     href: 'atomic_board.html',  locked: false },
     { id: 'chat',   icon: '💬', label: 'Chat',    href: 'atomic_chat.html',   locked: false },
     { id: 'choir',  icon: '🌀', label: 'Chœur',   href: 'atomic_choir.html',  locked: false },
+    { id: 'dream',  icon: '💭', label: 'Rêves',   href: 'atomic_dream.html',  locked: false },
     { id: 'help',   icon: 'ℹ️',  label: 'Aide',    href: 'atomic_help.html',   locked: false },
 ];
 

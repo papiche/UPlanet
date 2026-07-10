@@ -506,9 +506,22 @@ function submitEmail() {
     const email  = params.get('email') || params.get('mail') || '';
     if (email && email.includes('@')) {
         loadZencard(email);
-    } else {
-        showLanding();
+        return;
     }
+
+    /* Pas d'email dans l'URL : montrer la landing, puis basculer sur la ZenCard
+       de l'utilisateur connecté (UPH) dès que uplanet-header.js l'a résolue. */
+    showLanding();
+    const waitUph = setInterval(() => {
+        if (window._uphEmail) {
+            clearInterval(waitUph);
+            const u = new URL(window.location.href);
+            u.searchParams.set('email', window._uphEmail);
+            window.history.replaceState({}, '', u);
+            loadZencard(window._uphEmail);
+        }
+    }, 400);
+    setTimeout(() => clearInterval(waitUph), 8000);
 })();
 </script>
 <script src="nacl-fast.min.js"></script>

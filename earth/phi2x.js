@@ -25,6 +25,10 @@ const Phi2X = (function() {
     // Constante de structure fine — effet Shapiro (compression spatio-temporelle par la masse)
     const ALPHA_SHAPIRO  = 1 / 137.035999084;  // ≈ 0.00729735
 
+    // ── Bifurcation Relativiste (ATOM4LOVE — Vitesse d'Alignement) ───────────
+    const V_ALIGNMENT_MAX       = 0.99; // asymptote — jamais c
+    const V_ALIGNMENT_TAU_YEARS = 25;   // constante de temps caractéristique (accélération existentielle)
+
     // ── Alchimie des 5 Éléments (Familles-Couleurs Tzolkin → 5 Éléments) ─────
     // Rouge=Feu · Blanc=Air · Bleu=Eau · Jaune=Terre · Vert=Éther
     const ELEMENTS       = ['🔥 Feu',   '🌬️ Air',  '🌊 Eau', '🪨 Terre', '✨ Éther'];
@@ -456,6 +460,70 @@ const Phi2X = (function() {
         return ((tAnn + tDay + penta) * stretch) % TAU;
     }
 
+    // ── Bifurcation Relativiste (ATOM4LOVE — v, γ, dream_vector) ─────────────
+    /**
+     * Vitesse d'Alignement v ∈ [0, V_ALIGNMENT_MAX[ — fraction de c vers laquelle un Atome
+     * converge en fonction de son âge (masse temporelle accumulée depuis la naissance) et de
+     * son poids de naissance (facteur de compression Shapiro, cf. computePersonalStretch).
+     * Léger/rapide (stretch < WAVE_STRETCH) → convergence plus rapide vers c.
+     * Lourd/ancré  (stretch > WAVE_STRETCH) → convergence plus lente (ancrage matière).
+     * @param {number} birthUnix  - Timestamp Unix de naissance
+     * @param {number} weightKg   - Poids de naissance (défaut 3.5 kg)
+     * @param {number} [nowUnix]  - Timestamp Unix courant (défaut : maintenant)
+     * @returns {number} v ∈ [0, V_ALIGNMENT_MAX[
+     */
+    function computeAlignmentV(birthUnix, weightKg = 3.5, nowUnix) {
+        const now       = nowUnix !== undefined ? nowUnix : Date.now() / 1000;
+        const ageYears  = Math.max(0, (now - birthUnix) / ORBITAL_YEAR_S);
+        const stretchRatio = computePersonalStretch(weightKg) / WAVE_STRETCH; // ≈1 · <1 léger/rapide · >1 lourd/ancré
+        const tauYears  = V_ALIGNMENT_TAU_YEARS * stretchRatio;
+        return V_ALIGNMENT_MAX * (1 - Math.exp(-ageYears / tauYears));
+    }
+
+    /** Facteur de Lorentz γ = 1/√(1−v²) — physique standard, c=1 normalisé. */
+    function computeLorentzGamma(v) {
+        const vC = Math.max(0, Math.min(0.999999, Math.abs(v)));
+        return 1 / Math.sqrt(1 - vC * vC);
+    }
+
+    /**
+     * Divergence des Rêves ∈ [0,1] entre deux dream_vector (ensembles de tags DR).
+     * 0 = rêves identiques (DR commune), 1 = aucun tag commun (mondes distincts).
+     * Similarité de Jaccard inversée : 1 − |A∩B|/|A∪B|.
+     * @param {string[]} dreamVectorA
+     * @param {string[]} dreamVectorB
+     */
+    function computeDreamDivergence(dreamVectorA, dreamVectorB) {
+        const setA = new Set(dreamVectorA || []);
+        const setB = new Set(dreamVectorB || []);
+        if (setA.size === 0 && setB.size === 0) return 0;
+        const inter = [...setA].filter(t => setB.has(t)).length;
+        const union = new Set([...setA, ...setB]).size;
+        return union === 0 ? 0 : 1 - inter / union;
+    }
+
+    /**
+     * Vitesse relative entre deux Atomes (addition relativiste des vitesses d'Einstein),
+     * pondérée par la divergence de leurs Rêves communs (dreamDivergence ∈ [0,1]).
+     * dreamDivergence=0 (rêves alignés)  → les vitesses restent "solidaires" (v_rel faible).
+     * dreamDivergence=1 (rêves opposés) → v_rel s'approche de la formule brute d'Einstein.
+     * @param {number} vA
+     * @param {number} vB
+     * @param {number} [dreamDivergence=1]
+     */
+    function computeRelativeVelocity(vA, vB, dreamDivergence = 1) {
+        const a = Math.max(0, Math.min(0.999999, vA));
+        const b = Math.max(0, Math.min(0.999999, vB));
+        return Math.abs((a - b) / (1 - a * b * dreamDivergence));
+    }
+
+    /** Statut textuel de Bifurcation en fonction de γ. */
+    function describeBifurcation(gamma) {
+        if (gamma < 1.1)  return { key: 'sync',       label: 'Lignes temporelles synchronisées. Présent commun stable.' };
+        if (gamma < 1.5)  return { key: 'friction',   label: 'Friction Créatrice. Changement de phase et ajustement des trajectoires.' };
+        return                   { key: 'bifurcated', label: 'Bifurcation Relativiste complétée. Séparation des mondes dans la gratitude.' };
+    }
+
     // ── 3. Double Bang — superposition quantique Conception + Naissance ───────
     /**
      * Calcule la fonction d'onde Ψ de l'Explorateur par superposition des
@@ -583,6 +651,9 @@ const Phi2X = (function() {
     return {
         PHI, F_PHI, F_2, F_WATER, WAVE_STRETCH, TAU, ORBITAL_YEAR_S, ORBITAL_DAY_S,
         ALPHA_SHAPIRO,
+        V_ALIGNMENT_MAX, V_ALIGNMENT_TAU_YEARS,
+        computeAlignmentV, computeLorentzGamma, computeDreamDivergence,
+        computeRelativeVelocity, describeBifurcation,
         ELEMENTS, ELEMENT_COLORS, ELEMENT_KEYS, ARCHETYPES,
         PENTAGONS_GPS,
         KIN_GLYPHS, KIN_GLYPHS_FR, KIN_TONES_FR, KIN_TONE_KEYS,

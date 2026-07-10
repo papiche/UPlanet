@@ -352,6 +352,13 @@
                 ⚡ Publier ma révélation
             </button>
             <div id="publish-status" style="font-size:.72rem;color:rgba(255,255,255,.4);margin-top:8px;text-align:center"></div>
+
+            <button id="btn-love-friend" class="btn-compute"
+                    style="margin-top:8px;font-size:.82rem;padding:10px;background:rgba(255,255,255,.06);border:1px dashed rgba(0,255,204,.35)"
+                    onclick="_addAsLoveFriend()">
+                💞 Ajouter en Ami de Cœur (LOVE)
+            </button>
+            <div id="love-friend-status" style="font-size:.72rem;color:rgba(255,255,255,.4);margin-top:6px;text-align:center"></div>
         </div>
 
         <!-- Progressive disclosure — refine hint -->
@@ -854,6 +861,47 @@ async function _publishRevelation() {
     } else {
         btn.textContent = '⚡ Publier ma révélation';
         if (st) st.textContent = '⚠ Échec — ' + (result?.errors?.[0] || 'erreur inconnue');
+    }
+}
+
+// ── Ajouter le partageur (_hexM) comme Ami de Cœur (Kind 3 clé LOVE) ──────
+async function _addAsLoveFriend() {
+    const btn = document.getElementById('btn-love-friend');
+    const st  = document.getElementById('love-friend-status');
+    if (!_hexM) { if (st) st.textContent = '⚠ Aucun partageur identifié (lien sans ?hex=).'; return; }
+    if (!(window.isNostrConnected && window.userPubkey) && typeof window.connectNostr === 'function') {
+        btn.disabled = true; btn.textContent = '⏳ Connexion…';
+        try { await window.connectNostr(false); } catch (_) {}
+        btn.disabled = false;
+    }
+    const email = window._uphEmail;
+    if (!email || !window.userPubkey) {
+        if (st) st.textContent = '🔒 Connectez-vous avec votre MULTIPASS pour utiliser les Amis de Cœur.';
+        return;
+    }
+    const apiUrl = typeof window.getAPIUrl === 'function' ? window.getAPIUrl()
+        : (location.hostname === '127.0.0.1' || location.hostname === 'localhost') ? 'http://127.0.0.1:54321' : '';
+    btn.disabled = true; btn.textContent = '⏳…'; if (st) st.textContent = '';
+    try {
+        const chRes = await fetch(apiUrl + '/atom4love/challenge?email=' + encodeURIComponent(email));
+        const chJson = await chRes.json().catch(() => ({}));
+        if (!chRes.ok) throw new Error(chJson.detail || chJson.message || ('Challenge indisponible (' + chRes.status + ')'));
+        const authEvent = await window.nostr.signEvent({
+            kind: 22242, pubkey: window.userPubkey, created_at: Math.floor(Date.now() / 1000),
+            tags: [['challenge', chJson.challenge]], content: '',
+        });
+        const fd = new FormData();
+        fd.append('email', email); fd.append('action', 'add'); fd.append('target_hex', _hexM);
+        fd.append('auth_event', JSON.stringify(authEvent));
+        const res = await fetch(apiUrl + '/atom4love/follow', { method: 'POST', body: fd });
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok || !json.published) throw new Error(json.message || json.detail || ('HTTP ' + res.status));
+        btn.textContent = '✅ Ajouté·e en Ami de Cœur';
+        if (st) st.innerHTML = 'Voir la comparaison de vos Rêves sur <a href="atomic_dream.html" style="color:var(--teal)">atomic_dream.html</a>';
+    } catch (e) {
+        btn.disabled = false; btn.textContent = '💞 Ajouter en Ami de Cœur (LOVE)';
+        if (st) st.textContent = '⚠ ' + (e.message || String(e)) +
+            (e.message && e.message.indexOf('LOVE_KEY') !== -1 ? ' — activez ATOM4LOVE sur atomic.html' : '');
     }
 }
 

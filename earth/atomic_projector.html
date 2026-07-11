@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ZICMAMA — Écran</title>
+<style>
+  html, body { margin:0; padding:0; background:#04050a; overflow:hidden; height:100%; font-family:system-ui,sans-serif; }
+  #hdr {
+    position:fixed; top:0; left:0; right:0; z-index:10; text-align:center;
+    padding:18px 0 6px; color:#00ffcc; letter-spacing:.15em; font-size:1.6vw; font-weight:700;
+    pointer-events:none; text-shadow:0 0 18px rgba(0,255,204,.6), 0 0 4px rgba(0,255,204,.9);
+  }
+  #sub { text-align:center; font-size:.8vw; color:rgba(255,255,255,.35); letter-spacing:.08em; pointer-events:none; }
+  #cnt {
+    position:fixed; top:16px; right:18px; z-index:10; font-family:monospace;
+    color:rgba(255,255,255,.55); font-size:1.1rem;
+  }
+
+  /* ── Panneau admin (capitaine) ── */
+  #admin-toggle {
+    position:fixed; bottom:46px; left:14px; z-index:20; background:rgba(255,255,255,.06);
+    border:1px solid rgba(255,255,255,.15); color:rgba(255,255,255,.5); border-radius:20px;
+    padding:6px 14px; font-size:.78rem; cursor:pointer;
+  }
+  #admin-panel {
+    position:fixed; bottom:46px; left:14px; z-index:20; background:rgba(10,12,18,.92);
+    border:1px solid rgba(0,255,204,.25); border-radius:14px; padding:12px 16px; font-size:.8rem;
+    color:rgba(255,255,255,.7); display:none; min-width:260px; backdrop-filter:blur(6px);
+  }
+  #admin-panel input {
+    width:100%; background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.15);
+    border-radius:7px; color:#fff; padding:6px 9px; font-size:.78rem; margin:6px 0; font-family:monospace;
+  }
+  #admin-panel button {
+    background:rgba(0,255,204,.12); border:1px solid rgba(0,255,204,.35); color:#00ffcc;
+    border-radius:7px; padding:6px 12px; font-size:.76rem; cursor:pointer; margin-top:4px;
+  }
+  #admin-panel button.danger { background:rgba(255,80,80,.14); border-color:rgba(255,80,80,.4); color:#ff8a8a; }
+  #admin-status { font-size:.7rem; color:rgba(255,255,255,.4); margin-top:6px; min-height:1rem; }
+  #admin-hint { font-size:.68rem; color:rgba(255,255,255,.3); margin-top:4px; }
+
+  /* ── Indice + légende ── */
+  #hint {
+    position:fixed; bottom:70px; left:0; right:0; z-index:8; text-align:center;
+    font-size:.85rem; color:rgba(255,255,255,.32); pointer-events:none; transition:opacity .3s;
+  }
+  #legend {
+    position:fixed; bottom:14px; right:18px; z-index:10; display:flex; gap:14px;
+    font-size:.75rem; color:rgba(255,255,255,.45);
+  }
+  #legend span { display:inline-flex; align-items:center; gap:5px; }
+
+  /* ── Fiche profil focus ── */
+  #focus-panel {
+    position:fixed; top:64px; left:50%; transform:translateX(-50%); z-index:15;
+    background:rgba(10,12,18,.92); border:1px solid rgba(0,255,204,.3); border-radius:16px;
+    padding:14px 22px; text-align:center; display:none; backdrop-filter:blur(6px);
+    max-width:min(90vw, 420px);
+  }
+  #focus-panel .glyph { font-size:2.4rem; line-height:1.1; }
+  #focus-panel .label { color:#00ffcc; font-weight:700; font-size:1rem; margin:2px 0 6px; }
+  #focus-panel .interp { font-size:.74rem; color:rgba(255,255,255,.6); line-height:1.5; text-align:left; }
+  #focus-panel .close-btn {
+    position:absolute; top:8px; right:10px; background:none; border:none; color:rgba(255,255,255,.4);
+    font-size:1.1rem; cursor:pointer; line-height:1;
+  }
+
+  /* ── Footer parrainage ── */
+  #footer-support {
+    position:fixed; bottom:0; left:0; right:0; z-index:12; text-align:center;
+    padding:9px 10px; background:linear-gradient(0deg, rgba(0,10,8,.85), transparent);
+    font-size:.8rem;
+  }
+  #footer-support a {
+    color:#8be9c9; text-decoration:none; font-weight:600; letter-spacing:.02em;
+  }
+  #footer-support a:hover { text-decoration:underline; }
+</style>
+</head>
+<body>
+<div id="hdr">⚛ ZICMAMA — CONSTELLATION EN DIRECT</div>
+<div id="sub">Rejoignez sur votre téléphone — cherchez votre glyphe dans la salle</div>
+<div id="cnt">0 connecté·e·s</div>
+<div id="hint">👆 Touchez un profil pour explorer ses résonances</div>
+<div id="legend">
+  <span>🤝 <span style="color:#00ffcc">union</span></span>
+  <span>⚡ <span style="color:#ff5fa2">friction</span></span>
+</div>
+
+<div id="focus-panel">
+  <button class="close-btn" onclick="_clearFocus()">✕</button>
+  <div class="glyph" id="focus-glyph">⚛</div>
+  <div class="label" id="focus-label">—</div>
+  <div class="interp" id="focus-interp"></div>
+</div>
+
+<div id="footer-support">
+  💚 Soutenez ATOM4LOVE —
+  <a href="https://opencollective.com/monnaie-libre/projects/atom4love/donate" target="_blank" rel="noopener">
+    devenez parrain·e sur OpenCollective →
+  </a>
+</div>
+
+<button id="admin-toggle" onclick="_toggleAdmin()">🔌 Capitaine</button>
+<div id="admin-panel">
+  <div id="admin-connect-row">
+    <button onclick="_uphConnect()">⚡ Se connecter (NIP-07)</button>
+  </div>
+  <div id="admin-controls" style="display:none">
+    <div style="color:#8be9c9">⚓ Capitaine identifié</div>
+    <input type="password" id="admin-uplanetname" placeholder="UPLANETNAME (64 car. hex)" maxlength="64">
+    <button class="danger" onclick="_deleteAll()">🗑️ Tout supprimer</button>
+    <div id="admin-hint">Clic sur un glyphe dans la constellation pour le supprimer individuellement.</div>
+  </div>
+  <div id="admin-status"></div>
+</div>
+
+<script src="p5.min.js"></script>
+<script src="nostr.bundle.js"></script>
+<script src="phi2x.js"></script>
+<script src="atomic-glyphs.js"></script>
+<script>
+'use strict';
+
+var A4L_TAG          = 'zicmama_demo';
+var A4L_BEACON_KIND  = 20078;
+var A4L_BEACON_TAG   = 'zicmama_beacon';
+var RADAR_WINDOW_S   = 12 * 3600;
+var BEACON_TTL_MS    = 14000;
+
+var _nodes = new Map();      // pubkey -> {kinObj, phi, ax, ay, phase, speed, fx, fy}
+var _beacons = [];           // {fromPub, toPub, pct, startedAt}
+var _captainHex = null, _isCaptain = false;
+
+// ── Focus profil — clic sur un glyphe : anime tous les autres en couronne
+// autour de lui, positionnés par force de résonance (Phi2X.classifyResonance).
+var _focusPubkey = null;
+var _focusAnim = 0; // 0=ambiant, 1=disposition focus — interpolé chaque frame
+
+function _relayUrl() {
+    var h = location.hostname;
+    if (h === '127.0.0.1' || h === 'localhost') return 'ws://127.0.0.1:7777';
+    return 'ws://' + h + ':7777';
+}
+function _apiUrl() {
+    var h = location.hostname;
+    if (h === '127.0.0.1' || h === 'localhost') return 'http://127.0.0.1:54321';
+    return 'http://' + h + ':54321';
+}
+
+function _hash01(str) {
+    var h = 0;
+    for (var i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) >>> 0;
+    return (h % 100000) / 100000;
+}
+
+function _addNode(pubkey, kinObj, phi) {
+    if (_nodes.has(pubkey)) {
+        var n = _nodes.get(pubkey);
+        n.kinObj = kinObj; if (typeof phi === 'number') n.phi = phi;
+        return;
+    }
+    var a = _hash01(pubkey + 'a') * TWO_PI;
+    var r = 0.18 + _hash01(pubkey + 'b') * 0.72;
+    _nodes.set(pubkey, {
+        kinObj: kinObj, phi: (typeof phi === 'number' ? phi : null),
+        ax: 0.5 + Math.cos(a) * r * 0.44,
+        ay: 0.52 + Math.sin(a) * r * 0.4,
+        phase: _hash01(pubkey + 'c') * TWO_PI,
+        speed: 0.4 + _hash01(pubkey + 'd') * 0.5,
+        // Position radiale assignée quand ce nœud n'est PAS le focus (voir _setFocus)
+        fx: null, fy: null,
+    });
+}
+
+function _ambientPos(node) {
+    var t = (typeof frameCount !== 'undefined') ? frameCount : 0;
+    var bob = 0.012;
+    var x = (node.ax + Math.sin(t * 0.01 * node.speed + node.phase) * bob) * width;
+    var y = (node.ay + Math.cos(t * 0.013 * node.speed + node.phase) * bob) * height;
+    return { x: x, y: y };
+}
+
+function _nodePos(node) {
+    var amb = _ambientPos(node);
+    // Basé sur _focusAnim (pas _focusPubkey) : permet à la transition de retour
+    // vers l'ambiant de se jouer en douceur même après _clearFocus().
+    if (_focusAnim <= 0.001 || node.fx == null) return amb;
+    return {
+        x: amb.x + (node.fx - amb.x) * _focusAnim,
+        y: amb.y + (node.fy - amb.y) * _focusAnim,
+    };
+}
+
+// ── Focus : dispose tous les autres nœuds en couronne autour du profil
+// sélectionné, triés/rapprochés par force de résonance (Phi2X.classifyResonance).
+function _layoutFocus() {
+    var focus = _nodes.get(_focusPubkey);
+    if (!focus) return;
+    var cx = width / 2, cy = height / 2;
+    focus.fx = cx; focus.fy = cy;
+
+    var others = [];
+    _nodes.forEach(function(node, pubkey) {
+        if (pubkey === _focusPubkey) return;
+        var cls = (focus.phi != null && node.phi != null)
+            ? Phi2X.classifyResonance(focus.phi, node.phi)
+            : { pct: 0, nature: 'union' };
+        others.push({ pubkey: pubkey, node: node, pct: cls.pct, nature: cls.nature });
+    });
+    others.sort(function(a, b) { return b.pct - a.pct; });
+
+    var minR = Math.min(width, height) * 0.16;
+    var maxR = Math.min(width, height) * 0.42;
+    others.forEach(function(o, i) {
+        var angle = (i / Math.max(1, others.length)) * TWO_PI - HALF_PI;
+        var radius = maxR - (o.pct / 100) * (maxR - minR);
+        o.node.fx = cx + Math.cos(angle) * radius;
+        o.node.fy = cy + Math.sin(angle) * radius;
+        o.node._matchPct = o.pct;
+        o.node._matchNature = o.nature;
+    });
+}
+
+function _setFocus(pubkey) {
+    if (_focusPubkey === pubkey) { _clearFocus(); return; }
+    _focusPubkey = pubkey;
+    _layoutFocus();
+    var node = _nodes.get(pubkey);
+    document.getElementById('focus-glyph').textContent = AtomicGlyphs.emojiFor(node.kinObj);
+    document.getElementById('focus-label').textContent =
+        AtomicGlyphs.label(node.kinObj) + (node.kinObj ? ' · KIN ' + node.kinObj.kin : '');
+    document.getElementById('focus-interp').innerHTML = AtomicGlyphs.interpretation(node.kinObj);
+    document.getElementById('focus-panel').style.display = 'block';
+    document.getElementById('hint').style.opacity = '0';
+}
+
+function _clearFocus() {
+    _focusPubkey = null;
+    document.getElementById('focus-panel').style.display = 'none';
+    document.getElementById('hint').style.opacity = '1';
+    // Ne PAS effacer node.fx/fy ici : _focusAnim va redescendre à 0 en douceur
+    // dans draw(), et _nodePos() ignore fx/fy dès que _focusAnim ≈ 0 de toute façon.
+}
+
+function _connectRelay() {
+    var relayUrl = _relayUrl();
+    var subId = 'proj' + Math.random().toString(36).slice(2, 10);
+    var subIdB = 'beac' + Math.random().toString(36).slice(2, 10);
+    var since = Math.floor(Date.now() / 1000) - RADAR_WINDOW_S;
+    var ws;
+    try { ws = new WebSocket(relayUrl); } catch(e) { setTimeout(_connectRelay, 4000); return; }
+    ws.onopen = function() {
+        ws.send(JSON.stringify(['REQ', subId, { kinds: [30078], '#t': [A4L_TAG], since: since, limit: 500 }]));
+        ws.send(JSON.stringify(['REQ', subIdB, { kinds: [A4L_BEACON_KIND], '#t': [A4L_BEACON_TAG], since: Math.floor(Date.now()/1000) - 60 }]));
+    };
+    ws.onmessage = function(msg) {
+        var data; try { data = JSON.parse(msg.data); } catch(e) { return; }
+        if (data[0] !== 'EVENT') return;
+        if (data[1] === subId) _onParticipant(data[2]);
+        else if (data[1] === subIdB) _onBeacon(data[2]);
+    };
+    ws.onclose = function() { setTimeout(_connectRelay, 4000); };
+}
+
+function _onParticipant(ev) {
+    var kinTag = null, phaseTag = null;
+    for (var i = 0; i < ev.tags.length; i++) {
+        if (ev.tags[i][0] === 'kin')   kinTag   = parseInt(ev.tags[i][1]);
+        if (ev.tags[i][0] === 'phase') phaseTag = parseFloat(ev.tags[i][1]);
+    }
+    if (!kinTag) return;
+    _addNode(ev.pubkey, Phi2X.calcKinFromNum(kinTag), isNaN(phaseTag) ? null : phaseTag);
+    document.getElementById('cnt').textContent = _nodes.size + ' connecté·e·s';
+    if (_focusPubkey) _layoutFocus(); // un nouvel arrivant doit aussi être positionné autour du focus actif
+}
+
+function _onBeacon(ev) {
+    var toPub = null;
+    for (var i = 0; i < ev.tags.length; i++) if (ev.tags[i][0] === 'p') toPub = ev.tags[i][1];
+    var pct = 0, nature = 'union';
+    try {
+        var c = JSON.parse(ev.content);
+        pct = c.k_pct || 0;
+        nature = c.nature || 'union';
+    } catch(_) {}
+    _beacons.push({ fromPub: ev.pubkey, toPub: toPub, pct: pct, nature: nature, startedAt: Date.now() });
+}
+
+// ── p5.js ────────────────────────────────────────────────────────────────
+var _starSeeds = [];
+function setup() {
+    createCanvas(windowWidth, windowHeight);
+    textAlign(CENTER, CENTER);
+    for (var s = 0; s < 140; s++) {
+        _starSeeds.push({ x: random(width), y: random(height), r: random(0.6, 2.2), tw: random(1000, 5000), ph: random(TWO_PI) });
+    }
+    _connectRelay();
+}
+function windowResized() { resizeCanvas(windowWidth, windowHeight); }
+
+// Couleur ambiante des glyphes — cyan, cohérente avec l'identité visuelle du site.
+// (Une teinte "taux harmonique GAIA" a été retirée : sur des coordonnées réelles,
+// Phi2X.computeResonanceField reste toujours ∈ [0.50,0.545], une variation trop
+// fine pour porter un signal visuel discriminant — voir discussion du 2026-07-12.)
+var NODE_COLOR = [0, 255, 204];
+
+function draw() {
+    background(3, 4, 9, 42); // trail léger
+
+    // Anime la transition ambiant ↔ focus (voir _setFocus/_clearFocus)
+    var focusTarget = _focusPubkey ? 1 : 0;
+    _focusAnim += (focusTarget - _focusAnim) * 0.08;
+    if (Math.abs(focusTarget - _focusAnim) < 0.002) _focusAnim = focusTarget;
+
+    // Étoiles scintillantes
+    noStroke();
+    var now = millis();
+    _starSeeds.forEach(function(st) {
+        var tw = 0.35 + 0.5 * (0.5 + 0.5 * Math.sin(now / st.tw + st.ph));
+        fill(255, 255, 255, 60 * tw);
+        circle(st.x, st.y, st.r * 1.6);
+    });
+
+    // Réseau ambiant — relie chaque nœud à son plus proche voisin (fil ténu).
+    // S'estompe quand un focus prend le relais (voir lignes de résonance ci-dessous).
+    var posArr = [];
+    _nodes.forEach(function(node, pubkey) { posArr.push({ pubkey: pubkey, node: node, pos: _nodePos(node) }); });
+    var ambientAlpha = 22 * (1 - _focusAnim);
+    if (ambientAlpha > 0.5) {
+        for (var i = 0; i < posArr.length; i++) {
+            var best = null, bestD = Infinity;
+            for (var j = 0; j < posArr.length; j++) {
+                if (i === j) continue;
+                var d = dist(posArr[i].pos.x, posArr[i].pos.y, posArr[j].pos.x, posArr[j].pos.y);
+                if (d < bestD) { bestD = d; best = posArr[j]; }
+            }
+            if (best) {
+                stroke(120, 200, 190, ambientAlpha);
+                strokeWeight(1);
+                line(posArr[i].pos.x, posArr[i].pos.y, best.pos.x, best.pos.y);
+            }
+        }
+    }
+
+    // Lignes de résonance — du profil focus vers chaque autre, épaisseur/couleur
+    // selon le score (Phi2X.classifyResonance), affichées progressivement avec _focusAnim.
+    var baseSize = Math.max(34, Math.min(width, height) * 0.05);
+    if (_focusPubkey && _focusAnim > 0.02) {
+        var focusNode = _nodes.get(_focusPubkey);
+        if (focusNode) {
+            var fPos = _nodePos(focusNode);
+            _nodes.forEach(function(node, pubkey) {
+                if (pubkey === _focusPubkey || node._matchPct == null) return;
+                var isUnion = node._matchNature !== 'friction';
+                var rgb = isUnion ? [0, 255, 204] : [255, 95, 162];
+                var a = _focusAnim * (0.25 + node._matchPct / 130);
+                var pos = _nodePos(node);
+                stroke(rgb[0], rgb[1], rgb[2], 255 * a);
+                strokeWeight(0.6 + (node._matchPct / 100) * 3.4);
+                line(fPos.x, fPos.y, pos.x, pos.y);
+                noStroke();
+                fill(rgb[0], rgb[1], rgb[2], 235 * _focusAnim);
+                textSize(Math.max(10, baseSize * 0.22));
+                text((isUnion ? '🤝' : '⚡') + ' ' + node._matchPct + '%',
+                    pos.x + (pos.x - fPos.x) * 0.12, pos.y + (pos.y - fPos.y) * 0.12 - baseSize * 0.9);
+            });
+        }
+    }
+
+    // Nœuds (participants) — taille/glow proportionnels à l'écran
+    var nc = NODE_COLOR;
+    posArr.forEach(function(entry) {
+        var node = entry.node, pos = entry.pos;
+        var isFocused = entry.pubkey === _focusPubkey;
+        var ringBoost = isFocused ? (1 + _focusAnim * 0.5) : 1;
+        noStroke();
+        fill(nc[0], nc[1], nc[2], 16);
+        circle(pos.x, pos.y, baseSize * 3.6 * ringBoost);
+        fill(nc[0], nc[1], nc[2], 30);
+        circle(pos.x, pos.y, baseSize * 2.2 * ringBoost);
+        fill(20, 24, 30, 235);
+        stroke(isFocused ? 255 : nc[0], isFocused ? 255 : nc[1], isFocused ? 255 : nc[2], 200);
+        strokeWeight(isFocused ? 3 : 2);
+        circle(pos.x, pos.y, baseSize * 1.5 * ringBoost);
+        noStroke();
+        textSize(baseSize * 0.85 * ringBoost);
+        fill(255);
+        text(AtomicGlyphs.emojiFor(node.kinObj), pos.x, pos.y - baseSize * 0.05);
+        textSize(Math.max(11, baseSize * 0.24));
+        fill(nc[0], nc[1], nc[2], 235);
+        text((node.kinObj ? node.kinObj.glyphFr : '') + ' · KIN ' + (node.kinObj ? node.kinObj.kin : '—'),
+            pos.x, pos.y + baseSize * 0.92 * ringBoost);
+    });
+
+    // Beacons actifs — ligne pulsante entre deux nœuds + halo
+    var nowMs = Date.now();
+    _beacons = _beacons.filter(function(b) { return nowMs - b.startedAt < BEACON_TTL_MS; });
+    _beacons.forEach(function(b) {
+        var from = _nodes.get(b.fromPub);
+        if (!from) return;
+        var p1 = _nodePos(from);
+        var age = (nowMs - b.startedAt) / BEACON_TTL_MS;
+        var pulse = 0.5 + 0.5 * Math.sin(nowMs * 0.012);
+        // Union (Δφ≈0, 🤝) = or/cyan · Friction (Δφ≈π, ⚡) = or/magenta — même
+        // code couleur que atomic.html/atomic_match.html (Phi2X.classifyResonance).
+        var isUnion = b.nature !== 'friction';
+        var rgb = isUnion ? [255, 213, 79] : [255, 95, 162];
+        var icon = isUnion ? '🤝' : '⚡';
+
+        if (b.toPub && _nodes.has(b.toPub)) {
+            var to = _nodePos(_nodes.get(b.toPub));
+            stroke(rgb[0], rgb[1], rgb[2], 200 * (1 - age));
+            strokeWeight(3 + pulse * 3);
+            line(p1.x, p1.y, to.x, to.y);
+            noStroke();
+            fill(rgb[0], rgb[1], rgb[2], 240 * (1 - age));
+            textSize(Math.max(14, baseSize * 0.35));
+            text(icon + ' ' + b.pct + '%', (p1.x + to.x) / 2, (p1.y + to.y) / 2 - baseSize * 0.7);
+            _pulseNode(to, pulse, age, baseSize, rgb);
+        }
+        _pulseNode(from, pulse, age, baseSize, rgb);
+    });
+}
+
+function _pulseNode(node, pulse, age, baseSize, rgb) {
+    var pos = _nodePos(node);
+    rgb = rgb || [255, 213, 79];
+    noFill();
+    stroke(rgb[0], rgb[1], rgb[2], 220 * (1 - age));
+    strokeWeight(2.5);
+    circle(pos.x, pos.y, baseSize * (1.7 + pulse * 0.5));
+}
+
+// ── Admin capitaine ─────────────────────────────────────────────────────
+function _toggleAdmin() {
+    var p = document.getElementById('admin-panel');
+    p.style.display = (p.style.display === 'none' || !p.style.display) ? 'block' : 'none';
+}
+
+async function _uphConnect() {
+    var st = document.getElementById('admin-status');
+    if (typeof window.nostr === 'undefined') {
+        st.textContent = '⚠ Aucune extension NOSTR détectée (nos2x, Alby…).';
+        return;
+    }
+    try {
+        var pubkey = await window.nostr.getPublicKey();
+        var resp = await fetch(_apiUrl() + '/api/nostr/admin/captain_info');
+        var info = await resp.json();
+        _captainHex = info.captain_hex || info.node_hex || '';
+        _isCaptain = !!(_captainHex && pubkey === _captainHex);
+        if (_isCaptain) {
+            document.getElementById('admin-connect-row').style.display = 'none';
+            document.getElementById('admin-controls').style.display = 'block';
+            st.textContent = '';
+        } else {
+            st.textContent = '⚠️ Connecté mais pas identifié·e comme capitaine.';
+        }
+    } catch(e) {
+        st.textContent = '⚠ ' + (e.message || String(e));
+    }
+}
+
+function _uph() { return document.getElementById('admin-uplanetname').value.trim(); }
+
+async function _adminFetch(url, opts) {
+    var resp = await fetch(url, opts);
+    if (!resp.ok) throw new Error((await resp.json().catch(function(){return {};})).detail || resp.statusText);
+    return resp.json();
+}
+
+async function _deleteAll() {
+    var st = document.getElementById('admin-status');
+    var uph = _uph();
+    if (!/^[0-9a-fA-F]{64}$/.test(uph)) { st.textContent = '⚠ UPLANETNAME invalide (64 car. hex).'; return; }
+    if (!confirm('Supprimer TOUS les comptes démo et signaux ZICMAMA ?\nIRRÉVERSIBLE.')) return;
+    st.textContent = '⏳ Suppression…';
+    try {
+        var api = _apiUrl();
+        var ids = [];
+        for (const q of [
+            { kind: '30078', tag_t: A4L_TAG },
+            { kind: String(A4L_BEACON_KIND), tag_t: A4L_BEACON_TAG },
+        ]) {
+            var params = new URLSearchParams({ uplanetname: uph, kind: q.kind, tag_t: q.tag_t, limit: '500' });
+            var data = await _adminFetch(api + '/api/nostr/admin/events?' + params.toString());
+            (data.events || []).forEach(function(e) { ids.push(e.id); });
+        }
+        if (!ids.length) { st.textContent = 'Rien à supprimer.'; return; }
+        var res = await _adminFetch(api + '/api/nostr/admin/delete', {
+            method: 'POST', headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({ uplanetname: uph, ids: ids }),
+        });
+        _nodes.clear(); _beacons = [];
+        document.getElementById('cnt').textContent = '0 connecté·e·s';
+        st.textContent = '✅ ' + (res.deleted || ids.length) + ' événement(s) supprimé(s).';
+    } catch(e) { st.textContent = '⚠ ' + (e.message || String(e)); }
+}
+
+async function _deleteOne(pubkey) {
+    var st = document.getElementById('admin-status');
+    var uph = _uph();
+    if (!_isCaptain || !/^[0-9a-fA-F]{64}$/.test(uph)) return;
+    var node = _nodes.get(pubkey);
+    var label = node && node.kinObj ? AtomicGlyphs.label(node.kinObj) : pubkey.slice(0, 8) + '…';
+    if (!confirm('Supprimer ' + label + ' ?')) return;
+    st.textContent = '⏳ Suppression…';
+    try {
+        var api = _apiUrl();
+        var ids = [];
+        for (const kind of ['30078', String(A4L_BEACON_KIND)]) {
+            var params = new URLSearchParams({ uplanetname: uph, kind: kind, author: pubkey, limit: '50' });
+            var data = await _adminFetch(api + '/api/nostr/admin/events?' + params.toString());
+            (data.events || []).forEach(function(e) { ids.push(e.id); });
+        }
+        if (ids.length) {
+            await _adminFetch(api + '/api/nostr/admin/delete', {
+                method: 'POST', headers: {'Content-Type':'application/json'},
+                body: JSON.stringify({ uplanetname: uph, ids: ids }),
+            });
+        }
+        _nodes.delete(pubkey);
+        _beacons = _beacons.filter(function(b) { return b.fromPub !== pubkey && b.toPub !== pubkey; });
+        document.getElementById('cnt').textContent = _nodes.size + ' connecté·e·s';
+        st.textContent = '✅ ' + label + ' supprimé·e.';
+    } catch(e) { st.textContent = '⚠ ' + (e.message || String(e)); }
+}
+
+function mousePressed(event) {
+    // Ignore les clics sur les panneaux HTML superposés au canvas (admin,
+    // focus-panel, footer…) — sans ça, ouvrir un bouton déclenchait aussi
+    // un hit-test sur la constellation en dessous.
+    if (event && event.target && event.target.tagName !== 'CANVAS') return;
+
+    var hitR = Math.max(34, Math.min(width, height) * 0.05) * 0.9;
+    var found = null;
+    _nodes.forEach(function(node, pubkey) {
+        var pos = _nodePos(node);
+        if (dist(mouseX, mouseY, pos.x, pos.y) < hitR) found = pubkey;
+    });
+
+    var uph = _uph();
+    var adminArmed = _isCaptain && /^[0-9a-fA-F]{64}$/.test(uph);
+    if (adminArmed) {
+        if (found) _deleteOne(found);
+        return;
+    }
+    // Mode normal : un clic sur un profil l'anime au centre entouré de ses
+    // résonances ; un clic ailleurs (ou sur le même profil) referme la vue.
+    if (found) _setFocus(found);
+    else _clearFocus();
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>ZICMAMA — Constellation</title>
+<link rel="stylesheet" href="bootstrap.min.css">
+<link rel="stylesheet" href="leaflet.css">
+<style>
+  :root { --cy:#00ffcc; --bg:#050608; --card:rgba(255,255,255,.04); --line:rgba(255,255,255,.1); }
+  * { box-sizing:border-box; }
+  body {
+    margin:0; min-height:100vh; background:radial-gradient(circle at 50% 0%, #0a1a18 0%, var(--bg) 70%);
+    color:#e8f5f2; font-family:system-ui,-apple-system,sans-serif; padding:16px 14px 40px;
+  }
+  h1 { font-size:1.05rem; text-align:center; letter-spacing:.06em; color:var(--cy); margin:6px 0 2px; }
+  .sub { text-align:center; font-size:.72rem; color:rgba(255,255,255,.4); margin-bottom:18px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:16px; margin-bottom:14px; }
+  label { display:block; font-size:.68rem; text-transform:uppercase; letter-spacing:.05em; color:rgba(255,255,255,.45); margin-bottom:4px; }
+  input, select {
+    width:100%; background:rgba(255,255,255,.05); border:1px solid var(--line); border-radius:8px;
+    color:#fff; padding:9px 10px; font-size:.9rem; margin-bottom:10px;
+  }
+  input:focus, select:focus { outline:none; border-color:rgba(0,255,204,.5); }
+  .row2 { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .row3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; }
+  details summary { font-size:.75rem; color:rgba(255,255,255,.45); cursor:pointer; margin-bottom:8px; }
+  .btn {
+    width:100%; padding:14px; border-radius:12px; border:2px solid rgba(0,255,204,.5); cursor:pointer;
+    background:linear-gradient(135deg,rgba(0,255,204,.18),rgba(102,126,234,.14)); color:var(--cy);
+    font-size:1rem; font-weight:700; font-family:inherit;
+  }
+  .btn:disabled { opacity:.4; cursor:default; }
+  .btn-beacon {
+    width:100%; padding:16px; border-radius:14px; border:2px solid rgba(255,193,7,.55); cursor:pointer;
+    background:linear-gradient(135deg,rgba(255,193,7,.2),rgba(255,87,34,.14)); color:#ffd54f;
+    font-size:1.05rem; font-weight:700; font-family:inherit; margin-top:4px;
+  }
+  .btn-beacon:disabled { opacity:.4; cursor:default; }
+  #status { font-size:.78rem; color:rgba(255,255,255,.5); min-height:1.1rem; margin-top:8px; text-align:center; }
+  #my-glyph { text-align:center; font-size:2.4rem; margin:4px 0 2px; }
+  #my-glyph-label { text-align:center; font-size:.95rem; color:var(--cy); font-weight:700; margin-bottom:14px; }
+  .radar-item {
+    display:flex; align-items:center; gap:10px; padding:9px 6px; border-bottom:1px solid rgba(255,255,255,.06);
+  }
+  .radar-item:last-child { border-bottom:none; }
+  .radar-glyph { font-size:1.5rem; width:34px; text-align:center; }
+  .radar-name { flex:1; font-size:.85rem; }
+  .radar-pct { font-family:monospace; font-weight:700; font-size:.9rem; }
+  .radar-empty { text-align:center; font-size:.78rem; color:rgba(255,255,255,.35); padding:14px 0; }
+  #panel-join { display:block; }
+  #panel-live { display:none; }
+</style>
+</head>
+<body>
+
+<h1>⚛ ZICMAMA — CONSTELLATION</h1>
+<div class="sub">Rejoignez le réseau de résonance de la soirée — compte local, sans inscription permanente</div>
+
+<a id="eos-banner" href="eos_installer.html" style="display:none;text-decoration:none;margin:0 0 14px;
+   background:rgba(0,201,104,.1);border:1px solid rgba(0,201,104,.3);border-radius:12px;
+   padding:10px 14px;font-size:.76rem;color:#8be9c9;text-align:center;line-height:1.5;
+   align-items:center;justify-content:center;gap:6px;">
+  🔓 Vous utilisez Chrome ? Libérez votre smartphone avec /e/OS →
+</a>
+
+<details class="card" style="padding:14px 16px">
+  <summary style="cursor:pointer;color:var(--cy);font-weight:700;font-size:.85rem">
+    ℹ️ Comment sont calculés ces résultats ?
+  </summary>
+  <div style="margin-top:12px;font-size:.78rem;line-height:1.65;color:rgba(255,255,255,.65)">
+    <p>Le moteur <strong style="color:var(--cy)">Phi²</strong> modélise la Terre comme une
+    <strong>sphère de Goldberg</strong> : un maillage d'hexagones autour de
+    <strong>12 pentagones</strong> — les sommets d'un icosaèdre, comme un ballon de foot
+    projeté sur le globe. Chaque calcul compare en réalité <strong>deux</strong> exemplaires
+    de cette même grille.</p>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px">
+    <div>
+      <svg viewBox="0 0 200 168" xmlns="http://www.w3.org/2000/svg" style="width:100%;display:block">
+        <circle cx="100" cy="80" r="66" fill="rgba(0,20,20,.55)" stroke="rgba(0,255,204,.22)" stroke-width="1.3"/>
+        <ellipse cx="100" cy="80" rx="66" ry="20" fill="none" stroke="rgba(0,255,204,.1)" stroke-width=".6"/>
+        <ellipse cx="100" cy="61" rx="53" ry="16" fill="none" stroke="rgba(0,255,204,.08)" stroke-width=".5"/>
+        <ellipse cx="100" cy="99" rx="53" ry="16" fill="none" stroke="rgba(0,255,204,.08)" stroke-width=".5"/>
+        <line x1="100" y1="14" x2="100" y2="146" stroke="rgba(0,255,204,.08)" stroke-width=".6"/>
+        <!-- Pôles -->
+        <circle cx="100" cy="14" r="4.5" fill="rgba(255,90,90,.7)" stroke="#ff5a5a" stroke-width="1"/>
+        <circle cx="100" cy="146" r="4.5" fill="rgba(255,90,90,.7)" stroke="#ff5a5a" stroke-width="1"/>
+        <!-- Ceinture nord ×5 -->
+        <circle cx="150" cy="46" r="3.6" fill="rgba(255,213,79,.6)" stroke="#ffd54f" stroke-width=".9"/>
+        <circle cx="60"  cy="46" r="3.6" fill="rgba(255,213,79,.6)" stroke="#ffd54f" stroke-width=".9"/>
+        <circle cx="160" cy="80" r="3.2" fill="rgba(255,213,79,.5)" stroke="#ffd54f" stroke-width=".8"/>
+        <circle cx="40"  cy="80" r="3.2" fill="rgba(255,213,79,.5)" stroke="#ffd54f" stroke-width=".8"/>
+        <circle cx="122" cy="30" r="2.8" fill="rgba(255,213,79,.4)" stroke="#ffd54f" stroke-width=".7"/>
+        <!-- Ceinture sud ×5 -->
+        <circle cx="150" cy="114" r="3.6" fill="rgba(155,92,255,.65)" stroke="#9b5cff" stroke-width=".9"/>
+        <circle cx="60"  cy="114" r="3.6" fill="rgba(155,92,255,.65)" stroke="#9b5cff" stroke-width=".9"/>
+        <circle cx="78"  cy="128" r="2.8" fill="rgba(155,92,255,.45)" stroke="#9b5cff" stroke-width=".7"/>
+        <circle cx="122" cy="128" r="2.8" fill="rgba(155,92,255,.45)" stroke="#9b5cff" stroke-width=".7"/>
+        <!-- hex texture centrale -->
+        <polygon points="100,66 111,72 111,86 100,92 89,86 89,72" fill="rgba(0,255,204,.05)" stroke="rgba(0,255,204,.25)" stroke-width=".7"/>
+        <text x="100" y="164" text-anchor="middle" fill="rgba(255,255,255,.4)" font-size="9" font-family="sans-serif">🌍 Sphère GAIA — grille fixe (tourne ~14h50/tour)</text>
+      </svg>
+    </div>
+    <div>
+      <svg viewBox="0 0 200 168" xmlns="http://www.w3.org/2000/svg" style="width:100%;display:block">
+        <circle cx="100" cy="80" r="66" fill="rgba(20,10,0,.55)" stroke="rgba(255,213,79,.22)" stroke-width="1.3"/>
+        <ellipse cx="100" cy="80" rx="66" ry="20" fill="none" stroke="rgba(255,213,79,.1)" stroke-width=".6"/>
+        <ellipse cx="100" cy="61" rx="53" ry="16" fill="none" stroke="rgba(255,213,79,.08)" stroke-width=".5"/>
+        <ellipse cx="100" cy="99" rx="53" ry="16" fill="none" stroke="rgba(255,213,79,.08)" stroke-width=".5"/>
+        <!-- Même grille, ré-orientée (pivotée) -->
+        <circle cx="146" cy="52" r="3.6" fill="rgba(0,255,204,.6)" stroke="#00ffcc" stroke-width=".9"/>
+        <circle cx="70"  cy="34" r="3.6" fill="rgba(0,255,204,.6)" stroke="#00ffcc" stroke-width=".9"/>
+        <circle cx="158" cy="92" r="3.2" fill="rgba(0,255,204,.5)" stroke="#00ffcc" stroke-width=".8"/>
+        <circle cx="52"  cy="100" r="3.2" fill="rgba(0,255,204,.5)" stroke="#00ffcc" stroke-width=".8"/>
+        <circle cx="118" cy="120" r="2.8" fill="rgba(0,255,204,.4)" stroke="#00ffcc" stroke-width=".7"/>
+        <circle cx="88"  cy="132" r="2.8" fill="rgba(0,255,204,.35)" stroke="#00ffcc" stroke-width=".6"/>
+        <circle cx="132" cy="40" r="2.8" fill="rgba(0,255,204,.35)" stroke="#00ffcc" stroke-width=".6"/>
+        <!-- Pentagone #0 aligné sur la naissance -->
+        <circle cx="100" cy="80" r="6.5" fill="rgba(255,213,79,.85)" stroke="#ffd54f" stroke-width="1.6"/>
+        <circle cx="100" cy="80" r="11" fill="none" stroke="#ffd54f" stroke-width=".8" opacity=".5"/>
+        <text x="100" y="60" text-anchor="middle" fill="#ffd54f" font-size="9" font-family="sans-serif" font-weight="700">📍 naissance</text>
+        <text x="100" y="164" text-anchor="middle" fill="rgba(255,255,255,.4)" font-size="9" font-family="sans-serif">🌀 Sphère ÉMOTIONNELLE — pivotée sur TON lieu de naissance</text>
+      </svg>
+    </div>
+  </div>
+
+  <div style="margin-top:10px;font-size:.78rem;line-height:1.65;color:rgba(255,255,255,.65)">
+    <p>La sphère Gaïa reste fixe (elle ne dépend que du moment présent) ; la sphère
+    Émotionnelle est <strong>la même grille</strong>, mais tournée mathématiquement
+    (rotation d'Euler-Rodrigues) pour que son pentagone n°0 pointe exactement vers
+    ton lieu de naissance. En superposant les deux, on mesure une
+    <strong style="color:var(--cy)">interférence de Moiré</strong> : plus les 12 points
+    des deux grilles tombent près les uns des autres, plus tu es « né·e sur un nœud
+    naturel » de la Terre.</p>
+    <p style="margin-top:6px">Comparer <strong>deux personnes</strong>, c'est comparer
+    leurs phases φ respectives (angle dérivé de cette géométrie + de l'heure de
+    naissance). Le score k affiché dans le radar peut atteindre 100% de deux façons
+    opposées : phases alignées (🤝 <strong>union</strong>, Δφ≈0) ou phases contraires
+    (⚡ <strong>friction</strong>, Δφ≈π) — les deux sont des résonances fortes, juste de
+    nature différente.</p>
+  </div>
+</details>
+
+<div id="panel-join" class="card">
+  <label>Date de naissance</label>
+  <div class="row3">
+    <select id="birth-day"><option value="">Jour</option></select>
+    <select id="birth-month"><option value="">Mois</option></select>
+    <select id="birth-year"><option value="">Année</option></select>
+  </div>
+  <div class="row2">
+    <div>
+      <label for="birth-time">Heure</label>
+      <input type="time" id="birth-time" value="12:00">
+    </div>
+    <div>
+      <label for="birth-polarity">Polarité</label>
+      <select id="birth-polarity">
+        <option value="0">☀ Φ (♂)</option>
+        <option value="1">🌙 ♪ (♀)</option>
+      </select>
+    </div>
+  </div>
+
+  <details>
+    <summary>📍 Lieu de naissance &amp; réglages avancés (optionnel)</summary>
+    <button type="button" class="btn" style="padding:9px;font-size:.82rem;margin-bottom:10px" onclick="_openLocationPicker()">
+      🗺️ Choisir sur la carte
+    </button>
+    <div id="birth-loc-label" style="font-size:.72rem;color:rgba(255,255,255,.4);margin:-6px 0 10px;text-align:center"></div>
+    <div class="row2">
+      <div>
+        <label for="birth-lat">Latitude</label>
+        <input type="number" id="birth-lat" step="0.01">
+      </div>
+      <div>
+        <label for="birth-lon">Longitude</label>
+        <input type="number" id="birth-lon" step="0.01">
+      </div>
+    </div>
+    <div class="row2">
+      <div>
+        <label for="birth-weight">Poids naissance (kg)</label>
+        <input type="number" id="birth-weight" step="0.1" min="0.5" max="6" value="3.5">
+      </div>
+      <div>
+        <label for="birth-height">Taille naissance (cm)</label>
+        <input type="number" id="birth-height" step="1" min="30" max="65" value="50">
+      </div>
+    </div>
+  </details>
+
+  <button class="btn" id="btn-join" onclick="joinConstellation()">⚡ Rejoindre la constellation</button>
+  <div id="status"></div>
+</div>
+
+<div id="panel-live">
+  <div class="card" style="text-align:center">
+    <div id="my-glyph">⚛</div>
+    <div id="my-glyph-label">—</div>
+    <div id="my-interpretation" style="font-size:.78rem;line-height:1.6;color:rgba(255,255,255,.65);
+         text-align:left;background:rgba(255,255,255,.03);border:1px solid var(--line);
+         border-radius:10px;padding:10px 12px;margin-bottom:12px"></div>
+    <button class="btn-beacon" id="btn-beacon" onclick="sendBeacon()">📡 Signaler mon meilleur match</button>
+    <div id="beacon-status" style="font-size:.72rem;color:rgba(255,213,79,.7);min-height:1rem;margin-top:6px"></div>
+  </div>
+
+  <div class="card">
+    <label style="margin-bottom:8px">Résonance en direct (<span id="radar-count">0</span> connecté·e·s)</label>
+    <div id="radar-list"><div class="radar-empty">En attente d'autres participant·e·s…</div></div>
+  </div>
+</div>
+
+<script src="nostr.bundle.js"></script>
+<script src="phi2x.js"></script>
+<script src="atomic-glyphs.js"></script>
+<script src="bootstrap.bundle.min.js"></script>
+<script src="leaflet.js"></script>
+<script src="a4l-location-picker.js"></script>
+<script>
+'use strict';
+
+// ── Chrome (Google) → suggestion /e/OS (dégooglisé) ────────────────────────
+// Détection UA standard : "Chrome" est aussi présent dans l'UA d'Edge/Opera/
+// Samsung Internet — on les exclut pour ne cibler que le Chrome de Google.
+(function _detectChrome() {
+    var ua = navigator.userAgent || '';
+    var isChrome = /Chrome\//.test(ua) && !/Edg\/|OPR\/|SamsungBrowser\//.test(ua);
+    if (isChrome) document.getElementById('eos-banner').style.display = 'flex';
+})();
+
+// ── Lieu par défaut — coordonnées de la soirée (ZICMAMA n'a pas d'accès Internet
+// pour une recherche de ville en ligne) — À ADAPTER avant l'événement.
+var DEFAULT_LAT = 43.60;
+var DEFAULT_LON = 1.44;
+document.getElementById('birth-lat').value = DEFAULT_LAT;
+document.getElementById('birth-lon').value = DEFAULT_LON;
+document.getElementById('birth-lat').placeholder = DEFAULT_LAT;
+document.getElementById('birth-lon').placeholder = DEFAULT_LON;
+
+// ── Sélecteurs Jour/Mois/Année — plus rapides qu'un <input type="date"> sur
+// mobile (évite de faire défiler un calendrier natif sur des dizaines d'années).
+(function _fillDateSelects() {
+    var dEl = document.getElementById('birth-day');
+    var mEl = document.getElementById('birth-month');
+    var yEl = document.getElementById('birth-year');
+    for (var d = 1; d <= 31; d++) dEl.insertAdjacentHTML('beforeend', '<option value="' + d + '">' + d + '</option>');
+    var months = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
+    months.forEach(function(m, i) { mEl.insertAdjacentHTML('beforeend', '<option value="' + (i + 1) + '">' + m + '</option>'); });
+    var thisYear = new Date().getFullYear();
+    for (var y = thisYear - 16; y >= thisYear - 100; y--) yEl.insertAdjacentHTML('beforeend', '<option value="' + y + '">' + y + '</option>');
+})();
+
+function _getBirthDateISO() {
+    var d = document.getElementById('birth-day').value;
+    var m = document.getElementById('birth-month').value;
+    var y = document.getElementById('birth-year').value;
+    if (!d || !m || !y) return '';
+    return y + '-' + String(m).padStart(2, '0') + '-' + String(d).padStart(2, '0');
+}
+
+// ── Mémoire du navigateur — même profil/identité au retour ────────────────
+// Clé éphémère de démo à faible enjeu (pas de MULTIPASS, pas de wallet G1) :
+// la garder en localStorage permet à un retour sur le même navigateur/tél-
+// éphone de mettre à jour son propre event (kind 30078 remplaçable) plutôt
+// que d'en créer un nouveau, et de retrouver sa date de naissance déjà saisie.
+var PROFILE_KEY = 'zicmama_demo_profile';
+var _savedSk = null;
+
+function _restoreProfile() {
+    var raw;
+    try { raw = localStorage.getItem(PROFILE_KEY); } catch(_) { return; }
+    if (!raw) return;
+    var p;
+    try { p = JSON.parse(raw); } catch(_) { return; }
+    if (p.sk) _savedSk = p.sk;
+    if (p.day)    document.getElementById('birth-day').value = p.day;
+    if (p.month)  document.getElementById('birth-month').value = p.month;
+    if (p.year)   document.getElementById('birth-year').value = p.year;
+    if (p.time)   document.getElementById('birth-time').value = p.time;
+    if (p.polarity != null) document.getElementById('birth-polarity').value = p.polarity;
+    if (p.lat != null) document.getElementById('birth-lat').value = p.lat;
+    if (p.lon != null) document.getElementById('birth-lon').value = p.lon;
+    if (p.weight) document.getElementById('birth-weight').value = p.weight;
+    if (p.height) document.getElementById('birth-height').value = p.height;
+    if (p.locLabel) document.getElementById('birth-loc-label').textContent = '📍 ' + p.locLabel;
+}
+_restoreProfile();
+
+function _saveProfile(sk) {
+    try {
+        localStorage.setItem(PROFILE_KEY, JSON.stringify({
+            sk: sk,
+            day: document.getElementById('birth-day').value,
+            month: document.getElementById('birth-month').value,
+            year: document.getElementById('birth-year').value,
+            time: document.getElementById('birth-time').value,
+            polarity: document.getElementById('birth-polarity').value,
+            lat: document.getElementById('birth-lat').value,
+            lon: document.getElementById('birth-lon').value,
+            weight: document.getElementById('birth-weight').value,
+            height: document.getElementById('birth-height').value,
+            locLabel: document.getElementById('birth-loc-label').textContent.replace(/^📍 /, ''),
+        }));
+    } catch(_) {}
+}
+
+// ── Sélecteur de carte (comme atomic.html) — nécessite un accès Internet pour
+// les tuiles OSM et la recherche de ville (Nominatim). Fonctionne si ce laptop
+// (ou l'appareil de test) a Internet ; en walled-garden ZICMAMA pur, les
+// visiteurs peuvent toujours saisir lat/lon manuellement (défaut pré-rempli).
+function _openLocationPicker() {
+    if (typeof A4LLocationPicker === 'undefined') return;
+    A4LLocationPicker.open({
+        title: '📍 Lieu de naissance',
+        lat: parseFloat(document.getElementById('birth-lat').value) || DEFAULT_LAT,
+        lon: parseFloat(document.getElementById('birth-lon').value) || DEFAULT_LON,
+        onConfirm: function(lat, lon, label) {
+            document.getElementById('birth-lat').value = lat;
+            document.getElementById('birth-lon').value = lon;
+            document.getElementById('birth-loc-label').textContent = '📍 ' + label;
+        },
+    });
+}
+
+var A4L_APP_ID_CANDIDATES = ['ATOM4LOVE_v1', 'ATOM4LOVE_ALPHA'];
+var A4L_TAG    = 'zicmama_demo';
+var A4L_BEACON_KIND = 20078;
+var A4L_BEACON_TAG  = 'zicmama_beacon';
+var RADAR_WINDOW_S  = 12 * 3600; // ignore les comptes démo plus vieux que 12h
+
+var _sk = null, _pk = null, _myPhase = null, _myKinObj = null;
+var _participants = new Map(); // pubkey -> { kinObj, phase, lastSeen }
+var _liveWs = null;
+
+function _relayUrl() {
+    var h = location.hostname;
+    if (h === '127.0.0.1' || h === 'localhost') return 'ws://127.0.0.1:7777';
+    return 'ws://' + h + ':7777';
+}
+
+function _dateToUtcUnix(dateStr, timeStr, lonDeg) {
+    var d = new Date(dateStr + 'T' + (timeStr || '12:00') + ':00Z');
+    var offsetH = lonDeg / 15;
+    return Math.floor(d.getTime() / 1000 - offsetH * 3600);
+}
+
+// SHA-256 pure JS (FIPS 180-4) — ZICMAMA sert cette page en HTTP simple sur une
+// IP brute (pas de contexte sécurisé) : window.crypto.subtle y est `undefined`
+// (restriction Secure Context des navigateurs), donc crypto.subtle.digest() est
+// inutilisable ici. D'où "Cannot read properties of undefined (reading 'digest')".
+function _sha256Hex(message) {
+    function rotr(x, n) { return (x >>> n) | (x << (32 - n)); }
+    var K = [
+        0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,
+        0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,
+        0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,
+        0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,
+        0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,
+        0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,
+        0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,
+        0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2,
+    ];
+    var H = [0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19];
+
+    var msgBytes = new TextEncoder().encode(message);
+    var l = msgBytes.length;
+    var withOne = new Uint8Array((l + 9 + 63) & ~63);
+    withOne.set(msgBytes);
+    withOne[l] = 0x80;
+    var bitLenHi = Math.floor(l / 0x20000000);
+    var bitLenLo = (l << 3) >>> 0;
+    var dv = new DataView(withOne.buffer);
+    dv.setUint32(withOne.length - 8, bitLenHi);
+    dv.setUint32(withOne.length - 4, bitLenLo);
+
+    var w = new Uint32Array(64);
+    for (var chunk = 0; chunk < withOne.length; chunk += 64) {
+        for (var i = 0; i < 16; i++) w[i] = dv.getUint32(chunk + i * 4);
+        for (i = 16; i < 64; i++) {
+            var s0 = rotr(w[i-15], 7) ^ rotr(w[i-15], 18) ^ (w[i-15] >>> 3);
+            var s1 = rotr(w[i-2], 17) ^ rotr(w[i-2], 19) ^ (w[i-2] >>> 10);
+            w[i] = (w[i-16] + s0 + w[i-7] + s1) | 0;
+        }
+        var a=H[0],b=H[1],c=H[2],d=H[3],e=H[4],f=H[5],g=H[6],h=H[7];
+        for (i = 0; i < 64; i++) {
+            var S1 = rotr(e,6) ^ rotr(e,11) ^ rotr(e,25);
+            var ch = (e & f) ^ (~e & g);
+            var temp1 = (h + S1 + ch + K[i] + w[i]) | 0;
+            var S0 = rotr(a,2) ^ rotr(a,13) ^ rotr(a,22);
+            var maj = (a & b) ^ (a & c) ^ (b & c);
+            var temp2 = (S0 + maj) | 0;
+            h=g; g=f; f=e; e=(d+temp1)|0; d=c; c=b; b=a; a=(temp1+temp2)|0;
+        }
+        H[0]=(H[0]+a)|0; H[1]=(H[1]+b)|0; H[2]=(H[2]+c)|0; H[3]=(H[3]+d)|0;
+        H[4]=(H[4]+e)|0; H[5]=(H[5]+f)|0; H[6]=(H[6]+g)|0; H[7]=(H[7]+h)|0;
+    }
+    return Array.from(H).map(function(x) { return (x >>> 0).toString(16).padStart(8, '0'); }).join('');
+}
+
+function _publishToRelay(relayUrl, signedEvent) {
+    return new Promise(function(resolve, reject) {
+        var ws, done = false;
+        try { ws = new WebSocket(relayUrl); } catch(e) { reject(e); return; }
+        var timer = setTimeout(function() {
+            if (done) return; done = true;
+            try { ws.close(); } catch(_) {}
+            reject(new Error('Timeout relay'));
+        }, 8000);
+        ws.onopen = function() { ws.send(JSON.stringify(['EVENT', signedEvent])); };
+        ws.onmessage = function(msg) {
+            var data;
+            try { data = JSON.parse(msg.data); } catch(e) { return; }
+            if (data[0] === 'OK' && data[1] === signedEvent.id) {
+                if (done) return; done = true;
+                clearTimeout(timer); try { ws.close(); } catch(_) {}
+                data[2] ? resolve(data) : reject(new Error(data[3] || 'Rejeté par le relay'));
+            }
+        };
+        ws.onerror = function() {
+            if (done) return; done = true;
+            clearTimeout(timer); reject(new Error('Erreur connexion relay'));
+        };
+    });
+}
+
+function _statusMsg(msg, color) {
+    var el = document.getElementById('status');
+    el.textContent = msg; el.style.color = color || 'rgba(255,255,255,.5)';
+}
+
+async function joinConstellation() {
+    const btn = document.getElementById('btn-join');
+    const bd  = _getBirthDateISO();
+    const bt  = document.getElementById('birth-time').value || '12:00';
+    if (!bd) { _statusMsg('⚠ Renseignez votre date de naissance.', '#ff8888'); return; }
+
+    const polarity = parseInt(document.getElementById('birth-polarity').value) || 0;
+    const lat = parseFloat(document.getElementById('birth-lat').value) || DEFAULT_LAT;
+    const lon = parseFloat(document.getElementById('birth-lon').value) || DEFAULT_LON;
+    const weight = parseFloat(document.getElementById('birth-weight').value) || 3.5;
+    const height = parseFloat(document.getElementById('birth-height').value) || 50;
+
+    btn.disabled = true; btn.textContent = '⏳ Génération…';
+    _statusMsg('Génération de votre identité NOSTR locale…');
+
+    try {
+        // Réutilise l'identité de la session précédente sur ce navigateur, si connue
+        // (met à jour le même event remplaçable au lieu d'en créer un doublon).
+        _sk = _savedSk || window.NostrTools.generatePrivateKey();
+        _pk = window.NostrTools.getPublicKey(_sk);
+
+        const unix = _dateToUtcUnix(bd, bt, lon);
+        _myPhase  = Phi2X.computePersonalPhase(unix, lat, lon);
+        _myKinObj = Phi2X.calcKinFromDate(bd);
+        const omega = Phi2X.computeOmegaBio(height, weight, polarity);
+
+        btn.textContent = '✍ Signature…';
+        _statusMsg('Signature de l\'événement…');
+        const relayUrl = _relayUrl();
+        const baseTags = [
+            ['t', A4L_TAG],
+            ['kin', String(_myKinObj ? _myKinObj.kin : '')],
+            ['phase', _myPhase.toFixed(4)],
+            ['lat', String(lat)], ['lon', String(lon)],
+            ['birth_date', bd + 'T' + bt],
+        ];
+        const content = JSON.stringify({ personal_phase: _myPhase, omega_bio: omega });
+
+        btn.textContent = '📡 Publication…';
+        _statusMsg('Publication sur le relay local…');
+        let published = false, lastErr = null;
+        for (const appId of A4L_APP_ID_CANDIDATES) {
+            const proof = await _sha256Hex(_pk + ':' + appId);
+            const ev = {
+                kind: 30078, pubkey: _pk, created_at: Math.floor(Date.now() / 1000),
+                tags: [['d', 'atom4love'], ['a4l_proof', proof]].concat(baseTags),
+                content: content,
+            };
+            const signed = window.NostrTools.finishEvent(ev, _sk);
+            try { await _publishToRelay(relayUrl, signed); published = true; break; }
+            catch(e) { lastErr = e; }
+        }
+        if (!published) throw (lastErr || new Error('Publication refusée par le relay.'));
+
+        try { sessionStorage.setItem('zicmama_demo_nsec', window.NostrTools.nip19.nsecEncode(_sk)); } catch(_) {}
+        _saveProfile(_sk);
+
+        document.getElementById('my-glyph').textContent = AtomicGlyphs.emojiFor(_myKinObj);
+        document.getElementById('my-glyph-label').textContent =
+            AtomicGlyphs.label(_myKinObj) + (_myKinObj ? ' · KIN ' + _myKinObj.kin : '');
+        document.getElementById('my-interpretation').innerHTML = AtomicGlyphs.interpretation(_myKinObj);
+        document.getElementById('panel-join').style.display = 'none';
+        document.getElementById('panel-live').style.display = 'block';
+
+        _startLiveRadar(relayUrl);
+    } catch(e) {
+        console.error('[zicmama-demo] Rejoindre KO:', e);
+        _statusMsg('⚠ ' + (e.message || String(e)), '#ff6060');
+        btn.disabled = false; btn.textContent = '⚛ Réessayer';
+    }
+}
+
+function _startLiveRadar(relayUrl) {
+    var subId = 'radar' + Math.random().toString(36).slice(2, 10);
+    var since = Math.floor(Date.now() / 1000) - RADAR_WINDOW_S;
+    try { _liveWs = new WebSocket(relayUrl); } catch(e) { return; }
+    _liveWs.onopen = function() {
+        _liveWs.send(JSON.stringify(['REQ', subId, { kinds: [30078], '#t': [A4L_TAG], since: since, limit: 200 }]));
+    };
+    _liveWs.onmessage = function(msg) {
+        var data; try { data = JSON.parse(msg.data); } catch(e) { return; }
+        if (data[0] !== 'EVENT' || data[1] !== subId) return;
+        _ingestParticipant(data[2]);
+    };
+    _liveWs.onclose = function() { setTimeout(function() { _startLiveRadar(relayUrl); }, 4000); };
+}
+
+function _ingestParticipant(ev) {
+    if (!ev || ev.pubkey === _pk) return;
+    var kinTag = null, phaseTag = null;
+    for (var i = 0; i < ev.tags.length; i++) {
+        if (ev.tags[i][0] === 'kin')   kinTag   = parseInt(ev.tags[i][1]);
+        if (ev.tags[i][0] === 'phase') phaseTag = parseFloat(ev.tags[i][1]);
+    }
+    if (!kinTag || phaseTag === null || isNaN(phaseTag)) return;
+    var kinObj = Phi2X.calcKinFromNum(kinTag);
+    _participants.set(ev.pubkey, { kinObj: kinObj, phase: phaseTag, lastSeen: ev.created_at });
+    _renderRadar();
+}
+
+var _expandedRadar = new Set(); // pubkeys dont le détail KIN est déplié (tap)
+
+function _toggleRadarDetail(pubkey) {
+    if (_expandedRadar.has(pubkey)) _expandedRadar.delete(pubkey);
+    else _expandedRadar.add(pubkey);
+    _renderRadar();
+}
+
+function _renderRadar() {
+    var list = [];
+    _participants.forEach(function(p, pubkey) {
+        // Phi2X.classifyResonance() — canonique, identique à atomic.html /
+        // atomic_match.html : k seul ne distingue pas union (Δφ≈0) de friction
+        // (Δφ≈π), `nature` si. pct ∈ [0,100].
+        var cls = Phi2X.classifyResonance(_myPhase, p.phase);
+        // Relations Oracle du Tzolkin (Occulte/Couleur/Wavespell/Tonalité/Antipode/
+        // Voisins) — complémentaires du score de phase, pas remplacées par lui.
+        var relations = AtomicGlyphs.kinRelations(_myKinObj, p.kinObj);
+        list.push({ pubkey: pubkey, kinObj: p.kinObj, pct: cls.pct, nature: cls.nature, relations: relations });
+    });
+    list.sort(function(a, b) { return b.pct - a.pct; });
+
+    document.getElementById('radar-count').textContent = String(list.length);
+    var el = document.getElementById('radar-list');
+    if (!list.length) { el.innerHTML = '<div class="radar-empty">En attente d\'autres participant·e·s…</div>'; return; }
+    el.innerHTML = list.map(function(p) {
+        var isUnion = p.nature === 'union';
+        var color = p.pct > 85 ? (isUnion ? '#00ffcc' : '#ff5fa2') : p.pct > 65 ? '#ffaa00' : '#ff6b6b';
+        var natureIcon = isUnion ? '🤝' : '⚡';
+        var relIcons = p.relations.map(function(r) { return r.icon; }).join(' ');
+        var expanded = _expandedRadar.has(p.pubkey);
+        var detail = expanded ? '<div style="padding:6px 6px 8px 44px;font-size:.72rem;color:rgba(255,255,255,.55);line-height:1.5">'
+            + p.relations.map(function(r) {
+                return '<div style="margin-bottom:5px"><strong style="color:#e0e7ff">' + r.icon + ' ' + r.name + '</strong><br>' + r.desc + '</div>';
+            }).join('')
+            + '</div>' : '';
+        return '<div class="radar-item" style="flex-direction:column;align-items:stretch;cursor:pointer" onclick="_toggleRadarDetail(\'' + p.pubkey + '\')">'
+            + '<div style="display:flex;align-items:center;gap:10px">'
+            + '<span class="radar-glyph">' + AtomicGlyphs.emojiFor(p.kinObj) + '</span>'
+            + '<span class="radar-name">' + (p.kinObj ? p.kinObj.glyphFr + ' ' + p.kinObj.colorFr : '—')
+            + '<br><span style="font-size:.7rem;opacity:.8">' + relIcons + '</span></span>'
+            + '<span class="radar-pct" style="color:' + color + '">' + natureIcon + ' ' + p.pct + '%</span>'
+            + '</div>' + detail
+            + '</div>';
+    }).join('');
+}
+
+async function sendBeacon() {
+    const btn = document.getElementById('btn-beacon');
+    if (!_participants.size) {
+        document.getElementById('beacon-status').textContent = '⚠ Aucun autre participant pour le moment.';
+        return;
+    }
+    var best = null;
+    _participants.forEach(function(p, pubkey) {
+        var cls = Phi2X.classifyResonance(_myPhase, p.phase);
+        if (!best || cls.pct > best.pct) best = { pubkey: pubkey, pct: cls.pct, nature: cls.nature };
+    });
+    if (!best) return;
+
+    btn.disabled = true; btn.textContent = '📡 Envoi…';
+    try {
+        const ev = {
+            kind: A4L_BEACON_KIND, pubkey: _pk, created_at: Math.floor(Date.now() / 1000),
+            tags: [['t', A4L_BEACON_TAG], ['p', best.pubkey]],
+            content: JSON.stringify({ k_pct: best.pct, nature: best.nature }),
+        };
+        const signed = window.NostrTools.finishEvent(ev, _sk);
+        await _publishToRelay(_relayUrl(), signed);
+        document.getElementById('beacon-status').textContent =
+            '✅ Signal envoyé — regardez l\'écran ! (' + (best.nature === 'union' ? '🤝' : '⚡') + ' ' + best.pct + '%)';
+    } catch(e) {
+        document.getElementById('beacon-status').textContent = '⚠ ' + (e.message || String(e));
+    } finally {
+        setTimeout(function() { btn.disabled = false; btn.textContent = '📡 Signaler mon meilleur match'; }, 4000);
+    }
+}
+</script>
+</body>
+</html>

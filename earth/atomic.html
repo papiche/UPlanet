@@ -1631,11 +1631,13 @@ window.calculateMatch = function() {
 
     const phiA = _phaseForAtom('match-date-a','match-time-a','match-lon-a','match-lat-a');
     const phiB = _phaseForAtom('match-date-b','match-time-b','match-lon-b','match-lat-b');
-    const deltaPhi = Math.abs(phiA - phiB);
-    // Formule canonique : k = 1/(1+|sin(Δφ)|) ∈ [0.5,1.0] → normalisé [0,100]
-    // Identique à Phi2X.computeResonanceK() / Phi2X_Math.gd::compute_resonance_k()
-    const k = Phi2X.computeResonanceK(phiA, phiB);
-    globalCoherenceScore = (k - 0.5) * 200;
+    // Phi2X.classifyResonance() — canonique, partagée avec atomic_match.html et
+    // ZICMAMA (demo/projector). k = 1/(1+|sin(Δφ)|) ∈ [0.5,1.0] est maximal aux
+    // DEUX singularités : Δφ≈0 (union, interférence constructive) ET Δφ≈π
+    // (friction, interférence destructive) — `nature` distingue laquelle.
+    const _cls = Phi2X.classifyResonance(phiA, phiB);
+    const k = _cls.k, deltaPhi = _cls.deltaPhi;
+    globalCoherenceScore = _cls.pct;
 
     // Persist pour le bouton UPH "Partager mon test de résonance" (accessible depuis toutes les pages)
     const _dateA = document.getElementById('match-date-a')?.value;
@@ -1655,10 +1657,16 @@ window.calculateMatch = function() {
         } catch(e) {}
     }
 
-    const color  = globalCoherenceScore > 85 ? '#00ffcc' : globalCoherenceScore > 50 ? '#ffaa00' : '#ff0055';
-    const statut = globalCoherenceScore > 95 ? 'Singularité Parfaite (Vortex)'
-                 : globalCoherenceScore > 80 ? 'Super-Cohérence (SDF Blend)'
-                 : globalCoherenceScore > 50 ? 'Interférence Constructive'
+    // Une même intensité (%) peut venir d'une union (Δφ≈0) OU d'une friction
+    // (Δφ≈π) — voir Phi2X.classifyResonance(). On distingue les deux dans le
+    // libellé plutôt que d'étiqueter toute forte résonance "constructive".
+    const isUnion = _cls.nature === 'union';
+    const color  = globalCoherenceScore > 85 ? (isUnion ? '#00ffcc' : '#ff5fa2')
+                 : globalCoherenceScore > 50 ? '#ffaa00'
+                 : '#ff0055';
+    const statut = globalCoherenceScore > 95 ? (isUnion ? 'Singularité Parfaite (Union)' : 'Singularité Parfaite (Friction)')
+                 : globalCoherenceScore > 80 ? (isUnion ? 'Super-Cohérence (SDF Blend)' : 'Super-Tension (Friction Créative)')
+                 : globalCoherenceScore > 50 ? (isUnion ? 'Interférence Constructive' : 'Interférence Destructive (Friction)')
                  : 'Bruit Quantique (Asymétrie)';
 
     const el = id => document.getElementById(id);
@@ -3618,14 +3626,16 @@ async function loadRadar() {
             const phi_j   = parseFloat(c.personal_phase) || 0;
             const omega_j = parseFloat(c.omega_bio) || 0;
             const a5l_j   = parseFloat(c.a5l_amplitude) || null;
-            const delta   = myPhi - phi_j;
-            const k       = 1 / (1 + Math.abs(Math.sin(delta)));
+            // Phi2X.classifyResonance() — canonique (voir calculateMatch) : k seul
+            // ne distingue pas union (Δφ≈0) de friction (Δφ≈π), `nature` si.
+            const cls     = Phi2X.classifyResonance(myPhi, phi_j);
+            const k       = cls.k;
             // Proximité cymatique a5l : 1 si même ventre d'onde, 0 si nœud opposé
             const kWave   = (myA5l !== null && a5l_j !== null)
                 ? 1 - Math.abs(myA5l - a5l_j)   // ∈ [0,1]
                 : null;
             const isLocal = localIds.has(ev.id);
-            return { pubkey: ev.pubkey, phi: phi_j, omega: omega_j, k, kWave, a5l: a5l_j, isLocal };
+            return { pubkey: ev.pubkey, phi: phi_j, omega: omega_j, k, pct: cls.pct, nature: cls.nature, kWave, a5l: a5l_j, isLocal };
         }).filter(p => p.pubkey && p.phi > 0 && p.phi < 7);
 
         // Tri composite : k (phase) + kWave/4 (cymatique) + bonus local
@@ -3644,9 +3654,13 @@ async function loadRadar() {
             const npubStr = typeof window.hexToNpub === 'function'
                 ? window.hexToNpub(p.pubkey)
                 : p.pubkey.slice(0, 16) + '…';
-            const kPct  = (p.k * 100).toFixed(1);
-            const kColor = p.k >= 0.95 ? '#ff00aa' : p.k >= 0.85 ? '#00ffcc' : '#999';
-            const kLabel = p.k >= 0.95 ? '🔮 Singularité' : p.k >= 0.85 ? '✨ Super-cohérence' : p.k >= 0.75 ? '💫 Cohérence' : '〰 Interférence';
+            const kPct  = p.pct.toFixed(1);
+            const isUnion = p.nature === 'union';
+            const kColor = p.pct >= 90 ? (isUnion ? '#00ffcc' : '#ff5fa2') : p.pct >= 70 ? '#ffaa00' : '#999';
+            const kLabel = p.pct >= 90 ? (isUnion ? '🔮 Singularité (Union)' : '🔮 Singularité (Friction)')
+                         : p.pct >= 70 ? (isUnion ? '✨ Super-cohérence' : '✨ Super-tension')
+                         : p.pct >= 50 ? (isUnion ? '💫 Cohérence' : '💫 Friction créative')
+                         : '〰 Interférence';
             const localBadge = p.isLocal ? ' <span title="Même pentagone géo" style="color:#ffd700;font-size:.65rem">📍local</span>' : '';
             return `
             <div class="border rounded p-2 mb-2" style="border-color:rgba(0,255,204,.2)!important">

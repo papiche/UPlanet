@@ -134,6 +134,30 @@ const Phi2X = (function() {
         return 1 / (1 + Math.abs(Math.sin(phi_i - phi_j)));
     }
 
+    /**
+     * Classifie une résonance : intensité ET nature.
+     *
+     * k = computeResonanceK ∈ [0.5, 1.0] est maximal aux DEUX singularités —
+     * Δφ≈0 (interférence CONSTRUCTIVE, "union", phases alignées) ET Δφ≈π
+     * (interférence DESTRUCTIVE, "friction", phases opposées). k seul ne dit
+     * pas laquelle des deux ; cette fonction résout l'ambiguïté en comparant
+     * Δφ (replié dans [0,π]) à π/2 — le point médian, équidistant des deux
+     * singularités, où k est minimal (0.5).
+     *
+     * pct utilise l'échelle pleine (k-0.5)*200 ∈ [0,100] — canonique pour
+     * tout affichage (atomic.html, atomic_match.html, ZICMAMA demo/projector).
+     *
+     * @returns {{k:number, pct:number, deltaPhi:number, nature:'union'|'friction'}}
+     */
+    function classifyResonance(phi_i, phi_j) {
+        const k   = computeResonanceK(phi_i, phi_j);
+        const pct = Math.round((k - 0.5) * 200);
+        let delta = Math.abs(phi_i - phi_j) % TAU;
+        if (delta > Math.PI) delta = TAU - delta; // replié dans [0, π]
+        const nature = delta < Math.PI / 2 ? 'union' : 'friction';
+        return { k, pct, deltaPhi: delta, nature };
+    }
+
     /** Singularité : Condition A (Δφ≈0) OU Condition B (Δφ≈π) */
     function isOpticalSingularity(phi_i, phi_j, tol = 0.05) {
         const delta = Math.abs(phi_i - phi_j);
@@ -662,7 +686,7 @@ const Phi2X = (function() {
         gpsToHexAxial, getDynamicPentagons, getNearestPentagonId, geoTagA4L,
         computePersonalPhase, computePhaseFromForm,
         computePersonalPhaseWeighted, computePersonalStretch,
-        computeResonanceK, isOpticalSingularity,
+        computeResonanceK, classifyResonance, isOpticalSingularity,
         computeOmegaBio,
         calcKin, calcKinFromDate, calcKinFromNum,
         groupHarmonyScore,

@@ -25,6 +25,10 @@ const Phi2X = (function() {
     // Constante de structure fine — effet Shapiro (compression spatio-temporelle par la masse)
     const ALPHA_SHAPIRO  = 1 / 137.035999084;  // ≈ 0.00729735
 
+    // Modulo mathématique (toujours positif), contrairement à `%` en JS qui garde le signe
+    // du dividende — indispensable ici car birthUnix est négatif pour toute naissance avant 1970.
+    function _mod(x, m) { return ((x % m) + m) % m; }
+
     // ── Bifurcation Relativiste (ATOM4LOVE — Vitesse d'Alignement) ───────────
     const V_ALIGNMENT_MAX       = 0.99; // asymptote — jamais c
     const V_ALIGNMENT_TAU_YEARS = 25;   // constante de temps caractéristique (accélération existentielle)
@@ -105,7 +109,7 @@ const Phi2X = (function() {
         // Capture la géométrie Temps Phi au moment exact du Bang
         const penta = _pentagonOffset(birthLat, birthLon, birthUnix_utc);
 
-        return ((tAnn + tDay + penta) * WAVE_STRETCH) % TAU;
+        return _mod((tAnn + tDay + penta) * WAVE_STRETCH, TAU);
     }
 
     /**
@@ -126,7 +130,7 @@ const Phi2X = (function() {
         const tAnn      = (unix % ORBITAL_YEAR_S) / ORBITAL_YEAR_S * TAU;
         const solar     = unix + solarCorr;
         const tDay      = (solar % ORBITAL_DAY_S) / ORBITAL_DAY_S * TAU;
-        return ((tAnn + tDay) * WAVE_STRETCH) % TAU;
+        return _mod((tAnn + tDay) * WAVE_STRETCH, TAU);
     }
 
     /** k = 1 / (1 + |sin(Δφ)|) ∈ [0.5, 1.0] */
@@ -481,7 +485,7 @@ const Phi2X = (function() {
         const tAnn          = (birthUnix_utc % ORBITAL_YEAR_S) / ORBITAL_YEAR_S * TAU;
         const tDay          = ((birthUnix_utc + solarCorr) % ORBITAL_DAY_S) / ORBITAL_DAY_S * TAU;
         const penta         = _pentagonOffset(birthLat, birthLon, birthUnix_utc);
-        return ((tAnn + tDay + penta) * stretch) % TAU;
+        return _mod((tAnn + tDay + penta) * stretch, TAU);
     }
 
     // ── Bifurcation Relativiste (ATOM4LOVE — v, γ, dream_vector) ─────────────

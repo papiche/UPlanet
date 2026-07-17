@@ -3707,21 +3707,31 @@ function _queryRelayFilter(relayUrl, filter) {
     // GRID_ROT_S est calculé à l'intérieur pour éviter d'accéder à Phi2X
     // avant que phi2x.js soit chargé (phi2x.js est un <script src> après ce bloc).
     let _cdInterval = null;
+    // La distance minimale au pentagone le plus proche ne change qu'une fois par
+    // révolution (~14.83h) : on met en cache le résultat de la recherche plutôt
+    // que de la relancer (89 pas × 12 haversines) à chaque tick du setInterval(1s).
+    let _alignCache = null; // { lat, lon, bestTs, distKm }
 
     function _nextAlignmentSec(lat, lon) {
+        const now = Date.now() / 1000;
+        if (_alignCache && _alignCache.lat === lat && _alignCache.lon === lon && now < _alignCache.bestTs) {
+            return { secsFromNow: _alignCache.bestTs - now, distKm: _alignCache.distKm };
+        }
+
         const GRID_ROT_S = Phi2X.ORBITAL_DAY_S / Phi2X.PHI;
-        const now   = Date.now() / 1000;
         const step  = 300;   // résolution 5 min
         const limit = GRID_ROT_S / 2;
         let bestTs  = now, bestDist = Infinity;
         for (let dt = 0; dt <= limit; dt += step) {
-            const ts  = now + dt;
-            const pid = Phi2X.getNearestPentagonId(lat, lon, ts);
-            const pen = Phi2X.getDynamicPentagons(ts)[pid];
-            const d   = Phi2X.haversineKm(lat, lon, pen[0], pen[1]);
-            if (d < bestDist) { bestDist = d; bestTs = ts; }
+            const ts   = now + dt;
+            const grid = Phi2X.getDynamicPentagons(ts);
+            for (let i = 0; i < grid.length; i++) {
+                const d = Phi2X.haversineKm(lat, lon, grid[i][0], grid[i][1]);
+                if (d < bestDist) { bestDist = d; bestTs = ts; }
+            }
         }
-        return { secsFromNow: Math.max(0, bestTs - Date.now()/1000), distKm: bestDist };
+        _alignCache = { lat, lon, bestTs, distKm: bestDist };
+        return { secsFromNow: Math.max(0, bestTs - now), distKm: bestDist };
     }
 
     function _formatHMS(secs) {

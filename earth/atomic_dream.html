@@ -119,6 +119,66 @@ textarea.dream-ta{width:100%;background:rgba(0,0,0,.3);color:#cfd8e3;border:1px 
     <div id="profile-status"></div>
 </div>
 
+<!-- Mon profil de rencontre (bio/âge/intérêts/visibilité) -->
+<div class="section-card">
+    <div class="section-title">👤 Mon profil de rencontre</div>
+
+    <div class="field-label">Photo</div>
+    <div style="display:flex;align-items:center;gap:14px;margin-top:6px">
+        <div id="profile-photo-preview" onclick="openPhotoCapture()" style="width:64px;height:64px;border-radius:50%;
+            background:rgba(255,255,255,.05);border:1.5px dashed rgba(255,255,255,.25);display:flex;
+            align-items:center;justify-content:center;font-size:1.6rem;cursor:pointer;overflow:hidden;flex-shrink:0">📷</div>
+        <div style="flex:1">
+            <button type="button" class="btn-publish" style="margin-top:0;padding:8px" onclick="openPhotoCapture()">📷 Ajouter une photo</button>
+            <div id="photo-upload-status" style="font-size:.72rem;color:rgba(255,255,255,.4);margin-top:4px"></div>
+        </div>
+    </div>
+    <!-- Capture caméra — repli automatique sur la caméra native du téléphone
+         (input capture="user") si getUserMedia échoue ou est indisponible. -->
+    <div id="photo-capture-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;
+        align-items:center;justify-content:center;flex-direction:column;gap:12px">
+        <video id="photo-capture-video" autoplay playsinline style="max-width:90vw;max-height:60vh;border-radius:12px"></video>
+        <div style="display:flex;gap:10px">
+            <button class="btn-publish" style="margin-top:0" onclick="snapPhoto()">📸 Capturer</button>
+            <button class="btn-publish" style="margin-top:0;background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.25);color:#fff" onclick="closePhotoCapture()">Annuler</button>
+        </div>
+    </div>
+    <canvas id="photo-capture-canvas" style="display:none"></canvas>
+    <input type="file" id="photo-file-input" accept="image/*" capture="user" style="display:none" onchange="onPhotoFileChosen(this)">
+
+    <div class="field-label">Bio</div>
+    <textarea class="dream-ta" id="profile-bio" placeholder="Décris-toi en quelques mots…" maxlength="500"></textarea>
+
+    <div class="field-label">Âge</div>
+    <input type="number" id="profile-age" min="0" max="120" placeholder="ex: 28"
+        style="width:90px;background:rgba(0,0,0,.3);color:#cfd8e3;border:1px solid rgba(255,255,255,.15);
+        border-radius:6px;padding:6px 8px;font-size:.82rem;margin-top:6px">
+
+    <div class="field-label">Intérêts</div>
+    <div id="my-interests"></div>
+    <div class="tag-add-row">
+        <input type="text" id="interest-value" placeholder="ex: randonnée, cinéma…" style="flex:1">
+        <button onclick="addInterest()">➕</button>
+    </div>
+
+    <div class="field-label" style="margin-top:16px">Visibilité</div>
+    <label style="display:flex;align-items:center;gap:8px;margin-top:6px;font-size:.82rem;cursor:pointer">
+        <input type="checkbox" id="profile-public" onchange="onPublicToggle(this)">
+        Visible pour le matching (#love_match)
+    </label>
+    <p style="font-size:.68rem;color:rgba(255,255,255,.35);margin-top:4px">
+        Rendre ton profil public republie bio/âge/intérêts sur NOSTR (décentralisé, pas
+        totalement rétractable) et te rend visible dans le matching BRO de <b>cette station</b>
+        (constellation entière si tu es Parrain/Tier 3) — âge ≥ 18 requis.
+    </p>
+
+    <button class="btn-publish" id="btn-publish-profile" onclick="publishProfile()">📡 Publier mon profil</button>
+    <div id="profile-publish-status"></div>
+
+    <div class="field-label" style="margin-top:16px">Statut de mon profil ATOM4LOVE</div>
+    <div id="profile-status-summary" class="loading-hint">Chargement…</div>
+</div>
+
 <!-- Amis de Cœur -->
 <div class="section-card">
     <div class="section-title">💞 Amis de Cœur · <span id="friend-count">0</span></div>
@@ -202,6 +262,97 @@ function addTag() {
 }
 function removeTag(i) { MY_TAGS.splice(i, 1); renderMyTags(); }
 
+/* ── Photo de profil (capture caméra ou upload) ── */
+let MY_PHOTO_URL = '';
+let _photoStream = null;
+
+async function openPhotoCapture() {
+    // Tente getUserMedia (contexte sécurisé : HTTPS ou localhost). Repli
+    // automatique sur l'input file capture="user" (ouvre l'app caméra native
+    // du téléphone, fonctionne même hors contexte sécurisé) si indisponible.
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        try {
+            _photoStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
+            var video = document.getElementById('photo-capture-video');
+            video.srcObject = _photoStream;
+            document.getElementById('photo-capture-modal').style.display = 'flex';
+            return;
+        } catch (e) { /* refus/indisponible → repli input file */ }
+    }
+    document.getElementById('photo-file-input').click();
+}
+
+function closePhotoCapture() {
+    document.getElementById('photo-capture-modal').style.display = 'none';
+    if (_photoStream) {
+        _photoStream.getTracks().forEach(function(t) { t.stop(); });
+        _photoStream = null;
+    }
+}
+
+function snapPhoto() {
+    var video = document.getElementById('photo-capture-video');
+    var canvas = document.getElementById('photo-capture-canvas');
+    canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+    canvas.getContext('2d').drawImage(video, 0, 0);
+    closePhotoCapture();
+    canvas.toBlob(function(blob) {
+        if (blob) _uploadProfilePhoto(blob, 'photomaton.jpg');
+    }, 'image/jpeg', 0.85);
+}
+
+function onPhotoFileChosen(inp) {
+    var f = inp.files[0];
+    inp.value = '';
+    if (f) _uploadProfilePhoto(f, f.name);
+}
+
+async function _uploadProfilePhoto(fileOrBlob, filename) {
+    var statusEl = document.getElementById('photo-upload-status');
+    statusEl.textContent = '⏳ Envoi…'; statusEl.style.color = 'rgba(255,255,255,.4)';
+    try {
+        var fd = new FormData();
+        fd.append('file', fileOrBlob, filename || 'photo.jpg');
+        fd.append('type', 'avatar');
+        var res = await fetch(_apiUrl() + '/api/upload/image', { method: 'POST', body: fd });
+        var json = await res.json().catch(function() { return {}; });
+        if (!res.ok || !(json.url || json.local_url)) throw new Error(json.detail || 'Échec upload');
+        MY_PHOTO_URL = json.url || (_apiUrl() + json.local_url);
+        document.getElementById('profile-photo-preview').innerHTML =
+            '<img src="' + MY_PHOTO_URL + '" style="width:100%;height:100%;object-fit:cover">';
+        statusEl.textContent = '✅ Photo prête — publie ton profil pour l\'enregistrer';
+        statusEl.style.color = '#00ffcc';
+    } catch (e) {
+        statusEl.textContent = '⚠ ' + (e.message || e);
+        statusEl.style.color = '#ff6060';
+    }
+}
+
+/* ── Intérêts (profil de rencontre) ── */
+let MY_INTERESTS = [];
+function renderMyInterests() {
+    const el = document.getElementById('my-interests');
+    if (!MY_INTERESTS.length) { el.innerHTML = '<div class="loading-hint" style="padding:4px 0">Aucun intérêt — ajoutez-en un</div>'; return; }
+    el.innerHTML = MY_INTERESTS.map(function(t, i) {
+        return '<span class="chip">🔖 ' + _esc(t.replace(/_/g, ' ')) + '<button onclick="removeInterest(' + i + ')">✕</button></span>';
+    }).join('');
+}
+function addInterest() {
+    const valEl = document.getElementById('interest-value');
+    const val = _slug(valEl.value);
+    if (!val) return;
+    if (MY_INTERESTS.indexOf(val) === -1) MY_INTERESTS.push(val);
+    valEl.value = '';
+    renderMyInterests();
+}
+function removeInterest(i) { MY_INTERESTS.splice(i, 1); renderMyInterests(); }
+
+function onPublicToggle(el) {
+    if (el.checked && !confirm('Rendre ton profil visible republie bio/âge/intérêts sur NOSTR (décentralisé, pas totalement rétractable) et te rend visible dans le matching #love_match de cette station (constellation entière si Parrain/Tier 3). Continuer ?')) {
+        el.checked = false;
+    }
+}
+
 /* ── Auth NIP-42 (challenge + kind 22242, même flux que atomic.html) ── */
 async function a4lAuthEvent(apiUrl, email) {
     const chRes = await fetch(apiUrl + '/atom4love/challenge?email=' + encodeURIComponent(email));
@@ -251,6 +402,83 @@ async function publishDream() {
     }
 }
 
+/* ── Publier mon profil de rencontre (bio/âge/intérêts/visibilité) ── */
+async function publishProfile() {
+    const email = window._uphEmail;
+    const btn = document.getElementById('btn-publish-profile');
+    const statusEl = document.getElementById('profile-publish-status');
+    if (!email || !(window.isNostrConnected && window.userPubkey)) {
+        statusEl.textContent = '🔒 Connectez-vous depuis atomic.html pour publier.';
+        return;
+    }
+    btn.disabled = true; btn.textContent = '⏳ Signature…';
+    statusEl.textContent = '';
+    try {
+        const apiUrl = _apiUrl();
+        const authEvent = await a4lAuthEvent(apiUrl, email);
+        btn.textContent = '📡 Publication…';
+        const fd = new FormData();
+        fd.append('email', email);
+        fd.append('age', document.getElementById('profile-age').value || '');
+        fd.append('bio', document.getElementById('profile-bio').value || '');
+        fd.append('interests', MY_INTERESTS.join(','));
+        fd.append('public', document.getElementById('profile-public').checked ? 'true' : 'false');
+        fd.append('photo', MY_PHOTO_URL || '');
+        fd.append('auth_event', JSON.stringify(authEvent));
+        const res = await fetch(apiUrl + '/atom4love/profile', { method: 'POST', body: fd });
+        const json = await res.json().catch(function() { return {}; });
+        if (!res.ok || !json.published) throw new Error(json.message || json.detail || ('HTTP ' + res.status));
+        statusEl.textContent = '✅ Profil publié';
+        statusEl.style.color = '#00ffcc';
+        btn.textContent = '✅ Republier';
+        loadProfileStatus();
+    } catch (e) {
+        statusEl.textContent = '⚠ ' + (e.message || String(e));
+        statusEl.style.color = '#ff6060';
+        btn.textContent = '📡 Publier mon profil';
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+/* ── Charger le statut agrégé du profil ATOM4LOVE (tableau de bord) ── */
+async function loadProfileStatus() {
+    const email = window._uphEmail;
+    if (!email) return;
+    try {
+        const res = await fetch(_apiUrl() + '/atom4love/profile?email=' + encodeURIComponent(email));
+        const json = await res.json().catch(function() { return {}; });
+        const p = json.profile || {};
+        document.getElementById('profile-bio').value = p.bio || '';
+        document.getElementById('profile-age').value = p.age || '';
+        MY_INTERESTS = p.interests || [];
+        renderMyInterests();
+        document.getElementById('profile-public').checked = !!p.public;
+        if (p.photo) {
+            MY_PHOTO_URL = p.photo;
+            document.getElementById('profile-photo-preview').innerHTML =
+                '<img src="' + MY_PHOTO_URL + '" style="width:100%;height:100%;object-fit:cover">';
+        }
+
+        const tierLabel = {
+            1: '🎯 Tier 1 · Découverte',
+            2: '🎯 Tier 2 · Matching local (+18)',
+            3: '🎯 Tier 3 · Parrain · Matching constellation',
+        }[json.tier] || '🎯 Tier 1 · Découverte';
+        const stats = json.love_stats || {};
+        document.getElementById('profile-status-summary').innerHTML =
+            tierLabel + '<br>' +
+            (json.has_profile
+                ? (p.public ? '👁️ Profil visible pour le matching' : '🔒 Profil renseigné mais privé — active la visibilité ci-dessus pour apparaître dans le matching')
+                : '❌ Profil incomplet — remplis bio/âge/intérêts ci-dessus') + '<br>' +
+            (json.a4l_active
+                ? '✅ Phi² ATOM4LOVE actif'
+                : '💡 Phi² inactif — active-le sur <a href="atomic.html" style="color:var(--teal,#00ffcc)">atomic.html</a>') + '<br>' +
+            '📊 ' + (stats.memories_count || 0) + ' souvenir(s) · ' + (stats.dialog_count || 0) + ' échange(s) · ' + (stats.matches_count || 0) + ' match(s)<br>' +
+            '🔔 Notifications de résonance : <a href="' + _apiUrl() + '/mailjet" style="color:var(--teal,#00ffcc)">gérer sur /mailjet</a>';
+    } catch (e) { /* silencieux */ }
+}
+
 /* ── Charger mon profil existant ── */
 async function loadMyProfile() {
     const email = window._uphEmail;
@@ -276,6 +504,7 @@ async function loadMyProfile() {
         }
         renderMyTags();
         if (LOVE_HEX) loadFriends();
+        loadProfileStatus();
     } catch (e) { /* silencieux */ }
 }
 

@@ -289,6 +289,8 @@ var _encMode    = null;
 var _constellRelays = [];
 var _nodeHex       = null;   // Hex pubkey NODE de la station (12345.json → NODEHEX)
 var _captainHex    = null;   // Hex pubkey NOSTR du capitaine (12345.json → captainHEX)
+var _loveHex       = null;   // Hex pubkey de la clé LOVE dédiée (ATOM4LOVE), si activé
+var _lovePhotoUrl  = null;   // Photo du profil LOVE (distincte du Kind 0 MULTIPASS)
 
 // ── Sélection multiple / suppression ────────────────────────────────────────
 var _selectMode = false;
@@ -544,6 +546,25 @@ async function _loadConvs() {
     })) : [];
     items.sort(function(a,b){return b.time-a.time;});
 
+    // LOVE — canal dédié (HEX_LOVE, clé ATOM4LOVE propre à l'utilisateur) —
+    // épinglé en 3ème position, visible seulement si ATOM4LOVE est activé.
+    // Contrairement à NODE, c'est une vraie conversation à deux parties
+    // (l'utilisateur ↔ sa propre clé LOVE), pas la station.
+    if (_loveHex) {
+        var loveIdx = items.findIndex(function(c) { return c.peer === _loveHex; });
+        var loveExisting = loveIdx >= 0 ? items.splice(loveIdx, 1)[0] : null;
+        var loveProf = Object.assign({}, loveExisting ? loveExisting.profile : {name:'💕 LOVE', picture:null},
+            {name:'💕 LOVE', picture: _lovePhotoUrl || (loveExisting && loveExisting.profile.picture) || null});
+        items.unshift({
+            peer:    _loveHex,
+            profile: loveProf,
+            text:    loveExisting ? loveExisting.text : '💕 Ton profil de résonance ATOM4LOVE',
+            time:    loveExisting ? loveExisting.time : 0,
+            isMe:    loveExisting ? loveExisting.isMe : false,
+            isLove:  true
+        });
+    }
+
     // NODE — canal station (NODEHEX) — épinglé en 2ème position, visible uniquement pour le capitaine
     // Le capitaine est détecté via captainHEX (12345.json) comparé au _myPub connecté
     var _isCapitaine = _captainHex && _myPub && _captainHex === _myPub;
@@ -618,7 +639,7 @@ function _renderEmptyConvs() {
             'margin-top:14px;padding:11px 20px;border-radius:12px;cursor:pointer;' +
             'background:linear-gradient(135deg,rgba(0,255,204,.18),rgba(102,126,234,.12));' +
             'border:1.5px solid rgba(0,255,204,.45);color:#fff;font-size:.85rem;font-weight:700;' +
-        '">🤖 Ouvrir BRO</button></div>';
+        '">💕 Ouvrir LOVE</button></div>';
 }
 
 async function _fetchNodeHex() {
@@ -638,6 +659,31 @@ async function _fetchNodeHex() {
     } catch(_) {}
 }
 
+// ── Clé LOVE dédiée (ATOM4LOVE) — /atom4love/dream expose déjà love_hex ─────
+// (soit à la racine, soit sous dream_vector, selon qu'un dream_vector a été
+// publié ou non — cf. UPassport routers/identity.py::get_atom4love_dream).
+async function _fetchLoveHex() {
+    try {
+        var email = window._uphEmail;
+        if (!email) return;
+        var apiUrl = typeof window.getAPIUrl === 'function' ? window.getAPIUrl() : _upassportUrl();
+        var resp = await fetch(apiUrl + '/atom4love/dream?email=' + encodeURIComponent(email));
+        if (!resp.ok) return; // 404 = ATOM4LOVE non activé, pas de HEX_LOVE
+        var json = await resp.json();
+        var hex = json.love_hex || (json.dream_vector && json.dream_vector.love_hex) || '';
+        if (hex && /^[0-9a-f]{64}$/i.test(hex)) _loveHex = hex.toLowerCase();
+    } catch(_) {}
+    if (!_loveHex) return;
+    // Photo du profil LOVE (distincte du Kind 0 MULTIPASS) — /atom4love/profile
+    // existe déjà pour la page atomic_dream.html, réutilisé ici pour l'avatar.
+    try {
+        var apiUrl2 = typeof window.getAPIUrl === 'function' ? window.getAPIUrl() : _upassportUrl();
+        var resp2 = await fetch(apiUrl2 + '/atom4love/profile?email=' + encodeURIComponent(window._uphEmail));
+        var json2 = await resp2.json();
+        if (json2 && json2.profile && json2.profile.photo) _lovePhotoUrl = json2.profile.photo;
+    } catch(_) {}
+}
+
 function _stationUrl() {
     var u = _upassportUrl();
     return u.replace(':54321', ':12345').replace(/\/u\./, '/:12345/').replace('u.', '').replace(':54321', ':12345');
@@ -645,10 +691,17 @@ function _stationUrl() {
 
 async function _startBroLoveChat() {
     if (!_myPub) return;
-    // BRO = le MULTIPASS connecté (self-DM)
-    await _openChat(_myPub);
-    var inp = document.getElementById('chat-input');
-    if (inp) { inp.value = 'LOVE'; inp.dispatchEvent(new Event('input')); inp.focus(); }
+    if (_loveHex) {
+        // ATOM4LOVE activé : vraie conversation avec sa propre clé LOVE
+        await _openChat(_loveHex);
+        return;
+    }
+    // Pas encore de clé LOVE (ATOM4LOVE non activé) — pas de conversation
+    // possible tant que la clé dédiée n'existe pas ; on guide vers l'activation
+    // plutôt que d'ouvrir un fil BRO qui ne connaît pas les commandes LOVE.
+    if (confirm('Active d\'abord ton profil ATOM4LOVE pour ouvrir le canal LOVE. Continuer vers atomic.html ?')) {
+        location.href = 'atomic.html';
+    }
 }
 
 // ── Open chat ─────────────────────────────────────────────────────────────────
@@ -659,6 +712,7 @@ async function _openChat(peerHex) {
     } else {
         _peerProf = await _profile(peerHex);
         if (peerHex === _nodeHex) _peerProf = Object.assign({}, _peerProf, {name:'⚡ NODE'});
+        if (peerHex === _loveHex) _peerProf = Object.assign({}, _peerProf, {name:'💕 LOVE', picture: _lovePhotoUrl || _peerProf.picture});
     }
     _detectEnc();
 
@@ -1568,6 +1622,8 @@ async function _onConnected() {
     _updateRelayBadge('');
     // Récupérer la clé NODE de la station (canal capitaine)
     await _fetchNodeHex();
+    // Récupérer sa propre clé LOVE dédiée (ATOM4LOVE), si activée
+    await _fetchLoveHex();
 
     /* ── Initialiser les widgets ── */
     if (typeof ChatSidebar !== 'undefined') {
@@ -1678,6 +1734,7 @@ AtomicNav.injectTopHeader({
                 '<span class="h-title" id="h-title">💬 Messages</span>',
     actions: [
         {html: '<div id="relay-badge" class="a4l-relay-badge" onclick="_openRelayPicker()" title="Changer de relay"><div id="r-dot" class="a4l-relay-dot"></div><span id="r-name" class="a4l-relay-name">…</span></div>'},
+        {html: '<button class="h-btn h-btn-dim" id="btn-love" onclick="_startBroLoveChat()" title="Ouvrir le canal LOVE">💕</button>'},
         {html: '<button class="h-btn h-btn-teal" id="btn-new" onclick="_openNewDm()" style="display:none">+ DM</button>'}
     ]
 });

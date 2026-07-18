@@ -192,9 +192,32 @@
     </div>
   </details>
 
+  <label>Photo (optionnel)</label>
+  <div style="display:flex;align-items:center;gap:14px;margin-bottom:10px">
+    <div id="demo-photo-preview" onclick="openDemoPhotoCapture()" style="width:56px;height:56px;border-radius:50%;
+        background:rgba(255,255,255,.05);border:1.5px dashed rgba(0,255,204,.35);display:flex;
+        align-items:center;justify-content:center;font-size:1.4rem;cursor:pointer;overflow:hidden;flex-shrink:0">📷</div>
+    <button type="button" class="btn" style="padding:9px;font-size:.8rem;margin-bottom:0" onclick="openDemoPhotoCapture()">📸 Prendre une photo</button>
+  </div>
+  <div id="demo-photo-status" style="font-size:.7rem;color:rgba(255,255,255,.35);margin:-6px 0 10px;text-align:center"></div>
+
   <button class="btn" id="btn-join" onclick="joinConstellation()">⚡ Rejoindre la constellation</button>
   <div id="status"></div>
 </div>
+
+<!-- Capture caméra — repli automatique sur la caméra native du téléphone
+     (input capture="user") si getUserMedia échoue ou est indisponible
+     (cas des participants sur IP brute, hors contexte sécurisé). -->
+<div id="demo-photo-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:9999;
+    align-items:center;justify-content:center;flex-direction:column;gap:12px">
+  <video id="demo-photo-video" autoplay playsinline style="max-width:90vw;max-height:60vh;border-radius:12px"></video>
+  <div style="display:flex;gap:10px">
+    <button class="btn" style="padding:10px 18px;margin-bottom:0" onclick="snapDemoPhoto()">📸 Capturer</button>
+    <button class="btn" style="padding:10px 18px;margin-bottom:0;background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.25);color:#fff" onclick="closeDemoPhotoCapture()">Annuler</button>
+  </div>
+</div>
+<canvas id="demo-photo-canvas" style="display:none"></canvas>
+<input type="file" id="demo-photo-file-input" accept="image/*" capture="user" style="display:none" onchange="onDemoPhotoFileChosen(this)">
 
 <div id="panel-live">
   <div class="card" style="text-align:center">
@@ -211,6 +234,14 @@
     <label style="margin-bottom:8px">Résonance en direct (<span id="radar-count">0</span> connecté·e·s)</label>
     <div id="radar-list"><div class="radar-empty">En attente d'autres participant·e·s…</div></div>
   </div>
+
+  <!-- Kiosque : la clé NOSTR (et la date de naissance/photo) sont mémorisées
+       en localStorage pour qu'un visiteur retrouve son profil s'il revient sur
+       SON téléphone — mais sur l'ordinateur du photomaton, partagé par tout le
+       monde, un simple reload réutiliserait l'identité de la personne
+       précédente. Ce bouton efface tout et repart d'un profil vierge. -->
+  <button class="btn" style="background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.2);color:rgba(255,255,255,.6)"
+      onclick="resetForNewParticipant()">🔄 Personne suivante (nouveau profil)</button>
 </div>
 
 <script src="nostr.bundle.js"></script>
@@ -286,6 +317,11 @@ function _restoreProfile() {
     if (p.weight) document.getElementById('birth-weight').value = p.weight;
     if (p.height) document.getElementById('birth-height').value = p.height;
     if (p.locLabel) document.getElementById('birth-loc-label').textContent = '📍 ' + p.locLabel;
+    if (p.photoUrl) {
+        DEMO_PHOTO_URL = p.photoUrl;
+        document.getElementById('demo-photo-preview').innerHTML =
+            '<img src="' + DEMO_PHOTO_URL + '" style="width:100%;height:100%;object-fit:cover">';
+    }
 }
 _restoreProfile();
 
@@ -303,8 +339,74 @@ function _saveProfile(sk) {
             weight: document.getElementById('birth-weight').value,
             height: document.getElementById('birth-height').value,
             locLabel: document.getElementById('birth-loc-label').textContent.replace(/^📍 /, ''),
+            photoUrl: DEMO_PHOTO_URL,
         }));
     } catch(_) {}
+}
+
+/* ── Photo (capture caméra ou upload) ── */
+var DEMO_PHOTO_URL = '';
+var _demoPhotoStream = null;
+
+async function openDemoPhotoCapture() {
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        try {
+            _demoPhotoStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
+            var video = document.getElementById('demo-photo-video');
+            video.srcObject = _demoPhotoStream;
+            document.getElementById('demo-photo-modal').style.display = 'flex';
+            return;
+        } catch (e) { /* refus/indisponible (hors contexte sécurisé) → repli input file */ }
+    }
+    document.getElementById('demo-photo-file-input').click();
+}
+
+function closeDemoPhotoCapture() {
+    document.getElementById('demo-photo-modal').style.display = 'none';
+    if (_demoPhotoStream) {
+        _demoPhotoStream.getTracks().forEach(function(t) { t.stop(); });
+        _demoPhotoStream = null;
+    }
+}
+
+function snapDemoPhoto() {
+    var video = document.getElementById('demo-photo-video');
+    var canvas = document.getElementById('demo-photo-canvas');
+    canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+    canvas.getContext('2d').drawImage(video, 0, 0);
+    closeDemoPhotoCapture();
+    canvas.toBlob(function(blob) {
+        if (blob) _uploadDemoPhoto(blob, 'zicmama.jpg');
+    }, 'image/jpeg', 0.85);
+}
+
+function onDemoPhotoFileChosen(inp) {
+    var f = inp.files[0];
+    inp.value = '';
+    if (f) _uploadDemoPhoto(f, f.name);
+}
+
+async function _uploadDemoPhoto(fileOrBlob, filename) {
+    var statusEl = document.getElementById('demo-photo-status');
+    statusEl.textContent = '⏳ Envoi…'; statusEl.style.color = 'rgba(255,255,255,.35)';
+    try {
+        var fd = new FormData();
+        fd.append('file', fileOrBlob, filename || 'photo.jpg');
+        fd.append('type', 'avatar');
+        // Cette page est servie par UPassport (port 54321), même origine que
+        // l'API — pas de traduction de port nécessaire (cf. atomic_chat.html).
+        var res = await fetch(location.origin + '/api/upload/image', { method: 'POST', body: fd });
+        var json = await res.json().catch(function() { return {}; });
+        if (!res.ok || !(json.url || json.local_url)) throw new Error(json.detail || 'Échec upload');
+        DEMO_PHOTO_URL = json.url || (location.origin + json.local_url);
+        document.getElementById('demo-photo-preview').innerHTML =
+            '<img src="' + DEMO_PHOTO_URL + '" style="width:100%;height:100%;object-fit:cover">';
+        statusEl.textContent = '✅ Photo prête';
+        statusEl.style.color = '#00ffcc';
+    } catch (e) {
+        statusEl.textContent = '⚠ ' + (e.message || e);
+        statusEl.style.color = '#ff6060';
+    }
 }
 
 // ── Sélecteur de carte (comme atomic.html) — nécessite un accès Internet pour
@@ -431,6 +533,41 @@ function _statusMsg(msg, color) {
     el.textContent = msg; el.style.color = color || 'rgba(255,255,255,.5)';
 }
 
+// ── Réinitialisation kiosque : nouveau participant sur le même ordinateur ──
+// Un reload seul ne suffit PAS (_restoreProfile() relit localStorage à chaque
+// chargement de script) : il faut explicitement effacer clé + formulaire.
+function resetForNewParticipant() {
+    try { localStorage.removeItem(PROFILE_KEY); } catch(_) {}
+    try { sessionStorage.removeItem('zicmama_demo_nsec'); } catch(_) {}
+
+    if (_liveWs) { try { _liveWs.onclose = null; _liveWs.close(); } catch(_) {} _liveWs = null; }
+    _participants.clear();
+    _expandedRadar.clear();
+
+    _savedSk = null; _sk = null; _pk = null; _myPhase = null; _myKinObj = null;
+    DEMO_PHOTO_URL = '';
+
+    document.getElementById('birth-day').value = '';
+    document.getElementById('birth-month').value = '';
+    document.getElementById('birth-year').value = '';
+    document.getElementById('birth-time').value = '12:00';
+    document.getElementById('birth-polarity').value = '0';
+    document.getElementById('birth-lat').value = DEFAULT_LAT;
+    document.getElementById('birth-lon').value = DEFAULT_LON;
+    document.getElementById('birth-weight').value = '3.5';
+    document.getElementById('birth-height').value = '50';
+    document.getElementById('birth-loc-label').textContent = '';
+    document.getElementById('demo-photo-preview').innerHTML = '📷';
+    document.getElementById('demo-photo-status').textContent = '';
+
+    var btn = document.getElementById('btn-join');
+    btn.disabled = false; btn.textContent = '⚡ Rejoindre la constellation';
+    _statusMsg('');
+
+    document.getElementById('panel-live').style.display = 'none';
+    document.getElementById('panel-join').style.display = 'block';
+}
+
 async function joinConstellation() {
     const btn = document.getElementById('btn-join');
     const bd  = _getBirthDateISO();
@@ -467,7 +604,9 @@ async function joinConstellation() {
             ['lat', String(lat)], ['lon', String(lon)],
             ['birth_date', bd + 'T' + bt],
         ];
-        const content = JSON.stringify({ personal_phase: _myPhase, omega_bio: omega });
+        const contentObj = { personal_phase: _myPhase, omega_bio: omega };
+        if (DEMO_PHOTO_URL) contentObj.picture = DEMO_PHOTO_URL;
+        const content = JSON.stringify(contentObj);
 
         btn.textContent = '📡 Publication…';
         _statusMsg('Publication sur le relay local…');

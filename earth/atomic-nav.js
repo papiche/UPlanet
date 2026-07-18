@@ -7,13 +7,18 @@
 'use strict';
 
 var NAV_PAGES = [
-    { id: 'profil', icon: '🌌', label: 'Profil',  href: 'atomic.html',        locked: false },
-    { id: 'map',    icon: '🗺️',  label: 'Carte',   href: 'atomic_map.html',    locked: false },
-    { id: 'board',  icon: '🎴', label: 'Jeu',     href: 'atomic_board.html',  locked: false },
-    { id: 'chat',   icon: '💬', label: 'Chat',    href: 'atomic_chat.html',   locked: false },
-    { id: 'choir',  icon: '🌀', label: 'Chœur',   href: 'atomic_choir.html',  locked: false },
-    { id: 'dream',  icon: '💭', label: 'Rêves',   href: 'atomic_dream.html',  locked: false },
-    { id: 'help',   icon: 'ℹ️',  label: 'Aide',    href: 'atomic_help.html',   locked: false },
+    { id: 'profil',   icon: '🌌', label: 'Profil',   href: 'atomic.html',        locked: false },
+    { id: 'map',      icon: '🗺️',  label: 'Carte',    href: 'atomic_map.html',    locked: false },
+    { id: 'board',    icon: '🎴', label: 'Jeu',      href: 'atomic_board.html',  locked: false },
+    { id: 'chat',     icon: '💬', label: 'Chat',     href: 'atomic_chat.html',   locked: false },
+    { id: 'choir',    icon: '🌀', label: 'Chœur',    href: 'atomic_choir.html',  locked: false },
+    { id: 'dream',    icon: '💭', label: 'Rêves',    href: 'atomic_dream.html',  locked: false },
+    // /mailjet est servi par UPassport (pas par earth/) — href résolu au clic
+    // via getAPIUrl() (common.js), déjà chargé avant atomic-nav.js.
+    { id: 'settings', icon: '⚙️',  label: 'Réglages', hrefFn: function() {
+        return (typeof window.getAPIUrl === 'function' ? window.getAPIUrl() : '') + '/mailjet';
+    }, locked: false },
+    { id: 'help',     icon: 'ℹ️',  label: 'Aide',     href: 'atomic_help.html',   locked: false },
 ];
 
 function _detectPage() {
@@ -46,7 +51,7 @@ function injectBottomNav(opts) {
         var cls = 'a4l-bnav-btn' +
             (isActive ? ' active' : '') +
             (p.locked ? ' locked' : '');
-        var href = p.locked ? '#' : p.href;
+        var href = p.locked ? '#' : (p.hrefFn ? p.hrefFn() : p.href);
         var tag  = p.locked ? 'button' : 'a';
         var extraAttrs = (tag === 'a') ? ' href="' + href + '"' : ' type="button" onclick="void(0)"';
         return '<' + tag + ' class="' + cls + '"' + extraAttrs +

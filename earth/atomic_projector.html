@@ -155,16 +155,34 @@ function _hash01(str) {
     return (h % 100000) / 100000;
 }
 
-function _addNode(pubkey, kinObj, phi) {
+// Cache des images p5.js chargées par URL — loadImage() est asynchrone, on ne
+// veut la déclencher qu'une seule fois par photo, jamais à chaque frame de draw().
+var _photoImgCache = {}; // url -> p5.Image | 'loading' | 'failed'
+
+function _getPhotoImg(url) {
+    if (!url) return null;
+    var cached = _photoImgCache[url];
+    if (cached === 'loading' || cached === 'failed') return null;
+    if (cached) return cached;
+    _photoImgCache[url] = 'loading';
+    loadImage(url,
+        function(img) { _photoImgCache[url] = img; },
+        function()    { _photoImgCache[url] = 'failed'; });
+    return null;
+}
+
+function _addNode(pubkey, kinObj, phi, picture) {
     if (_nodes.has(pubkey)) {
         var n = _nodes.get(pubkey);
         n.kinObj = kinObj; if (typeof phi === 'number') n.phi = phi;
+        if (picture) n.picture = picture;
         return;
     }
     var a = _hash01(pubkey + 'a') * TWO_PI;
     var r = 0.18 + _hash01(pubkey + 'b') * 0.72;
     _nodes.set(pubkey, {
         kinObj: kinObj, phi: (typeof phi === 'number' ? phi : null),
+        picture: picture || null,
         ax: 0.5 + Math.cos(a) * r * 0.44,
         ay: 0.52 + Math.sin(a) * r * 0.4,
         phase: _hash01(pubkey + 'c') * TWO_PI,
@@ -271,7 +289,11 @@ function _onParticipant(ev) {
         if (ev.tags[i][0] === 'phase') phaseTag = parseFloat(ev.tags[i][1]);
     }
     if (!kinTag) return;
-    _addNode(ev.pubkey, Phi2X.calcKinFromNum(kinTag), isNaN(phaseTag) ? null : phaseTag);
+    // Photo optionnelle (cf. atomic_demo.html::joinConstellation) — même
+    // content JSON que personal_phase/omega_bio.
+    var picture = null;
+    try { picture = JSON.parse(ev.content || '{}').picture || null; } catch(_) {}
+    _addNode(ev.pubkey, Phi2X.calcKinFromNum(kinTag), isNaN(phaseTag) ? null : phaseTag, picture);
     document.getElementById('cnt').textContent = _nodes.size + ' connecté·e·s';
     if (_focusPubkey) _layoutFocus(); // un nouvel arrivant doit aussi être positionné autour du focus actif
 }
@@ -380,14 +402,33 @@ function draw() {
         circle(pos.x, pos.y, baseSize * 3.6 * ringBoost);
         fill(nc[0], nc[1], nc[2], 30);
         circle(pos.x, pos.y, baseSize * 2.2 * ringBoost);
-        fill(20, 24, 30, 235);
-        stroke(isFocused ? 255 : nc[0], isFocused ? 255 : nc[1], isFocused ? 255 : nc[2], 200);
-        strokeWeight(isFocused ? 3 : 2);
-        circle(pos.x, pos.y, baseSize * 1.5 * ringBoost);
+        // Photo (cf. atomic_demo.html::joinConstellation, optionnelle) — recadrée
+        // en cercle via un clip canvas natif ; repli sur le glyphe emoji si
+        // aucune photo, ou tant que loadImage() n'a pas fini de charger.
+        var photoImg = node.picture ? _getPhotoImg(node.picture) : null;
+        var ringD = baseSize * 1.5 * ringBoost;
+        if (photoImg) {
+            drawingContext.save();
+            drawingContext.beginPath();
+            drawingContext.arc(pos.x, pos.y, ringD / 2, 0, TWO_PI);
+            drawingContext.clip();
+            image(photoImg, pos.x - ringD / 2, pos.y - ringD / 2, ringD, ringD);
+            drawingContext.restore();
+            noFill();
+            stroke(isFocused ? 255 : nc[0], isFocused ? 255 : nc[1], isFocused ? 255 : nc[2], 200);
+            strokeWeight(isFocused ? 3 : 2);
+            circle(pos.x, pos.y, ringD);
+        } else {
+            fill(20, 24, 30, 235);
+            stroke(isFocused ? 255 : nc[0], isFocused ? 255 : nc[1], isFocused ? 255 : nc[2], 200);
+            strokeWeight(isFocused ? 3 : 2);
+            circle(pos.x, pos.y, ringD);
+            noStroke();
+            textSize(baseSize * 0.85 * ringBoost);
+            fill(255);
+            text(AtomicGlyphs.emojiFor(node.kinObj), pos.x, pos.y - baseSize * 0.05);
+        }
         noStroke();
-        textSize(baseSize * 0.85 * ringBoost);
-        fill(255);
-        text(AtomicGlyphs.emojiFor(node.kinObj), pos.x, pos.y - baseSize * 0.05);
         textSize(Math.max(11, baseSize * 0.24));
         fill(nc[0], nc[1], nc[2], 235);
         text((node.kinObj ? node.kinObj.glyphFr : '') + ' · KIN ' + (node.kinObj ? node.kinObj.kin : '—'),

@@ -736,6 +736,43 @@ async function fetchDidDocument(hex, nostrRelayUrl) {
     } catch (err) { npvLog.warn('fetchDidDocument exception:', err); return null; }
 }
 
+// ── Clé LOVE dédiée (ATOM4LOVE) — liée au DID via verificationMethod
+// #atom4love-key (cf. Astroport.ONE/tools/did_manager_nostr.sh::update_did_document,
+// même extraction que kin_oracle.sh::_scan_did_mapping côté serveur). Le profil
+// LOVE (bio/âge/intérêts/photo, Kind 30078 d=love-profile) est signé par cette
+// clé, distincte du pubkey MULTIPASS affiché sur cette page.
+function extractLoveHexFromDid(didDoc) {
+    if (!didDoc || !Array.isArray(didDoc.verificationMethod)) return null;
+    const vm = didDoc.verificationMethod.find(function (m) {
+        return m && typeof m.id === 'string' && m.id.endsWith('#atom4love-key');
+    });
+    if (!vm || typeof vm.publicKeyMultibase !== 'string') return null;
+    const hex = vm.publicKeyMultibase.replace(/^fe70102/, '');
+    return /^[0-9a-f]{64}$/i.test(hex) ? hex.toLowerCase() : null;
+}
+
+async function fetchLoveProfile(loveHex, nostrRelayUrl) {
+    npvLog.log(`fetchLoveProfile ${loveHex.substring(0,12)}… (kind 30078 d=love-profile)`);
+    try {
+        const relay = NostrTools.relayInit(nostrRelayUrl);
+        await relay.connect();
+        const sub = relay.sub([{ kinds: [30078], authors: [loveHex], '#d': ['love-profile'], limit: 1 }]);
+        return new Promise(function (resolve) {
+            let profile = null;
+            const timeout = setTimeout(function () { sub.unsub(); relay.close(); resolve(null); }, 6000);
+            sub.on('event', function (event) {
+                clearTimeout(timeout);
+                try { profile = JSON.parse(event.content); } catch (e) {}
+                sub.unsub(); relay.close(); resolve(profile);
+            });
+            sub.on('eose', function () {
+                if (!profile) { clearTimeout(timeout); sub.unsub(); relay.close(); resolve(null); }
+            });
+            relay.on('error', function () { clearTimeout(timeout); try { relay.close(); } catch (e) {} resolve(null); });
+        });
+    } catch (err) { npvLog.warn('fetchLoveProfile exception:', err); return null; }
+}
+
 function didContractStatusLabel(status) {
     if (!status) return '—';
     const labels = {
@@ -1393,6 +1430,27 @@ async function displayNostrData() {
             </div>`;
         } else {
             profileHTML += `<div class="did-section no-did">No UPlanet DID (kind 30800) found.</div>`;
+        }
+
+        // Profil LOVE (ATOM4LOVE) — clé dédiée liée au DID, distincte du MULTIPASS
+        // affiché ci-dessus. N'affiche la photo que si le profil est public
+        // (opt-in matching) ou si c'est son propre profil.
+        const loveHex = extractLoveHexFromDid(didDoc);
+        if (loveHex) {
+            const loveProfile = await fetchLoveProfile(loveHex, relayUrl);
+            if (loveProfile && loveProfile.photo && (loveProfile.public || isOwnProfile)) {
+                const lovePic = String(loveProfile.photo).replace(/"/g, '&quot;');
+                profileHTML += `<div class="profile-group" id="npv-love-group">
+                    <h4>💕 Profil LOVE (ATOM4LOVE)</h4>
+                    <div style="display:flex;align-items:center;gap:12px">
+                        <img src="${lovePic}" alt="LOVE" style="width:56px;height:56px;border-radius:50%;
+                            object-fit:cover;border:2px solid rgba(255,95,162,0.4)"
+                            onclick="openImageModal('${lovePic}')" title="Click to enlarge">
+                        <span style="font-size:.85em;opacity:.75">Photo distincte du profil MULTIPASS ci-dessus —
+                            gérée sur atomic_dream.html.</span>
+                    </div>
+                </div>`;
+            }
         }
 
         profileContentDiv.innerHTML = profileHTML;

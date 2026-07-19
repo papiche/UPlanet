@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Made In Zion — Forge ton MULTIPASS</title>
     <link rel="stylesheet" href="bootstrap.min.css">
+    <link rel="stylesheet" href="leaflet.css">
     <style>
         :root {
             --em:  #00C968; --em-dk: #027A48;
@@ -131,6 +132,24 @@
         .hidden{display:none!important}
         .cursor::after{content:'█';animation:blink 1s step-end infinite}
         @keyframes blink{50%{opacity:0}}
+        /* Modal carte — choix du lieu (naissance / conception) */
+        #miz-map-overlay{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:2000;
+                          display:flex;align-items:center;justify-content:center;padding:1rem}
+        #miz-map-modal{background:var(--mz-bg,#021a11);border:1px solid rgba(255,255,255,.15);
+                        border-radius:14px;padding:1rem;width:100%;max-width:34rem;
+                        box-shadow:0 10px 40px rgba(0,0,0,.6)}
+        #miz-map-box{height:260px;border-radius:10px;overflow:hidden;margin-top:.5rem}
+        #miz-map-modal .leaflet-control-attribution{display:none}
+        #miz-map-modal .leaflet-control-zoom a{background:rgba(10,12,22,.9);color:#ccc;border-color:rgba(255,255,255,.15)}
+        #miz-map-modal .leaflet-control-zoom a:hover{background:rgba(255,255,255,.15)}
+        /* Bouton ouverture carte (remplace l'ancien 🎲 Aléatoire) */
+        .map-btn{display:block;width:100%;margin:.2rem 0 .6rem;padding:7px 10px;border-radius:8px;
+                 background:rgba(0,201,104,.08);border:1px solid rgba(0,201,104,.3);
+                 color:rgba(0,201,104,.85);font-size:.75rem;cursor:pointer;text-align:center;
+                 transition:background .2s}
+        .map-btn:hover{background:rgba(0,201,104,.18)}
+        .map-btn.mv{background:rgba(155,48,255,.08);border-color:rgba(155,48,255,.35);color:rgba(200,160,255,.9)}
+        .map-btn.mv:hover{background:rgba(155,48,255,.18)}
         footer{text-align:center;padding:2.5rem 1rem;color:var(--em-dk);font-size:.88rem}
         footer a{color:var(--gold-dim);text-decoration:none}
         footer a:hover{text-decoration:underline}
@@ -1750,7 +1769,24 @@ kp = <span class="kw">nacl.sign</span><br>
         <h2 class="s-title" style="color:var(--mv)">Forge ATOM4LOVE — pas à pas</h2>
         <p class="s-sub">Chaque champ alimente la formule de ta clé. Explore, modifie, observe.</p>
 
-        <div class="row justify-content-center">
+        <!-- ── Verrou UPH — masque le wizard tant que le MULTIPASS n'est pas connecté ── -->
+        <div id="wiz-gate" class="row justify-content-center">
+            <div class="col-lg-9 col-xl-8">
+                <div class="wiz-wrap" style="text-align:center;padding:2.5rem 1.5rem">
+                    <div style="font-size:2.2rem;margin-bottom:.8rem">🔒</div>
+                    <div style="color:var(--mv);font-weight:700;font-size:1rem;margin-bottom:.6rem">
+                        Connexion MULTIPASS requise
+                    </div>
+                    <p style="font-size:.82rem;color:rgba(255,255,255,.55);max-width:32rem;margin:0 auto 1.2rem">
+                        La clé <strong style="color:var(--em)">LOVE</strong> forgée ici est liée à ton MULTIPASS existant.
+                        Connecte-toi (bandeau en haut, extension NOSTR) pour la créer ou la mettre à jour.
+                    </p>
+                    <button class="wz-next" onclick="_mizConnect()">🔓 Se connecter avec mon MULTIPASS</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="row justify-content-center hidden" id="wiz-content">
             <div class="col-lg-9 col-xl-8">
                 <div class="wiz-wrap">
                     <div class="wiz-hd">[ uNation_Forge v2.0 ] ~ pipeline cryptographique interactif</div>
@@ -1782,14 +1818,42 @@ kp = <span class="kw">nacl.sign</span><br>
                             </p>
                             <div class="d-flex gap-2 align-items-center mb-1">
                                 <label class="wz-label mb-0">Adresse email</label>
-                                <button class="rnd-btn" onclick="_randomEmail()" style="margin-left:auto">🎲</button>
+                                <button class="rnd-btn" id="btn-email-action" onclick="_mizEmailBtnClick()"
+                                        style="margin-left:auto" title="Générer un email aléatoire">🎲</button>
                             </div>
                             <input type="email" id="inp-email" class="form-control wz-input mb-1"
                                    placeholder="votre@email.com" autocomplete="email"
                                    oninput="_isDemoEmail=false;_updateUdrive()">
+                            <div id="email-locked-note" style="display:none;font-size:.7rem;color:rgba(0,201,104,.6);margin-bottom:.3rem">
+                                🔒 Email de ton MULTIPASS connecté — verrouillé pour la mise à jour réelle de ta clé LOVE.
+                            </div>
+                            <div class="d-flex gap-2 align-items-center mb-1" style="display:none" id="love-check-row">
+                                <div id="love-check-status" style="font-size:.72rem;flex:1"></div>
+                                <button id="btn-copy-love-hex" onclick="_mizCopyLoveHex()" class="hidden"
+                                        style="background:rgba(255,255,255,.1);color:#ccc;border:1px solid #555;
+                                               border-radius:6px;padding:3px 8px;font-size:.68rem;cursor:pointer;white-space:nowrap"
+                                        title="Copier le HEX complet">📋 HEX</button>
+                            </div>
                             <div id="email-err" style="color:#ff6b6b;font-size:.72rem;display:none">
                                 ⚠ Email invalide
                             </div>
+
+                            <!-- ── PASS du MULTIPASS connecté — révélé via NIP-42, jamais par email ── -->
+                            <div id="pass-reveal-box" style="display:none;margin-top:.5rem;
+                                 background:rgba(0,0,0,.4);border:1px solid rgba(155,48,255,.3);
+                                 border-radius:8px;padding:8px">
+                                <div style="font-size:.68rem;color:#aaa;margin-bottom:6px">🔑 Code PASS de mon MULTIPASS</div>
+                                <div style="display:flex;gap:5px">
+                                    <input type="password" id="pass-reveal-input" readonly placeholder="•••••"
+                                           style="flex:1;background:transparent;border:1px solid #555;color:#fff;
+                                                  border-radius:6px;padding:5px 8px;font-size:.75rem;font-family:monospace">
+                                    <button id="pass-reveal-btn" onclick="_mizRevealPass()" title="Dévoiler mon PASS"
+                                            style="background:rgba(255,255,255,.1);color:#ccc;border:1px solid #555;
+                                                   border-radius:6px;padding:5px 8px;font-size:.8rem;cursor:pointer">👁</button>
+                                </div>
+                                <div id="pass-reveal-status" style="font-size:.68rem;margin-top:4px"></div>
+                            </div>
+
                             <div id="udrive-box" style="display:none;margin-top:.6rem;
                                  background:rgba(0,0,0,.38);border:1px solid rgba(0,201,104,.18);
                                  border-radius:8px;padding:.5rem .8rem;font-size:.72rem;
@@ -1811,7 +1875,6 @@ kp = <span class="kw">nacl.sign</span><br>
                                             text-transform:uppercase;letter-spacing:1px">
                                     ⚓ Ancrage de Naissance
                                 </div>
-                                <button class="rnd-btn" onclick="_randomizeBirth()">🎲 Aléatoire</button>
                             </div>
                             <p class="mb-3" style="font-size:.75rem;color:rgba(255,255,255,.42)">
                                 Ces données forment le <strong style="color:rgba(255,215,0,.6)">sel brut (saltRaw)</strong>
@@ -1830,6 +1893,7 @@ kp = <span class="kw">nacl.sign</span><br>
                                            oninput="_updateSaltFormula()">
                                 </div>
                             </div>
+                            <button class="map-btn" type="button" onclick="_mizOpenMap('birth')">📍 Choisir le lieu sur la carte</button>
                             <div class="row g-2 mb-2">
                                 <div class="col-6">
                                     <label class="wz-label">🌐 Latitude</label>
@@ -1920,7 +1984,6 @@ kp = <span class="kw">nacl.sign</span><br>
                                             text-transform:uppercase;letter-spacing:1px">
                                     🌀 Singularité — Conception
                                 </div>
-                                <button class="rnd-btn" onclick="_randomizeConception()">🎲 Aléatoire</button>
                             </div>
                             <p class="mb-3" style="font-size:.75rem;color:rgba(255,255,255,.42)">
                                 Ces données forment le <strong style="color:rgba(155,48,255,.7)">poivre brut (pepperRaw)</strong>
@@ -1940,6 +2003,7 @@ kp = <span class="kw">nacl.sign</span><br>
                                            oninput="_updatePepperFormula()">
                                 </div>
                             </div>
+                            <button class="map-btn mv" type="button" onclick="_mizOpenMap('conception')">📍 Choisir le lieu sur la carte</button>
                             <div class="row g-2 mb-2">
                                 <div class="col-6">
                                     <label class="wz-label">🌐 Lat. conception</label>
@@ -1952,6 +2016,8 @@ kp = <span class="kw">nacl.sign</span><br>
                                            step="0.01" min="-180" max="180" oninput="_updatePepperFormula()">
                                 </div>
                             </div>
+                            <div id="con-city-label" class="mb-2"
+                                 style="font-size:.7rem;color:rgba(200,160,255,.6);min-height:.9rem"></div>
                             <div style="font-size:.7rem;color:rgba(155,48,255,.5);margin-bottom:.8rem">
                                 ⚠ Cette date est ta clé nsec2 — note-la précieusement.
                             </div>
@@ -1976,18 +2042,19 @@ kp = <span class="kw">nacl.sign</span><br>
                     <div class="wz-pane wz-hidden" id="wp4">
                         <div id="term-out" class="mb-2">Pipeline prêt.</div>
 
-                        <!-- ── Coffre nsec : révéler/copier + extension NIP-07 ────────── -->
+                        <!-- ── Coffre nsec : lecture seule, aucune copie/export ────────── -->
                         <div id="vault-box" class="hidden" style="background:rgba(155,48,255,.08);
                              border:1px solid rgba(155,48,255,.3);border-radius:10px;padding:13px;margin-bottom:10px">
                             <div style="color:#c78bff;font-size:.82rem;font-weight:700;margin-bottom:8px">
-                                🔒 Sécurise ta clé nsec
+                                🔒 Clé nsec LOVE — usage interne uniquement
                             </div>
                             <p style="font-size:.72rem;color:#ddd;margin-bottom:10px;line-height:1.5">
-                                Cette clé permet de prouver que tu es toi.
-                                <span style="color:#ff5566">Elle te permet d'accéder au réseau de rencontres harmoniques ATOM4LOVE.</span>
+                                Cette clé est utilisée par <strong style="color:rgba(0,201,104,.8)">l'IA du canal chat LOVE</strong>
+                                pour te répondre. <span style="color:#ff5566">Elle ne doit jamais être exportée ni collée dans une extension —
+                                le serveur la gère seul lors de l'activation.</span>
                             </p>
                             <div style="background:rgba(0,0,0,.4);padding:10px;border-radius:8px;margin-bottom:8px">
-                                <div style="font-size:.68rem;color:#aaa;margin-bottom:6px">Étape 1 — Copie ta clé nsec</div>
+                                <div style="font-size:.68rem;color:#aaa;margin-bottom:6px">Vérification (lecture seule)</div>
                                 <div style="display:flex;gap:5px">
                                     <input type="password" id="vault-nsec-input" readonly
                                            style="flex:1;background:transparent;border:1px solid #555;color:#fff;
@@ -1995,9 +2062,6 @@ kp = <span class="kw">nacl.sign</span><br>
                                     <button id="vault-reveal-btn" onclick="_mizRevealNsec()" title="Afficher/masquer"
                                             style="background:rgba(255,255,255,.1);color:#ccc;border:1px solid #555;
                                                    border-radius:6px;padding:5px 8px;font-size:.8rem;cursor:pointer">👁</button>
-                                    <button id="vault-copy-btn" onclick="_mizCopyNsec()"
-                                            style="background:#b464ff;color:#fff;border:none;border-radius:6px;
-                                                   padding:5px 10px;font-size:.72rem;cursor:pointer;white-space:nowrap">📋 Copier</button>
                                 </div>
                             </div>
                         </div>
@@ -2005,15 +2069,16 @@ kp = <span class="kw">nacl.sign</span><br>
                         <!-- ── Simulation pédagogique uniquement — inscription réelle sur g1.html ── -->
                         <div id="register-result" class="mb-2"></div>
 
+                        <!-- ── Mise à jour réelle de la clé LOVE du MULTIPASS connecté (UPH) ── -->
+                        <button id="btn-love-update" class="btn-cta mv hidden" onclick="_mizActivateLove()">
+                            💞 Mettre à jour ma clé LOVE →
+                        </button>
+                        <div id="love-update-status" class="mb-2" style="font-size:.75rem"></div>
+
                         <a href="g1.html" id="btn-a4l"
                            class="btn-cta mv hidden">
                             🧬 Créez votre MULTIPASS →
                         </a>
-
-                            <div style="background:rgba(0,0,0,.4);padding:10px;border-radius:8px" id="vault-wallet-step">
-                                <div style="font-size:.68rem;color:#aaa;margin-bottom:6px">Étape 2 — Colle-la dans ton extension NOSTR</div>
-                                <!-- rempli par _mizRenderWallet() selon le navigateur détecté -->
-                            </div>
 
                         <a href="https://z.astroport.one" id="btn-zk"
                            class="btn-cta mv hidden mt-2" target="_blank">
@@ -2027,15 +2092,332 @@ kp = <span class="kw">nacl.sign</span><br>
             </div>
         </div>
     </div>
+
+    <!-- ── Modal carte — choix du lieu (naissance / conception), partagée par les 2 étapes ── -->
+    <div id="miz-map-overlay" class="hidden">
+        <div id="miz-map-modal">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <div id="miz-map-title" style="font-size:.85rem;font-weight:700;color:var(--gold)">📍 Choisir le lieu</div>
+                <button type="button" onclick="_mizCloseMap()"
+                        style="background:none;border:none;color:#aaa;font-size:1.1rem;cursor:pointer;line-height:1">✕</button>
+            </div>
+            <div class="input-group input-group-sm mb-1">
+                <input type="text" id="miz-map-city-search" class="form-control wz-input"
+                       placeholder="Rechercher une ville…"
+                       onkeydown="if(event.key==='Enter'){event.preventDefault();_mizSearchMapCity()}">
+                <button class="btn" type="button" onclick="_mizSearchMapCity()"
+                        style="background:rgba(255,255,255,.1);border:1px solid #555;color:#ccc">🔍</button>
+            </div>
+            <div id="miz-map-search-result" style="font-size:.68rem;color:rgba(255,255,255,.45);min-height:1rem;margin-bottom:.3rem"></div>
+            <div id="miz-map-box"></div>
+            <div class="d-flex justify-content-between align-items-center mt-2">
+                <span id="miz-map-coords" style="font-size:.72rem;color:rgba(255,255,255,.5);font-family:monospace">— clique sur la carte —</span>
+            </div>
+            <button class="wz-next mt-2 w-100" type="button" onclick="_mizValidateMap()">✅ Valider ce lieu</button>
+        </div>
+    </div>
 </section>
 
 
 <script src="bootstrap.bundle.min.js"></script>
+<script src="leaflet.js"></script>
 <script src="nacl-fast.min.js"></script>
 <script src="nostr.bundle.js"></script>
 <script src="common.js"></script>
 <script src="uplanet-header.js"></script>
 <script>
+// ── Verrou UPH — la Forge ATOM4LOVE n'est visible qu'aux MULTIPASS connectés ──
+function _mizIsConnected() {
+    return !!((window.NostrState && window.NostrState.isNostrConnected && window.NostrState.userPubkey)
+        || (window.isNostrConnected && window.userPubkey));
+}
+function _mizCheckConnection() {
+    var connected = _mizIsConnected();
+    var gate = document.getElementById('wiz-gate');
+    var content = document.getElementById('wiz-content');
+    if (gate) gate.classList.toggle('hidden', connected);
+    if (content) content.classList.toggle('hidden', !connected);
+
+    var emailInp = document.getElementById('inp-email');
+    var lockNote = document.getElementById('email-locked-note');
+    var actionBtn = document.getElementById('btn-email-action');
+    var passBox = document.getElementById('pass-reveal-box');
+    if (connected && window._uphEmail && emailInp) {
+        emailInp.value = window._uphEmail;
+        emailInp.readOnly = true;
+        _isDemoEmail = false;
+        _updateUdrive();
+        if (lockNote) lockNote.style.display = '';
+        if (actionBtn) { actionBtn.textContent = '🔍'; actionBtn.title = 'Recopier mon email et vérifier ma clé LOVE'; }
+        if (passBox) passBox.style.display = '';
+        // Email différent du dernier PASS révélé (reconnexion sous une autre identité) → réinitialiser
+        if (window._uphEmail !== _mizPassBoundEmail) {
+            _mizPassBoundEmail = window._uphEmail;
+            _mizRevealedPass = '';
+            var passInp = document.getElementById('pass-reveal-input');
+            var passBtn = document.getElementById('pass-reveal-btn');
+            var passStatus = document.getElementById('pass-reveal-status');
+            if (passInp) { passInp.value = ''; passInp.type = 'password'; }
+            if (passBtn) passBtn.textContent = '👁';
+            if (passStatus) passStatus.textContent = '';
+        }
+    } else {
+        if (emailInp) emailInp.readOnly = false;
+        if (lockNote) lockNote.style.display = 'none';
+        if (actionBtn) { actionBtn.textContent = '🎲'; actionBtn.title = 'Générer un email aléatoire'; }
+        if (passBox) passBox.style.display = 'none';
+    }
+}
+
+// ── Bouton unique #wp1 : 🎲 (déconnecté, email démo) / 🔍 (connecté, recopie + vérifie clé LOVE) ──
+function _mizEmailBtnClick() {
+    if (_mizIsConnected() && window._uphEmail) { _mizCheckExistingLove(); }
+    else { _randomEmail(); }
+}
+
+// ── Révélation du PASS du MULTIPASS connecté — POST /reveal_pass (NIP-42) ────
+// Même flux d'authentification que _mizActivateLove() : challenge scopé à la
+// clé principale du compte, signé par l'extension connectée (window.nostr).
+// Aucun pass_code n'est demandé en alternative — ce serait circulaire.
+var _mizPassBoundEmail = '';
+var _mizRevealedPass = '';
+
+async function _mizRevealPass() {
+    var btn = document.getElementById('pass-reveal-btn');
+    var inp = document.getElementById('pass-reveal-input');
+    var statusEl = document.getElementById('pass-reveal-status');
+    if (!inp) return;
+    var setStatus = function(msg, color) {
+        if (statusEl) { statusEl.textContent = msg; statusEl.style.color = color || 'rgba(255,255,255,.5)'; }
+    };
+
+    // Déjà révélé cette session : simple bascule affichage/masquage, sans nouvel appel serveur
+    if (_mizRevealedPass) {
+        var shown = inp.type === 'text';
+        inp.type = shown ? 'password' : 'text';
+        if (btn) btn.textContent = shown ? '👁' : '🙈';
+        return;
+    }
+
+    if (!_mizIsConnected() || !window.nostr) {
+        setStatus('⚠ Connecte-toi avec ton MULTIPASS d\'abord.', '#ff8888');
+        return;
+    }
+    var email = window._uphEmail || (document.getElementById('inp-email').value || '').trim();
+    if (!email) {
+        setStatus('⚠ Aucun email associé à ton MULTIPASS connecté.', '#ff8888');
+        return;
+    }
+
+    if (btn) { btn.textContent = '⏳'; btn.disabled = true; }
+    setStatus('Obtention du challenge d\'authentification…');
+
+    try {
+        var apiUrl = typeof window.getAPIUrl === 'function' ? window.getAPIUrl()
+            : (location.hostname === '127.0.0.1' || location.hostname === 'localhost')
+              ? 'http://127.0.0.1:54321' : '';
+
+        var chRes  = await fetch(apiUrl + '/atom4love/challenge?email=' + encodeURIComponent(email));
+        var chJson = await chRes.json().catch(function(){ return {}; });
+        if (!chRes.ok) {
+            throw new Error(chJson.detail || chJson.message || ('Challenge indisponible (' + chRes.status + ')'));
+        }
+
+        setStatus('Signature de la preuve d\'identité…');
+        var authEvent = await window.nostr.signEvent({
+            kind: 22242,
+            pubkey: window.userPubkey,
+            created_at: Math.floor(Date.now() / 1000),
+            tags: [['challenge', chJson.challenge]],
+            content: '',
+        });
+
+        setStatus('Récupération du PASS…');
+        var fd = new FormData();
+        fd.append('email', email);
+        fd.append('auth_event', JSON.stringify(authEvent));
+        var res  = await fetch(apiUrl + '/reveal_pass', { method: 'POST', body: fd });
+        var data = await res.json().catch(function(){ return {}; });
+        if (!res.ok || !data.pass) {
+            throw new Error(data.message || data.detail || ('HTTP ' + res.status));
+        }
+
+        _mizRevealedPass = data.pass;
+        inp.value = data.pass;
+        inp.type = 'text';
+        if (btn) { btn.textContent = '🙈'; btn.disabled = false; }
+        setStatus('✅ PASS révélé.', '#4ade80');
+    } catch (e) {
+        if (btn) { btn.textContent = '👁'; btn.disabled = false; }
+        setStatus('⚠ ' + (e.message || String(e)), '#ff6060');
+    }
+}
+
+var _mizLastLoveHex = '';
+
+function _mizCopyLoveHex() {
+    var btn = document.getElementById('btn-copy-love-hex');
+    if (!_mizLastLoveHex) return;
+    if (navigator.clipboard) navigator.clipboard.writeText(_mizLastLoveHex).catch(function() {});
+    else {
+        var ta = document.createElement('textarea');
+        ta.value = _mizLastLoveHex; ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta); ta.select();
+        try { document.execCommand('copy'); } catch (_) {}
+        document.body.removeChild(ta);
+    }
+    if (btn) { btn.textContent = '✅ Copié'; setTimeout(function() { btn.textContent = '📋 HEX'; }, 2200); }
+}
+
+async function _mizCheckExistingLove() {
+    var emailInp = document.getElementById('inp-email');
+    var rowEl = document.getElementById('love-check-row');
+    var statusEl = document.getElementById('love-check-status');
+    var copyBtn = document.getElementById('btn-copy-love-hex');
+    if (window._uphEmail && emailInp) {
+        emailInp.value = window._uphEmail;
+        _isDemoEmail = false;
+        _updateUdrive();
+    }
+    var email = (emailInp.value || '').trim();
+    if (!email || !statusEl || !rowEl) return;
+
+    _mizLastLoveHex = '';
+    if (copyBtn) copyBtn.classList.add('hidden');
+    rowEl.style.display = '';
+    statusEl.style.color = 'rgba(255,255,255,.5)';
+    statusEl.textContent = '🔍 Vérification de ta clé LOVE existante…';
+
+    try {
+        var apiUrl = typeof window.getAPIUrl === 'function' ? window.getAPIUrl()
+            : (location.hostname === '127.0.0.1' || location.hostname === 'localhost')
+              ? 'http://127.0.0.1:54321' : '';
+        var res = await fetch(apiUrl + '/atom4love/dream?email=' + encodeURIComponent(email));
+        if (res.status === 404) {
+            statusEl.style.color = '#ffaa44';
+            statusEl.textContent = '🆕 Aucune clé LOVE existante — la Forge ci-dessous va en créer une.';
+            return;
+        }
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        var data = await res.json();
+        var hex = data.love_hex || '';
+        _mizLastLoveHex = hex;
+        statusEl.style.color = '#4ade80';
+        statusEl.textContent = '💞 Clé LOVE déjà active (' + hex.slice(0,8) + '…' + hex.slice(-4) + ') — '
+            + 'la Forge ci-dessous la mettra à jour.';
+        if (hex && copyBtn) copyBtn.classList.remove('hidden');
+    } catch (e) {
+        statusEl.style.color = '#ff6060';
+        statusEl.textContent = '⚠ Vérification impossible : ' + (e.message || String(e));
+    }
+}
+async function _mizConnect() {
+    if (typeof window.connectNostr === 'function') { await window.connectNostr(true); }
+    else if (typeof window.uphOpenLogin === 'function') { window.uphOpenLogin(); }
+    _mizCheckConnection();
+}
+window.addEventListener('UPlanetReady', _mizCheckConnection);
+document.addEventListener('nostr:connected', _mizCheckConnection);
+if (typeof window.waitForConnection === 'function') window.waitForConnection(_mizCheckConnection);
+document.addEventListener('DOMContentLoaded', _mizCheckConnection);
+_mizCheckConnection();          // vérif immédiate (reconnexion silencieuse déjà résolue)
+// window._uphEmail (profil kind 0) se résout après coup — on repolle un moment
+var _mizEmailPollTries = 0;
+var _mizEmailPoll = setInterval(function() {
+    if (window._uphEmail || ++_mizEmailPollTries > 20) { clearInterval(_mizEmailPoll); return; }
+    _mizCheckConnection();
+}, 500);
+
+// ── Mise à jour réelle de la clé LOVE — POST /atom4love/activate (NIP-42) ────
+// Même flux que atomic.html::publishIncarnationCert() : challenge scopé à la
+// clé NOSTR principale, signé par l'extension connectée (window.nostr), aucune
+// clé privée transmise au serveur.
+async function _mizActivateLove() {
+    var btn = document.getElementById('btn-love-update');
+    var statusEl = document.getElementById('love-update-status');
+    var setStatus = function(msg, color) {
+        if (statusEl) { statusEl.textContent = msg; statusEl.style.color = color || 'rgba(255,255,255,.5)'; }
+    };
+
+    if (!_mizIsConnected() || !window.nostr) {
+        setStatus('⚠ Connecte-toi avec ton MULTIPASS avant de mettre à jour ta clé LOVE.', '#ff8888');
+        return;
+    }
+    var email = window._uphEmail || (document.getElementById('inp-email').value || '').trim();
+    if (!email) {
+        setStatus('⚠ Aucun email associé à ton MULTIPASS connecté.', '#ff8888');
+        return;
+    }
+    var bd = document.getElementById('birth-date').value;
+    if (!bd) { setStatus('⚠ Renseigne ta date de naissance (étape 2).', '#ff8888'); return; }
+
+    var bt  = document.getElementById('birth-time').value;
+    var lat = document.getElementById('birth-lat').value || '0';
+    var lon = document.getElementById('birth-lon').value || '0';
+    var weight = document.getElementById('birth-weight').value || '3.5';
+    var polarity = document.getElementById('birth-pol').value || '0';
+    var cd = document.getElementById('con-date').value;
+    var ct = document.getElementById('con-time').value;
+    var clat = document.getElementById('con-lat').value;
+    var clon = document.getElementById('con-lon').value;
+    var birthPlace = document.getElementById('birth-city-label').textContent.replace(/^📍\s*/, '');
+
+    if (btn) { btn.textContent = '⏳ Challenge…'; btn.disabled = true; }
+    setStatus('Obtention du challenge d\'authentification…');
+
+    try {
+        var apiUrl = typeof window.getAPIUrl === 'function' ? window.getAPIUrl()
+            : (location.hostname === '127.0.0.1' || location.hostname === 'localhost')
+              ? 'http://127.0.0.1:54321' : '';
+
+        // ── Étape 1 : challenge NIP-42 scopé à la clé principale du compte ────
+        var chRes  = await fetch(apiUrl + '/atom4love/challenge?email=' + encodeURIComponent(email));
+        var chJson = await chRes.json().catch(function(){ return {}; });
+        if (!chRes.ok) {
+            throw new Error(chJson.detail || chJson.message || ('Challenge indisponible (' + chRes.status + ')'));
+        }
+
+        // ── Étape 2 : signer un event kind 22242 avec la clé UPH connectée ────
+        if (btn) btn.textContent = '✍ Signature…';
+        setStatus('Signature de la preuve d\'identité…');
+        var authEvent = await window.nostr.signEvent({
+            kind: 22242,
+            pubkey: window.userPubkey,
+            created_at: Math.floor(Date.now() / 1000),
+            tags: [['challenge', chJson.challenge]],
+            content: '',
+        });
+
+        // ── Étape 3 : activation — le serveur (re)calcule Phi²/KIN et republie ─
+        if (btn) btn.textContent = '📡 Activation…';
+        setStatus('Mise à jour de la clé LOVE…');
+        var fd = new FormData();
+        fd.append('email',          email);
+        fd.append('birth_datetime', bd + (bt ? 'T' + bt : 'T12:00'));
+        fd.append('birth_lat',      String(lat));
+        fd.append('birth_lon',      String(lon));
+        fd.append('birth_weight',   String(weight));
+        fd.append('polarity',       String(polarity));
+        fd.append('auth_event',     JSON.stringify(authEvent));
+        if (cd)         fd.append('conception_datetime', cd + (ct ? 'T' + ct : 'T00:00'));
+        if (birthPlace) fd.append('birth_place', birthPlace);
+
+        var actRes  = await fetch(apiUrl + '/atom4love/activate', { method: 'POST', body: fd });
+        var actJson = await actRes.json().catch(function(){ return {}; });
+        if (!actRes.ok || !actJson.activated) {
+            throw new Error(actJson.message || actJson.detail || ('HTTP ' + actRes.status));
+        }
+
+        var phaseStr = actJson.personal_phase != null ? actJson.personal_phase.toFixed(4) : '?';
+        setStatus('✅ Clé LOVE mise à jour — φ=' + phaseStr + '  Kin=' + (actJson.kin_num || '?'), '#4ade80');
+        if (btn) { btn.textContent = '✅ Republier'; btn.disabled = false; }
+    } catch (e) {
+        console.error('[miz] ATOM4LOVE activation KO:', e);
+        setStatus('⚠ ' + (e.message || String(e)), '#ff6060');
+        if (btn) { btn.textContent = '💞 Réessayer'; btn.disabled = false; }
+    }
+}
+
 // ── Email aléatoire @astroport.one ───────────────────────────────────────────
 var _EMAIL_WORDS = [
     'soleil','etoile','aurore','riviere','foret','colline','nuage','vague','lune',
@@ -2081,24 +2463,6 @@ function _updateUdrive() {
     box.style.display = '';
     url.textContent   = '/ipns/' + ipns;
 }
-
-// ── Villes aléatoires pour les demos ──────────────────────────────────────────
-var CITIES = [
-    {name:'Paris, France',        lat:48.85, lon:2.35},
-    {name:'Lyon, France',         lat:45.75, lon:4.83},
-    {name:'Bordeaux, France',     lat:44.84, lon:-0.58},
-    {name:'Marseille, France',    lat:43.30, lon:5.37},
-    {name:'Montréal, Canada',     lat:45.51, lon:-73.55},
-    {name:'Dakar, Sénégal',       lat:14.72, lon:-17.47},
-    {name:'Bruxelles, Belgique',  lat:50.85, lon:4.35},
-    {name:'Alger, Algérie',       lat:36.74, lon:3.06},
-    {name:'Abidjan, Côte d\'Ivoire',lat:5.35,lon:-4.0},
-    {name:'Genève, Suisse',       lat:46.20, lon:6.15},
-    {name:'Tunis, Tunisie',       lat:36.82, lon:10.18},
-    {name:'Fort-de-France, Martinique',lat:14.60,lon:-61.08},
-    {name:'Lomé, Togo',           lat:6.14,  lon:1.22},
-    {name:'Kinshasa, Congo',      lat:-4.33, lon:15.32},
-];
 
 // ── Base58 (identique à Ẑelkova CesiumWallet.dart Base58Encode) ───────────────
 function _b58Enc(bytes) {
@@ -2256,6 +2620,8 @@ function _wz1(restart) {
         document.getElementById('btn-retry').classList.add('hidden');
         document.getElementById('vault-box').classList.add('hidden');
         document.getElementById('register-result').innerHTML = '';
+        document.getElementById('btn-love-update').classList.add('hidden');
+        document.getElementById('love-update-status').innerHTML = '';
     }
     _showPane(1);
 }
@@ -2268,8 +2634,6 @@ function _wz2() {
     }
     err.style.display = 'none';
     _showPane(2);
-    // Auto-remplir si vide
-    if (!document.getElementById('birth-date').value) _randomizeBirth();
 }
 
 function _wz3() {
@@ -2284,40 +2648,15 @@ async function _wz4() {
     await _runPipeline();
 }
 
-// ── Randomisation naissance ───────────────────────────────────────────────────
-function _pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+// ── Auto-calcul de la date de conception depuis la naissance ────────────────
 function _rndInt(a, b) { return a + Math.floor(Math.random() * (b - a + 1)); }
-
-function _randomizeBirth() {
-    var city = _pick(CITIES);
-    var year = _rndInt(1955, 1998);
-    var month = String(_rndInt(1,12)).padStart(2,'0');
-    var day   = String(_rndInt(1,28)).padStart(2,'0');
-    var hh    = String(_rndInt(0,23)).padStart(2,'0');
-    var mm    = String(_rndInt(0,59)).padStart(2,'0');
-    var w  = (3.0 + Math.random() * 1.5).toFixed(1);
-    var bh = _rndInt(46, 56);
-    var ch = _rndInt(155, 192);
-    var pol = Math.random() > 0.5 ? '1' : '0';
-
-    document.getElementById('birth-date').value    = year+'-'+month+'-'+day;
-    document.getElementById('birth-time').value    = hh+':'+mm;
-    document.getElementById('birth-lat').value     = city.lat.toFixed(2);
-    document.getElementById('birth-lon').value     = city.lon.toFixed(2);
-    document.getElementById('birth-city-label').textContent = '📍 ' + city.name;
-    document.getElementById('birth-weight').value  = w;
-    document.getElementById('birth-height').value  = bh;
-    document.getElementById('cur-height').value    = ch;
-    document.getElementById('birth-pol').value     = pol;
-    _updateSaltFormula();
-}
 
 function _autoConception() {
     var bd = document.getElementById('birth-date').value;
     var blat = document.getElementById('birth-lat').value;
     var blon = document.getElementById('birth-lon').value;
     if (!bd) return;
-    // Conception ≈ naissance − 270 jours ±15 jours de variation
+    // Conception ≈ naissance − 270 jours ±10 jours de variation
     var bUnix = new Date(bd).getTime();
     var delta = (270 + _rndInt(-10, 10)) * 86400 * 1000;
     var cDate = new Date(bUnix - delta);
@@ -2326,26 +2665,124 @@ function _autoConception() {
     var cd = String(cDate.getDate()).padStart(2,'0');
     document.getElementById('con-date').value = cy+'-'+cm+'-'+cd;
     document.getElementById('con-time').value = String(_rndInt(0,23)).padStart(2,'0')+':'+String(_rndInt(0,59)).padStart(2,'0');
-    // Lieu conception = lieu naissance par défaut
+    // Lieu conception = lieu naissance par défaut (modifiable via 📍 Choisir sur la carte)
     document.getElementById('con-lat').value = blat || '';
     document.getElementById('con-lon').value = blon || '';
+    var birthLabel = document.getElementById('birth-city-label').textContent;
+    var conLabel = document.getElementById('con-city-label');
+    if (conLabel && birthLabel) conLabel.textContent = birthLabel;
     _updatePepperFormula();
 }
 
-function _randomizeConception() {
-    var city = _pick(CITIES);
-    var bd = document.getElementById('birth-date').value;
-    var bUnix = bd ? new Date(bd).getTime() : new Date('1985-06-01').getTime();
-    var delta = (260 + _rndInt(0, 30)) * 86400 * 1000;
-    var cDate = new Date(bUnix - delta);
-    var cy = cDate.getFullYear();
-    var cm = String(cDate.getMonth()+1).padStart(2,'0');
-    var cd = String(cDate.getDate()).padStart(2,'0');
-    document.getElementById('con-date').value = cy+'-'+cm+'-'+cd;
-    document.getElementById('con-time').value = String(_rndInt(0,23)).padStart(2,'0')+':'+String(_rndInt(0,59)).padStart(2,'0');
-    document.getElementById('con-lat').value = city.lat.toFixed(2);
-    document.getElementById('con-lon').value = city.lon.toFixed(2);
-    _updatePepperFormula();
+// ── Modal carte — choix du lieu (naissance / conception), partagée par les 2 étapes ──
+// [même principe que atomic.html initBirthMap()/initConceptionMap() : Leaflet local
+// (leaflet.js/leaflet.css vendorés), tuiles OSM + recherche Nominatim]
+var _mizMap = null, _mizMapMarker = null, _mizMapTarget = null, _mizMapPicked = null;
+
+function _mizOpenMap(target) {
+    _mizMapTarget = target; // 'birth' | 'conception'
+    var title = document.getElementById('miz-map-title');
+    if (title) title.textContent = target === 'birth' ? '📍 Choisir le lieu de naissance' : '📍 Choisir le lieu de conception';
+    var overlay = document.getElementById('miz-map-overlay');
+    if (overlay) overlay.classList.remove('hidden');
+
+    if (!_mizMap) {
+        _mizMap = L.map('miz-map-box', { center: [20, 0], zoom: 2, zoomControl: true, attributionControl: false });
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18 }).addTo(_mizMap);
+        _mizMap.on('click', function(e) {
+            _mizSetMapPoint(parseFloat(e.latlng.lat.toFixed(2)), parseFloat(e.latlng.lng.toFixed(2)), '');
+        });
+    }
+
+    var latId = target === 'birth' ? 'birth-lat' : 'con-lat';
+    var lonId = target === 'birth' ? 'birth-lon' : 'con-lon';
+    var lat = parseFloat(document.getElementById(latId).value);
+    var lon = parseFloat(document.getElementById(lonId).value);
+    if (!lat && !lon && target === 'conception') {
+        lat = parseFloat(document.getElementById('birth-lat').value);
+        lon = parseFloat(document.getElementById('birth-lon').value);
+    }
+    if (_mizMapMarker) { _mizMap.removeLayer(_mizMapMarker); _mizMapMarker = null; }
+    if (!isNaN(lat) && !isNaN(lon) && (lat || lon)) {
+        _mizSetMapPoint(lat, lon, '');
+    } else {
+        _mizMapPicked = null;
+        document.getElementById('miz-map-coords').textContent = '— clique sur la carte —';
+    }
+    document.getElementById('miz-map-city-search').value = '';
+    document.getElementById('miz-map-search-result').textContent = '';
+
+    // Le conteneur était display:none → Leaflet a besoin d'un recalcul de taille
+    setTimeout(function() {
+        _mizMap.invalidateSize();
+        if (!isNaN(lat) && !isNaN(lon) && (lat || lon)) _mizMap.setView([lat, lon], 6);
+    }, 80);
+}
+
+function _mizCloseMap() {
+    var overlay = document.getElementById('miz-map-overlay');
+    if (overlay) overlay.classList.add('hidden');
+}
+
+function _mizSetMapPoint(lat, lon, label) {
+    _mizMapPicked = { lat: lat, lon: lon, label: label || '' };
+    if (!_mizMap._mizIcon) {
+        _mizMap._mizIcon = L.divIcon({
+            className: '',
+            html: '<div style="width:12px;height:12px;border-radius:50%;background:#00ffcc;'
+                + 'box-shadow:0 0 8px #00ffcc;border:2px solid rgba(255,255,255,.6)"></div>',
+            iconSize: [12, 12], iconAnchor: [6, 6]
+        });
+    }
+    if (_mizMapMarker) _mizMapMarker.setLatLng([lat, lon]);
+    else _mizMapMarker = L.marker([lat, lon], { icon: _mizMap._mizIcon }).addTo(_mizMap);
+    document.getElementById('miz-map-coords').textContent =
+        lat.toFixed(2) + ', ' + lon.toFixed(2) + (label ? ' — ' + label : '');
+}
+
+async function _mizSearchMapCity() {
+    var input  = document.getElementById('miz-map-city-search');
+    var result = document.getElementById('miz-map-search-result');
+    var q = input ? input.value.trim() : '';
+    if (!q) return;
+    if (result) result.textContent = '🔍 Recherche…';
+    try {
+        var url = 'https://nominatim.openstreetmap.org/search?q='
+            + encodeURIComponent(q) + '&format=json&limit=1&accept-language=fr';
+        var data = await fetch(url, { headers: { 'Accept': 'application/json' } }).then(function(r){ return r.json(); });
+        if (data && data.length > 0) {
+            var place = data[0];
+            var lon = parseFloat(parseFloat(place.lon).toFixed(2));
+            var lat = parseFloat(parseFloat(place.lat).toFixed(2));
+            var label = place.display_name.split(',').slice(0, 3).join(', ');
+            if (result) result.textContent = '📍 ' + label;
+            _mizMap.setView([lat, lon], 7);
+            _mizSetMapPoint(lat, lon, label);
+        } else if (result) {
+            result.textContent = '⚠️ Ville non trouvée';
+        }
+    } catch (e) {
+        if (result) result.textContent = '⚠️ Erreur réseau';
+    }
+}
+
+function _mizValidateMap() {
+    if (!_mizMapPicked) return;
+    var latId, lonId, labelId;
+    if (_mizMapTarget === 'birth') { latId = 'birth-lat'; lonId = 'birth-lon'; labelId = 'birth-city-label'; }
+    else { latId = 'con-lat'; lonId = 'con-lon'; labelId = 'con-city-label'; }
+
+    document.getElementById(latId).value = _mizMapPicked.lat.toFixed(2);
+    document.getElementById(lonId).value = _mizMapPicked.lon.toFixed(2);
+    var labelEl = document.getElementById(labelId);
+    if (labelEl) {
+        labelEl.textContent = '📍 ' + (_mizMapPicked.label || (_mizMapPicked.lat.toFixed(2) + ', ' + _mizMapPicked.lon.toFixed(2)));
+    }
+
+    if (_mizMapTarget === 'birth') _updateSaltFormula();
+    else _updatePepperFormula();
+
+    _mizCloseMap();
 }
 
 // ── Formules live ─────────────────────────────────────────────────────────────
@@ -2383,30 +2820,8 @@ function _updatePepperFormula() {
     document.getElementById('pepper-formula').textContent = p || '— remplir les champs —';
 }
 
-// ── Détection extension NOSTR selon navigateur [atomic.html _getRecommendedWallet()] ──
-function _getRecommendedWallet() {
-    var ua = navigator.userAgent;
-    if (/Android/i.test(ua)) {
-        return { name: 'Amber', url: 'https://github.com/greenart7c3/Amber/releases', icon: '🟠' };
-    }
-    if (/Firefox/i.test(ua)) {
-        return { name: 'nos2x-fox', url: 'https://addons.mozilla.org/fr/firefox/addon/nos2x-fox/', icon: '🦊' };
-    }
-    return { name: 'nos2x', url: 'https://chromewebstore.google.com/detail/nos2x/kpgefcfmnafjgpblomihpgmejjdanjjp', icon: '🧩' };
-}
-
-function _mizRenderWallet() {
-    var w = _getRecommendedWallet();
-    document.getElementById('vault-wallet-step').innerHTML =
-        '<a href="' + w.url + '" target="_blank" rel="noopener" '
-        + 'style="display:block;text-align:center;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.2);'
-        + 'color:#fff;text-decoration:none;padding:9px;border-radius:8px;font-size:.8rem">'
-        + w.icon + ' Installer ' + w.name + '</a>'
-        + '<div style="font-size:.62rem;color:#aaa;text-align:center;margin-top:6px">'
-        + 'Ouvre l\'extension, choisis <em>"Importer une clé"</em> et colle ton nsec.</div>';
-}
-
-// ── Coffre nsec : révéler / copier [atomic.html _atomicRevealNsec/_atomicCopyNsec] ──
+// ── Coffre nsec : révéler uniquement — jamais de copie/export (clé réservée à
+// l'IA du canal chat LOVE, gérée exclusivement côté serveur) ─────────────────
 function _mizRevealNsec() {
     var inp  = document.getElementById('vault-nsec-input');
     var rbtn = document.getElementById('vault-reveal-btn');
@@ -2414,17 +2829,6 @@ function _mizRevealNsec() {
     var revealed = inp.type === 'text';
     inp.type = revealed ? 'password' : 'text';
     if (rbtn) rbtn.textContent = revealed ? '👁' : '🙈';
-}
-function _mizCopyNsec() {
-    var inp = document.getElementById('vault-nsec-input');
-    if (!inp) return;
-    inp.type = 'text';
-    inp.select();
-    try { document.execCommand('copy'); } catch (_) {}
-    if (navigator.clipboard) navigator.clipboard.writeText(inp.value).catch(function() {});
-    setTimeout(function() { inp.type = 'password'; }, 300);
-    var cbtn = document.getElementById('vault-copy-btn');
-    if (cbtn) { cbtn.textContent = '✅ Copié'; setTimeout(function() { cbtn.textContent = '📋 Copier'; }, 2200); }
 }
 
 // ── Pipeline crypto principal ─────────────────────────────────────────────────
@@ -2557,29 +2961,38 @@ async function _runPipeline() {
     await tType('>  MULTIPASS complet (biométrie) → atomic.html', 10, 'hi');
     await tType('>  Wallet ẐEN → Ẑelkova ci-dessous', 10);
 
-    // ── Révéler le coffre nsec — l'inscription réelle se fait sur atomic.html ─
-    // (jamais ici : miz.html est purement pédagogique, ne crée aucun MULTIPASS)
+    // ── Révéler le coffre nsec — page accessible uniquement aux MULTIPASS ────
+    // connectés (voir wiz-gate) : la clé LOVE calculée ici peut être activée
+    // réellement via _mizActivateLove() → POST /atom4love/activate.
     if (nsec) {
         document.getElementById('vault-nsec-input').value = nsec;
-        _mizRenderWallet();
         document.getElementById('vault-box').classList.remove('hidden');
         var resultEl = document.getElementById('register-result');
+        var isRealAccount = !_isDemoEmail && email && window._uphEmail
+            && email.toLowerCase() === window._uphEmail.toLowerCase();
         if (resultEl) {
             resultEl.innerHTML = _isDemoEmail
                 ? '<div class="small p-2 rounded mt-2" style="'
                     + 'background:rgba(255,150,0,.07);border:1px solid rgba(255,150,0,.3);color:#ffaa44">'
                     + '🎲 Adresse de démonstration — pipeline pédagogique uniquement.<br>'
                     + '<span style="font-size:.7rem;color:rgba(255,255,255,.4);">'
-                    + 'Utilise ton vrai email et continue vers ATOM4LOVE pour un MULTIPASS réel.</span></div>'
-                : '<div class="small p-2 rounded mt-2" style="'
-                    + 'background:rgba(0,200,255,.07);border:1px solid rgba(0,200,255,.3);color:#66ccff">'
-                    + 'ℹ️ Cette simulation ne crée aucun MULTIPASS.<br>'
-                    + '<span style="font-size:.7rem;color:rgba(255,255,255,.4);">'
-                    + 'Clique sur « Continuer vers ATOM4LOVE » ci-dessous pour l\'inscription réelle.</span></div>';
+                    + 'Reviens à l\'étape 1 avec ton email connecté pour mettre à jour ta vraie clé LOVE.</span></div>'
+                : isRealAccount
+                    ? '<div class="small p-2 rounded mt-2" style="'
+                        + 'background:rgba(0,201,104,.07);border:1px solid rgba(0,201,104,.3);color:#4ade80">'
+                        + '💞 Clé LOVE calculée pour ton MULTIPASS connecté.<br>'
+                        + '<span style="font-size:.7rem;color:rgba(255,255,255,.4);">'
+                        + 'Clique sur « Mettre à jour ma clé LOVE » ci-dessous pour l\'activer réellement sur le réseau.</span></div>'
+                    : '<div class="small p-2 rounded mt-2" style="'
+                        + 'background:rgba(0,200,255,.07);border:1px solid rgba(0,200,255,.3);color:#66ccff">'
+                        + 'ℹ️ Cet email diffère de ton compte connecté — mise à jour réelle indisponible.</div>';
         }
+        if (isRealAccount) document.getElementById('btn-love-update').classList.remove('hidden');
     }
 
-    document.getElementById('btn-a4l').classList.remove('hidden');
+    // btn-a4l ("Créez votre MULTIPASS") reste masqué : cette page, désormais
+    // réservée aux MULTIPASS déjà connectés (voir wiz-gate), ne propose plus
+    // la création d'un nouveau compte — seulement la mise à jour de la clé LOVE.
     $zk.classList.remove('hidden');
     $retry.classList.remove('hidden');
 }

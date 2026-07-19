@@ -552,6 +552,36 @@ const Phi2X = (function() {
         return                   { key: 'bifurcated', label: 'Bifurcation Relativiste complétée. Séparation des mondes dans la gratitude.' };
     }
 
+    /**
+     * Effet Lense-Thirring (Frame-Dragging) — analogie du couplage Projection/Absorption.
+     *
+     * Un corps massif en rotation rapide "entraîne" l'espace-temps voisin (relativité
+     * générale). Ici, la "masse en rotation" est la capacité d'un Atome à PROJETER une
+     * réalité structurée (architecture, protocoles, cadres conceptuels) — son Mode de
+     * Manifestation ∈ [-1, 1] : -1 = Réception/Absorption pure (habiter organiquement),
+     * +1 = Projection Active pure (construire/théoriser). Seule la composante positive
+     * (projective) entraîne le référentiel de l'autre ; la composante négative
+     * (absorptive) de l'AUTRE lui donne au contraire une résistance à cet entraînement
+     * (elle ne "tire" jamais elle-même — elle absorbe ou résiste).
+     *
+     * saturation ∈ [0,1] : 0 = équilibre (l'un ne submerge pas l'autre),
+     * 1 = entraînement total — la réalité du récepteur est happée dans l'orbite du
+     * projecteur, quand bien même leurs Rêves (buts, dream_vector) seraient identiques.
+     *
+     * @param {number} modeProjector - Mode de Manifestation de l'Atome projecteur ∈[-1,1]
+     * @param {number} modeReceiver  - Mode de Manifestation de l'Atome récepteur ∈[-1,1]
+     * @param {number} vProjector    - Vitesse d'Alignement du projecteur (cf. computeAlignmentV)
+     * @returns {{ dragOmega:number, resistance:number, saturation:number }}
+     */
+    function computeFrameDragging(modeProjector, modeReceiver, vProjector) {
+        const spin       = Math.max(0, modeProjector);   // seule la composante projective entraîne
+        const gammaP      = computeLorentzGamma(vProjector);
+        const dragOmega   = spin * gammaP;                // "moment cinétique" × facteur relativiste
+        const resistance  = Math.max(0, -modeReceiver);   // capacité d'absorption à résister à l'entraînement
+        const saturation  = Math.max(0, Math.min(1, dragOmega - resistance));
+        return { dragOmega, resistance, saturation };
+    }
+
     // ── 3. Double Bang — superposition quantique Conception + Naissance ───────
     /**
      * Calcule la fonction d'onde Ψ de l'Explorateur par superposition des
@@ -681,7 +711,7 @@ const Phi2X = (function() {
         ALPHA_SHAPIRO,
         V_ALIGNMENT_MAX, V_ALIGNMENT_TAU_YEARS,
         computeAlignmentV, computeLorentzGamma, computeDreamDivergence,
-        computeRelativeVelocity, describeBifurcation,
+        computeRelativeVelocity, describeBifurcation, computeFrameDragging,
         ELEMENTS, ELEMENT_COLORS, ELEMENT_KEYS, ARCHETYPES,
         PENTAGONS_GPS,
         KIN_GLYPHS, KIN_GLYPHS_FR, KIN_TONES_FR, KIN_TONE_KEYS,

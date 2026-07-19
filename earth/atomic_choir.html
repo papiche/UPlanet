@@ -83,6 +83,21 @@ table.matrix td{padding:4px 6px;text-align:center;border-radius:4px;font-family:
 .loading-hint{text-align:center;font-size:.72rem;color:rgba(255,255,255,.25);padding:6px 0}
 /* Security note */
 .sec-note{font-size:.65rem;color:rgba(255,255,255,.2);text-align:center;padding:8px 0}
+/* Formulaire manuel d'ajout d'atome (fusionné depuis atomic_resonance.html) */
+.add-atom-form{margin-top:10px;padding:10px;border:1px solid rgba(255,255,255,.08);
+    border-radius:10px;background:rgba(255,255,255,.02);display:none}
+.add-atom-form.open{display:block}
+.add-atom-form .frow{display:flex;gap:8px;margin-bottom:8px}
+.add-atom-form .frow>*{flex:1;min-width:0}
+.add-atom-form label{display:block;font-size:.65rem;color:rgba(255,255,255,.4);
+    margin-bottom:3px;text-transform:uppercase;letter-spacing:.5px}
+.city-hint{font-size:.7rem;color:rgba(255,255,255,.35);min-height:1rem;margin:2px 0 4px}
+.profile-link{display:block;text-align:center;font-size:.72rem;margin-top:8px;color:rgba(255,255,255,.35)}
+/* Calendrier de résonance personnelle */
+.cal-col-title{font-size:.74rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin:12px 0 8px}
+.cal-cols{display:flex;gap:12px}
+.cal-cols>div{flex:1;min-width:0}
+@media(max-width:480px){.cal-cols{flex-direction:column}}
 @media(max-width:480px){
     .page-content{padding:56px 10px 76px}
     .choir-header{padding:20px 12px 14px}
@@ -115,7 +130,80 @@ table.matrix td{padding:4px 6px;text-align:center;border-radius:4px;font-family:
 <div class="section-card">
     <div class="section-title">⚛ Les Atomes · <span id="atom-count">0</span>/13</div>
     <div id="atoms-list"></div>
-    <a class="btn-add-open" href="atomic.html">➕ Ajouter un Atome</a>
+    <button type="button" class="btn-add-open" id="btn-toggle-add" onclick="toggleAddForm()">➕ Ajouter un Atome</button>
+    <div class="add-atom-form" id="add-atom-form">
+        <div class="frow">
+            <div>
+                <label>Nom</label>
+                <input type="text" class="form-control" id="af-name" placeholder="Prénom">
+            </div>
+        </div>
+        <div class="frow">
+            <div>
+                <label>📅 Date de naissance</label>
+                <input type="date" class="form-control" id="af-date">
+            </div>
+            <div>
+                <label>🕐 Heure locale</label>
+                <input type="time" class="form-control" id="af-time" value="12:00">
+            </div>
+        </div>
+        <div class="frow">
+            <div>
+                <label>📍 Ville de naissance</label>
+                <input type="text" class="form-control" id="af-city" placeholder="ex: Toulouse" onkeydown="if(event.key==='Enter'){event.preventDefault();searchAtomCity()}">
+            </div>
+            <div>
+                <label>⚖️ Poids (kg, optionnel)</label>
+                <input type="number" class="form-control" id="af-weight" placeholder="3.5" step="0.1">
+            </div>
+        </div>
+        <div class="city-hint" id="af-city-hint"></div>
+        <input type="hidden" id="af-lat" value="">
+        <input type="hidden" id="af-lon" value="">
+        <div class="frow" style="margin-top:4px">
+            <button type="button" class="btn-a4l-secondary" onclick="searchAtomCity()">🔍 Localiser</button>
+            <button type="button" class="btn-a4l-primary" onclick="submitAddAtomForm()">✅ Ajouter</button>
+        </div>
+        <a href="atomic.html" class="profile-link">Créer un profil ATOM4LOVE complet →</a>
+    </div>
+</div>
+
+<!-- Calendrier de résonance personnelle (Noyau) -->
+<div class="section-card" id="personal-cal-card" style="display:none">
+    <div class="section-title">
+        <svg width="20" height="20" viewBox="0 0 24 24" style="vertical-align:-5px;margin-right:4px" aria-hidden="true">
+            <circle cx="12" cy="12" r="10" fill="none" stroke="#00ffcc" stroke-width="1.2" opacity=".5"/>
+            <ellipse cx="12" cy="12" rx="10" ry="4" fill="none" stroke="#f59e0b" stroke-width="1" opacity=".45" transform="rotate(30 12 12)"/>
+            <circle cx="12" cy="12" r="2" fill="#00ffcc"/>
+        </svg>
+        Calendrier de Résonance Personnelle
+    </div>
+    <div class="loading-hint" style="text-align:left;margin-bottom:8px">Fenêtres de l'année où votre phase natale s'aligne (Union) ou s'oppose (Friction) au cycle solaire — équinoxes et solstices.</div>
+    <div class="cal-cols">
+        <div>
+            <div class="cal-col-title" style="color:var(--teal,#00ffcc)">
+                <svg width="16" height="16" viewBox="0 0 24 24" style="vertical-align:-3px;margin-right:3px" aria-hidden="true">
+                    <circle cx="9" cy="12" r="7" fill="none" stroke="#00ffcc" stroke-width="1.3" opacity=".75"/>
+                    <circle cx="15" cy="12" r="7" fill="none" stroke="#00ffcc" stroke-width="1.3" opacity=".75"/>
+                </svg>
+                Union
+            </div>
+            <div id="cal-constructive"></div>
+        </div>
+        <div>
+            <div class="cal-col-title" style="color:var(--primary,#f59e0b)">
+                <svg width="16" height="16" viewBox="0 0 24 24" style="vertical-align:-3px;margin-right:3px" aria-hidden="true">
+                    <circle cx="6" cy="12" r="5" fill="none" stroke="#f59e0b" stroke-width="1.3" opacity=".75"/>
+                    <circle cx="18" cy="12" r="5" fill="none" stroke="#f59e0b" stroke-width="1.3" opacity=".75"/>
+                    <line x1="10" y1="8" x2="14" y2="16" stroke="#f59e0b" stroke-width="1" opacity=".55"/>
+                    <line x1="10" y1="16" x2="14" y2="8" stroke="#f59e0b" stroke-width="1" opacity=".55"/>
+                </svg>
+                Friction
+            </div>
+            <div id="cal-destructive"></div>
+        </div>
+    </div>
 </div>
 
 <!-- Group score -->
@@ -168,10 +256,18 @@ table.matrix td{padding:4px 6px;text-align:center;border-radius:4px;font-family:
    CONSTANTES & ÉTAT
    ═══════════════════════════════════════════════════════════════════════════ */
 const TAU = 2 * Math.PI;
-const OMEGA_DAILY = TAU / (Phi2X ? Phi2X.ORBITAL_DAY_S : 86164); // rad/s — cycle journalier
+const ORBITAL_DAY_S  = 86400;                      // jour solaire [s]
+const ORBITAL_YEAR_S = 365.25636 * ORBITAL_DAY_S;   // année sidérale [s]
+const OMEGA_DAILY = TAU / ORBITAL_DAY_S; // rad/s — cycle journalier
 const KIN_CSS  = ['#ef4444','#94a3b8','#60a5fa','#fbbf24','#34d399']; // Rouge Blanc Bleu Jaune Vert
 const KIN_NAMES= ['Rouge','Blanc','Bleu','Jaune','Vert'];
 const KIN_EMO  = ['🔴','⚪','🔵','🟡','🟢'];
+const SEASONS  = [ // dates approximatives, utilisées pour le calendrier de résonance personnelle
+    { l: "Équinoxe de Printemps", m: 2,  d: 20, tag: "🌱" },
+    { l: "Solstice d'Été",        m: 5,  d: 21, tag: "☀️" },
+    { l: "Équinoxe d'Automne",    m: 8,  d: 22, tag: "🍂" },
+    { l: "Solstice d'Hiver",      m: 11, d: 21, tag: "❄️" },
+];
 
 let ATOMS = [];       // [{id, name, dateStr, lon, phase, kin, color, hex}]
 let atomId = 0;
@@ -186,18 +282,66 @@ function kinColor(kin) { return kin ? KIN_CSS[kin.ci] : '#00ffcc'; }
 /* ═══════════════════════════════════════════════════════════════════════════
    ATOMS CRUD
    ═══════════════════════════════════════════════════════════════════════════ */
-function addAtom(name, dateStr, lonRaw, hex) {
+function addAtom(name, dateStr, lonRaw, hex, latRaw, weightKg) {
     if (ATOMS.length >= 13) return;
     const lon   = parseFloat(lonRaw) || 0;
+    const lat   = parseFloat(latRaw) || 0;
+    const weight= parseFloat(weightKg) || null;
     const kin   = (Phi2X && dateStr) ? Phi2X.calcKinFromDate(dateStr) : null;
     const phase = (Phi2X && dateStr) ? Phi2X.computePhaseFromForm(dateStr, '12:00', lon) : Math.random() * TAU;
-    ATOMS.push({ id: ++atomId, name: name || 'Atome ' + atomId, dateStr, lon, phase, kin, color: kinColor(kin), hex: hex || '' });
+    ATOMS.push({ id: ++atomId, name: name || 'Atome ' + atomId, dateStr, lon, lat, weight, phase, kin, color: kinColor(kin), hex: hex || '' });
     updateAll();
 }
 
 function removeAtom(id) {
     ATOMS = ATOMS.filter(a => a.id !== id);
     updateAll();
+}
+
+/* ── Formulaire manuel d'ajout d'atome (fusionné depuis atomic_resonance.html) ── */
+function toggleAddForm() {
+    document.getElementById('add-atom-form').classList.toggle('open');
+}
+
+async function searchAtomCity() {
+    const input = document.getElementById('af-city');
+    const hint  = document.getElementById('af-city-hint');
+    const q = input ? input.value.trim() : '';
+    if (!q) return;
+    hint.textContent = '🔍 Recherche…';
+    try {
+        const url = 'https://nominatim.openstreetmap.org/search?q=' + encodeURIComponent(q) + '&format=json&limit=1&accept-language=fr';
+        const data = await fetch(url, { headers: { 'Accept': 'application/json' } }).then(r => r.json());
+        if (data && data.length > 0) {
+            const place = data[0];
+            document.getElementById('af-lat').value = parseFloat(place.lat).toFixed(2);
+            document.getElementById('af-lon').value = parseFloat(place.lon).toFixed(2);
+            hint.textContent = '📍 ' + place.display_name.split(',').slice(0, 3).join(', ');
+        } else {
+            hint.textContent = '⚠️ Ville non trouvée';
+        }
+    } catch (e) {
+        hint.textContent = '⚠️ Erreur réseau';
+    }
+}
+
+function submitAddAtomForm() {
+    const name = document.getElementById('af-name').value.trim();
+    const date = document.getElementById('af-date').value;
+    const lat  = document.getElementById('af-lat').value;
+    const lon  = document.getElementById('af-lon').value;
+    const w    = document.getElementById('af-weight').value;
+    if (!date) {
+        if (typeof showNotification === 'function') showNotification({ message: 'Indiquez au moins une date de naissance', type: 'error' });
+        return;
+    }
+    addAtom(name, date, lon, '', lat, w);
+    document.getElementById('af-name').value = '';
+    document.getElementById('af-date').value = '';
+    document.getElementById('af-city').value = '';
+    document.getElementById('af-city-hint').textContent = '';
+    document.getElementById('af-weight').value = '';
+    document.getElementById('add-atom-form').classList.remove('open');
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -419,6 +563,72 @@ function renderRitual(atoms, ku, Hpct, vc) {
                     'Diversité maximale — la tension peut devenir force si elle est nommée.'}
             </div>
         </div>`;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   CALENDRIER DE RÉSONANCE PERSONNELLE (fusionné depuis atomic_resonance.html)
+   Recherche numérique : pour chaque saison (équinoxe/solstice), on échantillonne
+   la journée toutes les 5 min et on garde l'instant où la phase du Noyau (calculée
+   via l'API publique Phi2X.computePersonalPhaseWeighted) se rapproche le plus de
+   sa phase natale (Union) ou de son opposé (Friction).
+   ═══════════════════════════════════════════════════════════════════════════ */
+function _circDelta(a, b) { return Math.abs(((a - b + Math.PI) % TAU + TAU) % TAU - Math.PI); }
+
+function findPhaseMatchInDay(year, monthIdx0, day, lat, lon, weightKg, targetPhase) {
+    let bestTs = null, bestDelta = Infinity;
+    for (let m = 0; m < 24 * 60; m += 5) {
+        const ts = Math.floor(Date.UTC(year, monthIdx0, day, 0, m) / 1000);
+        const ph = Phi2X.computePersonalPhaseWeighted(ts, lat, lon, weightKg);
+        const delta = _circDelta(ph, targetPhase);
+        if (delta < bestDelta) { bestDelta = delta; bestTs = ts; }
+    }
+    return bestTs;
+}
+
+function renderPersonalCalendar() {
+    const card  = document.getElementById('personal-cal-card');
+    const noyau = ATOMS[0];
+    if (!card) return;
+    if (!Phi2X || !noyau || !noyau.dateStr) { card.style.display = 'none'; return; }
+
+    const weightKg = noyau.weight || 3.5;
+    const lat = noyau.lat || 0, lon = noyau.lon || 0;
+    const [y, mo, d] = noyau.dateStr.split('-').map(Number);
+    const birthUnix = Math.floor(Date.UTC(y, mo - 1, d, 12, 0, 0) / 1000);
+    const myPhase = Phi2X.computePersonalPhaseWeighted(birthUnix, lat, lon, weightKg);
+    const targetD = ((myPhase + Math.PI) % TAU + TAU) % TAU;
+
+    const year = new Date().getFullYear();
+    const cEl = document.getElementById('cal-constructive');
+    const dEl = document.getElementById('cal-destructive');
+    cEl.innerHTML = ''; dEl.innerHTML = '';
+
+    SEASONS.forEach(s => {
+        const tsC = findPhaseMatchInDay(year, s.m, s.d, lat, lon, weightKg, myPhase);
+        const tsD = findPhaseMatchInDay(year, s.m, s.d, lat, lon, weightKg, targetD);
+        cEl.appendChild(_buildCalCard(tsC, s, 'var(--teal,#00ffcc)'));
+        dEl.appendChild(_buildCalCard(tsD, s, 'var(--primary,#f59e0b)'));
+    });
+
+    card.style.display = '';
+}
+
+function _buildCalCard(ts, season, color) {
+    const div = document.createElement('div');
+    div.className = 'kin-card';
+    div.style.borderLeft = `3px solid ${color}`;
+    div.style.marginBottom = '8px';
+    const date = new Date(ts * 1000);
+    const dateStr = date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' });
+    const timeStr = String(date.getHours()).padStart(2,'0') + 'h' + String(date.getMinutes()).padStart(2,'0');
+    const dISO = date.getFullYear() + '-' + String(date.getMonth()+1).padStart(2,'0') + '-' + String(date.getDate()).padStart(2,'0');
+    const k = Phi2X.calcKinFromDate(dISO);
+    div.innerHTML = `
+        <div style="font-size:.76rem;font-weight:700;color:${color}">${season.tag} ${season.l}</div>
+        <div style="font-size:1rem;color:#fff;margin-top:2px">${dateStr} <span style="color:${color}">à ${timeStr}</span></div>
+        ${k ? `<div style="font-size:.66rem;color:rgba(255,255,255,.4);margin-top:2px">🌀 KIN ${k.kin} · ${k.colorFr} ${k.glyphFr}</div>` : ''}
+    `;
+    return div;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -649,6 +859,7 @@ function _esc(s) { return String(s||'').replace(/[<>&"']/g,''); }
 function updateAll() {
     renderAtomsList();
     renderScores();
+    renderPersonalCalendar();
     if (_audioOn) { stopAudio(); startAudio(); } /* recrée les oscillateurs */
 }
 

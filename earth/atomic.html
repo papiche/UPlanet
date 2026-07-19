@@ -251,6 +251,11 @@
             80%      { transform:translateX(4px); }
         }
         .wz-shake { animation:wz-shake .42s ease; }
+        @keyframes station-flash {
+            0%   { box-shadow:0 0 0 0 color-mix(in srgb, currentColor 45%, transparent); }
+            100% { box-shadow:0 0 0 8px transparent; }
+        }
+        .station-flash { animation:station-flash .6s ease-out; }
         #wz-hint-toast {
             position:fixed; bottom:80px; left:50%; transform:translateX(-50%);
             z-index:2100; background:rgba(8,6,2,.95); border:1px solid rgba(0,255,204,.25);
@@ -1921,6 +1926,15 @@ let _wzCurrentStep = 1;
 
 function _wzGoTo(step) {
     if (step < 1 || step > 5) return;
+    // Filet de sécurité : si la date de naissance est déjà valide, débloquer 3/4/5
+    // même si calculateConception() a échoué avant d'atteindre son déblocage normal
+    // (une erreur plus tard dans cette fonction ne doit jamais bloquer la navigation).
+    if (step >= 3 && document.getElementById('birth-date')?.value) {
+        ['wz-dot-3','wz-dot-4','wz-dot-5'].forEach(id => {
+            const d = document.getElementById(id);
+            if (d) d.classList.remove('locked');
+        });
+    }
     // Refuser si l'étape cible est encore verrouillée
     const dotTarget = document.getElementById('wz-dot-' + step);
     if (dotTarget && dotTarget.classList.contains('locked')) {
@@ -2229,22 +2243,40 @@ async function _resolveHomeStationUrl(ipfsnodeid) {
     } catch(_e) { return null; }
 }
 
+// Retour visuel unifié pour la résolution de station (badge + flash au moment du "found")
+function _setStationStatus(kind, html) {
+    var el = document.getElementById('home-station-status');
+    if (!el) return;
+    var boxed = 'border-radius:8px;padding:6px 10px;margin-top:2px;display:inline-block';
+    var styles = {
+        searching: 'color:rgba(255,255,255,.4)',
+        found:     'color:#00ffcc;background:rgba(0,255,204,.08);border:1px solid rgba(0,255,204,.3);' + boxed,
+        error:     'color:rgba(255,150,80,.75);background:rgba(255,150,80,.06);border:1px solid rgba(255,150,80,.25);' + boxed
+    };
+    el.setAttribute('style', 'font-size:.72rem;min-height:.9rem;' + (styles[kind] || styles.searching));
+    el.innerHTML = html;
+    if (kind === 'found') {
+        el.classList.remove('station-flash');
+        void el.offsetWidth; // reflow pour relancer l'animation
+        el.classList.add('station-flash');
+    }
+}
+
 // Résoudre la station la plus proche via GPS → swarm → 12345.json
 async function _resolveNearestStation(lat, lon) {
-    var _stStatus = document.getElementById('home-station-status');
-    if (_stStatus) _stStatus.textContent = '🔍 Recherche de la station la plus proche…';
+    _setStationStatus('searching', '🔍 Recherche de la station la plus proche…');
     try {
         var _apiBase = typeof window.getAPIUrl === 'function' ? window.getAPIUrl()
             : (location.hostname === '127.0.0.1' ? 'http://127.0.0.1:54321' : '');
-        if (!_apiBase) return;
+        if (!_apiBase) { _setStationStatus('error', '⚠️ Impossible de déterminer l\'API de station'); return; }
         // Récupérer la liste du swarm depuis la station courante
         var _ctrl = typeof AbortSignal !== 'undefined' && AbortSignal.timeout
             ? { signal: AbortSignal.timeout(6000) } : {};
         var _r = await fetch(_apiBase + '/api/swarm', _ctrl);
-        if (!_r.ok) return;
+        if (!_r.ok) { _setStationStatus('error', '⚠️ Constellation injoignable — réessayez'); return; }
         var _swarm = await _r.json();
         var _stations = Array.isArray(_swarm) ? _swarm : (_swarm.stations || []);
-        if (!_stations.length) return;
+        if (!_stations.length) { _setStationStatus('error', '⚠️ Aucune station détectée dans la constellation'); return; }
 
         // Haversine simplifié pour trouver la plus proche
         var _haversine = function(a, b, c, d) {
@@ -2262,7 +2294,7 @@ async function _resolveNearestStation(lat, lon) {
             var d = _haversine(lat, lon, sLat, sLon);
             if (d < _bestDist) { _bestDist = d; _best = st; }
         });
-        if (!_best) return;
+        if (!_best) { _setStationStatus('error', '⚠️ Aucune station géolocalisée trouvée'); return; }
 
         var _uspot = _best.uSPOT || _best.uspot || null;
         var _relay = _best.myRELAY || _best.relay || null;
@@ -2270,12 +2302,14 @@ async function _resolveNearestStation(lat, lon) {
             _resolvedUspot = _uspot;
             _resolvedRelay = _relay;
             var _dist = _bestDist < 1 ? Math.round(_bestDist*1000)+'m' : Math.round(_bestDist)+'km';
-            if (_stStatus) _stStatus.textContent =
-                '📡 Station : ' + (_best.hostname || _uspot.replace(/https?:\/\//, '')) +
-                ' (' + _dist + ')';
+            _setStationStatus('found',
+                '📡 Station la plus proche : <strong>' + (_best.hostname || _uspot.replace(/https?:\/\//, '')) + '</strong>'
+                + ' (' + _dist + ')');
+        } else {
+            _setStationStatus('error', '⚠️ Station la plus proche trouvée mais sans adresse valide');
         }
     } catch(_e) {
-        if (_stStatus) _stStatus.textContent = '';
+        _setStationStatus('error', '⚠️ Erreur réseau lors de la résolution de station');
     }
 }
 
@@ -2287,9 +2321,8 @@ async function _resolveStationFromKind0(homeStationField) {
     if (_info && _info.uspot) {
         _resolvedUspot = _info.uspot;
         _resolvedRelay = _info.relay;
-        var _stStatus = document.getElementById('home-station-status');
-        if (_stStatus) _stStatus.textContent =
-            '🏠 Station home : ' + _info.uspot.replace(/https?:\/\//, '').replace(':54321', '');
+        _setStationStatus('found',
+            '🏠 Station home : <strong>' + _info.uspot.replace(/https?:\/\//, '').replace(':54321', '') + '</strong>');
     }
 }
 
@@ -2569,24 +2602,29 @@ window._openLocB = function() {
 
 // ── PAUSE QUAND L'ONGLET N'EST PAS VISIBLE ────────────────────
 // Page Visibility API — arrête draw() à 0 fps, reprend dès le retour
+// p5 (mode global) n'attache loop()/noLoop() à window qu'une fois le sketch démarré —
+// un IntersectionObserver ou un événement de visibilité peut se déclencher avant (course
+// possible au chargement) : on protège chaque appel avec un typeof.
+function _p5Loop()   { if (typeof loop   === 'function') loop(); }
+function _p5NoLoop()  { if (typeof noLoop === 'function') noLoop(); }
 document.addEventListener('visibilitychange', () => {
-    if (document.hidden) noLoop();
-    else                 loop();
+    if (document.hidden) _p5NoLoop();
+    else                 _p5Loop();
 });
 // Pause aussi quand le canvas sort du viewport (IntersectionObserver)
 // + quand le panneau offcanvas le masque sur mobile
 document.addEventListener('DOMContentLoaded', () => {
     const panel = document.getElementById('atomic-panel');
     if (panel) {
-        panel.addEventListener('shown.bs.offcanvas',  () => { if (window.innerWidth < 768) noLoop(); });
-        panel.addEventListener('hidden.bs.offcanvas', () => { if (!document.hidden) loop(); });
+        panel.addEventListener('shown.bs.offcanvas',  () => { if (window.innerWidth < 768) _p5NoLoop(); });
+        panel.addEventListener('hidden.bs.offcanvas', () => { if (!document.hidden) _p5Loop(); });
     }
 
     const canvasContainer = document.getElementById('canvas-container');
     if (canvasContainer && 'IntersectionObserver' in window) {
         new IntersectionObserver(entries => {
-            if (entries[0].intersectionRatio === 0) noLoop();
-            else if (!document.hidden)              loop();
+            if (entries[0].intersectionRatio === 0) _p5NoLoop();
+            else if (!document.hidden)              _p5Loop();
         }, { threshold: 0 }).observe(canvasContainer);
     }
 });
@@ -3469,13 +3507,17 @@ async function _preInitFromNostr(pubkey) {
     if (!pubkey) return;
 
     // Email depuis UPH — le Kind 0 peut arriver après ce délai, donc on réessaie jusqu'à 10s
+    // (timer local à cette fonction — distinct du _emailDetectTimer de l'IIFE plus bas, hors de portée ici)
+    var _preInitEmailTimer;
     var emailEl = document.getElementById('multipass-email');
     if (emailEl && !emailEl.value) {
         var _applyUphEmail = function() {
             if (!emailEl.value && window._uphEmail) {
                 emailEl.value = window._uphEmail;
-                clearTimeout(_emailDetectTimer);
-                _emailDetectTimer = setTimeout(function() { _detectEmailOnRelay(window._uphEmail); }, 300);
+                clearTimeout(_preInitEmailTimer);
+                _preInitEmailTimer = setTimeout(function() {
+                    if (typeof window._detectEmailOnRelay === 'function') window._detectEmailOnRelay(window._uphEmail);
+                }, 300);
                 return true;
             }
             return false;
@@ -3490,11 +3532,13 @@ async function _preInitFromNostr(pubkey) {
 
     if (document.getElementById('birth-date').value) return; // coords déjà remplies
 
-    var relay = _relayUrl();
+    // _relayUrl/_wsQuery sont privées à l'IIFE définie plus bas dans le fichier — exposées sur window.
+    if (typeof window._relayUrl !== 'function' || typeof window._wsQuery !== 'function') return;
+    var relay = window._relayUrl();
 
     try {
         // Kind 30078 d=atom4love → coordonnées de naissance approximatives
-        var evs = await _wsQuery(relay, { kinds:[30078], '#d':['atom4love'], authors:[pubkey], limit:1 }, 5000);
+        var evs = await window._wsQuery(relay, { kinds:[30078], '#d':['atom4love'], authors:[pubkey], limit:1 }, 5000);
         if (!evs.length) return;
 
         var pos = _decodeA4lHexTag(evs[0].tags);
@@ -3813,10 +3857,13 @@ const _origP  = (_qp.get('origin') || '').replace(/[^0-9a-f]/gi,'').slice(0,64);
 /* ── Helpers relay ─────────────────────────────────────────────────────── */
 function _relayUrl() {
     const h = location.hostname;
+    if (h === '127.0.0.1' || h === 'localhost') return 'ws://127.0.0.1:7777';
     if (h.startsWith('ipfs.')) return 'wss://relay.' + h.slice(5);
     if (h.startsWith('u.'))    return 'wss://relay.' + h.slice(2);
     return 'wss://relay.copylaradio.com';
 }
+// Exposées sur window : _preInitFromNostr (définie plus haut, hors de cette IIFE) en a besoin.
+window._relayUrl = _relayUrl;
 function _wsQuery(relay, filter, timeout) {
     return new Promise(resolve => {
         const evs = []; let ws;
@@ -3837,6 +3884,7 @@ function _wsQuery(relay, filter, timeout) {
         } catch(_) { clearTimeout(t); resolve([]); }
     });
 }
+window._wsQuery = _wsQuery;
 function _hexToNpub(hex) {
     try { return NostrTools.nip19.npubEncode(hex); } catch(_) { return hex.slice(0,8)+'…'; }
 }
@@ -3862,7 +3910,7 @@ function _updateEmailHint(state, data) {
             if (window.nostr) {
                 // Extension NIP-07 active : info uniquement, pas de saisie de PASS requise
                 hint.innerHTML =
-                    `<div style="background:rgba(0,255,204,.06);border:1px solid rgba(0,255,204,.25);`
+                    `<div class="station-flash" style="background:rgba(0,255,204,.06);border:1px solid rgba(0,255,204,.25);`
                     +`border-radius:8px;padding:6px 10px;font-size:.72rem;color:#00ffcc;margin-top:4px">`
                     +`🟢 MULTIPASS existant${nameStr}<br>`
                     +`<span style="color:rgba(255,255,255,.35)">Station : ${stDisp}</span>`
@@ -3870,7 +3918,7 @@ function _updateEmailHint(state, data) {
                 if (passBlock) passBlock.style.display = 'none';
             } else {
                 hint.innerHTML =
-                    `<div style="background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.3);`
+                    `<div class="station-flash" style="background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.3);`
                     +`border-radius:8px;padding:6px 10px;font-size:.72rem;color:#f59e0b;margin-top:4px">`
                     +`✅ MULTIPASS détecté${nameStr}<br>`
                     +`<span style="color:rgba(255,255,255,.35)">Station : ${stDisp}</span><br>`
@@ -3918,6 +3966,7 @@ async function _detectEmailOnRelay(email) {
         _updateEmailHint('error');
     }
 }
+window._detectEmailOnRelay = _detectEmailOnRelay;
 
 /* ── Afficher un profil "visiteur référencé" (hex= param) ─────────────── */
 async function _showHexProfile(pubkey) {

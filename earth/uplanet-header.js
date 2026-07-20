@@ -663,15 +663,17 @@
             }
             if (d.nostrns) window._uphNostrNS = d.nostrns; // "/ipns/k51..."
 
-            // Bouton "station Home" — visible seulement en roaming, quand le
-            // backend a pu résoudre l'URL IPNS de la station d'origine.
+            // Bouton "station Home" — visible seulement en roaming, quand le backend
+            // a pu résoudre le hostname HTTP réel de la station d'origine (home_http_url,
+            // ex. "https://u.sagittarius.copylaradio.com"). NB: d.home_station_url est une
+            // adresse de contenu IPFS (NOSTRNS) — inutilisable pour recharger une page HTML.
             var homeBtn = document.getElementById('uph-home-btn');
             if (homeBtn) {
-                if (isRoam && d.home_station_url) {
-                    window._uphHomeStationUrl = d.home_station_url;
-                    homeBtn.title = 'Ouvrir cette page depuis votre station Home\n' + d.home_station_url;
+                if (isRoam && d.home_http_url) {
+                    window._uphHomeStationUrl = d.home_http_url;
+                    homeBtn.title = 'Ouvrir cette page depuis votre station Home\n' + d.home_http_url;
                     homeBtn.style.display = '';
-                    homeBtn.onclick = function () { location.href = _homePageUrl(d.home_station_url); };
+                    homeBtn.onclick = function () { location.href = _homePageUrl(d.home_http_url); };
                 } else {
                     homeBtn.style.display = 'none';
                 }

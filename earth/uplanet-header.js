@@ -146,7 +146,7 @@
         + '#uph-station{color:rgba(255,255,255,.38);font-size:10px;max-width:76px;'
         + 'overflow:hidden;text-overflow:ellipsis;flex-shrink:0;cursor:default}'
 
-        + '@media(max-width:500px){#uph-station,#uph-zen{display:none!important}}'
+        + '@media(max-width:500px){#uph-station,#uph-zen,#uph-home-btn{display:none!important}}'
         + '@media(max-width:480px){.uph-full{display:none!important}}'
         + '#uph-zen.linked{cursor:pointer}'
         + '#uph-zen.linked:hover{background:rgba(134,239,172,.25);border-color:rgba(134,239,172,.5)}'
@@ -178,6 +178,11 @@
         + 'color:rgba(255,255,255,.75);border-radius:11px;padding:2px 10px;font-size:10.5px;'
         + 'cursor:pointer;font-weight:500;flex-shrink:0}'
         + '#uph-access-btn:hover{background:rgba(255,255,255,.15)}'
+
+        + '#uph-home-btn{background:rgba(96,165,250,.13);border:1px solid rgba(96,165,250,.35);'
+        + 'color:#60a5fa;border-radius:11px;padding:2px 8px;font-size:11px;'
+        + 'cursor:pointer;font-weight:500;flex-shrink:0}'
+        + '#uph-home-btn:hover{background:rgba(96,165,250,.25)}'
         + '#uph-moverlay{display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.72);backdrop-filter:blur(5px);-webkit-backdrop-filter:blur(5px);align-items:center;justify-content:center}'
         + '#uph-moverlay.open{display:flex}'
         + '#uph-modal{background:rgba(8,8,22,.97);border:1px solid rgba(255,255,255,.12);border-radius:18px;'
@@ -283,6 +288,7 @@
             + 'border:1px solid;cursor:default;flex-shrink:0" title="État ATOM4LOVE"></span>'
             + '<span class="uph-sep"></span>'
             + '<span id="uph-station" title="Station Astroport.ONE">📡</span>'
+            + '<button id="uph-home-btn" style="display:none" title="Voir cette page depuis votre station Home">🏠</button>'
             + '<button id="uph-access-btn" title="Connexion / Accès">🔑 Accès</button>'
             + '<button id="uph-btn" style="display:none">⚡</button>'
             + '</div>';
@@ -587,7 +593,7 @@
             if (meta.name && nameEl) { nameEl.textContent = meta.name; nameEl._named = true; }
             if (meta.picture && avEl) { avEl.src = meta.picture; avEl.style.display = ''; }
             // Extraire l'email depuis le profil kind 0 (nip05 = "user@domain.tld")
-            var profileEmail = meta.email || (meta.nip05 && meta.nip05.includes('@') ? meta.nip05 : '');
+            var profileEmail = _sanitizeEmail(meta.email || (meta.nip05 && meta.nip05.includes('@') ? meta.nip05 : ''));
             if (profileEmail && !window._uphEmail) {
                 window._uphEmail = profileEmail;
                 console.log('[UPH] email extrait du kind 0:', profileEmail);
@@ -647,7 +653,7 @@
             if (nipEl) { nipEl.className = 'uph-dot uph-g'; nipEl.title = 'NIP-42 authentifié ✓'; }
             var src    = (d.source || '').toLowerCase();
             var isRoam = src.includes('roaming') || src.includes('swarm');
-            var email    = d.email || '';
+            var email    = _sanitizeEmail(d.email);
             var didLabel = email ? ('DID: ' + email) : '';
             if (roamEl) {
                 roamEl.textContent = isRoam ? '🌐 roaming' : '🏠 local';
@@ -656,6 +662,21 @@
                 roamEl.style.display = '';
             }
             if (d.nostrns) window._uphNostrNS = d.nostrns; // "/ipns/k51..."
+
+            // Bouton "station Home" — visible seulement en roaming, quand le
+            // backend a pu résoudre l'URL IPNS de la station d'origine.
+            var homeBtn = document.getElementById('uph-home-btn');
+            if (homeBtn) {
+                if (isRoam && d.home_station_url) {
+                    window._uphHomeStationUrl = d.home_station_url;
+                    homeBtn.title = 'Ouvrir cette page depuis votre station Home\n' + d.home_station_url;
+                    homeBtn.style.display = '';
+                    homeBtn.onclick = function () { location.href = _homePageUrl(d.home_station_url); };
+                } else {
+                    homeBtn.style.display = 'none';
+                }
+            }
+
             if (email) {
                 window._uphEmail = email;
                 var nameEl = document.getElementById('uph-name');
@@ -669,11 +690,7 @@
                 if (zenEl && zenEl.style.display !== 'none') {
                     zenEl.classList.add('linked');
                     zenEl.title = (zenEl.textContent || '') + ' · Historique ẑen';
-                    zenEl.onclick = function() {
-                        var params = 'email=' + encodeURIComponent(email);
-                        if (window._uphG1Pub) params += '&g1pub=' + encodeURIComponent(window._uphG1Pub);
-                        location.href = 'multipass.html?' + params;
-                    };
+                    zenEl.onclick = function() { location.href = _multipassUrl(email); };
                 }
             }
         } catch (e) {
@@ -704,11 +721,7 @@
                 if (window._uphEmail) {
                     el.classList.add('linked');
                     el.title = 'Ẑ ' + parseFloat(zen).toFixed(1) + ' ẑen · Historique transactions';
-                    el.onclick = function() {
-                        var params = 'email=' + encodeURIComponent(window._uphEmail);
-                        if (window._uphG1Pub) params += '&g1pub=' + encodeURIComponent(window._uphG1Pub);
-                        location.href = 'multipass.html?' + params;
-                    };
+                    el.onclick = function() { location.href = _multipassUrl(window._uphEmail); };
                 }
                 _updateNavProfile();
             } else {
@@ -735,11 +748,7 @@
         if (balEl  && bal !== undefined) balEl.textContent = '⚡ ' + parseFloat(bal).toFixed(1) + ' ẑen';
         if (lnkEl  && email) {
             lnkEl.style.display = '';
-            lnkEl.onclick = function() {
-                var params = 'email=' + encodeURIComponent(email);
-                if (window._uphG1Pub) params += '&g1pub=' + encodeURIComponent(window._uphG1Pub);
-                location.href = 'multipass.html?' + params;
-            };
+            lnkEl.onclick = function() { location.href = _multipassUrl(email); };
         }
         if (zcEl && email) {
             zcEl.style.display = '';
@@ -984,6 +993,33 @@
             _moveDrag(t.clientX, t.clientY);
         }, { passive: true });
         document.addEventListener('touchend', _endDrag, { passive: true });
+    }
+
+    // ── Helpers email / multipass / home station ───────────────────────────────
+    // Rejette les identifiants qui ne sont pas de vrais emails : le backend
+    // (/api/myGPS) retombe parfois sur le nom du dossier éphémère ".pubkey_<hex>"
+    // créé par 22242.sh quand le vrai dossier ~/.zen/game/nostr/EMAIL/ n'est pas
+    // encore synchronisé sur cette station (utilisateur roaming trop récent).
+    function _sanitizeEmail(raw) {
+        var e = (raw || '').trim();
+        if (!e || e.charAt(0) === '.' || e.indexOf('@') === -1) return '';
+        return e;
+    }
+
+    function _multipassUrl(email) {
+        var p = 'email=' + encodeURIComponent(email);
+        if (window._uphG1Pub) p += '&g1pub=' + encodeURIComponent(window._uphG1Pub);
+        return 'multipass.html?' + p;
+    }
+
+    // Reconstruit l'URL de la page courante servie depuis la station Home
+    // (roaming) : même chemin /earth/…, même query string, autre origine.
+    function _homePageUrl(homeStationUrl) {
+        var base = homeStationUrl.replace(/\/+$/, '');
+        var path = location.pathname;
+        var idx  = path.indexOf('/earth/');
+        var tail = idx !== -1 ? path.slice(idx) : '/earth/' + _page;
+        return base + tail + location.search;
     }
 
     // ── Détection URL API (fallback si common.js absent) ──────────────────────

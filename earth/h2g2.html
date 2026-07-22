@@ -106,6 +106,51 @@ body {
 .btn-recipe.secondary { background:rgba(99,102,241,0.12); color:var(--accent-light); border:1px solid rgba(99,102,241,0.25); }
 .recipe-desc { font-size:12px; color:var(--text-muted); line-height:1.6; margin:8px 0 0; }
 
+/* ── INFOBOX (recettes matière G1FabLab) ── */
+.ib-warn {
+    background:rgba(248,113,113,0.08); border-left:3px solid #f87171;
+    padding:10px 14px; border-radius:0 8px 8px 0; font-size:12px;
+    color:#fecaca; line-height:1.6; margin:10px 0;
+}
+.ib-block {
+    background:rgba(15,23,42,0.5); border:1px solid var(--card-border);
+    border-radius:10px; padding:10px 14px; margin:10px 0; font-size:12px;
+    color:#c7d2fe; line-height:1.65;
+}
+.ib-block-title {
+    font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.06em;
+    color:var(--text-muted); margin-bottom:6px;
+}
+.ib-code {
+    font-family:'Courier New',monospace; background:rgba(0,0,0,0.35);
+    padding:8px 10px; border-radius:6px; font-size:11.5px; color:#a5b4fc;
+    white-space:pre-wrap; margin:6px 0;
+}
+.ib-materials-list { list-style:none; margin:0; padding:0; }
+.ib-materials-list li {
+    padding:4px 0; border-bottom:1px solid rgba(99,102,241,0.08);
+    font-size:12px; display:flex; justify-content:space-between; color:#c7d2fe;
+}
+.ib-materials-list li:last-child { border-bottom:none; }
+.ib-materials-list .im-qty { color:var(--accent-light); font-weight:600; flex-shrink:0; margin-left:8px; }
+.ib-cure { display:flex; gap:14px; flex-wrap:wrap; font-size:11.5px; color:var(--text-muted); }
+.ib-cure strong { color:#e2e8f0; }
+
+/* ── FORK-TREE (variantes proposées) ── */
+.fork-section { margin-top:6px; }
+.fork-item {
+    background:rgba(124,58,237,0.06); border:1px solid rgba(124,58,237,0.2);
+    border-radius:8px; padding:8px 10px; margin-bottom:6px; font-size:11.5px;
+    cursor:pointer; transition:border-color .15s;
+}
+.fork-item:hover { border-color:var(--violet-light); }
+.fork-item .fork-author { color:var(--violet-light); font-weight:700; }
+.fork-item .fork-policy {
+    display:inline-block; font-size:9.5px; padding:1px 6px; border-radius:8px;
+    background:rgba(124,58,237,0.18); color:#ddd6fe; margin-left:6px;
+}
+.fork-item .fork-reason { color:var(--text-muted); margin-top:3px; line-height:1.5; }
+
 /* Panneau items (droite) */
 .items-panel { width:270px; flex-shrink:0; }
 .section-title {
@@ -234,6 +279,9 @@ body {
     <div class="coll-card" data-domain="transport" onclick="selectDomain('transport')">
       <div class="coll-emoji">🚗</div><div class="coll-name">Transport</div>
     </div>
+    <div class="coll-card" data-domain="chimie" onclick="selectDomain('chimie')">
+      <div class="coll-emoji">🧪</div><div class="coll-name">Chimie</div>
+    </div>
   </div>
 
   <!-- ── CORPS H2G2 ── -->
@@ -254,9 +302,15 @@ body {
           <div class="recipe-section-title">Ingrédients</div>
           <ul class="ingredient-list" id="rec-ingredients"></ul>
           <div class="recipe-desc" id="rec-desc" style="display:none"></div>
+          <div id="rec-infobox" style="display:none"></div>
+          <div id="rec-forks" class="fork-section" style="display:none">
+            <div class="recipe-section-title">Variantes proposées</div>
+            <div id="rec-forks-list"></div>
+          </div>
         </div>
         <div class="recipe-actions">
           <a id="rec-link" href="#" class="btn-recipe primary" target="_blank">🔗 Voir l'objet</a>
+          <button class="btn-recipe secondary" id="rec-fork-btn" style="display:none" onclick="proposeForkFromCraft()">🔀 Proposer une correction</button>
           <button class="btn-recipe secondary" onclick="closeRecipe()">✕ Fermer</button>
         </div>
       </div>
@@ -396,7 +450,8 @@ var DOMAIN_TAGS = {
     'vêtement'  : 'vêtement',
     'soin'      : 'soin',
     'numérique' : 'numérique',
-    'transport' : 'transport'
+    'transport' : 'transport',
+    'chimie'    : 'chimie'
 };
 
 /* ══════════════════════════════════════════
@@ -637,38 +692,169 @@ function showCraft(idx) {
     var ev  = _craftEvents[idx];
     if (!ev) return;
 
-    var p     = _parseContent(ev);
-    var title = p.title || _tagVal(ev,'title') || _dtag(ev);
-    var minop = p.min_operators || _tagVal(ev,'min_operators') || 1;
-    var time  = p.estimated_time || _tagVal(ev,'estimated_time') || '?';
-    var desc  = p.description || '';
-    var dtag  = _dtag(ev);
+    var p        = _parseContent(ev);
+    var title    = p.title || p.name || _tagVal(ev,'title') || _dtag(ev);
+    var dtag     = _dtag(ev);
+    var isMaterial = p.craft_type === 'material';
 
     document.getElementById('rec-name').textContent = title;
-    document.getElementById('rec-badges').innerHTML =
-        '<span class="qt-badge" style="background:rgba(124,58,237,0.14);color:#a78bfa">🔨 Craft collectif</span>';
 
-    var ingr = [
-        '👥 ' + minop + ' opérateur(s) minimum',
-        '⏱ Durée estimée : ' + time
-    ];
-    var steps = (p.steps || []);
-    steps.forEach(function(s, i) { ingr.push((i+1) + '. ' + s); });
-    document.getElementById('rec-ingredients').innerHTML =
-        ingr.map(function(s){ return '<li>' + _esc(s) + '</li>'; }).join('');
+    var descEl   = document.getElementById('rec-desc');
+    var ibox     = document.getElementById('rec-infobox');
+    var linkEl   = document.getElementById('rec-link');
+    var forkBtn  = document.getElementById('rec-fork-btn');
 
-    var descEl = document.getElementById('rec-desc');
-    if (desc) { descEl.textContent = desc; descEl.style.display = ''; }
-    else       { descEl.style.display = 'none'; }
+    if (isMaterial) {
+        /* ── Recette matière G1FabLab — vue "article de wiki" ── */
+        document.getElementById('rec-badges').innerHTML =
+            '<span class="qt-badge" style="background:rgba(139,92,246,0.16);color:#c4b5fd">🧪 Recette matière</span>'
+            + (p.safety ? '<span class="qt-badge" style="background:rgba(248,113,113,0.14);color:#fca5a5">⚠️ Sécurité</span>' : '');
 
-    document.getElementById('rec-link').href = 'calendars.html?craft=' + encodeURIComponent(dtag);
-    document.getElementById('rec-link').textContent = '📅 Planifier ce craft';
+        var materials = Array.isArray(p.materials) ? p.materials : [];
+        document.getElementById('rec-ingredients').innerHTML = materials.map(function(m) {
+            return '<li>' + _esc(m.name || '?')
+                + '<span class="im-qty">' + _esc(String(m.qty != null ? m.qty : '')) + ' ' + _esc(m.unit || '') + '</span></li>';
+        }).join('');
+
+        var desc = p.description || '';
+        if (desc) { descEl.textContent = desc; descEl.style.display = ''; }
+        else       { descEl.style.display = 'none'; }
+
+        ibox.innerHTML = _renderMaterialInfobox(p);
+        ibox.style.display = '';
+
+        linkEl.href = _grimoireLinkFor(ev) || ('calendars.html?craft=' + encodeURIComponent(dtag));
+        linkEl.textContent = '📖 Voir la recette illustrée';
+
+        forkBtn.style.display = '';
+        forkBtn.dataset.craftIdx = idx;
+
+        _loadForkVariants(ev);
+    } else {
+        /* ── Craft collectif skill/objet (comportement historique) ── */
+        var minop = p.min_operators || _tagVal(ev,'min_operators') || 1;
+        var time  = p.estimated_time || _tagVal(ev,'estimated_time') || '?';
+        var desc2 = p.description || '';
+
+        document.getElementById('rec-badges').innerHTML =
+            '<span class="qt-badge" style="background:rgba(124,58,237,0.14);color:#a78bfa">🔨 Craft collectif</span>';
+
+        var ingr = [
+            '👥 ' + minop + ' opérateur(s) minimum',
+            '⏱ Durée estimée : ' + time
+        ];
+        var steps = (p.steps || []);
+        steps.forEach(function(s, i) { ingr.push((i+1) + '. ' + s); });
+        document.getElementById('rec-ingredients').innerHTML =
+            ingr.map(function(s){ return '<li>' + _esc(s) + '</li>'; }).join('');
+
+        if (desc2) { descEl.textContent = desc2; descEl.style.display = ''; }
+        else        { descEl.style.display = 'none'; }
+
+        ibox.style.display = 'none';
+        ibox.innerHTML = '';
+
+        linkEl.href = 'calendars.html?craft=' + encodeURIComponent(dtag);
+        linkEl.textContent = '📅 Planifier ce craft';
+
+        forkBtn.style.display = 'none';
+
+        document.getElementById('rec-forks').style.display = 'none';
+    }
 
     document.querySelectorAll('.craft-row').forEach(function(r, i) { r.classList.toggle('active', i === idx); });
     document.querySelectorAll('.item-row').forEach(function(r) { r.classList.remove('active'); });
 
     document.getElementById('recipe-empty').style.display = 'none';
     document.getElementById('recipe-card').style.display  = '';
+}
+
+/* ══════════════════════════════════════════
+   INFOBOX — recette matière (G1FabLab)
+══════════════════════════════════════════ */
+function _renderMaterialInfobox(p) {
+    var html = '';
+    if (p.station) {
+        html += '<div class="ib-block"><div class="ib-block-title">🍲 Station de travail</div>' + _esc(p.station) + '</div>';
+    }
+    if (p.safety) {
+        html += '<div class="ib-warn">⚠️ <strong>Sécurité :</strong> ' + _esc(p.safety) + '</div>';
+    }
+    if (p.chemistry) {
+        html += '<div class="ib-block"><div class="ib-block-title">🧪 Chimie de la réaction</div>'
+            + '<div class="ib-code">' + _esc(p.chemistry) + '</div></div>';
+    }
+    if (p.industrial_comparison) {
+        html += '<div class="ib-block"><div class="ib-block-title">🏭 Comparatif industriel</div>' + _esc(p.industrial_comparison) + '</div>';
+    }
+    if (p.cost_comparison) {
+        html += '<div class="ib-block"><div class="ib-block-title">💶 Coût comparé</div>' + _esc(p.cost_comparison) + '</div>';
+    }
+    if (p.sourcing) {
+        html += '<div class="ib-block"><div class="ib-block-title">🛒 Se procurer les ingrédients</div>' + _esc(p.sourcing) + '</div>';
+    }
+    if (p.cure_time && (p.cure_time.workable || p.cure_time.full_cure)) {
+        html += '<div class="ib-block"><div class="ib-block-title">⏱ Temps de prise / durcissement</div>'
+            + '<div class="ib-cure">'
+            + (p.cure_time.workable  ? '<span>Prise : <strong>' + _esc(p.cure_time.workable) + '</strong></span>' : '')
+            + (p.cure_time.full_cure ? '<span>Durcissement complet : <strong>' + _esc(p.cure_time.full_cure) + '</strong></span>' : '')
+            + '</div></div>';
+    }
+    return html;
+}
+
+/* Lien vers l'article illustré (tag r pointant vers grimoire-craft.html#craft-N) */
+function _grimoireLinkFor(ev) {
+    var rTag = (ev.tags || []).find(function(t) { return t[0] === 'r' && /grimoire-craft\.html/.test(t[1] || ''); });
+    return rTag ? rTag[1] : '';
+}
+
+/* ══════════════════════════════════════════
+   FORK-TREE — variantes proposées (fork-of)
+══════════════════════════════════════════ */
+function _loadForkVariants(originalEv) {
+    var wrap = document.getElementById('rec-forks');
+    var list = document.getElementById('rec-forks-list');
+    wrap.style.display = '';
+    list.innerHTML = '<div style="color:var(--text-muted);font-size:11px"><i class="bi bi-hourglass-split"></i> Recherche de variantes…</div>';
+
+    RelaySelector.query(
+        _activeRelay,
+        { kinds: [30500], '#e': [originalEv.id], limit: 30 },
+        { timeout: 6000 }
+    ).then(function(events) {
+        var forks = events.filter(function(fe) {
+            return (fe.tags || []).some(function(t) { return t[0] === 'e' && t[1] === originalEv.id && t[3] === 'fork-of'; });
+        });
+        if (!forks.length) {
+            list.innerHTML = '<div style="color:var(--text-muted);font-size:11px;font-style:italic">Aucune variante proposée pour le moment.</div>';
+            return;
+        }
+        list.innerHTML = forks.map(function(fe) {
+            var fp = _parseContent(fe);
+            var policyTag = (fe.tags.find(function(t){return t[0]==='fork-policy';}) || [])[1] || 'variant';
+            var reason = fp.fork_reason || '';
+            var author = fe.pubkey.slice(0,8) + '…' + fe.pubkey.slice(-4);
+            return '<div class="fork-item" onclick="window.open(\'' + _esc(_grimoireLinkFor(fe) || '#') + '\',\'_blank\')">'
+                + '<span class="fork-author">@' + _esc(author) + '</span>'
+                + '<span class="fork-policy">' + _esc(policyTag) + '</span>'
+                + (reason ? '<div class="fork-reason">' + _esc(reason) + '</div>' : '')
+                + '</div>';
+        }).join('');
+    }).catch(function() {
+        list.innerHTML = '<div style="color:var(--text-muted);font-size:11px">Relay inaccessible pour les variantes.</div>';
+    });
+}
+
+/* Pré-remplit un nouveau craft à partir de l'original pour proposer une correction —
+   ouvre l'éditeur riche de minelife.html avec le contenu + le tag fork-of à publier. */
+function proposeForkFromCraft() {
+    var idx = _selectedCraftIdx;
+    var ev  = _craftEvents[idx];
+    if (!ev) return;
+    var dtag = _dtag(ev);
+    var url = 'minelife.html?fork_of=' + encodeURIComponent(ev.id) + '&fork_dtag=' + encodeURIComponent(dtag);
+    window.open(url, '_blank');
 }
 
 /* ══════════════════════════════════════════
@@ -719,7 +905,19 @@ function renderCrafts(events) {
 
     var html = events.map(function(ev, idx) {
         var p    = _parseContent(ev);
-        var title = p.title || _tagVal(ev,'title') || _dtag(ev);
+        var title = p.title || p.name || _tagVal(ev,'title') || _dtag(ev);
+        var isMaterial = p.craft_type === 'material';
+
+        if (isMaterial) {
+            var meta = [];
+            if (p.safety) meta.push('⚠️ sécurité');
+            if (p.cure_time && p.cure_time.workable) meta.push('⏱ ' + p.cure_time.workable);
+            return '<div class="craft-row" onclick="showCraft(' + idx + ')">'
+                + '<div class="craft-row-name">🧪 ' + _esc(title) + '</div>'
+                + '<div class="craft-row-meta">' + _esc(meta.join(' · ') || 'recette matière') + '</div>'
+                + '</div>';
+        }
+
         var minop = p.min_operators || _tagVal(ev,'min_operators') || 1;
         var time  = p.estimated_time || _tagVal(ev,'estimated_time') || '?';
 

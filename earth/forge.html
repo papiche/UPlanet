@@ -134,6 +134,10 @@ body{background:var(--bg);color:var(--txt);font-family:'Segoe UI',system-ui,sans
 .rings{display:flex;flex-wrap:wrap;gap:3px;margin-top:5px}
 .ring{font-size:.62rem;padding:1px 5px;border-radius:4px;background:rgba(5,150,105,.1);color:var(--muted)}
 .ring.miss{background:rgba(245,158,11,.1);color:var(--amb)}
+.rbadges{display:flex;gap:4px;margin-top:5px;flex-wrap:wrap}
+.rbadge{font-size:.6rem;padding:1px 6px;border-radius:8px;font-weight:600}
+.rbadge.warn{background:rgba(248,113,113,.15);color:#fca5a5}
+.rbadge.cure{background:rgba(14,165,233,.12);color:var(--blue)}
 
 /* VALIDATION QUEUE */
 .vqt{font-size:.68rem;font-weight:700;letter-spacing:1px;text-transform:uppercase;
@@ -344,6 +348,37 @@ body{background:var(--bg);color:var(--txt);font-family:'Segoe UI',system-ui,sans
                 <div class="mf" id="dr-qty-row" style="display:none">
                     <label>Quantité</label>
                     <input id="dr-qty" type="number" value="1" min="1">
+                </div>
+            </div>
+            <!-- Recette matière (ingrédients libres, façon G1FabLab) -->
+            <div class="mf" style="flex-direction:row;align-items:center;gap:6px">
+                <input id="dr-is-material" type="checkbox" style="width:auto" onchange="onDrMaterialToggle()">
+                <label style="margin:0" for="dr-is-material">🧪 Recette matière (ingrédients libres, hors inventaire)</label>
+            </div>
+            <div id="dr-material-fields" style="display:none;flex-direction:column;gap:6px">
+                <div class="mf">
+                    <label>Matériaux — 1 par ligne : Nom | Quantité | Unité</label>
+                    <textarea id="dr-materials" rows="3" placeholder="Silice (litière chat)|90|g&#10;Soude caustique (NaOH)|120|g"></textarea>
+                </div>
+                <div class="dr-row">
+                    <div class="mf">
+                        <label>⚠️ Sécurité</label>
+                        <input id="dr-safety" type="text" placeholder="Gants, extérieur, jamais d'aluminium…">
+                    </div>
+                    <div class="mf">
+                        <label>🍲 Station de travail</label>
+                        <input id="dr-station" type="text" placeholder="Casserole inox + foyer chaud">
+                    </div>
+                </div>
+                <div class="dr-row">
+                    <div class="mf">
+                        <label>⏱ Prise</label>
+                        <input id="dr-cure-workable" type="text" placeholder="30 min">
+                    </div>
+                    <div class="mf">
+                        <label>⏱ Durcissement complet</label>
+                        <input id="dr-cure-full" type="text" placeholder="72h">
+                    </div>
                 </div>
             </div>
             <!-- Ressources IPFS / uDRIVE -->
@@ -643,6 +678,12 @@ function parseRecipeEv(ev) {
             resultType:  resultType,
             resultName:  resultName,
             resultTag:   c.skill_tag || resultName.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,''),
+            // Recette matière (G1FabLab) — champs optionnels, lecture seule ici
+            craftType:   c.craft_type || 'skill',
+            materials:   Array.isArray(c.materials) ? c.materials : [],
+            station:     c.station || '',
+            safety:      c.safety || '',
+            cureTime:    c.cure_time || null,
             ev:          ev,
         };
     } catch(e) { return null; }
@@ -961,6 +1002,21 @@ function onDrTypeChange() {
     document.getElementById('dr-qty-row').style.display   = t === 'object'  ? '' : 'none';
 }
 
+function onDrMaterialToggle() {
+    var on = document.getElementById('dr-is-material').checked;
+    document.getElementById('dr-material-fields').style.display = on ? 'flex' : 'none';
+}
+
+/* Parse "Nom | Quantité | Unité" par ligne → [{name, qty, unit}] */
+function _parseMaterialsTextarea(raw) {
+    return (raw || '').split('\n').map(function(line) {
+        var parts = line.split('|').map(function(s){ return s.trim(); });
+        if (!parts[0]) return null;
+        var qty = parseFloat(parts[1]);
+        return { name: parts[0], qty: isNaN(qty) ? null : qty, unit: parts[2] || '' };
+    }).filter(Boolean);
+}
+
 function publishRecipe() {
     var icon    = (document.getElementById('dr-icon').value || '✨').trim();
     var name    = document.getElementById('dr-name').value.trim();
@@ -995,7 +1051,26 @@ function publishRecipe() {
         if (r.url) tags.push(['r', r.url, r.type || 'lien']);
     });
 
-    var content = JSON.stringify({
+    // Recette matière (G1FabLab) — champs optionnels
+    var isMaterial = document.getElementById('dr-is-material').checked;
+    var materialFields = {};
+    if (isMaterial) {
+        var materials = _parseMaterialsTextarea(document.getElementById('dr-materials').value);
+        var safety    = document.getElementById('dr-safety').value.trim();
+        var station   = document.getElementById('dr-station').value.trim();
+        var cureW     = document.getElementById('dr-cure-workable').value.trim();
+        var cureF     = document.getElementById('dr-cure-full').value.trim();
+        materialFields = {
+            craft_type: 'material',
+            materials:  materials,
+            safety:     safety || undefined,
+            station:    station || undefined,
+            cure_time:  (cureW || cureF) ? { workable: cureW, full_cure: cureF } : undefined,
+        };
+        tags.push(['t', 'materiau']);
+    }
+
+    var content = JSON.stringify(Object.assign({
         name:         name,
         icon:         icon,
         result_type:  rType,
@@ -1004,7 +1079,7 @@ function publishRecipe() {
         skill_tag:    normTag,
         auto_proclaimed: false,
         composite:    true,
-    });
+    }, materialFields));
 
     document.getElementById('btn-def-recipe').disabled = true;
     document.getElementById('btn-def-recipe').textContent = '⏳ Publication…';
@@ -1014,6 +1089,14 @@ function publishRecipe() {
         notify('📋 Recette « ' + name + ' » publiée !', 's');
         document.getElementById('dr-form').classList.remove('show');
         document.getElementById('dr-name').value = '';
+        // Reset matière
+        document.getElementById('dr-is-material').checked = false;
+        document.getElementById('dr-materials').value = '';
+        document.getElementById('dr-safety').value = '';
+        document.getElementById('dr-station').value = '';
+        document.getElementById('dr-cure-workable').value = '';
+        document.getElementById('dr-cure-full').value = '';
+        onDrMaterialToggle();
         // Reset ressources
         S.drResources = [];
         S.udriveFiles = [];
@@ -1291,7 +1374,12 @@ function renderRecipes() {
         }).join('') + r.uses.map(function(u) {
             var have = S.objects.some(function(o){ return o.tag===u.tag && o.quantity>=u.qty; });
             return '<span class="ring'+(have?'':' miss')+'">📦 '+esc(u.tag)+' ×'+u.qty+'</span>';
+        }).join('') + r.materials.map(function(m) {
+            return '<span class="ring">🧪 '+esc(m.name)+(m.qty!=null?' '+esc(String(m.qty))+' '+esc(m.unit||''):'')+'</span>';
         }).join('');
+
+        var badges = (r.safety ? '<span class="rbadge warn">⚠️ sécurité</span>' : '')
+            + (r.cureTime && r.cureTime.workable ? '<span class="rbadge cure">⏱ '+esc(r.cureTime.workable)+'</span>' : '');
 
         return '<div class="rcard'+(x.ok?' craftable':'')+'" onclick="autoFillForge(\''+esc(r.id)+'\')">'
              + '<div class="rch">'
@@ -1300,6 +1388,7 @@ function renderRecipes() {
              + '<span class="rcs '+statusClass+'">'+statusLabel+'</span>'
              + '</div>'
              + (ings ? '<div class="rings">'+ings+'</div>' : '')
+             + (badges ? '<div class="rbadges">'+badges+'</div>' : '')
              + '</div>';
     }).join('');
 }

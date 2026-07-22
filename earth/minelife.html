@@ -1660,6 +1660,46 @@ textarea.scan-input:focus { border-color: var(--accent); }
                 🤖 IA
             </button>
         </div>
+        <!-- Recette matière (G1FabLab) — chimie / fabrication physique, optionnel -->
+        <div style="padding:7px 14px;border-bottom:1px solid rgba(255,255,255,0.05);display:flex;align-items:center;gap:7px;flex-shrink:0;background:rgba(139,92,246,0.04)">
+            <input id="ce-is-material" type="checkbox" style="width:auto" onchange="wyMaterialToggle()">
+            <label for="ce-is-material" style="font-size:11.5px;color:#c4b5fd;margin:0;cursor:pointer">🧪 Recette matière (chimie / fabrication physique)</label>
+        </div>
+        <div id="ce-fork-banner" style="display:none;padding:8px 14px;border-bottom:1px solid rgba(124,58,237,0.2);background:rgba(124,58,237,0.08);flex-shrink:0">
+            <div style="font-size:10.5px;color:#c4b5fd">🔀 Vous proposez une correction/variante d'une recette existante — publiée comme une nouvelle recette liée à l'originale.</div>
+            <input id="ce-fork-reason" type="text" placeholder="Motif de la correction (ex: dosage NaOH corrigé)"
+                style="width:100%;margin-top:5px;padding:5px 8px;background:var(--input-bg);border:1px solid rgba(124,58,237,0.3);border-radius:6px;color:#e2e8f0;font-size:11px;outline:none">
+        </div>
+        <div id="ce-material-fields" style="display:none;flex-direction:column;gap:8px;padding:10px 14px;border-bottom:1px solid rgba(255,255,255,0.05);flex-shrink:0;max-height:240px;overflow-y:auto">
+            <input id="ce-mat-station" type="text" placeholder="🍲 Station de travail"
+                style="padding:6px 9px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:7px;color:#d1fae5;font-size:11px;outline:none">
+            <div>
+                <div style="font-size:10px;color:var(--text-muted);margin-bottom:3px">Matériaux — nom, quantité, unité</div>
+                <div id="ce-mat-list" style="display:flex;flex-direction:column;gap:4px;margin-bottom:4px"></div>
+                <div style="display:flex;gap:5px">
+                    <input id="ce-mat-name" type="text" placeholder="Nom" style="flex:2;padding:5px 8px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:6px;color:#d1fae5;font-size:11px">
+                    <input id="ce-mat-qty" type="text" placeholder="Qté" style="flex:1;padding:5px 8px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:6px;color:#d1fae5;font-size:11px">
+                    <input id="ce-mat-unit" type="text" placeholder="Unité" style="flex:1;padding:5px 8px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:6px;color:#d1fae5;font-size:11px">
+                    <button class="btn-ghost" style="font-size:11px;padding:4px 8px" onclick="wyAddMaterial()">＋</button>
+                </div>
+            </div>
+            <textarea id="ce-mat-safety" rows="2" placeholder="⚠️ Sécurité"
+                style="padding:6px 9px;background:var(--input-bg);border:1px solid rgba(248,113,113,0.35);border-radius:7px;color:#fecaca;font-size:11px;outline:none;resize:vertical"></textarea>
+            <textarea id="ce-mat-chemistry" rows="2" placeholder="🧪 Chimie de la réaction (équation, explication)"
+                style="padding:6px 9px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:7px;color:#d1fae5;font-size:11px;outline:none;resize:vertical;font-family:'Courier New',monospace"></textarea>
+            <textarea id="ce-mat-industrial" rows="2" placeholder="🏭 Comparatif industriel"
+                style="padding:6px 9px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:7px;color:#d1fae5;font-size:11px;outline:none;resize:vertical"></textarea>
+            <textarea id="ce-mat-cost" rows="2" placeholder="💶 Coût comparé"
+                style="padding:6px 9px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:7px;color:#d1fae5;font-size:11px;outline:none;resize:vertical"></textarea>
+            <textarea id="ce-mat-sourcing" rows="2" placeholder="🛒 Se procurer les ingrédients"
+                style="padding:6px 9px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:7px;color:#d1fae5;font-size:11px;outline:none;resize:vertical"></textarea>
+            <div style="display:flex;gap:8px">
+                <input id="ce-mat-cure-workable" type="text" placeholder="⏱ Prise (ex: 30 min)"
+                    style="flex:1;padding:6px 9px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:7px;color:#d1fae5;font-size:11px;outline:none">
+                <input id="ce-mat-cure-full" type="text" placeholder="⏱ Durcissement complet (ex: 72h)"
+                    style="flex:1;padding:6px 9px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:7px;color:#d1fae5;font-size:11px;outline:none">
+            </div>
+        </div>
         <!-- WYSIWYG main -->
         <div class="wy-layout" style="overflow-y:auto;flex:1">
             <!-- Left: Palette skills + médias -->
@@ -4353,16 +4393,58 @@ const WY = {
     permitId:    '',
     slots:       new Array(9).fill(null), // null | { skill, icon, level }
     resources:   [],                      // { url, type }
+    materials:   [],                      // { name, qty, unit } — recette matière G1FabLab
+    forkOf:      '',                      // event id de la recette d'origine (correction/variante)
+    forkPolicy:  'variant',               // 'variant' | 'correction' | 'improvement'
     skillPool:   [],                      // { skill, icon } chargé depuis relay
     mediaPool:   [],                      // { url, type, label, icon }
     dragPayload: null,                    // payload courant du drag
     tapSelected: null,                    // { kind:'skill', skill, icon } — sélection mobile tap&tap
 };
 
+function _resetMaterialFields() {
+    WY.materials  = [];
+    WY.forkOf     = '';
+    WY.forkPolicy = 'variant';
+    document.getElementById('ce-is-material').checked = false;
+    document.getElementById('ce-mat-station').value = '';
+    document.getElementById('ce-mat-safety').value = '';
+    document.getElementById('ce-mat-chemistry').value = '';
+    document.getElementById('ce-mat-industrial').value = '';
+    document.getElementById('ce-mat-cost').value = '';
+    document.getElementById('ce-mat-sourcing').value = '';
+    document.getElementById('ce-mat-cure-workable').value = '';
+    document.getElementById('ce-mat-cure-full').value = '';
+    document.getElementById('ce-fork-reason').value = '';
+    document.getElementById('ce-fork-banner').style.display = 'none';
+    wyMaterialToggle();
+    wyRenderMaterials();
+}
+
+/* Applique le contenu d'une recette matière (content JSON) aux champs du modal */
+function _applyMaterialContent(meta) {
+    if (meta.craft_type !== 'material') return;
+    document.getElementById('ce-is-material').checked = true;
+    WY.materials = Array.isArray(meta.materials) ? meta.materials.slice() : [];
+    document.getElementById('ce-mat-station').value    = meta.station || '';
+    document.getElementById('ce-mat-safety').value      = meta.safety || '';
+    document.getElementById('ce-mat-chemistry').value   = meta.chemistry || '';
+    document.getElementById('ce-mat-industrial').value  = meta.industrial_comparison || '';
+    document.getElementById('ce-mat-cost').value        = meta.cost_comparison || '';
+    document.getElementById('ce-mat-sourcing').value    = meta.sourcing || '';
+    if (meta.cure_time) {
+        document.getElementById('ce-mat-cure-workable').value = meta.cure_time.workable || '';
+        document.getElementById('ce-mat-cure-full').value     = meta.cure_time.full_cure || '';
+    }
+    wyMaterialToggle();
+    wyRenderMaterials();
+}
+
 async function openCraftEditor(permitId) {
     WY.permitId  = permitId || '';
     WY.slots     = new Array(9).fill(null);
     WY.resources = [];
+    _resetMaterialFields();
 
     if (permitId && _permitCache[permitId]) {
         const ev   = _permitCache[permitId];
@@ -4371,7 +4453,7 @@ async function openCraftEditor(permitId) {
         try { meta = JSON.parse(ev.content || '{}'); } catch(e) {}
 
         const dVal = (tags.find(t => t[0] === 'd') || [])[1] || '';
-        const humanName = meta.name || dVal.replace(/^PERMIT_/, '').replace(/_X\d+$/, '').replace(/_/g, ' ');
+        const humanName = meta.name || dVal.replace(/^PERMIT_/, '').replace(/^RECIPE_/, '').replace(/_X\d+$/, '').replace(/_/g, ' ');
         document.getElementById('ce-icon').value = meta.icon || getSkillEmoji(humanName.toLowerCase().replace(/\s+/g,'-')) || '🔷';
         document.getElementById('ce-name').value = humanName;
         document.getElementById('ce-desc').value = meta.description || '';
@@ -4381,6 +4463,7 @@ async function openCraftEditor(permitId) {
             if (i < 9) WY.slots[i] = { skill: ing.skill, icon: getSkillEmoji(ing.skill), level: ing.min_level };
         });
         tags.filter(t => t[0] === 'r' && t[1]).forEach(t => WY.resources.push({ url: t[1], type: t[2] || 'lien' }));
+        _applyMaterialContent(meta);
     } else {
         document.getElementById('ce-icon').value = '🔷';
         document.getElementById('ce-name').value = '';
@@ -4394,6 +4477,43 @@ async function openCraftEditor(permitId) {
     wyUpdateResult();
     document.getElementById('modal-craft-editor').style.display = 'flex';
     wyLoadPalette(); // async, non-bloquant
+}
+
+/* Ouvre l'éditeur pré-rempli à partir d'une recette existante, pour proposer une
+   correction/variante (fork-tree). Publie toujours un NOUVEL event (WY.permitId reste
+   vide) taggé ['e', originalEv.id, '', 'fork-of'] — cf. proposeForkFromCraft() dans h2g2.html. */
+async function openCraftEditorAsFork(originalEv) {
+    WY.permitId  = '';
+    WY.slots     = new Array(9).fill(null);
+    WY.resources = [];
+    _resetMaterialFields();
+
+    const tags = originalEv.tags || [];
+    let meta = {};
+    try { meta = JSON.parse(originalEv.content || '{}'); } catch(e) {}
+    const dVal = (tags.find(t => t[0] === 'd') || [])[1] || '';
+    const humanName = meta.name || dVal.replace(/^PERMIT_/, '').replace(/^RECIPE_/, '').replace(/_X\d+$/, '').replace(/_/g, ' ');
+
+    document.getElementById('ce-icon').value = meta.icon || '🔷';
+    document.getElementById('ce-name').value = humanName;
+    document.getElementById('ce-desc').value = meta.description || '';
+    document.getElementById('craft-editor-title').textContent = '🔀 Variante de : ' + humanName;
+
+    parseRecipeFromPermit(originalEv).forEach((ing, i) => {
+        if (i < 9) WY.slots[i] = { skill: ing.skill, icon: getSkillEmoji(ing.skill), level: ing.min_level };
+    });
+    tags.filter(t => t[0] === 'r' && t[1]).forEach(t => WY.resources.push({ url: t[1], type: t[2] || 'lien' }));
+    _applyMaterialContent(meta);
+
+    WY.forkOf = originalEv.id;
+    document.getElementById('ce-fork-banner').style.display = '';
+    document.getElementById('ce-permit-id').value = '';
+
+    wyRenderGrid();
+    wyRenderResources();
+    wyUpdateResult();
+    document.getElementById('modal-craft-editor').style.display = 'flex';
+    wyLoadPalette();
 }
 
 // ── Rendu grille ──
@@ -4471,6 +4591,39 @@ function wyResAdd(url, type) {
 }
 
 function wyResRemove(i) { WY.resources.splice(i, 1); wyRenderResources(); }
+
+// ── Recette matière (G1FabLab) ──
+
+function wyMaterialToggle() {
+    const on = document.getElementById('ce-is-material').checked;
+    document.getElementById('ce-material-fields').style.display = on ? 'flex' : 'none';
+}
+
+function wyAddMaterial() {
+    const name = document.getElementById('ce-mat-name').value.trim();
+    if (!name) return;
+    const qtyRaw = document.getElementById('ce-mat-qty').value.trim();
+    const qty  = qtyRaw === '' ? null : parseFloat(qtyRaw);
+    const unit = document.getElementById('ce-mat-unit').value.trim();
+    WY.materials.push({ name, qty: isNaN(qty) ? null : qty, unit });
+    document.getElementById('ce-mat-name').value = '';
+    document.getElementById('ce-mat-qty').value  = '';
+    document.getElementById('ce-mat-unit').value = '';
+    wyRenderMaterials();
+}
+
+function wyRemoveMaterial(i) { WY.materials.splice(i, 1); wyRenderMaterials(); }
+
+function wyRenderMaterials() {
+    const list = document.getElementById('ce-mat-list');
+    if (!list) return;
+    list.innerHTML = WY.materials.map((m, i) => `
+        <div style="display:flex;align-items:center;gap:6px;font-size:11px;background:rgba(255,255,255,0.04);border-radius:6px;padding:3px 8px">
+            <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(m.name)}</span>
+            <span style="color:var(--accent-light);font-weight:600;flex-shrink:0">${m.qty != null ? escapeHtml(String(m.qty)) : ''} ${escapeHtml(m.unit || '')}</span>
+            <button class="btn-ghost" style="padding:1px 5px;font-size:10px;color:#f87171;flex-shrink:0" onclick="wyRemoveMaterial(${i})">✕</button>
+        </div>`).join('');
+}
 
 // ── Chargement palette depuis relay ──
 
@@ -4656,13 +4809,20 @@ async function saveCraftEditor() {
     const desc = (document.getElementById('ce-desc').value || '').trim();
     if (!name) { notify('Le nom du skill est requis.', 'warning'); return; }
 
+    const isMaterial = document.getElementById('ce-is-material').checked;
     const normName = name.toUpperCase().replace(/[^A-Z0-9]/g, '_');
-    const dTag     = WY.permitId || 'PERMIT_' + normName + '_X1';
     const skillTag = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+
+    // Une correction/variante (fork) publie toujours un NOUVEL event, jamais WY.permitId
+    // (NIP-33 ne remplace que l'event du même pubkey+d-tag — un tiers ne peut pas
+    // écraser la recette d'un autre auteur).
+    const dTag = WY.forkOf
+        ? (isMaterial ? 'RECIPE_' : 'PERMIT_') + normName + '_X1_' + Math.floor(Date.now() / 1000)
+        : (WY.permitId || (isMaterial ? 'RECIPE_' : 'PERMIT_') + normName + '_X1');
 
     const tags = [
         ['d', dTag],
-        ['t', 'permit'],
+        ['t', isMaterial ? 'materiau' : 'permit'],
         ['t', 'auto_proclaimed'],
         ['t', skillTag],
         ...geoTags(),
@@ -4680,11 +4840,40 @@ async function saveCraftEditor() {
     // Ressources formation
     WY.resources.forEach(r => { if (r.url) tags.push(['r', r.url, r.type || 'lien']); });
 
-    const content = JSON.stringify({ id: dTag, name, icon, description: desc, skill_tag: skillTag, auto_proclaimed: true });
+    // Fork-tree : correction/variante d'une recette existante
+    let forkReason = '';
+    if (WY.forkOf) {
+        tags.push(['e', WY.forkOf, '', 'fork-of']);
+        tags.push(['fork-policy', WY.forkPolicy || 'variant']);
+        forkReason = (document.getElementById('ce-fork-reason').value || '').trim();
+    }
+
+    const content = { id: dTag, name, icon, description: desc, skill_tag: skillTag, auto_proclaimed: true };
+    if (isMaterial) {
+        content.craft_type = 'material';
+        content.materials  = WY.materials;
+        const station     = document.getElementById('ce-mat-station').value.trim();
+        const safety       = document.getElementById('ce-mat-safety').value.trim();
+        const chemistry    = document.getElementById('ce-mat-chemistry').value.trim();
+        const industrial   = document.getElementById('ce-mat-industrial').value.trim();
+        const cost         = document.getElementById('ce-mat-cost').value.trim();
+        const sourcing     = document.getElementById('ce-mat-sourcing').value.trim();
+        const cureWorkable = document.getElementById('ce-mat-cure-workable').value.trim();
+        const cureFull     = document.getElementById('ce-mat-cure-full').value.trim();
+        if (station)   content.station = station;
+        if (safety)    content.safety = safety;
+        if (chemistry) content.chemistry = chemistry;
+        if (industrial) content.industrial_comparison = industrial;
+        if (cost)      content.cost_comparison = cost;
+        if (sourcing)  content.sourcing = sourcing;
+        if (cureWorkable || cureFull) content.cure_time = { workable: cureWorkable, full_cure: cureFull };
+        if (WY.forkOf && forkReason) content.fork_reason = forkReason;
+        tags.push(['t', 'g1fablab']);
+    }
 
     try {
-        await requireSigned({ kind: 30500, tags, content });
-        notify('Craft publié !', 'success');
+        await requireSigned({ kind: 30500, tags, content: JSON.stringify(content) });
+        notify(WY.forkOf ? '🔀 Variante publiée !' : 'Craft publié !', 'success');
         closeCraftEditor();
         _atelierLoaded = false;
         setTimeout(() => loadCraftingTab(true), 600);
@@ -5278,6 +5467,21 @@ function wyApplyCraftJson(jsonStr) {
         });
         wyRenderGrid();
     }
+    // Fabrication physique/chimique détectée par BRO — préremplir le bloc matière
+    if (d.craft_type === 'material') {
+        document.getElementById('ce-is-material').checked = true;
+        if (Array.isArray(d.materials)) WY.materials = d.materials.slice();
+        if (d.safety)    document.getElementById('ce-mat-safety').value = d.safety;
+        if (d.cure_time) {
+            if (typeof d.cure_time === 'string') document.getElementById('ce-mat-cure-workable').value = d.cure_time;
+            else {
+                document.getElementById('ce-mat-cure-workable').value = d.cure_time.workable  || '';
+                document.getElementById('ce-mat-cure-full').value     = d.cure_time.full_cure || '';
+            }
+        }
+        wyMaterialToggle();
+        wyRenderMaterials();
+    }
     wyUpdateResult();
     const url = document.getElementById('ce-import-url')?.value?.trim();
     if (url && !WY.resources.find(r => r.url === url)) {
@@ -5776,6 +5980,19 @@ document.addEventListener('DOMContentLoaded', () => {
         if (_tabExploreBtn   && _tabExploreBtn.classList.contains('active'))   loadExploreTab();
         if (_tabFormationBtn && _tabFormationBtn.classList.contains('active')) loadFormationTab();
     });
+
+    // ?fork_of=<eventId> — lien "🔀 Proposer une correction" depuis h2g2.html
+    const _forkOfParam = new URLSearchParams(window.location.search).get('fork_of');
+    if (_forkOfParam) {
+        const _tabCraftBtn = document.getElementById('tab-craft-btn');
+        if (_tabCraftBtn) bootstrap.Tab.getOrCreateInstance(_tabCraftBtn).show();
+        waitForConnection(() => {
+            fetchEvents({ kinds: [30500], ids: [_forkOfParam], limit: 1 }).then(evs => {
+                if (evs[0]) openCraftEditorAsFork(evs[0]);
+                else notify('Recette d\'origine introuvable sur ce relay.', 'warning');
+            });
+        });
+    }
 
     // Actualiser UI si connexion change (relay events)
     if (window._minelifeConnPollId) clearInterval(window._minelifeConnPollId);

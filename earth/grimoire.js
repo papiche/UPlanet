@@ -590,6 +590,17 @@
         }
     }
 
+    /**
+     * Showcase vidéo pour un craft matière (Kind 30500 craft_type:"material", ex. G1FabLab).
+     * Alias de triggerSkillShowcase() — la recherche de badge (_findBadgeForSkill) et la
+     * publication Kind 22 sont déjà génériques ; seul le nom/tag diffère (dtag de la
+     * recette plutôt que nom de skill). Appelé après déclaration d'un objet Kind 30505
+     * "produit" avec une photo (cf. forge.html / plantnet.html).
+     */
+    async function triggerCraftShowcase(recipeDtag, resultName) {
+        return triggerSkillShowcase(recipeDtag, resultName);
+    }
+
     /* ── API publique ───────────────────────────────────────────────────── */
 
     window.Grimoire = {
@@ -598,6 +609,7 @@
         generateSkillVideo,
         generateCVReel,
         triggerSkillShowcase,
+        triggerCraftShowcase,
         trimAndPublish,
         concatSegments,
         _trimVideo,

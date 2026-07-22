@@ -2269,13 +2269,24 @@ async function _resolveNearestStation(lat, lon) {
         var _apiBase = typeof window.getAPIUrl === 'function' ? window.getAPIUrl()
             : (location.hostname === '127.0.0.1' ? 'http://127.0.0.1:54321' : '');
         if (!_apiBase) { _setStationStatus('error', '⚠️ Impossible de déterminer l\'API de station'); return; }
-        // Récupérer la liste du swarm depuis la station courante
+        // Récupérer la liste du swarm depuis la station courante — GET /api/ustats
+        // (alias de GET /, cf. UPassport routers/system.py::api_ustats). Le tableau
+        // "SWARM" exclut volontairement la station courante (Ustats.sh la filtre par
+        // IPFSNODEID) : on la réinjecte via CENTER/uSPOT/myRELAY pour comparaison.
         var _ctrl = typeof AbortSignal !== 'undefined' && AbortSignal.timeout
             ? { signal: AbortSignal.timeout(6000) } : {};
-        var _r = await fetch(_apiBase + '/api/swarm', _ctrl);
+        var _r = await fetch(_apiBase + '/api/ustats', _ctrl);
         if (!_r.ok) { _setStationStatus('error', '⚠️ Constellation injoignable — réessayez'); return; }
         var _swarm = await _r.json();
-        var _stations = Array.isArray(_swarm) ? _swarm : (_swarm.stations || []);
+        var _stations = Array.isArray(_swarm) ? _swarm : (_swarm.SWARM || _swarm.stations || []);
+        if (_swarm.CENTER && _swarm.CENTER.LAT && _swarm.CENTER.LON) {
+            // Pas de "hostname" au niveau racine du JSON — _setStationStatus retombe
+            // sur l'uSPOT nettoyé (cf. appelant, _best.hostname || uSPOT.replace(...))
+            _stations = _stations.concat([{
+                STATION_LAT: _swarm.CENTER.LAT, STATION_LON: _swarm.CENTER.LON,
+                uSPOT: _swarm.uSPOT, myRELAY: _swarm.myRELAY
+            }]);
+        }
         if (!_stations.length) { _setStationStatus('error', '⚠️ Aucune station détectée dans la constellation'); return; }
 
         // Haversine simplifié pour trouver la plus proche

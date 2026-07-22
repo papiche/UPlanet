@@ -1,0 +1,1240 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Forge Skills x1 — Activation Compétences</title>
+<link rel="icon" type="image/x-icon" href="favicon.ring.ico">
+<link rel="stylesheet" href="bootstrap.min.css">
+<link rel="stylesheet" href="fonts/bootstrap-icons.css">
+<style>
+:root {
+    --accent:       #10b981;
+    --accent-light: #34d399;
+    --accent-dark:  #059669;
+    --water-blue:   #38bdf8;
+    --water-dark:   #0ea5e9;
+    --solar:        #f59e0b;
+    --bg-main:      linear-gradient(135deg,#06101e 0%,#0a2018 40%,#06101c 100%);
+    --card-bg:      rgba(6,16,12,0.97);
+    --card-border:  rgba(16,185,129,0.25);
+    --text-muted:   #94a3b8;
+    --text-bright:  #e2e8f0;
+    --input-bg:     rgba(255,255,255,0.07);
+    --input-border: rgba(16,185,129,0.38);
+}
+* { box-sizing:border-box; }
+/* Couleur de fond solide en fallback pour éviter le blanc Bootstrap */
+body { margin:0; min-height:100vh;
+       background-color:#06101e;
+       background-image:linear-gradient(135deg,#06101e 0%,#0a2018 40%,#06101c 100%);
+       font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif; color:#e2e8f0; }
+/* Neutraliser les variables Bootstrap sur bg/color pour ne pas interférer */
+:root { --bs-body-bg: #06101e; --bs-body-color: #e2e8f0; }
+
+/* ── LAYOUT ── */
+.main { max-width:900px; margin:56px auto 0; padding:16px 14px 48px; }
+.page-title { font-size:18px; font-weight:700; color:var(--accent-light); margin-bottom:4px; }
+.page-title small { font-size:11.5px; color:#94a3b8; font-weight:400; display:block; margin-top:3px; }
+
+/* ── WCARD — couleurs solides sans variable CSS (résistance Bootstrap garantie) ── */
+.wcard {
+    background: #080f0a;
+    border: 1px solid rgba(16,185,129,.28);
+    border-radius:14px; padding:18px 18px 16px; margin-bottom:14px;
+    box-shadow:0 4px 28px rgba(0,0,0,.7); color:#e2e8f0;
+}
+.wcard-title {
+    font-size:13px; font-weight:700; color:#34d399;
+    margin-bottom:13px; display:flex; align-items:center; gap:7px;
+}
+.wcard.activated  { border-color:#10b981; background:#08150e; }
+.wcard.has-media  { border-color:#f59e0b; }
+
+/* ── PANNEAUX DYNAMIQUES — contraste renforcé (résiste à Bootstrap) ── */
+#existing-panel {
+    background:#081410 !important;
+    border-color:rgba(52,211,153,.3) !important;
+}
+#existing-panel .wcard-title { color:#34d399; }
+#existing-panel .wcard-title i { color:#6ee7b7; }
+
+#session-card {
+    background:#080e18 !important;
+    border-color:rgba(56,189,248,.25) !important;
+}
+#session-card .wcard-title { color:#7dd3fc; }
+.session-meta { display:flex; flex-wrap:wrap; gap:7px; color:#e2e8f0; }
+.meta-badge {
+    font-size:11.5px; padding:4px 12px; border-radius:10px;
+    background:rgba(56,189,248,.15); border:1px solid rgba(56,189,248,.3);
+    color:#bae6fd; font-weight:500;
+}
+
+/* ── FIELD WRAP (form groups avec labels) ── */
+.field-wrap { display:flex; flex-direction:column; gap:4px; flex:1; min-width:100px; }
+.field-label { font-size:10.5px; color:#94a3b8; font-weight:600;
+    display:flex; align-items:center; gap:4px; white-space:nowrap; }
+
+/* ── TOOLTIPS ── */
+.tip-icon {
+    display:inline-flex; align-items:center; justify-content:center;
+    width:14px; height:14px; border-radius:50%; font-size:9px; font-weight:700;
+    background:rgba(56,189,248,.18); border:1px solid rgba(56,189,248,.35); color:#7dd3fc;
+    cursor:help; position:relative; font-style:normal; flex-shrink:0;
+    line-height:1; text-align:center;
+}
+[data-tip] { position:relative; }
+[data-tip]::after {
+    content: attr(data-tip);
+    position:absolute; bottom:calc(100% + 7px); left:50%; transform:translateX(-50%);
+    background:rgba(6,14,26,.98); border:1px solid rgba(56,189,248,.22);
+    border-radius:9px; padding:9px 13px; font-size:11px; color:#e2e8f0;
+    white-space:pre-line; max-width:280px; min-width:150px; line-height:1.65;
+    box-shadow:0 8px 32px rgba(0,0,0,.75); z-index:10000;
+    pointer-events:none; opacity:0; transition:opacity .18s; font-weight:400;
+}
+[data-tip]:hover::after { opacity:1; }
+.tip-icon[data-tip]::after { left:0; transform:none; }
+.tip-right[data-tip]::after { left:auto; right:0; transform:none; }
+
+/* ── META BADGE ── */
+.meta-badge { font-size:11px; padding:3px 10px; border-radius:10px;
+  background:rgba(16,185,129,.14); border:1px solid rgba(16,185,129,.3); color:#a7f3d0; }
+
+/* ── SKILLS GRID ── */
+.skills-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(270px,1fr)); gap:14px; margin-bottom:20px; }
+
+/* ── SKILL CARD (wcard variant) ── */
+.skill-card { display:flex; flex-direction:column; gap:10px; position:relative; }
+.skill-header { display:flex; align-items:center; gap:10px; }
+.skill-icon { font-size:26px; }
+.skill-name { font-weight:700; font-size:14px; color:#a7f3d0; flex:1; }
+.skill-level {
+    font-size:11px; padding:3px 10px; border-radius:20px; font-weight:700;
+    background:rgba(56,189,248,.18); border:1px solid var(--water-blue); color:#7dd3fc;
+}
+.skill-desc { font-size:12px; color:#94a3b8; line-height:1.55; }
+
+/* ── STATUS BADGE ── */
+.status-badge { font-size:10px; padding:2px 9px; border-radius:20px; font-weight:600; align-self:flex-start; }
+.status-pending { background:rgba(255,255,255,.08); color:#9ca3af; border:1px solid rgba(255,255,255,.15); }
+.status-media   { background:rgba(245,158,11,.15); color:#fde68a; border:1px solid rgba(245,158,11,.3); }
+.status-active  { background:rgba(5,150,105,.2);   color:#6ee7b7; border:1px solid var(--accent); }
+.status-error   { background:rgba(239,68,68,.15);  color:#fca5a5; border:1px solid #ef4444; }
+
+/* ── DROP ZONE ── */
+.drop-zone {
+    border:1.5px dashed rgba(16,185,129,.35); border-radius:10px;
+    padding:14px; text-align:center; cursor:pointer; transition:all .2s;
+    min-height:76px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:5px;
+}
+.drop-zone:hover, .drop-zone.dragover { border-color:var(--accent-light); background:rgba(16,185,129,.06); }
+.drop-zone.has-file { border-color:var(--solar); background:rgba(245,158,11,.05); }
+.drop-zone .dz-label { font-size:11.5px; color:#94a3b8; }
+.drop-zone .dz-file  { font-size:11px; color:#fde68a; word-break:break-all; }
+.drop-zone .dz-icon  { font-size:22px; }
+
+/* ── SHARED MEDIA ── */
+.shared-media-row { display:flex; flex-wrap:wrap; gap:6px; margin-top:4px; }
+.shared-media-item {
+    font-size:10.5px; padding:3px 10px; border-radius:20px; cursor:pointer;
+    background:rgba(56,189,248,.1); border:1px solid rgba(56,189,248,.25); color:#7dd3fc;
+    max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+    transition:background .15s;
+}
+.shared-media-item:hover    { background:rgba(56,189,248,.22); }
+.shared-media-item.selected { background:rgba(56,189,248,.32); border-color:#38bdf8; color:#e0f2fe; }
+.shared-label { font-size:10.5px; color:#94a3b8; margin-bottom:5px; }
+/* Highlight depuis skills.html */
+@keyframes pulse-target {
+    0%   { box-shadow: 0 0 0 8px rgba(56,189,248,.5), 0 4px 28px rgba(0,0,0,.7); }
+    100% { box-shadow: 0 0 0 2px rgba(56,189,248,.08), 0 4px 28px rgba(0,0,0,.7); }
+}
+.skill-card.highlight-target { border-color:#38bdf8; animation: pulse-target 2.4s ease-out forwards; }
+/* Preview média sélectionné */
+.media-preview {
+    margin-top: 7px; border-radius: 9px; overflow: hidden;
+    background: rgba(0,0,0,.45); border: 1px solid rgba(56,189,248,.18);
+    display: flex; align-items: center; justify-content: center;
+    min-height: 44px; max-height: 180px;
+}
+.media-preview img, .media-preview video {
+    max-width: 100%; max-height: 180px; border-radius: 7px;
+    object-fit: contain; display: block;
+}
+.media-preview .pv-fallback {
+    color: #7dd3fc; font-size: 11px; padding: 10px 14px;
+    text-align: center; word-break: break-all;
+}
+
+/* ── BUTTONS ── */
+.btn-activate {
+    width:100%; padding:10px; border-radius:10px; font-weight:700;
+    font-size:12.5px; cursor:pointer; transition:all .2s;
+    background:linear-gradient(135deg,#059669,#10b981);
+    border:1px solid #10b981; color:#fff;
+}
+.btn-activate:not(:disabled):hover {
+    background:linear-gradient(135deg,#10b981,#34d399);
+    box-shadow:0 3px 14px rgba(16,185,129,.45);
+}
+.btn-activate:disabled { opacity:.3; cursor:not-allowed; }
+.btn-add {
+    padding:9px 18px; border-radius:10px; font-size:12px; font-weight:600;
+    background:linear-gradient(135deg,rgba(99,102,241,.3),rgba(99,102,241,.5));
+    border:1px solid rgba(99,102,241,.5); color:#c7d2fe; cursor:pointer; white-space:nowrap;
+    transition:all .2s;
+}
+.btn-add:hover { background:rgba(99,102,241,.62); box-shadow:0 2px 10px rgba(99,102,241,.35); }
+
+/* ── ADD SKILL PANEL ── */
+.add-skill-panel { border-style:dashed; border-color:rgba(99,102,241,.3); }
+.add-skill-panel .wcard-title { color:#a5b4fc; }
+.add-skill-row { display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end; }
+.add-skill-input {
+    width:100%; padding:9px 12px;
+    background:rgba(255,255,255,.07); border:1px solid rgba(99,102,241,.4);
+    border-radius:9px; color:#e2e8f0; font-size:12px; outline:none;
+    transition:border-color .2s, background .2s;
+}
+.add-skill-input:focus { border-color:#818cf8; background:rgba(255,255,255,.1); }
+.add-skill-input::placeholder { color:#64748b; }
+
+/* ── RARE SKILL CHIPS (suggestions) ── */
+.rare-skill-chip {
+    font-size:10.5px; padding:3px 10px; border-radius:16px; cursor:pointer;
+    background:rgba(99,102,241,.12); border:1px solid rgba(99,102,241,.28); color:#c7d2fe;
+    transition:all .15s; white-space:nowrap; display:inline-flex; align-items:center; gap:5px;
+}
+.rare-skill-chip:hover { background:rgba(99,102,241,.3); border-color:#818cf8; color:#e0e7ff; }
+.rare-skill-chip .chip-count { opacity:.55; font-size:9px; }
+
+/* ── EXISTING SKILLS ── */
+.existing-skills-list { display:flex; flex-wrap:wrap; gap:7px; }
+.existing-skill-badge {
+    font-size:11.5px; padding:4px 12px; border-radius:20px;
+    background:rgba(16,185,129,.14); border:1px solid rgba(16,185,129,.3); color:#a7f3d0;
+}
+.existing-skill-badge.x2 { background:rgba(56,189,248,.14); border-color:rgba(56,189,248,.3); color:#7dd3fc; }
+.existing-skill-badge.x3 { background:rgba(168,85,247,.14); border-color:rgba(168,85,247,.3); color:#d8b4fe; }
+.existing-skill-badge.x4 { background:rgba(234,179,8,.14);  border-color:rgba(234,179,8,.3);  color:#fde68a; }
+
+/* ── SESSION META ── */
+.session-meta { display:flex; flex-wrap:wrap; gap:7px; }
+
+/* ── MISC ── */
+input[type=file] { display:none; }
+.activated-check { position:absolute; top:12px; right:14px; font-size:18px; }
+.empty-state { text-align:center; padding:48px 20px; color:var(--text-muted); font-size:13px; }
+.empty-state i { font-size:34px; display:block; margin-bottom:12px; }
+@keyframes spin { to { transform:rotate(360deg) } }
+</style>
+</head>
+<body>
+
+<!-- MAIN -->
+<div class="main" id="main-content">
+
+  <!-- INTRO -->
+  <div class="wcard" style="background:rgba(14,165,233,.05);border-color:rgba(14,165,233,.2)">
+    <div class="page-title">
+      ⚓ Forge des Compétences
+      <small>Capitaine · Dépôt de skills x1 attestés pour tous les MULTIPASS</small>
+    </div>
+    <div class="wcard-title" style="color:#7dd3fc;margin-top:12px">
+      <i class="bi bi-info-circle-fill"></i> Comment ça marche
+    </div>
+    <div style="font-size:12px;line-height:1.8;color:#cbd5e1">
+      Chaque service installé sur votre station mérite une attestation signée dans la constellation.<br>
+      <strong style="color:#34d399">①</strong> Connectez votre MULTIPASS via <strong>⚡ Connecter</strong> dans le bandeau ·
+      <strong style="color:#34d399">②</strong> <strong style="color:#f59e0b">📎 Obligatoire :</strong> joignez un média de preuve (capture, vidéo, log) ou réutilisez une preuve partagée ·
+      <strong style="color:#34d399">③</strong> Cliquez <em>Activer x1</em> → Kind 30503 signé sur le relay local.<br>
+      <span style="color:#64748b"><strong style="color:#6ee7b7">x1</strong> = auto-proclamé (folksonomy) ·
+      <strong style="color:#7dd3fc">x2+</strong> = validé par 3 Capitaines ou cérémonie constellation.</span>
+    </div>
+  </div>
+
+  <!-- SKILLS EXISTANTS (visible après connexion) -->
+  <div class="wcard" id="existing-panel" style="display:none">
+    <div class="wcard-title"><i class="bi bi-award-fill"></i> Compétences déjà attestées</div>
+    <div class="existing-skills-list" id="existing-skills-list">
+      <span style="color:var(--text-muted);font-size:11px">Chargement…</span>
+    </div>
+  </div>
+
+  <!-- SESSION INFO -->
+  <div class="wcard" id="session-card" style="display:none">
+    <div class="wcard-title"><i class="bi bi-cpu"></i> Session détectée</div>
+    <div class="session-meta" id="session-meta"></div>
+  </div>
+
+  <!-- AJOUTER UN SKILL PERSONNALISÉ -->
+  <div class="wcard add-skill-panel">
+    <div class="wcard-title"><i class="bi bi-plus-circle-fill"></i> Ajouter un skill personnalisé</div>
+    <div class="add-skill-row">
+      <div class="field-wrap" style="flex:0 0 auto;min-width:unset">
+        <label class="field-label">
+          Icône
+          <span class="tip-icon" data-tip="Emoji représentant le skill&#10;Ex : 🌉 🔋 🐳 🤖 🎵 🔀 🧩 📡 🛡️&#10;Un seul emoji suffit.">i</span>
+        </label>
+        <input class="add-skill-input" id="new-skill-icon" placeholder="🔧" style="width:60px;text-align:center;font-size:18px;padding:6px">
+      </div>
+      <div class="field-wrap" style="flex:1.5">
+        <label class="field-label">
+          Nom du skill
+          <span class="tip-icon" data-tip="Nom court du service ou de la compétence.&#10;&#10;Exemples :&#10;· Matterbridge &amp; BRO Omni&#10;· PowerJoular&#10;· sound-spot&#10;&#10;→ Devient l'identifiant de l'attestation.">i</span>
+        </label>
+        <input class="add-skill-input" id="new-skill-name" placeholder="Ex : Matterbridge & BRO Omni" list="skill-suggestions" autocomplete="off">
+        <datalist id="skill-suggestions"></datalist>
+      </div>
+      <div class="field-wrap" style="flex:2">
+        <label class="field-label">
+          Description
+          <span class="tip-icon tip-right" data-tip="Ce que fait le service sur votre station.&#10;&#10;Exemples :&#10;· Bridge multi-réseaux déployé (Matrix, Telegram…)&#10;· Monitoring énergie par processus en temps réel&#10;· Streaming audio WiFi — RPi + Snapcast&#10;&#10;→ Apparaît dans l'attestation Kind 30503.">i</span>
+        </label>
+        <input class="add-skill-input" id="new-skill-desc" placeholder="Ex : Bridge multi-réseaux (Matrix, Telegram, IRC…)">
+      </div>
+      <div class="field-wrap" style="flex:0 0 auto;min-width:unset;justify-content:flex-end">
+        <label class="field-label" style="visibility:hidden">‌</label>
+        <button class="btn-add" onclick="addCustomSkill()"><i class="bi bi-plus-lg"></i> Ajouter</button>
+      </div>
+    </div>
+    <!-- Skills peu représentés dans la constellation (chargés depuis le relay) -->
+    <div id="rare-skills-section" style="display:none;margin-top:10px">
+      <div style="font-size:10.5px;color:#a78bfa;font-weight:600;margin-bottom:6px;display:flex;align-items:center;gap:8px">
+        <i class="bi bi-bar-chart-fill"></i> Peu représentés dans la constellation — cliquez pour préremplir
+        <a href="skills.html" style="font-size:10px;color:#7dd3fc;font-weight:400;text-decoration:none" target="_blank">
+          Parcourir tous <i class="bi bi-arrow-right"></i>
+        </a>
+      </div>
+      <div id="rare-skills-wrap" style="display:flex;flex-wrap:wrap;gap:5px"></div>
+    </div>
+  </div>
+
+  <!-- SKILLS GRID -->
+  <div id="skills-grid" class="skills-grid"></div>
+
+  <!-- Chargement -->
+  <div class="empty-state" id="loading-state">
+    <i class="bi bi-arrow-repeat" style="animation:spin 1s linear infinite"></i>
+    Chargement de la session…
+  </div>
+
+  <!-- FOOTER — Étape suivante -->
+  <div id="footer-cta" class="wcard" style="text-align:center;display:none">
+    <div style="font-size:13px;color:#6ee7b7;font-weight:700;margin-bottom:10px">
+      ✅ Skills activés — Prochaine étape
+    </div>
+    <div style="font-size:12px;color:var(--text-muted);line-height:2">
+      Gérez vos niveaux et explorez la constellation :<br>
+      <a href="minelife.html" style="color:#7dd3fc;font-weight:700;text-decoration:none">
+        <i class="bi bi-person-badge-fill"></i> MineLife → onglet Mes Compétences
+      </a>
+      &nbsp;·&nbsp;
+      <a href="economy.html" style="color:#a7f3d0;text-decoration:none">
+        <i class="bi bi-graph-up-arrow"></i> Tableau de bord ẐEN
+      </a>
+    </div>
+  </div>
+
+</div>
+
+<script src="nacl-fast.min.js"></script>
+<script src="nostr.bundle.js"></script>
+<script src="common.js"></script>
+<script src="uplanet-header.js"></script>
+<script src="relay.js"></script>
+<script src="wotx2-nav.js"></script>
+<script>
+'use strict';
+
+/* ── État global ─────────────────────────────────────────────── */
+var _privHex = null;      // nsec décodée en hex — jamais transmise
+var _pubHex  = null;
+var _session = null;
+var _skillState = {};     // { skillId: { cid, infoCid, status, eventId, _isShared } }
+var _localSkills = [];    // skills de la session courante — pour fillSkillName
+var _skillMeta   = {};    // name → { icon, desc } extrait des events relay
+
+/* ── Helpers URL ─────────────────────────────────────────────── */
+function getApiBase() {
+    var h = window.location.hostname;
+    // Sur la station locale : toujours pointer l'API locale (ignore getAPIUrl qui peut
+    // pointer vers copylaradio.com même en localhost)
+    if (h === 'localhost' || h === '127.0.0.1')
+        return window.location.protocol + '//' + h + ':54321';
+    if (window.getAPIUrl) { var u = window.getAPIUrl(); if (u) return u; }
+    if (h.startsWith('u.'))     return location.protocol + '//u.' + h.slice(2);
+    if (h.startsWith('ipfs.'))  return location.protocol + '//u.' + h.slice(5);
+    if (h.startsWith('relay.')) return location.protocol + '//u.' + h.slice(6);
+    return 'https://u.copylaradio.com';
+}
+function getRelayWs() {
+    if (window.getRelayUrl) {
+        var u = window.getRelayUrl();
+        if (u) return u.replace('wss://','ws://').replace('https://','ws://');
+    }
+    var h = window.location.hostname;
+    if (h === 'localhost' || h === '127.0.0.1') return 'ws://127.0.0.1:7777';
+    return 'wss://relay.' + h.replace(/^[^.]+\./, '');
+}
+function getIpfsBase() {
+    var h = window.location.hostname;
+    if (h === 'localhost' || h === '127.0.0.1') return 'http://127.0.0.1:8080';
+    return 'https://ipfs.' + h.replace(/^[^.]+\./, '');
+}
+
+
+function refreshActivateButtons() {
+    document.querySelectorAll('.btn-activate').forEach(function(btn) {
+        var sid = btn.dataset.skill;
+        var st  = _skillState[sid] || {};
+        var hasMedia = !!st.cid;
+        var ready = !!_privHex && hasMedia && st.status !== 'active';
+        btn.disabled = !ready;
+        btn.title = !_privHex ? 'Connectez votre MULTIPASS d\'abord'
+                  : !hasMedia ? '📎 Joignez un média de preuve pour activer'
+                  : '';
+    });
+}
+
+/* ── Session ─────────────────────────────────────────────────── */
+async function loadSession() {
+    try {
+        var r = await fetch(getApiBase() + '/api/skill/session');
+        if (r.ok) _session = await r.json();
+    } catch(e) {}
+
+    // Fallback : URL params
+    if (!_session) {
+        var params = new URLSearchParams(window.location.search);
+        _session = {
+            mode: params.get('mode') || 'install',
+            profile: params.get('profile') || 'standard',
+            score: parseInt(params.get('score') || '0'),
+            tier: params.get('tier') || '',
+            log_cid: params.get('session_cid') || '',
+            cpu_model: '', ram_gb: 0, vram_gb: 0
+        };
+    }
+
+    renderSession(_session);
+    var skills = sessionToSkills(_session);
+    _localSkills = skills;
+    await renderSkillCards(skills);
+    document.getElementById('loading-state').style.display = 'none';
+    // Pré-sélectionner le skill si ?skill= dans l'URL (lien depuis skills.html)
+    var targetSkill = params.get('skill');
+    if (targetSkill) {
+        var tCard = document.getElementById('card-' + targetSkill);
+        if (tCard) {
+            setTimeout(function() {
+                tCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                tCard.classList.add('highlight-target');
+            }, 150);
+        }
+    }
+}
+
+function renderSession(s) {
+    if (!s) return;
+    var card = document.getElementById('session-card');
+    var meta = document.getElementById('session-meta');
+    card.style.display = '';
+
+    // Badge coloré selon le type d'item
+    function badge(text, style) {
+        var extra = style || '';
+        return '<span class="meta-badge" style="' + extra + '">' + _esc(text) + '</span>';
+    }
+
+    var html = '';
+    // Mode install/upgrade — badge solaire
+    html += badge(s.mode === 'upgrade' ? '🔄 Upgrade' : '🆕 Installation',
+        'background:rgba(245,158,11,.18);border-color:rgba(245,158,11,.4);color:#fde68a');
+    // Profil
+    if (s.profile) html += badge('👤 ' + s.profile);
+    // Score
+    if (s.score)   html += badge('🏆 Score : ' + s.score,
+        'background:rgba(168,85,247,.15);border-color:rgba(168,85,247,.35);color:#d8b4fe');
+    // Tier
+    if (s.tier)    html += badge(s.tier,
+        'background:rgba(239,68,68,.12);border-color:rgba(239,68,68,.3);color:#fca5a5');
+    // Capitaine
+    if (s.captain) html += badge('⚓ ' + s.captain,
+        'background:rgba(16,185,129,.12);border-color:rgba(16,185,129,.3);color:#6ee7b7');
+    // Matériel
+    if (s.cpu_model) html += badge('🖥 ' + s.cpu_model);
+    if (s.ram_gb)    html += badge('💾 ' + s.ram_gb + ' Go RAM');
+    if (s.vram_gb > 0) html += badge('🎮 ' + s.vram_gb + ' Go VRAM',
+        'background:rgba(56,189,248,.12);border-color:rgba(56,189,248,.3);color:#7dd3fc');
+    if (s.disk_free_gb) html += badge('💿 ' + s.disk_free_gb + ' Go libre');
+    // Hôte
+    if (s.host)   html += badge('🏠 ' + s.host);
+
+    meta.innerHTML = html;
+}
+
+/* ── Mapping session → skills ────────────────────────────────── */
+function sessionToSkills(s) {
+    s = s || {};
+    var svcs    = Array.isArray(s.services) ? s.services : [];
+    var profile = s.profile || 'standard';
+    var score   = s.score   || 0;
+    var hasSvc  = function(n) {
+        return svcs.indexOf(n) !== -1 || s[n] === true || s[n] === 1;
+    };
+
+    // Socle commun — tout install Astroport.ONE
+    var list = [
+        { id:'bash',         icon:'🔧', name:'Bash & Scripting',
+          desc:'Scripting bash, automatisation et administration système' },
+        { id:'linux-admin',  icon:'🐧', name:'Administration Linux',
+          desc:'Gestion système Debian/Ubuntu — sécurité, réseau, services systemd' },
+        { id:'ipfs',         icon:'🌐', name:'IPFS / Kubo',
+          desc:'Nœud IPFS décentralisé configuré, gateway et swarm opérationnels' },
+        { id:'nostr-relay',  icon:'⚡', name:'NOSTR Relay strfry',
+          desc:'Relay strfry + filtres NIP-101 actifs (port 7777)' },
+        { id:'astroport',    icon:'⚓', name:'Astroport.ONE',
+          desc:'Station décentralisée installée — orchestrateur IPFS+NOSTR+ẐEN — x2+ via cérémonie' },
+        { id:'upassport',    icon:'🛂', name:'UPassport API',
+          desc:'API FastAPI UPassport opérationnelle (port 54321) — MULTIPASS, ZEN, upload IPFS' },
+    ];
+
+    // Services optionnels détectés dans la session
+    if (hasSvc('matterbridge') || hasSvc('bro_omni') || profile === 'omni') {
+        list.push({ id:'matterbridge', icon:'🌉', name:'Matterbridge & BRO Omni',
+            desc:'Bridge multi-réseaux (Matrix, Telegram, IRC…) + BRO omni-canal déployé' });
+    }
+    if (hasSvc('powerjoular') || hasSvc('monitoring')) {
+        list.push({ id:'powerjoular', icon:'🔋', name:'PowerJoular',
+            desc:'Monitoring consommation énergétique — mesure Watt par processus en temps réel' });
+    }
+    if (hasSvc('docker') || score > 10 || (profile !== 'standard' && profile !== 'omni')) {
+        list.push({ id:'docker', icon:'🐳', name:'Docker & Compose',
+            desc:'Orchestration de conteneurs — compose, registry local, volumes persistants' });
+    }
+    if (hasSvc('ollama') || profile === 'ai-company') {
+        list.push({ id:'ollama', icon:'🤖', name:'Ollama / IA Locale',
+            desc:'Déploiement de modèles IA locaux — inférence souveraine hors-cloud' });
+        list.push({ id:'qdrant', icon:'🔍', name:'Qdrant',
+            desc:'Base vectorielle souveraine — embeddings et recherche sémantique (knowledge)' });
+    }
+    if (hasSvc('g1billet')) {
+        list.push({ id:'g1billet', icon:'🪙', name:'G1BILLET',
+            desc:'Génération de billets Ğ1 imprimables — ZenCard et portefeuilles papier (port 33101)' });
+    }
+    if (hasSvc('sound-spot') || hasSvc('soundspot')) {
+        list.push({ id:'sound-spot', icon:'🎵', name:'sound-spot',
+            desc:'Streaming audio décentralisé — RPi comme point d\'accès WiFi + Snapcast' });
+    }
+    if (hasSvc('nginx') || hasSvc('nginx-proxy-manager')) {
+        list.push({ id:'nginx-proxy', icon:'🔀', name:'Nginx Proxy Manager',
+            desc:'Reverse proxy avec certificats Let\'s Encrypt automatiques' });
+    }
+
+    return list;
+}
+
+/* ── Rendu des cartes ────────────────────────────────────────── */
+async function renderSkillCards(skills) {
+    var grid = document.getElementById('skills-grid');
+    grid.innerHTML = '';
+
+    // Charger les médias partagés pour chaque skill en parallèle
+    var mediaMap = {};
+    await Promise.all(skills.map(async function(sk) {
+        try {
+            var r = await fetch(getApiBase() + '/api/skill/media/' + encodeURIComponent(sk.id) + '?limit=8');
+            if (r.ok) { var d = await r.json(); mediaMap[sk.id] = d.media || []; }
+        } catch(e) { mediaMap[sk.id] = []; }
+    }));
+
+    skills.forEach(function(sk) {
+        var level = sk.level || 1;
+        var media = mediaMap[sk.id] || [];
+        _skillState[sk.id] = { status:'pending', cid: null, infoCid: null, _isShared: false };
+
+        var card = document.createElement('div');
+        card.className = 'wcard skill-card';
+        card.id = 'card-' + sk.id;
+
+        card.innerHTML = [
+            '<div class="skill-header">',
+            '  <span class="skill-icon">', sk.icon, '</span>',
+            '  <span class="skill-name">', _esc(sk.name), '</span>',
+            '  <span class="skill-level">x', level, '</span>',
+            '</div>',
+            '<div class="skill-desc">', _esc(sk.desc), '</div>',
+            '<span class="status-badge status-pending" id="status-' + sk.id + '">En attente</span>',
+
+            // Médias partagés dans la constellation
+            media.length > 0 ? [
+                '<div>',
+                '  <div class="shared-label"><i class="bi bi-people-fill"></i> Médias existants dans la constellation :</div>',
+                '  <div class="shared-media-row" id="shared-' + sk.id + '">',
+                media.map(function(m, i) {
+                    var label = (m.content && m.content.title) ? m.content.title : 'Preuve #' + (i+1);
+                    return '<span class="shared-media-item" title="' + _esc(m.cid) + '" '
+                        + 'onclick="selectSharedMedia(\'' + _esc(sk.id) + '\',\'' + _esc(m.cid) + '\',this)">'
+                        + _esc(label.slice(0,28)) + '</span>';
+                }).join(''),
+                '  </div>',
+                '</div>'
+            ].join('') : '',
+
+            // Drop zone pour nouveau média
+            '<div class="drop-zone" id="dz-' + sk.id + '" ',
+            '     data-tip="Joignez la preuve d\'installation :\n📸 Capture d\'écran de la configuration\n🎬 Vidéo de démonstration\n📄 Log ou fichier texte (.txt, .md)\n📋 PDF de documentation\n\nMax 50 Mo — le CID sera ancré\ndans l\'attestation Kind 30503."',
+            '     onclick="document.getElementById(\'fi-' + sk.id + '\').click()"',
+            '     ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)"',
+            '     ondrop="handleDrop(event,\'' + sk.id + '\')" >',
+            '  <span class="dz-icon">📎</span>',
+            '  <span class="dz-label"><span style="color:#f59e0b;font-weight:700">Requis</span> — glissez ou cliquez pour choisir un fichier de preuve</span>',
+            '  <span class="dz-file" id="dz-file-' + sk.id + '" style="display:none"></span>',
+            '</div>',
+            '<div class="media-preview" id="preview-' + sk.id + '" style="display:none"></div>',
+            '<input type="file" id="fi-' + sk.id + '" accept="image/*,video/*,.pdf,.txt,.md" ',
+            '       onchange="handleFileInput(event,\'' + sk.id + '\')">',
+
+            '<button class="btn-activate" id="btn-' + sk.id + '" data-skill="' + sk.id + '"',
+            '        data-level="' + level + '" disabled onclick="activateSkill(\'' + sk.id + '\',' + level + ')">',
+            '  <i class="bi bi-lightning-charge-fill"></i> Activer x', level,
+            '</button>'
+        ].join('');
+
+        grid.appendChild(card);
+    });
+
+    refreshActivateButtons();
+}
+
+/* ── Sélection d'un média partagé ───────────────────────────── */
+function selectSharedMedia(skillId, cid, el) {
+    document.querySelectorAll('#shared-' + skillId + ' .shared-media-item').forEach(function(i) {
+        i.classList.remove('selected');
+    });
+    el.classList.add('selected');
+    _skillState[skillId].cid     = cid;
+    _skillState[skillId].infoCid = null;    // pas d'info.json pour un média déjà partagé
+    _skillState[skillId]._isShared = true;  // ne pas republier un Kind 30504 déjà existant
+    setCardStatus(skillId, 'media', '📎 Preuve sélectionnée : ' + cid.slice(0,16) + '…');
+    refreshActivateButtons();
+    _showMediaPreview(skillId, getIpfsBase() + '/ipfs/' + cid);
+}
+
+/* ── Drag & Drop ─────────────────────────────────────────────── */
+function handleDragOver(e) { e.preventDefault(); e.currentTarget.classList.add('dragover'); }
+function handleDragLeave(e) { e.currentTarget.classList.remove('dragover'); }
+
+async function handleDrop(e, skillId) {
+    e.preventDefault();
+    e.currentTarget.classList.remove('dragover');
+    var file = e.dataTransfer.files[0];
+    if (file) await processFile(skillId, file);
+}
+
+async function handleFileInput(e, skillId) {
+    var file = e.target.files[0];
+    e.target.value = '';  // reset pour permettre de re-sélectionner le même fichier
+    if (file) await processFile(skillId, file);
+}
+
+async function processFile(skillId, file) {
+    if (!_pubHex) {
+        setCardStatus(skillId, 'error', '❌ Connectez votre MULTIPASS d\'abord (⚡ en haut)');
+        return;
+    }
+    setCardStatus(skillId, 'pending', '⏳ Upload en cours…');
+    // Nouveau fichier annule la sélection de média partagé
+    _skillState[skillId]._isShared = false;
+    _skillState[skillId].cid     = null;
+    _skillState[skillId].infoCid = null;
+    document.querySelectorAll('#shared-' + skillId + ' .shared-media-item')
+        .forEach(function(el) { el.classList.remove('selected'); });
+    var dz = document.getElementById('dz-' + skillId);
+    var dzFile = document.getElementById('dz-file-' + skillId);
+    dz.classList.add('has-file');
+    dzFile.style.display = '';
+    dzFile.textContent = file.name + ' (' + (file.size/1024).toFixed(1) + ' Ko)';
+    _showLocalPreview(skillId, file);
+    try {
+        var result = await uploadToIPFS(file);
+        _skillState[skillId].cid     = result.cid;
+        _skillState[skillId].infoCid = result.infoCid;
+        setCardStatus(skillId, 'media', '📎 ' + result.cid.slice(0,20) + '…');
+        document.getElementById('dz-' + skillId).scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    } catch(e) {
+        setCardStatus(skillId, 'error', '❌ Upload échoué : ' + e.message);
+    }
+    refreshActivateButtons();
+}
+
+/* ── Prévisualisation média ──────────────────────────────────────────────── */
+function _showMediaPreview(skillId, url) {
+    var pv = document.getElementById('preview-' + skillId);
+    if (!pv) return;
+    pv.style.display = '';
+    pv.innerHTML = '';
+    var img = document.createElement('img');
+    img.alt = 'aperçu';
+    img.style.cssText = 'max-width:100%;max-height:180px;border-radius:7px;object-fit:contain';
+    img.onerror = function() {
+        pv.innerHTML = '<div class="pv-fallback">🔗 <a href="' + url + '" target="_blank" style="color:#7dd3fc">Voir le média</a></div>';
+    };
+    img.src = url;
+    pv.appendChild(img);
+}
+function _showLocalPreview(skillId, file) {
+    var pv = document.getElementById('preview-' + skillId);
+    if (!pv) return;
+    var type = file.type || '';
+    var url  = URL.createObjectURL(file);
+    var html;
+    if (type.startsWith('image/')) {
+        html = '<img src="' + url + '" style="max-width:100%;max-height:180px;border-radius:7px;object-fit:contain">';
+    } else if (type.startsWith('video/')) {
+        html = '<video src="' + url + '" controls muted playsinline style="max-width:100%;max-height:180px;border-radius:7px"></video>';
+    } else {
+        html = '<div class="pv-fallback">📎 ' + _esc(file.name) + '</div>';
+    }
+    pv.style.display = '';
+    pv.innerHTML = html;
+}
+
+/* ── Upload IPFS via /api/fileupload (conforme UPlanet_FILE_CONTRACT) ─────── */
+async function uploadToIPFS(file) {
+    if (!_pubHex)
+        throw new Error('Non connecté — utilisez ⚡ Connecter dans le bandeau');
+
+    var url  = getApiBase() + '/api/fileupload';
+    var form = new FormData();
+    form.append('file', file);
+
+    // Envoyer npub en form-field (NIP-42 fallback)
+    try {
+        var npub = NostrTools.nip19.npubEncode(_pubHex);
+        if (npub) form.append('npub', npub);
+    } catch(e) {}
+
+    // NIP-98 Authorization header (méthode préférée, remplace NIP-42)
+    var hdrs = {};
+    try {
+        var auth = await buildNip98Header(url, 'POST');
+        if (auth) hdrs['Authorization'] = auth;
+    } catch(e) {}
+
+    try {
+        var r = await fetch(url, { method:'POST', body: form, headers: hdrs });
+        if (!r.ok) {
+            var errMsg = 'HTTP ' + r.status;
+            try { var eb = await r.json(); errMsg += ' — ' + (eb.detail || JSON.stringify(eb)); } catch(x){}
+            throw new Error(errMsg);
+        }
+        var d = await r.json();
+        var cid     = d.new_cid || d.cid || d.Hash;
+        var infoCid = d.info || null;
+        if (cid) return { cid: cid, infoCid: infoCid };
+        throw new Error('réponse API sans CID');
+    } catch(e) {
+        throw new Error('/api/fileupload : ' + e.message);
+    }
+}
+
+/* ── NIP-98 HTTP Auth header ─────────────────────────────────── */
+async function buildNip98Header(url, method) {
+    if (!_pubHex) return null;
+    try {
+        var template = {
+            kind: 27235,
+            created_at: Math.floor(Date.now() / 1000),
+            tags: [['u', url], ['method', method]],
+            content: ''
+        };
+        var signed = await signEvent(template);
+        var json = JSON.stringify(signed);
+        // base64url sans padding
+        var b64 = btoa(unescape(encodeURIComponent(json)))
+            .replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'');
+        return 'Nostr ' + b64;
+    } catch(e) {
+        console.warn('[upload] NIP-98 header build failed:', e.message || e);
+        return null;
+    }
+}
+
+/* ── Signature (nsec local ou extension NIP-07) ──────────────── */
+async function signEvent(template) {
+    if (_privHex === 'EXT' && window.nostr) {
+        template.pubkey = _pubHex;
+        return await window.nostr.signEvent(template);
+    }
+    return NostrTools.finishEvent(template, _privHex);
+}
+
+/* ── Publication Kind 30503 + 30504 ─────────────────────────── */
+async function activateSkill(skillId, level) {
+    if (!_privHex) { alert('Connectez votre MULTIPASS d\'abord.'); return; }
+    var st = _skillState[skillId] || {};
+    var mediaCid = st.cid || null;
+
+    setCardStatus(skillId, 'pending', '⏳ Publication sur relay…');
+    document.getElementById('btn-' + skillId).disabled = true;
+
+    var sessionLogCid = (_session && _session.log_cid) ? _session.log_cid : null;
+    var skillNorm = skillId;
+    var permitKey = 'PERMIT_' + skillId.toUpperCase().replace(/-/g,'_') + '_X' + level;
+    var now = Math.floor(Date.now()/1000);
+    var nowIso = new Date().toISOString();
+
+    var infoCid = st.infoCid || null;
+
+    try {
+        // Kind 30504 — publier le média comme ressource partagée (si fichier local, pas déjà partagé)
+        // Conforme UPlanet_FILE_CONTRACT : référence le CID du info.json de provenance
+        var mediaCidNew = null;
+        if (mediaCid && !st._isShared) {
+            var tags30504 = [
+                ['d', 'resource-' + skillId + '-' + now],
+                ['t', skillNorm],
+                ['t', 'install-evidence'],
+                ['r', 'ipfs://' + mediaCid],
+                ['url', getIpfsBase() + '/ipfs/' + mediaCid]
+            ];
+            if (infoCid) tags30504.push(['info', infoCid]);
+            var ev30504 = await signEvent({
+                kind: 30504,
+                created_at: now,
+                tags: tags30504,
+                content: JSON.stringify({
+                    skill_tag: skillNorm,
+                    title: 'Preuve installation ' + skillNorm,
+                    cid: mediaCid,
+                    info: infoCid || '',
+                    uploaded_at: nowIso
+                })
+            });
+            await publishEvent(ev30504);
+            mediaCidNew = mediaCid;
+        }
+
+        // Métadonnées du skill (icon, nom, desc) depuis la liste locale
+        var skMeta = _localSkills.find(function(s){ return s.id === skillId; }) || {};
+
+        // Kind 30503 — attestation auto-déclarée (folksonomy)
+        var tags30503 = [
+            ['d', permitKey],
+            ['l', permitKey, 'permit_type'],
+            ['level', String(level)],
+            ['t', skillNorm],
+            ['t', 'auto_proclaimed']
+        ];
+        if (skMeta.name) tags30503.push(['title',   skMeta.name]);
+        if (skMeta.desc) tags30503.push(['summary',  skMeta.desc]);
+        // Les CIDs IPFS ne sont PAS des event IDs NOSTR (hex 64 chars) →
+        // utiliser le tag 'r' (référence URL) pour éviter le rejet du relay
+        if (sessionLogCid) tags30503.push(['r', 'ipfs://' + sessionLogCid, 'install_session']);
+        if (mediaCid)      tags30503.push(['r', 'ipfs://' + mediaCid,      'evidence']);
+        if (infoCid)       tags30503.push(['r', 'ipfs://' + infoCid,       'info']);
+
+        var ev30503 = await signEvent({
+            kind: 30503,
+            created_at: now,
+            tags: tags30503,
+            content: JSON.stringify({
+                skill: skillNorm, level: level,
+                title: skMeta.name || skillNorm,
+                icon: skMeta.icon || '',
+                description: skMeta.desc || '',
+                attested_at: nowIso,
+                auto_proclaimed: true,
+                session_cid: sessionLogCid || ''
+            })
+        });
+
+        await publishEvent(ev30503);
+
+        _skillState[skillId].status = 'active';
+        _skillState[skillId].eventId = ev30503.id;
+        setCardStatus(skillId, 'active', '✅ x' + level + ' activé · event: ' + ev30503.id.slice(0,12) + '…');
+        document.getElementById('card-' + skillId).classList.add('activated');
+        document.getElementById('card-' + skillId).innerHTML += '<span class="activated-check">✅</span>';
+        document.getElementById('footer-cta').style.display = '';
+
+    } catch(e) {
+        setCardStatus(skillId, 'error', '❌ ' + e.message);
+        document.getElementById('btn-' + skillId).disabled = false;
+    }
+}
+
+/* ── Publication WebSocket relay ────────────────────────────── */
+function publishEvent(event) {
+    return new Promise(function(resolve, reject) {
+        var ws;
+        try { ws = new WebSocket(getRelayWs()); } catch(e) { reject(new Error('Relay URL invalide : ' + e.message)); return; }
+        var timer = setTimeout(function() { try { ws.close(); } catch(x){} reject(new Error('Timeout relay (8s) — relay local démarré ?')); }, 8000);
+        ws.onopen = function() { ws.send(JSON.stringify(['EVENT', event])); };
+        ws.onmessage = function(e) {
+            try {
+                var d = JSON.parse(e.data);
+                if (d[0] === 'OK') {
+                    clearTimeout(timer); ws.close();
+                    // d[2] === false → relay a rejeté l'event (NIP-01 OK false)
+                    if (d[2] === false) {
+                        reject(new Error('Relay a rejeté l\'event : ' + (d[3] || 'raison inconnue')));
+                    } else {
+                        resolve(event.id);
+                    }
+                    return;
+                }
+                if (d[0] === 'NOTICE') {
+                    // NOTICE = info relay, pas un rejet — continuer à attendre OK
+                }
+            } catch(ex) {}
+        };
+        ws.onerror = function(e) { clearTimeout(timer); reject(new Error('Erreur WebSocket relay — strfry démarré ?')); };
+    });
+}
+
+/* ── UI helpers ──────────────────────────────────────────────── */
+function setCardStatus(skillId, type, text) {
+    var el = document.getElementById('status-' + skillId);
+    if (!el) return;
+    el.className = 'status-badge status-' + type;
+    el.textContent = text;
+}
+
+function _esc(t) { var d = document.createElement('div'); d.textContent = String(t || ''); return d.innerHTML; }
+
+/* ── Reset des cartes (changement de compte) ─────────────────── */
+function resetAllCards() {
+    Object.keys(_skillState).forEach(function(sid) {
+        _skillState[sid] = { status:'pending', cid: null, infoCid: null, _isShared: false };
+        var card = document.getElementById('card-' + sid);
+        if (card) {
+            card.classList.remove('activated');
+            var check = card.querySelector('.activated-check');
+            if (check) check.remove();
+        }
+        setCardStatus(sid, 'pending', 'En attente');
+        var dz = document.getElementById('dz-' + sid);
+        if (dz) { dz.classList.remove('has-file', 'dragover'); }
+        var dzFile = document.getElementById('dz-file-' + sid);
+        if (dzFile) { dzFile.style.display = 'none'; dzFile.textContent = ''; }
+        var pvEl = document.getElementById('preview-' + sid);
+        if (pvEl) { pvEl.style.display = 'none'; pvEl.innerHTML = ''; }
+        document.querySelectorAll('#shared-' + sid + ' .shared-media-item')
+            .forEach(function(el) { el.classList.remove('selected'); });
+    });
+    document.getElementById('footer-cta').style.display = 'none';
+    refreshActivateButtons();
+}
+
+/* ── Ajout de skill personnalisé ─────────────────────────────── */
+function addCustomSkill() {
+    var icon = (document.getElementById('new-skill-icon').value.trim() || '🔧');
+    var name = document.getElementById('new-skill-name').value.trim();
+    var desc = document.getElementById('new-skill-desc').value.trim();
+    if (!name) {
+        document.getElementById('new-skill-name').focus();
+        return;
+    }
+    var id = name.toLowerCase()
+        .replace(/[àáâã]/g,'a').replace(/[éèêë]/g,'e').replace(/[îï]/g,'i')
+        .replace(/[ôö]/g,'o').replace(/[ùûü]/g,'u').replace(/ç/g,'c')
+        .replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'');
+    if (!id) id = 'skill-' + Date.now();
+    if (_skillState[id]) { alert('Un skill "' + id + '" existe déjà dans la grille.'); return; }
+    var sk = { id: id, icon: icon, name: name, desc: desc || name };
+    addSkillCard(sk);
+    document.getElementById('new-skill-icon').value = '';
+    document.getElementById('new-skill-name').value = '';
+    document.getElementById('new-skill-desc').value = '';
+}
+
+async function addSkillCard(sk) {
+    var grid  = document.getElementById('skills-grid');
+    var level = sk.level || 1;
+    _skillState[sk.id] = { status:'pending', cid: null, infoCid: null, _isShared: false };
+
+    var card = document.createElement('div');
+    card.className = 'wcard skill-card';
+    card.id = 'card-' + sk.id;
+
+    var sharedHtml = '';
+    try {
+        var r = await fetch(getApiBase() + '/api/skill/media/' + encodeURIComponent(sk.id) + '?limit=8');
+        if (r.ok) {
+            var d = await r.json();
+            var media = d.media || [];
+            if (media.length > 0) {
+                sharedHtml = '<div>'
+                    + '<div class="shared-label"><i class="bi bi-people-fill"></i> Preuves existantes :</div>'
+                    + '<div class="shared-media-row" id="shared-' + sk.id + '">'
+                    + media.map(function(m, i) {
+                        var label = (m.content && m.content.title) ? m.content.title : 'Preuve #' + (i+1);
+                        return '<span class="shared-media-item" title="' + _esc(m.cid) + '" '
+                            + 'onclick="selectSharedMedia(\'' + sk.id + '\',\'' + m.cid + '\',this)">'
+                            + _esc(label.slice(0,28)) + '</span>';
+                    }).join('')
+                    + '</div></div>';
+            }
+        }
+    } catch(e) {}
+
+    card.innerHTML = [
+        '<div class="skill-header">',
+        '  <span class="skill-icon">', sk.icon, '</span>',
+        '  <span class="skill-name">', _esc(sk.name), '</span>',
+        '  <span class="skill-level">x', level, '</span>',
+        '</div>',
+        '<div class="skill-desc">', _esc(sk.desc), '</div>',
+        '<span class="status-badge status-pending" id="status-' + sk.id + '">En attente</span>',
+        sharedHtml,
+        '<div class="drop-zone" id="dz-' + sk.id + '" ',
+        '     data-tip="Joignez la preuve d\'installation :\n📸 Capture d\'écran • 🎬 Vidéo\n📄 Log / PDF / texte\n\nMax 50 Mo — ancré dans l\'attestation."',
+        '     onclick="document.getElementById(\'fi-' + sk.id + '\').click()"',
+        '     ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)"',
+        '     ondrop="handleDrop(event,\'' + sk.id + '\')" >',
+        '  <span class="dz-icon">📎</span>',
+        '  <span class="dz-label"><span style="color:#f59e0b;font-weight:700">Requis</span> — glissez ou cliquez pour choisir un fichier</span>',
+        '  <span class="dz-file" id="dz-file-' + sk.id + '" style="display:none"></span>',
+        '</div>',
+        '<div class="media-preview" id="preview-' + sk.id + '" style="display:none"></div>',
+        '<input type="file" id="fi-' + sk.id + '" accept="image/*,video/*,.pdf,.txt,.md" ',
+        '       onchange="handleFileInput(event,\'' + sk.id + '\')">',
+        '<button class="btn-activate" id="btn-' + sk.id + '" data-skill="' + sk.id + '"',
+        '        data-level="' + level + '" disabled onclick="activateSkill(\'' + sk.id + '\',' + level + ')">',
+        '  <i class="bi bi-lightning-charge-fill"></i> Activer x', level,
+        '</button>'
+    ].join('');
+
+    grid.appendChild(card);
+    refreshActivateButtons();
+    card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+/* ── Skills existants ────────────────────────────────────────── */
+async function fetchExistingSkills(pubkey) {
+    var panel = document.getElementById('existing-panel');
+    var list  = document.getElementById('existing-skills-list');
+    panel.style.display = '';
+    list.innerHTML = '<span style="color:var(--text-muted);font-size:11px">Chargement…</span>';
+
+    var skills = [];
+    try {
+        var events = await RelaySelector.query(
+            getRelayWs(),
+            { kinds: [30503], authors: [pubkey], limit: 50 },
+            { timeout: 6000 }
+        );
+        events.forEach(function(ev) {
+            var dTag   = (ev.tags.find(function(t){return t[0]==='d';})||[])[1]||'';
+            var lvlRaw = parseInt((ev.tags.find(function(t){return t[0]==='level';})||[])[1]||'1');
+            var lvlTag = (isNaN(lvlRaw) || lvlRaw < 1) ? 1 : lvlRaw;
+            var ts     = typeof ev.created_at === 'number' ? ev.created_at : 0;
+            if (dTag) skills.push({ permit: dTag, level: lvlTag, created_at: ts });
+        });
+    } catch(e) {}
+
+    if (skills.length === 0) {
+        list.innerHTML = '<span style="color:var(--text-muted);font-size:11px">Aucune compétence trouvée sur le relay local.</span>';
+        return;
+    }
+    skills.sort(function(a,b){return b.created_at - a.created_at;});
+    var seen = {};
+    var deduped = skills.filter(function(s) {
+        if (seen[s.permit]) return false;
+        seen[s.permit] = true; return true;
+    });
+    list.innerHTML = deduped.map(function(s) {
+        var cls = s.level >= 4 ? 'x4' : s.level === 3 ? 'x3' : s.level === 2 ? 'x2' : '';
+        var label = s.permit.replace(/^PERMIT_/, '').replace(/_X\d+$/, '').replace(/_/g,'-').toLowerCase();
+        return '<span class="existing-skill-badge ' + cls + '" title="' + _esc(s.permit) + '">'
+             + _esc(label) + ' <strong>x' + s.level + '</strong></span>';
+    }).join('');
+}
+
+/* ── Suggestions de skills (autocomplete + rare) ─────────────── */
+var SKILL_EMOJI = {
+    'nostr':'⚡','relay':'📡','ipfs':'🪐','strfry':'📡',
+    'matterbridge':'🌉','bro':'🤝','powerjoular':'⚡','sound':'🎵',
+    'spot':'🎵','nextcloud':'☁️','matrix':'🔮','git':'🐙',
+    'docker':'🐳','nginx':'🌐','postgres':'🐘','python':'🐍',
+    'rust':'🦀','flutter':'🎯','bash':'🖥️','linux':'🐧',
+    'solar':'☀️','wind':'💨','pi':'🍓','raspberry':'🍓',
+    'camera':'📷','video':'🎬','audio':'🎧','mesh':'🕸️',
+    'vpn':'🔒','tor':'🧅','telegram':'✈️','signal':'📶'
+};
+function _skillEmoji(name) {
+    var n = (name || '').toLowerCase();
+    for (var k in SKILL_EMOJI) { if (n.includes(k)) return SKILL_EMOJI[k]; }
+    return '🔧';
+}
+
+function _loadSkillSuggestions() {
+    if (typeof RelaySelector === 'undefined') {
+        console.warn('[Craft] _loadSkillSuggestions: RelaySelector absent — relay.js chargé ?');
+        return;
+    }
+    var wsUrl = getRelayWs();
+    console.log('[Craft] _loadSkillSuggestions → relay:', wsUrl);
+    RelaySelector.query(wsUrl, { kinds: [30503], limit: 300 }, { timeout: 5000 })
+        .then(function(events) {
+            console.log('[Craft] _loadSkillSuggestions: reçu', events.length, 'events Kind 30503');
+            var counts = {};
+            events.forEach(function(ev) {
+                // Premier tag 't' non-générique = nom du skill
+                var tTags = ev.tags.filter(function(x){return x[0]==='t';});
+                var t = '';
+                for (var i=0; i<tTags.length; i++) {
+                    var v = tTags[i][1]||'';
+                    if (v && v !== 'auto_proclaimed') { t = v; break; }
+                }
+                if (!t) {
+                    var d = (ev.tags.find(function(x){return x[0]==='d';})||[])[1]||'';
+                    t = d.replace(/^PERMIT_/,'').replace(/_X\d+$/,'').replace(/_/g,'-').toLowerCase();
+                }
+                if (!t) return;
+
+                counts[t] = (counts[t]||0) + 1;
+
+                if (!_skillMeta[t]) {
+                    // Cherche icon/desc dans : tag 'icon', tag 'summary', content JSON
+                    // (Les anciens events n'ont pas ces champs — les nouveaux oui)
+                    var iconTag    = (ev.tags.find(function(x){return x[0]==='icon';})||[])[1]||'';
+                    var descTag    = (ev.tags.find(function(x){return x[0]==='summary';})||[])[1]||'';
+                    var contentData = {};
+                    try { contentData = JSON.parse(ev.content||'{}'); } catch(e2) {}
+                    _skillMeta[t] = {
+                        icon: iconTag || contentData.icon || '',
+                        desc: descTag || contentData.description || contentData.desc || ''
+                    };
+                    console.log('[Craft] skill relay:', t,
+                        '| icon:', _skillMeta[t].icon || '(absent)',
+                        '| desc:', _skillMeta[t].desc ? _skillMeta[t].desc.slice(0,40)+'…' : '(absent)',
+                        '| tags clés:', ev.tags.map(function(x){return x[0];}).join(' '));
+                }
+            });
+            console.log('[Craft] skills comptés:', Object.keys(counts).join(', '));
+            _applySkillSuggestions(counts);
+        })
+        .catch(function(err) {
+            console.warn('[Craft] _loadSkillSuggestions erreur:', err && err.message || err);
+        });
+}
+
+function _applySkillSuggestions(counts) {
+    var datalist = document.getElementById('skill-suggestions');
+    var wrap     = document.getElementById('rare-skills-wrap');
+    var section  = document.getElementById('rare-skills-section');
+    var names    = Object.keys(counts);
+    if (!names.length) { console.log('[Craft] _applySkillSuggestions: aucun skill'); return; }
+
+    if (datalist) {
+        datalist.innerHTML = names.sort().map(function(n) {
+            return '<option value="' + _esc(n) + '">';
+        }).join('');
+        console.log('[Craft] datalist peuplé avec', names.length, 'suggestions');
+    }
+
+    if (wrap && section) {
+        var sorted = names.slice().sort(function(a,b){ return counts[a]-counts[b]; }).slice(0,9);
+        wrap.innerHTML = sorted.map(function(n) {
+            return '<span class="rare-skill-chip" onclick="fillSkillName(\'' + _esc(n) + '\',true)">'
+                + _skillEmoji(n) + ' ' + _esc(n)
+                + '<span class="chip-count">\xd7' + counts[n] + '</span></span>';
+        }).join('');
+        section.style.display = '';
+        console.log('[Craft] rare chips affichés:', sorted.join(', '));
+    }
+}
+
+/* force=true  → toujours écraser icon+desc (clic chip, sélection datalist)
+   force=false → ne remplir que si le champ est vide (appel interne) */
+function fillSkillName(name, force) {
+    console.log('[Craft] fillSkillName:', name, '| force:', !!force);
+
+    var inp = document.getElementById('new-skill-name');
+    if (inp) inp.value = name;
+
+    // Croise : 1) _skillMeta relay  2) _localSkills session  3) SKILL_EMOJI fallback
+    var meta    = _skillMeta[name] || {};
+    var localSk = _localSkills.find(function(s) {
+        return s.id === name || s.id.toLowerCase() === name.toLowerCase();
+    });
+    console.log('[Craft] fillSkillName meta relay:', JSON.stringify(meta),
+        '| local skill:', localSk ? localSk.id : '(non trouvé dans session)');
+
+    var icon = meta.icon || (localSk && localSk.icon) || _skillEmoji(name);
+    var desc = meta.desc || (localSk && localSk.desc) || '';
+    console.log('[Craft] fillSkillName → icon:', icon, '| desc:', desc ? desc.slice(0,50) : '(vide)');
+
+    var iconInp = document.getElementById('new-skill-icon');
+    var descInp = document.getElementById('new-skill-desc');
+    if (iconInp && (force || !iconInp.value.trim())) iconInp.value = icon;
+    if (descInp && (force || !descInp.value.trim())) descInp.value = desc;
+}
+
+/* ── Mise à jour UI connexion ────────────────────────────────── */
+function _onConnected(pubkey, label) {
+    refreshActivateButtons();
+    fetchExistingSkills(pubkey);
+}
+
+/* ── Init ────────────────────────────────────────────────────── */
+document.addEventListener('DOMContentLoaded', function() {
+    if (typeof NostrTools === 'undefined' || !NostrTools.nip19 || !NostrTools.getPublicKey) {
+        document.getElementById('loading-state').innerHTML =
+            '<i class="bi bi-exclamation-triangle" style="color:#fca5a5"></i>'
+            + ' <span style="color:#fca5a5">Erreur : nostr.bundle.js non chargé</span>';
+        return;
+    }
+
+    loadSession().catch(function(e) {
+        document.getElementById('loading-state').innerHTML =
+            '<i class="bi bi-exclamation-triangle" style="color:#fca5a5"></i>'
+            + ' <span style="color:#fca5a5">Impossible de charger la session : '
+            + _esc(e.message) + '</span>';
+    });
+
+    // Suggestions de skills depuis la constellation (lecture seule, sans auth)
+    _loadSkillSuggestions();
+
+    // Sélection dans le datalist → remplir icon+desc si le nom correspond à un skill connu
+    var _skillNameInp = document.getElementById('new-skill-name');
+    if (_skillNameInp) {
+        _skillNameInp.addEventListener('change', function() {
+            var v = this.value.trim();
+            if (!v) return;
+            var knownInMeta  = !!_skillMeta[v];
+            var knownInLocal = !!_localSkills.find(function(s){ return s.id === v; });
+            console.log('[Craft] input#new-skill-name change:', v, '| meta:', knownInMeta, '| local:', knownInLocal);
+            if (knownInMeta || knownInLocal) fillSkillName(v, true);
+        });
+    }
+
+    // 1. Connexion déjà établie (UPH session storage inter-pages)
+    var pk0 = (window.NostrState && window.NostrState.userPubkey) || window.userPubkey || '';
+    if (!pk0) { try { pk0 = sessionStorage.getItem('uph_pubkey') || ''; } catch(e) {} }
+    if (pk0) { _pubHex = pk0; _privHex = 'EXT'; _onConnected(pk0); return; }
+
+    // 2. Extension NIP-07 disponible
+    if (window.nostr && window.nostr.getPublicKey) {
+        window.nostr.getPublicKey().then(function(pk) {
+            if (!_pubHex) { _pubHex = pk; _privHex = 'EXT'; _onConnected(pk); }
+        }).catch(function() {});
+    }
+
+    // 3. Connexion future via bouton ⚡ du bandeau UPH
+    if (typeof window.waitForConnection === 'function') {
+        window.waitForConnection(function() {
+            var pk = (window.NostrState && window.NostrState.userPubkey) || window.userPubkey;
+            if (pk && !_pubHex) { _pubHex = pk; _privHex = 'EXT'; _onConnected(pk); }
+        });
+    }
+});
+</script>
+</body>
+</html>

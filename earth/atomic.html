@@ -430,16 +430,6 @@
                                  style="font-size:.68rem;color:rgba(0,200,255,.6);min-height:.9rem"></div>
                         </div>
 
-                        <!-- PASS block : affiché si MULTIPASS existant détecté -->
-                        <div id="multipass-pass-block" style="display:none;margin-bottom:8px">
-                            <label class="form-label small text-secondary text-uppercase mb-1">🔑 Code PASS reçu par email</label>
-                            <input type="text" class="form-control form-control-sm font-monospace"
-                                   id="multipass-pass-input" placeholder="XXXX" autocomplete="off" maxlength="20">
-                            <div class="small mt-1" style="color:rgba(255,200,80,.7)">
-                                Ce MULTIPASS existe déjà. Saisissez le code reçu lors de la création initiale.
-                            </div>
-                        </div>
-
                         <div id="step1-result" class="mt-1" style="display:none"></div>
                     </div>
                     <div class="wz-nav mt-2">
@@ -2275,7 +2265,9 @@ async function _resolveNearestStation(lat, lon) {
         // IPFSNODEID) : on la réinjecte via CENTER/uSPOT/myRELAY pour comparaison.
         var _ctrl = typeof AbortSignal !== 'undefined' && AbortSignal.timeout
             ? { signal: AbortSignal.timeout(6000) } : {};
-        var _r = await fetch(_apiBase + '/api/ustats', _ctrl);
+        // lat/lon requis pour que Ustats.sh inclue la clé CENTER (sinon la station
+        // courante ne peut jamais être réinjectée dans la comparaison ci-dessous)
+        var _r = await fetch(_apiBase + '/api/ustats?lat=' + encodeURIComponent(lat) + '&lon=' + encodeURIComponent(lon), _ctrl);
         if (!_r.ok) { _setStationStatus('error', '⚠️ Constellation injoignable — réessayez'); return; }
         var _swarm = await _r.json();
         var _stations = Array.isArray(_swarm) ? _swarm : (_swarm.SWARM || _swarm.stations || []);
@@ -2332,8 +2324,50 @@ async function _resolveStationFromKind0(homeStationField) {
     if (_info && _info.uspot) {
         _resolvedUspot = _info.uspot;
         _resolvedRelay = _info.relay;
-        _setStationStatus('found',
-            '🏠 Station home : <strong>' + _info.uspot.replace(/https?:\/\//, '').replace(':54321', '') + '</strong>');
+        var _label = '🏠 Station home : <strong>' + _info.uspot.replace(/https?:\/\//, '').replace(':54321', '') + '</strong>';
+        if (!_isSameStation(_info.uspot)) {
+            _label += ' — <a href="#" onclick="_confirmStationRedirect();return false;" style="color:#00ffcc">continuer là-bas →</a>';
+        }
+        _setStationStatus('found', _label);
+    }
+}
+
+// ── Redirection cross-station — le MULTIPASS d'un email n'existe que sur SA ──
+// station d'origine (~/.zen/game/nostr/{email}/ n'y vit qu'à un seul endroit).
+// _resolvedUspot est déjà vérifié joignable (12345.json de cette station même).
+function _isSameStation(uspotUrl) {
+    if (!uspotUrl) return true; // rien à comparer → ne pas proposer de redirection
+    try { return new URL(uspotUrl).origin === location.origin; }
+    catch(_e) { return true; }
+}
+
+function _confirmStationRedirect() {
+    if (!_resolvedUspot || _isSameStation(_resolvedUspot)) return;
+    var target = _resolvedUspot.replace(/\/$/, '') + '/earth/atomic.html' + location.search;
+    var host   = _resolvedUspot.replace(/^https?:\/\//, '').replace(':54321', '');
+    if (confirm('🏠 Votre MULTIPASS ATOM4LOVE est enregistré sur une autre station de la constellation :\n\n'
+        + host + '\n\nVoulez-vous être redirigé·e pour continuer l\'activation ?')) {
+        window.location.href = target;
+    } else {
+        _certStatus('⚠ Rendez-vous sur ' + host + ' pour activer votre MULTIPASS.', '#ff8888');
+    }
+}
+
+// Repli réactif : appelé quand /atom4love/challenge ou /atom4love/activate
+// répondent "compte introuvable localement" — retente une résolution à la
+// demande avant de proposer la redirection, ou affiche un message explicite
+// si aucune piste n'est trouvée (jamais de blocage silencieux).
+async function _proposeStationRedirectOrFallback(email) {
+    if (!_resolvedUspot || _isSameStation(_resolvedUspot)) {
+        if (typeof window._detectEmailOnRelay === 'function') {
+            await window._detectEmailOnRelay(email);
+        }
+    }
+    if (_resolvedUspot && !_isSameStation(_resolvedUspot)) {
+        _confirmStationRedirect();
+    } else {
+        _certStatus('⚠ MULTIPASS introuvable sur cette station, et impossible de déterminer sa station '
+            + 'd\'origine. Vérifiez votre connexion NOSTR ou réessayez plus tard.', '#ff8888');
     }
 }
 
@@ -3904,9 +3938,11 @@ function _hexToNpub(hex) {
 let _emailDetectTimer = null;
 
 function _updateEmailHint(state, data) {
-    const hint      = document.getElementById('multipass-email-hint');
-    const passBlock = document.getElementById('multipass-pass-block');
-    const btn       = document.getElementById('btn-multipass');
+    const hint = document.getElementById('multipass-email-hint');
+    // Le bouton réel de l'étape 1 est "step1-next-btn" (aucun élément "btn-multipass"
+    // n'existe dans le HTML — cf. _goToCreateMultipass()/étape 5, seule page qui gère
+    // réellement création/récupération via redirection vers /g1).
+    const btn = document.getElementById('step1-next-btn');
     if (!hint) return;
     switch (state) {
         case 'checking':
@@ -3918,37 +3954,24 @@ function _updateEmailHint(state, data) {
             const nameStr = data.name ? ` · <span style="color:rgba(255,255,255,.6)">${data.name}</span>` : '';
             // Résoudre la home station depuis l'IPFSNODEID pour cibler le bon uSPOT
             if (station) _resolveStationFromKind0(data.home_station || station);
-            if (window.nostr) {
-                // Extension NIP-07 active : info uniquement, pas de saisie de PASS requise
-                hint.innerHTML =
-                    `<div class="station-flash" style="background:rgba(0,255,204,.06);border:1px solid rgba(0,255,204,.25);`
-                    +`border-radius:8px;padding:6px 10px;font-size:.72rem;color:#00ffcc;margin-top:4px">`
-                    +`🟢 MULTIPASS existant${nameStr}<br>`
-                    +`<span style="color:rgba(255,255,255,.35)">Station : ${stDisp}</span>`
-                    +`</div>`;
-                if (passBlock) passBlock.style.display = 'none';
-            } else {
-                hint.innerHTML =
-                    `<div class="station-flash" style="background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.3);`
-                    +`border-radius:8px;padding:6px 10px;font-size:.72rem;color:#f59e0b;margin-top:4px">`
-                    +`✅ MULTIPASS détecté${nameStr}<br>`
-                    +`<span style="color:rgba(255,255,255,.35)">Station : ${stDisp}</span><br>`
-                    +`<span style="color:rgba(255,200,80,.6)">Saisissez le code PASS reçu par email lors de la création.</span>`
-                    +`</div>`;
-                if (passBlock) passBlock.style.display = '';
-                if (btn) btn.textContent = '🔑 Récupérer mon MULTIPASS';
-            }
+            // Info uniquement — la création/récupération réelle se fait via /g1
+            // (étape 5, _goToCreateMultipass()), jamais saisie de PASS ici.
+            hint.innerHTML =
+                `<div class="station-flash" style="background:rgba(0,255,204,.06);border:1px solid rgba(0,255,204,.25);`
+                +`border-radius:8px;padding:6px 10px;font-size:.72rem;color:#00ffcc;margin-top:4px">`
+                +`🟢 MULTIPASS existant${nameStr}<br>`
+                +`<span style="color:rgba(255,255,255,.35)">Station : ${stDisp}</span>`
+                +`</div>`;
+            if (btn) btn.textContent = 'Continuer →';
             break;
         }
         case 'notfound':
             hint.innerHTML = '';
-            if (passBlock) passBlock.style.display = 'none';
-            if (btn) btn.textContent = '✨ Créer mon MULTIPASS';
+            if (btn) btn.textContent = 'Commencer →';
             break;
         case 'error':
             hint.innerHTML = '<span style="color:rgba(255,120,120,.45);font-size:.7rem">⚠ Relay inaccessible — envoi direct</span>';
-            if (passBlock) passBlock.style.display = 'none';
-            if (btn) btn.textContent = '✨ Créer mon MULTIPASS';
+            if (btn) btn.textContent = 'Commencer →';
             break;
         default:
             hint.innerHTML = '';

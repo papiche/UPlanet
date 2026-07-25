@@ -3417,7 +3417,7 @@ async function publishIncarnationCert() {
         const chRes  = await fetch(apiUrl + '/atom4love/challenge?email=' + encodeURIComponent(email));
         const chJson = await chRes.json().catch(() => ({}));
         if (!chRes.ok) {
-            throw new Error(chJson.detail || chJson.message || ('Challenge indisponible (' + chRes.status + ')'));
+            throw new Error(chJson.error || chJson.detail || chJson.message || ('Challenge indisponible (' + chRes.status + ')'));
         }
 
         // ── Étape 2 : signer un event kind 22242 avec la clé UPH connectée ────
@@ -3445,11 +3445,19 @@ async function publishIncarnationCert() {
         fd.append('auth_event',     JSON.stringify(authEvent));
         if (cd)         fd.append('conception_datetime', cd + (ct ? 'T' + ct : 'T00:00'));
         if (birthPlace) fd.append('birth_place', birthPlace);
+        // Résidence actuelle (distincte de la naissance) — republie aussi
+        // atom4love-home/atom4love-priv côté serveur si fournie (voir
+        // atom4love_publish.py). _confirmedHomeLat/_confirmedHomeLon restent
+        // null tant que l'utilisateur n'a pas choisi sa résidence activement.
+        if (_confirmedHomeLat != null && _confirmedHomeLon != null) {
+            fd.append('home_lat', String(_confirmedHomeLat));
+            fd.append('home_lon', String(_confirmedHomeLon));
+        }
 
         const actRes  = await fetch(apiUrl + '/atom4love/activate', { method: 'POST', body: fd });
         const actJson = await actRes.json().catch(() => ({}));
         if (!actRes.ok || !actJson.activated) {
-            throw new Error(actJson.message || actJson.detail || ('HTTP ' + actRes.status));
+            throw new Error(actJson.error || actJson.message || actJson.detail || ('HTTP ' + actRes.status));
         }
 
         const phaseStr = actJson.personal_phase != null ? actJson.personal_phase.toFixed(4) : '?';
@@ -3461,8 +3469,16 @@ async function publishIncarnationCert() {
 
     } catch(e) {
         console.error('[atomic] ATOM4LOVE activation KO:', e);
-        _certStatus('⚠ ' + (e.message || String(e)), '#ff6060');
+        const msg = e.message || String(e);
         if (btn) { btn.textContent = '⚛ Réessayer'; btn.disabled = false; }
+        // Compte absent de CETTE station (n'existe que sur sa station d'origine) —
+        // proposer la redirection plutôt que d'afficher juste l'erreur brute.
+        if (/PRIMARY_ACCOUNT_NOT_FOUND/i.test(msg) || /introuvable/i.test(msg)) {
+            _certStatus('⚠ ' + msg, '#ff6060');
+            await _proposeStationRedirectOrFallback(email);
+        } else {
+            _certStatus('⚠ ' + msg, '#ff6060');
+        }
     }
 }
 

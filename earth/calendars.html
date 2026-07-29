@@ -572,6 +572,111 @@
             border-color: transparent;
             color: white;
         }
+
+        /* Personal (encrypted) calendar */
+        .personal-calendar-card {
+            border: 2px solid rgba(74, 222, 128, 0.35) !important;
+        }
+
+        .personal-lock-badge {
+            font-size: 0.75rem;
+            padding: 0.25rem 0.6rem;
+            border-radius: 20px;
+            background: rgba(74, 222, 128, 0.15);
+            color: var(--accent-green);
+            border: 1px solid rgba(74, 222, 128, 0.35);
+        }
+
+        .seasonal-chip {
+            cursor: pointer;
+            transition: transform 0.15s ease, filter 0.15s ease;
+        }
+
+        .seasonal-chip:hover {
+            transform: translateY(-1px);
+            filter: brightness(1.25);
+        }
+
+        /* Rappels d'événement (style Thunderbird) */
+        .reminder-row + .reminder-row { margin-top: 0; }
+        .reminder-add-link {
+            background: none;
+            border: none;
+            color: var(--accent-blue);
+            font-size: 0.85rem;
+            padding: 0.25rem 0;
+            cursor: pointer;
+        }
+        .reminder-add-link:hover { text-decoration: underline; }
+
+        /* Panneau d'alarme (rappels dus) */
+        #reminder-alarm-panel {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            width: 340px;
+            max-width: calc(100vw - 40px);
+            max-height: 70vh;
+            overflow-y: auto;
+            background: var(--bg-card);
+            border: 1px solid var(--accent-orange);
+            border-radius: 12px;
+            box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+            z-index: 10050;
+        }
+        .ra-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.6rem 0.9rem;
+            background: linear-gradient(135deg, rgba(251, 146, 60, 0.25), rgba(239, 68, 68, 0.15));
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px 12px 0 0;
+            font-weight: 600;
+            color: var(--accent-orange);
+            font-size: 0.9rem;
+        }
+        .ra-dismiss-all {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            font-size: 0.75rem;
+            cursor: pointer;
+        }
+        .ra-dismiss-all:hover { color: var(--text-primary); }
+        .ra-list { padding: 0.5rem; }
+        .ra-item {
+            background: rgba(15, 23, 42, 0.6);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 8px;
+            padding: 0.6rem 0.7rem;
+            margin-bottom: 0.5rem;
+        }
+        .ra-item:last-child { margin-bottom: 0; }
+        .ra-item-title { font-weight: 600; font-size: 0.88rem; margin-bottom: 0.2rem; }
+        .ra-item-when { font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.5rem; }
+        .ra-item-actions { display: flex; gap: 0.4rem; align-items: center; }
+        .ra-item-actions select {
+            flex: 1;
+            background: rgba(15, 23, 42, 0.8);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: var(--text-primary);
+            border-radius: 6px;
+            font-size: 0.75rem;
+            padding: 0.2rem 0.3rem;
+        }
+        .ra-btn {
+            border: none;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            padding: 0.25rem 0.5rem;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+        .ra-btn-snooze { background: rgba(59, 130, 246, 0.25); color: var(--accent-blue); }
+        .ra-btn-snooze:hover { background: rgba(59, 130, 246, 0.4); }
+        .ra-btn-dismiss { background: rgba(74, 222, 128, 0.2); color: var(--accent-green); }
+        .ra-btn-dismiss:hover { background: rgba(74, 222, 128, 0.35); }
     </style>
 </head>
 <body>
@@ -613,7 +718,7 @@
         <!-- Header -->
         <div class="text-center mb-5">
             <h1 class="display-4 fw-bold mb-3" style="background: linear-gradient(135deg, #3b82f6, #a78bfa); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">
-                📅 Gestion des Calendriers
+                📅 Mes Calendriers
             </h1>
             <p class="lead text-secondary">
                 Consultez, modifiez et supprimez vos calendriers et leurs événements
@@ -666,6 +771,9 @@
                     <button class="btn btn-success" onclick="showCreateCalendarModal()">
                         <i class="bi bi-plus-circle"></i> <span class="d-none d-sm-inline">Créer</span>
                     </button>
+                    <button class="btn btn-outline-primary" onclick="showImportCalendarModal()">
+                        <i class="bi bi-upload"></i> <span class="d-none d-sm-inline">Importer .ics</span>
+                    </button>
                 </div>
                 <div class="d-flex gap-2 align-items-center">
                     <!-- View Toggle -->
@@ -688,7 +796,43 @@
                     </select>
                 </div>
             </div>
-            
+
+            <!-- Personal (encrypted) Calendar — always visible, private by default -->
+            <div id="personal-calendar-section" class="calendar-card personal-calendar-card">
+                <div class="calendar-card-header">
+                    <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+                        <div class="d-flex align-items-center gap-3">
+                            <span class="fs-2">🔒</span>
+                            <div>
+                                <h4 class="mb-1" style="color: var(--text-primary);">Mon calendrier personnel</h4>
+                                <div class="d-flex flex-wrap gap-2 align-items-center">
+                                    <span class="personal-lock-badge"><i class="bi bi-shield-lock"></i> Chiffré NIP-44 — visible de vous seul</span>
+                                    <span id="personal-geo-badge" class="text-secondary small">📍 position inconnue</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="d-flex gap-2">
+                            <button class="btn btn-sm btn-outline-secondary" onclick="updatePersonalGeo()" title="Utiliser ma position pour adapter les suggestions à mon climat">
+                                <i class="bi bi-geo-alt"></i> <span class="d-none d-sm-inline">Localiser</span>
+                            </button>
+                            <button class="btn btn-sm btn-outline-secondary" onclick="exportCalendarICS(PERSONAL_DTAG, 'Mon_calendrier_personnel')" title="Exporter en .ics (Thunderbird, Google Calendar…)">
+                                <i class="bi bi-download"></i> <span class="d-none d-sm-inline">Exporter</span>
+                            </button>
+                            <button class="btn btn-sm btn-success" onclick="openAddPersonalEventModal()">
+                                <i class="bi bi-plus-circle"></i> <span class="d-none d-sm-inline">Ajouter un événement</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div id="personal-seasonal-hints" class="mt-2"></div>
+                </div>
+                <div class="calendar-card-body" id="personal-events-body">
+                    <div class="no-events-msg">
+                        <i class="bi bi-hourglass-split fs-1 mb-2 d-block" style="opacity: 0.3;"></i>
+                        <p>Chargement…</p>
+                    </div>
+                </div>
+            </div>
+
             <!-- View Mode Tabs -->
             <div class="view-mode-tabs">
                 <button class="view-mode-tab active" id="tab-separate" onclick="setViewMode('separate')">
@@ -757,11 +901,11 @@
     </div>
 
     <!-- Modal : Planifier une session de craft collectif -->
-    <div class="modal fade" id="craftSessionModal" tabindex="-1" aria-hidden="true">
+    <div class="modal fade" id="craftSessionModal" tabindex="-1" aria-hidden="true" aria-labelledby="craftSessionModalLabel">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content" style="background:#0d1f14;border:1px solid rgba(99,102,241,0.3);color:#d1fae5;">
                 <div class="modal-header" style="border-bottom:1px solid rgba(99,102,241,0.2);">
-                    <h6 class="modal-title" style="color:#a5b4fc;">
+                    <h6 class="modal-title" id="craftSessionModalLabel" style="color:#a5b4fc;">
                         <i class="bi bi-calendar-plus"></i> Planifier un craft collectif
                         <small class="d-block" style="font-size:10px;font-weight:400;color:#94a3b8;" id="craft-session-name"></small>
                     </h6>
@@ -790,11 +934,18 @@
                         <textarea class="form-control form-control-sm" id="craft-session-desc" rows="2"
                             style="background:rgba(255,255,255,0.07);border-color:rgba(99,102,241,0.3);color:#d1fae5;"></textarea>
                     </div>
+                    <div class="mb-3">
+                        <label class="form-label" style="font-size:11px;color:#94a3b8;">Rappel</label>
+                        <div id="craft-session-reminders"></div>
+                        <button type="button" class="reminder-add-link" onclick="addReminderRow('craft-session-reminders')">
+                            <i class="bi bi-plus-circle"></i> Ajouter un rappel
+                        </button>
+                    </div>
                     <div id="craft-session-operators-info"
                         style="font-size:10.5px;color:#94a3b8;background:rgba(99,102,241,0.07);border-radius:8px;padding:8px 10px;">
                         <i class="bi bi-people"></i> Opérateurs requis : <strong id="craft-session-min-op" style="color:#a5b4fc">—</strong>
                         <br><i class="bi bi-info-circle" style="font-size:9px"></i>
-                        L'événement sera visible de tous sur le relay. Les participants doivent avoir les PERMIT requis.
+                        L'événement sera publié sur le relay. Les participants doivent réunir les compétences/objets requis par la recette.
                     </div>
                 </div>
                 <div class="modal-footer" style="border-top:1px solid rgba(99,102,241,0.2);">
@@ -810,11 +961,11 @@
     </div>
     
     <!-- Edit Event Modal -->
-    <div class="modal fade" id="editEventModal" tabindex="-1">
+    <div class="modal fade" id="editEventModal" tabindex="-1" aria-labelledby="editEventModalLabel">
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title"><i class="bi bi-pencil"></i> Modifier l'événement</h5>
+                    <h5 class="modal-title" id="editEventModalLabel"><i class="bi bi-pencil"></i> Modifier l'événement</h5>
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
@@ -838,6 +989,13 @@
                         <label class="form-label">Description</label>
                         <textarea class="form-control" id="edit-event-description" rows="4"></textarea>
                     </div>
+                    <div class="mb-3">
+                        <label class="form-label">Rappel</label>
+                        <div id="edit-event-reminders"></div>
+                        <button type="button" class="reminder-add-link" onclick="addReminderRow('edit-event-reminders')">
+                            <i class="bi bi-plus-circle"></i> Ajouter un rappel
+                        </button>
+                    </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
@@ -850,11 +1008,11 @@
     </div>
     
     <!-- Delete Confirmation Modal -->
-    <div class="modal fade" id="deleteModal" tabindex="-1">
+    <div class="modal fade" id="deleteModal" tabindex="-1" aria-labelledby="deleteModalLabel">
         <div class="modal-dialog">
             <div class="modal-content">
                 <div class="modal-header bg-danger">
-                    <h5 class="modal-title text-white"><i class="bi bi-exclamation-triangle"></i> Confirmer la suppression</h5>
+                    <h5 class="modal-title text-white" id="deleteModalLabel"><i class="bi bi-exclamation-triangle"></i> Confirmer la suppression</h5>
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
@@ -876,11 +1034,11 @@
     </div>
 
     <!-- Create Calendar Modal -->
-    <div class="modal fade" id="createCalendarModal" tabindex="-1">
+    <div class="modal fade" id="createCalendarModal" tabindex="-1" aria-labelledby="createCalendarModalLabel">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content" style="background:#0f172a;border:1px solid rgba(74,222,128,0.3);color:#f1f5f9;">
                 <div class="modal-header" style="border-bottom:1px solid rgba(74,222,128,0.2);">
-                    <h5 class="modal-title"><i class="bi bi-calendar-plus" style="color:#4ade80;"></i> Créer un calendrier lunaire</h5>
+                    <h5 class="modal-title" id="createCalendarModalLabel"><i class="bi bi-calendar-plus" style="color:#4ade80;"></i> Créer un calendrier lunaire</h5>
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
@@ -934,6 +1092,99 @@
         </div>
     </div>
 
+    <!-- Add Personal Event Modal (chiffré NIP-44) -->
+    <div class="modal fade" id="addPersonalEventModal" tabindex="-1" aria-labelledby="addPersonalEventModalLabel">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="addPersonalEventModalLabel"><i class="bi bi-shield-lock" style="color:#4ade80;"></i> Ajouter un événement personnel</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="ape-suggestions" class="mb-3"></div>
+                    <div class="mb-3">
+                        <label class="form-label">Type</label>
+                        <select class="form-select" id="ape-type">
+                            <option value="semis">🌱 Semis</option>
+                            <option value="recolte">🌾 Récolte</option>
+                            <option value="entretien" selected>✂️ Entretien</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Titre</label>
+                        <input type="text" class="form-control" id="ape-title" placeholder="ex: Semis de carottes">
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Date de début</label>
+                            <input type="datetime-local" class="form-control" id="ape-start">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Date de fin (optionnel)</label>
+                            <input type="datetime-local" class="form-control" id="ape-end">
+                        </div>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">Notes</label>
+                        <textarea class="form-control" id="ape-description" rows="3"></textarea>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">Rappel</label>
+                        <div id="ape-reminders"></div>
+                        <button type="button" class="reminder-add-link" onclick="addReminderRow('ape-reminders')">
+                            <i class="bi bi-plus-circle"></i> Ajouter un rappel
+                        </button>
+                    </div>
+                    <div class="small text-secondary">
+                        <i class="bi bi-shield-lock"></i> Titre et notes sont chiffrés (NIP-44) avant publication sur le relay : seul vous, avec votre clé, pourrez les déchiffrer.
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+                    <button type="button" class="btn btn-success" id="ape-submit" onclick="submitPersonalEvent()">
+                        <i class="bi bi-shield-lock"></i> Chiffrer et publier
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Import Calendar Modal (.ics — RFC 5545, compatible Thunderbird / Google Calendar / Outlook) -->
+    <div class="modal fade" id="importCalendarModal" tabindex="-1" aria-labelledby="importCalendarModalLabel">
+        <div class="modal-dialog">
+            <div class="modal-content" style="background:#0f172a;border:1px solid rgba(59,130,246,0.3);color:#f1f5f9;">
+                <div class="modal-header" style="border-bottom:1px solid rgba(59,130,246,0.2);">
+                    <h5 class="modal-title" id="importCalendarModalLabel"><i class="bi bi-upload" style="color:#3b82f6;"></i> Importer un calendrier (.ics)</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Fichier iCalendar (.ics)</label>
+                        <input type="file" class="form-control" id="ics-import-file" accept=".ics,text/calendar" onchange="handleICSFileSelected(event)">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Nom du calendrier</label>
+                        <input type="text" class="form-control" id="ics-import-name" placeholder="ex: Mon agenda Thunderbird">
+                    </div>
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="checkbox" id="ics-import-private">
+                        <label class="form-check-label small" for="ics-import-private">
+                            <i class="bi bi-shield-lock"></i> Importer dans mon calendrier personnel chiffré (visible de vous seul)
+                        </label>
+                    </div>
+                    <div id="ics-import-preview" class="small text-secondary"></div>
+                    <div id="ics-import-status" class="small mt-2"></div>
+                </div>
+                <div class="modal-footer" style="border-top:1px solid rgba(59,130,246,0.2);">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+                    <button type="button" class="btn btn-primary" id="ics-import-submit" onclick="importICSCalendar()">
+                        <i class="bi bi-cloud-upload"></i> Importer sur NOSTR
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Scripts -->
     <script src="bootstrap.bundle.min.js"></script>
     <script src="nacl-fast.min.js"></script>
@@ -954,59 +1205,51 @@
         let currentView = 'list'; // 'list' or 'grid'
         let selectedCalendars = new Set(); // IDs of selected calendars
         let calendarColors = {}; // Color for each calendar
-        
+
+        // Calendrier personnel chiffré (NIP-44) — d-tag fixe, un seul par pubkey
+        const PERSONAL_DTAG = 'personal';
+        let personalGeo = null; // { lat, lon, hemisphere: 'nord'|'sud' } — jamais publié sur le relay
+
         // ========================================
-        // INITIALIZATION
+        // INITIALIZATION — la connexion NOSTR est gérée par uplanet-header.js
+        // (extension NIP-07, nsec mobile, cache sessionStorage inter-pages).
+        // Cette page se contente de récupérer le pubkey une fois disponible.
         // ========================================
-        document.addEventListener('DOMContentLoaded', async () => {
+        document.addEventListener('DOMContentLoaded', () => {
             console.log('[Calendars] 🚀 Page initialized');
-            
-            // Check if user is already connected
-            if (window.nostr) {
-                try {
-                    const pubkey = await window.nostr.getPublicKey();
-                    if (pubkey) {
-                        localUserPubkey = pubkey;
-                        await onUserConnected(pubkey);
-                    }
-                } catch (e) {
-                    console.log('[Calendars] User not yet connected');
-                }
+            loadPersonalGeoFromCache();
+            renderPersonalGeoBadge();
+            maybeAutoLocate();
+            startReminderEngine();
+
+            function pickup(pk) {
+                if (!pk || localUserPubkey) return;
+                localUserPubkey = pk;
+                onUserConnected(pk);
             }
+
+            var pk0 = (window.NostrState && window.NostrState.userPubkey) || window.userPubkey || '';
+            if (!pk0) { try { pk0 = sessionStorage.getItem('uph_pubkey') || ''; } catch (e) {} }
+            if (pk0) pickup(pk0);
+
+            // uplanet-header.js dispatche 'nostr:connected' à chaque connexion réussie
+            // (silencieuse à l'ouverture, extension, ou nsec mobile) — seul déclencheur nécessaire.
+            document.addEventListener('nostr:connected', function (e) {
+                pickup(e.detail && e.detail.pubkey);
+            });
         });
-        
+
         // ========================================
-        // NOSTR CONNECTION
+        // NOSTR CONNECTION — délègue à uplanet-header.js (modal 🔑 Accès)
         // ========================================
-        async function connectNostrUser() {
-            console.log('[Calendars] 🔐 Connecting to NOSTR...');
-            
-            if (!window.nostr) {
-                showNotification({
-                    type: 'error',
-                    title: 'Extension NOSTR requise',
-                    message: 'Installez une extension comme Alby ou nos2x pour vous connecter.'
-                });
-                return;
-            }
-            
-            try {
-                const pubkey = await window.nostr.getPublicKey();
-                localUserPubkey = pubkey;
-                
-                // Connect to relay
-                await ensureRelayConnection();
-                
-                await onUserConnected(pubkey);
-                
-            } catch (error) {
-                console.error('[Calendars] Connection error:', error);
-                showNotification({
-                    type: 'error',
-                    title: 'Erreur de connexion',
-                    message: error.message || 'Impossible de se connecter à NOSTR'
-                });
-            }
+        function connectNostrUser() {
+            if (typeof window.uphOpenLogin === 'function') { window.uphOpenLogin(); return; }
+            if (typeof window.uphConnect === 'function') { window.uphConnect(); return; }
+            showNotification({
+                type: 'error',
+                title: 'Extension NOSTR requise',
+                message: 'Installez une extension comme Alby ou nos2x, ou utilisez le bouton 🔑 Accès en haut de page.'
+            });
         }
         
         async function onUserConnected(pubkey) {
@@ -1053,25 +1296,31 @@
                     throw new Error('Relay non disponible');
                 }
                 
-                // Fetch calendars (Kind 31928)
+                // Fetch calendars (Kind 31924)
                 const calendars = await fetchUserNostrCalendars(localUserPubkey);
+
+                // Le calendrier personnel chiffré existe toujours par défaut
+                await ensurePersonalCalendar(calendars);
                 userCalendars = calendars;
-                
+
                 console.log('[Calendars] 📊 Found', calendars.length, 'calendars');
-                
+
                 // For each calendar, fetch its events
                 let totalEvents = 0;
                 let upcomingEvents = 0;
                 const now = Math.floor(Date.now() / 1000);
                 const weekFromNow = now + (7 * 24 * 60 * 60);
-                
+
                 for (const calendar of calendars) {
                     const calendarDTag = getTagValue(calendar, 'd');
                     if (calendarDTag) {
-                        const events = await fetchCalendarEvents(localUserPubkey, calendarDTag);
+                        let events = await fetchCalendarEvents(localUserPubkey, calendarDTag);
+                        if (calendarDTag === PERSONAL_DTAG) {
+                            events = await decryptPersonalEvents(events);
+                        }
                         calendarEvents[calendarDTag] = events;
                         totalEvents += events.length;
-                        
+
                         // Count upcoming events
                         for (const event of events) {
                             const startTag = getTagValue(event, 'start');
@@ -1084,19 +1333,24 @@
                         }
                     }
                 }
-                
+
                 // Update stats
                 document.getElementById('stat-calendars').textContent = calendars.length;
                 document.getElementById('stat-events').textContent = totalEvents;
                 document.getElementById('stat-upcoming').textContent = upcomingEvents;
-                
-                // Initialize calendar colors and select all by default
+
+                // Initialize calendar colors and select all by default (calendrier personnel exclu :
+                // il a sa propre section dédiée, pas mélangé à la vue unifiée multi-calendriers)
                 assignCalendarColors();
                 calendars.forEach(cal => {
                     const dTag = getTagValue(cal, 'd') || cal.id;
-                    selectedCalendars.add(dTag);
+                    if (dTag !== PERSONAL_DTAG) selectedCalendars.add(dTag);
                 });
-                
+
+                renderSeasonalHints('personal-seasonal-hints');
+                renderPersonalCalendarSection();
+                checkReminders();
+
                 // Render based on current view mode
                 if (viewMode === 'unified') {
                     renderCalendarCheckboxes();
@@ -1274,10 +1528,12 @@
             document.getElementById('craft-session-start').value        = '';
             document.getElementById('craft-session-end').value          = '';
             document.getElementById('craft-session-desc').value         = '';
-            // Prendre le premier calendrier de l'utilisateur comme cible
+            document.getElementById('craft-session-reminders').innerHTML = '';
+            // Prendre le premier calendrier de l'utilisateur comme cible, ou le calendrier
+            // personnel (toujours créé par ensurePersonalCalendar) si la liste n'est pas encore chargée
             _craftSessionCalDtag = userCalendars.length
                 ? (getTagValue(userCalendars[0], 'd') || userCalendars[0].id)
-                : 'main';
+                : PERSONAL_DTAG;
             new bootstrap.Modal(document.getElementById('craftSessionModal')).show();
         }
 
@@ -1305,7 +1561,8 @@
                         ['a',             `31924:${localUserPubkey}:${_craftSessionCalDtag}`],
                         ['craft',         _craftSessionCraftId],
                         ['min_operators', String(_craftSessionMinOp)],
-                        ['t',             'craft-collectif'], ['t', 'WoTx2']
+                        ['t',             'craft-collectif'], ['t', 'WoTx2'],
+                        ...collectReminderTags('craft-session-reminders')
                     ],
                     content: desc
                 };
@@ -1341,20 +1598,28 @@
         // CALENDAR SELECTION
         // ========================================
         function assignCalendarColors() {
-            const colors = ['cal-color-0', 'cal-color-1', 'cal-color-2', 'cal-color-3', 
+            const colors = ['cal-color-0', 'cal-color-1', 'cal-color-2', 'cal-color-3',
                            'cal-color-4', 'cal-color-5', 'cal-color-6', 'cal-color-7'];
             userCalendars.forEach((cal, idx) => {
                 const dTag = getTagValue(cal, 'd') || cal.id;
                 calendarColors[dTag] = colors[idx % colors.length];
             });
         }
+
+        // Hex réels des classes .cal-color-0..7 (voir <style> ~L.540) — utilisé pour les
+        // couleurs inline (border-left) car les propriétés CSS --accent-N n'existent pas.
+        const CAL_COLOR_HEX = {
+            'cal-color-0': '#3b82f6', 'cal-color-1': '#22c55e', 'cal-color-2': '#f59e0b',
+            'cal-color-3': '#ef4444', 'cal-color-4': '#8b5cf6', 'cal-color-5': '#ec4899',
+            'cal-color-6': '#14b8a6', 'cal-color-7': '#f97316'
+        };
         
         function renderCalendarCheckboxes() {
             const container = document.getElementById('calendar-checkboxes');
             if (!container) return;
             
             let html = '';
-            userCalendars.forEach((calendar, idx) => {
+            userCalendars.filter(cal => getTagValue(cal, 'd') !== PERSONAL_DTAG).forEach((calendar, idx) => {
                 const dTag = getTagValue(calendar, 'd') || calendar.id;
                 const title = getTagValue(calendar, 'title') || getTagValue(calendar, 'name') || dTag;
                 const style = getTagValue(calendar, 'calendar_type') || getTagValue(calendar, 't') || 'foret';
@@ -1524,7 +1789,7 @@
             const colorClass = event.colorClass || 'cal-color-0';
             
             return `
-                <div class="event-card" style="border-left: 4px solid var(--${colorClass.replace('cal-color-', 'accent-')}, #3b82f6);">
+                <div class="event-card" style="border-left: 4px solid ${CAL_COLOR_HEX[colorClass] || '#3b82f6'};">
                     <div class="event-card-header">
                         <div style="flex: 1;">
                             <span class="event-type-badge type-${eventType} mb-2 d-inline-block">${eventType}</span>
@@ -1542,10 +1807,10 @@
                             <span class="text-secondary small"><i class="bi bi-clock"></i> ${time}</span>
                         </div>
                         <div class="d-flex gap-1">
-                            <button class="btn btn-sm btn-outline-primary" onclick="showEditEventModal('${event.id}', '${event.calendarDTag}')">
+                            <button class="btn btn-sm btn-outline-primary" title="Modifier" aria-label="Modifier l'événement" onclick="showEditEventModal('${event.id}', '${event.calendarDTag}')">
                                 <i class="bi bi-pencil"></i>
                             </button>
-                            <button class="btn btn-sm btn-outline-danger" onclick="showDeleteModal('event', '${event.id}', '${escapeHtml(title.slice(0, 20))}')">
+                            <button class="btn btn-sm btn-outline-danger" title="Supprimer" aria-label="Supprimer l'événement" onclick="showDeleteModal('event', '${event.id}', '${escapeHtml(title.slice(0, 20)).replace(/'/g, "\\'")}')">
                                 <i class="bi bi-trash"></i>
                             </button>
                         </div>
@@ -1597,7 +1862,7 @@
                                     <button class="btn btn-sm btn-outline-primary" onclick="event.stopPropagation(); showEditEventModal('${event.id}', '${event.calendarDTag}')">
                                         <i class="bi bi-pencil"></i>
                                     </button>
-                                    <button class="btn btn-sm btn-outline-danger" onclick="event.stopPropagation(); showDeleteModal('event', '${event.id}', '${escapeHtml(title.slice(0, 20))}')">
+                                    <button class="btn btn-sm btn-outline-danger" title="Supprimer" aria-label="Supprimer l'événement" onclick="event.stopPropagation(); showDeleteModal('event', '${event.id}', '${escapeHtml(title.slice(0, 20)).replace(/'/g, "\\'")}')">
                                         <i class="bi bi-trash"></i>
                                     </button>
                                     ${description ? '<i class="bi bi-chevron-down toggle-icon" id="icon-' + eventUid + '"></i>' : ''}
@@ -1621,11 +1886,11 @@
         // ========================================
         function renderCalendars(calendars) {
             const container = document.getElementById('calendars-container');
-            
-            // Apply filter
-            let filtered = calendars;
+
+            // Le calendrier personnel chiffré a sa propre section dédiée (toujours visible, hors onglets)
+            let filtered = calendars.filter(cal => getTagValue(cal, 'd') !== PERSONAL_DTAG);
             if (currentFilter) {
-                filtered = calendars.filter(cal => {
+                filtered = filtered.filter(cal => {
                     const style = getTagValue(cal, 'calendar_type') || getTagValue(cal, 't');
                     return style === currentFilter;
                 });
@@ -1678,8 +1943,12 @@
                                     </div>
                                 </div>
                                 <div class="d-flex gap-2">
-                                    <button class="btn btn-sm btn-outline-danger" 
-                                            onclick="showDeleteModal('calendar', '${calendar.id}', '${escapeHtml(title)}')">
+                                    <button class="btn btn-sm btn-outline-secondary" title="Exporter en .ics (Thunderbird, Google Calendar…)"
+                                            onclick="exportCalendarICS('${dTag}', '${escapeHtml(title).replace(/'/g, "\\'")}')">
+                                        <i class="bi bi-download"></i>
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-danger" title="Supprimer" aria-label="Supprimer le calendrier"
+                                            onclick="showDeleteModal('calendar', '${calendar.id}', '${escapeHtml(title).replace(/'/g, "\\'")}')">
                                         <i class="bi bi-trash"></i>
                                     </button>
                                 </div>
@@ -1783,10 +2052,10 @@
                     <div class="event-card-footer">
                         <span class="text-secondary small"><i class="bi bi-clock"></i> ${time}</span>
                         <div class="d-flex gap-1">
-                            <button class="btn btn-sm btn-outline-primary" onclick="showEditEventModal('${event.id}', '${calendarDTag}')">
+                            <button class="btn btn-sm btn-outline-primary" title="Modifier" aria-label="Modifier l'événement" onclick="showEditEventModal('${event.id}', '${calendarDTag}')">
                                 <i class="bi bi-pencil"></i>
                             </button>
-                            <button class="btn btn-sm btn-outline-danger" onclick="showDeleteModal('event', '${event.id}', '${escapeHtml(title.slice(0, 20))}')">
+                            <button class="btn btn-sm btn-outline-danger" title="Supprimer" aria-label="Supprimer l'événement" onclick="showDeleteModal('event', '${event.id}', '${escapeHtml(title.slice(0, 20)).replace(/'/g, "\\'")}')">
                                 <i class="bi bi-trash"></i>
                             </button>
                         </div>
@@ -1835,7 +2104,7 @@
                                 <button class="btn btn-sm btn-outline-primary" onclick="event.stopPropagation(); showEditEventModal('${event.id}', '${calendarDTag}')">
                                     <i class="bi bi-pencil"></i>
                                 </button>
-                                <button class="btn btn-sm btn-outline-danger" onclick="event.stopPropagation(); showDeleteModal('event', '${event.id}', '${escapeHtml(title.slice(0, 20))}')">
+                                <button class="btn btn-sm btn-outline-danger" onclick="event.stopPropagation(); showDeleteModal('event', '${event.id}', '${escapeHtml(title.slice(0, 20)).replace(/'/g, "\\'")}')">
                                     <i class="bi bi-trash"></i>
                                 </button>
                                 <i class="bi bi-chevron-down toggle-icon" id="icon-${eventUid}"></i>
@@ -1878,7 +2147,203 @@
             
             return title || 'Événement sans titre';
         }
-        
+
+        // ========================================
+        // RAPPELS D'ÉVÉNEMENT (style Thunderbird)
+        // Chaque événement peut porter 0..N tags ['reminder', '<secondes avant start>'].
+        // Le tag reste en clair même sur les événements personnels chiffrés (NIP-44) :
+        // ce n'est qu'une durée, pas une donnée sensible, et ça permet au moteur
+        // d'alarme de fonctionner sans déchiffrement.
+        // ========================================
+        const REMINDER_PRESETS = [
+            { value: '0',      label: "Au moment de l'événement" },
+            { value: '300',    label: '5 minutes avant' },
+            { value: '900',    label: '15 minutes avant' },
+            { value: '1800',   label: '30 minutes avant' },
+            { value: '3600',   label: '1 heure avant' },
+            { value: '7200',   label: '2 heures avant' },
+            { value: '86400',  label: '1 jour avant' },
+            { value: '604800', label: '1 semaine avant' }
+        ];
+
+        // Le modal craft-session a un thème sombre custom avec styles inline sur ses champs
+        function _reminderSelectStyleAttr(containerId) {
+            return containerId.indexOf('craft-session') === 0
+                ? ' style="background:rgba(255,255,255,0.07);border-color:rgba(99,102,241,0.3);color:#d1fae5;"'
+                : '';
+        }
+
+        function addReminderRow(containerId, selectedValue) {
+            const container = document.getElementById(containerId);
+            if (!container) return;
+            const row = document.createElement('div');
+            row.className = 'reminder-row d-flex align-items-center gap-2 mb-2';
+            row.innerHTML = `
+                <select class="form-select form-select-sm"${_reminderSelectStyleAttr(containerId)}>
+                    ${REMINDER_PRESETS.map(p => `<option value="${p.value}"${p.value === selectedValue ? ' selected' : ''}>${p.label}</option>`).join('')}
+                </select>
+                <button type="button" class="btn btn-sm btn-outline-danger" onclick="this.closest('.reminder-row').remove()" title="Retirer ce rappel">
+                    <i class="bi bi-x"></i>
+                </button>
+            `;
+            container.appendChild(row);
+        }
+
+        function collectReminderTags(containerId) {
+            const container = document.getElementById(containerId);
+            if (!container) return [];
+            return Array.from(container.querySelectorAll('select')).map(s => ['reminder', s.value]);
+        }
+
+        // Vide le conteneur puis reconstruit une ligne par tag 'reminder' existant sur l'événement édité
+        function populateReminderRows(containerId, tags) {
+            const container = document.getElementById(containerId);
+            if (!container) return;
+            container.innerHTML = '';
+            (tags || []).filter(t => t[0] === 'reminder').forEach(t => addReminderRow(containerId, t[1]));
+        }
+
+        // ── Moteur d'alarme — vérifie périodiquement les rappels dus sur tous les événements chargés ──
+        const REMINDER_CHECK_INTERVAL_MS = 20000;
+        const REMINDER_STATE_KEY = 'uph_calendar_reminder_state';
+        let _reminderIntervalStarted = false;
+        let _lastDueReminderCount = 0;
+
+        function _reminderState() {
+            try { return JSON.parse(localStorage.getItem(REMINDER_STATE_KEY) || '{}'); } catch (e) { return {}; }
+        }
+        function _reminderStateSave(state) {
+            try { localStorage.setItem(REMINDER_STATE_KEY, JSON.stringify(state)); } catch (e) {}
+        }
+        function _isReminderSuppressed(key) {
+            const until = _reminderState()[key];
+            if (!until) return false;
+            return until === true || Date.now() < until;
+        }
+        function _suppressReminder(key, snoozeMs) {
+            const state = _reminderState();
+            state[key] = snoozeMs ? (Date.now() + snoozeMs) : true;
+            _reminderStateSave(state);
+        }
+
+        function collectDueReminders() {
+            const now = Date.now();
+            const due = [];
+            Object.keys(calendarEvents).forEach(dTag => {
+                (calendarEvents[dTag] || []).forEach(ev => {
+                    const startStr = getTagValue(ev, 'start');
+                    if (!startStr) return;
+                    const startMs = new Date(startStr).getTime();
+                    if (isNaN(startMs)) return;
+                    ev.tags.filter(t => t[0] === 'reminder').forEach(t => {
+                        const secBefore = parseInt(t[1], 10);
+                        if (isNaN(secBefore)) return;
+                        const triggerAt = startMs - secBefore * 1000;
+                        const key = ev.id + ':' + secBefore;
+                        // Fenêtre [triggerAt, start+1h] : évite de faire ressurgir de vieux
+                        // rappels après une longue absence de la page ouverte.
+                        if (now >= triggerAt && now < startMs + 3600000 && !_isReminderSuppressed(key)) {
+                            due.push({ key, event: ev, secBefore, startMs });
+                        }
+                    });
+                });
+            });
+            due.sort((a, b) => a.startMs - b.startMs);
+            return due;
+        }
+
+        function checkReminders() {
+            const due = collectDueReminders();
+            if (due.length > _lastDueReminderCount) _playReminderChime();
+            _lastDueReminderCount = due.length;
+            renderReminderPanel(due);
+        }
+
+        function _playReminderChime() {
+            try {
+                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.value = 880;
+                gain.gain.setValueAtTime(0.15, ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.6);
+                osc.connect(gain).connect(ctx.destination);
+                osc.start();
+                osc.stop(ctx.currentTime + 0.6);
+            } catch (e) {}
+        }
+
+        function renderReminderPanel(due) {
+            let panel = document.getElementById('reminder-alarm-panel');
+            if (!due.length) { if (panel) panel.remove(); return; }
+            if (!panel) {
+                panel = document.createElement('div');
+                panel.id = 'reminder-alarm-panel';
+                document.body.appendChild(panel);
+            }
+            panel.innerHTML = `
+                <div class="ra-header">
+                    <span><i class="bi bi-bell-fill"></i> Rappels (${due.length})</span>
+                    <button type="button" class="ra-dismiss-all" onclick="dismissAllReminders()">Tout ignorer</button>
+                </div>
+                <div class="ra-list">${due.map(_reminderCardHtml).join('')}</div>
+            `;
+        }
+
+        function _reminderCardHtml(d) {
+            const title = getEventTitle(d.event);
+            const diffMin = Math.round((d.startMs - Date.now()) / 60000);
+            const when = diffMin > 1 ? `commence dans ${diffMin} min`
+                : diffMin === 1 ? 'commence dans 1 min'
+                : diffMin === 0 ? 'commence maintenant'
+                : diffMin === -1 ? 'a commencé il y a 1 min'
+                : `a commencé il y a ${-diffMin} min`;
+            return `
+                <div class="ra-item">
+                    <div class="ra-item-title">${escapeHtml(title)}</div>
+                    <div class="ra-item-when"><i class="bi bi-clock"></i> ${when}</div>
+                    <div class="ra-item-actions">
+                        <select class="ra-snooze-select">
+                            <option value="300000">5 min</option>
+                            <option value="600000">10 min</option>
+                            <option value="1800000">30 min</option>
+                            <option value="3600000">1 h</option>
+                        </select>
+                        <button type="button" class="ra-btn ra-btn-snooze" onclick="snoozeReminder('${d.key}', this)">
+                            <i class="bi bi-alarm"></i> Rappeler
+                        </button>
+                        <button type="button" class="ra-btn ra-btn-dismiss" onclick="dismissReminder('${d.key}')">
+                            <i class="bi bi-check2"></i> Ignorer
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function snoozeReminder(key, btn) {
+            const select = btn.parentElement.querySelector('.ra-snooze-select');
+            _suppressReminder(key, parseInt(select.value, 10));
+            checkReminders();
+        }
+
+        function dismissReminder(key) {
+            _suppressReminder(key, 0);
+            checkReminders();
+        }
+
+        function dismissAllReminders() {
+            collectDueReminders().forEach(d => _suppressReminder(d.key, 0));
+            checkReminders();
+        }
+
+        function startReminderEngine() {
+            if (_reminderIntervalStarted) return;
+            _reminderIntervalStarted = true;
+            checkReminders();
+            setInterval(checkReminders, REMINDER_CHECK_INTERVAL_MS);
+        }
+
         // ========================================
         // EDIT & DELETE OPERATIONS
         // ========================================
@@ -1905,7 +2370,8 @@
             if (endStr) {
                 document.getElementById('edit-event-end').value = formatDateTimeLocal(endStr);
             }
-            
+            populateReminderRows('edit-event-reminders', event.tags);
+
             const modal = new bootstrap.Modal(document.getElementById('editEventModal'));
             modal.show();
         }
@@ -1928,24 +2394,34 @@
                 const events = calendarEvents[calendarDTag] || [];
                 const originalEvent = events.find(e => e.id === eventId);
                 const dTag = originalEvent ? getTagValue(originalEvent, 'd') : `event-${Date.now()}`;
-                
+                const isPersonal = calendarDTag === PERSONAL_DTAG;
+
                 // Create updated event
                 const updatedEvent = {
                     kind: 31922,
                     created_at: Math.floor(Date.now() / 1000),
                     tags: [
                         ['d', dTag],
-                        ['name', title],
                         ['start', new Date(startStr).toISOString()],
                         ['a', `31924:${localUserPubkey}:${calendarDTag}`]
                     ],
                     content: description
                 };
-                
+
+                if (isPersonal) {
+                    // Titre + notes chiffrés (NIP-44) — même traitement que submitPersonalEvent()
+                    updatedEvent.tags.push(['name', '🔒'], ['t', 'food-production'], ['private', 'nip44']);
+                    updatedEvent.content = await encryptSelf(JSON.stringify({ title, description }));
+                } else {
+                    updatedEvent.tags.push(['name', title]);
+                }
+
                 if (endStr) {
                     updatedEvent.tags.push(['end', new Date(endStr).toISOString()]);
                 }
-                
+
+                updatedEvent.tags.push(...collectReminderTags('edit-event-reminders'));
+
                 // Sign and publish
                 const signedEvent = await window.nostr.signEvent(updatedEvent);
                 
@@ -2087,6 +2563,330 @@
         }
         
         // ========================================
+        // EXPORT / IMPORT iCalendar (.ics — RFC 5545)
+        // Interopérabilité avec Thunderbird, Google Calendar, Outlook, Apple Calendar.
+        // ========================================
+
+        function _icsFoldLine(line) {
+            // RFC 5545 §3.1 : ligne limitée à 75 octets, poursuite par un espace en début de ligne suivante
+            if (line.length <= 75) return line;
+            let out = line.slice(0, 75);
+            let rest = line.slice(75);
+            while (rest.length) {
+                out += '\r\n ' + rest.slice(0, 74);
+                rest = rest.slice(74);
+            }
+            return out;
+        }
+
+        function _icsEscape(text) {
+            return String(text || '')
+                .replace(/\\/g, '\\\\')
+                .replace(/;/g, '\\;')
+                .replace(/,/g, '\\,')
+                .replace(/\n/g, '\\n');
+        }
+
+        function _icsDate(isoOrDateStr) {
+            const d = new Date(isoOrDateStr);
+            if (isNaN(d.getTime())) return '';
+            const pad = n => String(n).padStart(2, '0');
+            return d.getUTCFullYear() + pad(d.getUTCMonth() + 1) + pad(d.getUTCDate())
+                + 'T' + pad(d.getUTCHours()) + pad(d.getUTCMinutes()) + pad(d.getUTCSeconds()) + 'Z';
+        }
+
+        function buildICSForCalendar(calendarDTag, calendarTitle) {
+            const events = calendarEvents[calendarDTag] || [];
+            const lines = [
+                'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//UPlanet//calendars.html//FR', 'CALSCALE:GREGORIAN',
+                _icsFoldLine(`X-WR-CALNAME:${_icsEscape(calendarTitle)}`)
+            ];
+            events.forEach(ev => {
+                const startStr = getTagValue(ev, 'start');
+                if (!startStr) return;
+                const endStr = getTagValue(ev, 'end');
+                lines.push('BEGIN:VEVENT');
+                lines.push(`UID:${ev.id}@uplanet.copylaradio.com`);
+                lines.push(`DTSTAMP:${_icsDate(new Date(ev.created_at * 1000).toISOString())}`);
+                lines.push(`DTSTART:${_icsDate(startStr)}`);
+                if (endStr) lines.push(`DTEND:${_icsDate(endStr)}`);
+                lines.push(_icsFoldLine(`SUMMARY:${_icsEscape(getEventTitle(ev))}`));
+                if (ev.content) lines.push(_icsFoldLine(`DESCRIPTION:${_icsEscape(ev.content)}`));
+                ev.tags.filter(t => t[0] === 'reminder').forEach(t => {
+                    const sec = parseInt(t[1], 10);
+                    if (isNaN(sec)) return;
+                    lines.push('BEGIN:VALARM');
+                    lines.push('ACTION:DISPLAY');
+                    lines.push('DESCRIPTION:Rappel');
+                    lines.push(`TRIGGER:-PT${sec}S`);
+                    lines.push('END:VALARM');
+                });
+                lines.push('END:VEVENT');
+            });
+            lines.push('END:VCALENDAR');
+            return lines.join('\r\n') + '\r\n';
+        }
+
+        function exportCalendarICS(calendarDTag, calendarTitle) {
+            const events = calendarEvents[calendarDTag] || [];
+            if (!events.length) {
+                showNotification({ type: 'warning', title: 'Calendrier vide', message: 'Aucun événement à exporter.' });
+                return;
+            }
+            const ics = buildICSForCalendar(calendarDTag, calendarTitle || calendarDTag);
+            const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${(calendarTitle || calendarDTag).replace(/[^\w-]+/g, '_')}.ics`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 5000);
+            showNotification({ type: 'success', title: 'Export terminé', message: `${events.length} événement(s) exporté(s) en .ics.` });
+        }
+
+        function _icsUnfold(text) {
+            // RFC 5545 §3.1 : une ligne commençant par un espace/tab poursuit la précédente
+            return text.replace(/\r\n[ \t]/g, '').replace(/\n[ \t]/g, '');
+        }
+
+        function _icsUnescape(text) {
+            return String(text || '')
+                .replace(/\\n/gi, '\n')
+                .replace(/\\,/g, ',')
+                .replace(/\\;/g, ';')
+                .replace(/\\\\/g, '\\');
+        }
+
+        // Convertit une heure murale (année/mois/jour/h/m/s) exprimée dans le fuseau IANA `timeZone`
+        // en instant UTC (ms epoch), sans base de données tz externe : on s'appuie sur Intl
+        // (ICU embarqué du navigateur) via la technique classique « estimation UTC puis correction ».
+        function _zonedTimeToUTC(year, month, day, hour, minute, second, timeZone) {
+            const utcGuess = Date.UTC(year, month - 1, day, hour, minute, second);
+            const dtf = new Intl.DateTimeFormat('en-US', {
+                timeZone, hourCycle: 'h23',
+                year: 'numeric', month: '2-digit', day: '2-digit',
+                hour: '2-digit', minute: '2-digit', second: '2-digit'
+            });
+            const map = {};
+            dtf.formatToParts(new Date(utcGuess)).forEach(p => { if (p.type !== 'literal') map[p.type] = parseInt(p.value, 10); });
+            const readBackAsUTC = Date.UTC(map.year, map.month - 1, map.day, map.hour, map.minute, map.second);
+            // Écart entre l'heure murale lue dans `timeZone` et notre estimation UTC de départ
+            return utcGuess - (readBackAsUTC - utcGuess);
+        }
+
+        // Convertit une valeur DTSTART/DTEND iCalendar en ISO 8601, en conservant le fuseau d'origine :
+        // - suffixe Z → instant UTC absolu, pas de conversion nécessaire
+        // - TZID=<zone IANA> → résolu via Intl/_zonedTimeToUTC (garde l'instant réel de l'événement,
+        //   ex: 14:00 America/New_York reste 14:00 America/New_York quel que soit le fuseau du navigateur)
+        // - ni Z ni TZID exploitable (heure « flottante », ou TZID non-IANA type Windows/Outlook) :
+        //   repli sur l'heure locale du navigateur, comportement standard iCalendar pour le flottant
+        function _icsValueToISO(value, tzid) {
+            if (!value) return null;
+            const v = value.trim();
+            let m = v.match(/^(\d{4})(\d{2})(\d{2})$/);
+            if (m) return `${m[1]}-${m[2]}-${m[3]}T00:00:00.000Z`; // date seule (all-day) : pas de fuseau à appliquer
+
+            m = v.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})(Z)?$/);
+            if (!m) return null;
+            const y = +m[1], mo = +m[2], d = +m[3], h = +m[4], mi = +m[5], s = +m[6], isUTC = !!m[7];
+
+            if (isUTC) {
+                const dt = new Date(Date.UTC(y, mo - 1, d, h, mi, s));
+                return isNaN(dt.getTime()) ? null : dt.toISOString();
+            }
+
+            if (tzid) {
+                try {
+                    return new Date(_zonedTimeToUTC(y, mo, d, h, mi, s, tzid)).toISOString();
+                } catch (e) {
+                    console.warn('[Calendars] TZID non reconnu par Intl:', tzid, '— repli heure locale navigateur');
+                }
+            }
+
+            const dLocal = new Date(y, mo - 1, d, h, mi, s); // heure flottante : fuseau du navigateur
+            return isNaN(dLocal.getTime()) ? null : dLocal.toISOString();
+        }
+
+        // Convertit une durée TRIGGER iCalendar (-PT15M, -PT1H, -P1D, -PT300S…) en secondes avant l'événement
+        function _icsTriggerToSeconds(value) {
+            if (!value) return null;
+            const m = value.match(/^([+-]?)P(?:(\d+)W)?(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?)?$/);
+            if (!m) return null;
+            const negative = m[1] !== '+'; // TRIGGER par défaut négatif = avant l'événement
+            const weeks = +(m[2] || 0), days = +(m[3] || 0), hours = +(m[4] || 0), mins = +(m[5] || 0), secs = +(m[6] || 0);
+            const totalSec = weeks * 604800 + days * 86400 + hours * 3600 + mins * 60 + secs;
+            return negative ? totalSec : -totalSec;
+        }
+
+        function parseICS(text) {
+            const lines = _icsUnfold(text).split(/\r\n|\n|\r/);
+            let calname = '';
+            const events = [];
+            let cur = null;
+            let inAlarm = false;
+            let curTrigger = null;
+
+            lines.forEach(raw => {
+                const line = raw.trim();
+                if (!line) return;
+                if (line === 'BEGIN:VEVENT') { cur = { uid: '', summary: '', description: '', dtstart: null, dtend: null, reminders: [] }; return; }
+                if (line === 'END:VEVENT') { if (cur) events.push(cur); cur = null; return; }
+                if (line === 'BEGIN:VALARM') { inAlarm = true; curTrigger = null; return; }
+                if (line === 'END:VALARM') {
+                    if (cur && curTrigger != null) cur.reminders.push(curTrigger);
+                    inAlarm = false; curTrigger = null; return;
+                }
+                const idx = line.indexOf(':');
+                if (idx === -1) return;
+                const keyParts = line.slice(0, idx).split(';');
+                const key = keyParts[0].toUpperCase();
+                const value = line.slice(idx + 1);
+                // Paramètres type TZID=America/New_York, VALUE=DATE…
+                const params = {};
+                keyParts.slice(1).forEach(p => {
+                    const eq = p.indexOf('=');
+                    if (eq !== -1) params[p.slice(0, eq).toUpperCase()] = p.slice(eq + 1);
+                });
+
+                if (!cur) {
+                    if (key === 'X-WR-CALNAME') calname = _icsUnescape(value);
+                    return;
+                }
+                if (inAlarm) {
+                    if (key === 'TRIGGER') curTrigger = _icsTriggerToSeconds(value);
+                    return;
+                }
+                switch (key) {
+                    case 'UID': cur.uid = value; break;
+                    case 'SUMMARY': cur.summary = _icsUnescape(value); break;
+                    case 'DESCRIPTION': cur.description = _icsUnescape(value); break;
+                    case 'DTSTART': cur.dtstart = _icsValueToISO(value, params.TZID); break;
+                    case 'DTEND': cur.dtend = _icsValueToISO(value, params.TZID); break;
+                }
+            });
+
+            return { calname, events: events.filter(e => e.dtstart) };
+        }
+
+        let _pendingICS = null;
+
+        function showImportCalendarModal() {
+            _pendingICS = null;
+            document.getElementById('ics-import-file').value = '';
+            document.getElementById('ics-import-name').value = '';
+            document.getElementById('ics-import-private').checked = false;
+            document.getElementById('ics-import-preview').textContent = '';
+            document.getElementById('ics-import-status').innerHTML = '';
+            new bootstrap.Modal(document.getElementById('importCalendarModal')).show();
+        }
+
+        function handleICSFileSelected(evt) {
+            const file = evt.target.files[0];
+            const preview = document.getElementById('ics-import-preview');
+            if (!file) { _pendingICS = null; preview.textContent = ''; return; }
+            const reader = new FileReader();
+            reader.onload = () => {
+                try {
+                    _pendingICS = parseICS(reader.result);
+                    const nameInput = document.getElementById('ics-import-name');
+                    if (!nameInput.value && _pendingICS.calname) nameInput.value = _pendingICS.calname;
+                    preview.innerHTML = _pendingICS.events.length
+                        ? `<i class="bi bi-check-circle text-success"></i> ${_pendingICS.events.length} événement(s) détecté(s).`
+                        : `<i class="bi bi-exclamation-triangle text-warning"></i> Aucun événement (VEVENT) trouvé dans ce fichier.`;
+                } catch (e) {
+                    _pendingICS = null;
+                    preview.innerHTML = `<i class="bi bi-x-circle text-danger"></i> Fichier .ics invalide : ${e.message}`;
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        async function importICSCalendar() {
+            const status = document.getElementById('ics-import-status');
+            const btn = document.getElementById('ics-import-submit');
+            if (!_pendingICS || !_pendingICS.events.length) {
+                showNotification({ type: 'error', title: 'Aucun événement', message: 'Sélectionnez un fichier .ics valide contenant au moins un événement.' });
+                return;
+            }
+            const isPrivate = document.getElementById('ics-import-private').checked;
+            const name = document.getElementById('ics-import-name').value.trim() || 'Calendrier importé';
+
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Import…';
+            try {
+                await ensureRelayConnection();
+                const relay = window.nostrRelay;
+                let targetDTag = PERSONAL_DTAG;
+
+                if (!isPrivate) {
+                    targetDTag = 'import-' + Date.now();
+                    const calEv = {
+                        kind: 31924,
+                        created_at: Math.floor(Date.now() / 1000),
+                        tags: [['d', targetDTag], ['title', name], ['calendar_type', 'import']],
+                        content: ''
+                    };
+                    const signedCal = await window.nostr.signEvent(calEv);
+                    if (relay && relay.publish) await relay.publish(signedCal);
+                    else if (relay._originalRelay) await relay._originalRelay.publish(signedCal);
+                }
+
+                let ok = 0, failed = 0;
+                for (let i = 0; i < _pendingICS.events.length; i++) {
+                    const src = _pendingICS.events[i];
+                    status.innerHTML = `<i class="bi bi-hourglass-split"></i> Publication ${i + 1}/${_pendingICS.events.length}…`;
+                    try {
+                        const tags = [
+                            ['d', 'ics-' + (src.uid || (Date.now() + '-' + i)).replace(/[^\w.-]/g, '_')],
+                            ['start', src.dtstart],
+                            ['a', `31924:${localUserPubkey}:${targetDTag}`]
+                        ];
+                        if (src.dtend) tags.push(['end', src.dtend]);
+                        src.reminders.forEach(sec => tags.push(['reminder', String(Math.max(0, sec))]));
+
+                        let ev;
+                        if (isPrivate) {
+                            tags.push(['name', '🔒'], ['t', 'food-production'], ['private', 'nip44']);
+                            const encryptedContent = await encryptSelf(JSON.stringify({
+                                title: src.summary || 'Événement importé',
+                                description: src.description || ''
+                            }));
+                            ev = { kind: 31922, created_at: Math.floor(Date.now() / 1000), tags, content: encryptedContent };
+                        } else {
+                            tags.push(['name', src.summary || 'Événement importé']);
+                            ev = { kind: 31922, created_at: Math.floor(Date.now() / 1000), tags, content: src.description || '' };
+                        }
+
+                        const signed = await window.nostr.signEvent(ev);
+                        if (relay && relay.publish) await relay.publish(signed);
+                        else if (relay._originalRelay) await relay._originalRelay.publish(signed);
+                        ok++;
+                    } catch (e) {
+                        console.warn('[Calendars] Import ICS: échec événement', i, e.message || e);
+                        failed++;
+                    }
+                }
+
+                bootstrap.Modal.getInstance(document.getElementById('importCalendarModal')).hide();
+                showNotification({
+                    type: failed ? 'warning' : 'success',
+                    title: 'Import terminé',
+                    message: `${ok} événement(s) importé(s)${failed ? `, ${failed} échec(s)` : ''}.`
+                });
+                await loadUserCalendars();
+            } catch (error) {
+                console.error('[Calendars] Import ICS error:', error);
+                status.innerHTML = `<i class="bi bi-x-circle text-danger"></i> ${error.message}`;
+                showNotification({ type: 'error', title: "Erreur d'import", message: error.message });
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="bi bi-cloud-upload"></i> Importer sur NOSTR';
+            }
+        }
+
+        // ========================================
         // UTILITY FUNCTIONS
         // ========================================
         function refreshCalendars() {
@@ -2138,6 +2938,263 @@
             const div = document.createElement('div');
             div.textContent = text;
             return div.innerHTML;
+        }
+
+        // ========================================
+        // CALENDRIER PERSONNEL CHIFFRÉ (NIP-44)
+        // ========================================
+
+        // Chiffrement auto-destinataire (soi-même) : NIP-44 en priorité, NIP-04 en repli.
+        // Même schéma que a4l-chat-settings.js / astro.js pour rester cohérent avec le reste de earth/.
+        async function encryptSelf(text) {
+            if (!localUserPubkey || !window.nostr) throw new Error('Non connecté');
+            if (window.nostr.nip44 && window.nostr.nip44.encrypt) return window.nostr.nip44.encrypt(localUserPubkey, text);
+            if (window.nostr.nip04 && window.nostr.nip04.encrypt) return window.nostr.nip04.encrypt(localUserPubkey, text);
+            throw new Error('Votre extension NOSTR ne supporte pas le chiffrement (NIP-44/NIP-04)');
+        }
+
+        async function decryptSelf(ciphertext) {
+            if (!localUserPubkey || !window.nostr || !ciphertext) return null;
+            const attempts = [
+                () => window.nostr.nip44 && window.nostr.nip44.decrypt && window.nostr.nip44.decrypt(localUserPubkey, ciphertext),
+                () => window.nostr.nip04 && window.nostr.nip04.decrypt && window.nostr.nip04.decrypt(localUserPubkey, ciphertext)
+            ];
+            for (const attempt of attempts) {
+                try { const r = await attempt(); if (r) return r; } catch (e) {}
+            }
+            return null;
+        }
+
+        // Crée le calendrier personnel (Kind 31924, d="personal") s'il n'existe pas encore.
+        // Le titre reste en clair (générique, non sensible) : seuls les événements sont chiffrés.
+        async function ensurePersonalCalendar(calendars) {
+            const existing = calendars.find(c => getTagValue(c, 'd') === PERSONAL_DTAG);
+            if (existing) return existing;
+
+            console.log('[Calendars] 🔒 Création du calendrier personnel chiffré...');
+            const ev = {
+                kind: 31924,
+                created_at: Math.floor(Date.now() / 1000),
+                tags: [
+                    ['d', PERSONAL_DTAG],
+                    ['title', '🔒 Mon calendrier personnel'],
+                    ['calendar_type', 'personal'],
+                    ['private', 'nip44']
+                ],
+                content: ''
+            };
+            const signed = await window.nostr.signEvent(ev);
+            await ensureRelayConnection();
+            const relay = window.nostrRelay;
+            if (relay && relay.publish) await relay.publish(signed);
+            else if (relay && relay._originalRelay) await relay._originalRelay.publish(signed);
+            calendars.push(signed);
+            return signed;
+        }
+
+        // Déchiffre les événements marqués private=nip44 : remplace le tag "name" et le content
+        // par les valeurs déchiffrées pour que le rendu générique (getEventTitle, event.content) fonctionne sans modification.
+        async function decryptPersonalEvents(events) {
+            const out = [];
+            for (const ev of events) {
+                const isPrivate = getTagValue(ev, 'private') === 'nip44';
+                if (!isPrivate || !ev.content) { out.push(ev); continue; }
+                try {
+                    const plain = await decryptSelf(ev.content);
+                    if (!plain) { out.push(_lockedPlaceholder(ev)); continue; }
+                    const data = JSON.parse(plain);
+                    out.push(_withDecrypted(ev, data.title || 'Événement', data.description || ''));
+                } catch (e) {
+                    console.warn('[Calendars] Déchiffrement échoué pour', ev.id, e.message || e);
+                    out.push(_lockedPlaceholder(ev));
+                }
+            }
+            return out;
+        }
+
+        function _withDecrypted(ev, title, description) {
+            const clone = Object.assign({}, ev, { content: description });
+            clone.tags = ev.tags.map(t => t.slice());
+            const nameIdx = clone.tags.findIndex(t => t[0] === 'name');
+            if (nameIdx >= 0) clone.tags[nameIdx] = ['name', title];
+            else clone.tags.push(['name', title]);
+            return clone;
+        }
+
+        function _lockedPlaceholder(ev) {
+            return _withDecrypted(ev, '🔒 Événement chiffré', '(contenu illisible avec cette clé)');
+        }
+
+        function renderPersonalCalendarSection() {
+            const body = document.getElementById('personal-events-body');
+            if (!body) return;
+            const events = calendarEvents[PERSONAL_DTAG] || [];
+            body.innerHTML = renderEventsList(events, PERSONAL_DTAG);
+        }
+
+        // ── Localisation / climat (hémisphère) — jamais publié, uniquement en localStorage ──
+        function loadPersonalGeoFromCache() {
+            try {
+                const raw = localStorage.getItem('uph_calendar_geo');
+                if (raw) personalGeo = JSON.parse(raw);
+            } catch (e) {}
+        }
+
+        function maybeAutoLocate() {
+            if (personalGeo || !navigator.permissions || !navigator.permissions.query) return;
+            navigator.permissions.query({ name: 'geolocation' }).then(status => {
+                if (status.state === 'granted') updatePersonalGeo();
+            }).catch(() => {});
+        }
+
+        function updatePersonalGeo() {
+            if (!navigator.geolocation) {
+                showNotification({ type: 'error', title: 'Géolocalisation indisponible', message: "Votre navigateur ne supporte pas la géolocalisation." });
+                return;
+            }
+            navigator.geolocation.getCurrentPosition(
+                (pos) => {
+                    const lat = pos.coords.latitude, lon = pos.coords.longitude;
+                    personalGeo = { lat, lon, hemisphere: lat >= 0 ? 'nord' : 'sud' };
+                    try { localStorage.setItem('uph_calendar_geo', JSON.stringify(personalGeo)); } catch (e) {}
+                    renderPersonalGeoBadge();
+                    renderSeasonalHints('personal-seasonal-hints');
+                },
+                (err) => {
+                    showNotification({ type: 'error', title: 'Position non disponible', message: err.message || 'Impossible de récupérer votre position.' });
+                },
+                { timeout: 8000 }
+            );
+        }
+
+        function renderPersonalGeoBadge() {
+            const el = document.getElementById('personal-geo-badge');
+            if (!el) return;
+            if (!personalGeo) { el.textContent = '📍 position inconnue'; return; }
+            el.textContent = `📍 Hémisphère ${personalGeo.hemisphere === 'nord' ? 'Nord' : 'Sud'} (${personalGeo.lat.toFixed(1)}, ${personalGeo.lon.toFixed(1)})`;
+        }
+
+        // Suggestions saisonnières génériques (climat tempéré), décalées de 6 mois pour l'hémisphère sud
+        const SEASONAL_HINTS = {
+            1:  { semis: 'Semis sous abri (godets, serre)',        recolte: 'Poireaux, choux d\'hiver',        entretien: 'Protection gel, paillage' },
+            2:  { semis: 'Semis sous abri (tomates, poivrons)',    recolte: 'Derniers légumes d\'hiver',        entretien: 'Taille des arbres fruitiers' },
+            3:  { semis: 'Semis pleine terre (radis, carottes)',   recolte: 'Épinards, mâche',                  entretien: 'Préparation du sol' },
+            4:  { semis: 'Semis pleine terre (haricots, salades)', recolte: 'Asperges, radis',                  entretien: 'Buttage, désherbage' },
+            5:  { semis: 'Plantation tomates, courges',            recolte: 'Fraises, salades',                 entretien: 'Tuteurage, arrosage' },
+            6:  { semis: 'Semis de saison (haricots, betteraves)', recolte: 'Cerises, petits pois',              entretien: 'Paillage, arrosage régulier' },
+            7:  { semis: 'Semis d\'automne (choux, épinards)',     recolte: 'Tomates, courgettes, fruits d\'été', entretien: 'Arrosage, taille des tomates' },
+            8:  { semis: 'Semis d\'automne (mâche, épinards)',     recolte: 'Aubergines, poivrons, fruits',      entretien: 'Récolte des graines' },
+            9:  { semis: 'Semis d\'hiver (fèves, ail)',            recolte: 'Pommes, poires, courges',           entretien: 'Nettoyage du potager' },
+            10: { semis: 'Plantation ail, oignons',                 recolte: 'Coings, noix, dernières courges',  entretien: 'Paillage hivernal' },
+            11: { semis: 'Semis sous abri (fèves)',                recolte: 'Choux, poireaux, endives',          entretien: 'Protection contre le gel' },
+            12: { semis: 'Peu de semis (repos hivernal)',          recolte: 'Légumes racines, choux',            entretien: 'Entretien des outils, planification' }
+        };
+
+        function getSeasonalMonth() {
+            const now = new Date();
+            let month = now.getMonth() + 1;
+            if (personalGeo && personalGeo.hemisphere === 'sud') {
+                month = ((month + 5) % 12) + 1; // décalage de 6 mois
+            }
+            return month;
+        }
+
+        function getSeasonalEmoji(type) {
+            return { semis: '🌱', recolte: '🌾', entretien: '✂️' }[type] || '📌';
+        }
+
+        function renderSeasonalHints(containerId) {
+            const container = document.getElementById(containerId);
+            if (!container) return;
+            const month = getSeasonalMonth();
+            const hints = SEASONAL_HINTS[month];
+            const monthName = new Date(2024, month - 1, 1).toLocaleDateString('fr-FR', { month: 'long' });
+
+            container.innerHTML = `
+                <div class="small text-secondary mb-1">
+                    <i class="bi bi-lightbulb"></i> Suggestions de saison (${monthName}${personalGeo ? ', hémisphère ' + personalGeo.hemisphere : ' — hémisphère nord par défaut, cliquez sur 📍 Localiser pour adapter'})
+                </div>
+                <div class="d-flex flex-wrap gap-2">
+                    ${Object.entries(hints).map(([type, label]) => `
+                        <span class="event-type-badge seasonal-chip type-${type}"
+                              onclick="useSeasonalSuggestion('${type}', '${label.replace(/'/g, "\\'")}')">
+                            ${getSeasonalEmoji(type)} ${escapeHtml(label)}
+                        </span>
+                    `).join('')}
+                </div>
+            `;
+        }
+
+        function useSeasonalSuggestion(type, label) {
+            const modalEl = document.getElementById('addPersonalEventModal');
+            if (!modalEl.classList.contains('show')) openAddPersonalEventModal();
+            document.getElementById('ape-type').value = type;
+            document.getElementById('ape-title').value = label;
+        }
+
+        function openAddPersonalEventModal() {
+            document.getElementById('ape-type').value = 'entretien';
+            document.getElementById('ape-title').value = '';
+            document.getElementById('ape-start').value = '';
+            document.getElementById('ape-end').value = '';
+            document.getElementById('ape-description').value = '';
+            document.getElementById('ape-reminders').innerHTML = '';
+            renderSeasonalHints('ape-suggestions');
+            new bootstrap.Modal(document.getElementById('addPersonalEventModal')).show();
+        }
+
+        async function submitPersonalEvent() {
+            const type = document.getElementById('ape-type').value;
+            const title = document.getElementById('ape-title').value.trim();
+            const startStr = document.getElementById('ape-start').value;
+            const endStr = document.getElementById('ape-end').value;
+            const description = document.getElementById('ape-description').value;
+
+            if (!title || !startStr) {
+                showNotification({ type: 'error', title: 'Champs requis', message: 'Titre et date de début obligatoires.' });
+                return;
+            }
+
+            const fullTitle = `${getSeasonalEmoji(type)} ${title}`;
+            const btn = document.getElementById('ape-submit');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Chiffrement…';
+
+            try {
+                const encryptedContent = await encryptSelf(JSON.stringify({ title: fullTitle, description }));
+                const dTag = 'pevt-' + Date.now();
+                const ev = {
+                    kind: 31922,
+                    created_at: Math.floor(Date.now() / 1000),
+                    tags: [
+                        ['d', dTag],
+                        ['name', '🔒'],
+                        ['start', new Date(startStr).toISOString()],
+                        ['a', `31924:${localUserPubkey}:${PERSONAL_DTAG}`],
+                        ['t', 'food-production'],
+                        ['private', 'nip44'],
+                        ...collectReminderTags('ape-reminders')
+                    ],
+                    content: encryptedContent
+                };
+                if (endStr) ev.tags.push(['end', new Date(endStr).toISOString()]);
+
+                const signed = await window.nostr.signEvent(ev);
+                await ensureRelayConnection();
+                const relay = window.nostrRelay;
+                if (relay && relay.publish) await relay.publish(signed);
+                else if (relay && relay._originalRelay) await relay._originalRelay.publish(signed);
+
+                bootstrap.Modal.getInstance(document.getElementById('addPersonalEventModal')).hide();
+                showNotification({ type: 'success', title: 'Événement ajouté', message: 'Chiffré et publié sur votre calendrier personnel.' });
+                await loadUserCalendars();
+            } catch (error) {
+                console.error('[Calendars] Error creating personal event:', error);
+                showNotification({ type: 'error', title: 'Erreur', message: error.message });
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="bi bi-shield-lock"></i> Chiffrer et publier';
+            }
         }
 
         // ========================================

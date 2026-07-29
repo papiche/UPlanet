@@ -103,6 +103,10 @@
             <li>Construction mécanique (disques, bobinage, coulée résine) : méthode Piggott, générateur
             à flux axial pour éolienne domestique, documentée sur
             <a href="https://www.tripalium.org/eolienne-piggott" target="_blank">tripalium.org</a>.</li>
+            <li>Principe d'annulation/coupure exploité ici : voir
+            <a href="pdf/InfiniX-Pour-les-Nuls-Final.pdf" target="_blank">InfiniX — Pour les Nuls (PDF)</a>,
+            en particulier les chapitres 3 et 4 sur l'annulation de champ par superposition et la
+            nécessité d'une coupure en boucle réellement ouverte.</li>
         </ul>
         <div class="diagram-wrap">
             <svg viewBox="0 0 420 160" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:420px">
@@ -138,6 +142,16 @@
         <p>Motif groupé <code>-1, +1, +1, -1</code> (S, N, N, S, S, N, N, S…) répété sur le disque.
         Chaque aimant rotor croise deux positions stator de même polarité consécutives : deux
         impulsions de répulsion par transit.</p>
+        <div class="verdict">
+            <strong>Compromis couple / emballement</strong> — grouper les pôles double le nombre
+            d'impulsions par transit, donc double aussi l'énergie mécanique injectée par tour à
+            vitesse égale : le système accélère plus vite qu'avec un motif alterné simple (S,N,S,N…,
+            une seule impulsion par transit). Défendable pour un démonstrateur (plus de couple utile à
+            nombre de modules égal), à condition de toujours tester sous charge contrôlée dès le
+            premier essai (voir Tests) — jamais en roue libre. Pour un premier prototype plus prudent,
+            un motif alterné simple, moins « punchy » mais plus facile à maîtriser en montée en régime,
+            reste une option raisonnable avant de passer au motif groupé.
+        </div>
         <div class="diagram-wrap">
             <svg viewBox="0 0 460 150" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:440px">
                 <defs>
@@ -482,53 +496,89 @@
 
     <div class="card-mz">
         <h2>Électronique — composants</h2>
+        <div class="verdict ok">
+            <strong>✓ Boucle réellement ouverte</strong> — un MOSFET seul ne suffit pas : la diode de
+            roue libre classique posée en parallèle sur la bobine referme une boucle locale
+            (bobine + diode) indépendante de l'état de l'interrupteur. C'est exactement ce que le
+            principe interdit (annuler le champ ne suffit pas, il faut rompre la boucle électrique —
+            pas mettre en pause, débrancher). Solution retenue ici : un <strong>relais</strong> en
+            série avec chaque bobine de compensation, contact sec, sans aucun composant en parallèle
+            sur ce contact. La protection anti-surtension (diode de roue libre) est déplacée sur la
+            bobine du relais lui-même — un circuit électriquement séparé, sans lien avec la bobine de
+            l'aimant.
+        </div>
         <ul>
             <li><strong>MCU</strong> : Arduino Nano (ou STM32 Blue Pill pour plus de vitesse/canaux).</li>
             <li><strong>1 capteur Hall par position stator</strong> : A3144 (sortie digitale, collecteur
             ouvert) + résistance de tirage 10 kΩ vers +5V.</li>
-            <li><strong>1 MOSFET logique par bobine stator</strong> : 2N7000 ou IRLZ44N (0,11 A —
-            largement dans leurs specs), monté en interrupteur bas-côté (low-side).</li>
-            <li><strong>1 résistance d'ajustement par bobine</strong> (en série avec la bobine) : fixe
-            I<sub>ann</sub> précisément malgré la résistance propre variable de chaque bobine.</li>
-            <li><strong>1 diode de roue libre</strong> (1N4148 suffit à ce niveau de courant) en
-            parallèle sur chaque bobine, cathode côté +Vcc.</li>
+            <li><strong>1 relais par bobine stator</strong> : contact sec en série avec la bobine de
+            compensation — coupure galvanique franche, pas un simple interrupteur électronique.
+            Préférer un relais reed (≈1 ms de commutation) à un relais électromécanique classique
+            (5-15 ms) : la vitesse de commutation borne directement le régime maximal atteignable.</li>
+            <li><strong>1 transistor driver par relais</strong> (2N2222 ou équivalent) : le pin MCU ne
+            fournit pas assez de courant pour alimenter directement la bobine du relais.</li>
+            <li><strong>1 diode de roue libre par relais</strong> (1N4148) — en parallèle sur la
+            <u>bobine du relais</u> uniquement, pour protéger le transistor driver. Ne jamais la
+            remettre en parallèle sur la bobine de compensation : ce serait recréer la boucle fermée
+            qu'on cherche justement à éliminer.</li>
+            <li><strong>1 résistance d'ajustement par bobine</strong> (en série avec la bobine, côté
+            aimant) : fixe I<sub>ann</sub> précisément malgré la résistance propre variable de chaque
+            bobine.</li>
             <li><strong>Canal rotor</strong> : oscillateur HF (≈100 kHz, 555 ou timer MCU dédié) →
-            MOSFET → primaire du transformateur tournant → secondaire rotor → pont redresseur
-            (4×1N4148) → condensateur de lissage → bobines rotor (câblées en parallèle, une résistance
-            d'ajustement par bobine).</li>
+            MOSFET (ici sans contrainte de boucle ouverte : il pilote seulement le primaire du
+            transfo, pas la bobine de compensation) → primaire du transformateur tournant → secondaire
+            rotor → pont redresseur (4×1N4148) → condensateur de lissage → <strong>relais</strong> en
+            série (même exigence de coupure franche que côté stator) → bobines rotor (câblées en
+            parallèle, une résistance d'ajustement par bobine).</li>
         </ul>
         <div class="diagram-wrap">
-            <svg viewBox="0 0 380 220" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:380px">
+            <svg viewBox="0 0 420 230" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:420px">
                 <defs>
                     <marker id="arCh" markerWidth="7" markerHeight="7" refX="5" refY="3.5" orient="auto">
                         <polygon points="0 0,7 3.5,0 7" fill="rgba(255,255,255,.5)"/>
                     </marker>
                 </defs>
-                <text x="190" y="16" text-anchor="middle" font-size="9.5" fill="#67d9ff" font-weight="700">Un canal (stator ou rotor)</text>
+                <text x="210" y="16" text-anchor="middle" font-size="9.5" fill="#67d9ff" font-weight="700">Un canal (stator ou rotor)</text>
 
-                <rect x="10" y="60" width="60" height="26" rx="4" fill="rgba(155,48,255,.14)" stroke="#9B30FF" stroke-width="1.1"/>
-                <text x="40" y="77" text-anchor="middle" font-size="9" fill="#c78bff">MCU pin</text>
-                <path d="M70,73 L100,73" stroke="rgba(255,255,255,.5)" stroke-width="1.2"/>
-                <text x="85" y="68" text-anchor="middle" font-size="7" fill="rgba(255,255,255,.5)">220Ω</text>
+                <rect x="10" y="55" width="56" height="26" rx="4" fill="rgba(155,48,255,.14)" stroke="#9B30FF" stroke-width="1.1"/>
+                <text x="38" y="72" text-anchor="middle" font-size="8.5" fill="#c78bff">MCU pin</text>
+                <path d="M66,68 L90,68" stroke="rgba(255,255,255,.5)" stroke-width="1.2"/>
 
-                <rect x="100" y="55" width="34" height="36" rx="4" fill="rgba(0,204,255,.14)" stroke="#00ccff" stroke-width="1.1"/>
-                <text x="117" y="76" text-anchor="middle" font-size="8" fill="#67d9ff">MOSFET</text>
+                <rect x="90" y="50" width="46" height="36" rx="4" fill="rgba(0,204,255,.14)" stroke="#00ccff" stroke-width="1.1"/>
+                <text x="113" y="71" text-anchor="middle" font-size="7.5" fill="#67d9ff">driver</text>
+                <path d="M136,68 L160,68" stroke="rgba(255,255,255,.5)" stroke-width="1.2"/>
+
+                <rect x="160" y="50" width="52" height="36" rx="4" fill="rgba(155,110,0,.2)" stroke="#b89a00" stroke-width="1.1"/>
+                <text x="186" y="65" text-anchor="middle" font-size="7" fill="#FFD700">bobine</text>
+                <text x="186" y="75" text-anchor="middle" font-size="7" fill="#FFD700">relais</text>
+
+                <path d="M212,45 Q232,35 232,68" stroke="#ff9e7a" stroke-width="1.1" fill="none"/>
+                <path d="M227,63 L232,68 L237,63" stroke="#ff9e7a" stroke-width="1.1" fill="none"/>
+                <text x="244" y="38" font-size="7" fill="#ff9e7a">diode roue libre</text>
+                <text x="244" y="48" font-size="6.5" fill="rgba(255,255,255,.5)">(protège le driver —</text>
+                <text x="244" y="57" font-size="6.5" fill="rgba(255,255,255,.5)">circuit isolé, sans lien</text>
+                <text x="244" y="66" font-size="6.5" fill="rgba(255,255,255,.5)">avec la bobine aimant)</text>
+
+                <path d="M113,86 L113,105" stroke="rgba(255,255,255,.5)" stroke-width="1.2"/>
+                <text x="113" y="117" text-anchor="middle" font-size="9" fill="rgba(255,255,255,.5)">GND</text>
 
                 <text x="10" y="30" font-size="9" fill="#FFD700">+Vcc</text>
-                <path d="M25,35 L25,50 L200,50 L200,64" stroke="#FFD700" stroke-width="1.2" fill="none"/>
-                <rect x="170" y="50" width="60" height="24" rx="4" fill="rgba(255,215,0,.12)" stroke="#FFD700" stroke-width="1.1"/>
-                <text x="200" y="66" text-anchor="middle" font-size="8.5" fill="#FFD700">bobine</text>
-                <path d="M230,62 L250,62 L250,73 L134,73" stroke="rgba(255,255,255,.5)" stroke-width="1.2" fill="none"/>
+                <path d="M25,35 L25,185 L260,185" stroke="#FFD700" stroke-width="1.2" fill="none"/>
 
-                <path d="M230,50 Q260,40 260,73" stroke="#ff9e7a" stroke-width="1.2" fill="none"/>
-                <path d="M255,68 L260,73 L265,68" stroke="#ff9e7a" stroke-width="1.2" fill="none"/>
-                <text x="270" y="45" font-size="8" fill="#ff9e7a">diode roue libre</text>
+                <rect x="260" y="167" width="54" height="36" rx="4" fill="rgba(0,201,104,.14)" stroke="#00C968" stroke-width="1.2"/>
+                <text x="287" y="182" text-anchor="middle" font-size="7" fill="#5fffb0">relais</text>
+                <text x="287" y="193" text-anchor="middle" font-size="7" fill="#5fffb0">contact sec</text>
+                <path d="M314,185 L338,185" stroke="rgba(255,255,255,.5)" stroke-width="1.2"/>
 
-                <rect x="290" y="55" width="60" height="24" rx="4" fill="rgba(255,102,68,.1)" stroke="#ff6644" stroke-width="1.1"/>
-                <text x="320" y="71" text-anchor="middle" font-size="7.5" fill="#ff9e7a">R ajust. I<tspan baseline-shift="sub" font-size="6">ann</tspan></text>
+                <rect x="338" y="167" width="56" height="36" rx="4" fill="rgba(255,215,0,.12)" stroke="#FFD700" stroke-width="1.1"/>
+                <text x="366" y="189" text-anchor="middle" font-size="8" fill="#FFD700">bobine</text>
+                <path d="M394,185 L408,185 L408,100 L232,100" stroke="rgba(255,255,255,.5)" stroke-width="1.2" fill="none"/>
 
-                <path d="M117,91 L117,110" stroke="rgba(255,255,255,.5)" stroke-width="1.2"/>
-                <text x="117" y="122" text-anchor="middle" font-size="9" fill="rgba(255,255,255,.5)">GND</text>
+                <rect x="330" y="112" width="60" height="24" rx="4" fill="rgba(255,102,68,.1)" stroke="#ff6644" stroke-width="1.1"/>
+                <text x="360" y="128" text-anchor="middle" font-size="7" fill="#ff9e7a">R ajust. I<tspan baseline-shift="sub" font-size="6">ann</tspan></text>
+                <path d="M360,112 L360,100" stroke="rgba(255,255,255,.5)" stroke-width="1.2"/>
+
+                <text x="290" y="152" text-anchor="middle" font-size="6.5" fill="#5fffb0">aucun composant en parallèle ici</text>
 
                 <rect x="10" y="140" width="70" height="26" rx="4" fill="rgba(0,201,104,.12)" stroke="#00C968" stroke-width="1.1"/>
                 <text x="45" y="157" text-anchor="middle" font-size="8.5" fill="#5fffb0">Hall A3144</text>
@@ -537,19 +587,19 @@
                 <rect x="110" y="140" width="60" height="26" rx="4" fill="rgba(155,48,255,.14)" stroke="#9B30FF" stroke-width="1.1"/>
                 <text x="140" y="157" text-anchor="middle" font-size="8" fill="#c78bff">MCU in</text>
             </svg>
-            <div class="diagram-cap">Un canal stator/rotor : Hall → MCU → MOSFET → bobine (résistance d'ajustement + diode de roue libre)</div>
+            <div class="diagram-cap">Un canal stator/rotor : Hall → MCU → driver → bobine du relais (diode, circuit isolé) → contact sec du relais → bobine de compensation (aucun composant en parallèle — coupure franche)</div>
         </div>
     </div>
 
     <div class="card-mz">
         <h2>Électronique — logique de commande</h2>
         <ul>
-            <li>Chaque position stator est indépendante : sa propre Hall, son propre MOSFET, son propre
+            <li>Chaque position stator est indépendante : sa propre Hall, son propre relais, son propre
             pin MCU.</li>
             <li>Le rotor est périodique et symétrique au stator (même motif, même nombre de pôles) :
             toutes les bobines rotor se masquent/révèlent en même temps — un seul canal (une seule
             excitation HF) suffit pour tout le rotor, bobines rotor câblées en parallèle sur le
-            secondaire redressé.</li>
+            secondaire redressé, coupées par un seul relais commun.</li>
         </ul>
         <div class="diagram-wrap">
             <svg viewBox="0 0 360 170" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:340px">
@@ -612,6 +662,27 @@ void loop() {
 }</code></pre>
         <p>À haut régime, remplace la boucle de lecture par des interruptions (STM32, ou lib
         PinChangeInterrupt sur AVR) pour ne pas rater un passage.</p>
+        <div class="verdict">
+            <strong>⚠️ Latence du relais</strong> — un relais reed commute en ≈1 ms (5-15 ms pour un
+            relais électromécanique classique), bien plus lent qu'un MOSFET (µs). Cette latence borne
+            le régime maximal : au-delà d'un certain nombre de tr/min, le relais n'a pas le temps de
+            s'ouvrir avant que le rotor n'ait déjà dépassé le point de coupure visé. Mesure la latence
+            réelle du relais choisi à l'oscilloscope, et si besoin avance la commande de coupure d'un
+            angle proportionnel à la vitesse (calculée à partir de la période entre deux fronts Hall
+            successifs) plutôt que de couper exactement au passage détecté.
+        </div>
+        <table class="tbl-phys">
+            <thead><tr><th>Type de relais</th><th>Latence τ</th><th>RPM max (marge ×5)</th><th>RPM max (marge ×10, prudent)</th></tr></thead>
+            <tbody>
+                <tr><td>Relais reed</td><td class="num">≈ 1 ms</td><td class="num">≈ 1500 tr/min</td><td class="num">≈ 750 tr/min</td></tr>
+                <tr><td>Relais électromécanique classique</td><td class="num">≈ 10 ms</td><td class="num">≈ 150 tr/min</td><td class="num">≈ 75 tr/min</td></tr>
+            </tbody>
+        </table>
+        <p style="font-size:.8rem;color:rgba(255,255,255,.5)">Calcul : 8 aimants rotor × 8 positions
+        stator → chaque canal stator voit passer un aimant tous les 45°, soit une fenêtre
+        T = 7,5 / RPM (en secondes) entre deux passages consécutifs. RPM<sub>max</sub> = 7,5 / (τ ×
+        marge). Valeurs théoriques à confirmer à l'oscilloscope avec le relais réellement choisi —
+        elles bornent la vitesse électronique, pas la vitesse d'emballement mécanique (voir Tests).</p>
         <div class="diagram-wrap">
             <svg viewBox="0 0 260 260" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:220px">
                 <defs>
@@ -649,7 +720,23 @@ void loop() {
 
     <div class="card-mz">
         <h2>Tests</h2>
+        <div class="verdict">
+            <strong>⚠️ Pas de gouverneur naturel</strong> — un moteur classique se stabilise tout seul à
+            une vitesse à vide : le frein contre-électromoteur grandit avec la vitesse jusqu'à annuler
+            le couple (voir <a href="pdf/InfiniX-Pour-les-Nuls-Final.pdf" target="_blank">InfiniX —
+            Pour les Nuls</a>, Chapitre 2). Ici, ce frein est justement ce que le
+            principe supprime : rien ne s'oppose naturellement à l'accélération tant que le cycle
+            annulation/coupure/répulsion tourne, comme un tourniquet relancé à chaque passage sans
+            jamais être freiné. Le <strong>frein de Prony</strong> (ou toute charge électrique/mécanique
+            contrôlée) n'est donc pas qu'un instrument de mesure du rendement : c'est le seul
+            gouverneur de vitesse du système. Il doit être engagé dès la première mise sous tension,
+            jamais en roue libre même quelques secondes. L'autre limite du système — la fenêtre de
+            synchronisation du relais (voir Code de contrôle) — ne donne pas un arrêt propre en cas de
+            dépassement, mais un désynchronisme imprévisible : ce n'est pas un filet de sécurité.
+        </div>
         <ul>
+            <li>Charge connue (frein de Prony ou équivalent) engagée avant toute mise sous tension —
+            jamais de démarrage à vide.</li>
             <li>Tension réduite, timing vérifié à l'oscilloscope avant montée en régime.</li>
             <li>Wattmètre, tachymètre, frein de Prony → rendement = P<sub>méca</sub> / P<sub>élec</sub>.</li>
             <li>Documente et partage tes chiffres.</li>
@@ -715,8 +802,8 @@ void loop() {
         <h2>Où trouver les composants</h2>
         <p style="font-size:.8rem;color:rgba(255,255,255,.5)">Besoin total calculé pour la machine
         complète (2 platines face à face) : <strong>16 modules aimant+bobine</strong> (8 rotor + 8
-        stator), <strong>9 canaux de commutation</strong> (8 stator + 1 rotor partagé), <strong>8
-        capteurs Hall</strong> (stator seulement).</p>
+        stator), <strong>9 canaux de commutation</strong> (8 stator + 1 rotor partagé) — chacun un
+        relais + son transistor driver, <strong>8 capteurs Hall</strong> (stator seulement).</p>
         <table class="tbl-phys">
             <thead><tr><th>Composant</th><th>Lien</th><th>Besoin</th><th>À commander</th><th>Prix</th></tr></thead>
             <tbody>
@@ -725,19 +812,22 @@ void loop() {
                 <tr><td>Fil émaillé Ø0,3mm (≈AWG28)</td><td><a href="https://www.amazon.fr/dp/B09SHF76CY" target="_blank">bobinage 40m</a></td><td class="num">≈ 452 m (500 spires × 16 modules)</td><td class="num">12 lots (480m)</td><td class="num">≈ 227,88 €</td></tr>
                 <tr><td>Résine époxy fluide (coulée)</td><td><a href="https://www.amazon.fr/dp/B07S2WDMNB" target="_blank">DIPOXY-2K-700, 1,5kg</a></td><td class="num">≈ 70g (16 modules)</td><td class="num">1 kit (large excédent)</td><td class="num">24,90 €</td></tr>
                 <tr><td>Poudre de fer carbonyle</td><td><a href="https://widerangemetals.com/fr/poudre-de-fer-carbonyle-5-%C2%B5m-2500-mesh-0-mm-fe-min-005/" target="_blank">Wide Range Metals</a></td><td class="num">≈ 55g (16 modules)</td><td class="num">1× 250g (large excédent)</td><td class="num">≈ 8 €</td></tr>
-                <tr><td>MOSFET 2N7000</td><td><a href="https://www.amazon.fr/dp/B0831RFJ1B" target="_blank">BOJACK, lot de 100</a></td><td class="num">9</td><td class="num">1 lot (large excédent)</td><td class="num">11,99 €</td></tr>
+                <tr><td>Relais signal 5V (contact sec)</td><td><a href="https://www.amazon.fr/Module-relais-puissance-composants-%C3%A9lectroniques/dp/B09KH8JQVV" target="_blank">module relais mini 1A, lot de 5</a></td><td class="num">9</td><td class="num">2 lots (10, 1 de rechange)</td><td class="num">prix à vérifier au moment de la commande</td></tr>
+                <tr><td>Transistor driver 2N2222</td><td><a href="https://www.amazon.fr/Lot-100pcs-2N2222-Transistor-0-8A/dp/B01LZ6EE0L" target="_blank">BOJACK, lot de 100</a></td><td class="num">9</td><td class="num">1 lot (large excédent)</td><td class="num">prix à vérifier au moment de la commande</td></tr>
                 <tr><td>Capteur Hall A3144</td><td><a href="https://www.amazon.fr/dp/B0CZ6QXMZ2" target="_blank">lot de 10</a></td><td class="num">8</td><td class="num">1 lot (2 de rechange)</td><td class="num">9,99 €</td></tr>
-                <tr><td>Diode 1N4148</td><td><a href="https://www.amazon.fr/dp/B09H3GD4RZ" target="_blank">HeyNana, lot de 25</a></td><td class="num">16 (1/bobine)</td><td class="num">1 lot (9 de rechange)</td><td class="num">≈ 5,95 €</td></tr>
+                <tr><td>Diode 1N4148 (sur bobine relais)</td><td><a href="https://www.amazon.fr/dp/B09H3GD4RZ" target="_blank">HeyNana, lot de 25</a></td><td class="num">9 (1/relais)</td><td class="num">1 lot (16 de rechange)</td><td class="num">≈ 5,95 €</td></tr>
                 <tr><td>Arduino Nano</td><td><a href="https://www.amazon.fr/dp/B0097AU5OU" target="_blank">officiel [A000005]</a></td><td class="num">1</td><td class="num">1</td><td class="num">≈ 27,10 €</td></tr>
                 <tr><td>Contreplaqué 10-15mm</td><td>—</td><td class="num">2 platines</td><td class="num">magasin de bricolage</td><td class="num">variable</td></tr>
-                <tr><td colspan="3" style="text-align:right"><strong>Total (hors poudre de fer, résine et contreplaqué — négligeables)</strong></td><td colspan="2" class="num"><strong>≈ 429,03 €</strong></td></tr>
+                <tr><td colspan="3" style="text-align:right"><strong>Total (hors contreplaqué, relais et transistors driver — prix à confirmer)</strong></td><td colspan="2" class="num"><strong>≈ 417,04 € + relais/transistors</strong></td></tr>
             </tbody>
         </table>
         <p style="font-size:.8rem;color:rgba(255,255,255,.5)">Le fil de bobinage domine le budget (≈ 452m
         au total, 500 spires × 16 modules) : à ce volume, une bobine de fournisseur électronique
         (0,5-1kg en vrac) revient nettement moins cher que 12 lots de détail à l'unité — compare avant
-        de commander. MOSFET 2N7000 choisi ici (largement suffisant, tension/courant très faibles) ;
-        IRLZ44N reste une alternative si préféré, mêmes quantités. Le premier lien d'aimant fourni
+        de commander. Le relais indiqué ici est un module généraliste (à valider en vitesse de
+        commutation réelle) ; un relais reed dédié (ex. gamme Panasonic TQ2 ou HE) commute plus vite
+        mais se trouve plus facilement chez un fournisseur électronique (Mouser, Farnell, Reichelt) que
+        sur Amazon grand public — comparer avant de trancher. Le premier lien d'aimant fourni
         (B003MWDVBS) était inaccessible au moment de la vérification — utilise le second (SIGEL Ba701)
         qui correspond exactement aux specs.</p>
     </div>

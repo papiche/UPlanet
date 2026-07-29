@@ -82,25 +82,7 @@
   .btn-theme:hover { border-color: var(--accent); color: var(--accent); }
   .adm-header .badge-relay { font-size: .68rem; background: var(--surface2); border: 1px solid var(--border); color: var(--text2); padding: 2px 9px; border-radius: 20px; }
 
-  /* ── Auth panel ── */
-  .auth-panel {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 16px 20px;
-    margin: 16px;
-    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
-  }
-  .auth-panel label { font-size: .82rem; color: var(--text2); white-space: nowrap; }
-  .auth-panel input {
-    flex: 1; min-width: 260px;
-    background: var(--bg); border: 1px solid var(--border); border-radius: 7px;
-    color: var(--text); padding: 7px 12px; font-family: var(--mono); font-size: .82rem;
-    outline: none;
-  }
-  .auth-panel input:focus { border-color: var(--accent); }
-  .auth-panel input.error { border-color: var(--danger); }
-  .auth-panel input.ok { border-color: var(--ok); }
+  /* ── Auth status ── */
   .auth-status { font-size: .78rem; white-space: nowrap; }
 
   /* ── Filters ── */
@@ -566,19 +548,12 @@
   <span class="badge-relay" id="api-url-badge" style="margin-left:auto; font-size:.65rem; word-break:break-all;"></span>
 </div>
 
-<!-- Auth -->
-<div class="auth-panel">
-  <label for="uph-input">🔑 UPLANETNAME</label>
-  <input type="password" id="uph-input" placeholder="64 caractères hex (contenu de ~/.ipfs/swarm.key)" autocomplete="off" maxlength="64">
-  <span class="auth-status" id="auth-status"></span>
-  <span id="uph-optional-hint" style="display:none;font-size:.75rem;color:var(--ok)">⚓ Optionnel — vous êtes reconnu Capitaine, vos actions sont signées via votre extension NOSTR</span>
-</div>
-
 <!-- UPH Captain Verification -->
 <div class="uph-panel" id="uph-panel">
   <span class="uph-ext" id="uph-ext-status">🔌 Vérification extension NOSTR…</span>
   <span id="uph-captain-badge" style="display:none"></span>
   <button class="btn-uph" id="btn-uph-connect" style="display:none" onclick="typeof window.connectNostr==='function'&&window.connectNostr()">⚡ Identifier comme Capitaine</button>
+  <span class="auth-status" id="auth-status"></span>
 </div>
 
 <!-- Tabs -->
@@ -752,7 +727,7 @@
         <button class="btn-query" id="btn-grimoire-edit-toggle" style="padding:4px 12px;font-size:.76rem" onclick="toggleGrimoireEdit()">✏️ Modifier</button>
         <button class="btn-query" id="btn-grimoire-publish-single" style="padding:4px 12px;font-size:.76rem;display:none;background:linear-gradient(135deg,#38a169,#4f8ef7)" onclick="publishSingleGrimoireRecipe()">🚀 Publier cette recette</button>
         <button class="btn-query" id="btn-grimoire-realize" style="padding:4px 12px;font-size:.76rem;display:none;background:rgba(124,92,252,.7)" onclick="openGrimoireRealizeForm()">✅ Marquer comme réalisée</button>
-        <button class="btn-del-local" id="btn-grimoire-delete" style="padding:4px 12px;font-size:.76rem;display:none" onclick="deleteGrimoireRecipe()" title="Supprime cet événement Kind 30500 du relay LOCAL (capitaine uniquement, via UPLANETNAME)">🗑 Supprimer</button>
+        <button class="btn-del-local" id="btn-grimoire-delete" style="padding:4px 12px;font-size:.76rem;display:none" onclick="deleteGrimoireRecipe()" title="Supprime cet événement Kind 30500 du relay LOCAL (capitaine uniquement)">🗑 Supprimer</button>
         <button style="background:none;border:none;color:var(--text2);cursor:pointer;font-size:1rem;line-height:1;padding:0 4px" onclick="closeGrimoireDetail()">✕</button>
       </div>
       <div id="grimoire-detail-view" style="padding:14px 16px"></div>
@@ -894,7 +869,7 @@
 <!-- Empty state -->
 <div class="state-empty" id="state-empty">
   <div class="icon">⚡</div>
-  <div>Entrez votre UPLANETNAME et lancez une requête pour visualiser les événements NOSTR du relay local.</div>
+  <div>Connectez-vous en tant que Capitaine (⚡ extension NOSTR) et lancez une requête pour visualiser les événements NOSTR du relay local.</div>
 </div>
 
 </div><!-- /pane-query -->
@@ -928,7 +903,7 @@ function toggleTheme() {
 var _events = [], _selected = new Set();
 var _profHex = '', _profHexes = [], _profEvents = [], _relayProfiles = [];
 var _selectedPubkeys = new Set();
-var _captainHex = '', _userPubkey = '', _uph = '';
+var _captainHex = '', _userPubkey = '';
 var _profSelected = new Set();
 var _toastTimer = null;
 
@@ -1005,26 +980,6 @@ function jsAttr(v) {
     return JSON.stringify(v).replace(/"/g, '&quot;');
 }
 
-// ── Auth UPLANETNAME ──────────────────────────────────────────────────────
-document.getElementById('uph-input').addEventListener('input', function() {
-    var v = this.value.trim(); _uph = v;
-    var st = document.getElementById('auth-status');
-    if (!v) { st.textContent = ''; this.className = ''; return; }
-    var ok = /^[0-9a-fA-F]{64}$/.test(v);
-    this.className = ok ? 'ok' : 'error';
-    st.innerHTML = ok
-        ? '<span style="color:var(--ok)">✓ format valide</span>'
-        : '<span style="color:var(--danger)">✗ 64 chars hex attendus (' + v.length + ')</span>';
-    // Auto-chargement si on est déjà sur un onglet qui en a besoin et pas encore chargé
-    if (ok) {
-        var active = document.querySelector('.adm-tab.active');
-        var t = active && active.id.replace('tab-', '');
-        if (t === 'grimoire' && !_grimoireLoaded) { _grimoireLoaded = true; loadGrimoireStatus(); }
-        if (t === 'miz' && !_mizStatsLoaded) { _mizStatsLoaded = true; loadMizStats(); }
-    }
-});
-document.getElementById('uph-input').addEventListener('keydown', function(e) { if (e.key === 'Enter') doQuery(); });
-
 // ── Captain check — déclenché par nostr:connected (header uplanet-header.js)
 // Pas d'appel direct à window.nostr.getPublicKey() : on réutilise la connexion du header
 document.addEventListener('nostr:connected', function(e) {
@@ -1047,9 +1002,7 @@ function _checkCaptain(pubkey) {
             if (!badge) return;
             if (_captainHex && pubkey.toLowerCase() === _captainHex.toLowerCase()) {
                 badge.innerHTML = '⚓ Capitaine'; badge.className = 'uph-captain-ok'; badge.style.display = '';
-                showToast('⚓ Bienvenue Capitaine ! UPLANETNAME devient optionnel — vos actions se signent via votre extension NOSTR.', 'ok');
-                var hint = document.getElementById('uph-optional-hint');
-                if (hint) hint.style.display = '';
+                showToast('⚓ Bienvenue Capitaine ! Vos actions sont signées via votre extension NOSTR.', 'ok');
                 // Charge automatiquement l'onglet déjà ouvert si sa condition d'auth n'attendait que ceci
                 var active = document.querySelector('.adm-tab.active');
                 var t = active && active.id.replace('tab-', '');
@@ -1102,17 +1055,16 @@ function contentPreview(ev) {
 }
 
 // ── API helpers — centralise gestion 403 + erreurs ───────────────────────
-// ── Auth admin — UPLANETNAME (secret partagé) OU signature NIP-98 du Capitaine ──
-// Le backend (/api/nostr/admin/*) accepte désormais les deux : si l'extension
-// NOSTR connectée correspond au captain_hex de la station (badge ⚓ Capitaine
-// déjà affiché), il n'est plus nécessaire de saisir UPLANETNAME pour lire ou
-// supprimer — la possession de la clé privée du Capitaine suffit.
+// ── Auth admin — signature NIP-98 du Capitaine ──
+// Si l'extension NOSTR connectée correspond au captain_hex de la station
+// (badge ⚓ Capitaine déjà affiché), la possession de la clé privée du
+// Capitaine suffit pour lire ou supprimer via l'API admin.
 function _isCaptainAuth() {
     return !!(_userPubkey && _captainHex && _userPubkey.toLowerCase() === _captainHex.toLowerCase()
         && window.nostr && typeof window.nostr.signEvent === 'function');
 }
 function _hasAdminAuth() {
-    return /^[0-9a-fA-F]{64}$/.test(_uph) || _isCaptainAuth();
+    return _isCaptainAuth();
 }
 
 // Construit un header 'Authorization: Nostr <base64url>' (NIP-98, kind 27235)
@@ -1147,8 +1099,7 @@ async function apiFetch(url, opts) {
     }
     var resp = await fetch(url, opts);
     if (resp.status === 403) {
-        showToast('Accès refusé — UPLANETNAME incorrect ou signature Capitaine absente', 'err');
-        document.getElementById('uph-input').classList.add('error');
+        showToast('Accès refusé — connectez-vous en tant que Capitaine (extension NOSTR)', 'err');
         document.getElementById('auth-status').innerHTML = '<span style="color:var(--danger)">✗ Accès refusé</span>';
         throw new Error('403');
     }
@@ -1161,19 +1112,19 @@ async function apiFetch(url, opts) {
 async function adminDelete(ids) {
     return apiFetch(_apiUrl + '/api/nostr/admin/delete', {
         method: 'POST', headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ uplanetname: _uph, ids: ids })
+        body: JSON.stringify({ ids: ids })
     });
 }
 
 // ── Query ────────────────────────────────────────────────────────────────
 async function doQuery() {
     if (!_hasAdminAuth()) {
-        showToast('UPLANETNAME invalide (64 chars hex requis), ou connectez-vous en tant que Capitaine', 'err');
-        document.getElementById('uph-input').focus(); return;
+        showToast('Connectez-vous en tant que Capitaine (extension NOSTR)', 'err');
+        return;
     }
     var btn = document.getElementById('btn-query');
     btn.disabled = true; btn.textContent = '⏳…';
-    var params = new URLSearchParams({ uplanetname: _uph });
+    var params = new URLSearchParams();
     var kind = document.getElementById('f-kind').value.trim();
     var author = document.getElementById('f-author').value.trim();
     var dtag = document.getElementById('f-dtag').value.trim();
@@ -1193,8 +1144,6 @@ async function doQuery() {
         var data = await apiFetch(_apiUrl + '/api/nostr/admin/events?' + params.toString());
         _events = data.events || []; _selected.clear(); renderEvents();
         showToast(_events.length + ' événement(s) récupéré(s)', _events.length > 0 ? 'ok' : 'warn');
-        var inp = document.getElementById('uph-input');
-        inp.classList.remove('error'); inp.classList.add('ok');
         document.getElementById('auth-status').innerHTML = '<span style="color:var(--ok)">✓ Authentifié</span>';
     } catch(e) {
         if (e.message !== '403') showToast('Erreur réseau: ' + e.message, 'err');
@@ -1310,7 +1259,7 @@ function openProfile(pubkey) {
 document.getElementById('prof-hex').addEventListener('keydown', function(e) { if (e.key==='Enter') loadProfile(); });
 
 async function loadProfile() {
-    if (!_hasAdminAuth()) { showToast('UPLANETNAME requis, ou connectez-vous en tant que Capitaine', 'err'); return; }
+    if (!_hasAdminAuth()) { showToast('Connectez-vous en tant que Capitaine (extension NOSTR)', 'err'); return; }
     var manualHex = document.getElementById('prof-hex').value.trim();
     var targets = Array.from(_selectedPubkeys);
     if (targets.length === 0 && /^[0-9a-fA-F]{64}$/.test(manualHex)) targets = [manualHex];
@@ -1322,8 +1271,8 @@ async function loadProfile() {
         var allEvents = [], profileMetas = [];
         for (var i = 0; i < targets.length; i++) {
             var hex = targets[i];
-            var p0 = new URLSearchParams({ uplanetname:_uph, kind:'0', author:hex, limit:'1' });
-            var pA = new URLSearchParams({ uplanetname:_uph, author:hex, limit:'500' });
+            var p0 = new URLSearchParams({ kind:'0', author:hex, limit:'1' });
+            var pA = new URLSearchParams({ author:hex, limit:'500' });
             var results = await Promise.all([
                 apiFetch(_apiUrl+'/api/nostr/admin/events?'+p0),
                 apiFetch(_apiUrl+'/api/nostr/admin/events?'+pA)
@@ -1535,7 +1484,7 @@ async function deleteProfileConstellation() {
     try {
         var data = await apiFetch(_apiUrl+'/api/nostr/admin/constellation_delete', {
             method:'POST', headers:{'Content-Type':'application/json'},
-            body: JSON.stringify({ uplanetname:_uph, authors:authors })
+            body: JSON.stringify({ authors:authors })
         });
         var nodes = data.constellation_nodes || [];
         showToast('Local: '+(data.local_deleted?'OK':'échec')+
@@ -1564,11 +1513,11 @@ async function deleteProfileConstellation() {
 
 // ── Profils du relay ─────────────────────────────────────────────────────
 async function loadRelayProfiles() {
-    if (!_hasAdminAuth()) { showToast('UPLANETNAME requis, ou connectez-vous en tant que Capitaine','err'); return; }
+    if (!_hasAdminAuth()) { showToast('Connectez-vous en tant que Capitaine (extension NOSTR)','err'); return; }
     var btn = document.getElementById('btn-load-relay-profiles');
     btn.disabled = true; btn.textContent = '⏳…';
     try {
-        var data = await apiFetch(_apiUrl+'/api/nostr/admin/events?'+new URLSearchParams({uplanetname:_uph,kind:'0',limit:'200'}));
+        var data = await apiFetch(_apiUrl+'/api/nostr/admin/events?'+new URLSearchParams({kind:'0',limit:'200'}));
         _relayProfiles = data.events || [];
         renderRelayProfiles();
         showToast(_relayProfiles.length+' profil(s) trouvé(s)','ok');
@@ -1587,6 +1536,8 @@ function showEventModal(ev) {
     document.getElementById('jm-json').textContent = JSON.stringify(ev, null, 2);
     // Bouton "Voir profil" uniquement si kind 0 (profil)
     document.getElementById('jm-viewer-btn').style.display = (ev.kind === 0) ? '' : 'none';
+    // Bouton "Voir message" uniquement si kind 1 (note)
+    document.getElementById('jm-message-viewer-btn').style.display = (ev.kind === 1) ? '' : 'none';
     document.getElementById('jm-copy-fb').style.display = 'none';
     document.getElementById('json-modal-overlay').style.display = 'flex';
 }
@@ -1616,6 +1567,11 @@ function copyModalJson() {
 function openViewer() {
     if (!_modalEvent) return;
     window.open('nostr_profile_viewer.html?hex=' + _modalEvent.pubkey, '_blank');
+}
+
+function openMessageViewer() {
+    if (!_modalEvent) return;
+    window.open('nostr_message_viewer.html?event=' + _modalEvent.id, '_blank');
 }
 
 function openAuthorFromModal() {
@@ -1868,7 +1824,7 @@ function loadTree() {
     if (!/^[0-9a-fA-F]{64}$/.test(hex)) {
         showToast('Pubkey invalide — connectez-vous via ⚡ ou saisissez une pubkey', 'warn'); return;
     }
-    // Admin API si UPLANETNAME dispo OU Capitaine connecté, sinon REQ relay WebSocket (lecture publique)
+    // Admin API si Capitaine connecté, sinon REQ relay WebSocket (lecture publique)
     if (_hasAdminAuth()) {
         _loadTreeAdmin(hex);
     } else {
@@ -1881,7 +1837,7 @@ async function _loadTreeAdmin(hex) {
     var status = document.getElementById('tree-status');
     btn.disabled = true; btn.textContent = '⏳…'; status.textContent = 'Chargement…';
     try {
-        var params = new URLSearchParams({ uplanetname: _uph, author: hex, limit: '500' });
+        var params = new URLSearchParams({ author: hex, limit: '500' });
         var data = await apiFetch(_apiUrl + '/api/nostr/admin/events?' + params);
         _treeEvents = data.events || [];
         document.getElementById('tree-hex-input').value = hex;
@@ -1898,7 +1854,7 @@ async function _loadTreeAdmin(hex) {
 function _loadTreeRelay(hex) {
     var relayUrl = typeof window.getRelayUrl === 'function' ? window.getRelayUrl() : null;
     if (!relayUrl) {
-        showToast('Relay NOSTR non détecté — renseignez votre UPLANETNAME pour utiliser l\'API admin', 'warn'); return;
+        showToast('Relay NOSTR non détecté — connectez-vous en tant que Capitaine pour utiliser l\'API admin', 'warn'); return;
     }
     var btn = document.getElementById('btn-load-tree');
     var status = document.getElementById('tree-status');
@@ -1913,7 +1869,7 @@ function _loadTreeRelay(hex) {
         document.getElementById('tree-hex-input').value = hex;
         btn.disabled = false; btn.textContent = '🌳 Charger l\'arbre';
         if (!events.length && status.textContent === 'Connexion relay…') {
-            status.textContent = ''; showToast('Relay inaccessible — renseignez UPLANETNAME', 'warn'); return;
+            status.textContent = ''; showToast('Relay inaccessible — connectez-vous en tant que Capitaine', 'warn'); return;
         }
         renderTree();
         status.textContent = events.length + ' événement(s)';
@@ -2237,11 +2193,11 @@ async function deleteSingleTreeEvent(evId) {
 var _multipassAccounts = [];
 
 async function loadMultipassList() {
-    if (!_hasAdminAuth()) { showToast('UPLANETNAME requis, ou connectez-vous en tant que Capitaine', 'err'); return; }
+    if (!_hasAdminAuth()) { showToast('Connectez-vous en tant que Capitaine (extension NOSTR)', 'err'); return; }
     var btn = document.getElementById('btn-load-multipass');
     btn.disabled = true; btn.textContent = '⏳…';
     try {
-        var data = await apiFetch(_apiUrl + '/api/nostr/admin/multipass_list?' + new URLSearchParams({ uplanetname: _uph }));
+        var data = await apiFetch(_apiUrl + '/api/nostr/admin/multipass_list?' + new URLSearchParams());
         _multipassAccounts = data.accounts || [];
         renderMultipassGrid();
         showToast(_multipassAccounts.length + ' compte(s) MULTIPASS trouvé(s)', _multipassAccounts.length > 0 ? 'ok' : 'warn');
@@ -2293,9 +2249,9 @@ async function openMemDetail(email, hex) {
     panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 
     try {
-        var statusP = apiFetch(_apiUrl + '/api/nostr/admin/memory_status?' + new URLSearchParams({ uplanetname: _uph, email: email }));
+        var statusP = apiFetch(_apiUrl + '/api/nostr/admin/memory_status?' + new URLSearchParams({ email: email }));
         var cookiesP = hex
-            ? apiFetch(_apiUrl + '/api/nostr/admin/events?' + new URLSearchParams({ uplanetname: _uph, kind: '31903', author: hex, limit: '1' })).catch(function() { return { events: [] }; })
+            ? apiFetch(_apiUrl + '/api/nostr/admin/events?' + new URLSearchParams({ kind: '31903', author: hex, limit: '1' })).catch(function() { return { events: [] }; })
             : Promise.resolve({ events: [] });
         var results = await Promise.all([statusP, cookiesP]);
         var status = results[0];
@@ -2367,7 +2323,7 @@ async function resetMemory(email, hex, scope, btnEl) {
     try {
         var data = await apiFetch(_apiUrl + '/api/nostr/admin/memory_reset', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ uplanetname: _uph, email: email, scope: scope })
+            body: JSON.stringify({ email: email, scope: scope })
         });
         showToast((data.deleted || []).length + ' élément(s) réinitialisé(s) pour ' + email, 'ok');
         opsLog([{ type: 'ok', text: 'memory_reset ' + scope + ' → ' + email }]);
@@ -2383,7 +2339,7 @@ async function regenerateLifeos(email, btnEl) {
     try {
         var data = await apiFetch(_apiUrl + '/api/nostr/admin/memory_regenerate', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ uplanetname: _uph, email: email })
+            body: JSON.stringify({ email: email })
         });
         if (data.ok) {
             showToast('Profil LifeOS régénéré depuis ' + (data.own_posts_found || 0) + ' post(s) Mastodon', 'ok');
@@ -2412,7 +2368,7 @@ function _gSlugify(text) {
 }
 
 /* Publication d'un event NOSTR signé côté client (NIP-07 ou nsec mémoire) — distinct
-   de apiFetch/adminDelete qui passent par l'API REST admin (UPLANETNAME) : ici on a
+   de apiFetch/adminDelete qui passent par l'API REST admin (auth Capitaine) : ici on a
    besoin d'une vraie signature pour créer un nouvel événement Kind 30500. */
 function requireSignedRelay(evTemplate) {
     return new Promise(function(resolve, reject) {
@@ -2432,6 +2388,38 @@ function requireSignedRelay(evTemplate) {
 }
 
 /* Les 11 recettes du Grimoire G1FabLab — transcrites depuis grimoire-craft.md */
+/* Tag stable de l'objet Kind 30505 produit par « Silicate de sodium DIY » —
+   calculé comme forge.html calcule resultTag (slug du nom du résultat).
+   Sert de pont d'ingrédient ('uses') pour les crafts 2/6/9/10 qui en consomment. */
+var GRIMOIRE_SILICATE_TAG = 'silicate-de-sodium-diy-verre-liquide';
+/* Skill commun exigé pour tous les crafts du grimoire (compétence de base G1FabLab) */
+var GRIMOIRE_SKILL = 'g1fablab';
+
+/* Catalogue des matières premières externes référencées en 'uses' par les recettes —
+   objets Kind 30505 communs (stock généreux, quantity_type:'infinite') : on suppose un
+   accès basique (achat/récupération) plutôt qu'un inventaire individuel strictement rare. */
+var GRIMOIRE_MATERIALS = [
+    { tag: 'silice',          name: 'Silice (poudre)',                icon: '🏖️', unit: 'g' },
+    { tag: 'soude-caustique', name: 'Soude caustique (NaOH)',         icon: '🧂', unit: 'g' },
+    { tag: 'eau',             name: 'Eau',                            icon: '💧', unit: 'ml' },
+    { tag: 'tissu-coton',     name: 'Tissu — vieux draps coton',      icon: '🧵', unit: 'm²' },
+    { tag: 'sable-quartz',    name: 'Sable de quartz extra-fin',      icon: '⏳', unit: 'L' },
+    { tag: 'vinaigre',        name: "Vinaigre blanc d'alcool",        icon: '🍶', unit: 'L' },
+    { tag: 'sable-fin',       name: 'Sable fin (rivière/silice)',     icon: '🏜️', unit: 'kg' },
+    { tag: 'fecule',          name: 'Fécule (pomme de terre/maïs)',   icon: '🥔', unit: 'g' },
+    { tag: 'sel',             name: 'Sel fin de cuisine',             icon: '🧂', unit: 'g' },
+    { tag: 'sciure',          name: 'Sciure de bois',                 icon: '🪵', unit: '%' },
+    { tag: 'sucre',           name: 'Sucre blanc (saccharose)',       icon: '🍬', unit: '%' },
+    { tag: 'acide-citrique',  name: 'Acide citrique',                 icon: '🍋', unit: '%' },
+    { tag: 'fromage-blanc',   name: 'Fromage blanc maigre',           icon: '🧀', unit: 'parts' },
+    { tag: 'chaux',           name: 'Chaux aérienne/hydraulique',     icon: '⚪', unit: 'parts' },
+    { tag: 'laine-acier',     name: "Laine d'acier",                  icon: '🧽', unit: 'g' },
+    { tag: 'charbon-actif',   name: 'Charbon actif/biochar',          icon: '⚫', unit: 'g' },
+    { tag: 'papier-carton',   name: 'Pulpe papier/carton',            icon: '🧻', unit: 'parts' },
+    { tag: 'huile-de-lin',    name: 'Huile de lin',                   icon: '🫒', unit: '%' },
+    { tag: 'terebenthine',    name: 'Essence de térébenthine',        icon: '🧴', unit: '%' },
+];
+
 var GRIMOIRE_RECIPES = [
 {
     heading: '⚠️ Craft 1 — Silicate de sodium DIY (verre liquide)',
@@ -2439,9 +2427,14 @@ var GRIMOIRE_RECIPES = [
     description: "Fabrique le liant de base pour la pétrification du sable et le drapage de la coque du dôme.",
     station: '🍲 Casserole inox + foyer chaud (poêle de masse / réchaud)',
     materials: [
-        { name: 'Silice — litière pour chat 100% silice broyée en poudre', qty: 90, unit: 'g' },
-        { name: 'Soude caustique en paillettes (NaOH)', qty: 120, unit: 'g' },
-        { name: 'Eau distillée ou eau de pluie filtrée', qty: 300, unit: 'ml' },
+        { name: 'Silice — litière pour chat 100% silice broyée en poudre', qty: 90, unit: 'g', tag: 'silice', icon: '🏖️' },
+        { name: 'Soude caustique en paillettes (NaOH)', qty: 120, unit: 'g', tag: 'soude-caustique', icon: '🧂' },
+        { name: 'Eau distillée ou eau de pluie filtrée', qty: 300, unit: 'ml', tag: 'eau', icon: '💧' },
+    ],
+    uses: [
+        { tag: 'silice', qty: 90, unit: 'g' },
+        { tag: 'soude-caustique', qty: 120, unit: 'g' },
+        { tag: 'eau', qty: 300, unit: 'ml' },
     ],
     safety: "La réaction soude + eau est extrêmement exothermique, et l'ajout de la silice dans la solution brûlante peut provoquer des projections (« effet geyser »). Portez impérativement des lunettes de protection et des gants en nitrile, et travaillez en extérieur ou sous hotte. Ne jamais utiliser d'ustensiles en aluminium.",
     chemistry: "La soude (NaOH) se dissout dans l'eau en libérant des ions Na+ et OH- — dissolution très exothermique. Ces ions attaquent le réseau vitreux Si-O-Si de la silice et le dépolymérisent :\nSiO2 + 2 NaOH → Na2SiO3 + H2O",
@@ -2456,16 +2449,22 @@ var GRIMOIRE_RECIPES = [
     description: "Dresse la première membrane rigide autoportante du dôme sur le ballon de baudruche.",
     station: '🪣 Seau de mélange + 💨 pulvérisateur à pression',
     materials: [
-        { name: 'Tissu — bandes de vieux draps en coton (pour 1 m²)', qty: 1.5, unit: 'm²' },
-        { name: 'Silicate de sodium liquide', qty: 0.4, unit: 'L' },
-        { name: 'Sable de quartz extra-fin (0-0,3 mm)', qty: 0.4, unit: 'L' },
-        { name: "Vinaigre blanc d'alcool (8-10%)", qty: 0.3, unit: 'L' },
+        { name: 'Tissu — bandes de vieux draps en coton (pour 1 m²)', qty: 1.5, unit: 'm²', tag: 'tissu-coton', icon: '🧵' },
+        { name: 'Silicate de sodium liquide', qty: 0.4, unit: 'L', tag: GRIMOIRE_SILICATE_TAG, icon: '✨' },
+        { name: 'Sable de quartz extra-fin (0-0,3 mm)', qty: 0.4, unit: 'L', tag: 'sable-quartz', icon: '⏳' },
+        { name: "Vinaigre blanc d'alcool (8-10%)", qty: 0.3, unit: 'L', tag: 'vinaigre', icon: '🍶' },
     ],
     chemistry: "Le vinaigre (acide acétique) neutralise les ions OH- du silicate et précipite instantanément un gel d'acide silicique insoluble :\nNa2SiO3 + 2 CH3COOH → H2SiO3↓ (gel) + 2 CH3COONa",
     industrial_comparison: "Une coque équivalente s'obtient industriellement par stratification de fibre de verre/résine époxy — plus résistant mais résines pétrochimiques toxiques.",
     cost_comparison: "Environ 2 à 3 €/m² pour la version drap-silicate — contre 15 à 25 €/m² pour un stratifié fibre de verre/résine professionnel.",
     sourcing: "Vieux draps : récupération. Silicate : cf Craft 1. Sable de quartz : négoce de matériaux. Vinaigre : supermarché.",
     cure_time: { workable: '5 min (pétrification)', full_cure: '24-48h (séchage complet)' },
+    uses: [
+        { tag: 'tissu-coton', qty: 1.5, unit: 'm²' },
+        { tag: GRIMOIRE_SILICATE_TAG, qty: 400, unit: 'ml' }, // 0.4L de silicate (Craft 1)
+        { tag: 'sable-quartz', qty: 0.4, unit: 'L' },
+        { tag: 'vinaigre', qty: 0.3, unit: 'L' },
+    ],
 },
 {
     heading: 'Craft 3 — Brique de Starkrit (sable-amidon)',
@@ -2473,10 +2472,16 @@ var GRIMOIRE_RECIPES = [
     description: "Fabrique des briques réfractaires ou des cloisons sans cuisson au four à haute température.",
     station: '📦 Moule en bois + 🔨 presse manuelle (ou tamping)',
     materials: [
-        { name: 'Sable fin de rivière ou de silice', qty: 1, unit: 'kg' },
-        { name: 'Fécule de pomme de terre ou de maïs', qty: 50, unit: 'g' },
-        { name: 'Eau', qty: 200, unit: 'ml' },
-        { name: 'Sel fin de cuisine', qty: 1, unit: 'pincée' },
+        { name: 'Sable fin de rivière ou de silice', qty: 1, unit: 'kg', tag: 'sable-fin', icon: '🏜️' },
+        { name: 'Fécule de pomme de terre ou de maïs', qty: 50, unit: 'g', tag: 'fecule', icon: '🥔' },
+        { name: 'Eau', qty: 200, unit: 'ml', tag: 'eau', icon: '💧' },
+        { name: 'Sel fin de cuisine', qty: 1, unit: 'g', tag: 'sel', icon: '🧂' },
+    ],
+    uses: [
+        { tag: 'sable-fin', qty: 1, unit: 'kg' },
+        { tag: 'fecule', qty: 50, unit: 'g' },
+        { tag: 'eau', qty: 200, unit: 'ml' },
+        { tag: 'sel', qty: 1, unit: 'g' },
     ],
     safety: "L'amidon est réversible à l'eau : une brique de Starkrit exposée à une pluie battante redevient de la boue de sable. Réservez-la à un usage strictement intérieur, ou protégez-la avec la « Peau de Pierre » (Craft 6).",
     chemistry: "Gélatinisation puis rétrogradation de l'amidon : l'amylose et l'amylopectine forment un réseau collant qui, en séchant, se rigidifie et emprisonne les grains de sable.",
@@ -2491,10 +2496,15 @@ var GRIMOIRE_RECIPES = [
     description: "Lie des déchets de bois pour créer des plaques isolantes ou d'ameublement.",
     station: '🔩 Presse à chaud (plaques métalliques serrées à 160°C)',
     materials: [
-        { name: 'Sciure de bois fine de récupération', qty: 90, unit: '%' },
-        { name: 'Sucre blanc de table (saccharose)', qty: 7.5, unit: '%' },
-        { name: 'Acide citrique en poudre', qty: 2.5, unit: '%' },
+        { name: 'Sciure de bois fine de récupération', qty: 90, unit: '%', tag: 'sciure', icon: '🪵' },
+        { name: 'Sucre blanc de table (saccharose)', qty: 7.5, unit: '%', tag: 'sucre', icon: '🍬' },
+        { name: 'Acide citrique en poudre', qty: 2.5, unit: '%', tag: 'acide-citrique', icon: '🍋' },
         { name: 'Eau chaude', qty: null, unit: "juste assez pour dissoudre le sucre et l'acide" },
+    ],
+    uses: [
+        { tag: 'sciure', qty: 90, unit: '%' },
+        { tag: 'sucre', qty: 7.5, unit: '%' },
+        { tag: 'acide-citrique', qty: 2.5, unit: '%' },
     ],
     safety: "L'estérification démarre dès 140-150°C ; monter à 180°C brûle souvent la surface du bois. Visez plutôt 160°C pendant 20 à 30 minutes.",
     chemistry: "L'acide citrique se déshydrate en anhydride citrique, qui forme des liaisons ester avec la cellulose du bois et le saccharose :\nCellulose-OH + Acide citrique --(chaleur)--> Cellulose-O-CO-R + H2O",
@@ -2509,8 +2519,12 @@ var GRIMOIRE_RECIPES = [
     description: "Réalise des collages de bois structuraux ou fixe des isolants naturels.",
     station: '🥣 Pot de mélange en verre (température ambiante)',
     materials: [
-        { name: 'Fromage blanc maigre (0% de matière grasse)', qty: 5, unit: 'parts' },
-        { name: 'Chaux aérienne ou hydraulique en poudre (NHL 3.5)', qty: 1, unit: 'part' },
+        { name: 'Fromage blanc maigre (0% de matière grasse)', qty: 5, unit: 'parts', tag: 'fromage-blanc', icon: '🧀' },
+        { name: 'Chaux aérienne ou hydraulique en poudre (NHL 3.5)', qty: 1, unit: 'part', tag: 'chaux', icon: '⚪' },
+    ],
+    uses: [
+        { tag: 'fromage-blanc', qty: 5, unit: 'parts' },
+        { tag: 'chaux', qty: 1, unit: 'part' },
     ],
     safety: "La chaux est une base forte, irritante pour la peau et surtout pour les yeux. Portez des gants et évitez tout contact oculaire.",
     chemistry: "La chaux rompt la structure de la caséine (dénaturation alcaline) et forme du caséinate de calcium :\nCaséine-COOH + Ca(OH)2 → (Caséine-COO)2Ca + 2 H2O",
@@ -2526,8 +2540,8 @@ var GRIMOIRE_RECIPES = [
     station: '🖌️ Brosse large ou 💨 pulvérisateur de jardin',
     materials: [
         { name: 'Enduit traditionnel chaux/sable humide (pour 1 m²)', qty: null, unit: '' },
-        { name: 'Silicate de sodium pur', qty: 70, unit: 'ml' },
-        { name: 'Eau du robinet', qty: 280, unit: 'ml' },
+        { name: 'Silicate de sodium pur', qty: 70, unit: 'ml', tag: GRIMOIRE_SILICATE_TAG, icon: '✨' },
+        { name: 'Eau du robinet', qty: 280, unit: 'ml', tag: 'eau', icon: '💧' },
     ],
     safety: "La réaction produit de la soude résiduelle qui peut former des efflorescences blanches — rincez à l'eau claire après 24h si l'esthétique importe.",
     chemistry: "La portlandite résiduelle de l'enduit réagit avec le silicate dilué pour former du silicate de calcium hydraté (C-S-H) :\nCa(OH)2 + Na2SiO3 + H2O → C-S-H + NaOH",
@@ -2535,6 +2549,10 @@ var GRIMOIRE_RECIPES = [
     cost_comparison: "Moins de 0,50 €/m² pour le badigeon maison — contre 15 à 30 € le bidon de 5L d'hydrofuge silicone du commerce.",
     sourcing: "Silicate de sodium pur : cf Craft 1, ou magasin de céramique/poterie.",
     cure_time: { workable: 'Immédiat (pétrification au contact)', full_cure: '24-48h + rinçage' },
+    uses: [
+        { tag: GRIMOIRE_SILICATE_TAG, qty: 70, unit: 'ml' }, // 70ml de silicate (Craft 1)
+        { tag: 'eau', qty: 280, unit: 'ml' },
+    ],
 },
 {
     heading: 'Craft 7 — Sachet chauffant exothermique',
@@ -2542,10 +2560,15 @@ var GRIMOIRE_RECIPES = [
     description: "Module de chauffage thermique d'urgence.",
     station: "✉️ Sachet étanche à l'air (stockage) + sachet en tissu fin (usage)",
     materials: [
-        { name: "Laine d'acier fine (grade 0000) hachée", qty: 65, unit: 'g' },
-        { name: 'Charbon actif ou biochar broyé', qty: 25, unit: 'g' },
-        { name: 'Sel fin de cuisine', qty: 10, unit: 'g' },
+        { name: "Laine d'acier fine (grade 0000) hachée", qty: 65, unit: 'g', tag: 'laine-acier', icon: '🧽' },
+        { name: 'Charbon actif ou biochar broyé', qty: 25, unit: 'g', tag: 'charbon-actif', icon: '⚫' },
+        { name: 'Sel fin de cuisine', qty: 10, unit: 'g', tag: 'sel', icon: '🧂' },
         { name: 'Eau (légère vaporisation)', qty: null, unit: '' },
+    ],
+    uses: [
+        { tag: 'laine-acier', qty: 65, unit: 'g' },
+        { tag: 'charbon-actif', qty: 25, unit: 'g' },
+        { tag: 'sel', qty: 10, unit: 'g' },
     ],
     chemistry: "Oxydation accélérée du fer, fortement exothermique :\n4 Fe + 3 O2 → 2 Fe2O3\nLe sel joue le rôle d'électrolyte, le charbon actif démultiplie la surface de contact avec l'air.",
     industrial_comparison: "Les chaufferettes jetables du commerce (HotHands) utilisent la même oxydation du fer, avec poudre calibrée en usine.",
@@ -2575,9 +2598,9 @@ var GRIMOIRE_RECIPES = [
     description: "Valorise les déchets de papier/carton en isolant thermique structurel de remplissage.",
     station: "🪣 Grand bac + perceuse à embout mélangeur (ou foulage aux pieds)",
     materials: [
-        { name: 'Pulpe de papier/carton (journaux macérés et déchiquetés)', qty: 10, unit: 'parts (volume)' },
-        { name: 'Chaux hydraulique en poudre (NHL 3.5)', qty: 2.5, unit: 'parts (2 à 3)' },
-        { name: 'Silicate de sodium (Craft 1)', qty: 1, unit: 'part' },
+        { name: 'Pulpe de papier/carton (journaux macérés et déchiquetés)', qty: 10, unit: 'parts (volume)', tag: 'papier-carton', icon: '🧻' },
+        { name: 'Chaux hydraulique en poudre (NHL 3.5)', qty: 2.5, unit: 'parts (2 à 3)', tag: 'chaux', icon: '⚪' },
+        { name: 'Silicate de sodium (Craft 1)', qty: 1, unit: 'part', tag: GRIMOIRE_SILICATE_TAG, icon: '✨' },
         { name: 'Eau', qty: null, unit: 'juste assez pour une pâte homogène' },
     ],
     chemistry: "Lien essentiellement physique — feutrage de fibres de cellulose emprisonnant la chaux et le silicate, qui minéralise partiellement la surface (même silicatisation que le Craft 6).",
@@ -2585,6 +2608,11 @@ var GRIMOIRE_RECIPES = [
     cost_comparison: "Papier récupéré gratuitement, chaux et silicate représentant quelques euros — contre 10 à 20 €/m² pour de la laine de roche.",
     sourcing: "Papier/carton : récupération, déchetterie. Chaux : cf Craft 5. Silicate : cf Craft 1.",
     cure_time: { workable: 'Démoulage après 24-48h', full_cure: '5-7 jours (séchage complet)' },
+    uses: [
+        { tag: 'papier-carton', qty: 10, unit: 'parts (volume)' },
+        { tag: 'chaux', qty: 2.5, unit: 'parts (2 à 3)' },
+        { tag: GRIMOIRE_SILICATE_TAG, qty: 200, unit: 'ml' }, // ≈1 part de silicate (Craft 1) — ratio du grimoire converti en valeur absolue approximative
+    ],
 },
 {
     heading: "Craft 10 — Vernis à l'huile de lin « boosté » au silicate",
@@ -2592,15 +2620,20 @@ var GRIMOIRE_RECIPES = [
     description: "Protège et durcit en surface les panneaux de bois composite (Craft 4) ou les manches d'outils.",
     station: '🥃 Pot en verre + pinceau',
     materials: [
-        { name: 'Huile de lin (crue ou cuite)', qty: 90, unit: '%' },
-        { name: "Essence de térébenthine (ou substitut végétal)", qty: 5, unit: '%' },
-        { name: 'Silicate de sodium (Craft 1)', qty: 5, unit: '%' },
+        { name: 'Huile de lin (crue ou cuite)', qty: 90, unit: '%', tag: 'huile-de-lin', icon: '🫒' },
+        { name: "Essence de térébenthine (ou substitut végétal)", qty: 5, unit: '%', tag: 'terebenthine', icon: '🧴' },
+        { name: 'Silicate de sodium (Craft 1)', qty: 5, unit: '%', tag: GRIMOIRE_SILICATE_TAG, icon: '✨' },
     ],
     chemistry: "L'huile de lin sèche par polymérisation oxydative ; le silicate migre dans les fibres superficielles et s'y minéralise au contact de l'humidité ambiante.",
     industrial_comparison: "Les vernis polyuréthane du commerce forment un film plastique imperméable mais non respirant. Le vernis huile/silicate conserve la respirabilité du bois.",
     cost_comparison: "Environ 2 à 3 € pour 200ml de vernis maison — contre 15 à 25 €/L pour un vernis bois du commerce.",
     sourcing: "Huile de lin : droguerie, bricolage ou magasin bio. Térébenthine : droguerie. Silicate : cf Craft 1.",
     cure_time: { workable: 'Hors poussière 24h', full_cure: '5-7 jours (polymérisation complète)' },
+    uses: [
+        { tag: 'huile-de-lin', qty: 90, unit: '%' },
+        { tag: 'terebenthine', qty: 5, unit: '%' },
+        { tag: GRIMOIRE_SILICATE_TAG, qty: 10, unit: 'ml' }, // 5% d'un lot nominal de 200ml — ratio du grimoire converti en valeur absolue approximative
+    ],
 },
 {
     heading: "Craft 11 — Test de la Goutte d'Acide (contrôle qualité)",
@@ -2617,35 +2650,50 @@ function _gDtag(r) {
     return 'RECIPE_' + normName + '_X1';
 }
 
+/* Tag d'objet stable produit par une recette — même algorithme que resultTag
+   dans forge.html (slug du nom du résultat), pour que ce craft soit chaînable
+   comme ingrédient ('uses') d'un autre craft. */
+function _gResultTag(r) {
+    return (r.name || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+}
+
+/* Tags requires/uses communs à un craft du grimoire — compétence de base
+   G1FabLab (requires) + ingrédients internes chaînés (uses), ex. silicate de sodium. */
+function _gIngredientTags(r) {
+    var tags = [['requires', GRIMOIRE_SKILL, '1']];
+    (r.uses || []).forEach(function(u) { tags.push(['uses', u.tag, String(u.qty)]); });
+    return tags;
+}
+
 var _grimoirePublished = {}; // dtag → event
 var _grimoireLoaded = false;
 var _mizStatsLoaded = false;
 
-/* Bandeau d'état — distingue clairement les deux auth nécessaires : UPLANETNAME
-   (lecture du statut via l'API admin) vs extension NOSTR NIP-07 (signature de
-   publication). Mis à jour à chaque affichage de l'onglet + sur nostr:connected. */
+/* Bandeau d'état — publication nécessite l'extension NOSTR (NIP-07), statut et
+   suppression nécessitent en plus d'être reconnu Capitaine de la station.
+   Mis à jour à chaque affichage de l'onglet + sur nostr:connected. */
 function _updateGrimoireAuthBanner() {
     var el = document.getElementById('grimoire-auth-banner');
     if (!el) return;
     if (_isCaptainAuth()) {
         el.className = 'grimoire-auth-banner ok';
-        el.innerHTML = '⚓ Capitaine reconnu (' + window.userPubkey.slice(0,10) + '…) — publication, statut et suppression accessibles sans UPLANETNAME.';
+        el.innerHTML = '⚓ Capitaine reconnu (' + window.userPubkey.slice(0,10) + '…) — publication, statut et suppression accessibles.';
     } else if (window.userPubkey) {
-        el.className = 'grimoire-auth-banner ok';
-        el.innerHTML = '⚡ Extension NOSTR connectée (' + window.userPubkey.slice(0,10) + '…) — publication possible ; statut/suppression nécessitent UPLANETNAME (vous n\'êtes pas reconnu Capitaine de cette station).';
+        el.className = 'grimoire-auth-banner warn';
+        el.innerHTML = '⚡ Extension NOSTR connectée (' + window.userPubkey.slice(0,10) + '…) — publication possible ; statut/suppression réservés au Capitaine de cette station.';
     } else {
         el.className = 'grimoire-auth-banner warn';
-        el.innerHTML = '⚠️ Extension NOSTR non connectée — la vérification du statut fonctionne (UPLANETNAME suffit), mais la publication est désactivée tant que vous ne vous connectez pas via le bouton ⚡ en haut de page.';
+        el.innerHTML = '⚠️ Extension NOSTR non connectée — connectez-vous via le bouton ⚡ en haut de page pour publier, consulter le statut ou supprimer.';
     }
 }
 document.addEventListener('nostr:connected', function() { _updateGrimoireAuthBanner(); });
 
 async function loadGrimoireStatus() {
-    if (!_hasAdminAuth()) { showToast('UPLANETNAME requis, ou connectez-vous en tant que Capitaine', 'err'); return; }
+    if (!_hasAdminAuth()) { showToast('Connectez-vous en tant que Capitaine (extension NOSTR)', 'err'); return; }
     var btn = document.getElementById('btn-load-grimoire-status');
     btn.disabled = true; btn.textContent = '⏳…';
     try {
-        var data = await apiFetch(_apiUrl + '/api/nostr/admin/events?' + new URLSearchParams({ uplanetname: _uph, kind: '30500', tag_t: 'g1fablab', limit: '50' }));
+        var data = await apiFetch(_apiUrl + '/api/nostr/admin/events?' + new URLSearchParams({ kind: '30500', tag_t: 'g1fablab', limit: '50' }));
         _grimoirePublished = {};
         (data.events || []).forEach(function(ev) {
             var d = getDtag(ev);
@@ -2758,13 +2806,13 @@ function closeGrimoireDetail() {
     _grimoireDetailDtag = null;
 }
 
-// ── Supprimer (capitaine, relay local — via API admin UPLANETNAME) ──
+// ── Supprimer (capitaine, relay local — via API admin) ──
 
 async function deleteGrimoireRecipe(dtag) {
     dtag = dtag || _grimoireDetailDtag;
     var ev = _grimoirePublished[dtag];
     if (!ev) return;
-    if (!_hasAdminAuth()) { showToast('UPLANETNAME requis, ou connectez-vous en tant que Capitaine', 'err'); return; }
+    if (!_hasAdminAuth()) { showToast('Connectez-vous en tant que Capitaine (extension NOSTR)', 'err'); return; }
     var data = _grimoireRecipeData(dtag);
     if (!confirm('Supprimer la recette « ' + (data.name || dtag) + ' » du relay LOCAL ?\nIRRÉVERSIBLE.')) return;
 
@@ -2793,6 +2841,7 @@ function _renderGrimoireDetailView(data) {
                 return '<li>' + escHtml(m.name || '?') + '<span class="gd-qty">' + escHtml(m.qty != null ? String(m.qty) : '') + ' ' + escHtml(m.unit || '') + '</span></li>';
             }).join('') + '</ul></div>';
     }
+    if (data.min_operators > 1) html += '<div class="gd-block"><div class="gd-block-title">👥 Craft collectif</div>' + data.min_operators + ' opérateurs minimum — planifiable dans Mes Calendriers (onglet Crafts collectifs)</div>';
     if (data.safety) html += '<div class="gd-warn">⚠️ <strong>Sécurité :</strong> ' + escHtml(data.safety) + '</div>';
     if (data.chemistry) html += '<div class="gd-block"><div class="gd-block-title">🧪 Chimie de la réaction</div><div class="gd-code">' + escHtml(data.chemistry) + '</div></div>';
     if (data.industrial_comparison) html += '<div class="gd-block"><div class="gd-block-title">🏭 Comparatif industriel</div>' + escHtml(data.industrial_comparison) + '</div>';
@@ -2854,6 +2903,7 @@ function _renderGrimoireDetailEdit(data) {
             '<div class="gd-field"><label>⏱ Prise</label><input id="gd-cure-workable" value="' + escHtml((data.cure_time && data.cure_time.workable) || '') + '"></div>' +
             '<div class="gd-field"><label>⏱ Durcissement complet</label><input id="gd-cure-full" value="' + escHtml((data.cure_time && data.cure_time.full_cure) || '') + '"></div>' +
         '</div>' +
+        '<div class="gd-field" style="max-width:220px"><label>👥 Opérateurs minimum <span style="font-weight:400;color:var(--text2)">(&gt;1 = craft collectif, planifiable dans Mes Calendriers)</span></label><input id="gd-min-operators" type="number" min="1" value="' + escHtml(String(data.min_operators || 1)) + '"></div>' +
         '<div class="gd-edit-actions">' +
             '<button class="btn-query" onclick="saveGrimoireEdit()">💾 Publier les modifications</button>' +
             '<button class="btn-query" style="background:transparent;border:1px solid var(--border);color:var(--text2)" onclick="toggleGrimoireEdit()">✕ Annuler</button>' +
@@ -2903,6 +2953,7 @@ async function saveGrimoireEdit() {
     var sourcing = document.getElementById('gd-sourcing').value.trim();
     var cureW = document.getElementById('gd-cure-workable').value.trim();
     var cureF = document.getElementById('gd-cure-full').value.trim();
+    var minOp = parseInt(document.getElementById('gd-min-operators').value, 10) || 1;
     if (station) content.station = station;
     if (safety) content.safety = safety;
     if (chemistry) content.chemistry = chemistry;
@@ -2910,13 +2961,17 @@ async function saveGrimoireEdit() {
     if (cost) content.cost_comparison = cost;
     if (sourcing) content.sourcing = sourcing;
     if (cureW || cureF) content.cure_time = { workable: cureW, full_cure: cureF };
+    content.min_operators = minOp;
 
     var r = _gRecipeByDtag(dtag) || {};
     var slug = _gSlugify(r.heading || content.name);
     var tags = [
         ['d', dtag], ['t', 'materiau'], ['t', 'g1fablab'], ['t', 'chimie'], ['t', 'habitat'],
         ['r', 'grimoire-craft.html#' + slug, 'article'],
-    ];
+        ['min_operators', String(minOp)],
+    ].concat(_gIngredientTags(r));
+    if (minOp > 1) tags.push(['t', 'craft-collectif']);
+    content.skill_tag = _gResultTag(r);
 
     var btn = document.querySelector('#grimoire-detail-edit .gd-edit-actions button');
     if (btn) { btn.disabled = true; btn.textContent = '⏳…'; }
@@ -2946,14 +3001,18 @@ async function publishSingleGrimoireRecipe() {
     var btn = document.getElementById('btn-grimoire-publish-single');
     btn.disabled = true; btn.textContent = '⏳…';
     var slug = _gSlugify(r.heading);
+    var minOp = r.min_operators || 1;
     var tags = [
         ['d', dtag], ['t', 'materiau'], ['t', 'g1fablab'], ['t', 'chimie'], ['t', 'habitat'],
         ['r', 'grimoire-craft.html#' + slug, 'article'],
-    ];
+        ['min_operators', String(minOp)],
+    ].concat(_gIngredientTags(r));
+    if (minOp > 1) tags.push(['t', 'craft-collectif']);
     var content = {
         name: r.name, icon: r.icon, description: r.description,
         result_type: 'object', result_name: r.name,
         craft_type: 'material', materials: r.materials || [],
+        min_operators: minOp, skill_tag: _gResultTag(r),
     };
     if (r.station) content.station = r.station;
     if (r.safety) content.safety = r.safety;
@@ -2987,7 +3046,7 @@ function openGrimoireRealizeForm() {
     if (showing) { form.style.display = 'none'; return; }
     form.innerHTML =
         '<div class="gd-realize-box">' +
-            '<div style="font-size:.8rem;color:var(--text);margin-bottom:8px">✅ Déclarer une réalisation de <strong>' + escHtml(data.name) + '</strong> — publie un objet Kind 30505 lié à la recette.</div>' +
+            '<div style="font-size:.8rem;color:var(--text);margin-bottom:8px">✅ Déclarer une réalisation de <strong>' + escHtml(data.name) + '</strong> — publie/enrichit l\'objet Kind 30505 <code>' + escHtml(_gResultTag(data)) + '</code> (chaînable comme ingrédient d\'un autre craft).</div>' +
             '<div class="gd-row">' +
                 '<div class="gd-field"><label>Quantité produite</label><input id="gr-qty" type="number" value="1" min="0" step="any"></div>' +
                 '<div class="gd-field"><label>Unité</label><input id="gr-unit" value="' + escHtml((data.materials && data.materials[0] && data.materials[0].unit) || 'unité') + '"></div>' +
@@ -3011,26 +3070,53 @@ async function publishGrimoireRealization() {
     var unit = document.getElementById('gr-unit').value.trim();
     var notes = document.getElementById('gr-notes').value.trim();
     var now = Math.floor(Date.now() / 1000);
-    var objDtag = 'OBJET_' + dtag.replace(/^RECIPE_/, '') + '_' + now;
-
-    var tags = [
-        ['d', objDtag], ['t', 'object'], ['t', 'g1fablab'],
-        ['e', recipeEv.id, '', 'produced-by'],
-        ['quantity', String(qty)], ['quantity_unit', unit],
-    ];
-    var content = {
-        name: data.name, title: data.name, type: 'material', quantity: qty, quantity_unit: unit,
-        quantity_type: 'discrete', durability: 100, description: notes || ('Réalisé depuis la recette « ' + data.name + ' »'),
-        produced_at: now,
-    };
+    // d stable = tag résultat de la recette (identique à celui référencé par 'uses' des
+    // crafts qui en dépendent) — permet le chaînage objet↔recette dans forge.html.
+    var objDtag = _gResultTag(data);
 
     var btn = document.querySelector('#grimoire-realize-form button');
     if (btn) { btn.disabled = true; btn.textContent = '⏳…'; }
     try {
+        // Cumule avec le stock existant de ce même objet (Kind 30505 = état courant,
+        // replaceable NIP-33 — republier avec le même d écrase l'ancien total).
+        var existingQty = 0;
+        try {
+            var existing = await apiFetch(_apiUrl + '/api/nostr/admin/events?' + new URLSearchParams({
+                kind: '30505', author: window.userPubkey, tag_d: objDtag, limit: '1'
+            }));
+            var ev0 = existing.events && existing.events[0];
+            if (ev0) {
+                var qTag = (ev0.tags.find(function(t){return t[0]==='quantity';}) || [])[1];
+                existingQty = parseFloat(qTag) || 0;
+            }
+        } catch (e) { /* pas bloquant — on repart de 0 si la requête échoue */ }
+
+        var totalQty = existingQty + qty;
+        var tags = [
+            ['d', objDtag], ['title', data.name],
+            ['t', 'object'], ['t', 'g1fablab'], ['t', 'discrete'], ['t', 'portable'],
+            ['e', recipeEv.id, '', 'produced-by'],
+            ['quantity', String(totalQty)], ['quantity_unit', unit],
+            ['durability', '100'], ['repairability', '5'],
+        ];
+        var content = {
+            name: data.name, title: data.name, type: 'material', quantity: totalQty, quantity_unit: unit,
+            quantity_type: 'discrete', mobility: 'portable', durability: 100, repairability: 5,
+            description: notes || ('Réalisé depuis la recette « ' + data.name + ' »'),
+            produced_at: now,
+        };
+
         var signed = await requireSignedRelay({ kind: 30505, tags: tags, content: JSON.stringify(content) });
-        showToast('✅ Réalisation de « ' + data.name + ' » déclarée (objet ' + signed.id.slice(0,10) + '…)', 'ok');
-        opsLog([{ type: 'ok', text: '✅ Réalisation déclarée : ' + data.name + ' — voir objects.html' }]);
-        document.getElementById('grimoire-realize-form').style.display = 'none';
+        showToast('✅ Réalisation de « ' + data.name + ' » déclarée — stock total : ' + totalQty + ' ' + unit, 'ok');
+        opsLog([{ type: 'ok', text: '✅ Réalisation déclarée : ' + data.name + ' (' + totalQty + ' ' + unit + ') — voir objects.html' }]);
+        document.getElementById('grimoire-realize-form').innerHTML =
+            '<div class="gd-realize-box">' +
+                '<div style="font-size:.82rem;color:var(--ok);margin-bottom:8px">✅ Stock « ' + escHtml(data.name) + ' » : <strong>' + totalQty + ' ' + escHtml(unit) + '</strong></div>' +
+                '<div class="gd-edit-actions">' +
+                    '<a class="btn-query" href="forge.html?recipe=' + encodeURIComponent(dtag) + '" target="_blank">⚒️ Recharger dans la Forge</a>' +
+                    '<a class="btn-query" href="objects.html" target="_blank" style="background:transparent;border:1px solid var(--border);color:var(--text2)">📦 Voir dans Objets</a>' +
+                '</div>' +
+            '</div>';
     } catch(e) {
         showToast('Erreur : ' + (e.message || e), 'err');
         if (btn) { btn.disabled = false; btn.textContent = '📤 Publier la réalisation'; }
@@ -3060,14 +3146,18 @@ async function importGrimoireRecipes() {
         var r = missing[i];
         var dTag = _gDtag(r);
         var slug = _gSlugify(r.heading);
+        var minOp = r.min_operators || 1;
         var tags = [
             ['d', dTag], ['t', 'materiau'], ['t', 'g1fablab'], ['t', 'chimie'], ['t', 'habitat'],
             ['r', 'grimoire-craft.html#' + slug, 'article'],
-        ];
+            ['min_operators', String(minOp)],
+        ].concat(_gIngredientTags(r));
+        if (minOp > 1) tags.push(['t', 'craft-collectif']);
         var content = {
             name: r.name, icon: r.icon, description: r.description,
             result_type: 'object', result_name: r.name,
             craft_type: 'material', materials: r.materials || [],
+            min_operators: minOp, skill_tag: _gResultTag(r),
         };
         if (r.station)               content.station = r.station;
         if (r.safety)                content.safety = r.safety;
@@ -3106,15 +3196,15 @@ var _MIZ_PILLAR_TAGS = {
 };
 
 async function loadMizStats() {
-    if (!_hasAdminAuth()) { showToast('UPLANETNAME requis, ou connectez-vous en tant que Capitaine', 'err'); return; }
+    if (!_hasAdminAuth()) { showToast('Connectez-vous en tant que Capitaine (extension NOSTR)', 'err'); return; }
     var btn = document.getElementById('btn-load-miz-stats');
     var status = document.getElementById('miz-stats-status');
     btn.disabled = true; btn.textContent = '⏳…'; status.textContent = 'Chargement…';
     try {
         var results = await Promise.all([
-            apiFetch(_apiUrl + '/api/nostr/admin/events?' + new URLSearchParams({ uplanetname: _uph, kind: '30500', limit: '500' })),
-            apiFetch(_apiUrl + '/api/nostr/admin/events?' + new URLSearchParams({ uplanetname: _uph, kind: '30503', limit: '500' })),
-            apiFetch(_apiUrl + '/api/nostr/admin/events?' + new URLSearchParams({ uplanetname: _uph, kind: '30505', limit: '500' })),
+            apiFetch(_apiUrl + '/api/nostr/admin/events?' + new URLSearchParams({ kind: '30500', limit: '500' })),
+            apiFetch(_apiUrl + '/api/nostr/admin/events?' + new URLSearchParams({ kind: '30503', limit: '500' })),
+            apiFetch(_apiUrl + '/api/nostr/admin/events?' + new URLSearchParams({ kind: '30505', limit: '500' })),
         ]);
         var recipes = results[0].events || [], skills = results[1].events || [], objects = results[2].events || [];
         var tagCounts = {};
@@ -3172,6 +3262,7 @@ function renderMizStats(recipeCount, skillCount, objectCount, tagCounts) {
     <div class="json-modal-footer">
       <button class="btn-query" style="padding:5px 13px;font-size:.78rem" onclick="copyModalJson()">📋 Copier JSON</button>
       <button class="btn-query" id="jm-viewer-btn" style="padding:5px 13px;font-size:.78rem;display:none" onclick="openViewer()">👁 Voir profil</button>
+      <button class="btn-query" id="jm-message-viewer-btn" style="padding:5px 13px;font-size:.78rem;display:none" onclick="openMessageViewer()">💬 Voir message</button>
       <button class="btn-query" id="jm-author-btn" style="padding:5px 13px;font-size:.78rem" onclick="openAuthorFromModal()">🔍 Tous ses événements</button>
       <span id="jm-copy-fb" style="font-size:.78rem;color:var(--ok);display:none;margin-left:4px">✓ Copié !</span>
     </div>

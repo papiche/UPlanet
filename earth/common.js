@@ -32,6 +32,23 @@
         base = document.currentScript.src.replace(/\/[^\/]*$/, '/');
     }
 
+    // window.waitForConnection — défini ICI (synchrone, avant le chargement des libs) et non
+    // dans une lib chargée async : de nombreuses pages earth/ l'appellent dès DOMContentLoaded,
+    // qui peut survenir avant que lib_0…lib_7 aient fini de charger. Aucune lib ne l'exportait
+    // réellement (chaque page devait la redéfinir localement, ex. minelife.html) — centralisé ici
+    // pour que `if (window.waitForConnection) window.waitForConnection(cb)` fonctionne partout.
+    window.waitForConnection = window.waitForConnection || function (callback, maxWait) {
+        maxWait = maxWait || 12000;
+        var start = Date.now();
+        function check() {
+            var ok = (window.NostrState && window.NostrState.isNostrConnected && window.NostrState.userPubkey)
+                  || (window.isNostrConnected && window.userPubkey);
+            if (ok) { callback(); }
+            else if (Date.now() - start < maxWait) { setTimeout(check, 400); }
+        }
+        check();
+    };
+
     // Charge chaque lib séquentiellement : lib N+1 ne commence qu'après le onload de lib N.
     // Garantit que window.* exports de lib N sont disponibles quand lib N+1 s'exécute.
     function loadSequential(index) {

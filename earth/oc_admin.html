@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html lang="fr" data-no-dynamic-theme>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OC Admin — Facturation Armateur/Capitaine</title>
+<style>
+  :root {
+    --bg: #0e1117; --surface: #161b27; --surface2: #1e2535; --border: #2a3347;
+    --accent: #4f8ef7; --accent2: #7c5cfc; --danger: #e53e3e; --warn: #d69e2e; --ok: #38a169;
+    --text: #d1d5db; --text2: #8892a4;
+    --mono: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+    --header-bg: linear-gradient(135deg, #1a1f30 0%, #0e1117 100%); --header-text: #ffffff;
+  }
+  body.light {
+    --bg: #f0f3f8; --surface: #ffffff; --surface2: #e6eaf3; --border: #c8d0e0;
+    --accent: #2563eb; --accent2: #5b21b6; --danger: #b91c1c; --warn: #92400e; --ok: #15803d;
+    --text: #111827; --text2: #4b5563;
+    --header-bg: linear-gradient(135deg, #e0e7f3 0%, #f0f3f8 100%); --header-text: #111827;
+  }
+  * { box-sizing: border-box; }
+  body { background: var(--bg); color: var(--text); font-family: system-ui, sans-serif; margin: 0; min-height: 100vh; transition: background .2s, color .2s; }
+  .adm-header { background: var(--header-bg); border-bottom: 1px solid var(--border); padding: 14px 20px; display: flex; align-items: center; gap: 14px; }
+  .adm-header h1 { font-size: 1.05rem; font-weight: 700; margin: 0; color: var(--header-text); letter-spacing: .02em; }
+  .btn-theme { background: none; border: 1px solid var(--border); color: var(--text2); border-radius: 6px; padding: 3px 9px; cursor: pointer; font-size: .85rem; }
+  .btn-theme:hover { border-color: var(--accent); color: var(--accent); }
+  .badge-relay { font-size: .68rem; background: var(--surface2); border: 1px solid var(--border); color: var(--text2); padding: 2px 9px; border-radius: 20px; }
+
+  .uph-panel { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 10px 20px; margin: 12px 16px 8px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: .8rem; }
+  .uph-ext { color: var(--text2); }
+  .uph-pubkey { font-family: var(--mono); color: var(--accent); }
+  .uph-captain-ok { background: rgba(56,161,105,.18); border: 1px solid rgba(56,161,105,.4); color: #68d391; border-radius: 20px; padding: 2px 10px; font-weight: 700; }
+  .uph-captain-warn { background: rgba(214,158,46,.18); border: 1px solid rgba(214,158,46,.4); color: #f6c05d; border-radius: 20px; padding: 2px 10px; }
+  .btn-uph { background: var(--surface2); border: 1px solid var(--border); color: var(--text2); border-radius: 6px; padding: 4px 12px; font-size: .78rem; cursor: pointer; }
+  .btn-uph:hover { border-color: var(--accent); color: var(--accent); }
+
+  .adm-tabs { display: flex; gap: 0; margin: 0 16px; }
+  .adm-tab { padding: 8px 20px; font-size: .83rem; font-weight: 600; cursor: pointer; background: var(--surface2); border: 1px solid var(--border); color: var(--text2); border-bottom: none; border-radius: 8px 8px 0 0; user-select: none; }
+  .adm-tab.active { background: var(--surface); color: var(--text); border-bottom: 1px solid var(--surface); margin-bottom: -1px; z-index: 1; }
+  .adm-tab-body { background: var(--surface); border: 1px solid var(--border); border-radius: 0 10px 10px 10px; margin: 0 16px 20px; padding: 18px 20px; }
+
+  h3 { font-size: .95rem; margin: 0 0 10px; }
+  .panel-section { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; margin-bottom: 14px; }
+  .btn { background: linear-gradient(135deg, var(--accent) 0%, var(--accent2) 100%); color: #fff; border: none; border-radius: 7px; padding: 8px 18px; font-size: .85rem; font-weight: 600; cursor: pointer; }
+  .btn:hover { opacity: .88; } .btn:disabled { opacity: .4; cursor: not-allowed; }
+  .btn-danger { background: var(--danger); color: #fff; border: none; border-radius: 7px; padding: 8px 18px; font-size: .85rem; font-weight: 600; cursor: pointer; }
+  .btn-danger:disabled { opacity: .4; cursor: not-allowed; }
+  .btn-sm { background: var(--surface2); border: 1px solid var(--border); color: var(--text2); border-radius: 6px; padding: 4px 10px; font-size: .76rem; cursor: pointer; }
+  .btn-sm:hover { border-color: var(--accent); color: var(--accent); }
+  label { font-size: .78rem; color: var(--text2); display: block; margin-bottom: 3px; }
+  input, select { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text); padding: 6px 10px; font-size: .82rem; width: 100%; outline: none; }
+  input:focus, select:focus { border-color: var(--accent); }
+  .grid { display: grid; gap: 10px; }
+  .grid-4 { grid-template-columns: repeat(4, 1fr); }
+  .grid-2 { grid-template-columns: repeat(2, 1fr); }
+  table { width: 100%; border-collapse: collapse; font-size: .8rem; margin-top: 8px; }
+  th, td { border: 1px solid var(--border); padding: 6px 8px; text-align: left; }
+  th { background: var(--surface2); font-size: .75rem; color: var(--text2); }
+  .state-empty { text-align: center; padding: 30px 20px; color: var(--text2); font-size: .85rem; }
+  .line-row { display: grid; grid-template-columns: 110px 140px 1fr 100px 90px 32px; gap: 6px; margin-bottom: 6px; align-items: center; }
+  .status-pill { font-size: .72rem; padding: 2px 8px; border-radius: 12px; font-weight: 600; }
+  .s-ok { background: rgba(56,161,105,.18); color: #68d391; }
+  .s-fail { background: rgba(229,62,62,.18); color: #fc8181; }
+  .s-pending { background: rgba(214,158,46,.18); color: #f6c05d; }
+
+  #toast { position: fixed; bottom: 24px; right: 24px; z-index: 9999; background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 12px 18px; font-size: .83rem; box-shadow: 0 8px 32px rgba(0,0,0,.5); transform: translateY(12px); opacity: 0; transition: all .2s; max-width: 340px; }
+  #toast.show { transform: translateY(0); opacity: 1; }
+  #toast.t-ok { border-left: 3px solid var(--ok); } #toast.t-err { border-left: 3px solid var(--danger); } #toast.t-warn { border-left: 3px solid var(--warn); }
+</style>
+</head>
+<body>
+
+<div class="adm-header">
+  <span style="font-size:1.4rem">🧾</span>
+  <h1>OC Admin — Facturation Armateur/Capitaine</h1>
+  <button class="btn-theme" id="btn-theme" onclick="toggleTheme()" title="Basculer thème">☀️</button>
+  <a href="nostr_admin.html" target="_blank" class="badge-relay" title="Admin NOSTR — relay local" style="text-decoration:none;cursor:pointer">⚡ NOSTR Admin</a>
+  <span class="badge-relay" id="api-url-badge" style="margin-left:auto; font-size:.65rem; word-break:break-all;"></span>
+</div>
+
+<div class="uph-panel" id="uph-panel">
+  <span class="uph-ext" id="uph-ext-status">🔌 Vérification extension NOSTR…</span>
+  <span id="uph-captain-badge" style="display:none"></span>
+  <button class="btn-uph" id="btn-uph-connect" style="display:none" onclick="typeof window.connectNostr==='function'&&window.connectNostr()">⚡ Identifier comme Capitaine</button>
+</div>
+
+<div class="adm-tabs">
+  <div class="adm-tab active" id="tab-contrib" onclick="switchTab('contrib')">💶 Contributions</div>
+  <div class="adm-tab" id="tab-expenses" onclick="switchTab('expenses')">🔥 Dépenses / Burns</div>
+  <div class="adm-tab" id="tab-invoice" onclick="switchTab('invoice')">🧾 Facturation</div>
+  <div class="adm-tab" id="tab-wallets" onclick="switchTab('wallets')">👛 Wallets</div>
+</div>
+
+<!-- ══════════════ Contributions ══════════════ -->
+<div class="adm-tab-body" id="pane-contrib">
+  <h3>Contributions €→Ẑen (rattrapage 12 mois)</h3>
+  <p style="font-size:.8rem;color:var(--text2)">Délègue à <code>oc2uplanet.sh --sync</code> — peut prendre jusqu'à ~30s (vérification d'une preuve NOSTR par transaction).</p>
+  <button class="btn" id="btn-load-contrib" onclick="loadContributions()">🔄 Charger</button>
+  <div id="contrib-wrap"></div>
+</div>
+
+<!-- ══════════════ Dépenses / Burns ══════════════ -->
+<div class="adm-tab-body" id="pane-expenses" style="display:none">
+  <div class="panel-section">
+    <h3>Dépenses OpenCollective</h3>
+    <button class="btn-sm" id="btn-load-expenses" onclick="loadExpenses()">🔄 Charger</button>
+    <div id="expenses-wrap"></div>
+  </div>
+  <div class="panel-section">
+    <h3>Preuves de burn (kind 30851, type=debit)</h3>
+    <button class="btn-sm" id="btn-load-burns" onclick="loadBurnProofs()">🔄 Charger</button>
+    <div id="burns-wrap"></div>
+  </div>
+</div>
+
+<!-- ══════════════ Facturation ══════════════ -->
+<div class="adm-tab-body" id="pane-invoice" style="display:none">
+  <div class="panel-section">
+    <h3>Découverte (stations sœurs, PAF)</h3>
+    <button class="btn-sm" id="btn-load-dues" onclick="loadDues()">🔄 Charger</button>
+    <div id="dues-wrap"></div>
+  </div>
+
+  <div class="panel-section">
+    <h3>Émetteur de la facture</h3>
+    <div class="grid grid-4">
+      <div><label>Nom</label><input id="inv-issuer-name" placeholder="Frédéric RENAULT EI"></div>
+      <div><label>Adresse</label><input id="inv-issuer-address" placeholder="1 rue Test, 75000 Paris"></div>
+      <div><label>SIRET</label><input id="inv-issuer-siret" placeholder="12345678900010"></div>
+      <div><label>Email</label><input id="inv-issuer-email" placeholder="contact@example.com"></div>
+    </div>
+  </div>
+
+  <div class="panel-section">
+    <h3>Facture</h3>
+    <div class="grid grid-4">
+      <div><label>N° facture</label><input id="inv-id" readonly></div>
+      <div><label>Date</label><input id="inv-date" readonly></div>
+      <div><label>Destinataire</label><input id="inv-recipient" value="Collectif G1FabLab (OpenCollective)"></div>
+      <div><label>Constellation (UPLANETG1PUB)</label><input id="inv-constellation" placeholder="auto-détecté ou manuel"></div>
+    </div>
+  </div>
+
+  <div class="panel-section">
+    <h3>Lignes</h3>
+    <div class="line-row" style="font-weight:600;font-size:.75rem;color:var(--text2)">
+      <span>Rôle</span><span>Nœud (IPFSNODEID)</span><span>Description</span><span>Bénéficiaire</span><span>Montant Ẑ</span><span></span>
+    </div>
+    <div id="lines-wrap"></div>
+    <datalist id="node-datalist"></datalist>
+    <button class="btn-sm" onclick="addLine()">➕ Ajouter une ligne</button>
+    <div style="margin-top:8px;font-weight:600">Total : <span id="inv-total">0.00</span> Ẑ</div>
+  </div>
+
+  <div class="panel-section">
+    <h3>1️⃣ Générer PDF + certifier (aucun Ẑen brûlé)</h3>
+    <button class="btn" id="btn-generate" onclick="doGenerate()">📄 Générer PDF + Certifier</button>
+    <div id="generate-result" style="margin-top:10px;font-size:.85rem"></div>
+  </div>
+
+  <div class="panel-section">
+    <h3>2️⃣ Confirmer le burn (irréversible)</h3>
+    <p style="font-size:.8rem;color:var(--text2)">Brûle réellement les Ẑen et soumet la facture consolidée à OpenCollective. Nécessite l'étape 1.</p>
+    <button class="btn-danger" id="btn-burn" onclick="doBurn()" disabled>🔥 Confirmer le burn</button>
+    <div id="burn-result" style="margin-top:10px;font-size:.85rem"></div>
+  </div>
+</div>
+
+<!-- ══════════════ Wallets ══════════════ -->
+<div class="adm-tab-body" id="pane-wallets" style="display:none">
+  <p style="font-size:.8rem;color:var(--text2)">
+    Chaque MULTIPASS porte deux portefeuilles Ğ1 distincts : <strong>Ğ1 (Duniter)</strong> — blockchain,
+    consensus multi-nœuds, dont le solde en ẐEN est affiché ci-dessous — et <strong>Ğ1-N² (Nostr)</strong> —
+    ledger local au relay de la station, jamais synchronisé entre stations (kind 30852). La
+    <strong>ZenCard</strong> (portefeuille distinct, non listé ici) retrace séparément l'historique des
+    apports en Ẑen — investissement en capital coopératif, cf. onglet Facturation/<code>check_zencard</code>.
+  </p>
+  <div class="panel-section">
+    <h3>Cette station</h3>
+    <button class="btn-sm" id="btn-load-wallets-local" onclick="loadWallets()">🔄 Charger</button>
+    <div id="wallets-local-wrap"></div>
+  </div>
+  <div class="panel-section">
+    <h3>Constellation (stations sœurs)</h3>
+    <p style="font-size:.78rem;color:var(--text2)">Interroge chaque station sœur directement — le ledger Ğ1-N² n'étant jamais répliqué, seule la station elle-même peut répondre. Nécessite d'être authentifié Capitaine sur chacune d'elles pour en voir le détail (403 sinon, affiché tel quel).</p>
+    <button class="btn-sm" id="btn-load-wallets-constellation" onclick="loadWalletsConstellation()">🔄 Charger la constellation</button>
+    <div id="wallets-constellation-wrap"></div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script src="nacl-fast.min.js"></script>
+<script src="nostr.bundle.js"></script>
+<script src="common.js"></script>
+<script src="uplanet-header.js"></script>
+<script src="jspdf.umd.min.js"></script>
+<script src="oc-invoice-pdf.js"></script>
+<script>
+// ── Thème ────────────────────────────────────────────────────────────────
+function applyTheme(theme) {
+    document.body.classList.toggle('light', theme === 'light');
+    var btn = document.getElementById('btn-theme');
+    if (btn) btn.textContent = theme === 'light' ? '🌙' : '☀️';
+    try { localStorage.setItem('oc-admin-theme', theme); } catch(e) {}
+}
+function toggleTheme() { applyTheme(document.body.classList.contains('light') ? 'dark' : 'light'); }
+(function() {
+    var saved; try { saved = localStorage.getItem('oc-admin-theme'); } catch(e) {}
+    applyTheme(saved || 'dark');
+})();
+
+// ── État global ───────────────────────────────────────────────────────────
+var _captainHex = '', _userPubkey = '';
+var _apiUrl = (function() {
+    var cur = new URL(window.location.href), api = new URL(cur.origin);
+    if (cur.hostname.startsWith('ipfs.')) api.hostname = api.hostname.replace('ipfs.', 'u.');
+    if (cur.port === '8080' || cur.port !== '') api.port = '54321';
+    return api.toString().replace(/\/+$/, '');
+})();
+document.getElementById('api-url-badge').textContent = _apiUrl;
+var _lineSeq = 0;
+var _generatedCids = null; // {pdf_cid, cert_cid} — rempli après doGenerate(), requis par doBurn()
+
+window.addEventListener('UPlanetReady', function() {
+    if (typeof window.getAPIUrl === 'function') {
+        var detected = window.getAPIUrl();
+        if (detected) { _apiUrl = detected; document.getElementById('api-url-badge').textContent = _apiUrl; }
+    }
+    var pk = window.NostrState && window.NostrState.userPubkey;
+    if (pk) _checkCaptain(pk);
+    var btn = document.getElementById('btn-uph-connect');
+    if (btn && typeof window.nostr !== 'undefined' && !pk) btn.style.display = '';
+    _autoFillConstellation();
+});
+
+document.addEventListener('nostr:connected', function(e) {
+    var pk = (e.detail && e.detail.pubkey) || (window.NostrState && window.NostrState.userPubkey);
+    if (pk) _checkCaptain(pk);
+});
+
+function _checkCaptain(pubkey) {
+    _userPubkey = pubkey;
+    var extStatus = document.getElementById('uph-ext-status');
+    var connectBtn = document.getElementById('btn-uph-connect');
+    if (extStatus) extStatus.innerHTML = '⚡ <span class="uph-pubkey">' + pubkey.slice(0,12) + '…' + pubkey.slice(-6) + '</span>';
+    if (connectBtn) connectBtn.style.display = 'none';
+    fetch(_apiUrl + '/api/nostr/admin/captain_info')
+        .then(function(r) { return r.ok ? r.json() : null; })
+        .then(function(info) {
+            if (!info) return;
+            _captainHex = info.captain_hex || info.node_hex || '';
+            var badge = document.getElementById('uph-captain-badge');
+            if (!badge) return;
+            if (_captainHex && pubkey.toLowerCase() === _captainHex.toLowerCase()) {
+                badge.innerHTML = '⚓ Capitaine'; badge.className = 'uph-captain-ok'; badge.style.display = '';
+                showToast('⚓ Bienvenue Capitaine ! Vos actions sont signées via votre extension NOSTR.', 'ok');
+            } else if (_captainHex) {
+                badge.innerHTML = '⚠️ Non-capitaine'; badge.className = 'uph-captain-warn'; badge.style.display = '';
+            }
+        }).catch(function() {});
+}
+function _isCaptainAuth() {
+    return !!(_userPubkey && _captainHex && _userPubkey.toLowerCase() === _captainHex.toLowerCase()
+        && window.nostr && typeof window.nostr.signEvent === 'function');
+}
+
+// Auto-détection UPLANETG1PUB depuis 12345.json — l'utilisateur peut toujours
+// la corriger manuellement (champ non readonly) si la station locale diffère.
+function _autoFillConstellation() {
+    if (!window.getStationUrl) return;
+    fetch(window.getStationUrl() + '/12345.json').then(function(r){ return r.ok ? r.json() : null; })
+        .then(function(d) {
+            if (d && d.UPLANETG1PUB) document.getElementById('inv-constellation').value = d.UPLANETG1PUB;
+        }).catch(function() {});
+}
+
+// ── apiFetch — NIP-98 auto-signé (pattern nostr_admin.html) ───────────────
+async function buildAdminNip98Header(url, method) {
+    if (!_isCaptainAuth()) return null;
+    try {
+        var template = { kind: 27235, created_at: Math.floor(Date.now()/1000), tags: [['u', url], ['method', method || 'GET']], content: '' };
+        var signed = await window.nostr.signEvent(template);
+        var b64 = btoa(unescape(encodeURIComponent(JSON.stringify(signed)))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'');
+        return 'Nostr ' + b64;
+    } catch(e) { console.warn('[apiFetch] NIP-98 signing failed:', e.message || e); return null; }
+}
+async function apiFetch(url, opts) {
+    opts = opts || {};
+    if (_isCaptainAuth()) {
+        var method = (opts.method || 'GET').toUpperCase();
+        var auth = await buildAdminNip98Header(url, method);
+        if (auth) opts.headers = Object.assign({}, opts.headers, { 'Authorization': auth });
+    }
+    var resp = await fetch(url, opts);
+    if (resp.status === 403) { showToast('Accès refusé — connectez-vous en tant que Capitaine', 'err'); throw new Error('403'); }
+    if (resp.status === 503) { var d = await resp.json().catch(function(){return{};}); showToast(d.detail || 'Déjà en cours — réessayez', 'warn'); throw new Error('503'); }
+    if (!resp.ok) { var err = await resp.json().catch(function(){ return {detail: resp.statusText}; }); throw new Error(err.detail || resp.statusText); }
+    return resp.json();
+}
+
+// ── Helpers ──────────────────────────────────────────────────────────────
+function escHtml(s) { return (s == null ? '' : String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+// escHtml() n'échappe pas les guillemets — insuffisant pour une valeur placée dans un
+// attribut HTML délimité par des guillemets (href="…"). Les CID pdf_cid/cert_cid rendus
+// dans l'onglet Dépenses/Burns proviennent de tags d'events NOSTR kind 30851 — potentiellement
+// publiés par n'importe quel auteur du relay, jamais fiables tels quels dans un href.
+function escAttr(s) { return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+var _toastTimer = null;
+function showToast(msg, type) {
+    var t = document.getElementById('toast'); if (!t) return;
+    t.textContent = msg; t.className = 'show t-' + (type || 'ok');
+    clearTimeout(_toastTimer); _toastTimer = setTimeout(function(){ t.className = ''; }, 4000);
+}
+function switchTab(tab) {
+    ['contrib','expenses','invoice','wallets'].forEach(function(t) {
+        var tabEl = document.getElementById('tab-' + t), paneEl = document.getElementById('pane-' + t);
+        if (tabEl) tabEl.classList.toggle('active', t === tab);
+        if (paneEl) paneEl.style.display = (t === tab) ? '' : 'none';
+    });
+}
+
+// ── Onglet Contributions ──────────────────────────────────────────────────
+async function loadContributions() {
+    var btn = document.getElementById('btn-load-contrib');
+    btn.disabled = true; btn.textContent = '⏳ Chargement (jusqu\'à ~30s)…';
+    try {
+        var data = await apiFetch(_apiUrl + '/api/oc_admin/contributions');
+        var rows = Array.isArray(data) ? data : [];
+        if (!rows.length) { document.getElementById('contrib-wrap').innerHTML = '<div class="state-empty">Aucune contribution.</div>'; return; }
+        document.getElementById('contrib-wrap').innerHTML = '<table><thead><tr><th>Email</th><th>Montant</th><th>Tier</th><th>MULTIPASS</th><th>Abonné</th><th>Émission</th></tr></thead><tbody>' +
+            rows.map(function(r) {
+                return '<tr><td>' + escHtml(r.email) + '</td><td>' + escHtml(r.amount) + '</td><td>' + escHtml(r.tier) + '</td>' +
+                    '<td>' + escHtml(r.multipass_label || r.multipass_status) + '</td>' +
+                    '<td>' + escHtml(r.subscriber_label || r.subscriber_status) + '</td>' +
+                    '<td>' + escHtml(r.emission_label || r.emission_status) + '</td></tr>';
+            }).join('') + '</tbody></table>';
+        showToast(rows.length + ' compte(s) chargé(s)', 'ok');
+    } catch(e) { if (!['403','503'].includes(e.message)) showToast('Erreur : ' + e.message, 'err'); }
+    finally { btn.disabled = false; btn.textContent = '🔄 Charger'; }
+}
+
+// ── Onglet Dépenses / Burns ────────────────────────────────────────────────
+async function loadExpenses() {
+    var btn = document.getElementById('btn-load-expenses');
+    btn.disabled = true; btn.textContent = '⏳…';
+    try {
+        var data = await apiFetch(_apiUrl + '/api/oc_admin/expenses');
+        var rows = data.expenses || [];
+        if (!rows.length) { document.getElementById('expenses-wrap').innerHTML = '<div class="state-empty">Aucune dépense.</div>'; return; }
+        document.getElementById('expenses-wrap').innerHTML = '<table><thead><tr><th>ID</th><th>Statut</th><th>Description</th><th>Montant</th><th>Créé par</th></tr></thead><tbody>' +
+            rows.map(function(r) {
+                return '<tr><td>' + escHtml(r.id) + '</td><td>' + escHtml(r.status) + '</td><td>' + escHtml(r.description) + '</td>' +
+                    '<td>' + escHtml(r.amount && r.amount.value) + ' ' + escHtml(r.amount && r.amount.currency) + '</td>' +
+                    '<td>' + escHtml(r.createdBy && r.createdBy.name) + '</td></tr>';
+            }).join('') + '</tbody></table>';
+    } catch(e) { if (!['403','503'].includes(e.message)) showToast('Erreur : ' + e.message, 'err'); }
+    finally { btn.disabled = false; btn.textContent = '🔄 Charger'; }
+}
+async function loadBurnProofs() {
+    var btn = document.getElementById('btn-load-burns');
+    btn.disabled = true; btn.textContent = '⏳…';
+    try {
+        var data = await apiFetch(_apiUrl + '/api/nostr/admin/events?kind=30851&limit=200');
+        var debits = (data.events || []).map(function(ev) {
+            try { var c = JSON.parse(ev.content); return c.type === 'debit' ? Object.assign({}, c, {_ev: ev}) : null; }
+            catch(e) { return null; }
+        }).filter(Boolean);
+        if (!debits.length) { document.getElementById('burns-wrap').innerHTML = '<div class="state-empty">Aucune preuve de burn.</div>'; return; }
+        document.getElementById('burns-wrap').innerHTML = '<table><thead><tr><th>Facture</th><th>Rôle</th><th>Nœud</th><th>Bénéficiaire</th><th>Montant</th><th>Statut</th><th>Liens</th></tr></thead><tbody>' +
+            debits.map(function(d) {
+                var pdfTag = (d._ev.tags || []).find(function(t){return t[0]==='pdf_cid';});
+                var certTag = (d._ev.tags || []).find(function(t){return t[0]==='cert_cid';});
+                var gw = _ipfsGatewayLocal();
+                var links = (pdfTag ? '<a href="'+escAttr(gw+'/ipfs/'+pdfTag[1])+'" target="_blank">PDF</a> ' : '') +
+                            (certTag ? '<a href="'+escAttr(gw+'/ipfs/'+certTag[1])+'" target="_blank">Certif</a>' : '');
+                var cls = d.status === 'OK' ? 's-ok' : (d.status === 'PENDING' ? 's-pending' : 's-fail');
+                return '<tr><td>' + escHtml(d.invoice_id) + '</td><td>' + escHtml(d.role) + '</td><td>' + escHtml((d.node_id||'').slice(0,10)) + '…</td>' +
+                    '<td>' + escHtml(d.email) + '</td><td>' + escHtml(d.amount) + ' Ẑ</td>' +
+                    '<td><span class="status-pill ' + cls + '">' + escHtml(d.status) + '</span></td><td>' + links + '</td></tr>';
+            }).join('') + '</tbody></table>';
+    } catch(e) { if (!['403','503'].includes(e.message)) showToast('Erreur : ' + e.message, 'err'); }
+    finally { btn.disabled = false; btn.textContent = '🔄 Charger'; }
+}
+function _ipfsGatewayLocal() {
+    var h = location.hostname;
+    if (h === '127.0.0.1' || h === 'localhost') return 'http://127.0.0.1:8080';
+    return location.protocol + '//' + h + ':8080';
+}
+
+// ── Onglet Wallets ──────────────────────────────────────────────────────────
+// Rend une table wallets pour UNE station à partir de la réponse de
+// /api/oc_admin/g1n2_wallets (locale ou distante — même format). w.zen est le
+// solde Ẑen du portefeuille Ğ1-Duniter du MULTIPASS (G1PUBNOSTR), w.balance le
+// solde Ğ1-N² (Nostr, ledger local jamais synchronisé entre stations) — deux
+// portefeuilles Ğ1 distincts du même MULTIPASS, jamais à confondre/additionner.
+// Ceci n'est PAS le portefeuille ZenCard (players/.g1pub, solde G1 figé à 1 Ğ1,
+// historique d'apports capitalisés exposé séparément par /check_zencard).
+function _walletsTableHtml(data) {
+    var rows = data.wallets || [];
+    if (!rows.length) return '<div class="state-empty">Aucun wallet Ğ1-N² sur cette station.</div>';
+    var mintSet = {}; (data.mint_authorities || []).forEach(function(h) { mintSet[h] = 1; });
+    var html = '<table><thead><tr><th>Email</th><th>HEX</th><th>Ğ1-N² (Nostr)</th><th>Ẑen (Ğ1-Duniter)</th><th></th></tr></thead><tbody>';
+    rows.forEach(function(w) {
+        html += '<tr><td>' + escHtml(w.email || '—') + '</td>' +
+            '<td style="font-family:var(--mono);font-size:.7rem">' + escHtml((w.hex || '').slice(0, 10)) + '…</td>' +
+            '<td>' + escHtml(w.balance) + '</td>' +
+            '<td>' + (w.zen == null ? '—' : escHtml(w.zen)) + '</td>' +
+            '<td>' + (mintSet[w.hex] ? '<span class="status-pill s-ok">🏦 mint</span>' : '') + '</td></tr>';
+    });
+    html += '</tbody></table><p style="font-size:.75rem;color:var(--text2);margin-top:6px">Total Ğ1-N² : ' +
+        escHtml(data.total_balance) + ' — Total Ẑen (Ğ1-Duniter) : ' + escHtml(data.total_zen) + '</p>';
+    return html;
+}
+
+async function loadWallets() {
+    var btn = document.getElementById('btn-load-wallets-local');
+    btn.disabled = true; btn.textContent = '⏳…';
+    try {
+        var data = await apiFetch(_apiUrl + '/api/oc_admin/g1n2_wallets');
+        document.getElementById('wallets-local-wrap').innerHTML = _walletsTableHtml(data);
+    } catch(e) { if (!['403','503'].includes(e.message)) showToast('Erreur : ' + e.message, 'err'); }
+    finally { btn.disabled = false; btn.textContent = '🔄 Charger'; }
+}
+
+// Une station sœur n'est joignable que via SA PROPRE route (kind 30852 n'étant
+// jamais répliqué, cf. NIP-101/KIND_REGISTRY.md) — reconstruit son URL UPassport
+// depuis le hostname renvoyé par /api/oc_admin/dues (même heuristique que _apiUrl
+// pour la station locale : sous-domaine u.<host> en prod, port 54321 en dev/local).
+function _constellationApiUrl(hostname) {
+    if (!hostname) return null;
+    if (hostname === '127.0.0.1' || hostname === 'localhost' || /^\d+\.\d+\.\d+\.\d+$/.test(hostname)) {
+        return 'http://' + hostname + ':54321';
+    }
+    return 'https://u.' + hostname;
+}
+
+async function loadWalletsConstellation() {
+    var btn = document.getElementById('btn-load-wallets-constellation');
+    var wrap = document.getElementById('wallets-constellation-wrap');
+    btn.disabled = true; btn.textContent = '⏳…';
+    wrap.innerHTML = '<div class="state-empty">Interrogation des stations sœurs…</div>';
+    try {
+        if (!_duesData) await loadDues();
+        var stations = (_duesData && _duesData.stations) || [];
+        if (!stations.length) { wrap.innerHTML = '<div class="state-empty">Aucune station sœur découverte (onglet Facturation → Découverte).</div>'; return; }
+        var results = await Promise.all(stations.map(async function(s) {
+            var base = _constellationApiUrl(s.hostname);
+            if (!base) return { station: s, error: 'hostname inconnu' };
+            try { return { station: s, data: await apiFetch(base + '/api/oc_admin/g1n2_wallets') }; }
+            catch(e) { return { station: s, error: e.message === '403' ? 'accès refusé (non-Capitaine sur cette station)' : e.message }; }
+        }));
+        wrap.innerHTML = results.map(function(r) {
+            var label = escHtml(r.station.hostname || (r.station.node_id || '').slice(0, 10) + '…');
+            var title = '<h4 style="margin:14px 0 4px">🛰️ ' + label + '</h4>';
+            return title + (r.error
+                ? '<div class="state-empty" style="padding:8px 0">⚠️ ' + escHtml(r.error) + '</div>'
+                : _walletsTableHtml(r.data));
+        }).join('');
+        showToast(stations.length + ' station(s) interrogée(s)', 'ok');
+    } catch(e) { showToast('Erreur : ' + e.message, 'err'); }
+    finally { btn.disabled = false; btn.textContent = '🔄 Charger la constellation'; }
+}
+
+// ── Onglet Facturation ─────────────────────────────────────────────────────
+var _duesData = null; // rempli par loadDues() — source unique de résolution du bénéficiaire
+
+async function loadDues() {
+    var btn = document.getElementById('btn-load-dues');
+    btn.disabled = true; btn.textContent = '⏳…';
+    try {
+        var data = await apiFetch(_apiUrl + '/api/oc_admin/dues');
+        _duesData = data;
+        var rows = data.stations || [];
+        var html = '<p style="font-size:.8rem;color:var(--text2)">Capitaine : ' + escHtml(data.captain_email) + '</p>';
+        if (rows.length) {
+            html += '<table><thead><tr><th>Nœud</th><th>Hôte</th><th>Armateur</th><th>PAF</th><th>NODEZEN</th><th>captainZEN</th><th>Valeur machine</th></tr></thead><tbody>' +
+                rows.map(function(r) {
+                    return '<tr><td style="font-family:var(--mono);font-size:.72rem">' + escHtml(r.node_id) + '</td><td>' + escHtml(r.hostname) + '</td>' +
+                        '<td>' + escHtml(r.armateur_email || '⚠️ non enregistré') + '</td>' +
+                        '<td>' + escHtml(r.PAF) + '</td><td>' + escHtml(r.NODEZEN) + '</td><td>' + escHtml(r.captainZEN) + '</td><td>' + escHtml(r.MACHINE_VALUE_ZEN) + '</td></tr>';
+                }).join('') + '</tbody></table>';
+        }
+        document.getElementById('dues-wrap').innerHTML = html;
+        // Rafraîchit la datalist des nœuds connus + réévalue les lignes déjà composées
+        var dl = document.getElementById('node-datalist');
+        if (dl) dl.innerHTML = rows.map(function(r) { return '<option value="' + escAttr(r.node_id) + '">'; }).join('');
+        document.querySelectorAll('#lines-wrap .line-row').forEach(_updatePayeeForRow);
+    } catch(e) { if (!['403','503'].includes(e.message)) showToast('Erreur : ' + e.message, 'err'); }
+    finally { btn.disabled = false; btn.textContent = '🔄 Charger'; }
+}
+
+// Résolution du bénéficiaire — MÊME logique que ZEN.INVOICE.sh::_payee_for_role() :
+// jamais de saisie libre pour l'email. Une divergence entre ce que le Capitaine
+// taperait et ce que le serveur résout ferait diverger le d_tag NOSTR publié ici
+// de celui que ZEN.INVOICE.sh publie réellement lors du burn (deux events jamais
+// réconciliés). Retourne '' si non résolvable (registre Armateur non chargé/non
+// enregistré) — la ligne est alors visuellement signalée, jamais silencieusement acceptée.
+function _resolvePayee(role, nodeId) {
+    if (!_duesData) return '';
+    if (role === 'capitaine') return _duesData.captain_email || '';
+    if (role === 'armateur') {
+        var station = (_duesData.stations || []).find(function(s) { return s.node_id === nodeId; });
+        if (station && station.armateur_email) return station.armateur_email;
+        return _duesData.armateur_email_fallback || '';
+    }
+    return '';
+}
+function _updatePayeeForRow(row) {
+    var role = row.querySelector('select').value;
+    var nodeId = row.querySelector('.l-node').value.trim();
+    var emailInput = row.querySelector('.l-email');
+    var payee = _resolvePayee(role, nodeId);
+    emailInput.value = payee;
+    emailInput.style.borderColor = payee ? '' : 'var(--danger)';
+    emailInput.title = payee ? '' : 'Non résolu — chargez "Découverte" ci-dessus et/ou enregistrez cet Armateur (captain.sh)';
+}
+
+function addLine() {
+    var id = 'line-' + (_lineSeq++);
+    var div = document.createElement('div');
+    div.className = 'line-row'; div.id = id;
+    div.innerHTML =
+        '<select onchange="_updatePayeeForRow(this.closest(\'.line-row\')); updateTotal()">' +
+            '<option value="armateur">Armateur</option><option value="capitaine">Capitaine</option>' +
+        '</select>' +
+        '<input placeholder="12D3Koo…" class="l-node" list="node-datalist" oninput="_updatePayeeForRow(this.closest(\'.line-row\'))">' +
+        '<input placeholder="Description" class="l-desc">' +
+        '<input class="l-email" readonly title="Résolu automatiquement depuis le registre Armateur/Capitaine — non modifiable, cf. bouton Découverte">' +
+        '<input type="number" step="0.01" class="l-amount" value="0" onchange="updateTotal()">' +
+        '<button class="btn-sm" onclick="document.getElementById(\'' + id + '\').remove(); updateTotal();" title="Supprimer">✕</button>';
+    document.getElementById('lines-wrap').appendChild(div);
+    _updatePayeeForRow(div);
+}
+function updateTotal() {
+    var total = 0;
+    document.querySelectorAll('.l-amount').forEach(function(i) { total += Number(i.value) || 0; });
+    document.getElementById('inv-total').textContent = total.toFixed(2);
+}
+function _readLines() {
+    var rows = document.querySelectorAll('#lines-wrap .line-row');
+    var lines = [];
+    rows.forEach(function(row) {
+        lines.push({
+            role: row.querySelector('select').value,
+            node_id: row.querySelector('.l-node').value.trim(),
+            payee_email: row.querySelector('.l-email').value.trim(),
+            amount_zen: Number(row.querySelector('.l-amount').value) || 0,
+            description: row.querySelector('.l-desc').value.trim(),
+        });
+    });
+    return lines;
+}
+// Un (rôle, nœud) en double produit le MÊME d_tag NOSTR des deux côtés (client ET
+// ZEN.INVOICE.sh) — la 2ᵉ ligne serait silencieusement traitée comme "déjà brûlée"
+// (marqueur posé par la 1ʳᵉ) sans jamais être brûlée ni soumise à OpenCollective,
+// sans la moindre erreur. Bloqué ici plutôt que dans ZEN.INVOICE.sh (déjà testé) :
+// le Capitaine doit consolider en une seule ligne (description combinée).
+function _findDuplicateLines(lines) {
+    var seen = {};
+    for (var i = 0; i < lines.length; i++) {
+        var key = lines[i].role + ':' + lines[i].node_id;
+        if (seen[key]) return { a: seen[key], b: lines[i] };
+        seen[key] = lines[i];
+    }
+    return null;
+}
+function _buildInvoice() {
+    return {
+        invoice_id: document.getElementById('inv-id').value,
+        date: document.getElementById('inv-date').value,
+        constellation: document.getElementById('inv-constellation').value.trim(),
+        issuer: {
+            name: document.getElementById('inv-issuer-name').value.trim(),
+            address: document.getElementById('inv-issuer-address').value.trim(),
+            siret: document.getElementById('inv-issuer-siret').value.trim(),
+            email: document.getElementById('inv-issuer-email').value.trim(),
+        },
+        recipient: document.getElementById('inv-recipient').value.trim(),
+        lines: _readLines(),
+    };
+}
+
+async function doGenerate() {
+    if (!_isCaptainAuth()) { showToast('Connectez-vous en tant que Capitaine', 'err'); return; }
+    var invoice = _buildInvoice();
+    if (!invoice.lines.length) { showToast('Ajoutez au moins une ligne', 'warn'); return; }
+    for (var i = 0; i < invoice.lines.length; i++) {
+        if (!invoice.lines[i].payee_email || !invoice.lines[i].amount_zen) {
+            showToast('Chaque ligne doit avoir un bénéficiaire résolu (Découverte) et un montant', 'warn'); return;
+        }
+    }
+    var dup = _findDuplicateLines(invoice.lines);
+    if (dup) {
+        showToast('Deux lignes ont le même (rôle, nœud) — consolidez-les en une seule ligne (description combinée)', 'err');
+        return;
+    }
+    var btn = document.getElementById('btn-generate');
+    btn.disabled = true; btn.textContent = '⏳ Génération…';
+    try {
+        var result = await OCInvoicePDF.generateAndPublish(invoice);
+        _generatedCids = { pdf_cid: result.pdf_cid, cert_cid: result.cert_cid };
+        var gw = _ipfsGatewayLocal();
+        document.getElementById('generate-result').innerHTML =
+            '✅ ' + result.events.length + ' event(s) PENDING publié(s)<br>' +
+            '<a href="' + escAttr(gw + '/ipfs/' + result.pdf_cid) + '" target="_blank">📄 Voir le PDF</a> — ' +
+            '<a href="' + escAttr(gw + '/ipfs/' + result.cert_cid) + '" target="_blank">🔎 Voir la certification</a>';
+        document.getElementById('btn-burn').disabled = false;
+        showToast('PDF + certification générés', 'ok');
+    } catch(e) { showToast('Erreur génération : ' + e.message, 'err'); }
+    finally { btn.disabled = false; btn.textContent = '📄 Générer PDF + Certifier'; }
+}
+
+async function doBurn() {
+    if (!_generatedCids) { showToast('Générez d\'abord le PDF (étape 1)', 'warn'); return; }
+    var invoice = _buildInvoice();
+    // Re-vérifié ici (pas seulement à l'étape 1) : les lignes ont pu être modifiées
+    // entre temps — un doublon (rôle, nœud) introduit à ce stade brûlerait quand même
+    // silencieusement une ligne sur deux (cf. doGenerate).
+    var dup = _findDuplicateLines(invoice.lines);
+    if (dup) {
+        showToast('Deux lignes ont le même (rôle, nœud) — consolidez-les avant de brûler', 'err');
+        return;
+    }
+    if (!confirm('Brûler réellement ' + document.getElementById('inv-total').textContent + ' Ẑ et soumettre la facture à OpenCollective ?\n\nCette action est IRRÉVERSIBLE.')) return;
+    var btn = document.getElementById('btn-burn');
+    btn.disabled = true; btn.textContent = '⏳ Burn en cours…';
+    try {
+        var burnResult = await apiFetch(_apiUrl + '/api/oc_admin/invoice/burn', {
+            method: 'POST', headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({ invoice_id: invoice.invoice_id, lines: invoice.lines }),
+        });
+        await OCInvoicePDF.finalizeAfterBurn(invoice, burnResult, _generatedCids);
+        var rows = burnResult.results || [];
+        document.getElementById('burn-result').innerHTML = '<table><thead><tr><th>Rôle</th><th>Nœud</th><th>Montant</th><th>Statut</th></tr></thead><tbody>' +
+            rows.map(function(r) {
+                var cls = r.status === 'ok' ? 's-ok' : (r.status === 'burned_but_oc_failed' ? 's-pending' : 's-fail');
+                return '<tr><td>' + escHtml(r.role) + '</td><td>' + escHtml((r.node_id||'').slice(0,10)) + '…</td><td>' + escHtml(r.amount_zen) + ' Ẑ</td>' +
+                    '<td><span class="status-pill ' + cls + '">' + escHtml(r.status) + '</span></td></tr>';
+            }).join('') + '</tbody></table>';
+        showToast('Burn terminé', 'ok');
+    } catch(e) { if (!['403','503'].includes(e.message)) showToast('Erreur burn : ' + e.message, 'err'); }
+    finally { btn.disabled = false; btn.textContent = '🔥 Confirmer le burn'; }
+}
+
+// ── Init ─────────────────────────────────────────────────────────────────
+(function() {
+    var now = new Date();
+    document.getElementById('inv-id').value = 'FACTURE-' +
+        now.toISOString().replace(/[-:T]/g,'').slice(0,14);
+    document.getElementById('inv-date').value = now.toISOString().slice(0,10);
+    addLine();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calculs &amp; validation — Le Moteur | Made In Zion</title>
+    <link rel="stylesheet" href="bootstrap.min.css">
+    <style>
+        :root {
+            --em:  #00C968; --em-dk: #027A48;
+            --gold:#FFD700; --gold-dim:#b89a00;
+            --mv:  #9B30FF;
+            --cy:  #00ccff;
+            --red: #ff6644;
+            --mz-bg:  #1a1102;
+            --mz-glass: rgba(155,110,0,.12);
+            --bdr:  rgba(255,215,0,.28);
+            --acc: var(--gold);
+        }
+        body{background:var(--mz-bg);color:#f2ece0;font-family:'Segoe UI',system-ui,sans-serif}
+        body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
+            background:radial-gradient(circle at 85% 15%,rgba(255,215,0,.09),transparent 30%)}
+        a{color:var(--cy)}
+        .crumb{padding:1.2rem 1rem 0;font-size:.8rem}
+        .crumb a{color:rgba(255,255,255,.45);text-decoration:none}
+        .crumb a:hover{color:var(--acc)}
+        .chap{color:rgba(255,255,255,.4);font-size:.72rem;text-transform:uppercase;letter-spacing:1.5px;margin-top:.3rem}
+        .hero{text-align:center;padding:1.6rem 1rem 2rem}
+        .hero h1{font-size:clamp(1.5rem,4vw,2.3rem);color:var(--acc);text-transform:uppercase;
+                  letter-spacing:1.5px;text-shadow:0 0 24px rgba(255,215,0,.3);margin-bottom:.3rem}
+        .hero .tag{color:var(--em);font-weight:700;font-size:1rem}
+        .card-mz{background:var(--mz-glass);border:1px solid var(--bdr);border-radius:14px;
+                 padding:1.6rem 1.8rem;margin-bottom:1.6rem}
+        .card-mz h2{color:var(--acc);font-size:1.15rem;text-transform:uppercase;letter-spacing:1px;
+                    margin-bottom:1rem;border-bottom:1px solid rgba(255,255,255,.08);padding-bottom:.6rem}
+        .card-mz h3{color:#67d9ff;font-size:.92rem;text-transform:uppercase;letter-spacing:.5px;margin:1.1rem 0 .5rem}
+        .card-mz p, .card-mz li{color:#e6dcc6;font-size:.95rem;line-height:1.7}
+        .card-mz ul{padding-left:1.3rem}
+        .card-mz ol{padding-left:1.3rem}
+        .card-mz li::marker{color:var(--acc)}
+        .diagram-wrap{background:rgba(0,0,0,.35);border:1px solid var(--bdr);border-radius:10px;
+                      padding:1rem .8rem .5rem;margin:1rem 0;overflow-x:auto}
+        .diagram-wrap svg{display:block;margin:0 auto;max-width:100%;height:auto}
+        .diagram-cap{text-align:center;font-size:.74rem;color:rgba(255,255,255,.45);margin-top:.4rem;font-style:italic}
+        .btn-cta{display:block;width:100%;padding:.9rem 1.5rem;font-size:1.05rem;
+                  font-weight:700;text-transform:uppercase;background:linear-gradient(90deg,var(--gold),#ffea75);
+                  color:#000;border:none;border-radius:10px;cursor:pointer;text-align:center;
+                  transition:all .3s;box-shadow:0 0 20px rgba(255,215,0,.3);text-decoration:none}
+        .btn-cta:hover{box-shadow:0 0 34px rgba(255,215,0,.6);transform:scale(1.02);color:#000}
+        .btn-cta.mv{background:linear-gradient(90deg,var(--mv),#d08cff);color:#fff}
+        .btn-cta.mv:hover{box-shadow:0 0 34px rgba(155,48,255,.6);color:#fff}
+        footer{text-align:center;padding:2.5rem 1rem;color:var(--em-dk);font-size:.85rem}
+        footer a{color:var(--gold-dim);text-decoration:none}
+        footer a:hover{text-decoration:underline}
+        .verdict{border-left:3px solid var(--red);padding:.8rem 1.1rem;background:rgba(255,102,68,.08);
+                 border-radius:0 8px 8px 0;margin:1rem 0}
+        .verdict strong{color:#ff9e7a}
+        .verdict.ok{border-left-color:var(--em);background:rgba(0,201,104,.08)}
+        .verdict.ok strong{color:#5fffb0}
+        .tbl-phys{width:100%;border-collapse:collapse;font-size:.85rem;margin:.8rem 0}
+        .tbl-phys th, .tbl-phys td{padding:.5rem .6rem;border-bottom:1px solid rgba(255,255,255,.08);text-align:left}
+        .tbl-phys th{color:var(--acc);font-weight:700;font-size:.74rem;text-transform:uppercase;letter-spacing:.4px}
+        .tbl-phys td{color:#e6dcc6}
+        .tbl-phys td.num{color:#67d9ff;font-variant-numeric:tabular-nums;white-space:nowrap}
+        .tbl-phys tr:last-child td{border-bottom:none}
+        code{background:rgba(0,0,0,.35);padding:.1rem .35rem;border-radius:4px;color:#67d9ff;font-size:.88em}
+    </style>
+</head>
+<body>
+
+<div class="crumb"><a href="moteur.html">← Le Moteur</a></div>
+
+<section class="hero">
+    <div class="chap">Chapitre 7 / 8</div>
+    <h1>Calculs &amp; validation</h1>
+    <p class="tag">Modélisation du couple — et ses limites physiques</p>
+</section>
+
+<section class="container pb-5" style="max-width:820px">
+
+    <div class="card-mz">
+        <h2>Hypothèses de calcul</h2>
+        <p>Deux paramètres géométriques ne sont pas fixés par le cahier des charges — on les pose ici
+        pour rendre le calcul concret, à ajuster à ton propre prototype :</p>
+        <table class="tbl-phys">
+            <thead><tr><th>Paramètre</th><th>Symbole</th><th>Valeur retenue</th></tr></thead>
+            <tbody>
+                <tr><td>Rayon moyen de placement des aimants</td><td class="num">r</td><td class="num">0,10 m</td></tr>
+                <tr><td>Entrefer au moment de la répulsion</td><td class="num">d</td><td class="num">2 mm</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="card-mz">
+        <h2>1. Validation de l'annulation de flux</h2>
+        <p>Approximation solénoïde + noyau (loi d'Ampère, milieu linéaire non saturé) : le champ créé
+        au cœur du noyau par la bobine de compensation est</p>
+        <p style="text-align:center"><code>H = N·I / L_b</code></p>
+        <p>Avec N = 500 spires, I = 0,11 A, L<sub>b</sub> = 12 mm :</p>
+        <p style="text-align:center"><code>H = (500 × 0,11) / 0,012 ≈ 4583 A/m</code></p>
+        <p>Perméabilité absolue du noyau SMC (μᵣ ≈ 200) : μ = μᵣ·μ₀ = 200 × 4π×10⁻⁷ ≈ 2,51×10⁻⁴ H/m.
+        Induction générée :</p>
+        <p style="text-align:center"><code>B = μ·H ≈ 2,51×10⁻⁴ × 4583 ≈ 1,15 T</code></p>
+        <div class="verdict ok">
+            <strong>✓ Ordre de grandeur cohérent</strong> — 1,15 T calculé contre B<sub>r</sub> ≈ 1,3 T
+            pour le N42 : l'écart (≈ 12 %) tient à la variabilité réelle de μᵣ et de B<sub>r</sub> d'un
+            échantillon à l'autre (résine/poudre non homogène, tolérance de fabrication de l'aimant).
+            C'est exactement pour cette raison que le chapitre
+            <a href="moteur-modules.html">Aimants &amp; bobines</a> calibre chaque bobine
+            expérimentalement au gaussmètre plutôt que de fixer N par ce seul calcul théorique — le
+            calcul valide l'ordre de grandeur, la mesure fixe la valeur exacte.
+        </div>
+    </div>
+
+    <div class="card-mz">
+        <h2>2. Résistance et puissance Joule</h2>
+        <p>Fil AWG28, Ø<sub>fil</sub> = 0,32 mm, section S = π(0,16 mm)² ≈ 8,04×10⁻⁸ m². Diamètre moyen
+        d'une spire (entre le noyau coulé Ø≈16 mm et le bobinage fini Ø≈20 mm, voir
+        <a href="moteur-modules.html">Aimants &amp; bobines</a>) : d<sub>m</sub> ≈ 18 mm.</p>
+        <p style="text-align:center"><code>L_tot = N × π·d_m = 500 × π×0,018 ≈ 28,3 m</code></p>
+        <p style="text-align:center"><code>R = ρ_Cu × L_tot / S = 1,72×10⁻⁸ × 28,3 / 8,04×10⁻⁸ ≈ 6,0 Ω</code></p>
+        <p style="text-align:center"><code>P_j = R·I² = 6,0 × 0,11² ≈ 0,073 W</code></p>
+        <div class="verdict ok">
+            <strong>✓ Cohérent avec les 0,07 W annoncés</strong> — l'écart est sous la marge d'erreur
+            usuelle (tolérance du fil, résistivité du cuivre variant avec la température de bobinage).
+        </div>
+        <p>Consommation brute au pire cas (les 16 modules — 8 rotor + 8 stator — actifs
+        simultanément, hypothèse majorante) :</p>
+        <p style="text-align:center"><code>P_elec,max = 16 × 0,073 ≈ 1,17 W</code></p>
+        <p style="font-size:.85rem;color:rgba(255,255,255,.5)">En pratique, chaque canal stator n'est
+        actif que pendant sa fenêtre d'approche (voir <a href="moteur-electronique.html">Électronique
+        — logique de commande</a>), et le canal rotor est unique et partagé : la consommation moyenne
+        réelle est significativement plus basse — à mesurer au wattmètre (voir
+        <a href="moteur-tests-securite.html">Tests</a>).</p>
+    </div>
+
+    <div class="card-mz">
+        <h2>3. Force de répulsion entre deux N42 Ø10×10mm</h2>
+        <p>Modèle de plaque de charge magnétique (formule de force de maintien/décollement, standard
+        pour un aimant contre une surface saturée — ici entre deux faces polaires identiques) :</p>
+        <p style="text-align:center"><code>F_contact = B_r² · A / (2·μ₀)</code></p>
+        <p>Avec B<sub>r</sub> = 1,3 T et A = π×(5 mm)² ≈ 7,85×10⁻⁵ m² :</p>
+        <p style="text-align:center"><code>F_contact ≈ 1,69 × 7,85×10⁻⁵ / (2×1,257×10⁻⁶) ≈ 53 N</code></p>
+        <p>C'est la force <em>au contact</em>. À l'entrefer retenu (d = 2 mm, soit 20 % du diamètre de
+        l'aimant), la force chute significativement — les modèles de champ proche pour cette géométrie
+        donnent typiquement 25 à 40 % de la valeur de contact, soit :</p>
+        <p style="text-align:center"><code>F_rep(2mm) ≈ 13 à 21 N — valeur retenue pour la suite : 15 N</code></p>
+        <div class="verdict">
+            <strong>⚠️ Estimation, pas une mesure</strong> — le passage contact→entrefer n'a pas de
+            formule fermée simple pour deux disques finis (il faut normalement une intégrale à
+            solution elliptique). La valeur retenue ici (15 N) est un ordre de grandeur d'ingénierie.
+            La seule vraie valeur est celle mesurée au dynamomètre (ressort taré ou capteur de force)
+            à l'entrefer réel du prototype, aimant contre aimant, avant tout calcul de couple.
+        </div>
+    </div>
+
+    <div class="card-mz">
+        <h2>4. Couple instantané et couple moyen lissé</h2>
+        <p>Couple de crête pour une impulsion, bras de levier r = 0,10 m :</p>
+        <p style="text-align:center"><code>C_inst = F_rep × r = 15 × 0,10 = 1,5 N·m</code></p>
+        <p>Motif <code>-1, +1, +1, -1</code> : 8 aimants rotor × 2 impulsions chacun = <strong>16
+        impulsions par tour</strong> (voir <a href="moteur-principe.html">Disposition des pôles</a>).
+        Sur une course utile Δs ≈ 2×entrefer ≈ 4 mm où la répulsion reste significative, l'énergie
+        injectée par impulsion :</p>
+        <p style="text-align:center"><code>E_impulsion ≈ F_rep × Δs = 15 × 0,004 = 0,06 J</code></p>
+        <p style="text-align:center"><code>E_tour = 16 × 0,06 ≈ 0,96 J</code></p>
+        <p>Couple moyen lissé sur un tour complet (2π rad) :</p>
+        <p style="text-align:center"><code>C_moyen = E_tour / (2π) ≈ 0,96 / 6,283 ≈ 0,15 N·m</code></p>
+    </div>
+
+    <div class="card-mz">
+        <h2>5. Puissance mécanique à 750 tr/min</h2>
+        <p style="text-align:center"><code>ω = 750 × 2π / 60 ≈ 78,5 rad/s</code></p>
+        <p style="text-align:center"><code>P_méca = C_moyen × ω ≈ 0,15 × 78,5 ≈ 12 W</code></p>
+        <p style="font-size:.85rem;color:rgba(255,255,255,.5)">Douze watts, pour un démonstrateur de 16
+        aimants Ø10mm : l'ordre de grandeur reste celui d'une petite maquette de laboratoire, pas d'un
+        moteur de traction — cohérent avec l'échelle des composants du chapitre
+        <a href="moteur-approvisionnement.html">Approvisionnement</a>.</p>
+    </div>
+
+    <div class="card-mz">
+        <h2>6. Pourquoi il n'y a pas de « COP » à annoncer</h2>
+        <p>En ne comparant que la puissance mécanique estimée (≈ 12 W) à la seule puissance Joule des
+        bobines de compensation (≈ 1,2 W au pire cas), on obtient un rapport supérieur à 1 — et c'est
+        précisément le signal qu'il ne faut <strong>pas</strong> calculer ce rapport de cette façon.</p>
+        <div class="verdict">
+            <strong>⚠️ Ce ratio n'est pas un rendement</strong> — comparer P<sub>méca</sub> à
+            P<sub>Joule,compensation</sub> revient à ignorer la vraie source de l'énergie mécanique :
+            elle ne vient pas du courant d'annulation (0,11 A), mais de l'énergie magnétique déjà
+            stockée dans l'aimantation des N42 — figée une fois pour toutes en usine, lors de
+            l'aimantation industrielle sous champ intense. Le courant de compensation ne fait que
+            <em>masquer</em> ou <em>révéler</em> cette énergie au bon moment ; il n'en est pas la
+            source, de la même façon qu'une électrovanne minuscule ne « crée » pas l'énergie d'un
+            réservoir d'air comprimé qu'elle libère. Traiter la puissance mécanique comme si elle
+            sortait gratuitement du seul courant d'annulation reviendrait à annoncer un COP supérieur à
+            l'unité — une affirmation de survolté (« over-unity »), qui contredirait le premier
+            principe de la thermodynamique. Aucune expérience indépendante n'a jamais confirmé un tel
+            gain net et durable sur ce type de dispositif à aimants permanents commutés ; l'histoire
+            des « moteurs à aimants permanents » en boucle fermée est jalonnée d'annonces de ce genre,
+            toutes invalidées à la mesure sérieuse.
+        </div>
+        <p>Où se cache donc le vrai coût, si ce n'est dans le courant continu de 0,11 A ? Trois pistes,
+        toutes réelles et mesurables :</p>
+        <ul>
+            <li><strong>Transitoires de commutation</strong> — la bobine ne s'allume/s'éteint pas
+            instantanément (di/dt fini). Pendant ces fronts, la variation de flux couplée au champ de
+            l'aimant qui approche induit une réaction mécanique (loi de Lenz) qui n'apparaît pas dans
+            un calcul I²R statique.</li>
+            <li><strong>Démagnétisation cumulative</strong> — chaque bobine expose son aimant à un champ
+            opposé calibré (voir <a href="moteur-modules.html">Aimants &amp; bobines</a>, le choix du
+            ratio L/D≈1 « résiste à la démagnétisation » — un aveu que le risque est réel). Un aimant
+            qui perd du champ au fil des cycles restitue en réalité une partie de son énergie
+            d'aimantation stockée en usine ; ce n'est pas une source infinie.</li>
+            <li><strong>Pertes parasites</strong> — courants de Foucault dans le noyau SMC, arcs aux
+            contacts du relais, frottements mécaniques : aucune n'apparaît dans un bilan qui ne compte
+            que le courant continu des bobines.</li>
+        </ul>
+        <p>La seule mesure qui vaille reste celle du chapitre <a href="moteur-tests-securite.html">Tests
+        &amp; sécurité</a> : frein de Prony engagé dès la mise sous tension, wattmètre en entrée,
+        tachymètre + couple en sortie. Rendement attendu, honnêtement : <strong>≤ 1</strong>, sans
+        doute nettement inférieur une fois frottements et pertes de commutation comptés — l'intérêt
+        réel de l'annulation de flux n'est pas de « créer » de l'énergie, mais de supprimer le frein
+        contre-électromoteur en roue libre (voir <a href="moteur-applications.html">Applications
+        mobilité</a>).</p>
+    </div>
+
+    <div class="row mt-4">
+        <div class="col-md-6 mb-2"><a href="moteur-approvisionnement.html" class="btn-cta mv">← Chapitre précédent : Approvisionnement</a></div>
+        <div class="col-md-6 mb-2"><a href="moteur-applications.html" class="btn-cta">Chapitre suivant : Applications mobilité →</a></div>
+    </div>
+
+</section>
+
+<footer>
+    <p>Le feu mauve est allumé.<br>
+    Propulsé par <a href="https://astroport.one" target="_blank">Astroport.ONE</a>
+    &amp; La Monnaie Libre (Ğ1/Ẑen).</p>
+</footer>
+
+<script src="nacl-fast.min.js"></script>
+<script src="nostr.bundle.js"></script>
+<script src="common.js"></script>
+<script src="uplanet-header.js"></script>
+<script src="miz-nav.js"></script>
+<script>MizNav.injectBottomNav();</script>
+
+</body>
+</html>

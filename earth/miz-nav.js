@@ -24,6 +24,7 @@ function _detectPage() {
     if (file === 'miz.html')                   return 'hub';
     if (file === 'vaisseau.html')               return 'vaisseau';
     if (file === 'moteur.html')                 return 'moteur';
+    if (file.indexOf('moteur-') === 0)          return 'moteur';
     if (file === 'mouvement.html')              return 'mouvement';
     if (file === 'oasis.html')                  return 'oasis';
     if (file === 'grimoire-craft.html')         return 'grimoire';

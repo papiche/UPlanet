@@ -26,6 +26,7 @@
         { e: '💬', l: 'Coracle',        h: 'https://coracle.copylaradio.com', mini: true },
         { sep: 'Station 모' },
         { e: '📡', l: 'NODE Admin',     h: 'nostr_admin.html' },
+        { e: '🧾', l: 'OC Admin',       h: 'oc_admin.html' },
         { e: '♥️', l: 'Station',        h: 'economy.html',           mini: true },
         { e: '🌌', l: 'Swarm',          h: 'economy.Swarm.html' },
         { e: '😎', l: 'BRO Admin',      h: 'mailjet.html', mini:true },

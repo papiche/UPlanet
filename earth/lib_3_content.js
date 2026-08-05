@@ -75,8 +75,10 @@ async function publishNote(content, additionalTags = [], kind = 1, options = {})
         errors: []
     };
 
-    // Vérification de la connexion
-    if (!userPubkey) {
+    // Vérification de la connexion — lire NostrState.userPubkey en direct : la var locale
+    // `userPubkey` de ce fichier n'est qu'un instantané pris au chargement du script (avant
+    // toute connexion), NostrState reste lui seul toujours à jour (objet partagé, jamais figé).
+    if (!NostrState.userPubkey) {
         const errorMsg = "❌ Vous devez être connecté pour publier.";
         if (!silent) alert(errorMsg);
         result.errors.push(errorMsg);
@@ -127,8 +129,8 @@ async function publishNote(content, additionalTags = [], kind = 1, options = {})
             } else {
                 signedEvent = await window.nostr.signEvent(eventTemplate);
             }
-        } else if (userPrivateKey) {
-            signedEvent = NostrTools.finishEvent(eventTemplate, userPrivateKey);
+        } else if (NostrState.userPrivateKey) {
+            signedEvent = NostrTools.finishEvent(eventTemplate, NostrState.userPrivateKey);
         } else {
             throw new Error("Aucune méthode de signature disponible");
         }
@@ -212,6 +214,11 @@ async function publishNote(content, additionalTags = [], kind = 1, options = {})
             }
 
             result.relaysTotal = 1;
+
+            // Relecture live : ensureRelayConnection() vient potentiellement d'établir
+            // NostrState.nostrRelay à l'instant — la var `nostrRelay` de tête de fichier
+            // reste figée à sa valeur du chargement du script (cf. NostrState.userPubkey ci-dessus).
+            const nostrRelay = NostrState.nostrRelay;
 
             // Verify nostrRelay is valid and has publish method
             if (!nostrRelay || typeof nostrRelay.publish !== 'function') {
@@ -501,8 +508,8 @@ async function postComment(content, url = null) {
             } else {
                 signedEvent = await window.nostr.signEvent(eventTemplate);
             }
-        } else if (userPrivateKey) {
-            signedEvent = NostrTools.finishEvent(eventTemplate, userPrivateKey);
+        } else if (NostrState.userPrivateKey) {
+            signedEvent = NostrTools.finishEvent(eventTemplate, NostrState.userPrivateKey);
         } else {
             throw new Error("No signing method available");
         }

@@ -95,7 +95,7 @@
         </div>
     </div>
 
-    <div class="card-mz">
+    <div class="card-mz" id="composants">
         <h2>Composants</h2>
         <ul>
             <li><strong>MCU</strong> : Arduino Nano ESP32 (recommandé pour la télémétrie sans fil —
@@ -108,14 +108,14 @@
             calibration.</li>
             <li><strong>1 diode de blocage 1N4007</strong> + <strong>1 diode Zener de puissance 24V
             (1N5359B)</strong> par bobine — réseau de récupération d'énergie (snubber), voir plus bas.</li>
-            <li><strong>Canal rotor</strong> : le rotor porte lui aussi des bobines de compensation (voir
-            <a href="moteur-assemblage.html">Assemblage — le rotor</a>), qui tournent avec la plaque bois
-            fixée à la roue. Le courant d'annulation leur parvient par <strong>transformateur tournant
-            à couplage inductif</strong> — retenu ici pour l'usure nulle sur la durée (voir <a
-            href="moteur-tests-securite.html#endurance">Tests — endurance</a>), à travers l'axe creux du
-            truck. Le rotor étant périodique et symétrique au stator, toutes ses bobines se
-            masquent/révèlent en même temps : un seul canal MOSFET (côté fixe, avant la liaison
-            tournante) suffit pour l'ensemble.</li>
+            <li><strong>2 balais récupérés</strong> (porte-balais + charbons d'un petit moteur DC de
+            voiture radiocommandée) + 2 anneaux de cuivre au moyeu — amènent le courant du MOSFET rotor
+            (côté fixe) aux bobines rotor, sans électronique embarquée sur la partie tournante. Voir
+            plus bas.</li>
+            <li><strong>1 aimant témoin</strong> (petit, faible, jamais masqué), fixé sur le rotor, +
+            <strong>1 sonde Hall dédiée</strong> sur le stator — signal de synchronisation fiable,
+            indépendant des aimants principaux qui sont eux-mêmes masqués pendant l'approche. Voir plus
+            bas.</li>
         </ul>
         <div class="diagram-wrap">
             <svg viewBox="0 0 420 210" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:420px">
@@ -211,88 +211,41 @@
 
     <div class="card-mz">
         <h2>Logique de commande</h2>
-        <p>Même principe que la version relais : bobine ON tant que le SS49E détecte l'approche (lu en
-        analogique, comparé à un seuil), OFF au passage — seul le composant de coupure change, et c'est
-        le même capteur que celui du bip-mètre : pas de composant supplémentaire à ajouter, juste un
-        second usage du SS49E déjà en place sur chaque module. Chaque position
-        stator est indépendante (sa propre Hall, son propre MOSFET) ; le rotor, périodique et
-        symétrique, partage un seul canal — actif dès qu'une approche est détectée côté stator,
-        puisque les deux plaques sont en phase. Le rotor est alimenté par <strong>transformateur
-        tournant à couplage inductif</strong> (retenu ici pour l'usure nulle sur la durée — voir
-        <a href="moteur-tests-securite.html#endurance">Tests — endurance</a>), pas par bagues collectrices.</p>
+        <p>Un seul MCU, côté stator (fixe), pilote l'ensemble : ses 8 canaux stator, plus un 9<sup>e</sup>
+        canal partagé qui alimente toutes les bobines rotor à travers les balais (voir plus bas).
+        Contrairement à la version précédente, le déclenchement ne vient <strong>pas</strong> d'une
+        lecture directe des 8 SS49E de chaque module : ces aimants sont masqués pendant l'approche, donc
+        peu détectables au bon moment (voir <a href="#capteur-aveugle">Le capteur aveugle</a>). Le
+        timing réel est <strong>prédit</strong> à partir de l'aimant témoin, jamais masqué — code
+        complet dans cette section.</p>
         <div class="verdict">
             <strong>⚠️ Une seconde couche de sécurité, logicielle</strong> — en plus du générateur de
             récupération et de sa résistance de délestage (charge physique, voir <a
-            href="moteur-tests-securite.html">Tests &amp; sécurité</a>), l'ESP32 mesure le régime en
-            direct à partir des fronts Hall (RPM = 7,5 / T, T la période mesurée en secondes — même
-            formule que le calcul de latence du relais) et bascule tout le stator en <strong>roue
-            libre logicielle</strong> dès qu'un seuil est dépassé : toutes les bobines restent ON en
-            permanence, plus aucune impulsion de répulsion n'est produite, le système décélère sous
-            l'effet du frottement et du générateur. C'est une coupure douce (on ne rompt jamais un
-            courant établi), pas un arrêt brutal — et un état par défaut sûr au démarrage : tant que le
-            firmware n'a pas confirmé une mesure RPM valide, les bobines démarrent masquées (ON), jamais
-            révélées. Cette sécurité logicielle vient <em>en plus</em> du délestage physique, jamais à
-            sa place : un bug ou un reset peut toujours la contourner, pas une résistance qui chauffe.
+            href="moteur-tests-securite.html">Tests &amp; sécurité</a>), le MCU mesure le régime en
+            direct à partir du top de l'aimant témoin et bascule <strong>toutes</strong> les bobines
+            (stator et rotor, puisque le même MCU pilote les deux) en <strong>roue libre logicielle</strong>
+            dès qu'un seuil est dépassé : toutes restent ON en permanence, plus aucune impulsion de
+            répulsion n'est produite, le système décélère sous l'effet du frottement et du générateur.
+            C'est une coupure douce (on ne rompt jamais un courant établi), pas un arrêt brutal — et un
+            état par défaut sûr au démarrage : tant que le firmware n'a pas confirmé une mesure RPM
+            valide, les bobines démarrent masquées (ON), jamais révélées. Cette sécurité logicielle
+            vient <em>en plus</em> du délestage physique, jamais à sa place : un bug ou un reset peut
+            toujours la contourner, pas une résistance qui chauffe.
         </div>
-        <pre style="background:rgba(0,0,0,.4);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:1rem;overflow-x:auto;font-size:.82rem;color:#c8f0ff"><code>const uint8_t HALL_PINS[8]   = {A0,A1,A2,A3,A4,A5,A6,A7};  // SS49E, sortie analogique
-const uint8_t MOSFET_PINS[8] = {10,11,12,13,14,15,16,17};  // IRLZ44N, un par bobine stator
-const uint8_t ROTOR_PIN      = 18;  // MOSFET commun, avant transfo tournant
-
-const int   APPROACH_THRESHOLD = 550;  // à caler par module pendant la calibration (bip-mètre)
-const float RPM_MAX_SAFE = 600.0;      // seuil de bascule en roue libre
-const float RPM_RESUME   = 500.0;      // hystérésis : reprise sous ce seuil
-
-unsigned long lastEdgeMicros = 0;
-float currentRPM = 0;
-bool freewheelMode = true;          // état par défaut au démarrage : masqué, sûr
-
-void setup() {
-  for (uint8_t i = 0; i &lt; 8; i++) {
-    pinMode(MOSFET_PINS[i], OUTPUT);
-    digitalWrite(MOSFET_PINS[i], HIGH);  // masqué avant la première mesure valide
-  }
-  pinMode(ROTOR_PIN, OUTPUT);
-  digitalWrite(ROTOR_PIN, HIGH);
-}
-
-void loop() {
-  // RPM à partir de la période entre deux fronts sur le canal 0
-  static bool wasApproach0 = false;
-  bool approach0 = (analogRead(HALL_PINS[0]) &gt; APPROACH_THRESHOLD);
-  if (approach0 &amp;&amp; !wasApproach0) {
-    unsigned long now = micros();
-    unsigned long period = now - lastEdgeMicros;
-    lastEdgeMicros = now;
-    if (period &gt; 0) currentRPM = 7.5e6 / period;   // RPM = 7,5 / T(s)
-  }
-  wasApproach0 = approach0;
-
-  if (!freewheelMode &amp;&amp; currentRPM &gt; RPM_MAX_SAFE) freewheelMode = true;
-  if ( freewheelMode &amp;&amp; currentRPM &lt; RPM_RESUME)   freewheelMode = false;
-
-  bool anyApproach = false;
-  for (uint8_t i = 0; i &lt; 8; i++) {
-    bool approach = (analogRead(HALL_PINS[i]) &gt; APPROACH_THRESHOLD);
-    bool coilOn = freewheelMode ? true : approach;    // roue libre = toujours masqué
-    digitalWrite(MOSFET_PINS[i], coilOn ? HIGH : LOW);
-    anyApproach |= approach;
-  }
-  digitalWrite(ROTOR_PIN, freewheelMode ? HIGH : (anyApproach ? HIGH : LOW));
-}</code></pre>
-        <p style="font-size:.85rem;color:rgba(255,255,255,.5)">Code illustratif : en pratique, préfère
-        des interruptions matérielles (ou un échantillonnage rapide en timer) à la lecture en boucle
-        pour ne rater aucun front à haut régime, et un filtrage (moyenne glissante) sur la mesure RPM
-        pour éviter les bascules intempestives dues au bruit d'une seule lecture. APPROACH_THRESHOLD et
-        RPM_MAX_SAFE/RPM_RESUME sont à caler expérimentalement, sous la marge de synchronisation
+        <p style="font-size:.85rem;color:rgba(255,255,255,.5)">Interruptions matérielles (ou
+        échantillonnage rapide en timer) recommandées plutôt qu'une lecture en boucle, pour ne rater
+        aucun front à haut régime, et un filtrage (moyenne glissante) sur la mesure de période pour
+        éviter les bascules intempestives dues au bruit d'une seule lecture. Seuils à caler
+        expérimentalement, sous la marge de synchronisation
         calculée plus haut.</p>
     </div>
 
     <div class="card-mz">
         <h2>Où placer les sondes Hall</h2>
-        <p>Les 8 SS49E vont <strong>uniquement sur la plaque stator</strong> (fixe) — le rotor n'en a
-        pas besoin, ses bobines suivent le canal partagé. Chaque sonde doit détecter l'aimant du
-        <strong>rotor</strong> qui approche, pas l'aimant du stator juste à côté (qui, lui, est déjà
-        masqué/révélé par sa propre bobine et ne doit pas fausser la lecture).</p>
+        <p>Les 8 SS49E permanents vont <strong>uniquement sur la plaque stator</strong> (fixe, câblage
+        simple vers le MCU). Chaque sonde doit détecter l'aimant du <strong>rotor</strong> qui
+        approche, pas l'aimant du stator juste à côté (déjà masqué/révélé par sa propre bobine — il
+        fausserait la lecture).</p>
         <ul>
             <li>Même rayon que les modules, une sonde par module (8 au total).</li>
             <li><strong>Décalée</strong> de quelques mm par rapport au centre du module, dans le sens de
@@ -303,8 +256,12 @@ void loop() {
             <li>Face de détection <strong>affleurante</strong> à la surface de la plaque stator qui fait
             face au rotor — dans un petit perçage à côté du module, pas dans l'entrefer lui-même (elle
             serait écrasée à l'assemblage).</li>
-            <li>Fils routés par l'arrière de la plaque stator vers l'ESP32 — pas de liaison tournante
+            <li>Fils routés par l'arrière de la plaque stator vers le MCU — aucune liaison tournante
             nécessaire de ce côté, la plaque est fixe.</li>
+            <li>Côté rotor, pas de sonde permanente : la calibration de ses modules se fait avec un
+            SS49E <strong>portable</strong>, tenu à la main pendant le bobinage et lors des contrôles
+            périodiques (voir <a href="moteur-tests-securite.html#endurance">Tests — endurance</a>) —
+            pas besoin de câblage puisque le rotor n'a pas de MCU à lui.</li>
         </ul>
         <div class="diagram-wrap">
             <svg viewBox="0 0 320 200" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:300px">
@@ -329,58 +286,117 @@ void loop() {
         </div>
     </div>
 
-    <div class="card-mz">
-        <h2>Liaison tournante : construire le transformateur (ou des bagues, pour un premier essai)</h2>
-        <p>Les deux options amènent le courant d'annulation aux bobines rotor à travers la liaison
-        tournante, au niveau du moyeu de la roue — entre le truck (fixe) et le moyeu de la roue
-        (tournant), là où tout est déjà coaxial.</p>
+    <div class="card-mz" id="liaison-balais">
+        <h2>Liaison rotor : balais récupérés</h2>
+        <p>Le rotor porte ses propres bobines de compensation (annulation symétrique des deux côtés,
+        voir <a href="moteur-assemblage.html">Assemblage — le rotor</a>), mais pas d'électronique à lui
+        — pas de MCU, pas de batterie embarquée. Un seul MOSFET, côté stator, pilote toutes les
+        bobines rotor à la fois (câblées en parallèle, elles se masquent/révèlent toutes ensemble),
+        à travers deux simples contacts glissants au niveau du moyeu.</p>
         <div class="verdict ok">
-            <strong>✓ Pour valider le concept d'abord : des bagues</strong> — bien plus simple à monter
-            et déboguer qu'un transformateur tournant, quitte à accepter l'usure des balais. Deux
-            anneaux de cuivre fin (bande de cuivre autocollante, ou tronçon de tube cuivre) collés et
-            isolés autour du moyeu tournant, chacun relié à un fil de la bobine rotor. Deux petits
-            contacts à ressort (ou morceaux de charbon récupérés sur un vieux moteur à balais) montés
-            sur un support fixe (le truck ou la plaque stator), qui frottent en permanence sur les
-            anneaux. Une fois le principe validé au banc (chapitre <a
-            href="moteur-tests-securite.html">Tests</a>), tu peux passer au transformateur tournant pour
-            la version durable.</div>
-        <p><strong>Transformateur tournant</strong> — deux demi-noyaux ferrite en forme d'anneau,
-        coaxiaux avec l'axe, face à face avec un petit entrefer (0,5-1 mm, sans lien avec l'entrefer
-        moteur de 2 mm) :</p>
+            <strong>✓ Récupérés, pas fabriqués</strong> — le porte-balais et les charbons d'un petit
+            moteur à courant continu de voiture radiocommandée (ou de n'importe quel jouet à moteur DC
+            bon marché) sont déjà prêts à l'emploi : ressort de contact, charbon, rien à fabriquer.
+            Conçus pour encaisser plusieurs ampères à plusieurs milliers de tr/min, ils sont largement
+            surdimensionnés pour nos quelques centaines de mA à 750 tr/min maximum — l'usure attendue
+            ici est négligeable sur la durée de vie du démonstrateur. À confirmer au banc (voir <a
+            href="moteur-tests-securite.html#endurance">Tests — endurance</a>), pas à supposer, mais
+            c'est un bon point de départ.
+        </div>
         <ul>
-            <li>Demi-noyau primaire, bobiné, fixé côté truck/stator — relié à l'oscillateur HF (≈100kHz)
-            piloté par MOSFET.</li>
-            <li>Demi-noyau secondaire, bobiné, collé dans le moyeu de la roue (côté rotor) — relié au
-            pont redresseur + condensateur de lissage qui alimentent les bobines rotor.</li>
-            <li><strong>Astuce de récupération</strong> : les bobines d'une paire de coques de chargeur
-            à induction Qi (émetteur + récepteur) sont déjà bobinées, accordées et dimensionnées pour ce
-            genre de transfert par petit entrefer — les récupérer et les monter coaxialement est souvent
-            plus simple que de rebobiner un noyau ferrite depuis zéro.</li>
-            <li>L'alignement angulaire n'a pas d'importance (les deux demi-noyaux sont des anneaux) :
-            seul l'entrefer axial compte, et il ne varie pas avec la rotation.</li>
+            <li><strong>2 anneaux de contact en cuivre</strong> (bande adhésive ou tronçon de tube
+            cuivre), collés et isolés autour du moyeu tournant — un par fil de la bobine rotor.</li>
+            <li><strong>2 balais récupérés</strong>, montés sur un petit support fixe (le truck ou la
+            plaque stator), qui pressent en permanence sur les anneaux.</li>
+            <li>Le courant vient directement du MOSFET/snubber du canal rotor (même circuit que les
+            canaux stator, voir <a href="#composants">Composants</a>) — juste redirigé vers les balais
+            au lieu d'une bobine locale fixe.</li>
         </ul>
         <div class="diagram-wrap">
             <svg viewBox="0 0 380 180" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:360px">
-                <text x="190" y="16" text-anchor="middle" font-size="9.5" fill="#67d9ff" font-weight="700">Liaison tournante, au moyeu</text>
+                <text x="190" y="16" text-anchor="middle" font-size="9.5" fill="#67d9ff" font-weight="700">Balais récupérés, au moyeu</text>
                 <line x1="10" y1="90" x2="370" y2="90" stroke="rgba(230,220,198,.5)" stroke-width="5"/>
-                <text x="40" y="70" font-size="8" fill="rgba(255,255,255,.5)">axe / truck (fixe)</text>
+                <text x="30" y="70" font-size="8" fill="rgba(255,255,255,.5)">axe / truck (fixe)</text>
 
-                <rect x="140" y="60" width="30" height="60" rx="3" fill="rgba(0,204,255,.14)" stroke="#00ccff" stroke-width="1.2"/>
-                <text x="155" y="93" text-anchor="middle" font-size="7" fill="#67d9ff">primaire</text>
-                <text x="155" y="103" text-anchor="middle" font-size="6.5" fill="rgba(255,255,255,.5)">(fixe)</text>
+                <rect x="150" y="55" width="16" height="70" rx="2" fill="rgba(180,140,80,.5)" stroke="#b89a00" stroke-width="1"/>
+                <rect x="204" y="55" width="16" height="70" rx="2" fill="rgba(180,140,80,.5)" stroke="#b89a00" stroke-width="1"/>
+                <text x="185" y="50" text-anchor="middle" font-size="7" fill="rgba(255,255,255,.5)">anneaux cuivre (moyeu, tournant)</text>
 
-                <rect x="176" y="20" width="8" height="140" fill="rgba(255,102,68,.2)" stroke="#ff6644" stroke-width="1"/>
-                <text x="180" y="14" text-anchor="middle" font-size="7" fill="#ff9e7a">0,5-1mm</text>
+                <rect x="140" y="60" width="10" height="20" rx="2" fill="rgba(0,201,104,.2)" stroke="#00C968" stroke-width="1.1"/>
+                <rect x="220" y="60" width="10" height="20" rx="2" fill="rgba(0,201,104,.2)" stroke="#00C968" stroke-width="1.1"/>
+                <text x="185" y="140" text-anchor="middle" font-size="7.5" fill="#5fffb0">balais récupérés (moteur RC), support fixe</text>
 
-                <rect x="190" y="60" width="30" height="60" rx="3" fill="rgba(255,215,0,.14)" stroke="#FFD700" stroke-width="1.2"/>
-                <text x="205" y="93" text-anchor="middle" font-size="7" fill="#FFD700">secondaire</text>
-                <text x="205" y="103" text-anchor="middle" font-size="6.5" fill="rgba(255,255,255,.5)">(moyeu roue)</text>
+                <path d="M145,60 L145,30 L60,30" stroke="rgba(255,255,255,.4)" stroke-width="1.1" fill="none"/>
+                <path d="M225,60 L225,30 L300,30" stroke="rgba(255,255,255,.4)" stroke-width="1.1" fill="none"/>
+                <text x="60" y="24" text-anchor="middle" font-size="7" fill="rgba(255,255,255,.5)">MOSFET rotor</text>
+                <text x="300" y="24" text-anchor="middle" font-size="7" fill="rgba(255,255,255,.5)">GND</text>
 
-                <path d="M220,80 L250,50" stroke="rgba(255,255,255,.4)" stroke-width="1" fill="none"/>
-                <text x="270" y="46" text-anchor="middle" font-size="7" fill="rgba(255,255,255,.5)">tourne avec la roue</text>
+                <path d="M240,80 L270,50" stroke="rgba(255,255,255,.4)" stroke-width="1" fill="none"/>
+                <text x="290" y="46" text-anchor="middle" font-size="7" fill="rgba(255,255,255,.5)">tourne avec la roue</text>
             </svg>
-            <div class="diagram-cap">Deux demi-noyaux coaxiaux au moyeu : l'un fixe (truck), l'autre solidaire de la roue</div>
+            <div class="diagram-cap">Anneaux tournants au moyeu, balais fixes en contact permanent — même principe qu'un moteur à charbons, juste utilisé à l'envers</div>
         </div>
+    </div>
+
+    <div class="card-mz" id="capteur-aveugle">
+        <h2>Le capteur aveugle : synchroniser sans voir l'aimant masqué</h2>
+        <p>Un problème sérieux, pas un détail : la sonde Hall d'un côté est censée annoncer l'arrivée de
+        l'aimant de l'autre côté — mais cet aimant est justement <strong>masqué</strong> (annulé à
+        ~0T) pendant toute son approche, exactement pour éviter l'interaction prématurée. Résultat :
+        pendant la phase où on aurait le plus besoin de la détecter, l'approche ne produit presque
+        aucun signal — et au moment où le champ redevient détectable (la révélation), c'est déjà trop
+        tard pour s'en servir comme déclencheur, l'événement a déjà eu lieu.</p>
+        <div class="verdict ok">
+            <strong>✓ Solution : un aimant témoin, jamais masqué</strong> — petit, faible (bien plus
+            faible qu'un N42 de propulsion, pour ne pas réintroduire de réluctance notable), fixé sur le
+            <strong>rotor</strong> à une position connue, détecté par une sonde Hall dédiée sur le
+            stator. N'étant jamais compensé, il donne un signal franc et fiable, une fois par tour. À
+            partir de ce top, le MCU mesure la période réelle de rotation et <strong>prédit</strong> —
+            plutôt qu'il ne détecte — le moment d'alignement des 8 modules principaux, qui restent
+            masqués tout le long de leur approche comme prévu. Le canal rotor (via les balais) suit la
+            même prédiction : il se révèle chaque fois qu'une position quelconque atteint son alignement.
+        </div>
+        <p style="font-size:.85rem;color:rgba(255,255,255,.5)">Les 8 SS49E du stator restent utiles pour
+        la calibration (bip-mètre) — et peuvent en plus servir de secours au tout premier démarrage à
+        la manivelle (voir <a href="moteur-assemblage.html">Assemblage — démarrage manuel</a>) : à très
+        basse vitesse, avant que l'aimant témoin n'ait donné une première période fiable, le masquage
+        n'est pas encore critique et un signal résiduel peut suffire à amorcer.</p>
+        <pre style="background:rgba(0,0,0,.4);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:1rem;overflow-x:auto;font-size:.82rem;color:#c8f0ff"><code>const uint8_t INDEX_PIN     = A7;  // aimant témoin (rotor), jamais masqué : 1 top par tour
+const uint8_t ROTOR_MOSFET  = 19;  // canal partagé, vers les balais
+
+unsigned long lastTop = 0, period = 0;
+
+void loop() {
+  static bool wasIndex = false;
+  bool indexNow = (analogRead(INDEX_PIN) &gt; INDEX_THRESHOLD);
+  if (indexNow &amp;&amp; !wasIndex) {
+    unsigned long now = micros();
+    period = now - lastTop;
+    lastTop = now;
+    currentRPM = 60.0e6 / period;         // 1 top par tour =&gt; RPM = 60 / T(s)
+  }
+  wasIndex = indexNow;
+  // ... sécurité roue libre inchangée, basée sur currentRPM ...
+
+  bool anyAligned = false;
+  if (period &gt; 0) {
+    unsigned long elapsed = micros() - lastTop;
+    for (uint8_t i = 0; i &lt; 8; i++) {
+      // position attendue du module i : i/8 de tour après le top
+      unsigned long expected = (unsigned long)((i / 8.0) * period);
+      bool nearAlignment = (abs((long)(elapsed - expected)) &lt; REVEAL_WINDOW);
+      bool coilOn = freewheelMode ? true : !nearAlignment;  // masqué sauf près de l'alignement prédit
+      digitalWrite(MOSFET_PINS[i], coilOn ? HIGH : LOW);
+      anyAligned |= nearAlignment;
+    }
+  }
+  // canal rotor (balais) : révélé si une position quelconque est alignée
+  digitalWrite(ROTOR_MOSFET, (freewheelMode || !anyAligned) ? HIGH : LOW);
+}</code></pre>
+        <p style="font-size:.85rem;color:rgba(255,255,255,.5)">Code illustratif, à affiner (gestion du
+        premier tour sans mesure, filtrage de period, interruptions plutôt que boucle) — mais le
+        principe compte : on planifie le cycle des aimants masqués à partir d'un signal qui, lui, ne
+        l'est jamais.</p>
     </div>
 
     <div class="row mt-4">

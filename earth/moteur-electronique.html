@@ -26,8 +26,8 @@
         .crumb a:hover{color:var(--acc)}
         .chap{color:rgba(255,255,255,.4);font-size:.72rem;text-transform:uppercase;letter-spacing:1.5px;margin-top:.3rem}
         .hero{text-align:center;padding:1.6rem 1rem 2rem}
-        .hero h1{font-size:clamp(1.5rem,4vw,2.3rem);color:var(--acc);text-transform:uppercase;
-                  letter-spacing:1.5px;text-shadow:0 0 24px rgba(255,215,0,.3);margin-bottom:.3rem}
+        .hero h1{font-size:clamp(1.4rem,4vw,2.1rem);color:var(--acc);text-transform:uppercase;
+                  letter-spacing:1px;text-shadow:0 0 24px rgba(255,215,0,.3);margin-bottom:.3rem}
         .hero .tag{color:var(--em);font-weight:700;font-size:1rem}
         .card-mz{background:var(--mz-glass);border:1px solid var(--bdr);border-radius:14px;
                  padding:1.6rem 1.8rem;margin-bottom:1.6rem}
@@ -69,240 +69,322 @@
 <div class="crumb"><a href="moteur.html">← Le Moteur</a></div>
 
 <section class="hero">
-    <div class="chap">Chapitre 4 / 8</div>
-    <h1>Électronique</h1>
-    <p class="tag">Composants, logique de commande, code de contrôle</p>
+    <div class="chap">Chapitre 4 / 8 — Prototype « Made In Zion », version roue de skate</div>
+    <h1>Électronique de Commutation, Calibration et Récupération d'Énergie</h1>
+    <p class="tag">MOSFET IRLZ44N, bip-mètre Hall SS49E, snubber Zener</p>
 </section>
 
 <section class="container pb-5" style="max-width:820px">
 
     <div class="card-mz">
-        <h2>Électronique — composants</h2>
+        <h2>Rejet de la commutation mécanique</h2>
+        <p>À une vitesse de rotation de 750 tr/min avec une configuration multipolaire, la fréquence de
+        commutation atteint 100 à 200 Hz. À ce régime, les micro-switches ou rupteurs mécaniques s'usent
+        et s'arcent quasi instantanément — c'est exactement la limite chiffrée dans les premières
+        versions de cette page, où un relais reed (≈1 ms de commutation) plafonnait le régime autour de
+        750 tr/min pour rester fiable. Le pilotage du prototype réel est donc confié exclusivement au
+        <strong>transistor MOSFET de puissance canal N IRLZ44N</strong> (logic level), commandé par
+        l'ESP32 : sa commutation en microsecondes ne borne plus le régime électroniquement.</p>
+        <div class="verdict">
+            <strong>⚠️ Conséquence pour le gouverneur de vitesse</strong> — en supprimant le plafond
+            électronique imposé par le relais, ce choix supprime aussi le seul filet — même imparfait —
+            qui limitait involontairement l'emballement. Voir <a href="moteur-tests-securite.html">Tests
+            &amp; sécurité — pas de gouverneur naturel</a> : le frein de Prony (ou une charge contrôlée
+            équivalente) devient plus que jamais la seule limite de vitesse du système, à engager dès la
+            première mise sous tension.
+        </div>
+    </div>
+
+    <div class="card-mz">
+        <h2>Composants</h2>
+        <ul>
+            <li><strong>MCU</strong> : Arduino Nano ESP32 (recommandé pour la télémétrie sans fil —
+            suivi RPM/tension en direct) ou Nano classique.</li>
+            <li><strong>1 MOSFET IRLZ44N par bobine</strong> (logic level, canal N), monté en interrupteur
+            bas-côté, commandé directement par une broche ESP32 (avec résistance de grille).</li>
+            <li><strong>1 capteur Hall linéaire SS49E</strong> (boîtier TO-92S) par module, pour la
+            calibration au bip-mètre — voir plus bas.</li>
+            <li><strong>1 buzzer piézo</strong> partagé, piloté par l'ESP32 pendant la phase de
+            calibration.</li>
+            <li><strong>1 diode de blocage 1N4007</strong> + <strong>1 diode Zener de puissance 24V
+            (1N5359B)</strong> par bobine — réseau de récupération d'énergie (snubber), voir plus bas.</li>
+            <li><strong>Canal rotor</strong> : le rotor porte lui aussi des bobines de compensation (voir
+            <a href="moteur-assemblage.html">Assemblage — le rotor</a>), qui tournent avec la plaque bois
+            fixée à la roue. Le courant d'annulation leur parvient par <strong>transformateur tournant
+            à couplage inductif</strong> — retenu ici pour l'usure nulle sur la durée (voir <a
+            href="moteur-tests-securite.html#endurance">Tests — endurance</a>), à travers l'axe creux du
+            truck. Le rotor étant périodique et symétrique au stator, toutes ses bobines se
+            masquent/révèlent en même temps : un seul canal MOSFET (côté fixe, avant la liaison
+            tournante) suffit pour l'ensemble.</li>
+        </ul>
+        <div class="diagram-wrap">
+            <svg viewBox="0 0 420 210" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:420px">
+                <text x="210" y="16" text-anchor="middle" font-size="9.5" fill="#67d9ff" font-weight="700">Un canal (MOSFET + snubber)</text>
+
+                <text x="10" y="30" font-size="9" fill="#FFD700">+Vcc / batterie</text>
+                <path d="M25,35 L25,50 L340,50" stroke="#FFD700" stroke-width="1.2" fill="none"/>
+
+                <rect x="170" y="50" width="60" height="30" rx="4" fill="rgba(255,215,0,.12)" stroke="#FFD700" stroke-width="1.1"/>
+                <text x="200" y="69" text-anchor="middle" font-size="8.5" fill="#FFD700">bobine</text>
+                <path d="M200,80 L200,150" stroke="rgba(255,255,255,.5)" stroke-width="1.2"/>
+
+                <rect x="10" y="130" width="56" height="26" rx="4" fill="rgba(155,48,255,.14)" stroke="#9B30FF" stroke-width="1.1"/>
+                <text x="38" y="147" text-anchor="middle" font-size="8.5" fill="#c78bff">ESP32 pin</text>
+                <path d="M66,143 L120,143 L120,150" stroke="rgba(255,255,255,.5)" stroke-width="1.2" fill="none"/>
+                <text x="90" y="138" text-anchor="middle" font-size="7" fill="rgba(255,255,255,.5)">R grille</text>
+
+                <rect x="170" y="150" width="60" height="34" rx="4" fill="rgba(0,204,255,.14)" stroke="#00ccff" stroke-width="1.1"/>
+                <text x="200" y="171" text-anchor="middle" font-size="8" fill="#67d9ff">IRLZ44N</text>
+                <path d="M120,150 L170,167" stroke="rgba(255,255,255,.4)" stroke-width="1"/>
+                <path d="M200,184 L200,196" stroke="rgba(255,255,255,.5)" stroke-width="1.2"/>
+                <text x="200" y="207" text-anchor="middle" font-size="9" fill="rgba(255,255,255,.5)">GND</text>
+
+                <path d="M230,58 L330,58 L330,110" stroke="#ff9e7a" stroke-width="1.2" fill="none"/>
+                <polygon points="325,100 335,100 330,108" fill="#ff9e7a"/>
+                <text x="337" y="70" font-size="7" fill="#ff9e7a">1N4007</text>
+                <text x="337" y="79" font-size="6.5" fill="rgba(255,255,255,.5)">(blocage)</text>
+
+                <rect x="316" y="110" width="28" height="26" rx="3" fill="rgba(255,102,68,.12)" stroke="#ff6644" stroke-width="1.1"/>
+                <text x="330" y="127" text-anchor="middle" font-size="7" fill="#ff9e7a">24V</text>
+                <text x="337" y="150" font-size="6.5" fill="rgba(255,255,255,.5)">Zener 1N5359B</text>
+                <path d="M330,136 L330,150 L200,150" stroke="#ff9e7a" stroke-width="1.1" fill="none" stroke-dasharray="2 2"/>
+
+                <text x="330" y="165" font-size="6.5" fill="#5fffb0">énergie de coupure</text>
+                <text x="330" y="174" font-size="6.5" fill="#5fffb0">recyclée vers +Vcc</text>
+            </svg>
+            <div class="diagram-cap">ESP32 → MOSFET IRLZ44N → bobine ; à l'ouverture, la diode 1N4007 + Zener 24V renvoient le pic inductif vers +Vcc au lieu de le dissiper</div>
+        </div>
+    </div>
+
+    <div class="card-mz">
+        <h2>La calibration par bip-mètre Hall</h2>
+        <p>Pour régler précisément le courant d'annulation calibré à <strong>0,11 A</strong> (pertes
+        Joule minimes de ≈0,07 W par bobine), le prototype réel n'utilise pas de gaussmètre coûteux
+        mais un capteur linéaire <strong>SS49E</strong> relié à l'ESP32. Ce « bip-mètre » acoustique
+        traduit l'intensité du champ magnétique en son : lorsque le courant d'annulation est parfait, le
+        champ net tombe à zéro (<strong>B = 0 T</strong>) et le buzzer indique le point de consigne
+        (silence, ou changement de tonalité selon le montage).</p>
+        <div class="diagram-wrap">
+            <svg viewBox="0 0 360 150" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:340px">
+                <rect x="20" y="55" width="40" height="40" rx="4" fill="rgba(255,215,0,.16)" stroke="#FFD700" stroke-width="1.2"/>
+                <text x="40" y="79" text-anchor="middle" font-size="9" fill="#FFD700" font-weight="700">module</text>
+                <path d="M60,75 L95,75" stroke="#5fffb0" stroke-width="1.4"/>
+                <rect x="95" y="65" width="14" height="20" rx="2" fill="rgba(0,201,104,.18)" stroke="#00C968" stroke-width="1.2"/>
+                <text x="102" y="55" text-anchor="middle" font-size="7.5" fill="#5fffb0">SS49E</text>
+                <rect x="130" y="45" width="70" height="60" rx="6" fill="rgba(0,0,0,.35)" stroke="rgba(255,255,255,.3)" stroke-width="1.2"/>
+                <text x="165" y="72" text-anchor="middle" font-size="9" fill="#5fffb0">ESP32</text>
+                <text x="165" y="86" text-anchor="middle" font-size="7" fill="rgba(255,255,255,.5)">ADC</text>
+                <text x="165" y="38" text-anchor="middle" font-size="7.5" fill="rgba(255,255,255,.5)">bip-mètre</text>
+                <path d="M200,75 L230,75" stroke="rgba(255,255,255,.4)" stroke-width="1.2"/>
+                <text x="270" y="70" text-anchor="middle" font-size="16">🔊</text>
+                <text x="270" y="90" text-anchor="middle" font-size="7.5" fill="rgba(255,255,255,.5)">buzzer piézo</text>
+                <text x="180" y="120" text-anchor="middle" font-size="8" fill="rgba(255,255,255,.5)">ajoute des spires jusqu'à B=0 (silence)</text>
+            </svg>
+            <div class="diagram-cap">SS49E + ESP32 + buzzer : un gaussmètre acoustique fait maison</div>
+        </div>
+    </div>
+
+    <div class="card-mz">
+        <h2>Le réseau de coupure et de récupération (snubber Zener)</h2>
+        <p>Pour éviter l'effet de freinage magnétique (effet Lenz) lors de la coupure du circuit — tout
+        en protégeant le MOSFET des surtensions de rupture (back-EMF) — le circuit intègre une diode de
+        blocage 1N4007 et une diode Zener de 24V. Ce réseau assure une coupure nette (style moteur à
+        impulsions) et recycle l'énergie inductive d'ouverture directement vers l'alimentation/batterie,
+        au lieu de la dissiper en chaleur — sans aucune usure d'arc électrique, contrairement à un
+        contact mécanique.</p>
         <div class="verdict ok">
-            <strong>✓ Boucle réellement ouverte</strong> — un MOSFET seul ne suffit pas : la diode de
-            roue libre classique posée en parallèle sur la bobine referme une boucle locale
-            (bobine + diode) indépendante de l'état de l'interrupteur. C'est exactement ce que le
-            principe interdit (annuler le champ ne suffit pas, il faut rompre la boucle électrique —
-            pas mettre en pause, débrancher). Solution retenue ici : un <strong>relais</strong> en
-            série avec chaque bobine de compensation, contact sec, sans aucun composant en parallèle
-            sur ce contact. La protection anti-surtension (diode de roue libre) est déplacée sur la
-            bobine du relais lui-même — un circuit électriquement séparé, sans lien avec la bobine de
-            l'aimant.
-        </div>
-        <ul>
-            <li><strong>MCU</strong> : Arduino Nano (ou STM32 Blue Pill pour plus de vitesse/canaux).</li>
-            <li><strong>1 capteur Hall par position stator</strong> : A3144 (sortie digitale, collecteur
-            ouvert) + résistance de tirage 10 kΩ vers +5V.</li>
-            <li><strong>1 relais par bobine stator</strong> : contact sec en série avec la bobine de
-            compensation — coupure galvanique franche, pas un simple interrupteur électronique.
-            Préférer un relais reed (≈1 ms de commutation) à un relais électromécanique classique
-            (5-15 ms) : la vitesse de commutation borne directement le régime maximal atteignable.</li>
-            <li><strong>1 transistor driver par relais</strong> (2N2222 ou équivalent) : le pin MCU ne
-            fournit pas assez de courant pour alimenter directement la bobine du relais.</li>
-            <li><strong>1 diode de roue libre par relais</strong> (1N4148) — en parallèle sur la
-            <u>bobine du relais</u> uniquement, pour protéger le transistor driver. Ne jamais la
-            remettre en parallèle sur la bobine de compensation : ce serait recréer la boucle fermée
-            qu'on cherche justement à éliminer.</li>
-            <li><strong>1 résistance d'ajustement par bobine</strong> (en série avec la bobine, côté
-            aimant) : fixe I<sub>ann</sub> précisément malgré la résistance propre variable de chaque
-            bobine.</li>
-            <li><strong>Canal rotor</strong> : oscillateur HF (≈100 kHz, 555 ou timer MCU dédié) →
-            MOSFET (ici sans contrainte de boucle ouverte : il pilote seulement le primaire du
-            transfo, pas la bobine de compensation) → primaire du transformateur tournant → secondaire
-            rotor → pont redresseur (4×1N4148) → condensateur de lissage → <strong>relais</strong> en
-            série (même exigence de coupure franche que côté stator) → bobines rotor (câblées en
-            parallèle, une résistance d'ajustement par bobine).</li>
-        </ul>
-        <div class="diagram-wrap">
-            <svg viewBox="0 0 420 230" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:420px">
-                <defs>
-                    <marker id="arCh" markerWidth="7" markerHeight="7" refX="5" refY="3.5" orient="auto">
-                        <polygon points="0 0,7 3.5,0 7" fill="rgba(255,255,255,.5)"/>
-                    </marker>
-                </defs>
-                <text x="210" y="16" text-anchor="middle" font-size="9.5" fill="#67d9ff" font-weight="700">Un canal (stator ou rotor)</text>
-
-                <rect x="10" y="55" width="56" height="26" rx="4" fill="rgba(155,48,255,.14)" stroke="#9B30FF" stroke-width="1.1"/>
-                <text x="38" y="72" text-anchor="middle" font-size="8.5" fill="#c78bff">MCU pin</text>
-                <path d="M66,68 L90,68" stroke="rgba(255,255,255,.5)" stroke-width="1.2"/>
-
-                <rect x="90" y="50" width="46" height="36" rx="4" fill="rgba(0,204,255,.14)" stroke="#00ccff" stroke-width="1.1"/>
-                <text x="113" y="71" text-anchor="middle" font-size="7.5" fill="#67d9ff">driver</text>
-                <path d="M136,68 L160,68" stroke="rgba(255,255,255,.5)" stroke-width="1.2"/>
-
-                <rect x="160" y="50" width="52" height="36" rx="4" fill="rgba(155,110,0,.2)" stroke="#b89a00" stroke-width="1.1"/>
-                <text x="186" y="65" text-anchor="middle" font-size="7" fill="#FFD700">bobine</text>
-                <text x="186" y="75" text-anchor="middle" font-size="7" fill="#FFD700">relais</text>
-
-                <path d="M212,45 Q232,35 232,68" stroke="#ff9e7a" stroke-width="1.1" fill="none"/>
-                <path d="M227,63 L232,68 L237,63" stroke="#ff9e7a" stroke-width="1.1" fill="none"/>
-                <text x="244" y="38" font-size="7" fill="#ff9e7a">diode roue libre</text>
-                <text x="244" y="48" font-size="6.5" fill="rgba(255,255,255,.5)">(protège le driver —</text>
-                <text x="244" y="57" font-size="6.5" fill="rgba(255,255,255,.5)">circuit isolé, sans lien</text>
-                <text x="244" y="66" font-size="6.5" fill="rgba(255,255,255,.5)">avec la bobine aimant)</text>
-
-                <path d="M113,86 L113,105" stroke="rgba(255,255,255,.5)" stroke-width="1.2"/>
-                <text x="113" y="117" text-anchor="middle" font-size="9" fill="rgba(255,255,255,.5)">GND</text>
-
-                <text x="10" y="30" font-size="9" fill="#FFD700">+Vcc</text>
-                <path d="M25,35 L25,185 L260,185" stroke="#FFD700" stroke-width="1.2" fill="none"/>
-
-                <rect x="260" y="167" width="54" height="36" rx="4" fill="rgba(0,201,104,.14)" stroke="#00C968" stroke-width="1.2"/>
-                <text x="287" y="182" text-anchor="middle" font-size="7" fill="#5fffb0">relais</text>
-                <text x="287" y="193" text-anchor="middle" font-size="7" fill="#5fffb0">contact sec</text>
-                <path d="M314,185 L338,185" stroke="rgba(255,255,255,.5)" stroke-width="1.2"/>
-
-                <rect x="338" y="167" width="56" height="36" rx="4" fill="rgba(255,215,0,.12)" stroke="#FFD700" stroke-width="1.1"/>
-                <text x="366" y="189" text-anchor="middle" font-size="8" fill="#FFD700">bobine</text>
-                <path d="M394,185 L408,185 L408,100 L232,100" stroke="rgba(255,255,255,.5)" stroke-width="1.2" fill="none"/>
-
-                <rect x="330" y="112" width="60" height="24" rx="4" fill="rgba(255,102,68,.1)" stroke="#ff6644" stroke-width="1.1"/>
-                <text x="360" y="128" text-anchor="middle" font-size="7" fill="#ff9e7a">R ajust. I<tspan baseline-shift="sub" font-size="6">ann</tspan></text>
-                <path d="M360,112 L360,100" stroke="rgba(255,255,255,.5)" stroke-width="1.2"/>
-
-                <text x="290" y="152" text-anchor="middle" font-size="6.5" fill="#5fffb0">aucun composant en parallèle ici</text>
-
-                <rect x="10" y="140" width="70" height="26" rx="4" fill="rgba(0,201,104,.12)" stroke="#00C968" stroke-width="1.1"/>
-                <text x="45" y="157" text-anchor="middle" font-size="8.5" fill="#5fffb0">Hall A3144</text>
-                <path d="M80,153 L110,153" stroke="rgba(255,255,255,.5)" stroke-width="1.2" marker-end="url(#arCh)"/>
-                <text x="95" y="147" text-anchor="middle" font-size="7" fill="rgba(255,255,255,.5)">pull-up 10k</text>
-                <rect x="110" y="140" width="60" height="26" rx="4" fill="rgba(155,48,255,.14)" stroke="#9B30FF" stroke-width="1.1"/>
-                <text x="140" y="157" text-anchor="middle" font-size="8" fill="#c78bff">MCU in</text>
-            </svg>
-            <div class="diagram-cap">Un canal stator/rotor : Hall → MCU → driver → bobine du relais (diode, circuit isolé) → contact sec du relais → bobine de compensation (aucun composant en parallèle — coupure franche)</div>
+            <strong>Compromis assumé vis-à-vis de la « boucle ouverte »</strong> — une version antérieure
+            de cette page exigeait une coupure galvanique totale (relais, sans aucun composant en
+            parallèle) pour respecter à la lettre le principe d'annulation de <a
+            href="pdf/InfiniX-Pour-les-Nuls-Final.pdf" target="_blank">InfiniX — Pour les Nuls</a>
+            (Chapitre 4). Le snubber Zener n'est pas une coupure galvanique parfaite : au moment de
+            l'ouverture, la diode 1N4007 + Zener offrent un chemin de conduction dès que la tension
+            dépasse le seuil de 24V, le temps d'évacuer l'énergie stockée dans la bobine vers +Vcc. C'est
+            un chemin transitoire et dirigé vers l'alimentation — pas une boucle locale bobine/diode qui
+            entretiendrait indéfiniment un courant induit — mais ce n'est pas non plus un circuit ouvert
+            à 100 % pendant toute la phase révélée. Retenu ici parce que la commutation mécanique
+            (relais) est incompatible avec 100-200 Hz en continu ; à documenter au banc (voir <a
+            href="moteur-tests-securite.html">Tests</a>) pour mesurer l'écart réel avec la version
+            relais.
         </div>
     </div>
 
     <div class="card-mz">
-        <h2>Électronique — logique de commande</h2>
-        <ul>
-            <li>Chaque position stator est indépendante : sa propre Hall, son propre relais, son propre
-            pin MCU.</li>
-            <li>Le rotor est périodique et symétrique au stator (même motif, même nombre de pôles) :
-            toutes les bobines rotor se masquent/révèlent en même temps — un seul canal (une seule
-            excitation HF) suffit pour tout le rotor, bobines rotor câblées en parallèle sur le
-            secondaire redressé, coupées par un seul relais commun.</li>
-        </ul>
-        <div class="diagram-wrap">
-            <svg viewBox="0 0 360 170" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:340px">
-                <text x="180" y="16" text-anchor="middle" font-size="9.5" fill="#67d9ff" font-weight="700">8 canaux stator, 1 canal rotor</text>
-                <g>
-                    <rect x="20" y="30" width="40" height="16" rx="3" fill="rgba(0,204,255,.14)" stroke="#00ccff" stroke-width="1"/>
-                    <rect x="20" y="50" width="40" height="16" rx="3" fill="rgba(0,204,255,.14)" stroke="#00ccff" stroke-width="1"/>
-                    <rect x="20" y="70" width="40" height="16" rx="3" fill="rgba(0,204,255,.14)" stroke="#00ccff" stroke-width="1"/>
-                    <text x="40" y="42" text-anchor="middle" font-size="7.5" fill="#67d9ff">S1</text>
-                    <text x="40" y="62" text-anchor="middle" font-size="7.5" fill="#67d9ff">S2</text>
-                    <text x="40" y="82" text-anchor="middle" font-size="7.5" fill="#67d9ff">…S8</text>
-                    <path d="M60,38 L90,38" stroke="rgba(255,255,255,.4)" stroke-width="1"/>
-                    <path d="M60,58 L90,58" stroke="rgba(255,255,255,.4)" stroke-width="1"/>
-                    <path d="M60,78 L90,78" stroke="rgba(255,255,255,.4)" stroke-width="1"/>
-                </g>
-                <rect x="90" y="20" width="70" height="80" rx="6" fill="rgba(155,48,255,.14)" stroke="#9B30FF" stroke-width="1.2"/>
-                <text x="125" y="65" text-anchor="middle" font-size="8.5" fill="#c78bff">Contrôleur</text>
-                <path d="M160,60 L200,60" stroke="rgba(255,255,255,.4)" stroke-width="1.2"/>
-                <rect x="200" y="40" width="60" height="40" rx="4" fill="rgba(255,102,68,.12)" stroke="#ff6644" stroke-width="1.2"/>
-                <text x="230" y="63" text-anchor="middle" font-size="8" fill="#ff9e7a">1 canal HF</text>
-                <path d="M260,60 L290,60" stroke="rgba(255,255,255,.4)" stroke-width="1.2"/>
-                <g>
-                    <rect x="290" y="30" width="40" height="14" rx="3" fill="rgba(255,215,0,.14)" stroke="#FFD700" stroke-width="1"/>
-                    <rect x="290" y="48" width="40" height="14" rx="3" fill="rgba(255,215,0,.14)" stroke="#FFD700" stroke-width="1"/>
-                    <rect x="290" y="66" width="40" height="14" rx="3" fill="rgba(255,215,0,.14)" stroke="#FFD700" stroke-width="1"/>
-                    <text x="310" y="40" text-anchor="middle" font-size="7" fill="#FFD700">R1</text>
-                    <text x="310" y="58" text-anchor="middle" font-size="7" fill="#FFD700">R2</text>
-                    <text x="310" y="76" text-anchor="middle" font-size="7" fill="#FFD700">…R8</text>
-                </g>
-                <text x="180" y="145" text-anchor="middle" font-size="8" fill="rgba(255,255,255,.5)">rotor : même signal pour toutes les bobines (parallèle)</text>
-            </svg>
-            <div class="diagram-cap">Stator : un canal indépendant par position. Rotor : un seul canal, réparti sur toutes les bobines</div>
+        <h2>Logique de commande</h2>
+        <p>Même principe que la version relais : bobine ON tant que le SS49E détecte l'approche (lu en
+        analogique, comparé à un seuil), OFF au passage — seul le composant de coupure change, et c'est
+        le même capteur que celui du bip-mètre : pas de composant supplémentaire à ajouter, juste un
+        second usage du SS49E déjà en place sur chaque module. Chaque position
+        stator est indépendante (sa propre Hall, son propre MOSFET) ; le rotor, périodique et
+        symétrique, partage un seul canal — actif dès qu'une approche est détectée côté stator,
+        puisque les deux plaques sont en phase. Le rotor est alimenté par <strong>transformateur
+        tournant à couplage inductif</strong> (retenu ici pour l'usure nulle sur la durée — voir
+        <a href="moteur-tests-securite.html#endurance">Tests — endurance</a>), pas par bagues collectrices.</p>
+        <div class="verdict">
+            <strong>⚠️ Une seconde couche de sécurité, logicielle</strong> — en plus du générateur de
+            récupération et de sa résistance de délestage (charge physique, voir <a
+            href="moteur-tests-securite.html">Tests &amp; sécurité</a>), l'ESP32 mesure le régime en
+            direct à partir des fronts Hall (RPM = 7,5 / T, T la période mesurée en secondes — même
+            formule que le calcul de latence du relais) et bascule tout le stator en <strong>roue
+            libre logicielle</strong> dès qu'un seuil est dépassé : toutes les bobines restent ON en
+            permanence, plus aucune impulsion de répulsion n'est produite, le système décélère sous
+            l'effet du frottement et du générateur. C'est une coupure douce (on ne rompt jamais un
+            courant établi), pas un arrêt brutal — et un état par défaut sûr au démarrage : tant que le
+            firmware n'a pas confirmé une mesure RPM valide, les bobines démarrent masquées (ON), jamais
+            révélées. Cette sécurité logicielle vient <em>en plus</em> du délestage physique, jamais à
+            sa place : un bug ou un reset peut toujours la contourner, pas une résistance qui chauffe.
         </div>
-    </div>
+        <pre style="background:rgba(0,0,0,.4);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:1rem;overflow-x:auto;font-size:.82rem;color:#c8f0ff"><code>const uint8_t HALL_PINS[8]   = {A0,A1,A2,A3,A4,A5,A6,A7};  // SS49E, sortie analogique
+const uint8_t MOSFET_PINS[8] = {10,11,12,13,14,15,16,17};  // IRLZ44N, un par bobine stator
+const uint8_t ROTOR_PIN      = 18;  // MOSFET commun, avant transfo tournant
 
-    <div class="card-mz">
-        <h2>Code de contrôle</h2>
-        <p>8 positions stator, timing : bobine ON tant que le Hall détecte l'approche, OFF au passage.
-        Le canal rotor suit la même logique, partagée par une seule broche.</p>
-        <pre style="background:rgba(0,0,0,.4);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:1rem;overflow-x:auto;font-size:.82rem;color:#c8f0ff"><code>const uint8_t HALL_PINS[8]   = {2,3,4,5,6,7,8,9};
-const uint8_t STATOR_PINS[8] = {22,23,24,25,26,27,28,29};
-const uint8_t ROTOR_PIN      = 30;  // active/désactive l'oscillateur HF du transfo tournant
+const int   APPROACH_THRESHOLD = 550;  // à caler par module pendant la calibration (bip-mètre)
+const float RPM_MAX_SAFE = 600.0;      // seuil de bascule en roue libre
+const float RPM_RESUME   = 500.0;      // hystérésis : reprise sous ce seuil
+
+unsigned long lastEdgeMicros = 0;
+float currentRPM = 0;
+bool freewheelMode = true;          // état par défaut au démarrage : masqué, sûr
 
 void setup() {
   for (uint8_t i = 0; i &lt; 8; i++) {
-    pinMode(HALL_PINS[i], INPUT_PULLUP);
-    pinMode(STATOR_PINS[i], OUTPUT);
+    pinMode(MOSFET_PINS[i], OUTPUT);
+    digitalWrite(MOSFET_PINS[i], HIGH);  // masqué avant la première mesure valide
   }
   pinMode(ROTOR_PIN, OUTPUT);
+  digitalWrite(ROTOR_PIN, HIGH);
 }
 
 void loop() {
+  // RPM à partir de la période entre deux fronts sur le canal 0
+  static bool wasApproach0 = false;
+  bool approach0 = (analogRead(HALL_PINS[0]) &gt; APPROACH_THRESHOLD);
+  if (approach0 &amp;&amp; !wasApproach0) {
+    unsigned long now = micros();
+    unsigned long period = now - lastEdgeMicros;
+    lastEdgeMicros = now;
+    if (period &gt; 0) currentRPM = 7.5e6 / period;   // RPM = 7,5 / T(s)
+  }
+  wasApproach0 = approach0;
+
+  if (!freewheelMode &amp;&amp; currentRPM &gt; RPM_MAX_SAFE) freewheelMode = true;
+  if ( freewheelMode &amp;&amp; currentRPM &lt; RPM_RESUME)   freewheelMode = false;
+
   bool anyApproach = false;
   for (uint8_t i = 0; i &lt; 8; i++) {
-    bool approach = (digitalRead(HALL_PINS[i]) == LOW);  // Hall actif = aimant proche
-    digitalWrite(STATOR_PINS[i], approach ? HIGH : LOW); // bobine ON pendant l'approche
+    bool approach = (analogRead(HALL_PINS[i]) &gt; APPROACH_THRESHOLD);
+    bool coilOn = freewheelMode ? true : approach;    // roue libre = toujours masqué
+    digitalWrite(MOSFET_PINS[i], coilOn ? HIGH : LOW);
     anyApproach |= approach;
   }
-  digitalWrite(ROTOR_PIN, anyApproach ? HIGH : LOW);     // rotor synchronisé, canal partagé
+  digitalWrite(ROTOR_PIN, freewheelMode ? HIGH : (anyApproach ? HIGH : LOW));
 }</code></pre>
-        <p>À haut régime, remplace la boucle de lecture par des interruptions (STM32, ou lib
-        PinChangeInterrupt sur AVR) pour ne pas rater un passage.</p>
-        <div class="verdict">
-            <strong>⚠️ Latence du relais</strong> — un relais reed commute en ≈1 ms (5-15 ms pour un
-            relais électromécanique classique), bien plus lent qu'un MOSFET (µs). Cette latence borne
-            le régime maximal : au-delà d'un certain nombre de tr/min, le relais n'a pas le temps de
-            s'ouvrir avant que le rotor n'ait déjà dépassé le point de coupure visé. Mesure la latence
-            réelle du relais choisi à l'oscilloscope, et si besoin avance la commande de coupure d'un
-            angle proportionnel à la vitesse (calculée à partir de la période entre deux fronts Hall
-            successifs) plutôt que de couper exactement au passage détecté.
-        </div>
-        <table class="tbl-phys">
-            <thead><tr><th>Type de relais</th><th>Latence τ</th><th>RPM max (marge ×5)</th><th>RPM max (marge ×10, prudent)</th></tr></thead>
-            <tbody>
-                <tr><td>Relais reed</td><td class="num">≈ 1 ms</td><td class="num">≈ 1500 tr/min</td><td class="num">≈ 750 tr/min</td></tr>
-                <tr><td>Relais électromécanique classique</td><td class="num">≈ 10 ms</td><td class="num">≈ 150 tr/min</td><td class="num">≈ 75 tr/min</td></tr>
-            </tbody>
-        </table>
-        <p style="font-size:.8rem;color:rgba(255,255,255,.5)">Calcul : 8 aimants rotor × 8 positions
-        stator → chaque canal stator voit passer un aimant tous les 45°, soit une fenêtre
-        T = 7,5 / RPM (en secondes) entre deux passages consécutifs. RPM<sub>max</sub> = 7,5 / (τ ×
-        marge). Valeurs théoriques à confirmer à l'oscilloscope avec le relais réellement choisi —
-        elles bornent la vitesse électronique, pas la vitesse d'emballement mécanique (voir
-        <a href="moteur-tests-securite.html">Tests</a>).</p>
+        <p style="font-size:.85rem;color:rgba(255,255,255,.5)">Code illustratif : en pratique, préfère
+        des interruptions matérielles (ou un échantillonnage rapide en timer) à la lecture en boucle
+        pour ne rater aucun front à haut régime, et un filtrage (moyenne glissante) sur la mesure RPM
+        pour éviter les bascules intempestives dues au bruit d'une seule lecture. APPROACH_THRESHOLD et
+        RPM_MAX_SAFE/RPM_RESUME sont à caler expérimentalement, sous la marge de synchronisation
+        calculée plus haut.</p>
+    </div>
+
+    <div class="card-mz">
+        <h2>Où placer les sondes Hall</h2>
+        <p>Les 8 SS49E vont <strong>uniquement sur la plaque stator</strong> (fixe) — le rotor n'en a
+        pas besoin, ses bobines suivent le canal partagé. Chaque sonde doit détecter l'aimant du
+        <strong>rotor</strong> qui approche, pas l'aimant du stator juste à côté (qui, lui, est déjà
+        masqué/révélé par sa propre bobine et ne doit pas fausser la lecture).</p>
+        <ul>
+            <li>Même rayon que les modules, une sonde par module (8 au total).</li>
+            <li><strong>Décalée</strong> de quelques mm par rapport au centre du module, dans le sens de
+            rotation — pas pile dessus. Elle capte ainsi l'aimant rotor qui arrive, en avance sur
+            l'alignement parfait, sans être noyée par le champ du module stator immédiatement voisin.
+            C'est le même principe de placement que les sondes Hall d'un moteur BLDC classique, entre
+            les pôles plutôt que dessus.</li>
+            <li>Face de détection <strong>affleurante</strong> à la surface de la plaque stator qui fait
+            face au rotor — dans un petit perçage à côté du module, pas dans l'entrefer lui-même (elle
+            serait écrasée à l'assemblage).</li>
+            <li>Fils routés par l'arrière de la plaque stator vers l'ESP32 — pas de liaison tournante
+            nécessaire de ce côté, la plaque est fixe.</li>
+        </ul>
         <div class="diagram-wrap">
-            <svg viewBox="0 0 260 260" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:220px">
+            <svg viewBox="0 0 320 200" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:300px">
                 <defs>
-                    <marker id="fArr" markerWidth="6" markerHeight="6" refX="4" refY="3" orient="auto">
-                        <polygon points="0 0,6 3,0 6" fill="rgba(255,255,255,.5)"/>
+                    <marker id="hArr" markerWidth="7" markerHeight="7" refX="5" refY="3.5" orient="auto">
+                        <polygon points="0 0,7 3.5,0 7" fill="rgba(255,255,255,.5)"/>
                     </marker>
                 </defs>
-                <rect x="70" y="10" width="120" height="30" rx="6" fill="rgba(155,48,255,.14)" stroke="#9B30FF" stroke-width="1.2"/>
-                <text x="130" y="30" text-anchor="middle" font-size="9" fill="#c78bff">pour i = 1..8</text>
-                <path d="M130,40 L130,58" stroke="rgba(255,255,255,.4)" stroke-width="1.2" marker-end="url(#fArr)"/>
-
-                <rect x="60" y="60" width="140" height="30" rx="6" fill="rgba(0,201,104,.12)" stroke="#00C968" stroke-width="1.2"/>
-                <text x="130" y="80" text-anchor="middle" font-size="8.5" fill="#5fffb0">lire Hall[i]</text>
-                <path d="M130,90 L130,108" stroke="rgba(255,255,255,.4)" stroke-width="1.2" marker-end="url(#fArr)"/>
-
-                <polygon points="130,110 190,140 130,170 70,140" fill="rgba(255,215,0,.1)" stroke="#FFD700" stroke-width="1.2"/>
-                <text x="130" y="144" text-anchor="middle" font-size="8" fill="#FFD700">approche ?</text>
-
-                <text x="205" y="135" font-size="8" fill="#5fffb0">oui</text>
-                <path d="M190,140 L215,140 L215,180" stroke="rgba(255,255,255,.4)" stroke-width="1.1" fill="none"/>
-                <text x="55" y="135" text-anchor="end" font-size="8" fill="#ff9e7a">non</text>
-                <path d="M70,140 L45,140 L45,180" stroke="rgba(255,255,255,.4)" stroke-width="1.1" fill="none"/>
-
-                <rect x="170" y="180" width="90" height="26" rx="5" fill="rgba(0,204,255,.12)" stroke="#00ccff" stroke-width="1.1"/>
-                <text x="215" y="197" text-anchor="middle" font-size="7.5" fill="#67d9ff">bobine[i]=ON</text>
-                <rect x="0" y="180" width="90" height="26" rx="5" fill="rgba(255,102,68,.1)" stroke="#ff6644" stroke-width="1.1"/>
-                <text x="45" y="197" text-anchor="middle" font-size="7.5" fill="#ff9e7a">bobine[i]=OFF</text>
-
-                <path d="M130,170 L130,235" stroke="rgba(255,255,255,.25)" stroke-width="1" stroke-dasharray="2 3"/>
-                <text x="130" y="250" text-anchor="middle" font-size="8" fill="rgba(255,255,255,.5)">puis : rotor = OU(approches)</text>
+                <text x="160" y="16" text-anchor="middle" font-size="9.5" fill="#67d9ff" font-weight="700">Un module stator, vu de face (côté rotor)</text>
+                <circle cx="130" cy="110" r="34" fill="rgba(255,215,0,.18)" stroke="#FFD700" stroke-width="1.3"/>
+                <text x="130" y="114" text-anchor="middle" font-size="9" fill="#FFD700" font-weight="700">module</text>
+                <text x="130" y="126" text-anchor="middle" font-size="7" fill="rgba(255,255,255,.5)">aimant+bobine</text>
+                <rect x="188" y="96" width="26" height="18" rx="3" fill="rgba(0,201,104,.18)" stroke="#00C968" stroke-width="1.2"/>
+                <text x="201" y="108" text-anchor="middle" font-size="7" fill="#5fffb0">SS49E</text>
+                <path d="M164,110 L188,105" stroke="rgba(255,255,255,.4)" stroke-width="1"/>
+                <path d="M240,60 L270,150" stroke="rgba(255,255,255,.3)" stroke-width="1.3" marker-end="url(#hArr)"/>
+                <text x="270" y="55" text-anchor="middle" font-size="8" fill="rgba(255,255,255,.5)">sens de rotation</text>
+                <text x="130" y="175" text-anchor="middle" font-size="7.5" fill="#5fffb0">sonde décalée en avance sur le module</text>
+                <text x="130" y="188" text-anchor="middle" font-size="7.5" fill="rgba(255,255,255,.5)">— capte le rotor qui arrive, pas le stator voisin</text>
             </svg>
-            <div class="diagram-cap">Logique de boucle : une décision par position, rotor = OU logique de toutes les approches</div>
+            <div class="diagram-cap">Décalage volontaire de la sonde, dans le sens de rotation, pour anticiper le passage de l'aimant rotor</div>
+        </div>
+    </div>
+
+    <div class="card-mz">
+        <h2>Liaison tournante : construire le transformateur (ou des bagues, pour un premier essai)</h2>
+        <p>Les deux options amènent le courant d'annulation aux bobines rotor à travers la liaison
+        tournante, au niveau du moyeu de la roue — entre le truck (fixe) et le moyeu de la roue
+        (tournant), là où tout est déjà coaxial.</p>
+        <div class="verdict ok">
+            <strong>✓ Pour valider le concept d'abord : des bagues</strong> — bien plus simple à monter
+            et déboguer qu'un transformateur tournant, quitte à accepter l'usure des balais. Deux
+            anneaux de cuivre fin (bande de cuivre autocollante, ou tronçon de tube cuivre) collés et
+            isolés autour du moyeu tournant, chacun relié à un fil de la bobine rotor. Deux petits
+            contacts à ressort (ou morceaux de charbon récupérés sur un vieux moteur à balais) montés
+            sur un support fixe (le truck ou la plaque stator), qui frottent en permanence sur les
+            anneaux. Une fois le principe validé au banc (chapitre <a
+            href="moteur-tests-securite.html">Tests</a>), tu peux passer au transformateur tournant pour
+            la version durable.</div>
+        <p><strong>Transformateur tournant</strong> — deux demi-noyaux ferrite en forme d'anneau,
+        coaxiaux avec l'axe, face à face avec un petit entrefer (0,5-1 mm, sans lien avec l'entrefer
+        moteur de 2 mm) :</p>
+        <ul>
+            <li>Demi-noyau primaire, bobiné, fixé côté truck/stator — relié à l'oscillateur HF (≈100kHz)
+            piloté par MOSFET.</li>
+            <li>Demi-noyau secondaire, bobiné, collé dans le moyeu de la roue (côté rotor) — relié au
+            pont redresseur + condensateur de lissage qui alimentent les bobines rotor.</li>
+            <li><strong>Astuce de récupération</strong> : les bobines d'une paire de coques de chargeur
+            à induction Qi (émetteur + récepteur) sont déjà bobinées, accordées et dimensionnées pour ce
+            genre de transfert par petit entrefer — les récupérer et les monter coaxialement est souvent
+            plus simple que de rebobiner un noyau ferrite depuis zéro.</li>
+            <li>L'alignement angulaire n'a pas d'importance (les deux demi-noyaux sont des anneaux) :
+            seul l'entrefer axial compte, et il ne varie pas avec la rotation.</li>
+        </ul>
+        <div class="diagram-wrap">
+            <svg viewBox="0 0 380 180" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:360px">
+                <text x="190" y="16" text-anchor="middle" font-size="9.5" fill="#67d9ff" font-weight="700">Liaison tournante, au moyeu</text>
+                <line x1="10" y1="90" x2="370" y2="90" stroke="rgba(230,220,198,.5)" stroke-width="5"/>
+                <text x="40" y="70" font-size="8" fill="rgba(255,255,255,.5)">axe / truck (fixe)</text>
+
+                <rect x="140" y="60" width="30" height="60" rx="3" fill="rgba(0,204,255,.14)" stroke="#00ccff" stroke-width="1.2"/>
+                <text x="155" y="93" text-anchor="middle" font-size="7" fill="#67d9ff">primaire</text>
+                <text x="155" y="103" text-anchor="middle" font-size="6.5" fill="rgba(255,255,255,.5)">(fixe)</text>
+
+                <rect x="176" y="20" width="8" height="140" fill="rgba(255,102,68,.2)" stroke="#ff6644" stroke-width="1"/>
+                <text x="180" y="14" text-anchor="middle" font-size="7" fill="#ff9e7a">0,5-1mm</text>
+
+                <rect x="190" y="60" width="30" height="60" rx="3" fill="rgba(255,215,0,.14)" stroke="#FFD700" stroke-width="1.2"/>
+                <text x="205" y="93" text-anchor="middle" font-size="7" fill="#FFD700">secondaire</text>
+                <text x="205" y="103" text-anchor="middle" font-size="6.5" fill="rgba(255,255,255,.5)">(moyeu roue)</text>
+
+                <path d="M220,80 L250,50" stroke="rgba(255,255,255,.4)" stroke-width="1" fill="none"/>
+                <text x="270" y="46" text-anchor="middle" font-size="7" fill="rgba(255,255,255,.5)">tourne avec la roue</text>
+            </svg>
+            <div class="diagram-cap">Deux demi-noyaux coaxiaux au moyeu : l'un fixe (truck), l'autre solidaire de la roue</div>
         </div>
     </div>
 
     <div class="row mt-4">
-        <div class="col-md-6 mb-2"><a href="moteur-assemblage.html" class="btn-cta mv">← Chapitre précédent : Rotor &amp; stator</a></div>
+        <div class="col-md-6 mb-2"><a href="moteur-assemblage.html" class="btn-cta mv">← Chapitre précédent : Assemblage &amp; moyeu de skate</a></div>
         <div class="col-md-6 mb-2"><a href="moteur-tests-securite.html" class="btn-cta">Chapitre suivant : Tests &amp; sécurité →</a></div>
     </div>
 

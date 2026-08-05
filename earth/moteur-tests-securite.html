@@ -53,6 +53,8 @@
         .verdict{border-left:3px solid var(--red);padding:.8rem 1.1rem;background:rgba(255,102,68,.08);
                  border-radius:0 8px 8px 0;margin:1rem 0}
         .verdict strong{color:#ff9e7a}
+        .verdict.ok{border-left-color:var(--em);background:rgba(0,201,104,.08)}
+        .verdict.ok strong{color:#5fffb0}
     </style>
 </head>
 <body>
@@ -79,10 +81,13 @@
             jamais être freiné. Le <strong>frein de Prony</strong> (ou toute charge électrique/mécanique
             contrôlée) n'est donc pas qu'un instrument de mesure du rendement : c'est le seul
             gouverneur de vitesse du système. Il doit être engagé dès la première mise sous tension,
-            jamais en roue libre même quelques secondes. L'autre limite du système — la fenêtre de
-            synchronisation du relais (voir <a href="moteur-electronique.html">Électronique</a>) — ne
-            donne pas un arrêt propre en cas de dépassement, mais un désynchronisme imprévisible : ce
-            n'est pas un filet de sécurité.
+            jamais en roue libre même quelques secondes. Le prototype réel pilote la coupure par MOSFET
+            (voir <a href="moteur-electronique.html">Électronique</a>) plutôt que par relais : la
+            commutation en microsecondes ne plafonne plus rien électroniquement, ce qui a
+            <strong>supprimé le seul filet — même imparfait — qui limitait involontairement
+            l'emballement</strong> dans les versions précédentes. Sans ce filet, rien d'autre que le
+            frein de Prony ne s'oppose à l'accélération : ce n'est plus une option prudente, c'est la
+            seule limite qui reste.
         </div>
         <ul>
             <li>Charge connue (frein de Prony ou équivalent) engagée avant toute mise sous tension —
@@ -123,13 +128,114 @@
         </div>
     </div>
 
+    <div class="card-mz" id="endurance">
+        <h2>⏱️ Endurance &amp; recalibration</h2>
+        <p>Rien n'interdit a priori plusieurs heures de fonctionnement continu à cette échelle de
+        puissance (≈12 W) : les roulements viennent d'une roue de skate largement surdimensionnée pour
+        cet usage, et le <a href="moteur-electronique.html">transformateur tournant</a> retenu côté
+        rotor n'a aucune usure de contact, contrairement à des bagues collectrices. Le facteur qui se
+        dégrade réellement avec l'usage cumulé, ce sont les <strong>aimants</strong> : chaque cycle les
+        expose à un champ opposé calibré (voir <a href="moteur-calculs.html">Calculs — démagnétisation
+        cumulative</a>), et rien ne garantit que cet effet reste négligeable sur des dizaines d'heures.</p>
+        <ul>
+            <li>Mesure le champ de chaque module au bip-mètre <strong>avant</strong> et
+            <strong>après</strong> chaque session prolongée — pas seulement à la fabrication.</li>
+            <li>Si le champ mesuré au courant de référence (0,11 A) ne tombe plus exactement à zéro, ne
+            force pas le courant à l'ancienne valeur : recalibre (reprendre la procédure du chapitre
+            <a href="moteur-modules.html">Modules &amp; noyau imbriqué</a>) — un aimant plus faible a
+            besoin de moins de champ opposé pour être annulé.</li>
+            <li>Tiens une fiche par session : date, durée, RPM max atteint, champ mesuré avant/après.
+            C'est la seule façon de savoir si la dérive existe, et à quel rythme.</li>
+        </ul>
+    </div>
+
+    <div class="card-mz">
+        <h2>🔌 Un frein utile : récupérer plutôt que dissiper</h2>
+        <p>Le frein de Prony transforme l'énergie cinétique en chaleur, perdue. Alternative simple :
+        coupler un petit générateur (poulie + courroie depuis la roue de skate) à une charge électrique
+        — même principe de freinage (couple ∝ vitesse, via le back-EMF bien réel et bienvenu de ce
+        générateur classique), mais l'énergie devient utilisable.</p>
+        <ul>
+            <li>💡 LED (éclairage, indicateur visuel de fonctionnement).</li>
+            <li>📱 Chargeur téléphone (convertisseur buck 5V/USB).</li>
+            <li>🔋 Alimentation de l'électronique de contrôle elle-même (ESP32) — le moteur devient
+            partiellement autonome en énergie.</li>
+            <li>📊 Supercondensateur pour un data-logger embarqué (RPM, tension, température).</li>
+            <li>🔊 Buzzer d'alerte en cas de survitesse — un signal utile, en plus du freinage.</li>
+            <li>🌍 Vision G1FabLab : petite station de recharge nomade, démonstrateur coopératif pour
+            foires et marchés — « pousse la roue, recharge ton téléphone ».</li>
+        </ul>
+        <div class="verdict">
+            <strong>⚠️ La charge utile seule n'est pas un gouverneur fiable</strong> — un chargeur USB
+            ou une batterie ne tirent du courant qu'en fonction de leurs propres besoins : batterie
+            pleine ou téléphone déjà chargé, quasiment aucun courant ne circule, donc quasiment aucun
+            frein — précisément au moment où la vitesse pourrait être la plus haute. Le couple de
+            freinage doit rester garanti par une charge qui <strong>ne peut pas se couper elle-même</strong>.
+        </div>
+        <p>La solution est bien connue du monde de l'éolien et de l'hydrolien hors-réseau : un
+        <strong>contrôleur de délestage</strong> (dump load / diversion load controller). Les charges
+        utiles (LED, USB, batterie) sont prioritaires ; tout surplus de puissance qu'elles n'absorbent
+        pas est automatiquement dérivé vers une résistance de délestage fixe — jamais désactivée,
+        jamais pleine, toujours prête à freiner.</p>
+        <div class="diagram-wrap">
+            <svg viewBox="0 0 420 200" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:400px">
+                <defs>
+                    <marker id="dArr" markerWidth="6" markerHeight="6" refX="4" refY="3" orient="auto">
+                        <polygon points="0 0,6 3,0 6" fill="rgba(255,255,255,.5)"/>
+                    </marker>
+                </defs>
+                <rect x="10" y="70" width="80" height="40" rx="5" fill="rgba(0,201,104,.12)" stroke="#00C968" stroke-width="1.1"/>
+                <text x="50" y="87" text-anchor="middle" font-size="8" fill="#5fffb0">Générateur</text>
+                <text x="50" y="98" text-anchor="middle" font-size="7" fill="rgba(255,255,255,.5)">poulie+courroie</text>
+                <path d="M90,90 L120,90" stroke="rgba(255,255,255,.4)" stroke-width="1.2" marker-end="url(#dArr)"/>
+
+                <rect x="120" y="72" width="60" height="36" rx="5" fill="rgba(0,204,255,.12)" stroke="#00ccff" stroke-width="1.1"/>
+                <text x="150" y="94" text-anchor="middle" font-size="7.5" fill="#67d9ff">redresseur</text>
+                <path d="M180,90 L210,90" stroke="rgba(255,255,255,.4)" stroke-width="1.2" marker-end="url(#dArr)"/>
+
+                <rect x="210" y="60" width="90" height="60" rx="5" fill="rgba(155,48,255,.14)" stroke="#9B30FF" stroke-width="1.2"/>
+                <text x="255" y="86" text-anchor="middle" font-size="8" fill="#c78bff">Contrôleur</text>
+                <text x="255" y="98" text-anchor="middle" font-size="8" fill="#c78bff">délestage</text>
+
+                <path d="M300,75 L330,30" stroke="rgba(255,255,255,.4)" stroke-width="1.1" marker-end="url(#dArr)"/>
+                <text x="320" y="55" font-size="6.5" fill="#5fffb0">priorité</text>
+                <rect x="330" y="15" width="80" height="26" rx="4" fill="rgba(255,215,0,.12)" stroke="#FFD700" stroke-width="1.1"/>
+                <text x="370" y="32" text-anchor="middle" font-size="8" fill="#FFD700">💡 LED / 📱 USB</text>
+
+                <path d="M300,90 L330,90" stroke="rgba(255,255,255,.4)" stroke-width="1.1" marker-end="url(#dArr)"/>
+                <text x="315" y="86" font-size="6.5" fill="#5fffb0">priorité</text>
+                <rect x="330" y="77" width="80" height="26" rx="4" fill="rgba(255,215,0,.12)" stroke="#FFD700" stroke-width="1.1"/>
+                <text x="370" y="94" text-anchor="middle" font-size="8" fill="#FFD700">🔋 batterie</text>
+
+                <path d="M300,105 L330,150" stroke="#ff9e7a" stroke-width="1.3" marker-end="url(#dArr)"/>
+                <text x="322" y="130" font-size="6.5" fill="#ff9e7a">surplus,</text>
+                <text x="318" y="139" font-size="6.5" fill="#ff9e7a">jamais coupé</text>
+                <rect x="330" y="139" width="80" height="34" rx="4" fill="rgba(255,102,68,.14)" stroke="#ff6644" stroke-width="1.3"/>
+                <text x="370" y="153" text-anchor="middle" font-size="8" fill="#ff9e7a">🔥 résistance</text>
+                <text x="370" y="164" text-anchor="middle" font-size="7" fill="rgba(255,255,255,.5)">toujours active</text>
+            </svg>
+            <div class="diagram-cap">Contrôleur de délestage : priorité aux charges utiles, le surplus part systématiquement dans la résistance de sécurité</div>
+        </div>
+        <div class="verdict ok">
+            <strong>✓ Dimensionnement</strong> — à ≈12 W mécaniques estimés à 750 tr/min (voir <a
+            href="moteur-calculs.html">Calculs</a>), une petite dynamo de vélo (3-6 W) ou un moteur DC
+            de récupération suffit largement. Dimensionne la résistance de délestage pour absorber en
+            continu la puissance <em>maximale</em> du générateur, pas seulement le surplus occasionnel —
+            c'est elle qui garantit le freinage, pas les charges utiles.
+        </div>
+    </div>
+
     <div class="card-mz">
         <h2>⚠️ Sécurité</h2>
         <ul>
             <li>Aimants à haute vitesse : carter de protection, lunettes, montée en régime progressive.</li>
-            <li>Résine époxy et poudre de fer : ventilation, gants, masque.</li>
-            <li>Bagues/balais ou transformateur tournant : isolation vérifiée avant mise sous tension,
-            fusible côté alimentation.</li>
+            <li>Vernis isolant et colle époxy (isolation des rondelles, fixation des modules) :
+            ventilation, gants.</li>
+            <li>MOSFET et snubber Zener (voir <a href="moteur-electronique.html">Électronique</a>) :
+            isolation vérifiée avant mise sous tension, fusible côté alimentation/batterie.</li>
+            <li>Roulements d'origine de la roue de skate : contrôle du jeu axial avant chaque essai —
+            un entrefer qui dérive est le premier signe d'un roulement fatigué. Vérifie aussi le
+            serrage des boulons de calibration de l'entrefer avant chaque montée en régime.</li>
         </ul>
         <div class="diagram-wrap">
             <svg viewBox="0 0 300 140" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:280px">

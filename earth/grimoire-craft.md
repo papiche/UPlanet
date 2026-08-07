@@ -80,6 +80,7 @@ Permet de dresser la première membrane rigide autoportante du dôme sur le ball
 |---|---|
 | Tissu — bandes de vieux draps en coton | 1,5 m² |
 | Silicate de sodium liquide | 0,4 L |
+| Eau distillée ou de pluie (dilution 1:2) | 0,8 L |
 | Sable de quartz extra-fin (0-0,3 mm) | 0,4 L |
 | Vinaigre blanc d'alcool (8-10 %) | 0,3 L |
 
@@ -129,7 +130,7 @@ Permet de dresser la première membrane rigide autoportante du dôme sur le ball
 
 ---
 
-### Craft 3 — Brique de Starkrit (sable-amidon)
+### Craft 3 — Brique de Starkrit-Sable (sable-amidon)
 
 Permet de fabriquer des briques réfractaires ou des cloisons sans cuisson au four à haute température.
 
@@ -170,14 +171,14 @@ Permet de fabriquer des briques réfractaires ou des cloisons sans cuisson au fo
 <div class="diagram-cap">Schéma du procédé — Craft 3 : gélatinisation de l'amidon puis séchage</div>
 </div>
 
-**Résultat :** 1 brique de Starkrit — très solide, résistante à la chaleur sèche.
+**Résultat :** 1 brique de Starkrit-Sable — très solide, résistante à la chaleur sèche.
 
 > 🧪 **Chimie de la réaction :** pas de réaction chimique à proprement parler ici, mais une transformation physico-chimique de l'amidon. La chaleur et l'eau font gonfler puis éclater les grains d'amidon (gélatinisation) : l'amylose et l'amylopectine se libèrent et forment un réseau collant (l'empois). En séchant, ce réseau se réorganise et se rigidifie (rétrogradation), emprisonnant les grains de sable dans une matrice solide. Le sel abaisse légèrement la température de gélatinisation et limite le développement microbien pendant les 72 h de séchage.
 
-> ⚠️ **Point faible — sensibilité à l'humidité :** l'amidon est réversible à l'eau : une brique de Starkrit exposée à une pluie battante redevient de la boue de sable en quelques heures. Réservez ces briques à un **usage strictement intérieur**, ou protégez-les impérativement avec la « Peau de Pierre » (Craft 6) ou un enduit à la chaux adjuvanté avant toute exposition extérieure.
+> ⚠️ **Point faible — sensibilité à l'humidité :** l'amidon est réversible à l'eau : une brique de Starkrit-Sable exposée à une pluie battante redevient de la boue de sable en quelques heures. Réservez ces briques à un **usage strictement intérieur**, ou protégez-les impérativement avec la « Peau de Pierre » (Craft 6) ou un enduit à la chaux adjuvanté avant toute exposition extérieure.
 
-> 🏭 **Comparatif industriel :** la brique de construction standard est cuite au four à 900–1200 °C (terre cuite) ou autoclavée sous vapeur et pression (béton cellulaire AAC) — des procédés très consommateurs d'énergie fossile (la cuisson des briques compte parmi les postes d'émission de CO₂ notables de l'industrie du bâtiment). Le Starkrit atteint une solidité comparable par simple séchage à l'air, sans four, au prix d'une résistance à l'humidité et à la compression bien inférieure.
-> 💶 **Coût comparé :** moins de 0,30 € d'intrants par brique de Starkrit (sable quasi gratuit + fécule + sel) — comparable, voire moins cher, qu'une brique de terre cuite standard (0,30 à 0,60 €/pièce), mais sans le coût énergétique de cuisson ni le transport lourd depuis la briqueterie.
+> 🏭 **Comparatif industriel :** la brique de construction standard est cuite au four à 900–1200 °C (terre cuite) ou autoclavée sous vapeur et pression (béton cellulaire AAC) — des procédés très consommateurs d'énergie fossile (la cuisson des briques compte parmi les postes d'émission de CO₂ notables de l'industrie du bâtiment). Le Starkrit-Sable atteint une solidité comparable par simple séchage à l'air, sans four, au prix d'une résistance à l'humidité et à la compression bien inférieure.
+> 💶 **Coût comparé :** moins de 0,30 € d'intrants par brique de Starkrit-Sable (sable quasi gratuit + fécule + sel) — comparable, voire moins cher, qu'une brique de terre cuite standard (0,30 à 0,60 €/pièce), mais sans le coût énergétique de cuisson ni le transport lourd depuis la briqueterie.
 
 > 🛒 **Se procurer les ingrédients :**
 > - **Sable fin de rivière ou de silice** — négoce de matériaux/carrière locale (sable à maçonner tamisé), ou magasin de bricolage (sac de sable fin de jardin).
@@ -597,7 +598,7 @@ Ce n'est pas une recette de fabrication mais un protocole de contrôle qualité,
 |---|---|---|---|
 | 1 — Silicate liquide | 30 min (mijotage) | — (liquide, utilisable dès refroidi) | Se conserve plusieurs mois en flacon fermé |
 | 2 — Coque drap-silicate | 5 min (pétrification) | 24-48h (séchage complet) | Ne pas percer avant 24h |
-| 3 — Starkrit | Démoulage immédiat | 72h (séchage à l'air) | ⚠️ Protéger de l'humidité (Craft 6) |
+| 3 — Starkrit-Sable | Démoulage immédiat | 72h (séchage à l'air) | ⚠️ Protéger de l'humidité (Craft 6) |
 | 4 — Bois composite | 20-30 min (presse à 160°C) | 48h (stabilisation avant charge) | Laisser refroidir à plat, éviter le gauchissement |
 | 5 — Colle de caséine | 45 min (temps de travail) | 24-48h (résistance mécanique) | Carbonatation complète en plusieurs semaines |
 | 6 — Peau de pierre | Immédiat (pétrification au contact) | 24-48h + rinçage | ⚠️ Efflorescences possibles, rincer après 24h |

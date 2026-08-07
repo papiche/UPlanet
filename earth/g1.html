@@ -246,6 +246,7 @@ body {
     font-family: 'Share Tech Mono', monospace;
     display: none;
 }
+.ipfs-badge.visible { display: inline-block; }
 
 /* ══ STATION CARDS (instrument panels) ══════════════════════════════════ */
 .stations-grid { display: flex; flex-direction: column; gap: 8px; }
@@ -280,7 +281,7 @@ body {
 }
 .station-card.primary-station { border-color: var(--brass); }
 .station-card.from-ipfs { border-left: 3px solid var(--ipfs-col); }
-.station-card.no-slots  { opacity: 0.55; }
+.station-card.offline  { opacity: 0.55; }
 
 .card-header { display: flex; align-items: flex-start; gap: 9px; margin-bottom: 8px; }
 
@@ -648,7 +649,6 @@ body {
             <li><b>SWARM</b> : Découverte p2p via registre IPFS (12345.json)</li>
             <li><b>NOSTR</b> : Identité souveraine & communication des relais</li>
             <li><b>uMAP</b> : Topologie géolocalisée des Astroports</li>
-            <li><b>PLAYER</b> : Accès distribué aux médias (Audio/Vidéo)</li>
         </ul>
     </div>
 
@@ -771,7 +771,9 @@ function parseStation(m, forcedActive) {
         diskGb   : parseFloat(stor['available_gb']||cap['available_space_gb']) || 0,
         ncardPrice   : parseInt(m['NCARD']) || 0,
         zcardPrice   : parseInt(m['ZCARD']) || 0,
-        paf          : parseInt(m['PAF']||eco['captain_remuneration']) || 0,
+        // captain_remuneration = PAF × 2 (cf. ZEN.ECONOMY.sh) — diviser le fallback
+        // pour ne pas afficher 2×PAF sous le simple libellé "PAF" (règle 3×PAF).
+        paf          : parseInt(m['PAF']) || Math.round((parseInt(eco['captain_remuneration'])||0)/2) || 0,
         multipassCount: parseInt(eco['multipass_count']) || 0,
         zencardCount  : parseInt(eco['zencard_count'])   || 0,
         bilan    : m['BILAN'] || '0',
@@ -810,58 +812,6 @@ function setStatus(state, msg) {
     document.getElementById('status-dot').className =
         'gauge-light ' + (states[state] || 'run');
     document.getElementById('status-text').textContent = msg.toUpperCase();
-}
-
-async function envoyerJukebox() {
-    const input = document.getElementById('yt-search');
-    const status = document.getElementById('jukebox-status');
-    const query = input.value.trim();
-
-    if (!query) return;
-
-    if (!window.nostr) {
-        status.style.color = "var(--orange)";
-        status.textContent = "⚠ MULTIPASS introuvable (Extension Nostr requise).";
-        return;
-    }
-
-    try {
-        status.style.color = "var(--ipfs-col)";
-        status.textContent = "Signature MULTIPASS en cours...";
-
-        // Déduction intelligente du Relai
-        let relayUrl = (typeof window.getRelayUrl === 'function' ? window.getRelayUrl() : null) || "wss://relay.copylaradio.com";
-
-        // L'ordre pour l'IA
-        const event = {
-            kind: 1,
-            created_at: Math.floor(Date.now() / 1000),
-            tags: [["expiration", String(Math.floor(Date.now() / 1000) + 3600)], // S'efface dans 1h (NIP-40)
-                ["t", "jukebox"]
-            ],
-            content: `#BRO #youtube #mp3 ${query}`
-        };
-
-        const signedEvent = await window.nostr.signEvent(event);
-        const ws = new WebSocket(relayUrl);
-
-        ws.onopen = () => {
-            ws.send(JSON.stringify(["EVENT", signedEvent]));
-            status.style.color = "var(--green)";
-            status.textContent = "✔ Transmis à BRO ! Copie uDRIVE + Antenne en cours...";
-            input.value = '';
-            setTimeout(() => ws.close(), 2000);
-        };
-        
-        ws.onerror = () => {
-            status.style.color = "var(--red)";
-            status.textContent = "❌ Impossible de joindre le relai : " + relayUrl;
-        };
-
-    } catch (e) {
-        status.style.color = "var(--red)";
-        status.textContent = "Erreur : " + e.message;
-    }
 }
 
 
@@ -968,14 +918,14 @@ function renderStations(primaryUspot) {
     countEl.textContent = String(stations.length);
     if (ipfsCount>0) {
         ipfsPill.textContent = '+'+ipfsCount+' IPFS';
-        ipfsPill.style.display = '';
+        ipfsPill.classList.add('visible');
     }
 
     grid.innerHTML='';
     stations.forEach(function(s) {
         const isPrimary  = s.uspot===primaryUspot;
         const isSelected = s.uspot===selectedUspot;
-        const hasSlots   = s.active;
+        const isActive   = s.active;
         const bilanInt   = parseInt(s.bilan)||0;
         const bilanStr   = (bilanInt>0?'+':'')+s.bilan;
 
@@ -1019,7 +969,7 @@ function renderStations(primaryUspot) {
             isSelected  ? 'selected'        : '',
             isPrimary   ? 'primary-station'  : '',
             s.fromIpfs  ? 'from-ipfs'        : '',
-            !hasSlots   ? 'no-slots'          : '',
+            !isActive   ? 'offline'          : '',
         ].filter(Boolean).join(' ');
         card.dataset.uspot = s.uspot;
 
@@ -1036,7 +986,7 @@ function renderStations(primaryUspot) {
                     ${s.fromIpfs?'<span class="badge badge-ipfs">⬡ IPFS</span>'   :''}
                     ${s.hwTier?`<span class="badge badge-hw" title="Power Score: ${s.powerScore}${s.gpuVram>0?' · '+s.gpuVram+'Go VRAM GPU':''}">
                         ${s.hwTier==='brain'?(s.gpuVram>0?'🔥🎮':'🔥'):s.hwTier==='standard'?'⚡':'🌿'}</span>`:''}
-                    <span class="badge ${hasSlots?'badge-ok':'badge-none'}">
+                    <span class="badge ${isActive?'badge-ok':'badge-none'}">
                         ${s.multipassCount} MP</span>
                     ${bilanInt!==0
                         ?`<span class="${bilanInt>=0?'bilan-pos':'bilan-neg'}">∆${bilanStr}Ẑ</span>`
@@ -1047,7 +997,7 @@ function renderStations(primaryUspot) {
             <div class="card-compact-row">
                 <span>MP&nbsp;<b>${s.multipassCount}</b></span>
                 <span>ZC&nbsp;<b>${s.zencardCount}</b></span>
-                <span>PAF&nbsp;<b>${s.paf||'?'}Ẑ</b></span>
+                <span title="Participation Aux Frais — rémunération de base de l'Armateur">PAF&nbsp;<b>${s.paf||'?'}Ẑ</b></span>
                 ${s.ncardPrice?`<span title="MULTIPASS/sem">NC&nbsp;${s.ncardPrice}Ẑ</span>`:''}
                 ${s.zcardPrice?`<span title="ZenCard/sem">ZC&nbsp;${s.zcardPrice}Ẑ</span>`:''}
                 ${s.diskGb?`<span>💾&nbsp;${Math.round(s.diskGb)}Go</span>`:''}
@@ -1105,7 +1055,7 @@ function renderStations(primaryUspot) {
             <div class="card-footer">
                 <span class="dist-display">${distStr}</span>
                 <button class="lever-btn ${isSelected?'engaged':''}"
-                    ${!hasSlots?'disabled title="STATION HORS LIGNE"':''}
+                    ${!isActive?'disabled title="STATION HORS LIGNE"':''}
                     onclick="selectAndRedirect('${esc(s.uspot)}')">
                     ${isSelected?'▶ SÉLECTIONNÉ':'▶ CHOISIR'}
                 </button>
@@ -1114,7 +1064,7 @@ function renderStations(primaryUspot) {
 
         card.addEventListener('click', function(e) {
             if (e.target.tagName==='BUTTON'||e.target.tagName==='A') return;
-            if (hasSlots&&s.active) selectStation(s.uspot, false);
+            if (isActive) selectStation(s.uspot, false);
         });
         grid.appendChild(card);
     });
@@ -1312,7 +1262,7 @@ function populateNomenclature(uspotUrl) {
 // Accessible via: https://ipfs.DOMAIN/12345/  (nginx location /12345/ → port 12345)
 function loadIpfsInsideView(gateway) {
     const url = gateway.replace(/\/$/,'')+'/12345/';
-    setStatus('ipfs', `LECTURE REGISTRES IPFS → ${gateway.replace(/https?:\/\//,'')}...`);
+    setStatus('ipfs', `LECTURE DES REGISTRES IPFS → ${gateway.replace(/https?:\/\//,'')}...`);
 
     fetch(url)
         .then(r=>{ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })

@@ -789,7 +789,7 @@
             + '<hr class="uph-msep">'
             + '<div style="text-align:center;padding:10px 0;font-size:11px;color:rgba(255,255,255,.45);line-height:1.6">'
             + 'Pas encore d\'identité ?<br>'
-            + '<a href="atomic.html" style="color:rgba(0,255,204,.7);font-weight:600;text-decoration:none">⚛ Créer via ATOM4LOVE →</a><br>'
+            + '<a href="g1.html" style="color:rgba(0,255,204,.7);font-weight:600;text-decoration:none">⚛ Créer votre MULTIPASS →</a><br>'
             + '<span style="font-size:9px;color:rgba(255,255,255,.2)">puis importez votre nsec dans nos2x</span>'
             + '</div>'
             + '</div>';

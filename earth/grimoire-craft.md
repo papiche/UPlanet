@@ -3,7 +3,7 @@
 
 *« Transformer des déchets de scierie, du sable ordinaire et des ressources d'épicerie en composants structurels d'une autonomie indiscutable. »*
 
-Ce grimoire rassemble les recettes de fabrication maison (« craft ») des matériaux utilisés dans le [Guide Technique du Dôme Rocket 4.1](vaisseau.html#guide-rocket) et dans l'ensemble des chantiers G1FabLab. Chaque recette a fait l'objet de vérifications en laboratoire ou de retours d'expérience éprouvés par la communauté des constructeurs alternatifs.
+Ce grimoire rassemble les recettes de fabrication maison (« craft ») des matériaux utilisés dans le [Guide Technique du Vaisseau](vaisseau.html) et dans l'ensemble des chantiers G1FabLab. Chaque recette a fait l'objet de vérifications en laboratoire ou de retours d'expérience éprouvés par la communauté des constructeurs alternatifs.
 
 ---
 

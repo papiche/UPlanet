@@ -132,6 +132,30 @@
   .reader-hint { color: #c8a83c; font-family: monospace; font-size: .7rem; opacity: .7; }
   .reader-btn { background: transparent !important; border: 1px solid #c8a83c !important; color: #c8a83c !important; }
 
+  /* --- Alternative numérique (pas d'imprimante) --- */
+  .digital-alt-btn { background: transparent; color: #c8a83c; border: 1px dashed #c8a83c; border-radius: 5px;
+    padding: 8px 14px; cursor: pointer; font-size: .85rem; margin-top: 8px; }
+  .digital-alt-btn:hover { background: rgba(200,168,60,0.12); }
+  .digital-form { display: none; text-align: left; margin: 10px auto 0; max-width: 480px; padding: 14px 16px;
+    background: rgba(245,240,232,.05); border: 1px solid #2d5a1b; border-radius: 8px; }
+  .digital-form.open { display: block; }
+  .digital-form label { display: block; font-size: .8rem; color: #f5f0e8; margin: 10px 0 4px; }
+  .digital-form input[type=text], .digital-form input[type=date] {
+    width: 100%; padding: 7px 9px; border-radius: 4px; border: 1px solid #555; background: #f5f0e8;
+    color: #1a1209; font-size: .85rem; }
+  .digital-form .df-radio-group label, .digital-form .df-check-row {
+    display: flex; align-items: flex-start; gap: 8px; font-size: .8rem; margin: 6px 0; color: #f5f0e8; font-weight: normal; }
+  .digital-form .df-check-row { margin-top: 12px; }
+  .digital-form .df-radio-group input, .digital-form .df-check-row input { margin-top: 3px; flex: none; }
+  .df-honeypot { position: absolute; left: -9999px; opacity: 0; height: 0; width: 0; }
+  .df-submit { background: #2d5a1b; color: #f5f0e8; border: none; padding: 10px 18px; border-radius: 5px;
+    cursor: pointer; font-weight: bold; margin-top: 12px; font-size: .9rem; }
+  .df-submit:hover { background: #3a7523; }
+  .df-submit:disabled { opacity: .5; cursor: default; }
+  .df-result { margin-top: 10px; font-size: .82rem; padding: 8px 10px; border-radius: 5px; display: none; }
+  .df-result.ok { display: block; background: rgba(45,90,27,.3); color: #9fe07e; }
+  .df-result.err { display: block; background: rgba(200,60,60,.25); color: #ff9c9c; }
+
   @media print {
     .no-print { display: none !important; }
     html, body { width: 100% !important; height: 100% !important; margin: 0 !important; padding: 0 !important; background: #fff !important; }
@@ -165,6 +189,46 @@
     <br><br>
     <button style="background:transparent;color:#aaa;border:1px solid #aaa;cursor:pointer;padding:5px;border-radius:3px;" onclick="resetWizard()">↺ Recommencer</button>
   </div>
+
+  <div style="text-align:center" class="no-print">
+    <button type="button" class="digital-alt-btn" id="digital-toggle-btn" onclick="toggleDigitalForm()">📧 Pas d'imprimante ? Remplir en ligne</button>
+  </div>
+  <form id="digital-form" class="digital-form no-print" onsubmit="return submitDigitalForm(event)">
+    <p style="font-size:.78rem;color:#aaa;margin-bottom:0">Alternative au papier : ces informations sont envoyées par email au capitaine de la station, qui vous recontactera pour finaliser le Contrat de Prêt à l'Usage.</p>
+
+    <label>Nom / Prénom (ou Raison Sociale)</label>
+    <input type="text" data-field="Nom / Prénom (ou Raison Sociale)" required>
+
+    <label>Adresse de l'installation</label>
+    <input type="text" data-field="Adresse de l'installation" required>
+
+    <label>Email / Clé Publique Ğ1</label>
+    <input type="text" data-field="Email / Clé Publique Ğ1" required>
+
+    <label>Représentant du Collectif (si connu)</label>
+    <input type="text" data-field="Représentant (Emprunteur)">
+
+    <label>Origine de la machine hébergeant le Nœud</label>
+    <div class="df-radio-group">
+      <label><input type="radio" name="origine-machine" data-field="Origine de la machine" value="Le Prêteur apporte et recycle une machine qu'il possède déjà." required> Le Prêteur apporte et recycle une machine qu'il possède déjà.</label>
+      <label><input type="radio" name="origine-machine" data-field="Origine de la machine" value="Le Collectif fournit la machine entière commandée au préalable."> Le Collectif fournit la machine entière commandée au préalable.</label>
+    </div>
+
+    <label>Fait à</label>
+    <input type="text" data-field="Fait à">
+    <label>Le</label>
+    <input type="date" data-field="Le">
+
+    <div class="df-check-row">
+      <input type="checkbox" name="consent" required>
+      <span>Lu et approuvé — j'accepte les conditions du Contrat de Prêt à l'Usage (COMMODAT) ci-dessus.</span>
+    </div>
+
+    <input type="text" name="website" class="df-honeypot" tabindex="-1" autocomplete="off">
+
+    <button type="submit" class="df-submit">📧 Envoyer au capitaine</button>
+    <div id="df-result" class="df-result"></div>
+  </form>
 </div>
 
 <div class="document-container">
@@ -510,6 +574,67 @@
       alert('Impression terminée ! Bravo Armateur ! 🌿');
     }
   });
+
+  /* ── Alternative numérique : envoi au capitaine via Mailjet ── */
+  function getUSPOTBase() {
+    try {
+      var u = new URL(window.location.href);
+      if (u.hostname.indexOf('ipfs.') === 0) u.hostname = u.hostname.replace('ipfs.', 'u.');
+      if (u.port && u.port !== '443' && u.port !== '80') u.port = '54321';
+      u.pathname = '/'; u.search = ''; u.hash = '';
+      return u.toString().replace(/\/$/, '');
+    } catch (e) { return 'http://localhost:54321'; }
+  }
+
+  function toggleDigitalForm() {
+    var f = document.getElementById('digital-form');
+    var open = f.classList.toggle('open');
+    var btn = document.getElementById('digital-toggle-btn');
+    btn.textContent = open ? '✕ Fermer le formulaire' : '📧 Pas d\'imprimante ? Remplir en ligne';
+  }
+
+  async function submitDigitalForm(ev) {
+    ev.preventDefault();
+    var form = ev.target;
+    var btn = form.querySelector('.df-submit');
+    var result = document.getElementById('df-result');
+    var fields = {};
+    form.querySelectorAll('[data-field]').forEach(function (el) {
+      var label = el.dataset.field;
+      if (el.type === 'radio') { if (el.checked) fields[label] = el.value; }
+      else if (el.value && el.value.trim()) { fields[label] = el.value.trim(); }
+    });
+    var consent = form.querySelector('[name=consent]');
+    if (consent && !consent.checked) {
+      result.className = 'df-result err';
+      result.textContent = "⚠️ Merci de cocher la case de consentement.";
+      return false;
+    }
+    btn.disabled = true; btn.textContent = 'Envoi…';
+    result.className = 'df-result';
+    try {
+      var fd = new FormData();
+      fd.append('zine', 'armateur');
+      fd.append('fields', JSON.stringify(fields));
+      fd.append('website', form.querySelector('.df-honeypot').value);
+      var resp = await fetch(getUSPOTBase() + '/api/zine-submit', { method: 'POST', body: fd });
+      var data = await resp.json();
+      if (data.ok) {
+        result.className = 'df-result ok';
+        result.textContent = '✅ Formulaire envoyé au capitaine — vous serez recontacté·e pour finaliser le contrat.';
+        form.reset();
+      } else {
+        result.className = 'df-result err';
+        result.textContent = '⚠️ ' + (data.error || "Échec de l'envoi. Merci d'imprimer le zine.");
+      }
+    } catch (e) {
+      result.className = 'df-result err';
+      result.textContent = "⚠️ Connexion impossible. Merci d'imprimer le zine.";
+    } finally {
+      btn.disabled = false; btn.textContent = '📧 Envoyer au capitaine';
+    }
+    return false;
+  }
 </script>
 
 <script src="miz-nav.js"></script>

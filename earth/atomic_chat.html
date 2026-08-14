@@ -678,12 +678,46 @@ async function _fetchLoveHex() {
     if (!_loveHex) return;
     // Photo du profil LOVE (distincte du Kind 0 MULTIPASS) — /atom4love/profile
     // existe déjà pour la page atomic_dream.html, réutilisé ici pour l'avatar.
+    // bio/age/interests/photo ne sont renvoyés par le serveur que si le profil
+    // est public, ou si on prouve qu'on en est le titulaire (NIP-42) — voir
+    // _fetchOwnA4lAuthEvent(). On n'essaie la signature QUE si le premier appel
+    // (sans preuve) montre un profil vide, pour éviter une popup de signature
+    // inutile quand le profil est déjà public.
     try {
         var apiUrl2 = typeof window.getAPIUrl === 'function' ? window.getAPIUrl() : _upassportUrl();
-        var resp2 = await fetch(apiUrl2 + '/atom4love/profile?email=' + encodeURIComponent(window._uphEmail));
+        var profUrl = apiUrl2 + '/atom4love/profile?email=' + encodeURIComponent(window._uphEmail);
+        var resp2 = await fetch(profUrl);
         var json2 = await resp2.json();
+        if (json2 && json2.profile && !json2.profile.photo && !json2.profile.public) {
+            var authEv = await _fetchOwnA4lAuthEvent(window._uphEmail, apiUrl2);
+            if (authEv) {
+                resp2 = await fetch(profUrl + '&auth_event=' + encodeURIComponent(authEv));
+                json2 = await resp2.json();
+            }
+        }
         if (json2 && json2.profile && json2.profile.photo) _lovePhotoUrl = json2.profile.photo;
     } catch(_) {}
+}
+
+// ── Preuve NIP-42 "je suis le titulaire de cet email" — pour lire son propre
+// profil LOVE privé via GET /atom4love/profile (voir UPassport identity.py).
+// Même mécanisme que l'étape 1-2 de atomic.html::_activate() (challenge à
+// usage unique + signature kind 22242 par la clé MULTIPASS connectée).
+async function _fetchOwnA4lAuthEvent(email, apiUrl) {
+    if (!email || !window.nostr || typeof window.nostr.signEvent !== 'function') return '';
+    try {
+        var chRes = await fetch(apiUrl + '/atom4love/challenge?email=' + encodeURIComponent(email));
+        if (!chRes.ok) return '';
+        var chJson = await chRes.json();
+        var pubkey = window.userPubkey || (window.NostrState && window.NostrState.userPubkey) || await window.nostr.getPublicKey();
+        var authEvent = await window.nostr.signEvent({
+            kind: 22242, pubkey: pubkey,
+            created_at: Math.floor(Date.now() / 1000),
+            tags: [['challenge', chJson.challenge]],
+            content: '',
+        });
+        return JSON.stringify(authEvent);
+    } catch(_) { return ''; }
 }
 
 // Solde Ğ1-N² (♥) d'un pair (HEX_LOVE — ma propre clé sur le canal LOVE, ou

@@ -210,6 +210,18 @@ textarea.dream-ta{width:100%;background:rgba(0,0,0,.3);color:#cfd8e3;border:1px 
     <div id="fresque-detail" style="text-align:center;font-size:.7rem;color:rgba(255,255,255,.45);margin-top:4px"></div>
 </div>
 
+<!-- Profil privé de l'ami sélectionné — visible seulement si follow réciproque
+     (cf. identity.py::get_atom4love_profile, is_friend), jamais pour un suivi
+     unilatéral. Chargé à la demande dans selectFriend(), pas au chargement de
+     la liste (évite N déchiffrements/signatures pour N amis non consultés). -->
+<div class="section-card" id="friend-profile-card" style="display:none">
+    <div class="section-title">💞 Profil de <span id="friend-profile-name"></span></div>
+    <div style="display:flex;gap:12px;align-items:flex-start">
+        <div id="friend-profile-photo" style="width:64px;height:64px;border-radius:12px;background:rgba(255,255,255,.06);flex-shrink:0;overflow:hidden"></div>
+        <div id="friend-profile-bio" style="font-size:.78rem;color:rgba(255,255,255,.65);flex:1"></div>
+    </div>
+</div>
+
 </div><!-- /main-content -->
 
 <div class="sec-note">🔐 dream_vector signé par votre clé LOVE dédiée · v calculé côté serveur</div>
@@ -263,8 +275,41 @@ function addTag() {
 function removeTag(i) { MY_TAGS.splice(i, 1); renderMyTags(); }
 
 /* ── Photo de profil (capture caméra ou upload) ── */
-let MY_PHOTO_URL = '';
+let MY_PHOTO_URL = '';       // ancien mécanisme, URL IPFS en clair (rétrocompat)
+let MY_PHOTO_CID = '';       // photo chiffrée UENC (AES-256-GCM)
+let MY_PHOTO_ENC_KEY = '';   // clé hex — ne quitte ce navigateur que via POST /atom4love/profile (HTTPS)
 let _photoStream = null;
+
+/* ── UENC (AES-256-GCM) — même format que zelkova/lib/services/encrypted_file_service.dart
+   et UPassport routers/media_upload.py::_encrypt_aes256gcm : MAGIC(4)="UENC" +
+   VERSION(1) + TYPE(1) + IV(12) + CIPHERTEXT+TAG(16). Chiffrement fait côté SERVEUR
+   (POST /api/fileupload/encrypted attend le fichier en clair + la clé) ; seul le
+   déchiffrement (affichage) se fait ici, via l'API Web Crypto native (aucune lib externe). ── */
+function _hexToBytes(hex) {
+    const bytes = new Uint8Array(hex.length / 2);
+    for (let i = 0; i < bytes.length; i++) bytes[i] = parseInt(hex.substr(i * 2, 2), 16);
+    return bytes;
+}
+function _bytesToHex(bytes) {
+    return Array.from(bytes).map(function(b) { return b.toString(16).padStart(2, '0'); }).join('');
+}
+function _randomAesKeyHex() {
+    return _bytesToHex(crypto.getRandomValues(new Uint8Array(32)));
+}
+async function _decryptUencUrl(cid, keyHex) {
+    const gw = (window.IPFS_GATEWAY || _apiUrl().replace(/^https?:\/\/u\./, 'https://ipfs.').replace(':54321', ':8080'));
+    const resp = await fetch(gw.replace(/\/$/, '') + '/ipfs/' + cid);
+    if (!resp.ok) throw new Error('Téléchargement IPFS échoué (' + resp.status + ')');
+    const buf = new Uint8Array(await resp.arrayBuffer());
+    if (buf.length < 34 || buf[0] !== 0x55 || buf[1] !== 0x45 || buf[2] !== 0x4E || buf[3] !== 0x43) {
+        throw new Error('Format UENC invalide');
+    }
+    const iv = buf.slice(6, 18);
+    const ciphertextWithTag = buf.slice(18);
+    const cryptoKey = await crypto.subtle.importKey('raw', _hexToBytes(keyHex), { name: 'AES-GCM' }, false, ['decrypt']);
+    const plainBuf = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: iv }, cryptoKey, ciphertextWithTag);
+    return URL.createObjectURL(new Blob([plainBuf]));
+}
 
 async function openPhotoCapture() {
     // Tente getUserMedia (contexte sécurisé : HTTPS ou localhost). Repli
@@ -309,18 +354,23 @@ function onPhotoFileChosen(inp) {
 
 async function _uploadProfilePhoto(fileOrBlob, filename) {
     var statusEl = document.getElementById('photo-upload-status');
-    statusEl.textContent = '⏳ Envoi…'; statusEl.style.color = 'rgba(255,255,255,.4)';
+    statusEl.textContent = '⏳ Chiffrement + envoi…'; statusEl.style.color = 'rgba(255,255,255,.4)';
     try {
+        var keyHex = _randomAesKeyHex();
         var fd = new FormData();
         fd.append('file', fileOrBlob, filename || 'photo.jpg');
-        fd.append('type', 'avatar');
-        var res = await fetch(_apiUrl() + '/api/upload/image', { method: 'POST', body: fd });
+        fd.append('encryption_key', keyHex);
+        fd.append('encryption_type', 'aes256gcm');
+        var res = await fetch(_apiUrl() + '/api/fileupload/encrypted', { method: 'POST', body: fd });
         var json = await res.json().catch(function() { return {}; });
-        if (!res.ok || !(json.url || json.local_url)) throw new Error(json.detail || 'Échec upload');
-        MY_PHOTO_URL = json.url || (_apiUrl() + json.local_url);
+        if (!res.ok || !json.cid) throw new Error(json.detail || 'Échec upload');
+        MY_PHOTO_CID = json.cid;
+        MY_PHOTO_ENC_KEY = keyHex;
+        MY_PHOTO_URL = ''; // remplace l'ancien mécanisme en clair — ne pas envoyer les deux
+        var blobUrl = await _decryptUencUrl(MY_PHOTO_CID, MY_PHOTO_ENC_KEY);
         document.getElementById('profile-photo-preview').innerHTML =
-            '<img src="' + MY_PHOTO_URL + '" style="width:100%;height:100%;object-fit:cover">';
-        statusEl.textContent = '✅ Photo prête — publie ton profil pour l\'enregistrer';
+            '<img src="' + blobUrl + '" style="width:100%;height:100%;object-fit:cover">';
+        statusEl.textContent = '✅ Photo chiffrée prête — publie ton profil pour l\'enregistrer';
         statusEl.style.color = '#00ffcc';
     } catch (e) {
         statusEl.textContent = '⚠ ' + (e.message || e);
@@ -424,6 +474,8 @@ async function publishProfile() {
         fd.append('interests', MY_INTERESTS.join(','));
         fd.append('public', document.getElementById('profile-public').checked ? 'true' : 'false');
         fd.append('photo', MY_PHOTO_URL || '');
+        fd.append('photo_cid', MY_PHOTO_CID || '');
+        fd.append('photo_enc_key', MY_PHOTO_ENC_KEY || '');
         fd.append('auth_event', JSON.stringify(authEvent));
         const res = await fetch(apiUrl + '/atom4love/profile', { method: 'POST', body: fd });
         const json = await res.json().catch(function() { return {}; });
@@ -441,20 +493,41 @@ async function publishProfile() {
     }
 }
 
-/* ── Charger le statut agrégé du profil ATOM4LOVE (tableau de bord) ── */
+/* ── Charger le statut agrégé du profil ATOM4LOVE (tableau de bord) ──
+   C'est TON propre tableau de bord (édition bio/âge/intérêts) — il a besoin
+   du profil complet même quand public=false, donc on retente avec une preuve
+   NIP-42 (auth_event, cf. a4lAuthEvent ci-dessus) si le premier appel revient
+   redacté (has_profile:true + non public — le serveur cache alors les champs
+   privés faute de preuve, voir identity.py::get_atom4love_profile). */
 async function loadProfileStatus() {
     const email = window._uphEmail;
     if (!email) return;
     try {
-        const res = await fetch(_apiUrl() + '/atom4love/profile?email=' + encodeURIComponent(email));
-        const json = await res.json().catch(function() { return {}; });
+        const apiUrl = _apiUrl();
+        const profUrl = apiUrl + '/atom4love/profile?email=' + encodeURIComponent(email);
+        let res = await fetch(profUrl);
+        let json = await res.json().catch(function() { return {}; });
+        if (json && json.profile && !json.profile.public && json.has_profile) {
+            try {
+                const authEvent = await a4lAuthEvent(apiUrl, email);
+                res = await fetch(profUrl + '&auth_event=' + encodeURIComponent(JSON.stringify(authEvent)));
+                json = await res.json().catch(function() { return json; });
+            } catch (_) { /* profil affiché redacté — pas bloquant */ }
+        }
         const p = json.profile || {};
         document.getElementById('profile-bio').value = p.bio || '';
         document.getElementById('profile-age').value = p.age || '';
         MY_INTERESTS = p.interests || [];
         renderMyInterests();
         document.getElementById('profile-public').checked = !!p.public;
-        if (p.photo) {
+        if (p.photo_cid && p.photo_enc_key) {
+            MY_PHOTO_CID = p.photo_cid; MY_PHOTO_ENC_KEY = p.photo_enc_key;
+            try {
+                const blobUrl = await _decryptUencUrl(MY_PHOTO_CID, MY_PHOTO_ENC_KEY);
+                document.getElementById('profile-photo-preview').innerHTML =
+                    '<img src="' + blobUrl + '" style="width:100%;height:100%;object-fit:cover">';
+            } catch (_) { /* photo indisponible — pas bloquant */ }
+        } else if (p.photo) {
             MY_PHOTO_URL = p.photo;
             document.getElementById('profile-photo-preview').innerHTML =
                 '<img src="' + MY_PHOTO_URL + '" style="width:100%;height:100%;object-fit:cover">';
@@ -566,6 +639,57 @@ function selectFriend(i) {
     SELECTED_FRIEND = i;
     renderFriends();
     renderFresque(FRIENDS[i]);
+    loadFriendProfile(FRIENDS[i]);
+}
+
+/* ── Preuve NIP-42 réutilisable — évite de re-signer à chaque ami consulté.
+   Le challenge n'est PAS consommé côté serveur pour ce chemin (cf.
+   identity.py::_verify_viewer_identity), donc reste valable ~120s ; on
+   resigne simplement si l'event mis en cache a plus de 90s. ── */
+let _viewerAuthCache = null; // {event, at}
+async function _getViewerAuthEvent() {
+    const email = window._uphEmail;
+    if (!email || !(window.isNostrConnected && window.userPubkey)) return null;
+    if (_viewerAuthCache && (Date.now() - _viewerAuthCache.at) < 90000) return _viewerAuthCache.event;
+    try {
+        const event = await a4lAuthEvent(_apiUrl(), email);
+        _viewerAuthCache = { event: event, at: Date.now() };
+        return event;
+    } catch (_) { return null; }
+}
+
+/* ── Profil privé (bio + photo chiffrée) d'un Ami de Cœur — visible
+   uniquement si le follow Kind 3 est réciproque (vérifié côté serveur). ── */
+async function loadFriendProfile(f) {
+    const card = document.getElementById('friend-profile-card');
+    if (!f) { card.style.display = 'none'; return; }
+    const email = window._uphEmail;
+    if (!email) { card.style.display = 'none'; return; }
+    try {
+        const apiUrl = _apiUrl();
+        const authEvent = await _getViewerAuthEvent();
+        if (!authEvent) { card.style.display = 'none'; return; }
+        const url = apiUrl + '/atom4love/profile?hex=' + encodeURIComponent(f.hex) +
+            '&viewer_email=' + encodeURIComponent(email) +
+            '&viewer_auth_event=' + encodeURIComponent(JSON.stringify(authEvent));
+        const res = await fetch(url);
+        const json = await res.json().catch(function() { return {}; });
+        const p = json.profile || {};
+        if (!p.bio && !p.photo_cid && !p.photo) { card.style.display = 'none'; return; }
+        document.getElementById('friend-profile-name').textContent = f.name;
+        document.getElementById('friend-profile-bio').textContent = p.bio || '(pas de bio)';
+        const photoEl = document.getElementById('friend-profile-photo');
+        photoEl.innerHTML = '';
+        if (p.photo_cid && p.photo_enc_key) {
+            try {
+                const blobUrl = await _decryptUencUrl(p.photo_cid, p.photo_enc_key);
+                photoEl.innerHTML = '<img src="' + blobUrl + '" style="width:100%;height:100%;object-fit:cover">';
+            } catch (_) {}
+        } else if (p.photo) {
+            photoEl.innerHTML = '<img src="' + p.photo + '" style="width:100%;height:100%;object-fit:cover">';
+        }
+        card.style.display = '';
+    } catch (_) { card.style.display = 'none'; }
 }
 
 function renderFresque(f) {

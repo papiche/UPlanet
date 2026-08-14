@@ -605,12 +605,14 @@
                 console.log('[UPH] g1pub trouvé dans kind 0:', meta.g1pub.slice(0, 8)+'…');
                 window._uphG1Pub = meta.g1pub;
                 _loadBalance(meta.g1pub);
-                // Badge A4L niveau 1 : g1pub NIP-39 présent (level 2 laissé aux pages qui chargent Kind 30078)
+                // Badge A4L niveau 1 (MULTIPASS) — passe à 2 si _checkA4lStatus confirme a4l_active
                 if (typeof uphSetA4lBadge === 'function') uphSetA4lBadge(1);
+                var _a4lEmail = profileEmail || window._uphEmail;
+                if (_a4lEmail) _checkA4lStatus(_a4lEmail);
             } else {
                 console.warn('[UPH] g1pub absent du profil kind 0 — compte non MULTIPASS (calculé localement).',
                     'Champs disponibles:', Object.keys(meta).join(', '));
-                if (typeof uphSetA4lBadge === 'function') uphSetA4lBadge(0);
+                if (typeof uphSetA4lBadge === 'function') uphSetA4lBadge(-1);
             }
         } catch (e) {
             console.warn('[UPH] _loadProfile erreur:', e.message || e);
@@ -1100,7 +1102,10 @@
     };
 
     // Affiche l'état ATOM4LOVE dans le pill UPH.
-    // level : 2 = conforme (🔑), 1 = probable (🟡), 0 = hybridé (⚠), -1 = absent (masqué)
+    // level : 2 = clé LOVE active (🔑), 1 = MULTIPASS sans clé LOVE (🟡), -1 = pas de MULTIPASS (masqué)
+    // Pas de notion de "co-dérivation"/"conformité" : la clé LOVE est TOUJOURS
+    // dérivée indépendamment du wallet G1 (voir Astroport.ONE/tools/atom4love_publish.py) —
+    // le niveau 2 reflète juste GET /atom4love/profile?email=…→a4l_active, pas une preuve cryptographique.
     window.uphSetA4lBadge = function (level) {
         var el = document.getElementById('uph-a4l');
         if (!el) return;
@@ -1108,23 +1113,45 @@
             el.textContent = '🔑 a4l';
             el.style.color = '#00ffcc'; el.style.borderColor = 'rgba(0,255,204,.35)';
             el.style.background = 'rgba(0,255,204,.08)';
-            el.title = 'ATOM4LOVE conforme — clé co-dérivée via keygen UPassport';
+            el.title = 'ATOM4LOVE actif — clé LOVE dérivée de vos données de naissance';
             el.style.display = '';
         } else if (level === 1) {
             el.textContent = '🟡 a4l';
             el.style.color = '#eab308'; el.style.borderColor = 'rgba(234,179,8,.35)';
             el.style.background = 'rgba(234,179,8,.08)';
-            el.title = 'ATOM4LOVE probable — g1pub NIP-39 présent, preuve non complète';
-            el.style.display = '';
-        } else if (level === 0) {
-            el.textContent = '⚠ a4l';
-            el.style.color = '#fb923c'; el.style.borderColor = 'rgba(251,146,60,.35)';
-            el.style.background = 'rgba(251,146,60,.08)';
-            el.title = 'ATOM4LOVE hybridé — clé externe, non liée à la chaîne keygen';
+            el.title = 'MULTIPASS actif — ATOM4LOVE pas encore activé';
             el.style.display = '';
         } else {
             el.style.display = 'none';
         }
     };
+
+    // ── Vérification réelle du statut ATOM4LOVE (une fois par session) ────────
+    // Remplace l'ancien flag optimiste posé par atomic.html juste après l'activation
+    // (jamais revérifié ailleurs) par un vrai appel serveur : GET /atom4love/profile
+    // renvoie a4l_active = existence de ~/.zen/game/nostr/<email>/HEX_LOVE.
+    var _a4lStatusChecked = false;
+    function _checkA4lStatus(email) {
+        if (_a4lStatusChecked || !email) return;
+        _a4lStatusChecked = true;
+        // Le compte (~/.zen/game/nostr/<email>/) n'existe que sur SA station Home —
+        // interroger la station courante en roaming renverrait toujours a4l_active=false.
+        // window._uphHomeStationUrl est résolu par _loadMyGPS() (roaming détecté via NIP-42),
+        // en parallèle de _loadProfile() : court délai pour lui laisser une chance d'arriver
+        // avant de figer l'URL cible (statut affiché, pas un flux d'écriture — un léger
+        // retard de fraîcheur ici s'auto-corrige à la prochaine page, sans risque).
+        setTimeout(function() {
+            var base = window._uphHomeStationUrl || _apiUrl();
+            fetch(base.replace(/\/+$/, '') + '/atom4love/profile?email=' + encodeURIComponent(email),
+                { signal: AbortSignal.timeout(6000) })
+                .then(function(r) { return r.ok ? r.json() : null; })
+                .then(function(data) {
+                    if (data && data.a4l_active && typeof uphSetA4lBadge === 'function') {
+                        uphSetA4lBadge(2);
+                    }
+                })
+                .catch(function() {});
+        }, 1200);
+    }
 
 })();

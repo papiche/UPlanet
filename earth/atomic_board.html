@@ -445,6 +445,19 @@ body.card-open #bg-canvas{opacity:0}
 [data-tip]:hover::before{opacity:1}
 /* mobile long-press : classe injectée par JS */
 [data-tip].tip-show::after,[data-tip].tip-show::before{opacity:1}
+/* #filter-bar défile en overflow-x:auto sur mobile, ce qui force aussi le clip
+   vertical (overflow-y devient implicitement auto) : un ::after absolute
+   positionné au-dessus du bouton y serait invisible. On bascule en fixed avec
+   des coordonnées calculées en JS (--tip-x/--tip-y, cf. _showMobileTip) pour
+   échapper à ce clip. */
+[data-tip].tip-show::after{
+    position:fixed;top:var(--tip-y,auto);left:var(--tip-x,auto);
+    bottom:auto;transform:translate(-50%,-100%)
+}
+[data-tip].tip-show::before{
+    position:fixed;top:calc(var(--tip-y,0px) + 6px);left:var(--tip-x,auto);
+    bottom:auto;transform:translate(-50%,-100%)
+}
 
 /* ══ Boutons actions sociales (follow / mute) ════════════════════════════════ */
 .cb-social-row{
@@ -880,16 +893,16 @@ function _buildAtom(ev){
 /* ═══════════════════════════════════════════════════════════════════════════
    RENDU DES CARTES
    ═══════════════════════════════════════════════════════════════════════════ */
-function _conformeLevel(atom){
-    var p=atom.profile||{};
+/* La clé LOVE n'est jamais co-dérivée du wallet G1 (voir
+   Astroport.ONE/tools/atom4love_publish.py) — il n'y a pas de "preuve de
+   conformité" cryptographique à afficher. Le seul fait vérifiable et déjà
+   disponible dans le certificat : le champ "email_enc" qui relie ce cert à
+   un compte MULTIPASS — chiffré $UPLANETNAME (lisible uniquement par les
+   stations de la constellation, jamais par ce script client ni par un tiers
+   qui lirait le relay). On teste juste sa présence, jamais son contenu. */
+function _isLinkedToAccount(atom){
     var c=atom.certData||{};
-    var k0g=p.g1pub||'';
-    var cg=c.g1pub||'';
-    var cgp=c.g1pub_proof||'';
-    if(k0g&&cg&&k0g!==cg) return 0;  // fraude : discordance Kind 0 ≠ cert 30078
-    if(cg&&cgp)            return 2;  // preuve relay-validée
-    if(k0g||cg)            return 1;  // g1pub seul sans preuve
-    return 0;
+    return !!c.email_enc;
 }
 
 function _makeCard(atom){
@@ -904,12 +917,9 @@ function _makeCard(atom){
     var penLbl='⬟P'+String(atom.pentagonId||0).padStart(2,'0');
     var rot=_cardRot(atom.pubkey);
 
-    /* Badge de conformité A4L */
-    var clvl=_conformeLevel(atom);
-    var a4lBadge=clvl===2
-        ?'<div class="cb-a4l-badge" style="font-size:.55rem;color:#00ffcc;opacity:.85;text-align:center" title="Clé co-dérivée keygen — g1pub_proof relay-validé">🔑 MULTIPASS</div>'
-        :clvl===1
-        ?'<div class="cb-a4l-badge" style="font-size:.55rem;color:#eab308;opacity:.75;text-align:center" title="g1pub probable — sans preuve de co-dérivation">🟡 probable</div>'
+    /* Badge de lien MULTIPASS — présence du champ "email" dans le certificat LOVE */
+    var a4lBadge=_isLinkedToAccount(atom)
+        ?'<div class="cb-a4l-badge" style="font-size:.55rem;color:#00ffcc;opacity:.85;text-align:center" title="Certificat lié à un compte MULTIPASS UPlanet">📧 lié</div>'
         :'';
 
     /* Score de résonance — petit indicateur */
@@ -1741,6 +1751,9 @@ function _showNewCard(atom){
         clearTimeout(_tipTimer);
         if(_tipTarget&&_tipTarget!==el) _tipTarget.classList.remove('tip-show');
         _tipTarget=el;
+        var r=el.getBoundingClientRect();
+        el.style.setProperty('--tip-x',(r.left+r.width/2)+'px');
+        el.style.setProperty('--tip-y',(r.top-8)+'px');
         el.classList.add('tip-show');
         setTimeout(function(){if(_tipTarget===el)el.classList.remove('tip-show');},2800);
     }

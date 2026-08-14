@@ -565,6 +565,8 @@
   <div class="adm-tab" id="tab-memory" onclick="switchTab('memory')">🧠 Mémoire</div>
   <div class="adm-tab" id="tab-grimoire" onclick="switchTab('grimoire')">📖 Grimoire</div>
   <div class="adm-tab" id="tab-miz" onclick="switchTab('miz')">🏛️ MIZ Académie</div>
+  <div class="adm-tab" id="tab-node" onclick="switchTab('node')">⚙️ NODE</div>
+  <div class="adm-tab" id="tab-arbor" onclick="switchTab('arbor')">🧬 ARBOR<span id="tab-arbor-badge" style="display:none;margin-left:5px;background:var(--danger);color:#fff;border-radius:9px;padding:0 6px;font-size:.68rem;font-weight:700"></span></div>
 </div>
 
 <!-- Profile panel -->
@@ -699,6 +701,13 @@
     </div>
     <div id="mem-detail-body" style="padding:12px 16px;"></div>
   </div>
+  <div id="identity-edit-panel" style="display:none" class="tree-kind-panel">
+    <div class="tree-panel-header">
+      <span class="tree-panel-title" id="identity-edit-title">—</span>
+      <button style="background:none;border:none;color:var(--text2);cursor:pointer;font-size:1rem;line-height:1;padding:0 4px" onclick="closeIdentityEditor()">✕</button>
+    </div>
+    <div id="identity-edit-body" style="padding:12px 16px;"></div>
+  </div>
 </div>
 
 <!-- Grimoire G1FabLab (import Kind 30500 des recettes matière) -->
@@ -766,6 +775,30 @@
       <span id="miz-stats-status" style="font-size:.75rem;color:var(--text2)"></span>
     </div>
     <div id="miz-stats-body"></div>
+  </div>
+</div>
+
+<!-- Config NODE (capitaine uniquement — whitelist stricte, cf. services/coop_config.py) -->
+<div id="pane-node" style="display:none">
+  <div class="profile-panel" style="border-radius:0 10px 10px 10px">
+    <div style="font-size:.78rem;color:var(--text2);line-height:1.6;margin-bottom:12px;
+      border:1px solid var(--border);border-radius:6px;padding:8px 12px;background:var(--bg)">
+      ⚙️ Ces valeurs sont partagées par <b>toutes les stations de l'essaim</b> (event NOSTR
+      Kind 30800 chiffré, propagé par <code>backfill_constellation.sh</code>). Les clés sensibles
+      (🔒) ne sont jamais renvoyées en clair — un champ laissé vide n'écrase pas la valeur existante.
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px">
+      <button class="btn-query" id="btn-load-node-config" onclick="loadNodeConfig()" style="padding:6px 18px;font-size:.82rem;white-space:nowrap">🔄 Charger la configuration</button>
+      <span id="node-config-status" style="font-size:.75rem;color:var(--text2)"></span>
+    </div>
+    <div id="node-config-body"></div>
+  </div>
+</div>
+
+<!-- ARBOR — auto-amélioration IA (capitaine uniquement) -->
+<div id="pane-arbor" style="display:none">
+  <div class="profile-panel" style="border-radius:0 10px 10px 10px">
+    <div id="arbor-body"><div class="state-empty"><div class="icon">🧬</div><div>Chargement…</div></div></div>
   </div>
 </div>
 
@@ -1009,6 +1042,11 @@ function _checkCaptain(pubkey) {
                 var t = active && active.id.replace('tab-', '');
                 if (t === 'grimoire') { _updateGrimoireAuthBanner(); if (!_grimoireLoaded) { _grimoireLoaded = true; loadGrimoireStatus(); } }
                 if (t === 'miz' && !_mizStatsLoaded) { _mizStatsLoaded = true; loadMizStats(); }
+                if (t === 'node' && !_nodeConfigLoaded) { _nodeConfigLoaded = true; loadNodeConfig(); }
+                // ARBOR chargé systématiquement à la connexion (pas seulement si l'onglet
+                // est actif) — le badge sur #tab-arbor doit être visible depuis n'importe
+                // quel autre onglet, sans attendre que le capitaine clique sur 🧬 ARBOR.
+                if (!_arborLoaded) { _arborLoaded = true; loadArborStatus(); }
             } else if (_captainHex) {
                 badge.innerHTML = '⚠️ Non-capitaine'; badge.className = 'uph-captain-warn'; badge.style.display = '';
             }
@@ -1230,7 +1268,7 @@ async function purgeFilter() {
 
 // ── Navigation ───────────────────────────────────────────────────────────
 function switchTab(tab) {
-    ['query', 'profile', 'tree', 'memory', 'grimoire', 'miz'].forEach(function(t) {
+    ['query', 'profile', 'tree', 'memory', 'grimoire', 'miz', 'node', 'arbor'].forEach(function(t) {
         var tabEl  = document.getElementById('tab-'  + t);
         var paneEl = document.getElementById('pane-' + t);
         if (tabEl)  tabEl.classList.toggle('active', t === tab);
@@ -1247,6 +1285,8 @@ function switchTab(tab) {
         if (uphOk && !_grimoireLoaded) { _grimoireLoaded = true; loadGrimoireStatus(); }
     }
     if (tab === 'miz' && uphOk && !_mizStatsLoaded) { _mizStatsLoaded = true; loadMizStats(); }
+    if (tab === 'node' && uphOk && !_nodeConfigLoaded) { _nodeConfigLoaded = true; loadNodeConfig(); }
+    if (tab === 'arbor' && uphOk && !_arborLoaded) { _arborLoaded = true; loadArborStatus(); }
 }
 function openProfile(pubkey) {
     document.getElementById('f-author').value = pubkey;
@@ -2308,6 +2348,8 @@ function renderMemDetail(email, hex, s, cookieDomains) {
     html += '<div style="margin-bottom:14px"><h5 style="font-size:.8rem;color:var(--text2);margin:0 0 4px">🧾 Préférences apprises (identity)</h5>' +
         line('Lignes', s.identity.preferences_lines) + line('Historique', s.identity.preferences_history_entries) +
         resetBtn('identity_learned', 'Réinitialiser') + '</div>';
+    html += '<div style="margin-bottom:14px"><h5 style="font-size:.8rem;color:var(--text2);margin:0 0 4px">📝 Profil LifeOS (5 fichiers)</h5>' +
+        '<div class="mem-reset-row"><button class="btn-regen" onclick="openIdentityEditor(' + jsAttr(email) + ')">✏️ Éditer le LifeOS</button></div></div>';
     if (cookieDomains.length) {
         html += '<div style="margin-bottom:14px"><h5 style="font-size:.8rem;color:var(--text2);margin:0 0 4px">🍪 Cookies liés (NOSTR kind 31903)</h5>' +
             '<div style="font-size:.78rem;color:var(--text)">' + cookieDomains.map(escHtml).join(', ') + '</div></div>';
@@ -2349,6 +2391,58 @@ async function regenerateLifeos(email, btnEl) {
             showToast('Régénération échouée : ' + (data.error || '?'), 'err');
             opsLog([{ type: 'err', text: 'memory_regenerate mastodon → ' + email + ' : ' + (data.error || '?') }]);
         }
+    } catch(e) {
+        if (e.message !== '403') showToast('Erreur : ' + e.message, 'err');
+    } finally {
+        btnEl.disabled = false; btnEl.textContent = savedText;
+    }
+}
+
+var _IDENTITY_LABELS = {
+    '.Core.md': '🪐 Qui il/elle est', '.Style.md': '🎨 Style', '.Rules.md': '🚫 Limites',
+    '.Preferences.md': '🧾 Préférences', '.Objectifs.md': '🎯 Objectifs'
+};
+
+async function openIdentityEditor(email) {
+    var panel = document.getElementById('identity-edit-panel');
+    var body  = document.getElementById('identity-edit-body');
+    document.getElementById('identity-edit-title').textContent = '📝 LifeOS — ' + email;
+    panel.style.display = '';
+    body.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text2)">⏳ Chargement…</div>';
+    panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    try {
+        var data = await apiFetch(_apiUrl + '/api/nostr/admin/identity_content?' + new URLSearchParams({ email: email }));
+        body.innerHTML = data.filenames.map(function(fn) {
+            var id = 'idedit-' + fn.replace(/[^a-zA-Z0-9]/g, '');
+            return '<div style="margin-bottom:14px">' +
+                '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">' +
+                '<h5 style="font-size:.8rem;color:var(--text2);margin:0">' + (_IDENTITY_LABELS[fn] || fn) + '</h5>' +
+                '<button class="btn-regen" onclick="saveIdentityFile(' + jsAttr(email) + ',' + jsAttr(fn) + ',' + jsAttr(id) + ',this)">💾 Enregistrer</button>' +
+                '</div>' +
+                '<textarea id="' + id + '" rows="5" maxlength="4000" placeholder="' + escAttr((data.placeholders || {})[fn] || '') + '" ' +
+                'style="width:100%;resize:vertical;background:var(--bg);' +
+                'border:1px solid var(--border);border-radius:6px;color:var(--text);padding:8px;box-sizing:border-box;' +
+                'font-family:\'Courier New\',monospace;font-size:.78rem">' + escHtml(data.content[fn] || '') + '</textarea></div>';
+        }).join('');
+    } catch(e) {
+        if (e.message !== '403') body.innerHTML = '<div style="color:var(--danger);padding:14px">Erreur : ' + escHtml(e.message) + '</div>';
+    }
+}
+
+function closeIdentityEditor() {
+    document.getElementById('identity-edit-panel').style.display = 'none';
+}
+
+async function saveIdentityFile(email, filename, textareaId, btnEl) {
+    var content = document.getElementById(textareaId).value;
+    btnEl.disabled = true; var savedText = btnEl.textContent; btnEl.textContent = '⏳…';
+    try {
+        var data = await apiFetch(_apiUrl + '/api/nostr/admin/identity_save', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: email, filename: filename, content: content })
+        });
+        showToast(filename + ' enregistré' + (data.notified ? ' — membre notifié' : ' (DM de notification échoué)'), data.notified ? 'ok' : 'warn');
+        opsLog([{ type: 'ok', text: 'identity_save ' + filename + ' → ' + email }]);
     } catch(e) {
         if (e.message !== '403') showToast('Erreur : ' + e.message, 'err');
     } finally {
@@ -2669,6 +2763,8 @@ function _gIngredientTags(r) {
 var _grimoirePublished = {}; // dtag → event
 var _grimoireLoaded = false;
 var _mizStatsLoaded = false;
+var _nodeConfigLoaded = false;
+var _arborLoaded = false;
 
 /* Bandeau d'état — publication nécessite l'extension NOSTR (NIP-07), statut et
    suppression nécessitent en plus d'être reconnu Capitaine de la station.
@@ -3195,6 +3291,307 @@ var _MIZ_PILLAR_TAGS = {
     mouvement: ['transport'],
     oasis:     ['cuisine', 'soin'],
 };
+
+// ── Config NODE ⊕ ARBOR — moteur de rendu partagé (même schéma serveur,
+// cf. services/coop_config.py::COOP_CONFIG_SCHEMA) ──────────────────────────
+var _nodeCategories = [];
+var _arborCategories = [];
+
+async function loadNodeConfig() {
+    var statusEl = document.getElementById('node-config-status');
+    var body = document.getElementById('node-config-body');
+    statusEl.textContent = '⏳ Chargement…';
+    try {
+        var data = await apiFetch(_apiUrl + '/api/nostr/admin/node_config');
+        _nodeCategories = data.categories || [];
+        body.innerHTML = renderConfigCategories(_nodeCategories, 'node');
+        statusEl.textContent = _nodeCategories.length + ' catégorie(s)';
+    } catch(e) {
+        statusEl.textContent = '';
+        if (e.message !== '403') body.innerHTML = '<div style="color:var(--danger);padding:14px">Erreur : ' + escHtml(e.message) + '</div>';
+    }
+}
+
+function renderConfigCategories(categories, prefix) {
+    return categories.map(function(cat) {
+        var rows = cat.keys.map(function(k) {
+            var id = prefix + '-key-' + k.key;
+            var inputType = k.sensitive ? 'password' : (k.kind === 'number' || k.kind === 'percent' ? 'number' : 'text');
+            var placeholder = k.readonly ? '' : (k.sensitive
+                ? (k.defined ? (k.encrypted ? '•••••• (définie, chiffrée)' : '⚠️ définie en clair — réenregistrez-la') : 'non définie')
+                : (k.placeholder || ''));
+            var value = k.sensitive ? '' : (k.value || '');
+            var lockAttrs = k.readonly ? ' disabled' : '';
+            return '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);flex-wrap:wrap">' +
+                '<div style="flex:0 0 220px;min-width:180px"><b style="font-size:.78rem">' + escHtml(k.label) + '</b>' +
+                (k.sensitive ? ' 🔒' : '') + (k.readonly ? ' <span style="color:var(--text2);font-size:.7rem">(lecture seule)</span>' : '') +
+                (k.help ? '<div style="font-size:.68rem;color:var(--text2)">' + escHtml(k.help) + '</div>' : '') + '</div>' +
+                '<input type="' + inputType + '" id="' + id + '" data-key="' + escAttr(k.key) + '" data-prefix="' + prefix + '"' +
+                ' placeholder="' + escAttr(placeholder) + '" value="' + escAttr(value) + '"' + lockAttrs +
+                ' oninput="this.dataset.dirty=1" autocomplete="' + (k.sensitive ? 'new-password' : 'off') + '"' +
+                ' style="flex:1;min-width:140px;background:var(--bg);border:1px solid var(--border);border-radius:5px;color:var(--text);padding:5px 9px;font-size:.78rem">' +
+                (k.unit ? '<span style="font-size:.72rem;color:var(--text2)">' + escHtml(k.unit) + '</span>' : '') +
+                '</div>';
+        }).join('');
+        return '<details style="margin-bottom:8px;border:1px solid var(--border);border-radius:6px;padding:0 10px" open>' +
+            '<summary style="cursor:pointer;padding:8px 0;font-size:.82rem;font-weight:700">' + cat.icon + ' ' + escHtml(cat.title) +
+            (cat.note ? ' <span style="font-size:.68rem;color:var(--text2);font-weight:400">— ' + escHtml(cat.note) + '</span>' : '') + '</summary>' +
+            '<div style="padding-bottom:8px">' + rows +
+            '<div style="text-align:right;padding-top:8px">' +
+            '<button class="btn-regen" onclick="saveConfigCategory(' + jsAttr(cat.id) + ',' + jsAttr(prefix) + ',this)">💾 Enregistrer cette catégorie</button>' +
+            '</div></div></details>';
+    }).join('');
+}
+
+async function saveConfigCategory(catId, prefix, btnEl) {
+    var cat = (prefix === 'node' ? _nodeCategories : _arborCategories).find(function(c) { return c.id === catId; });
+    if (!cat) return;
+    var entries = [];
+    cat.keys.forEach(function(k) {
+        var el = document.getElementById(prefix + '-key-' + k.key);
+        if (el && el.dataset.dirty && !el.disabled) entries.push({ key: k.key, value: el.value });
+    });
+    if (!entries.length) { showToast('Aucun champ modifié dans cette catégorie.', 'warn'); return; }
+
+    btnEl.disabled = true; var savedText = btnEl.textContent; btnEl.textContent = '⏳…';
+    try {
+        var data = await apiFetch(_apiUrl + '/api/nostr/admin/node_config', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ entries: entries })
+        });
+        showToast((data.keys || []).length + ' clé(s) enregistrée(s) : ' + (data.keys || []).join(', '), 'ok');
+        opsLog([{ type: 'ok', text: 'node_config set → ' + (data.keys || []).join(',') }]);
+        if (prefix === 'node') { _nodeConfigLoaded = false; loadNodeConfig(); }
+        else { _arborLoaded = false; loadArborStatus(); }
+    } catch(e) {
+        if (e.message !== '403') showToast('Erreur : ' + e.message, 'err');
+    } finally {
+        btnEl.disabled = false; btnEl.textContent = savedText;
+    }
+}
+
+// ── ARBOR — statut + déclenchement à distance ───────────────────────────────
+var _arborPollTimer = null;
+
+async function loadArborStatus() {
+    var body = document.getElementById('arbor-body');
+    try {
+        var data = await apiFetch(_apiUrl + '/api/nostr/admin/arbor_status');
+        _arborCategories = data.thresholds || [];
+        _arborPendingCookies = data.cookies_without_scraper || [];
+        updateArborBadge(data);
+        // Le corps du panneau n'a besoin d'être rendu que si l'onglet est visible —
+        // évite un travail DOM inutile quand loadArborStatus() est déclenché en
+        // arrière-plan depuis _checkCaptain() pour peupler seulement le badge.
+        if (body) body.innerHTML = renderArborStatus(data);
+        if (data.state && data.state.status === 'running') {
+            clearTimeout(_arborPollTimer);
+            _arborPollTimer = setTimeout(function() { loadArborStatus(); }, 15000);
+        }
+    } catch(e) {
+        if (e.message !== '403' && body) body.innerHTML = '<div style="color:var(--danger);padding:14px">Erreur : ' + escHtml(e.message) + '</div>';
+    }
+}
+
+var _arborPendingCookies = [];
+
+function updateArborBadge(data) {
+    var badge = document.getElementById('tab-arbor-badge');
+    if (!badge) return;
+    var branchesPending = (data.branches || []).filter(function(b) { return !b.already_merged; }).length;
+    var count = (data.cookies_without_scraper || []).length + branchesPending;
+    if (count > 0) { badge.textContent = count; badge.style.display = ''; }
+    else { badge.style.display = 'none'; }
+}
+
+function renderArborPendingActions(data) {
+    var cookies = data.cookies_without_scraper || [];
+    var enabled = data.remote_trigger_enabled;
+    var html = '<div style="margin-bottom:14px;border:1px solid rgba(230,126,34,.35);border-radius:6px;' +
+        'padding:10px 12px;background:rgba(230,126,34,.06)">' +
+        '<h5 style="font-size:.8rem;color:var(--text2);margin:0 0 8px">🔔 Actions en attente</h5>';
+
+    html += '<div style="margin-bottom:10px"><b style="font-size:.76rem">🍪 Cookies déposés sans scraper</b> ';
+    if (!cookies.length) {
+        html += '<span style="font-size:.74rem;color:var(--text2)">— aucun, tout est couvert.</span></div>';
+    } else {
+        html += '<span style="font-size:.7rem;color:var(--text2)">(' + cookies.length + ')</span></div>';
+        html += cookies.map(function(c) {
+            var since = c.notified_since_days != null ? c.notified_since_days + ' jour(s)' : '?';
+            return '<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--border);flex-wrap:wrap;font-size:.76rem">' +
+                '<span style="flex:1;min-width:200px"><b>' + escHtml(c.domain) + '</b> · ' + escHtml(c.email) +
+                ' <span style="color:var(--warn,#d69e2e)">— notifié depuis ' + since + '</span></span>' +
+                '<button class="btn-regen" ' + (enabled ? '' : 'disabled') +
+                ' onclick="triggerArborForgeScraper(' + jsAttr(c.email) + ',' + jsAttr(c.domain) + ',this)">🔨 Forger le scraper</button>' +
+                '</div>';
+        }).join('');
+    }
+
+    html += '<div style="margin-top:10px">' +
+        '<button class="btn-regen" onclick="loadArborMinedPreview(this)">🔄 Analyser les demandes non traitées</button> ' +
+        '<span style="font-size:.68rem;color:var(--text2)">peut prendre du temps — analyse du corpus complet, jamais auto-chargé</span>' +
+        '<div id="arbor-mined-body" style="margin-top:8px"></div>' +
+        '</div>';
+
+    html += '</div>';
+    return html;
+}
+
+function renderArborStatus(data) {
+    var html = '';
+    var enabled = data.remote_trigger_enabled;
+    html += '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px;' +
+        'border:1px solid var(--border);border-radius:6px;padding:8px 12px;background:var(--bg)">' +
+        '<span style="font-size:.78rem;color:var(--text2)">Déclenchement distant : ' +
+        (enabled ? '<b style="color:var(--ok,#4ade80)">✅ activé</b>' : '<b style="color:var(--text2)">🔒 désactivé</b>') +
+        ' · cooldown ' + escHtml(String(data.cooldown_min)) + ' min</span></div>';
+
+    if (data.state && data.state.status === 'running') {
+        html += '<div style="border:1px solid rgba(251,191,36,.4);border-radius:6px;padding:10px 12px;margin-bottom:14px;' +
+            'background:rgba(251,191,36,.08);font-size:.8rem">⏳ Run en cours — mode <b>' + escHtml(data.state.mode || '?') +
+            '</b>, démarré à ' + escHtml(data.state.started_at || '?') + '</div>';
+    }
+
+    html += renderArborPendingActions(data);
+
+    html += '<div style="margin-bottom:14px"><h5 style="font-size:.8rem;color:var(--text2);margin:0 0 8px">🚀 Déclencher un run</h5>' +
+        ['mine-requests', 'observe-love', 'explore', 'apply'].map(function(m) {
+            return '<button class="btn-regen" style="margin:0 6px 6px 0" ' + (enabled ? '' : 'disabled') +
+                ' onclick="triggerArbor(' + jsAttr(m) + ')">▶ ' + escHtml(m) + '</button>';
+        }).join('') + '</div>';
+
+    var cli = data.claude_cli || {};
+    var cliOk = cli.available && cli.authenticated;
+    html += '<div style="margin-bottom:14px;border:1px solid var(--border);border-radius:6px;padding:10px 12px">' +
+        '<h5 style="font-size:.8rem;color:var(--text2);margin:0 0 8px">🔨 Forger un nouvel outil (génération de code par Claude)</h5>' +
+        '<div style="font-size:.74rem;margin-bottom:8px">Claude CLI : ' +
+        (cli.available ? '✅ installé' : '❌ introuvable') + ' · ' +
+        (cli.authenticated ? '✅ compte authentifié' + (cli.account ? ' (' + escHtml(cli.account) + ')' : '') : '❌ non authentifié') +
+        (!cliOk ? '<br><span style="color:var(--text2)">Configurez-le au préalable : <code>bash Astroport.ONE/claude.vscodium.setup.sh setup</code> (ou <code>migrate</code> si config VSCodium existante).</span>' : '') +
+        '</div>' +
+        '<textarea id="arbor-forge-need" rows="3" maxlength="500" placeholder="Décris le besoin en langage naturel — ex: « suivre un compte Mastodon et résumer ses posts quotidiennement »" ' +
+        'style="width:100%;resize:vertical;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:8px;font-size:.78rem;box-sizing:border-box;margin-bottom:6px"' +
+        (enabled && cliOk ? '' : ' disabled') + '></textarea>' +
+        '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">' +
+        '<input id="arbor-forge-slug" type="text" placeholder="slug optionnel (ex: mastodon-digest)" maxlength="30" ' +
+        'style="flex:1;min-width:160px;background:var(--bg);border:1px solid var(--border);border-radius:5px;color:var(--text);padding:5px 9px;font-size:.76rem"' +
+        (enabled && cliOk ? '' : ' disabled') + '>' +
+        '<button class="btn-regen" ' + (enabled && cliOk ? '' : 'disabled') + ' onclick="triggerArborForge()">🔨 Forger</button>' +
+        '</div></div>';
+
+    html += '<div style="margin-bottom:14px"><h5 style="font-size:.8rem;color:var(--text2);margin:0 0 4px">⚙️ Seuils effectifs</h5>' +
+        renderConfigCategories(data.thresholds || [], 'arbor') + '</div>';
+
+    var branches = data.branches || [];
+    html += '<div style="margin-bottom:14px"><h5 style="font-size:.8rem;color:var(--text2);margin:0 0 4px">🌿 Branches en attente de revue</h5>';
+    if (!branches.length) {
+        html += '<div class="state-empty" style="padding:14px"><div class="icon">🌿</div><div>Aucune branche arbor/* pour le moment.</div></div>';
+    } else {
+        html += branches.map(function(b) {
+            var statusLabel = b.already_merged ? '✅ déjà mergée — nettoyage possible'
+                : (b.worktree_present ? '📝 à relire (worktree présent)' : '📝 à relire (worktree absent, ex. après reboot)');
+            return '<div style="border:1px solid var(--border);border-radius:6px;padding:8px 12px;margin-bottom:6px;font-size:.78rem">' +
+                '<b>' + escHtml(b.branch) + '</b> — ' + statusLabel + '<br>' +
+                '<span style="color:var(--text2)">' + escHtml(b.subject || '') + ' · ' + escHtml(String(b.commits_ahead)) + ' commit(s) d\'avance</span><br>' +
+                '<code style="font-size:.72rem;color:var(--text2)">' + escHtml(b.review_command) + '</code> ' +
+                '<button class="btn-regen" style="padding:2px 8px;font-size:.7rem" onclick="navigator.clipboard.writeText(' +
+                jsAttr(b.review_command) + ');showToast(\'Commande copiée\',\'ok\')">📋 copier</button>' +
+                '</div>';
+        }).join('');
+    }
+    html += '</div>';
+
+    var audit = data.audit || [];
+    html += '<div><h5 style="font-size:.8rem;color:var(--text2);margin:0 0 4px">🕐 Derniers runs</h5>';
+    if (!audit.length) {
+        html += '<div class="state-empty" style="padding:14px"><div class="icon">🕐</div><div>Aucun run enregistré.</div></div>';
+    } else {
+        html += '<div style="font-size:.74rem;color:var(--text2);line-height:1.7">' + audit.map(function(a) {
+            return escHtml(a.at || '') + ' — <b>' + escHtml(a.event || '') + '</b> (' + escHtml(a.mode || '') + ')' +
+                (a.rc !== undefined ? ' rc=' + a.rc : '') + (a.duration_s !== undefined ? ' · ' + a.duration_s + 's' : '') +
+                (a.branch ? ' · branche ' + escHtml(a.branch) : '');
+        }).join('<br>') + '</div>';
+    }
+    html += '</div>';
+    return html;
+}
+
+async function triggerArbor(mode) {
+    if (!confirm('Déclencher un run ARBOR en mode « ' + mode + ' » ? Aucun merge ne sera effectué — seule une branche isolée sera produite (pour apply) ou une notification envoyée.')) return;
+    try {
+        var data = await apiFetch(_apiUrl + '/api/nostr/admin/arbor_trigger', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ mode: mode })
+        });
+        showToast('Run ARBOR démarré (' + mode + ')', 'ok');
+        opsLog([{ type: 'ok', text: 'arbor_trigger ' + mode }]);
+        _arborLoaded = true;
+        loadArborStatus();
+    } catch(e) {
+        if (e.message !== '403') showToast('Erreur : ' + e.message, 'err');
+    }
+}
+
+async function triggerArborForge() {
+    var need = (document.getElementById('arbor-forge-need').value || '').trim();
+    var slug = (document.getElementById('arbor-forge-slug').value || '').trim();
+    if (need.length < 5) { showToast('Décris le besoin (au moins 5 caractères).', 'warn'); return; }
+    if (!confirm('Lancer la génération d\'un outil par Claude pour ce besoin ? Aucun merge automatique — une branche isolée sera produite pour relecture, et vous serez notifié.')) return;
+    try {
+        var data = await apiFetch(_apiUrl + '/api/nostr/admin/arbor_trigger', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ mode: 'forge', need: need, slug: slug || undefined })
+        });
+        showToast('Forge ARBOR démarrée', 'ok');
+        opsLog([{ type: 'ok', text: 'arbor_trigger forge : ' + need.slice(0, 60) }]);
+        _arborLoaded = true;
+        loadArborStatus();
+    } catch(e) {
+        if (e.message !== '403') showToast('Erreur : ' + e.message, 'err');
+    }
+}
+
+async function triggerArborForgeScraper(email, domain, btnEl) {
+    if (!confirm('Forger un scraper pour « ' + domain + ' » (compte ' + email + ') ? Aucun merge automatique — une branche isolée sera produite pour relecture, et vous serez notifié.')) return;
+    btnEl.disabled = true; var savedText = btnEl.textContent; btnEl.textContent = '⏳…';
+    try {
+        var data = await apiFetch(_apiUrl + '/api/nostr/admin/arbor_trigger', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ mode: 'forge-scraper', owner_email: email, domain: domain })
+        });
+        showToast('Forge du scraper ' + domain + ' démarrée', 'ok');
+        opsLog([{ type: 'ok', text: 'arbor_trigger forge-scraper : ' + domain + ' (' + email + ')' }]);
+        loadArborStatus();
+    } catch(e) {
+        if (e.message !== '403') showToast('Erreur : ' + e.message, 'err');
+    } finally {
+        btnEl.disabled = false; btnEl.textContent = savedText;
+    }
+}
+
+async function loadArborMinedPreview(btnEl) {
+    var out = document.getElementById('arbor-mined-body');
+    btnEl.disabled = true; var savedText = btnEl.textContent; btnEl.textContent = '⏳ Analyse en cours (peut prendre plusieurs minutes)…';
+    out.innerHTML = '';
+    try {
+        var data = await apiFetch(_apiUrl + '/api/nostr/admin/arbor_mined_preview');
+        var clusters = data.clusters || [];
+        if (!clusters.length) {
+            out.innerHTML = '<div style="font-size:.74rem;color:var(--text2)">Aucun nouveau pattern détecté.</div>';
+        } else {
+            out.innerHTML = clusters.map(function(c) {
+                return '<div style="border:1px solid var(--border);border-radius:6px;padding:8px 10px;margin-bottom:6px;font-size:.76rem">' +
+                    '<b>' + escHtml(c.summary || '(résumé non calculé)') + '</b><br>' +
+                    '<span style="color:var(--text2)">' + c.count + ' demande(s) · ' + c.owners.length + ' compte(s) : ' + escHtml(c.owners.join(', ')) + '</span>' +
+                    '</div>';
+            }).join('');
+        }
+    } catch(e) {
+        if (e.message !== '403') out.innerHTML = '<div style="color:var(--danger)">Erreur : ' + escHtml(e.message) + '</div>';
+    } finally {
+        btnEl.disabled = false; btnEl.textContent = savedText;
+    }
+}
 
 async function loadMizStats() {
     if (!_hasAdminAuth()) { showToast('Connectez-vous en tant que Capitaine (extension NOSTR)', 'err'); return; }

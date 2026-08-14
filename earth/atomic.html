@@ -3404,11 +3404,24 @@ async function publishIncarnationCert() {
     const loc = document.getElementById('birth-location-label')?.textContent || '';
     const birthPlace = (loc && loc !== 'Cliquez sur la carte ou cherchez une ville' && loc !== 'Aucune sélection') ? loc : '';
 
-    if (btn) { btn.textContent = '⏳ Challenge…'; btn.disabled = true; }
+    if (btn) { btn.textContent = '⏳ Localisation…'; btn.disabled = true; }
+    _certStatus('Vérification de votre station d\'origine…');
+
+    // ── Résolution proactive de la home station AVANT le premier appel réseau ──
+    // Le MULTIPASS d'un email n'existe que sur SA station d'origine. Si elle
+    // n'a pas déjà été résolue (ex. clic très rapide après connexion, avant que
+    // le polling de window._uphEmail n'ait eu le temps de tourner), on tente une
+    // résolution synchrone ici plutôt que de laisser échouer l'appel /activate
+    // sur la station courante puis se rabattre sur _proposeStationRedirectOrFallback.
+    if (!_resolvedUspot && typeof window._detectEmailOnRelay === 'function') {
+        await window._detectEmailOnRelay(email);
+    }
+
+    if (btn) btn.textContent = '⏳ Challenge…';
     _certStatus('Obtention du challenge d\'authentification…');
 
     try {
-        const apiUrl = _resolvedUspot ||
+        const apiUrl = _resolvedUspot || window._uphHomeStationUrl ||
             (typeof window.getAPIUrl === 'function' ? window.getAPIUrl()
             : (location.hostname === '127.0.0.1' || location.hostname === 'localhost')
               ? 'http://127.0.0.1:54321' : '');
@@ -3417,7 +3430,7 @@ async function publishIncarnationCert() {
         const chRes  = await fetch(apiUrl + '/atom4love/challenge?email=' + encodeURIComponent(email));
         const chJson = await chRes.json().catch(() => ({}));
         if (!chRes.ok) {
-            throw new Error(chJson.error || chJson.detail || chJson.message || ('Challenge indisponible (' + chRes.status + ')'));
+            throw new Error(chJson.message || chJson.detail || chJson.error || ('Challenge indisponible (' + chRes.status + ')'));
         }
 
         // ── Étape 2 : signer un event kind 22242 avec la clé UPH connectée ────
@@ -3457,7 +3470,8 @@ async function publishIncarnationCert() {
         const actRes  = await fetch(apiUrl + '/atom4love/activate', { method: 'POST', body: fd });
         const actJson = await actRes.json().catch(() => ({}));
         if (!actRes.ok || !actJson.activated) {
-            throw new Error(actJson.error || actJson.message || actJson.detail || ('HTTP ' + actRes.status));
+            // Message humain prioritaire (actJson.error n'est qu'un code machine, ex. LOVE_KEY_EXISTS_MISMATCH)
+            throw new Error(actJson.message || actJson.detail || actJson.error || ('HTTP ' + actRes.status));
         }
 
         const phaseStr = actJson.personal_phase != null ? actJson.personal_phase.toFixed(4) : '?';
@@ -3953,7 +3967,7 @@ function _hexToNpub(hex) {
 /* ── Détection MULTIPASS via tag #i NIP-39 sur le relay constellation ── */
 let _emailDetectTimer = null;
 
-function _updateEmailHint(state, data) {
+async function _updateEmailHint(state, data) {
     const hint = document.getElementById('multipass-email-hint');
     // Le bouton réel de l'étape 1 est "step1-next-btn" (aucun élément "btn-multipass"
     // n'existe dans le HTML — cf. _goToCreateMultipass()/étape 5, seule page qui gère
@@ -3968,8 +3982,10 @@ function _updateEmailHint(state, data) {
             const station = (data.home_station || '').split(':')[0];
             const stDisp  = station ? station.slice(0,14)+'…' : '?';
             const nameStr = data.name ? ` · <span style="color:rgba(255,255,255,.6)">${data.name}</span>` : '';
-            // Résoudre la home station depuis l'IPFSNODEID pour cibler le bon uSPOT
-            if (station) _resolveStationFromKind0(data.home_station || station);
+            // Résoudre la home station depuis l'IPFSNODEID pour cibler le bon uSPOT —
+            // attendu (awaited par _detectEmailOnRelay) pour garantir que _resolvedUspot
+            // est fixé avant que _activate() ne construise son apiUrl.
+            if (station) await _resolveStationFromKind0(data.home_station || station);
             // Info uniquement — la création/récupération réelle se fait via /g1
             // (étape 5, _goToCreateMultipass()), jamais saisie de PASS ici.
             hint.innerHTML =
@@ -4005,7 +4021,7 @@ async function _detectEmailOnRelay(email) {
         if (evs.length) {
             let meta = {};
             try { meta = JSON.parse(evs[0].content); } catch(_) {}
-            _updateEmailHint('found', {
+            await _updateEmailHint('found', {
                 name:         meta.display_name || meta.name || '',
                 home_station: meta.home_station || ''
             });

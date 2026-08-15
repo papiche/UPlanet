@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Made In Zion — Forge ton MULTIPASS</title>
+    <!-- Anti-FOUC thème : applique data-theme AVANT le premier rendu CSS -->
+    <script>try{var _t=localStorage.getItem('uplanet-theme');if(_t)document.documentElement.setAttribute('data-theme',_t)}catch(e){}</script>
     <link rel="stylesheet" href="bootstrap.min.css">
     <link rel="stylesheet" href="leaflet.css">
     <style>
@@ -15,9 +17,27 @@
             --mz-bg:  #021a11; --tbg: #010a06;
             --mz-glass: rgba(2,122,72,.14);
             --bdr:  rgba(0,201,104,.28);
+            /* Texte posé à même le fond de page (hero, présentation, footer) — le reste
+               du contenu vit dans des cartes en verre sombre (--mz-glass/--tbg) qui ne changent pas de thème */
+            --body-fg: #e0f2e9;
+            --txt-strong: #ffffff;
+            --txt-soft:   #b3d4c4;
+            --txt-dim:    rgba(255,255,255,.4);
+            --pill-border: rgba(255,255,255,.3);
+            --pill-text:   rgba(255,255,255,.75);
+        }
+        :root[data-theme="light"] {
+            --mz-bg: #eef6f1;
+            --mz-glass: rgba(2,26,17,.92);
+            --body-fg: #123524;
+            --txt-strong: #0d2e1e;
+            --txt-soft:   #1f4632;
+            --txt-dim:    rgba(10,40,25,.55);
+            --pill-border: rgba(10,40,25,.3);
+            --pill-text:   rgba(10,40,25,.75);
         }
         html,body{scroll-behavior:smooth}
-        body{background:var(--mz-bg);color:#e0f2e9;font-family:'Segoe UI',system-ui,sans-serif}
+        body{background:var(--mz-bg);color:var(--body-fg);font-family:'Segoe UI',system-ui,sans-serif;transition:background .3s,color .3s}
         body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
             background:radial-gradient(circle at 12% 55%,rgba(155,48,255,.07),transparent 28%),
                        radial-gradient(circle at 88% 28%,rgba(0,201,104,.07),transparent 28%)}
@@ -39,10 +59,27 @@
         .pilier-icon{display:block;margin-bottom:.7rem;width:52px;height:52px}
         .pilier h3{color:var(--gold);font-size:1.08rem;margin-bottom:.5rem}
         .pilier p{color:#b3d4c4;font-size:.88rem;margin:0}
+        /* ── Bandeau connecteur : ce qui relie les 4 Piliers ── */
+        .connector{background:var(--mz-glass);border:1px solid var(--bdr);border-radius:14px;
+                   padding:1.4rem 1.6rem;margin-top:.6rem;position:relative;overflow:hidden;
+                   display:flex;flex-wrap:wrap;align-items:center;gap:1.2rem;text-decoration:none;
+                   transition:transform .3s,box-shadow .3s,border-color .3s}
+        .connector::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;
+                   background:linear-gradient(90deg,var(--em),var(--gold),var(--cy),var(--mv),var(--gold))}
+        .connector:hover{transform:translateY(-3px);border-color:var(--cy);
+                   box-shadow:0 10px 30px rgba(0,204,255,.16)}
+        .connector-chain{display:flex;align-items:center;gap:.3rem;font-size:1.35rem;flex:none}
+        .connector-chain span.arw{font-size:.9rem;color:rgba(255,255,255,.25)}
+        .connector-txt{flex:1;min-width:220px}
+        .connector-txt strong{color:var(--cy);text-transform:uppercase;letter-spacing:.5px;font-size:.95rem}
+        .connector-txt p{color:#b3d4c4;font-size:.85rem;margin:.3rem 0 0;line-height:1.55}
+        .connector-cta{flex:none;background:rgba(0,204,255,.1);border:1px solid rgba(0,204,255,.35);
+                   color:var(--cy);border-radius:8px;padding:8px 16px;font-size:.82rem;font-weight:700;
+                   white-space:nowrap}
         /* ── Section title ── */
         .s-title{text-align:center;text-transform:uppercase;letter-spacing:2px;
                   font-size:1.5rem;font-weight:700;margin-bottom:.3rem}
-        .s-sub{text-align:center;color:rgba(255,255,255,.4);font-size:.88rem;margin-bottom:2.2rem}
+        .s-sub{text-align:center;color:var(--txt-dim);font-size:.88rem;margin-bottom:2.2rem}
         /* ── Pipeline SVG wrapper ── */
         .svg-wrap{background:rgba(0,0,0,.45);border:1px solid rgba(0,201,104,.18);
                   border-radius:14px;padding:1.2rem;overflow-x:auto}
@@ -135,7 +172,7 @@
         /* Modal carte — choix du lieu (naissance / conception) */
         #miz-map-overlay{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:2000;
                           display:flex;align-items:center;justify-content:center;padding:1rem}
-        #miz-map-modal{background:var(--mz-bg,#021a11);border:1px solid rgba(255,255,255,.15);
+        #miz-map-modal{background:var(--tbg,#010a06);border:1px solid rgba(255,255,255,.15);
                         border-radius:14px;padding:1rem;width:100%;max-width:34rem;
                         box-shadow:0 10px 40px rgba(0,0,0,.6)}
         #miz-map-box{height:260px;border-radius:10px;overflow:hidden;margin-top:.5rem}
@@ -153,6 +190,13 @@
         footer{text-align:center;padding:2.5rem 1rem;color:var(--em-dk);font-size:.88rem}
         footer a{color:var(--gold-dim);text-decoration:none}
         footer a:hover{text-decoration:underline}
+        .op-pill{border:1px solid var(--pill-border);color:var(--pill-text);background:rgba(255,255,255,.05)}
+        /* ── Bascule thème clair/sombre ── */
+        .theme-toggle{position:fixed;top:14px;right:14px;z-index:1400;width:42px;height:42px;
+                       border-radius:50%;display:flex;align-items:center;justify-content:center;
+                       background:var(--mz-glass);border:1px solid var(--bdr);color:var(--txt-strong);
+                       font-size:1.15rem;cursor:pointer;transition:transform .25s,box-shadow .25s}
+        .theme-toggle:hover{transform:scale(1.08);box-shadow:0 0 18px rgba(0,201,104,.3)}
         /* ── Sections pliables — style carte Pilier ── */
         .s-hdr{background:var(--mz-glass);border:1px solid var(--bdr);border-radius:14px;
                padding:2rem 1.5rem 1.6rem;position:relative;overflow:hidden;
@@ -175,10 +219,12 @@
         .s-collapsed .s-body{max-height:0!important;opacity:0;pointer-events:none}
         .s-hdr-txt{width:100%}
         .s-hdr-txt .s-title{margin-bottom:.35rem}
-        .s-hdr-txt .s-sub{margin-bottom:0;max-width:640px;margin-left:auto;margin-right:auto}
+        .s-hdr-txt .s-sub{margin-bottom:0;max-width:640px;margin-left:auto;margin-right:auto;color:rgba(255,255,255,.4)}
     </style>
 </head>
 <body>
+
+<button id="theme-btn" class="theme-toggle" title="Changer de thème" onclick="toggleTheme()">☀️</button>
 
 <!-- ── HERO ─────────────────────────────────────────────────────────────────── -->
 <section class="hero">
@@ -246,13 +292,13 @@
             <h2 style="color:var(--gold);font-size:1.55rem;font-weight:700;margin-bottom:.8rem;line-height:1.2;">
                 L'Académie qui bâtit<br><span style="color:var(--em);">hors de la Matrice</span>
             </h2>
-            <p style="color:#b3d4c4;font-size:.95rem;line-height:1.65;margin-bottom:1rem;">
-                <strong style="color:#fff;">Made In Zion</strong> est un chantier-école coopératif. Nous transmettons
+            <p style="color:var(--txt-soft);font-size:.95rem;line-height:1.65;margin-bottom:1rem;">
+                <strong style="color:var(--txt-strong);">Made In Zion</strong> est un chantier-école coopératif. Nous transmettons
                 les savoirs oubliés — construction en dôme, énergie thermique low-tech, mobilité légère, forêt-jardin —
                 et nous les connectons au réseau décentralisé <strong style="color:var(--em);">UPlanet</strong> pour
                 financer l'autonomie par la <strong style="color:var(--gold);">Monnaie Libre Ẑen</strong>.
             </p>
-            <p style="color:#b3d4c4;font-size:.95rem;line-height:1.65;margin-bottom:1.4rem;">
+            <p style="color:var(--txt-soft);font-size:.95rem;line-height:1.65;margin-bottom:1.4rem;">
                 Chaque dôme bâti devient une <strong style="color:var(--mv);">Ambassade Web3</strong> : nœud IPFS,
                 relay NOSTR, hotspot mesh. Le réseau rémunère chaque nœud en <strong style="color:var(--gold);">Ẑen</strong>
                 pour les flux relayés — sans banque, sans intermédiaire.
@@ -378,6 +424,19 @@
             <p><strong>Forêt-Jardin & Abondance.</strong> Zéro labour, zéro chimie. Forêts nourricières et aquaculture régénératrice.</p>
         </a></div>
     </div>
+
+    <!-- ── Bandeau connecteur : ce qui relie et finance les 4 Piliers ── -->
+    <a class="connector" href="reseau.html">
+        <span class="connector-chain">
+            🛖<span class="arw">→</span>⚡<span class="arw">→</span>📡<span class="arw">→</span>🕸<span class="arw">→</span>🪙<span class="arw">↺</span>
+        </span>
+        <span class="connector-txt">
+            <strong>Le Réseau — ce qui relie et finance les 4 Piliers</strong>
+            <p>Vaisseau + Moteur donnent l'autonomie d'un foyer. Connecté en Constellation et rémunéré en Ẑen,
+            ce foyer finance la construction du Vaisseau suivant — le cercle ne s'arrête jamais.</p>
+        </span>
+        <span class="connector-cta">Découvrir Le Réseau →</span>
+    </a>
 </section>
 
 <!-- ── MAILLAGE HEXAGONAL & RENDEZ-VOUS PRIVÉ ────────────────────────────────── -->
@@ -747,7 +806,7 @@
         </div>
     </div>
 
-    <p style="margin-top:1.4rem;text-align:center;font-size:.78rem;color:rgba(255,255,255,.28)">
+    <p style="margin-top:1.4rem;text-align:center;font-size:.78rem;color:var(--txt-dim)">
         Spécifications complètes : Disclosures tdcommons #1–5 — G1FabLab / UPlanet ORIGIN (CC BY 4.0, AGPL-3.0)
     </p>
     </div><!-- /s-body goldberg -->
@@ -2118,10 +2177,8 @@ kp = <span class="kw">nacl.sign</span><br>
            letter-spacing:.5px">
             📖 Grimoire de Craft du G1FabLab (recettes matériaux) → grimoire-craft.html
         </a>
-        <a href="opensource.html" style="display:inline-block;padding:6px 18px;
-           border:1px solid rgba(255,255,255,.3);border-radius:6px;color:rgba(255,255,255,.75);
-           font-size:.82rem;text-decoration:none;background:rgba(255,255,255,.05);
-           letter-spacing:.5px">
+        <a href="opensource.html" class="op-pill" style="display:inline-block;padding:6px 18px;
+           border-radius:6px;font-size:.82rem;text-decoration:none;letter-spacing:.5px">
             ⚖️ La Charte Open Source (licences AGPL/CC BY/CC BY-SA) → opensource.html
         </a>
     </p>
@@ -2135,6 +2192,7 @@ kp = <span class="kw">nacl.sign</span><br>
 <script src="nacl-fast.min.js"></script>
 <script src="nostr.bundle.js"></script>
 <script src="common.js"></script>
+<script src="carousel-3d.js"></script>
 <script src="uplanet-header.js"></script>
 <script src="miz-nav.js"></script>
 <script>MizNav.injectBottomNav();</script>

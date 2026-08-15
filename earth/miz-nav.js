@@ -17,6 +17,7 @@ var CORE_PAGES = [
 ];
 
 var MORE_PAGES = [
+    { id: 'reseau',        icon: '🕸', label: 'Le Réseau',             sub: 'Constellation & économie Ẑen',        href: 'reseau.html' },
     { id: 'grimoire',      icon: '📖', label: 'Grimoire de Craft',     sub: 'Recettes matériaux du G1FabLab',      href: 'grimoire-craft.html' },
     { id: 'opensource',    icon: '⚖️', label: 'Charte Open Source',    sub: 'Licences AGPL/CC BY/CC BY-SA',        href: 'opensource.html' },
     { id: 'zine-armateur', icon: '📄', label: 'Contrat Armateur',      sub: 'À signer et faire passer',            href: 'ZINE.html' },
@@ -36,6 +37,7 @@ function _detectPage() {
     if (file.indexOf('moteur-') === 0)          return 'moteur';
     if (file === 'mouvement.html')              return 'mouvement';
     if (file === 'oasis.html')                  return 'oasis';
+    if (file === 'reseau.html')                 return 'reseau';
     if (file === 'grimoire-craft.html')         return 'grimoire';
     if (file === 'opensource.html')             return 'opensource';
     if (file === 'ZINE.html')                   return 'zine-armateur';

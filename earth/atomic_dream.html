@@ -557,7 +557,17 @@ async function loadMyProfile() {
     const email = window._uphEmail;
     if (!email) return;
     try {
-        const res = await fetch(_apiUrl() + '/atom4love/dream?email=' + encodeURIComponent(email));
+        const apiUrl = _apiUrl();
+        let url = apiUrl + '/atom4love/dream?email=' + encodeURIComponent(email);
+        // cr/dr ne sont renvoyés par le serveur qu'au propriétaire prouvé (ou à un
+        // Ami de Cœur réciproque) — on prouve ici qu'on consulte notre propre rêve.
+        if (window.isNostrConnected && window.userPubkey) {
+            try {
+                const authEvent = await a4lAuthEvent(apiUrl, email);
+                url += '&auth_event=' + encodeURIComponent(JSON.stringify(authEvent));
+            } catch (_) { /* signature refusée/indisponible — cr/dr resteront vides */ }
+        }
+        const res = await fetch(url);
         if (res.status === 404) {
             document.getElementById('not-activated-card').style.display = '';
             document.getElementById('main-content').style.display = 'none';

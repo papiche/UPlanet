@@ -23,6 +23,7 @@ var MORE_PAGES = [
     { id: 'zine-armateur', icon: '📄', label: 'Contrat Armateur',      sub: 'À signer et faire passer',            href: 'ZINE.html' },
     { id: 'zine-adhesion', icon: '🌿', label: 'Adhésion Made In Zion', sub: 'À signer et transmettre à vos amis',  href: 'ZINE.MIZ.html' },
     { id: 'zine-art',      icon: '🌾', label: 'Déclaration de Talent', sub: 'Révèle ton Art — WoTx²',              href: 'ZINE.MOUVEMENT.html' },
+    { id: 'zine-love',     icon: '💜', label: 'Atom4Love',            sub: 'À distribuer avec CoracleẐ',          href: 'ZINE.LOVE.html' },
 ];
 
 var ALL_PAGES = CORE_PAGES.concat(MORE_PAGES);
@@ -43,6 +44,7 @@ function _detectPage() {
     if (file === 'ZINE.html')                   return 'zine-armateur';
     if (file === 'ZINE.MIZ.html')               return 'zine-adhesion';
     if (file === 'ZINE.MOUVEMENT.html')         return 'zine-art';
+    if (file === 'ZINE.LOVE.html')               return 'zine-love';
     return '';
 }
 

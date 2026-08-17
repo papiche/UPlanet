@@ -105,13 +105,24 @@
     const zoomLevel =  calculateZoomLevel(desiredImageWidthInKm, latitude);
     // const zoomLevel =  calculateZoomLevel(desiredImageWidthInKm, latitude) + 2;
 
-    console.log('Recommended zoom level:', zoomLevel);
+    // OSM tiles are available up to zoom 19. calculateZoomLevel() can compute
+    // beyond that for very tight bounding boxes (e.g. deg=0.001, used for the
+    // UMAP-level zUmap.jpg profile picture, resolves to ~18.46) — clamped here
+    // so the requested view never exceeds what the tile layer can actually
+    // render. Without this, setView() below (called BEFORE the tile layer is
+    // added, so no maxZoom constraint exists yet) sets the map to a zoom the
+    // tile layer's own maxZoom then refuses to draw tiles for, producing a
+    // blank screenshot — this was silently breaking the UMAP profile picture.
+    const OSM_MAX_ZOOM = 19;
+    const clampedZoomLevel = Math.min(zoomLevel, OSM_MAX_ZOOM);
+    console.log('Recommended zoom level:', zoomLevel, '-> clamped:', clampedZoomLevel);
 
     const map = L.map('map', {
       zoomControl: false // Disable the default zoom control
-    }).setView([centerLat, centerLon], zoomLevel);
+    }).setView([centerLat, centerLon], clampedZoomLevel);
 
     const tileLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: OSM_MAX_ZOOM,
     attribution: `U Planet | Astroport | ${southWestLat} : ${southWestLon}`
     }).addTo(map);
 

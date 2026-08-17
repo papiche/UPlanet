@@ -93,10 +93,18 @@
 
 <!-- ══════════════ Contributions ══════════════ -->
 <div class="adm-tab-body" id="pane-contrib">
-  <h3>Contributions €→Ẑen (rattrapage 12 mois)</h3>
-  <p style="font-size:.8rem;color:var(--text2)">Délègue à <code>oc2uplanet.sh --sync</code> — peut prendre jusqu'à ~30s (vérification d'une preuve NOSTR par transaction).</p>
-  <button class="btn" id="btn-load-contrib" onclick="loadContributions()">🔄 Charger</button>
-  <div id="contrib-wrap"></div>
+  <div class="panel-section">
+    <h3>Contributions €→Ẑen (rattrapage 12 mois)</h3>
+    <p style="font-size:.8rem;color:var(--text2)">Délègue à <code>oc2uplanet.sh --sync</code> — croise chaque don OpenCollective avec l'état MULTIPASS/abonné et une preuve d'émission NOSTR, mais reste basé sur les <b>montants déclarés par OC</b>. Peut prendre jusqu'à ~30s.</p>
+    <button class="btn" id="btn-load-contrib" onclick="loadContributions()">🔄 Charger</button>
+    <div id="contrib-wrap"></div>
+  </div>
+  <div class="panel-section">
+    <h3>Preuves de crédit confirmées (kind 30851, oc-emission)</h3>
+    <p style="font-size:.8rem;color:var(--text2)">Source de vérité indépendante d'OC : événements signés par le Capitaine au moment de l'émission réelle des Ẑen — montant et statut tels qu'effectivement publiés sur le relay, pas simplement déclarés côté OpenCollective.</p>
+    <button class="btn-sm" id="btn-load-credits" onclick="loadCreditProofs()">🔄 Charger</button>
+    <div id="credits-wrap"></div>
+  </div>
 </div>
 
 <!-- ══════════════ Dépenses / Burns ══════════════ -->
@@ -194,6 +202,7 @@
 <script src="nostr.bundle.js"></script>
 <script src="common.js"></script>
 <script src="uplanet-header.js"></script>
+<script src="relay.js"></script>
 <script src="jspdf.umd.min.js"></script>
 <script src="oc-invoice-pdf.js"></script>
 <script>
@@ -340,6 +349,40 @@ async function loadContributions() {
     finally { btn.disabled = false; btn.textContent = '🔄 Charger'; }
 }
 
+// Preuves de crédit (kind 30851, #t=oc-emission) — lit directement le contenu des
+// events publiés par _publish_emission_proof() dans oc2uplanet.sh : email, amount,
+// tier_slug, status, generated_at proviennent tous du contenu SIGNÉ par le Capitaine
+// au moment de l'émission, pas d'une donnée OC re-fetchée à chaque chargement de page.
+//
+// Requête via connexion WebSocket directe au relay (RelaySelector.query, relay.js) —
+// pas de détour par /api/nostr/admin/events (HTTP → subprocess strfry scan côté
+// UPassport) : ces preuves sont publiques par nature (vérifiabilité par n'importe
+// qui), pas besoin de l'auth admin NIP-98/UPLANETNAME de cette route.
+async function loadCreditProofs() {
+    var btn = document.getElementById('btn-load-credits');
+    btn.disabled = true; btn.textContent = '⏳…';
+    try {
+        var relayWs = (typeof window.getRelayUrl === 'function' && window.getRelayUrl()) || 'ws://127.0.0.1:7777';
+        var events = await RelaySelector.query(relayWs, { kinds: [30851], '#t': ['oc-emission'], limit: 300 }, { timeout: 8000 });
+        var credits = events.map(function(ev) {
+            try { return Object.assign({}, JSON.parse(ev.content), {_ev: ev}); }
+            catch(e) { return null; }
+        }).filter(Boolean).sort(function(a, b) {
+            return (b.generated_at || '').localeCompare(a.generated_at || '');
+        });
+        if (!credits.length) { document.getElementById('credits-wrap').innerHTML = '<div class="state-empty">Aucune preuve de crédit (relay : ' + escHtml(relayWs) + ').</div>'; return; }
+        document.getElementById('credits-wrap').innerHTML = '<table><thead><tr><th>Email</th><th>Montant</th><th>Tier</th><th>Statut</th><th>Émis le</th></tr></thead><tbody>' +
+            credits.map(function(c) {
+                var cls = c.status === 'OK' ? 's-ok' : (c.status === 'PENDING' ? 's-pending' : 's-fail');
+                return '<tr><td>' + escHtml(c.email) + '</td><td>' + escHtml(c.amount) + ' Ẑ</td><td>' + escHtml(c.tier_slug) + '</td>' +
+                    '<td><span class="status-pill ' + cls + '">' + escHtml(c.status) + '</span></td>' +
+                    '<td>' + escHtml(c.generated_at) + '</td></tr>';
+            }).join('') + '</tbody></table>';
+        showToast(credits.length + ' preuve(s) de crédit chargée(s) (relay direct)', 'ok');
+    } catch(e) { showToast('Erreur relay : ' + e.message, 'err'); }
+    finally { btn.disabled = false; btn.textContent = '🔄 Charger'; }
+}
+
 // ── Onglet Dépenses / Burns ────────────────────────────────────────────────
 async function loadExpenses() {
     var btn = document.getElementById('btn-load-expenses');
@@ -357,16 +400,20 @@ async function loadExpenses() {
     } catch(e) { if (!['403','503'].includes(e.message)) showToast('Erreur : ' + e.message, 'err'); }
     finally { btn.disabled = false; btn.textContent = '🔄 Charger'; }
 }
+// Preuves de burn (kind 30851, #t=oc-burn, type=debit) — même principe que
+// loadCreditProofs() : lecture publique en direct sur le relay (RelaySelector.query),
+// pas de détour par /api/nostr/admin/events (HTTP → subprocess strfry côté UPassport).
 async function loadBurnProofs() {
     var btn = document.getElementById('btn-load-burns');
     btn.disabled = true; btn.textContent = '⏳…';
     try {
-        var data = await apiFetch(_apiUrl + '/api/nostr/admin/events?kind=30851&limit=200');
-        var debits = (data.events || []).map(function(ev) {
+        var relayWs = (typeof window.getRelayUrl === 'function' && window.getRelayUrl()) || 'ws://127.0.0.1:7777';
+        var events = await RelaySelector.query(relayWs, { kinds: [30851], '#t': ['oc-burn'], limit: 200 }, { timeout: 8000 });
+        var debits = events.map(function(ev) {
             try { var c = JSON.parse(ev.content); return c.type === 'debit' ? Object.assign({}, c, {_ev: ev}) : null; }
             catch(e) { return null; }
         }).filter(Boolean);
-        if (!debits.length) { document.getElementById('burns-wrap').innerHTML = '<div class="state-empty">Aucune preuve de burn.</div>'; return; }
+        if (!debits.length) { document.getElementById('burns-wrap').innerHTML = '<div class="state-empty">Aucune preuve de burn (relay : ' + escHtml(relayWs) + ').</div>'; return; }
         document.getElementById('burns-wrap').innerHTML = '<table><thead><tr><th>Facture</th><th>Rôle</th><th>Nœud</th><th>Bénéficiaire</th><th>Montant</th><th>Statut</th><th>Liens</th></tr></thead><tbody>' +
             debits.map(function(d) {
                 var pdfTag = (d._ev.tags || []).find(function(t){return t[0]==='pdf_cid';});
@@ -379,7 +426,8 @@ async function loadBurnProofs() {
                     '<td>' + escHtml(d.email) + '</td><td>' + escHtml(d.amount) + ' Ẑ</td>' +
                     '<td><span class="status-pill ' + cls + '">' + escHtml(d.status) + '</span></td><td>' + links + '</td></tr>';
             }).join('') + '</tbody></table>';
-    } catch(e) { if (!['403','503'].includes(e.message)) showToast('Erreur : ' + e.message, 'err'); }
+        showToast(debits.length + ' preuve(s) de burn chargée(s) (relay direct)', 'ok');
+    } catch(e) { showToast('Erreur relay : ' + e.message, 'err'); }
     finally { btn.disabled = false; btn.textContent = '🔄 Charger'; }
 }
 function _ipfsGatewayLocal() {

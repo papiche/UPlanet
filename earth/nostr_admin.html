@@ -588,6 +588,32 @@
     </div>
   </div>
 
+  <!-- Purge des comptes "étrangers" (analyse + nettoyage bulk du relay) -->
+  <div class="relay-profiles-panel" id="purge-panel">
+    <h4>🧹 Purge des comptes étrangers</h4>
+    <p style="font-size:.78rem;color:var(--text2);margin:0 0 10px">
+      Identifie les auteurs de ce relay qui ne sont ni un MULTIPASS connu, ni un NODE actif de la
+      constellation, ni couverts par un DID + abonnement coopératif valide — délègue à
+      <code>purge_nostr_strangers.sh</code> (Astroport.ONE). La purge supprime définitivement leurs
+      événements non protégés (jamais le ledger Ğ1-N², jamais les harmoniques ATOM4LOVE/ZICMAMA).
+    </p>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
+      <button class="btn-query" id="btn-purge-analyze" onclick="purgeStrangersAnalyze()" style="padding:5px 14px;font-size:.78rem">
+        🔍 Analyser le relay
+      </button>
+      <button class="btn-del-local" id="btn-purge-clean" onclick="purgeStrangersClean()" disabled style="padding:5px 14px;font-size:.8rem">
+        ☢️ Purger les candidats (<span id="purge-candidate-count">0</span>)
+      </button>
+      <span id="purge-status" style="font-size:.75rem;color:var(--text2)"></span>
+    </div>
+    <div id="purge-wrap" style="display:none">
+      <table class="events-table">
+        <thead><tr><th>Pubkey</th><th>Nom</th><th>Statut</th><th style="text-align:right">Volume</th></tr></thead>
+        <tbody id="purge-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
   <!-- Sélection manuelle par pubkey -->
   <div class="profile-search">
     <label style="font-size:.82rem;color:var(--text2);white-space:nowrap">Pubkey hex</label>
@@ -1156,6 +1182,10 @@ async function adminDelete(ids) {
 }
 
 // ── Query ────────────────────────────────────────────────────────────────
+// Lecture directe sur le relay (RelaySelector.query) plutôt que
+// /api/nostr/admin/events (HTTP → subprocess strfry côté UPassport) — la
+// donnée elle-même est publique, seule la fonctionnalité de suppression qui
+// suit (adminDelete) reste gatée côté serveur.
 async function doQuery() {
     if (!_hasAdminAuth()) {
         showToast('Connectez-vous en tant que Capitaine (extension NOSTR)', 'err');
@@ -1163,7 +1193,6 @@ async function doQuery() {
     }
     var btn = document.getElementById('btn-query');
     btn.disabled = true; btn.textContent = '⏳…';
-    var params = new URLSearchParams();
     var kind = document.getElementById('f-kind').value.trim();
     var author = document.getElementById('f-author').value.trim();
     var dtag = document.getElementById('f-dtag').value.trim();
@@ -1171,21 +1200,26 @@ async function doQuery() {
     var ttag = document.getElementById('f-ttag').value.trim();
     var since = datetimeToTs(document.getElementById('f-since').value);
     var until = datetimeToTs(document.getElementById('f-until').value);
-    if (kind)   params.set('kind', kind);
-    if (author) params.set('author', author);
-    if (dtag)   params.set('tag_d', dtag);
-    if (ptag)   params.set('tag_p', ptag);
-    if (ttag)   params.set('tag_t', ttag);
-    params.set('limit', document.getElementById('f-limit').value);
-    if (since)  params.set('since', since);
-    if (until)  params.set('until', until);
+    var filter = {};
+    if (kind) {
+        var kinds = kind.split(',').map(function(k){ return parseInt(k.trim(), 10); }).filter(function(n){ return !isNaN(n); });
+        if (kinds.length) filter.kinds = kinds;
+    }
+    if (author) filter.authors = [author];
+    if (dtag) filter['#d'] = [dtag];
+    if (ptag) filter['#p'] = [ptag];
+    if (ttag) filter['#t'] = [ttag];
+    filter.limit = parseInt(document.getElementById('f-limit').value, 10) || 100;
+    if (since) filter.since = since;
+    if (until) filter.until = until;
     try {
-        var data = await apiFetch(_apiUrl + '/api/nostr/admin/events?' + params.toString());
-        _events = data.events || []; _selected.clear(); renderEvents();
+        var relayUrl = (typeof window.getRelayUrl === 'function' && window.getRelayUrl()) || 'ws://127.0.0.1:7777';
+        _events = await RelaySelector.query(relayUrl, filter, { timeout: 10000 });
+        _selected.clear(); renderEvents();
         showToast(_events.length + ' événement(s) récupéré(s)', _events.length > 0 ? 'ok' : 'warn');
         document.getElementById('auth-status').innerHTML = '<span style="color:var(--ok)">✓ Authentifié</span>';
     } catch(e) {
-        if (e.message !== '403') showToast('Erreur réseau: ' + e.message, 'err');
+        showToast('Erreur relay: ' + e.message, 'err');
     } finally {
         btn.disabled = false; btn.textContent = '🔍 Requêter';
     }
@@ -1309,18 +1343,17 @@ async function loadProfile() {
     var btn = document.getElementById('btn-load-profile');
     btn.disabled = true; btn.textContent = '⏳…';
     try {
+        var relayUrl = (typeof window.getRelayUrl === 'function' && window.getRelayUrl()) || 'ws://127.0.0.1:7777';
         var allEvents = [], profileMetas = [];
         for (var i = 0; i < targets.length; i++) {
             var hex = targets[i];
-            var p0 = new URLSearchParams({ kind:'0', author:hex, limit:'1' });
-            var pA = new URLSearchParams({ author:hex, limit:'500' });
             var results = await Promise.all([
-                apiFetch(_apiUrl+'/api/nostr/admin/events?'+p0),
-                apiFetch(_apiUrl+'/api/nostr/admin/events?'+pA)
+                RelaySelector.query(relayUrl, { kinds:[0], authors:[hex], limit:1 }, { timeout: 10000 }),
+                RelaySelector.query(relayUrl, { authors:[hex], limit:500 }, { timeout: 10000 })
             ]);
-            var d0 = results[0], dA = results[1];
-            allEvents = allEvents.concat(dA.events || []);
-            var prof = d0.events && d0.events[0] ? d0.events[0] : null;
+            var ev0 = results[0], evA = results[1];
+            allEvents = allEvents.concat(evA);
+            var prof = ev0 && ev0[0] ? ev0[0] : null;
             var meta = {}; if (prof) { try { meta = JSON.parse(prof.content); } catch(err) {} }
             profileMetas.push({ hex: hex, meta: meta, hasKind0: !!prof, event: prof });
         }
@@ -1387,7 +1420,7 @@ async function loadProfile() {
 
         renderProfileEvents();
         showToast(_profEvents.length + ' événement(s) chargé(s) — '+targets.length+' profil(s)', 'ok');
-    } catch(e) { if (e.message !== '403') showToast('Erreur: '+e.message,'err'); }
+    } catch(e) { showToast('Erreur relay: '+e.message,'err'); }
     finally { btn.disabled = false; btn.textContent = 'Charger'; }
 }
 
@@ -1558,13 +1591,93 @@ async function loadRelayProfiles() {
     var btn = document.getElementById('btn-load-relay-profiles');
     btn.disabled = true; btn.textContent = '⏳…';
     try {
-        var data = await apiFetch(_apiUrl+'/api/nostr/admin/events?'+new URLSearchParams({kind:'0',limit:'200'}));
-        _relayProfiles = data.events || [];
+        var relayUrl = (typeof window.getRelayUrl === 'function' && window.getRelayUrl()) || 'ws://127.0.0.1:7777';
+        _relayProfiles = await RelaySelector.query(relayUrl, { kinds:[0], limit:200 }, { timeout: 10000 });
         renderRelayProfiles();
         showToast(_relayProfiles.length+' profil(s) trouvé(s)','ok');
-    } catch(e) { if (e.message !== '403') showToast('Erreur: '+e.message,'err'); }
+    } catch(e) { showToast('Erreur relay: '+e.message,'err'); }
     finally { btn.disabled = false; btn.textContent = '📋 Charger les profils du relay'; }
 }
+
+// ── Purge des comptes étrangers (purge_nostr_strangers.sh) ─────────────────
+// Contrairement aux lectures ci-dessus, l'analyse (scans strfry ciblés,
+// classification MULTIPASS/NODE/DID) et la purge (strfry delete) restent
+// côté serveur — pas d'équivalent relay direct possible pour cette logique.
+var _purgeAuthors = [];
+
+async function purgeStrangersAnalyze() {
+    if (!_hasAdminAuth()) { showToast('Connectez-vous en tant que Capitaine (extension NOSTR)', 'err'); return; }
+    var btn = document.getElementById('btn-purge-analyze');
+    var status = document.getElementById('purge-status');
+    btn.disabled = true; btn.textContent = '⏳…'; status.textContent = 'Analyse en cours (scans strfry)…';
+    try {
+        var data = await apiFetch(_apiUrl + '/api/nostr/admin/purge_strangers');
+        if (data.running) {
+            _purgeAuthors = [];
+            renderPurgeCandidates([]);
+            document.getElementById('btn-purge-clean').disabled = true;
+            document.getElementById('purge-candidate-count').textContent = '…';
+            status.textContent = 'Une purge est déjà en cours (pid ' + data.pid + ')…';
+            if (data.log_tail) opsLog([{type:'info', text: '📋 Purge en cours — dernières lignes :\n' + data.log_tail}]);
+            showToast('Purge déjà en cours', 'warn');
+            return;
+        }
+        _purgeAuthors = data.authors || [];
+        renderPurgeCandidates(_purgeAuthors);
+        var n = data.candidate_count || 0;
+        document.getElementById('purge-candidate-count').textContent = n;
+        document.getElementById('btn-purge-clean').disabled = (n === 0);
+        status.textContent = _purgeAuthors.length + ' auteur(s) analysé(s) — ' + n + ' candidat(s) à la purge';
+        showToast(n + ' compte(s) candidat(s) à la purge', n > 0 ? 'warn' : 'ok');
+    } catch(e) {
+        status.textContent = '';
+        if (e.message !== '403') showToast('Erreur : ' + e.message, 'err');
+    } finally {
+        btn.disabled = false; btn.textContent = '🔍 Analyser le relay';
+    }
+}
+
+function renderPurgeCandidates(authors) {
+    var wrap = document.getElementById('purge-wrap');
+    var tbody = document.getElementById('purge-tbody');
+    var candidates = authors.filter(function(a) { return a.purge_candidate; });
+    if (candidates.length === 0) { wrap.style.display = 'none'; tbody.innerHTML = ''; return; }
+    wrap.style.display = '';
+    tbody.innerHTML = candidates.map(function(a) {
+        return '<tr>' +
+            '<td><span class="ev-pub" title="' + escAttr(a.hex) + ' — clic: voir profil" onclick="openProfile(' + jsAttr(a.hex) + ')">' +
+                escHtml(a.hex.slice(0, 10)) + '…</span></td>' +
+            '<td>' + escHtml(a.name) + '</td>' +
+            '<td style="color:var(--warn-text)">' + escHtml(a.status) + '</td>' +
+            '<td style="text-align:right">' + escHtml(a.volume) + '</td>' +
+            '</tr>';
+    }).join('');
+}
+
+async function purgeStrangersClean() {
+    var candidates = _purgeAuthors.filter(function(a) { return a.purge_candidate; });
+    if (!candidates.length) return;
+    if (!confirm('Purger DÉFINITIVEMENT les événements de ' + candidates.length + ' compte(s) étranger(s) ?\n\n' +
+        'IRRÉVERSIBLE — ni MULTIPASS connu, ni NODE actif, ni DID+abonnement valide pour ces comptes.\n\n' +
+        'Nécessite votre signature NIP-98 de Capitaine.')) return;
+    var btn = document.getElementById('btn-purge-clean');
+    var status = document.getElementById('purge-status');
+    btn.disabled = true; btn.textContent = '⏳ Lancement…';
+    try {
+        var data = await apiFetch(_apiUrl + '/api/nostr/admin/purge_strangers/clean', { method: 'POST' });
+        status.textContent = 'Purge lancée en arrière-plan (pid ' + data.pid + ')…';
+        btn.textContent = '⏳ Purge en cours…'; // reste désactivé — ré-analyser pour rafraîchir
+        opsLog([{type: 'warn', text: '☢️ Purge lancée — ' + candidates.length + ' compte(s) candidat(s). Relancez "Analyser" dans quelques instants pour vérifier.'}]);
+        showToast('Purge lancée en arrière-plan', 'warn');
+    } catch(e) {
+        if (e.message !== '403') {
+            showToast('Erreur : ' + e.message, 'err');
+            opsLog([{type: 'err', text: '✗ Échec du lancement de la purge : ' + e.message}]);
+        }
+        btn.disabled = false; btn.textContent = '☢️ Purger les candidats (' + candidates.length + ')';
+    }
+}
+
 // ── JSON Modal ────────────────────────────────────────────────────────────
 var _modalEvent = null;
 
@@ -1860,85 +1973,28 @@ function _treeSvg(groupId, color, cr) {
     return s + '</svg>';
 }
 
-function loadTree() {
+// Lecture directe sur le relay (RelaySelector.query, relay.js) — publique par
+// nature (un pubkey et ses events sont visibles de n'importe qui sur le relay),
+// plus besoin de distinguer un chemin admin (HTTP) d'un chemin public (WS brut) :
+// tout le monde utilise désormais le même chemin relay en priorité.
+async function loadTree() {
     var hex = document.getElementById('tree-hex-input').value.trim() || _userPubkey;
     if (!/^[0-9a-fA-F]{64}$/.test(hex)) {
         showToast('Pubkey invalide — connectez-vous via ⚡ ou saisissez une pubkey', 'warn'); return;
     }
-    // Admin API si Capitaine connecté, sinon REQ relay WebSocket (lecture publique)
-    if (_hasAdminAuth()) {
-        _loadTreeAdmin(hex);
-    } else {
-        _loadTreeRelay(hex);
-    }
-}
-
-async function _loadTreeAdmin(hex) {
     var btn = document.getElementById('btn-load-tree');
     var status = document.getElementById('tree-status');
-    btn.disabled = true; btn.textContent = '⏳…'; status.textContent = 'Chargement…';
+    btn.disabled = true; btn.textContent = '⏳…'; status.textContent = 'Connexion relay…';
     try {
-        var params = new URLSearchParams({ author: hex, limit: '500' });
-        var data = await apiFetch(_apiUrl + '/api/nostr/admin/events?' + params);
-        _treeEvents = data.events || [];
+        var relayUrl = (typeof window.getRelayUrl === 'function' && window.getRelayUrl()) || 'ws://127.0.0.1:7777';
+        _treeEvents = await RelaySelector.query(relayUrl, { authors: [hex], limit: 500 }, { timeout: 10000 });
         document.getElementById('tree-hex-input').value = hex;
         renderTree();
         showToast(_treeEvents.length + ' événement(s) chargé(s)', _treeEvents.length > 0 ? 'ok' : 'warn');
         status.textContent = _treeEvents.length + ' événement(s)';
     } catch(e) {
-        if (e.message !== '403') { showToast('Erreur: ' + e.message, 'err'); status.textContent = ''; }
+        status.textContent = ''; showToast('Erreur relay : ' + e.message, 'err');
     } finally {
-        btn.disabled = false; btn.textContent = '🌳 Charger l\'arbre';
-    }
-}
-
-function _loadTreeRelay(hex) {
-    var relayUrl = typeof window.getRelayUrl === 'function' ? window.getRelayUrl() : null;
-    if (!relayUrl) {
-        showToast('Relay NOSTR non détecté — connectez-vous en tant que Capitaine pour utiliser l\'API admin', 'warn'); return;
-    }
-    var btn = document.getElementById('btn-load-tree');
-    var status = document.getElementById('tree-status');
-    btn.disabled = true; btn.textContent = '⏳…'; status.textContent = 'Connexion relay…';
-    var events = [], done = false, ws;
-    var subId = 'tree-' + hex.slice(0, 6) + '-' + Date.now().toString(36);
-    var finish = function() {
-        if (done) return; done = true;
-        clearTimeout(timer);
-        try { ws.close(); } catch(e) {}
-        _treeEvents = events;
-        document.getElementById('tree-hex-input').value = hex;
-        btn.disabled = false; btn.textContent = '🌳 Charger l\'arbre';
-        if (!events.length && status.textContent === 'Connexion relay…') {
-            status.textContent = ''; showToast('Relay inaccessible — connectez-vous en tant que Capitaine', 'warn'); return;
-        }
-        renderTree();
-        status.textContent = events.length + ' événement(s)';
-        showToast(events.length + ' événement(s) chargé(s)', events.length > 0 ? 'ok' : 'warn');
-    };
-    var timer = setTimeout(finish, 10000);
-    try {
-        ws = new WebSocket(relayUrl);
-        ws.onopen = function() {
-            status.textContent = 'Chargement…';
-            ws.send(JSON.stringify(['REQ', subId, { authors: [hex], limit: 500 }]));
-        };
-        ws.onmessage = function(e) {
-            try {
-                var msg = JSON.parse(e.data);
-                if (msg[0] === 'EVENT' && msg[1] === subId) { events.push(msg[2]); }
-                else if ((msg[0] === 'EOSE' || msg[0] === 'CLOSED') && msg[1] === subId) { finish(); }
-            } catch(err) {}
-        };
-        ws.onclose = finish;
-        ws.onerror = function() {
-            if (done) return; done = true; clearTimeout(timer);
-            status.textContent = ''; showToast('Erreur WebSocket relay', 'err');
-            btn.disabled = false; btn.textContent = '🌳 Charger l\'arbre';
-        };
-    } catch(e) {
-        clearTimeout(timer); status.textContent = '';
-        showToast('Impossible d\'ouvrir le relay : ' + e.message, 'err');
         btn.disabled = false; btn.textContent = '🌳 Charger l\'arbre';
     }
 }
@@ -2290,13 +2346,14 @@ async function openMemDetail(email, hex) {
     panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 
     try {
+        var relayUrl = (typeof window.getRelayUrl === 'function' && window.getRelayUrl()) || 'ws://127.0.0.1:7777';
         var statusP = apiFetch(_apiUrl + '/api/nostr/admin/memory_status?' + new URLSearchParams({ email: email }));
         var cookiesP = hex
-            ? apiFetch(_apiUrl + '/api/nostr/admin/events?' + new URLSearchParams({ kind: '31903', author: hex, limit: '1' })).catch(function() { return { events: [] }; })
-            : Promise.resolve({ events: [] });
+            ? RelaySelector.query(relayUrl, { kinds:[31903], authors:[hex], limit:1 }, { timeout: 8000 }).catch(function() { return []; })
+            : Promise.resolve([]);
         var results = await Promise.all([statusP, cookiesP]);
         var status = results[0];
-        var cookieEvents = results[1].events || [];
+        var cookieEvents = results[1] || [];
         var cookieDomains = [];
         if (cookieEvents[0]) {
             try {
@@ -2790,9 +2847,10 @@ async function loadGrimoireStatus() {
     var btn = document.getElementById('btn-load-grimoire-status');
     btn.disabled = true; btn.textContent = '⏳…';
     try {
-        var data = await apiFetch(_apiUrl + '/api/nostr/admin/events?' + new URLSearchParams({ kind: '30500', tag_t: 'g1fablab', limit: '50' }));
+        var relayUrl = (typeof window.getRelayUrl === 'function' && window.getRelayUrl()) || 'ws://127.0.0.1:7777';
+        var events = await RelaySelector.query(relayUrl, { kinds:[30500], '#t':['g1fablab'], limit:50 }, { timeout: 10000 });
         _grimoirePublished = {};
-        (data.events || []).forEach(function(ev) {
+        events.forEach(function(ev) {
             var d = getDtag(ev);
             if (d) _grimoirePublished[d] = ev;
         });
@@ -2800,7 +2858,7 @@ async function loadGrimoireStatus() {
         var n = Object.keys(_grimoirePublished).length;
         showToast(n + ' / ' + GRIMOIRE_RECIPES.length + ' recette(s) déjà publiée(s)', 'ok');
     } catch(e) {
-        if (e.message !== '403') showToast('Erreur : ' + e.message, 'err');
+        showToast('Erreur relay : ' + e.message, 'err');
     } finally {
         btn.disabled = false; btn.textContent = '🔍 Vérifier le statut sur le relay';
     }
@@ -3178,10 +3236,9 @@ async function publishGrimoireRealization() {
         // replaceable NIP-33 — republier avec le même d écrase l'ancien total).
         var existingQty = 0;
         try {
-            var existing = await apiFetch(_apiUrl + '/api/nostr/admin/events?' + new URLSearchParams({
-                kind: '30505', author: window.userPubkey, tag_d: objDtag, limit: '1'
-            }));
-            var ev0 = existing.events && existing.events[0];
+            var relayUrl = (typeof window.getRelayUrl === 'function' && window.getRelayUrl()) || 'ws://127.0.0.1:7777';
+            var existing = await RelaySelector.query(relayUrl, { kinds:[30505], authors:[window.userPubkey], '#d':[objDtag], limit:1 }, { timeout: 8000 });
+            var ev0 = existing[0];
             if (ev0) {
                 var qTag = (ev0.tags.find(function(t){return t[0]==='quantity';}) || [])[1];
                 existingQty = parseFloat(qTag) || 0;
@@ -3599,12 +3656,13 @@ async function loadMizStats() {
     var status = document.getElementById('miz-stats-status');
     btn.disabled = true; btn.textContent = '⏳…'; status.textContent = 'Chargement…';
     try {
+        var relayUrl = (typeof window.getRelayUrl === 'function' && window.getRelayUrl()) || 'ws://127.0.0.1:7777';
         var results = await Promise.all([
-            apiFetch(_apiUrl + '/api/nostr/admin/events?' + new URLSearchParams({ kind: '30500', limit: '500' })),
-            apiFetch(_apiUrl + '/api/nostr/admin/events?' + new URLSearchParams({ kind: '30503', limit: '500' })),
-            apiFetch(_apiUrl + '/api/nostr/admin/events?' + new URLSearchParams({ kind: '30505', limit: '500' })),
+            RelaySelector.query(relayUrl, { kinds:[30500], limit:500 }, { timeout: 10000 }),
+            RelaySelector.query(relayUrl, { kinds:[30503], limit:500 }, { timeout: 10000 }),
+            RelaySelector.query(relayUrl, { kinds:[30505], limit:500 }, { timeout: 10000 }),
         ]);
-        var recipes = results[0].events || [], skills = results[1].events || [], objects = results[2].events || [];
+        var recipes = results[0] || [], skills = results[1] || [], objects = results[2] || [];
         var tagCounts = {};
         var pillarCounts = { vaisseau: 0, moteur: 0, mouvement: 0, oasis: 0 };
         recipes.forEach(function(ev) {
@@ -3621,7 +3679,7 @@ async function loadMizStats() {
         _updateMizPillarBadges(pillarCounts);
         status.textContent = 'Actualisé';
     } catch(e) {
-        if (e.message !== '403') { showToast('Erreur : ' + e.message, 'err'); status.textContent = ''; }
+        showToast('Erreur relay : ' + e.message, 'err'); status.textContent = '';
     } finally {
         btn.disabled = false; btn.textContent = '🔄 Actualiser';
     }
@@ -3671,5 +3729,6 @@ function renderMizStats(recipeCount, skillCount, objectCount, tagCounts) {
 <script src="nostr.bundle.js"></script>
 <script src="common.js"></script>
 <script src="uplanet-header.js"></script>
+<script src="relay.js"></script>
 </body>
 </html>

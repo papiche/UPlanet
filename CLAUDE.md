@@ -33,6 +33,7 @@ The app is accessed at `/ipns/copylaradio.com` or via `qo-op.com` redirect.
 - **entrance.html** — Landing page with Explorer/Builder dual-path entry
 - **welcome.html** — Leaflet-based interactive map world view
 - **economy.html** — ẐEN economic dashboard with station metrics and services
+- **parrains.html** — Public leaderboard of cooperative sponsors ("parrains"), ranked by cumulative ZenCard/OpenCollective sponsorship contributions (Satellite/Constellation infra tiers). Pseudonymized (no email), fed by UPassport `/api/parrains_ranking`
 
 ### Core JavaScript
 - **common.js** (~8,500 lines) — Central shared library. Exports globals on `window`:

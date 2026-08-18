@@ -50,7 +50,7 @@
         { id: 'grimoire',     icon: '📚', label: 'Grimoire',    href: 'grimoire.tuto.html'        },
         { id: 'contribute',   icon: '🌿', label: 'Contribuer',  href: 'contribute.html'           },
         { id: 'crowdfunding', icon: '💰', label: 'Financement', href: 'crowdfunding.html'         },
-        { id: 'keygen',       icon: '🔑', label: 'Keygen',      href: 'keygen-v2.html'            },
+        { id: 'keygen',       icon: '🔑', label: 'Keygen',      href: 'g1.html'            },
         { id: 'oracle',       icon: '🔭', label: 'Oracle',      href: 'oracle.html'               },
         { id: 'plantnet',     icon: '🌿', label: 'PlantNet',    href: 'plantnet.html'             },
         { id: 'scan',         icon: '📡', label: 'Scanner',     href: 'scan.html'                 },

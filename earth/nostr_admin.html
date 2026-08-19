@@ -2414,7 +2414,50 @@ function renderMemDetail(email, hex, s, cookieDomains) {
     html += '<div style="border-top:1px solid var(--border);padding-top:10px;text-align:right">' +
         '<button class="tc-del-btn" style="background:rgba(220,38,38,.28)" onclick="resetMemory(' +
         jsAttr(email) + ',' + jsAttr(hex) + ',\'all\',this)">⚠️ Tout réinitialiser</button></div>';
+    html += '<div style="border:1px solid var(--danger);border-radius:8px;padding:12px 14px;margin-top:16px;background:rgba(229,62,62,.06)">' +
+        '<h5 style="font-size:.8rem;color:var(--err-text);margin:0 0 6px">☠️ Destruction du compte MULTIPASS</h5>' +
+        '<p style="font-size:.74rem;color:var(--text2);margin:0 0 10px">' +
+        'Désactive le compte, exporte une sauvegarde chiffrée (uDRIVE + events NOSTR + cashback Ğ1 vers le wallet primal), ' +
+        'puis supprime les données NOSTR locales — permet une migration ultérieure vers un autre relay/capitaine avec le backup. ' +
+        '<b>Irréversible sur cette station.</b></p>' +
+        '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">' +
+        '<select class="destroy-reason-select" style="background:var(--bg);border:1px solid var(--border);color:var(--text);' +
+        'border-radius:6px;padding:5px 8px;font-size:.78rem">' +
+        '<option value="INSOLVENCY">Insolvabilité (défaut)</option>' +
+        '<option value="INTRUSION">Intrusion (fonds non autorisés)</option>' +
+        '<option value="INCOMPATIBLE_KEY">Clé incompatible</option>' +
+        '</select>' +
+        '<button class="tc-del-btn" style="background:rgba(220,38,38,.4)" onclick="destroyMultipass(' +
+        jsAttr(email) + ',this)">☠️ Détruire ce compte</button>' +
+        '</div></div>';
     return html;
+}
+
+async function destroyMultipass(email, btnEl) {
+    var reasonSel = btnEl.parentElement.querySelector('.destroy-reason-select');
+    var reason = reasonSel ? reasonSel.value : 'INSOLVENCY';
+    if (!confirm('Détruire DÉFINITIVEMENT le compte MULTIPASS « ' + email + ' » sur cette station ?\n\n' +
+        'Motif : ' + reason + '\n\n' +
+        'Une sauvegarde chiffrée sera exportée et le solde Ğ1 restitué au wallet primal, mais ' +
+        'toutes les données NOSTR locales de ce compte seront supprimées. IRRÉVERSIBLE.\n\n' +
+        'Tapez OK pour confirmer.')) return;
+    btnEl.disabled = true; reasonSel.disabled = true;
+    var savedText = btnEl.textContent; btnEl.textContent = '⏳ Lancement…';
+    try {
+        var data = await apiFetch(_apiUrl + '/api/nostr/admin/destroy_multipass', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: email, reason: reason })
+        });
+        btnEl.textContent = '⏳ Destruction en cours…';
+        opsLog([{ type: 'warn', text: '☠️ Destruction lancée (pid ' + data.pid + ') — ' + email + ' [' + reason + ']. Le compte disparaîtra de la liste MULTIPASS une fois terminé.' }]);
+        showToast('Destruction lancée en arrière-plan', 'warn');
+    } catch(e) {
+        btnEl.disabled = false; reasonSel.disabled = false; btnEl.textContent = savedText;
+        if (e.message !== '403') {
+            showToast('Erreur : ' + e.message, 'err');
+            opsLog([{ type: 'err', text: '✗ Échec du lancement de la destruction (' + email + ') : ' + e.message }]);
+        }
+    }
 }
 
 async function resetMemory(email, hex, scope, btnEl) {

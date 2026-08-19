@@ -664,17 +664,22 @@
             }
             if (d.nostrns) window._uphNostrNS = d.nostrns; // "/ipns/k51..."
 
-            // Bouton "station Home" — visible seulement en roaming, quand le backend
-            // a pu résoudre le hostname HTTP réel de la station d'origine (home_http_url,
-            // ex. "https://u.sagittarius.copylaradio.com"). NB: d.home_station_url est une
-            // adresse de contenu IPFS (NOSTRNS) — inutilisable pour recharger une page HTML.
+            // Bouton "station Home" — visible seulement en roaming, quand le backend a pu
+            // résoudre uSPOT (API/earth mount, ex. "https://u.sagittarius.copylaradio.com")
+            // et/ou myIPFS (gateway IPFS de la home) de la station d'origine. Ces deux URLs
+            // sont lues telles quelles depuis le 12345.json de la home (services/roaming.py) —
+            // jamais reconstruites depuis un "hostname" décoratif, qui peut être invalide
+            // (ex. station LAN sans domainname configuré → "u.nexus.localhost", injoignable).
+            // NB: d.home_station_url est une adresse de contenu IPFS (NOSTRNS = coffre
+            // personnel de l'utilisateur) — inutilisable pour recharger une page de earth/.
             var homeBtn = document.getElementById('uph-home-btn');
             if (homeBtn) {
-                if (isRoam && d.home_http_url) {
+                var homeUrl = isRoam ? _homePageUrl(d.home_http_url, d.home_myipfs) : null;
+                if (homeUrl) {
                     window._uphHomeStationUrl = d.home_http_url;
-                    homeBtn.title = 'Ouvrir cette page depuis votre station Home\n' + d.home_http_url;
+                    homeBtn.title = 'Ouvrir cette page depuis votre station Home\n' + homeUrl;
                     homeBtn.style.display = '';
-                    homeBtn.onclick = function () { location.href = _homePageUrl(d.home_http_url); };
+                    homeBtn.onclick = function () { location.href = homeUrl; };
                 } else {
                     homeBtn.style.display = 'none';
                 }
@@ -1015,10 +1020,26 @@
         return 'multipass.html?' + p;
     }
 
-    // Reconstruit l'URL de la page courante servie depuis la station Home
-    // (roaming) : même chemin /earth/…, même query string, autre origine.
-    function _homePageUrl(homeStationUrl) {
-        var base = homeStationUrl.replace(/\/+$/, '');
+    // Sommes-nous actuellement sur une gateway IPFS (contenu adressé par CID/IPNS,
+    // ex. ipfs.domain.tld/ipns/copylaradio.com/...) plutôt que sur le mount statique
+    // /earth/ d'UPassport (u.domain.tld) ? Même détection que _apiUrl() ci-dessous.
+    function _isGatewayPage() {
+        return location.hostname.indexOf('ipfs.') === 0 || /^\/ip(fs|ns)\//.test(location.pathname);
+    }
+
+    // Reconstruit l'URL de la page courante servie depuis la station Home (roaming).
+    // - Sur une gateway earth (contenu content-addressed) : on garde le pathname/search
+    //   identiques et on ne change que l'origine, vers le myIPFS de la home — le
+    //   contenu est adressé par CID/IPNS, donc identique sur n'importe quelle gateway.
+    // - Sinon (page servie via u.<station>/earth/…, ou tout autre domaine) : on
+    //   recompose vers uSPOT + /earth/<page>, seule route HTML fiable (mount statique
+    //   UPassport, cf. 54321.py app.mount("/earth", ...)).
+    function _homePageUrl(homeUSpot, homeMyIPFS) {
+        if (_isGatewayPage() && homeMyIPFS) {
+            return homeMyIPFS.replace(/\/+$/, '') + location.pathname + location.search;
+        }
+        if (!homeUSpot) return null;
+        var base = homeUSpot.replace(/\/+$/, '');
         var path = location.pathname;
         var idx  = path.indexOf('/earth/');
         var tail = idx !== -1 ? path.slice(idx) : '/earth/' + _page;

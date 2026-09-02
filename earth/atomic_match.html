@@ -19,6 +19,16 @@
     <link rel="stylesheet" href="core-theme.css">
     <link rel="stylesheet" href="uplanet-atomic.css">
     <style>
+        /* Police scopée à la synastrie planétaire (score + roue) — vendorisée dans fonts/,
+           jamais chargée globalement ailleurs sur le site (pas de refonte typographique). */
+        @font-face {
+            font-family: 'Orbital';
+            src: url('fonts/Orbitron/static/Orbitron-Bold.ttf') format('truetype');
+            font-weight: 700;
+            font-display: swap;
+        }
+        .font-orbital { font-family: 'Orbital', system-ui, sans-serif; letter-spacing: .5px; }
+
         html, body { margin:0; padding:0; background:#080602; color:#e0e0e0; font-family:system-ui,sans-serif; min-height:100dvh; }
 
         /* ── Canvas fond ── */
@@ -246,6 +256,9 @@
         ⚛ L'algorithme <strong>phi2x</strong> compare la position de la Terre lors de vos deux naissances pour mesurer votre <strong>cohérence d'onde</strong>.
         Résultat instantané, 100% local — <strong>zéro donnée transmise</strong>.
     </div>
+    <div class="why-callout">
+        🪐 La <strong>synastrie planétaire</strong> compare vos 7 planètes de naissance réelles (Soleil, Lune, Mercure, Vénus, Mars, Jupiter, Saturne) — un second algorithme, indépendant de phi2x, lui aussi calculé 100% localement.
+    </div>
 
     <!-- Formulaire visiteur -->
     <div class="section-card">
@@ -333,6 +346,25 @@
                style="display:block;text-align:right;font-size:.68rem;
                       color:rgba(167,139,250,.45);margin-top:8px;text-decoration:none">
                 En savoir plus sur le Tzolkin →
+            </a>
+        </div>
+
+        <!-- Synastrie planétaire — algorithme indépendant de phi2x, calculé via synastry.js -->
+        <div id="synastry-block" style="display:none;margin-top:14px;
+             background:rgba(124,58,237,.06);border:1px solid rgba(124,58,237,.18);
+             border-radius:12px;padding:14px 16px">
+            <div style="font-size:.62rem;color:rgba(167,139,250,.6);text-transform:uppercase;
+                        letter-spacing:1.5px;margin-bottom:10px">🪐 Synastrie Planétaire</div>
+            <div id="synastry-wheel" style="max-width:280px;margin:0 auto 12px"></div>
+            <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:10px;justify-content:center">
+                <div id="syn-score" class="font-orbital" style="font-size:1.8rem;font-weight:700;color:#a78bfa">--%</div>
+                <div id="syn-top-aspect" style="font-size:.8rem;color:rgba(255,255,255,.55)">—</div>
+            </div>
+            <div id="syn-categories" style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:.72rem"></div>
+            <a href="atomic_help.html" target="_blank"
+               style="display:block;text-align:right;font-size:.68rem;
+                      color:rgba(167,139,250,.45);margin-top:8px;text-decoration:none">
+                En savoir plus sur la synastrie →
             </a>
         </div>
 
@@ -432,6 +464,9 @@
 <script src="nacl-fast.min.js"></script>
 <script src="nostr.bundle.js"></script>
 <script src="phi2x.js"></script>
+<script src="astronomy.browser.min.js"></script>
+<script src="synastry.js"></script>
+<script src="synastry-wheel.js"></script>
 <script>
 'use strict';
 
@@ -632,6 +667,9 @@ function _openVisitorLocPicker() {
 let _matchResult  = null;
 let _kinA         = null;
 let _elemResult   = null;
+let _synastryResult = null;
+let _synastryPlanetsA = null;
+let _synastryPlanetsB = null;
 
 function _computeMatch() {
     if (!_vDateISO) return;
@@ -666,6 +704,22 @@ function _computeMatch() {
 
         // Archétype alchimique si les deux KINs sont disponibles
         _elemResult = (_kinA && _kinB) ? Phi2X.getDualElements(_kinA, _kinB) : null;
+
+        // Synastrie planétaire — algorithme indépendant de phi2x (même données,
+        // calcul 100% local via astronomy.browser.min.js + synastry.js)
+        _synastryResult = null;
+        _synastryPlanetsA = null;
+        _synastryPlanetsB = null;
+        if (typeof Astronomy !== 'undefined' && typeof Synastry !== 'undefined' && _bDate && _bDate.length >= 8) {
+            try {
+                const bDateISO = `${_bDate.slice(0,4)}-${_bDate.slice(4,6)}-${_bDate.slice(6,8)}`;
+                const bTimePad = (_bTime || '1200').padStart(4, '0');
+                const bTimeStr = `${bTimePad.slice(0,2)}:${bTimePad.slice(2)}`;
+                _synastryPlanetsA = Synastry.natalPlanets(_vDateISO, _vTimeStr, latA, lonA);
+                _synastryPlanetsB = Synastry.natalPlanets(bDateISO, bTimeStr, _bLat, lonB);
+                _synastryResult = Synastry.synastry(_synastryPlanetsA, _synastryPlanetsB);
+            } catch(e) { if (window.DEBUG) console.warn('[A4L match] Synastrie indisponible', e); }
+        }
 
         _scheduleResultReveal();
     } catch(e) {
@@ -791,6 +845,29 @@ function _renderResult() {
     if (kdBlock && _kinA && _kinB) {
         document.getElementById('kin-decode-content').innerHTML = _buildKinRelations(_kinA, _kinB);
         kdBlock.style.display = 'block';
+    }
+
+    // Synastrie planétaire — second algorithme, indépendant de phi2x
+    const synBlock = document.getElementById('synastry-block');
+    if (synBlock && _synastryResult) {
+        const wheelEl = document.getElementById('synastry-wheel');
+        if (wheelEl && typeof SynastryWheel !== 'undefined' && _synastryPlanetsA && _synastryPlanetsB) {
+            try { SynastryWheel.render(wheelEl, _synastryPlanetsA, _synastryPlanetsB, _synastryResult.aspects); }
+            catch(e) { if (window.DEBUG) console.warn('[A4L match] Roue synastrie indisponible', e); }
+        }
+        const FR_BODY   = { sun:'Soleil', moon:'Lune', mercury:'Mercure', venus:'Vénus', mars:'Mars', jupiter:'Jupiter', saturn:'Saturne' };
+        const FR_ASPECT = { conjonction:'conjonction', sextile:'sextile', carre:'carré', trigone:'trigone', opposition:'opposition' };
+        document.getElementById('syn-score').textContent = Math.round(_synastryResult.score) + '%';
+        const top = _synastryResult.topAspect;
+        document.getElementById('syn-top-aspect').textContent = top
+            ? `${FR_BODY[top.bodyA] || top.bodyA} ${FR_ASPECT[top.aspect] || top.aspect} ${FR_BODY[top.bodyB] || top.bodyB}`
+            : 'Aucun aspect majeur';
+        const CAT_LABELS = { attraction:'💞 Attraction', emotion:'🌊 Émotion', communication:'💬 Communication', vision:'🔭 Vision' };
+        document.getElementById('syn-categories').innerHTML = Object.keys(CAT_LABELS).map(function(cat) {
+            const val = Math.round((_synastryResult.categoryScores && _synastryResult.categoryScores[cat]) || 0);
+            return `<div><span style="color:rgba(255,255,255,.4)">${CAT_LABELS[cat]}</span> <b style="color:#a78bfa">${val}%</b></div>`;
+        }).join('');
+        synBlock.style.display = 'block';
     }
 
     // Section partage viral — on partage le lien de TOI (A), pas la page actuelle

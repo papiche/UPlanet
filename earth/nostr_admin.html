@@ -818,6 +818,14 @@
       <span id="node-config-status" style="font-size:.75rem;color:var(--text2)"></span>
     </div>
     <div id="node-config-body"></div>
+
+    <div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--border)">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px">
+        <h5 style="font-size:.8rem;color:var(--text2);margin:0">🌌 Constellations Synastriques</h5>
+        <button class="btn-query" onclick="loadSynastryStatus()" style="padding:5px 14px;font-size:.78rem;white-space:nowrap">🔄 Actualiser</button>
+      </div>
+      <div id="synastry-status-body"><div class="state-empty"><div class="icon">🌌</div><div>Chargement…</div></div></div>
+    </div>
   </div>
 </div>
 
@@ -1068,7 +1076,7 @@ function _checkCaptain(pubkey) {
                 var t = active && active.id.replace('tab-', '');
                 if (t === 'grimoire') { _updateGrimoireAuthBanner(); if (!_grimoireLoaded) { _grimoireLoaded = true; loadGrimoireStatus(); } }
                 if (t === 'miz' && !_mizStatsLoaded) { _mizStatsLoaded = true; loadMizStats(); }
-                if (t === 'node' && !_nodeConfigLoaded) { _nodeConfigLoaded = true; loadNodeConfig(); }
+                if (t === 'node' && !_nodeConfigLoaded) { _nodeConfigLoaded = true; loadNodeConfig(); loadSynastryStatus(); }
                 // ARBOR chargé systématiquement à la connexion (pas seulement si l'onglet
                 // est actif) — le badge sur #tab-arbor doit être visible depuis n'importe
                 // quel autre onglet, sans attendre que le capitaine clique sur 🧬 ARBOR.
@@ -1319,7 +1327,7 @@ function switchTab(tab) {
         if (uphOk && !_grimoireLoaded) { _grimoireLoaded = true; loadGrimoireStatus(); }
     }
     if (tab === 'miz' && uphOk && !_mizStatsLoaded) { _mizStatsLoaded = true; loadMizStats(); }
-    if (tab === 'node' && uphOk && !_nodeConfigLoaded) { _nodeConfigLoaded = true; loadNodeConfig(); }
+    if (tab === 'node' && uphOk && !_nodeConfigLoaded) { _nodeConfigLoaded = true; loadNodeConfig(); loadSynastryStatus(); }
     if (tab === 'arbor' && uphOk && !_arborLoaded) { _arborLoaded = true; loadArborStatus(); }
 }
 function openProfile(pubkey) {
@@ -3467,6 +3475,57 @@ async function saveConfigCategory(catId, prefix, btnEl) {
         if (e.message !== '403') showToast('Erreur : ' + e.message, 'err');
     } finally {
         btnEl.disabled = false; btnEl.textContent = savedText;
+    }
+}
+
+// ── Synastrie planétaire (indépendante du Kin) — cf. RUNTIME/KIN.news.sh §8 ─
+async function loadSynastryStatus() {
+    var body = document.getElementById('synastry-status-body');
+    try {
+        var data = await apiFetch(_apiUrl + '/api/nostr/admin/synastry_stats');
+        if (body) body.innerHTML = renderSynastryStatus(data);
+    } catch(e) {
+        if (e.message !== '403' && body) body.innerHTML = '<div style="color:var(--danger);padding:14px">Erreur : ' + escHtml(e.message) + '</div>';
+    }
+}
+
+function renderSynastryStatus(data) {
+    var html = '';
+    if (data.running) {
+        html += '<div style="border:1px solid rgba(251,191,36,.4);border-radius:6px;padding:10px 12px;margin-bottom:10px;' +
+            'background:rgba(251,191,36,.08);font-size:.8rem">⏳ Run en cours…</div>';
+    } else if (data.never_run) {
+        html += '<div style="font-size:.78rem;color:var(--text2);margin-bottom:10px">Jamais exécuté sur cette station.</div>';
+    } else {
+        html += '<div style="display:flex;flex-wrap:wrap;gap:14px;margin-bottom:10px;font-size:.78rem">' +
+            '<span>📅 ' + escHtml(data.generated_at || '?') + '</span>' +
+            '<span>' + (data.enabled === false ? '🔒 désactivée' : '✅ active') + '</span>' +
+            '<span>🎯 seuil ' + escHtml(String(data.min_score != null ? data.min_score : '?')) + '%</span>' +
+            '<span>👤 ' + escHtml(String(data.members_with_birthdate != null ? data.members_with_birthdate : '?')) + ' membre(s) éligible(s)</span>' +
+            '<span>🔗 ' + escHtml(String(data.pairs_scanned != null ? data.pairs_scanned : '?')) + ' paire(s) scannée(s)</span>' +
+            '<span>💫 ' + escHtml(String(data.matches_found != null ? data.matches_found : '?')) + ' match(es)</span>' +
+            '<span>📧 ' + escHtml(String(data.emails_sent != null ? data.emails_sent : '?')) + ' envoyé(s)</span>' +
+            '</div>';
+    }
+    html += '<button class="btn-regen" ' + (data.running ? 'disabled' : '') +
+        ' onclick="triggerSynastry()">▶ Lancer maintenant</button>';
+    if (data.log_tail) {
+        html += '<pre style="margin-top:10px;max-height:180px;overflow:auto;font-size:.7rem;' +
+            'background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px">' + escHtml(data.log_tail) + '</pre>';
+    }
+    return html;
+}
+
+async function triggerSynastry() {
+    if (!confirm('Lancer un run Constellations Synastriques maintenant ? Des emails seront envoyés aux membres ayant des matches au-dessus du seuil configuré.')) return;
+    try {
+        await apiFetch(_apiUrl + '/api/nostr/admin/synastry_trigger', { method: 'POST' });
+        showToast('Run Constellations Synastriques démarré', 'ok');
+        opsLog([{ type: 'ok', text: 'synastry_trigger' }]);
+        loadSynastryStatus();
+    } catch(e) {
+        if (e.message === '409') showToast('Un run est déjà en cours.', 'warn');
+        else if (e.message !== '403') showToast('Erreur : ' + e.message, 'err');
     }
 }
 

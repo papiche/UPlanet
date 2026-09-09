@@ -7,6 +7,136 @@ Ce grimoire rassemble les recettes de fabrication maison (« craft ») des maté
 
 ---
 
+## 🧂 SECTION 0 — L'Autonomie Chimique : produire ses propres réactifs
+
+*Avant de couler la première coque, il faut d'abord pouvoir produire son propre liant. Cette section referme la boucle en amont du Craft 1 : sable, sel et eau de mer suffisent à fabriquer soi-même la soude caustique qui sert de base au silicate de sodium — sans passer par le rayon droguerie.*
+
+### Craft 0 — Membrane d'échange d'ions DIY (résine de billes)
+
+Permet de fabriquer la pièce maîtresse de l'électrolyseur du Craft 0bis, habituellement vendue jusqu'à 400 $ le pied carré dans l'industrie.
+
+**Station de travail :** 🔨 Mortier/broyeur + 🖌️ pinceau, cadre en bois tendu d'une toile de fibre de verre
+
+> ⚠️ **Sécurité :** le solvant qui dissout le PVC dans la colle à tube d'évacuation (cyclohexanone, MEK ou THF selon la marque) dégage des vapeurs inflammables et irritantes. Travaillez **en extérieur ou sous ventilation forcée**, loin de toute flamme ou étincelle, avec un masque à cartouche adapté aux solvants organiques si possible.
+
+| Ingrédient | Quantité (pour ~0,1 m²) |
+|---|---|
+| Billes de résine échangeuse d'ions (adoucisseur d'eau), broyées en poudre fine | 1 volume |
+| Colle PVC (PVC dissous dans solvant, type colle à tube d'évacuation) | 1 volume |
+| Toile de fibre de verre à trame fine | 1 pièce, tendue sur cadre |
+
+```
+[ Billes de résine ] ──(broyer fin)──► [ Poudre de résine ]
+                                                │
+                                                ▼ (mélanger à volume égal avec)
+                                       [ Colle PVC liquide ] ──► Pâte conductrice
+                                                                        │
+                                                                        ▼ (badigeonner sur)
+                                                                [ Trame fibre de verre ]
+                                                                        │
+                                                                        ▼
+                                                                Sécher 24h ──► Membrane
+```
+
+<div class="diagram-wrap">
+<svg viewBox="0 0 630 150" xmlns="http://www.w3.org/2000/svg">
+<defs><marker id="arrowC0" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#00ccff"/></marker></defs>
+<line x1="190" y1="75" x2="226" y2="75" stroke="#00ccff" stroke-width="2.5" marker-end="url(#arrowC0)"/>
+<line x1="400" y1="75" x2="436" y2="75" stroke="#00ccff" stroke-width="2.5" marker-end="url(#arrowC0)"/>
+<rect x="20" y="45" width="170" height="60" rx="10" fill="rgba(0,201,104,0.12)" stroke="#00C968" stroke-width="1.5"/>
+<text x="105" y="65" text-anchor="middle" fill="#e0f2e9" font-size="12.5" font-family="sans-serif">⚪ Résine broyée</text>
+<text x="105" y="83" text-anchor="middle" fill="#e0f2e9" font-size="11" font-family="sans-serif" opacity="0.7">(adoucisseur d'eau)</text>
+<rect x="230" y="45" width="170" height="60" rx="10" fill="rgba(0,204,255,0.10)" stroke="#00ccff" stroke-width="1.5"/>
+<text x="315" y="65" text-anchor="middle" fill="#e0f2e9" font-size="12.5" font-family="sans-serif">+ 🧪 Colle PVC</text>
+<text x="315" y="83" text-anchor="middle" fill="#e0f2e9" font-size="11" font-family="sans-serif" opacity="0.7">volume à volume</text>
+<rect x="440" y="45" width="170" height="60" rx="10" fill="rgba(255,215,0,0.12)" stroke="#FFD700" stroke-width="1.5"/>
+<text x="525" y="65" text-anchor="middle" fill="#fff" font-size="12.5" font-family="sans-serif">🕸️ Membrane</text>
+<text x="525" y="83" text-anchor="middle" fill="#e0f2e9" font-size="11" font-family="sans-serif" opacity="0.7">badigeon + séchage 24h</text>
+</svg>
+<div class="diagram-cap">Schéma du procédé — Craft 0 : percolation ionique dans une matrice de PVC</div>
+</div>
+
+**Résultat :** ~0,1 m² de membrane d'échange d'ions — sélective aux cations (Na⁺) ou aux anions (Cl⁻) selon le type de résine utilisée.
+
+> ⚙️ **Principe physique :** ce n'est pas une réaction chimique mais un phénomène de conduction ionique par percolation. Les billes de résine, initialement isolées, sont broyées si finement et mélangées en proportion si dense dans la matrice de PVC qu'elles finissent par se toucher d'un bord à l'autre du film : les ions peuvent alors « sauter » de bille en bille à travers tout le réseau, un peu comme le courant traverse un réseau de grains de graphite en contact dans une résistance carbone. Le PVC durci, lui, reste imperméable à l'eau et aux grosses molécules — d'où la sélectivité de la membrane.
+
+> 🏭 **Comparatif industriel :** les membranes échangeuses d'ions commerciales (Nafion et équivalents) sont produites par post-fonctionnalisation chimique de films polymères fluorés en usine — un procédé complexe qui explique leur prix, jusqu'à 400 $ le pied carré (~430 €/m²). La version G1FabLab obtient une sélectivité ionique comparable, en beaucoup plus rustique, en réutilisant une résine d'adoucisseur d'eau déjà pré-fonctionnalisée par son fabricant.
+> 💶 **Coût comparé :** moins de 1 €/m² pour la version résine broyée + colle PVC — contre plusieurs centaines d'euros le mètre carré en membrane industrielle.
+
+> 🛒 **Se procurer les ingrédients :**
+> - **Billes de résine échangeuse d'ions** — boutique de piscine ou de traitement d'eau (recharge d'adoucisseur d'eau) : résine cationique (forme Na⁺) pour une membrane cationique, résine anionique (forme Cl⁻/OH⁻) pour une membrane anionique.
+> - **Colle PVC** — rayon plomberie d'un magasin de bricolage (colle pour tube d'évacuation PVC).
+> - **Toile de fibre de verre** — carrosserie/nautisme ou magasin de bricolage (voile de verre fine pour stratification).
+
+---
+
+### Craft 0bis — Soude & Acide DIY : électrolyse membranaire de l'eau de mer
+
+Permet de produire sa propre soude caustique (NaOH) — l'intrant du Craft 1 — directement à partir de sel et d'électricité, sans dépendre d'une chaîne d'approvisionnement.
+
+**Station de travail :** 🔋 Alimentation continue régulée (chargeur de batterie ou panneau + régulateur) + 2 bacs séparés par la membrane du Craft 0 + électrodes inertes
+
+> ⚠️ **Sécurité impérative :** l'électrolyse du sel peut dégager du **chlore gazeux (Cl₂)**, toxique pour les voies respiratoires — utilisé comme arme chimique durant la Première Guerre mondiale. Ce risque survient si les deux compartiments communiquent (membrane fissurée ou mal étanche) ou si l'électrode anodique oxyde directement les chlorures plutôt que l'eau. Travaillez impérativement **en extérieur ou sous forte ventilation**, ne mélangez jamais le contenu des deux bacs, utilisez des électrodes en **titane platiné ou graphite** (jamais acier ni aluminium, qui se dissolvent), et **arrêtez immédiatement l'électrolyse** au moindre indice d'odeur de piscine/eau de Javel prononcée. Les solutions de NaOH et HCl obtenues sont corrosives : gants et lunettes de protection obligatoires.
+
+| Ingrédient | Quantité |
+|---|---|
+| Eau de mer, ou eau + sel de cuisine non iodé (≈30 g/L) | 2 × 1 L (un par compartiment) |
+| Membrane d'échange d'ions (Craft 0) | 1 pièce, séparant les 2 bacs |
+| Électrodes inertes (titane platiné ou tiges de graphite) | 2 (une par compartiment) |
+| Alimentation continue régulée (6-12 V, quelques ampères) | 1 |
+
+```
+[ Bac Cathode (eau) ]  ◄── membrane Craft 0 ──►  [ Bac Anode (eau salée) ]
+          │                                                  │
+          ▼ (courant continu, plusieurs heures)               ▼
+   Na+ migre vers la cathode                        Cl- reste piégé côté anode
+          │                                                  │
+          ▼                                                  ▼
+  [ Soude NaOH concentrée ]                        [ Acide HCl concentré ]
+```
+
+<div class="diagram-wrap">
+<svg viewBox="0 0 640 200" xmlns="http://www.w3.org/2000/svg">
+<defs><marker id="arrowC0b" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#FFD700"/></marker></defs>
+<rect x="30" y="30" width="260" height="145" rx="8" fill="rgba(0,204,255,0.08)" stroke="#00ccff" stroke-width="1.5"/>
+<rect x="350" y="30" width="260" height="145" rx="8" fill="rgba(255,215,0,0.08)" stroke="#FFD700" stroke-width="1.5"/>
+<rect x="298" y="25" width="44" height="155" rx="4" fill="rgba(0,201,104,0.25)" stroke="#00C968" stroke-width="1.5"/>
+<text x="320" y="105" text-anchor="middle" fill="#e0f2e9" font-size="10" font-family="sans-serif" transform="rotate(-90 320 105)">membrane Craft 0</text>
+<text x="160" y="55" text-anchor="middle" fill="#e0f2e9" font-size="13" font-family="sans-serif">⊖ CATHODE</text>
+<text x="160" y="95" text-anchor="middle" fill="#9fd3e8" font-size="10.5" font-family="sans-serif">2H₂O+2e⁻ → H₂↑+2OH⁻</text>
+<text x="160" y="130" text-anchor="middle" fill="#fff" font-size="13" font-family="sans-serif" font-weight="bold">→ NaOH (soude)</text>
+<text x="475" y="55" text-anchor="middle" fill="#e0f2e9" font-size="13" font-family="sans-serif">⊕ ANODE</text>
+<text x="475" y="95" text-anchor="middle" fill="#9fd3e8" font-size="10.5" font-family="sans-serif">2H₂O → O₂↑+4H⁺+4e⁻</text>
+<text x="475" y="130" text-anchor="middle" fill="#fff" font-size="13" font-family="sans-serif" font-weight="bold">→ HCl (acide)</text>
+<line x1="150" y1="150" x2="255" y2="150" stroke="#FFD700" stroke-width="1.5" marker-end="url(#arrowC0b)"/>
+<text x="195" y="167" text-anchor="middle" fill="#FFD700" font-size="10" font-family="sans-serif">Na⁺ migre à travers</text>
+</svg>
+<div class="diagram-cap">Schéma du procédé — Craft 0bis : cellule d'électrolyse membranaire à deux compartiments</div>
+</div>
+
+**Résultat :** une solution de soude caustique (NaOH) concentrée côté cathode, et une solution d'acide chlorhydrique (HCl) côté anode — à partir de rien d'autre que du sel, de l'eau et de l'électricité.
+
+> 🧪 **Chimie de la réaction :** à la cathode, l'eau se réduit en libérant de l'hydrogène gazeux et des ions hydroxyde :
+> ```
+> Cathode : 2 H2O + 2 e- → H2 (gaz) + 2 OH-
+> ```
+> Ces ions OH⁻ ne traversent pas la membrane cationique — en revanche, les ions sodium (Na⁺) du compartiment anodique y migrent, attirés par le champ électrique, pour rejoindre le compartiment cathodique où s'accumule donc le NaOH. Côté anode, l'eau s'oxyde en libérant de l'oxygène et des protons :
+> ```
+> Anode : 2 H2O → O2 (gaz) + 4 H+ + 4 e-
+> ```
+> Les ions chlorure (Cl⁻), retenus par la membrane sélective aux cations, restent piégés côté anode avec les protons H⁺ nouvellement formés : leur accumulation constitue la solution d'acide chlorhydrique (HCl).
+> ⚠️ **Le vrai risque à connaître :** si l'électrode anodique oxyde directement les ions chlorure plutôt que l'eau — ce qui arrive facilement à forte concentration en sel ou avec certaines électrodes actives —, la réaction devient `2 Cl- → Cl2 (gaz) + 2 e-` : c'est la chimie industrielle du chlore (procédé chlore-alcali), et c'est exactement le gaz toxique à éviter. Une électrode anodique en graphite plutôt qu'en métal actif, une concentration en sel modérée et une membrane bien étanche limitent ce risque, mais ne l'éliminent jamais complètement — d'où la ventilation obligatoire.
+
+> 🏭 **Comparatif industriel :** ce montage artisanal n'est rien d'autre qu'une version miniature du **procédé chlore-alcali à membrane**, utilisé par l'industrie chimique mondiale pour produire la quasi-totalité de la soude et du chlore de la planète — à la différence que les usines emploient des membranes calibrées, des électrodes en titane platiné industrielles et un contrôle strict du chlore gazeux évacué. Le G1FabLab reproduit la même électrochimie à l'échelle du bocal, avec les compromis de sécurité que cela implique.
+> 💶 **Coût comparé :** le sel et l'eau de mer sont gratuits ou quasi gratuits ; le coût réel est celui de l'électricité (quelques centimes par litre de NaOH produit) et de l'amortissement de la membrane et des électrodes — contre 2 à 4 €/kg pour de la soude en paillettes du commerce (cf Craft 1). L'intérêt n'est pas tant économique que **stratégique** : produire son propre réactif de base sans dépendre d'une chaîne d'approvisionnement.
+
+> 🛒 **Se procurer les ingrédients :**
+> - **Sel de cuisine non iodé** ou **eau de mer** — supermarché (gros sel non traité) ou prélèvement direct en bord de mer.
+> - **Électrodes en titane platiné** — récupération sur un électrolyseur au sel de piscine hors d'usage, ou boutique d'aquariophilie/anticorrosion navale. **Tiges de graphite** en alternative économique (électrodes de pile 4,5 V), à remplacer plus souvent (elles s'érodent).
+> - **Alimentation continue régulée** — chargeur de batterie de voiture, bloc d'alimentation de labo, ou panneau solaire + régulateur de charge.
+
+---
+
 ## 🧱 SECTION I — Les matériaux et composites de structure
 
 ### ⚠️ Craft 1 — Silicate de sodium DIY (verre liquide)
@@ -65,7 +195,7 @@ Permet de fabriquer le liant de base pour la pétrification du sable et le drapa
 
 > 🛒 **Se procurer les ingrédients :**
 > - **Silice** — rayon litière pour chat (supermarché/animalerie) : choisir une litière « 100 % silice de quartz », sans argile ni parfum ajouté, à broyer en poudre.
-> - **Soude caustique (NaOH)** — droguerie ou rayon bricolage (déboucheur de canalisation en paillettes pures, vérifier l'absence d'additifs), ou boutique de savonnerie artisanale.
+> - **Soude caustique (NaOH)** — droguerie ou rayon bricolage (déboucheur de canalisation en paillettes pures, vérifier l'absence d'additifs), ou boutique de savonnerie artisanale. → Ou produisez-la vous-même à partir de sel et d'électricité : cf **Craft 0bis**.
 > - **Eau distillée** — pharmacie ou supermarché (rayon fer à repasser) ; l'eau de pluie filtrée est une alternative gratuite.
 
 ---
@@ -596,6 +726,8 @@ Ce n'est pas une recette de fabrication mais un protocole de contrôle qualité,
 
 | Craft | Temps de prise (manipulable) | Durcissement complet | Note |
 |---|---|---|---|
+| 0 — Membrane DIY | Badigeon immédiat | 24h (séchage) | Réutilisable des mois si rincée après usage |
+| 0bis — Soude & Acide (électrolyse) | Production continue | — (solutions liquides) | ⚠️ Ventilation obligatoire, risque Cl₂ |
 | 1 — Silicate liquide | 30 min (mijotage) | — (liquide, utilisable dès refroidi) | Se conserve plusieurs mois en flacon fermé |
 | 2 — Coque drap-silicate | 5 min (pétrification) | 24-48h (séchage complet) | Ne pas percer avant 24h |
 | 3 — Starkrit-Sable | Démoulage immédiat | 72h (séchage à l'air) | ⚠️ Protéger de l'humidité (Craft 6) |

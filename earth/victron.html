@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🔆 UPlanet Solar Constellation</title>
+    <style>
+        @font-face {
+            font-family: 'Orbitron';
+            src: url('./fonts/Orbitron/Orbitron-VariableFont_wght.ttf') format('truetype');
+            font-weight: 400 900;
+            font-style: normal;
+            font-display: swap;
+        }
+        @font-face {
+            font-family: 'Rajdhani';
+            src: url('./fonts/Roboto/Roboto-VariableFont_wdth,wght.ttf') format('truetype');
+            font-weight: 300 700;
+            font-style: normal;
+            font-display: swap;
+        }
+        @font-face {
+            font-family: 'Share Tech Mono';
+            src: url('./fonts/ShareTechMono-Regular.woff2') format('woff2');
+            font-weight: 400;
+            font-style: normal;
+            font-display: swap;
+        }
+
+        :root {
+            --bg-void: #030508;
+            --bg-deep: #0a0e14;
+            --bg-panel: #0d1219;
+            --bg-card: #111820;
+            --bg-hover: #1a222d;
+            --text-primary: #e8f4ff;
+            --text-secondary: #6b8299;
+            --text-dim: #3d5066;
+            --accent-cyan: #00d4ff;
+            --accent-green: #00ff88;
+            --accent-yellow: #ffd000;
+            --accent-orange: #ff8800;
+            --accent-red: #ff3366;
+            --accent-purple: #9966ff;
+            --border-glow: rgba(0, 212, 255, 0.3);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Rajdhani', sans-serif;
+            background: var(--bg-void);
+            color: var(--text-primary);
+            min-height: 100vh;
+            background-image:
+                radial-gradient(ellipse at 20% 20%, rgba(0, 255, 136, 0.04) 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 80%, rgba(0, 212, 255, 0.03) 0%, transparent 50%);
+        }
+
+        .container { max-width: 1100px; margin: 0 auto; padding: 20px; }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+            padding: 15px 22px;
+            background: linear-gradient(135deg, var(--bg-panel) 0%, var(--bg-deep) 100%);
+            border: 1px solid var(--border-glow);
+            border-radius: 4px;
+            margin-bottom: 20px;
+        }
+
+        h1 {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.2rem;
+            font-weight: 700;
+            letter-spacing: 2px;
+            color: var(--accent-green);
+        }
+        h1 span { color: var(--text-secondary); font-size: 0.65rem; font-weight: 400; display: block; letter-spacing: 1px; margin-top: 2px; }
+
+        .conn { display: flex; align-items: center; gap: 8px; font-size: 0.75rem; color: var(--text-secondary); }
+        .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--accent-red); box-shadow: 0 0 8px currentColor; }
+        .dot.online { background: var(--accent-green); }
+        .dot.warning { background: var(--accent-yellow); }
+
+        .agg-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 20px; }
+        .agg-item {
+            background: var(--bg-card);
+            border: 1px solid var(--border-glow);
+            border-radius: 4px;
+            padding: 14px;
+            text-align: center;
+        }
+        .agg-value { font-family: 'Share Tech Mono', monospace; font-size: 1.4rem; color: var(--accent-green); }
+        .agg-label { font-size: 0.62rem; color: var(--text-dim); letter-spacing: 1px; margin-top: 4px; }
+
+        .empty-state {
+            background: var(--bg-card);
+            border: 1px dashed var(--border-glow);
+            border-radius: 4px;
+            padding: 30px;
+            text-align: center;
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            line-height: 1.6;
+        }
+
+        .station-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-glow);
+            border-radius: 4px;
+            padding: 14px 18px;
+            margin-bottom: 10px;
+        }
+        .station-card-top { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+        .station-name { font-weight: 700; color: var(--text-primary); }
+        .station-name a { color: inherit; text-decoration: none; border-bottom: 1px dotted var(--text-dim); }
+        .charge-badge {
+            font-size: 0.62rem;
+            letter-spacing: 1px;
+            padding: 2px 8px;
+            border-radius: 3px;
+            text-transform: uppercase;
+        }
+        .charge-bulk       { background: rgba(0,212,255,0.12); color: var(--accent-cyan); }
+        .charge-absorption { background: rgba(255,208,0,0.12); color: var(--accent-yellow); }
+        .charge-float      { background: rgba(0,255,136,0.12); color: var(--accent-green); }
+        .charge-equalize   { background: rgba(153,102,255,0.12); color: var(--accent-purple); }
+        .charge-off, .charge-unknown { background: rgba(107,130,153,0.12); color: var(--text-secondary); }
+        .charge-error      { background: rgba(255,51,102,0.12); color: var(--accent-red); }
+
+        .station-stats { display: flex; gap: 22px; margin: 8px 0; flex-wrap: wrap; }
+        .station-stat { text-align: center; }
+        .station-stat .v { font-family: 'Share Tech Mono', monospace; font-size: 1rem; color: var(--text-primary); }
+        .station-stat .l { font-size: 0.6rem; color: var(--text-dim); letter-spacing: 1px; }
+
+        .bar-track { height: 6px; background: var(--bg-hover); border-radius: 3px; overflow: hidden; margin-top: 6px; }
+        .bar-fill { height: 100%; background: linear-gradient(90deg, var(--accent-green), var(--accent-cyan)); border-radius: 3px; }
+
+        .loading { text-align: center; padding: 60px 20px; color: var(--text-secondary); font-size: 0.9rem; }
+
+        .hist-toggle {
+            background: rgba(0,255,136,0.08);
+            border: 1px solid rgba(0,255,136,0.25);
+            color: var(--accent-green);
+            font-family: 'Rajdhani', sans-serif;
+            font-size: 0.68rem;
+            letter-spacing: 1px;
+            padding: 3px 10px;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+        .hist-toggle:hover { background: rgba(0,255,136,0.16); }
+        .hist-toggle:disabled { opacity: 0.5; cursor: default; }
+
+        .station-history { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--border-glow); }
+        .hist-status { font-size: 0.72rem; color: var(--text-secondary); padding: 4px 0; }
+        .hist-summary { display: flex; gap: 18px; margin-top: 6px; flex-wrap: wrap; }
+        .hist-summary .v { font-family: 'Share Tech Mono', monospace; font-size: 0.85rem; color: var(--text-primary); }
+        .hist-summary .l { font-size: 0.58rem; color: var(--text-dim); letter-spacing: 1px; }
+
+        .chart-svg-wrap svg { width: 100%; height: auto; display: block; }
+        .chart-bar { transition: opacity 0.15s; }
+        .chart-bar:hover { opacity: 0.7; }
+        .chart-axis-label { font-family: 'Share Tech Mono', monospace; font-size: 9px; fill: var(--text-dim); }
+        .chart-grid-line { stroke: var(--bg-hover); stroke-width: 1; }
+
+        .constellation-history {
+            background: var(--bg-card);
+            border: 1px solid var(--border-glow);
+            border-radius: 4px;
+            padding: 16px 18px;
+            margin-top: 20px;
+        }
+        .constellation-history h2 {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.8rem;
+            letter-spacing: 1px;
+            color: var(--accent-green);
+            margin-bottom: 10px;
+        }
+        .legend-row { display: flex; flex-wrap: wrap; gap: 10px 16px; margin-top: 10px; font-size: 0.68rem; color: var(--text-secondary); }
+        .legend-item { display: flex; align-items: center; gap: 5px; }
+        .legend-swatch { width: 9px; height: 9px; border-radius: 2px; flex-shrink: 0; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🔆 SOLAR CONSTELLATION<span>Production photovoltaïque des stations UPlanet (Victron MPPT)</span></h1>
+            <div class="conn">
+                <div class="dot" id="connection-status"></div>
+                <span id="relay-status">CONNECTING...</span>
+                <span id="relay-url" style="color:var(--text-dim)"></span>
+            </div>
+        </header>
+
+        <div id="loading" class="loading">🔭 Recherche de régulateurs MPPT dans la constellation…</div>
+
+        <div id="main" style="display:none">
+            <div class="agg-row">
+                <div class="agg-item">
+                    <div class="agg-value" id="agg-count">--</div>
+                    <div class="agg-label">🛰️ STATIONS PRODUCTRICES</div>
+                </div>
+                <div class="agg-item">
+                    <div class="agg-value" id="agg-power" style="color:var(--accent-cyan)">-- W</div>
+                    <div class="agg-label">⚡ PUISSANCE INSTANTANÉE</div>
+                </div>
+                <div class="agg-item">
+                    <div class="agg-value" id="agg-today">-- Wh</div>
+                    <div class="agg-label">☀️ PRODUCTION DU JOUR</div>
+                </div>
+                <div class="agg-item">
+                    <div class="agg-value" id="agg-month" style="color:var(--accent-yellow)">-- kWh</div>
+                    <div class="agg-label">📅 PRODUCTION DU MOIS</div>
+                </div>
+            </div>
+
+            <div id="stations-list"></div>
+            <div id="empty-state" class="empty-state" style="display:none">
+                Aucun régulateur MPPT Victron détecté pour l'instant dans la constellation.<br>
+                Une station l'active via <code>astrosystemctl local install victron</code>
+                (module <code>tools/victron/</code> — cf. Astroport.ONE).
+            </div>
+
+            <div class="constellation-history">
+                <h2>📈 HISTORIQUE CONSTELLATION (30 JOURS)</h2>
+                <div style="font-size:0.72rem;color:var(--text-secondary);margin-bottom:10px;">
+                    Lu directement depuis le CID publié par chaque station
+                    (<code>/ipns/&lt;station&gt;/VICTRON/victron_history.json.ipfs</code>) — jamais via NOSTR.
+                </div>
+                <button class="hist-toggle" id="btn-load-constellation-history">🔭 Charger l'historique de toutes les stations</button>
+                <div class="hist-status" id="constellation-hist-status"></div>
+                <div class="chart-svg-wrap" id="constellation-chart"></div>
+                <div class="legend-row" id="constellation-legend"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="nacl-fast.min.js"></script>
+    <script src="nostr.bundle.js"></script>
+    <script src="common.js"></script>
+    <script>
+        const EVENT_KIND_STATION = 30850;
+        let ws = null;
+        let relay = null;
+        const stations = new Map();
+        const connectedRelays = new Set();
+        let swarmRelaysLoaded = false;
+
+        function detectRelayUrl() {
+            return (typeof window.getRelayUrl === 'function') ? window.getRelayUrl() : 'wss://relay.copylaradio.com';
+        }
+
+        window.addEventListener('load', async () => {
+            await new Promise(r => setTimeout(r, 200));
+            const relayUrl = new URLSearchParams(window.location.search).get('relay') || detectRelayUrl();
+            document.getElementById('relay-url').textContent = relayUrl.replace(/^wss?:\/\//, '');
+            connectedRelays.add(relayUrl);
+            await initializeRelay(relayUrl);
+        });
+
+        async function initializeRelay(relayUrl) {
+            if (typeof connectToRelay === 'function') {
+                try {
+                    await connectToRelay();
+                    if (window.nostrRelay && typeof window.nostrRelay.sub === 'function') {
+                        relay = window.nostrRelay;
+                        setStatus('online', 'CONNECTED');
+                        subscribeWithCommonJS();
+                        return;
+                    }
+                } catch (e) {
+                    console.warn('⚠️ common.js connectToRelay failed:', e);
+                }
+            }
+            connectWebSocket(relayUrl);
+        }
+
+        function connectWebSocket(relayUrl) {
+            ws = new WebSocket(relayUrl);
+            ws.onopen = () => { setStatus('online', 'CONNECTED'); subscribeWithWebSocket(); };
+            ws.onmessage = (event) => handleWebSocketMessage(JSON.parse(event.data));
+            ws.onerror = () => setStatus('warning', 'ERROR');
+            ws.onclose = () => setStatus('warning', 'DISCONNECTED');
+        }
+
+        function setStatus(cls, label) {
+            document.getElementById('connection-status').className = 'dot ' + cls;
+            document.getElementById('relay-status').textContent = label;
+        }
+
+        function subscribeWithCommonJS() {
+            const since = Math.floor(Date.now() / 1000) - (30 * 24 * 60 * 60);
+            const sub = relay.sub([{ kinds: [EVENT_KIND_STATION], since, limit: 500 }]);
+            sub.on('event', processStationEvent);
+            sub.on('eose', () => { reveal(); loadSwarmRelays(); });
+            setTimeout(reveal, 5000);
+        }
+
+        function subscribeWithWebSocket() {
+            const since = Math.floor(Date.now() / 1000) - (30 * 24 * 60 * 60);
+            ws.send(JSON.stringify(['REQ', 'solar-' + Date.now(), { kinds: [EVENT_KIND_STATION], since, limit: 500 }]));
+            setTimeout(reveal, 5000);
+        }
+
+        function handleWebSocketMessage(message) {
+            const [type, ...data] = message;
+            if (type === 'EVENT') processStationEvent(data[1]);
+            else if (type === 'EOSE') { reveal(); loadSwarmRelays(); }
+        }
+
+        function reveal() {
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('main').style.display = 'block';
+            updateUI();
+        }
+
+        function getTagValue(tags, name) {
+            return tags.find(t => t[0] === name)?.[1] || null;
+        }
+
+        // Discover swarm relays via UPassport API (same method as economy.Swarm.html)
+        async function loadSwarmRelays() {
+            if (swarmRelaysLoaded) return;
+            swarmRelaysLoaded = true;
+            const uspotUrl = (window.upassportUrl || '').replace(/\/$/, '');
+            if (!uspotUrl) return;
+            try {
+                const r = await fetch(uspotUrl + '/');
+                if (!r.ok) return;
+                const root = await r.json();
+                const isRoutable = url => url && !url.includes('127.') && !url.includes('localhost') && !url.includes('0.0.0.0');
+                const newRelays = new Set();
+                if (isRoutable(root['myRELAY'])) newRelays.add(root['myRELAY']);
+                (root['SWARM'] || []).forEach(peer => { if (peer && isRoutable(peer['myRELAY'])) newRelays.add(peer['myRELAY']); });
+                newRelays.forEach(relayUrl => {
+                    if (!connectedRelays.has(relayUrl)) { connectedRelays.add(relayUrl); subscribeSwarmRelay(relayUrl); }
+                });
+            } catch (e) { console.warn('⚠️ loadSwarmRelays:', e); }
+        }
+
+        function subscribeSwarmRelay(relayUrl) {
+            const since = Math.floor(Date.now() / 1000) - (30 * 24 * 60 * 60);
+            const peerWs = new WebSocket(relayUrl);
+            peerWs.onopen = () => peerWs.send(JSON.stringify(['REQ', 'solar-swarm-' + Date.now(), { kinds: [EVENT_KIND_STATION], since, limit: 500 }]));
+            peerWs.onmessage = (event) => {
+                try {
+                    const [type, ...data] = JSON.parse(event.data);
+                    if (type === 'EVENT') processStationEvent(data[1]);
+                    else if (type === 'EOSE') updateUI();
+                } catch (e) {}
+            };
+            peerWs.onerror = () => console.warn(`⚠️ Relay swarm inaccessible: ${relayUrl}`);
+        }
+
+        function processStationEvent(event) {
+            try {
+                const content = JSON.parse(event.content);
+                const tags = event.tags;
+                const stationId = getTagValue(tags, 'station');
+                if (!stationId) return;
+                const existing = stations.get(stationId);
+                if (existing && event.created_at <= existing.created_at) return;
+
+                const solar = content.hardware?.solar || {};
+                stations.set(stationId, {
+                    stationId,
+                    stationName: getTagValue(tags, 'station:name') || ('...' + stationId.slice(-8)),
+                    stationUrl: content.station_url || getTagValue(tags, 'station:url') || null,
+                    powerW: solar.power_w ?? parseFloat(getTagValue(tags, 'hw:solar_power_w') || 0),
+                    yieldTodayWh: solar.yield_today_wh ?? parseFloat(getTagValue(tags, 'hw:solar_yield_today_wh') || 0),
+                    monthWh: solar.month_wh ?? parseFloat(getTagValue(tags, 'hw:solar_month_wh') || 0),
+                    totalWh: solar.total_wh ?? parseFloat(getTagValue(tags, 'hw:solar_total_wh') || 0),
+                    batteryV: solar.battery_v ?? parseFloat(getTagValue(tags, 'hw:solar_battery_v') || 0),
+                    chargeState: solar.charge_state || getTagValue(tags, 'hw:solar_charge_state') || 'unknown',
+                    created_at: event.created_at
+                });
+                updateUI();
+            } catch (e) {
+                console.warn('⚠️ processStationEvent:', e);
+            }
+        }
+
+        function escapeHtml(s) {
+            return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+        }
+
+        function chargeClass(state) {
+            const known = ['bulk', 'absorption', 'float', 'equalize', 'off', 'error'];
+            return known.includes(state) ? 'charge-' + state : 'charge-unknown';
+        }
+
+        function updateUI() {
+            const producers = Array.from(stations.values())
+                .filter(s => s.powerW > 0 || s.yieldTodayWh > 0)
+                .sort((a, b) => b.powerW - a.powerW);
+
+            const totalPower = producers.reduce((s, p) => s + p.powerW, 0);
+            const totalToday = producers.reduce((s, p) => s + p.yieldTodayWh, 0);
+            const totalMonth = producers.reduce((s, p) => s + p.monthWh, 0);
+
+            document.getElementById('agg-count').textContent = producers.length;
+            document.getElementById('agg-power').textContent = `${totalPower.toFixed(0)} W`;
+            document.getElementById('agg-today').textContent = `${totalToday.toFixed(0)} Wh`;
+            document.getElementById('agg-month').textContent = `${(totalMonth / 1000).toFixed(2)} kWh`;
+
+            const list = document.getElementById('stations-list');
+            const emptyState = document.getElementById('empty-state');
+
+            if (producers.length === 0) {
+                list.innerHTML = '';
+                emptyState.style.display = 'block';
+                return;
+            }
+            emptyState.style.display = 'none';
+
+            const maxToday = Math.max(...producers.map(p => p.yieldTodayWh), 1);
+
+            list.innerHTML = producers.map(s => {
+                const name = s.stationUrl
+                    ? `<a href="${escapeHtml(s.stationUrl)}" target="_blank" rel="noopener">${escapeHtml(s.stationName)}</a>`
+                    : escapeHtml(s.stationName);
+                const barPct = Math.round((s.yieldTodayWh / maxToday) * 100);
+                const safeId = cssId(s.stationId);
+                return `
+                <div class="station-card">
+                    <div class="station-card-top">
+                        <div class="station-name">🔆 ${name}</div>
+                        <span class="charge-badge ${chargeClass(s.chargeState)}">${escapeHtml(s.chargeState)}</span>
+                    </div>
+                    <div class="station-stats">
+                        <div class="station-stat"><div class="v">${s.powerW.toFixed(0)} W</div><div class="l">INSTANT</div></div>
+                        <div class="station-stat"><div class="v">${s.yieldTodayWh.toFixed(0)} Wh</div><div class="l">JOUR</div></div>
+                        <div class="station-stat"><div class="v">${s.monthWh.toFixed(0)} Wh</div><div class="l">MOIS</div></div>
+                        <div class="station-stat"><div class="v">${(s.totalWh / 1000).toFixed(1)} kWh</div><div class="l">TOTAL</div></div>
+                        <div class="station-stat"><div class="v">${s.batteryV.toFixed(1)} V</div><div class="l">BATTERIE</div></div>
+                    </div>
+                    <div class="bar-track"><div class="bar-fill" style="width:${barPct}%"></div></div>
+                    <div style="margin-top:8px;">
+                        <button class="hist-toggle" data-station="${escapeHtml(s.stationId)}" onclick="toggleStationHistory(this)">📈 Historique</button>
+                    </div>
+                    <div class="station-history" id="hist-${safeId}" style="display:none"></div>
+                </div>`;
+            }).join('');
+        }
+
+        // --- Historique multi-jours (lu depuis le CID publié par chaque station) ---
+
+        function cssId(stationId) { return String(stationId).replace(/[^a-zA-Z0-9_-]/g, ''); }
+
+        // Reconstruit l'URL de la gateway IPFS d'une station à partir de son
+        // uSPOT (station:url, l'URL UPassport) — inverse exactement la
+        // transformation faite par tools/my.sh (myIPFS -> uSPOT) :
+        //   https://ipfs.DOMAIN  <-> https://u.DOMAIN
+        //   http://127.0.0.1:8080 <-> http://127.0.0.1:54321
+        function deriveGatewayUrl(stationUrl) {
+            if (!stationUrl) return null;
+            if (/^https:\/\/u\./.test(stationUrl)) return stationUrl.replace(/^https:\/\/u\./, 'https://ipfs.');
+            if (stationUrl.includes('54321')) return stationUrl.replace('54321', '8080');
+            return null;
+        }
+
+        function withTimeout(promise, ms) {
+            return Promise.race([
+                promise,
+                new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), ms))
+            ]);
+        }
+
+        const historyCache = new Map(); // stationId -> {days: Map(date->wh)} | null (échec)
+
+        // Récupère l'historique complet d'une station : pointeur CID (.ipfs)
+        // puis contenu (/ipfs/<cid>). Retourne null si indisponible (station
+        // sans module victron, ou pas encore de publish-cid effectué).
+        async function fetchStationHistoryDays(station) {
+            if (historyCache.has(station.stationId)) return historyCache.get(station.stationId);
+
+            const gateway = deriveGatewayUrl(station.stationUrl);
+            if (!gateway) { historyCache.set(station.stationId, null); return null; }
+
+            try {
+                const pointerUrl = `${gateway}/ipns/${station.stationId}/VICTRON/victron_history.json.ipfs`;
+                const cidResp = await withTimeout(fetch(pointerUrl), 12000);
+                if (!cidResp.ok) throw new Error('pointer not found');
+                const cid = (await cidResp.text()).trim();
+                if (!cid) throw new Error('empty CID');
+
+                const contentResp = await withTimeout(fetch(`${gateway}/ipfs/${cid}`), 12000);
+                if (!contentResp.ok) throw new Error('content not found');
+                const json = await contentResp.json();
+
+                const days = new Map();
+                Object.entries(json.days || {}).forEach(([date, d]) => days.set(date, d.yield_wh || 0));
+                const result = { days, since: json.since || null };
+                historyCache.set(station.stationId, result);
+                return result;
+            } catch (e) {
+                console.warn(`⚠️ Historique indisponible pour ${station.stationName}:`, e.message);
+                historyCache.set(station.stationId, null);
+                return null;
+            }
+        }
+
+        function lastNDates(n) {
+            const out = [];
+            const d = new Date();
+            for (let i = n - 1; i >= 0; i--) {
+                const dd = new Date(d);
+                dd.setDate(d.getDate() - i);
+                out.push(dd.toISOString().slice(0, 10));
+            }
+            return out;
+        }
+
+        function fmtDateLabel(iso) { return iso.slice(5).replace('-', '/'); } // MM/DD
+
+        // Petit graphique en barres (SVG inline, une seule série) pour le
+        // panneau "Historique" d'une station.
+        function buildSingleBarChartSVG(dates, whByDate) {
+            const w = 640, h = 160, padL = 34, padB = 18, padT = 6, padR = 6;
+            const plotW = w - padL - padR, plotH = h - padT - padB;
+            const values = dates.map(d => whByDate.get(d) || 0);
+            const max = Math.max(...values, 1);
+            const barGap = 2;
+            const barW = Math.max(1, plotW / dates.length - barGap);
+
+            let bars = '';
+            dates.forEach((d, i) => {
+                const v = values[i];
+                const barH = (v / max) * plotH;
+                const x = padL + i * (plotW / dates.length);
+                const y = padT + plotH - barH;
+                bars += `<rect class="chart-bar" x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="${barH.toFixed(1)}" fill="var(--accent-green)" rx="1"><title>${d}: ${v.toFixed(0)} Wh</title></rect>`;
+            });
+
+            let grid = '';
+            for (let g = 0; g <= 2; g++) {
+                const gy = padT + (plotH / 2) * g;
+                grid += `<line class="chart-grid-line" x1="${padL}" y1="${gy.toFixed(1)}" x2="${w - padR}" y2="${gy.toFixed(1)}"/>`;
+                grid += `<text class="chart-axis-label" x="2" y="${(gy + 3).toFixed(1)}">${Math.round(max * (1 - g / 2))}</text>`;
+            }
+
+            let labels = '';
+            const step = Math.ceil(dates.length / 8);
+            dates.forEach((d, i) => {
+                if (i % step !== 0) return;
+                const x = padL + i * (plotW / dates.length);
+                labels += `<text class="chart-axis-label" x="${x.toFixed(1)}" y="${h - 4}">${fmtDateLabel(d)}</text>`;
+            });
+
+            return `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="xMinYMin meet">${grid}${bars}${labels}</svg>`;
+        }
+
+        async function toggleStationHistory(btn) {
+            const stationId = btn.dataset.station;
+            const panel = document.getElementById('hist-' + cssId(stationId));
+            if (!panel) return;
+
+            if (panel.style.display !== 'none') { panel.style.display = 'none'; return; }
+            panel.style.display = 'block';
+            if (panel.dataset.loaded === '1') return;
+
+            panel.innerHTML = `<div class="hist-status">⏳ Chargement de l'historique publié...</div>`;
+            btn.disabled = true;
+
+            const station = stations.get(stationId);
+            const result = station ? await fetchStationHistoryDays(station) : null;
+
+            if (!result || result.days.size === 0) {
+                panel.innerHTML = `<div class="hist-status">⚠️ Pas d'historique publié pour cette station (module victron non installé, ou <code>publish-cid</code> pas encore exécuté).</div>`;
+                btn.disabled = false;
+                return;
+            }
+
+            const dates = lastNDates(30);
+            const totalPeriod = dates.reduce((s, d) => s + (result.days.get(d) || 0), 0);
+            const daysWithData = dates.filter(d => result.days.has(d)).length;
+
+            panel.innerHTML = `
+                <div class="chart-svg-wrap">${buildSingleBarChartSVG(dates, result.days)}</div>
+                <div class="hist-summary">
+                    <div><div class="v">${totalPeriod.toFixed(0)} Wh</div><div class="l">TOTAL 30J</div></div>
+                    <div><div class="v">${daysWithData}/30</div><div class="l">JOURS SUIVIS</div></div>
+                    <div><div class="v">${result.since || '?'}</div><div class="l">DEPUIS</div></div>
+                </div>`;
+            panel.dataset.loaded = '1';
+            btn.disabled = false;
+        }
+
+        // --- Vue d'ensemble constellation : graphique empilé, toutes stations ---
+
+        function stationColor(stationId) {
+            let hash = 0;
+            for (let i = 0; i < stationId.length; i++) hash = (hash * 31 + stationId.charCodeAt(i)) | 0;
+            const hue = Math.abs(hash) % 360;
+            return `hsl(${hue}, 70%, 55%)`;
+        }
+
+        function buildStackedChartSVG(dates, perStationWh, colorByStation) {
+            const w = 900, h = 260, padL = 40, padB = 20, padT = 8, padR = 8;
+            const plotW = w - padL - padR, plotH = h - padT - padB;
+            const stationIds = Object.keys(perStationWh);
+
+            const totals = dates.map(d => stationIds.reduce((s, id) => s + (perStationWh[id].get(d) || 0), 0));
+            const max = Math.max(...totals, 1);
+            const barGap = 2;
+            const barW = Math.max(1, plotW / dates.length - barGap);
+
+            let bars = '';
+            dates.forEach((d, i) => {
+                const x = padL + i * (plotW / dates.length);
+                let yCursor = padT + plotH;
+                stationIds.forEach(id => {
+                    const v = perStationWh[id].get(d) || 0;
+                    if (v <= 0) return;
+                    const segH = (v / max) * plotH;
+                    yCursor -= segH;
+                    bars += `<rect class="chart-bar" x="${x.toFixed(1)}" y="${yCursor.toFixed(1)}" width="${barW.toFixed(1)}" height="${segH.toFixed(1)}" fill="${colorByStation[id]}"><title>${d}: ${v.toFixed(0)} Wh</title></rect>`;
+                });
+            });
+
+            let grid = '';
+            for (let g = 0; g <= 2; g++) {
+                const gy = padT + (plotH / 2) * g;
+                grid += `<line class="chart-grid-line" x1="${padL}" y1="${gy.toFixed(1)}" x2="${w - padR}" y2="${gy.toFixed(1)}"/>`;
+                grid += `<text class="chart-axis-label" x="2" y="${(gy + 3).toFixed(1)}">${Math.round(max * (1 - g / 2))}Wh</text>`;
+            }
+
+            let labels = '';
+            const step = Math.ceil(dates.length / 10);
+            dates.forEach((d, i) => {
+                if (i % step !== 0) return;
+                const x = padL + i * (plotW / dates.length);
+                labels += `<text class="chart-axis-label" x="${x.toFixed(1)}" y="${h - 4}">${fmtDateLabel(d)}</text>`;
+            });
+
+            return `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="xMinYMin meet">${grid}${bars}${labels}</svg>`;
+        }
+
+        async function loadConstellationHistory() {
+            const btn = document.getElementById('btn-load-constellation-history');
+            const statusEl = document.getElementById('constellation-hist-status');
+            const chartEl = document.getElementById('constellation-chart');
+            const legendEl = document.getElementById('constellation-legend');
+
+            btn.disabled = true;
+            const candidates = Array.from(stations.values()).filter(s => s.stationUrl);
+            statusEl.textContent = `⏳ Chargement de ${candidates.length} station(s)...`;
+
+            const results = await Promise.allSettled(candidates.map(s => fetchStationHistoryDays(s)));
+
+            const perStationWh = {};
+            const colorByStation = {};
+            const legendEntries = [];
+            let okCount = 0;
+
+            candidates.forEach((s, i) => {
+                const r = results[i].status === 'fulfilled' ? results[i].value : null;
+                if (!r || r.days.size === 0) return;
+                okCount++;
+                perStationWh[s.stationId] = r.days;
+                colorByStation[s.stationId] = stationColor(s.stationId);
+                legendEntries.push({ name: s.stationName, color: colorByStation[s.stationId] });
+            });
+
+            if (okCount === 0) {
+                statusEl.textContent = `⚠️ Aucun historique publié trouvé (${candidates.length} station(s) testée(s)).`;
+                chartEl.innerHTML = '';
+                legendEl.innerHTML = '';
+                btn.disabled = false;
+                return;
+            }
+
+            const dates = lastNDates(30);
+            statusEl.textContent = `✅ ${okCount}/${candidates.length} station(s) avec historique publié — 30 derniers jours.`;
+            chartEl.innerHTML = buildStackedChartSVG(dates, perStationWh, colorByStation);
+            legendEl.innerHTML = legendEntries.map(l =>
+                `<div class="legend-item"><span class="legend-swatch" style="background:${l.color}"></span>${escapeHtml(l.name)}</div>`
+            ).join('');
+            btn.disabled = false;
+        }
+
+        document.getElementById('btn-load-constellation-history').addEventListener('click', loadConstellationHistory);
+    </script>
+    <script src="feedback.js"></script>
+    <script src="app_switch.js"></script>
+    <script src="uplanet-header.js"></script>
+</body>
+</html>

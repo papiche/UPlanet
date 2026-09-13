@@ -1254,6 +1254,10 @@
                     <div class="aggregate-value" id="agg-energy" style="color: var(--accent-yellow)">-- kWh</div>
                     <div class="aggregate-label">⚡ ÉNERGIE ESSAIM (JOUR)</div>
                 </div>
+                <div class="aggregate-item">
+                    <div class="aggregate-value" id="agg-solar" style="color: var(--accent-green)">-- Wh</div>
+                    <div class="aggregate-label">🔆 SOLAIRE ESSAIM (JOUR)</div>
+                </div>
             </div>
         </div>
     </div>
@@ -1527,6 +1531,13 @@
                         hwEnergyMonthKwh: content.hardware?.energy?.month_kwh || parseFloat(getTagValue(tags, 'hw:energy_month_kwh') || 0),
                         hwEnergyTotalKwh: content.hardware?.energy?.total_kwh || parseFloat(getTagValue(tags, 'hw:energy_total_kwh') || 0),
                         hwAvgWRecent: content.hardware?.energy?.avg_w_recent || parseFloat(getTagValue(tags, 'hw:avg_w_recent') || 0),
+                        // Production solaire mesurée (Victron MPPT BLE — cf. tools/victron/victron_stats.sh)
+                        hwSolarPowerW: content.hardware?.solar?.power_w || parseFloat(getTagValue(tags, 'hw:solar_power_w') || 0),
+                        hwSolarYieldTodayWh: content.hardware?.solar?.yield_today_wh || parseFloat(getTagValue(tags, 'hw:solar_yield_today_wh') || 0),
+                        hwSolarMonthWh: content.hardware?.solar?.month_wh || parseFloat(getTagValue(tags, 'hw:solar_month_wh') || 0),
+                        hwSolarTotalWh: content.hardware?.solar?.total_wh || parseFloat(getTagValue(tags, 'hw:solar_total_wh') || 0),
+                        hwSolarBatteryV: content.hardware?.solar?.battery_v || parseFloat(getTagValue(tags, 'hw:solar_battery_v') || 0),
+                        hwSolarChargeState: content.hardware?.solar?.charge_state || getTagValue(tags, 'hw:solar_charge_state') || 'unknown',
                         created_at: event.created_at,
                         content
                     });
@@ -1756,6 +1767,9 @@
                     ? ` | 💾R:${station.hwDiskReadMbps} W:${station.hwDiskWriteMbps} MB/s` : '';
                 const energyTitle = station.hwAvgWRecent > 0
                     ? ` | ⚡${station.hwAvgWRecent.toFixed(1)}W ratio:${(station.hwPowerScore / (station.hwAvgWRecent + station.costPaf || 1)).toFixed(2)}` : '';
+                const hasSolar = station.hwSolarYieldTodayWh > 0 || station.hwSolarPowerW > 0;
+                const solarTitle = hasSolar
+                    ? ` | 🔆${station.hwSolarPowerW.toFixed(0)}W jour:${station.hwSolarYieldTodayWh.toFixed(0)}Wh` : '';
 
                 row.innerHTML = `
                     <div class="station-name-cell">
@@ -1765,7 +1779,7 @@
                     <div>${station.healthStatus.replace('_', ' ').toUpperCase()}</div>
                     <div style="color: ${station.bilan >= 0 ? 'var(--accent-green)' : 'var(--accent-red)'}">${station.bilan.toFixed(1)} Ẑ</div>
                     <div style="color: var(--accent-yellow)">${station.revenueTotal.toFixed(0)} Ẑ</div>
-                    <div title="${station.hwCpuCores}c ${station.hwRamGb.toFixed(0)}Go score:${station.hwPowerScore}${isGpuBrain?' GPU '+station.hwGpuVram+'Go':''}${diskTitle}${energyTitle}">${tierEmoji} N:${station.priceMultipass}Ẑ Z:${station.priceZencard}Ẑ</div>
+                    <div title="${station.hwCpuCores}c ${station.hwRamGb.toFixed(0)}Go score:${station.hwPowerScore}${isGpuBrain?' GPU '+station.hwGpuVram+'Go':''}${diskTitle}${energyTitle}${solarTitle}">${tierEmoji}${hasSolar?'🔆':''} N:${station.priceMultipass}Ẑ Z:${station.priceZencard}Ẑ</div>
                     <div>${station.weeksRunway}w</div>
                 `;
 
@@ -1880,6 +1894,10 @@
                         ${station.hwAvgWRecent > 0 || station.hwEnergyTodayKwh > 0 ? `<div style="font-size:0.7rem;color:var(--text-secondary);margin-bottom:6px;">
                             ⚡ Énergie : jour=${station.hwEnergyTodayKwh.toFixed(2)}kWh · mois=${station.hwEnergyMonthKwh.toFixed(2)}kWh · total=${station.hwEnergyTotalKwh.toFixed(2)}kWh
                             ${(station.hwAvgWRecent + station.costPaf) > 0 ? ` · ratio perf/coût/watt=<b style="color:var(--accent-cyan);">${(station.hwPowerScore / (station.hwAvgWRecent + station.costPaf)).toFixed(2)}</b>` : ''}
+                        </div>` : ''}
+                        ${station.hwSolarYieldTodayWh > 0 || station.hwSolarPowerW > 0 ? `<div style="font-size:0.7rem;color:var(--accent-green);margin-bottom:6px;">
+                            🔆 Solaire : instant=${station.hwSolarPowerW.toFixed(0)}W · jour=${station.hwSolarYieldTodayWh.toFixed(0)}Wh · mois=${station.hwSolarMonthWh.toFixed(0)}Wh · total=${(station.hwSolarTotalWh/1000).toFixed(1)}kWh
+                            · batterie=${station.hwSolarBatteryV.toFixed(1)}V (${station.hwSolarChargeState})
                         </div>` : ''}
                         <div style="font-size:0.72rem;color:var(--text-secondary);margin-bottom:4px;">${rankLabel}</div>
                         <div style="display:flex;gap:6px;flex-wrap:wrap;">
@@ -2077,6 +2095,7 @@
             let totalZencardRenters = 0, totalZencardOwners = 0;
             let healthyCount = 0, brainCount = 0;
             let totalEnergyTodayKwh = 0;
+            let totalSolarTodayWh = 0;
 
             stations.forEach(s => {
                 totalRevenue += s.revenueTotal;
@@ -2087,6 +2106,7 @@
                 if (s.healthStatus === 'healthy') healthyCount++;
                 if (s.hwTier === 'brain') brainCount++;
                 totalEnergyTodayKwh += s.hwEnergyTodayKwh || 0;
+                totalSolarTodayWh += s.hwSolarYieldTodayWh || 0;
             });
 
             const healthPercent = Math.round((healthyCount / stations.length) * 100);
@@ -2104,6 +2124,8 @@
             if (aggBrain) aggBrain.textContent = brainCount > 0 ? `${brainCount} / ${stations.length}` : `0 / ${stations.length}`;
             const aggEnergy = document.getElementById('agg-energy');
             if (aggEnergy) aggEnergy.textContent = `${totalEnergyTodayKwh.toFixed(2)} kWh`;
+            const aggSolar = document.getElementById('agg-solar');
+            if (aggSolar) aggSolar.textContent = `${totalSolarTodayWh.toFixed(0)} Wh`;
 
             // Display SHARED wallet values (correctly not summed across stations)
             document.getElementById('total-cash').textContent = `${totalCash.toFixed(2)} Ẑ`;

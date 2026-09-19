@@ -160,6 +160,59 @@ Permet de planifier une session (Kind 31922) avec les tags `craft` et `min_opera
 
 ---
 
+## `cloud.html` — FaceCloud (cloud chiffré + reconnaissance faciale)
+
+Une seule page pour : activer le cloud chiffré du MULTIPASS, y envoyer des
+photos, et nommer les visages qui y sont détectés. **Pas** de navigateur de
+fichiers : le disque se monte comme un lecteur réseau standard.
+
+**Stack :** `nacl-fast.min.js` → `nostr.bundle.js` → `common.js` → `app_switch.js` → `feedback.js`
+**Style :** `cloud.enhancements.css` (thème clair Google-Drive, sections
+`PANNEAU D'ACTIVATION` et `FACECLOUD` ; accent `#1a73e8`)
+
+Sections, dans l'ordre : En-tête → Connexion → Mon cloud chiffré → Mes photos
+→ Visages détectés. Tant que le MULTIPASS n'est pas connecté, les trois
+dernières portent `.fc-locked` (grisées, `pointer-events:none`) ; la connexion
+ajoute `.fc-unlocked`.
+
+| Action | Appel |
+|--------|-------|
+| État cloud | `GET /api/cloud/status` → `{enrolled, dav_url, email, files, bytes, max_file_size}` |
+| Activer / régénérer | `POST /api/cloud/enroll` → `{dav_url, email, token, instructions}` |
+| Révoquer | `POST /api/cloud/revoke` |
+| Envoyer une photo | `POST /api/fileupload` (multipart `file`, `npub` inutile : le NIP-98 suffit) |
+| Lister les visages | `GET /mailjet/faces` → `{faces:[{id,name,pubkey,timestamp}]}` |
+| Nommer un visage | `POST /mailjet/faces-edit` (multipart `point_id`, `name`, `pubkey`) |
+| Oublier un visage | `POST /mailjet/faces-delete` (multipart `point_id`) |
+
+**Un seul mécanisme d'auth : NIP-98** (kind 27235, tags `u`/`method`, base64url
+sans padding) — **même convention que `craft.html` / `forge.html` /
+`nostr_admin.html`**, vérifiée par `UPassport/services/nostr.py`. Signature via
+`window.nostr.signEvent()` (NIP-07), repli `NostrTools.finishEvent`.
+Le serveur n'accepte un event que ~120 s (`NIP98_MAX_AGE`) : **chaque** appel
+signe un event FRAIS, d'où la fonction unique `nostrFetch(path, {method, body})`
+utilisée par toutes les sections. `body` peut être un `FormData` (le
+Content-Type est laissé au navigateur, pour la frontière multipart).
+
+Les visages sont séparés en **À nommer** (`pubkey` vide, `Inconnu_xxxxxxxx`) et
+**Déjà identifiés**. Le champ clé accepte un `npub1…` ou 64 hex ;
+`normalizeKey()` convertit en hex (le backend n'accepte que l'hex) et renvoie
+`null` sur saisie invalide (≠ `''` qui veut dire « pas de clé »).
+L'analyse faciale étant asynchrone (GPU), la page le dit explicitement et
+propose un bouton **Actualiser** plutôt qu'un polling silencieux.
+
+Le mot de passe DAV n'est affiché **qu'une fois** (le serveur ne le re-expose
+jamais ; `status` dit seulement s'il existe). Montage : `davfs2` (Linux),
+Finder ⌘K (macOS), Ajouter un emplacement réseau (Windows).
+
+Backend : `UPassport/services/cloud_storage.py`, monté sous `/dav/`
+(AES-256-GCM avant IPFS, une clé par fichier, index/keyring locaux en 0600) ;
+catalogue de visages dans Qdrant `faces_{hex}`, alimenté par
+`Astroport.ONE/IA/bro/satellite_face_matcher.py`.
+
+⚠️ L'ancienne route serveur `GET /cloud` (template `UPassport/templates/cloud.html`,
+drive NOSTR kind 1063/21/22) est **supprimée** : FaceCloud est la seule page cloud.
+
 ## Modules partagés
 
 ### `carousel-3d.js`

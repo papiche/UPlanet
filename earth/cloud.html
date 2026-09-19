@@ -1,0 +1,750 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FaceCloud — UPlanet</title>
+<link rel="icon" type="image/x-icon" href="favicon.ico">
+<link rel="stylesheet" href="bootstrap.min.css">
+<link rel="stylesheet" href="fonts/bootstrap-icons.css">
+<link rel="stylesheet" href="cloud.enhancements.css">
+</head>
+<body class="cloud-container">
+
+<!-- Bandeau de connexion NOSTR (convention earth/, cf. earth/CLAUDE.md) -->
+<div id="nostr-bar" style="position:fixed;top:10px;right:12px;z-index:9000;
+  display:flex;align-items:center;gap:8px;
+  background:rgba(32,33,36,0.85);backdrop-filter:blur(10px);
+  border:1px solid rgba(255,255,255,0.12);border-radius:20px;
+  padding:5px 14px;font-size:12px;color:rgba(255,255,255,0.9)">
+  <span id="conn-badge">🔴</span>
+  <span id="user-name-badge" style="display:none;color:#86efac;font-weight:600"></span>
+  <button id="btn-connect" onclick="handleConnect()"
+    style="background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.25);
+    color:rgba(255,255,255,0.9);padding:3px 10px;border-radius:12px;
+    cursor:pointer;font-size:11px;font-weight:500">⚡ Se connecter</button>
+</div>
+
+<header class="cloud-header">
+  <div class="cloud-header-content">
+    <div class="cloud-header-left">
+      <div class="cloud-logo"><i class="bi bi-cloud-check"></i> FaceCloud</div>
+    </div>
+  </div>
+</header>
+
+<main class="cloud-panel">
+
+  <!-- ══ 1. En-tête ═══════════════════════════════════════════════════ -->
+  <section class="cloud-card fc-hero">
+    <h1 class="fc-title">FaceCloud</h1>
+    <p class="cloud-lead">
+      Votre cloud personnel chiffré, avec reconnaissance faciale privée entre amis.
+    </p>
+    <p class="cloud-note">
+      Vos fichiers sont chiffrés (AES-256-GCM) <strong>sur la station avant</strong>
+      d'être stockés sur IPFS. Les clés ne quittent jamais votre trousseau privé.
+      Les visages détectés sur vos photos restent anonymes tant que vous ne leur
+      donnez pas de nom — et une photo n'est partagée qu'avec un ami qui vous
+      suit <strong>mutuellement</strong> sur NOSTR.
+    </p>
+  </section>
+
+  <!-- ══ 2. Connexion ═════════════════════════════════════════════════ -->
+  <section class="cloud-card" id="card-login">
+    <h2>Connexion</h2>
+
+    <div id="no-extension" class="cloud-error" style="display:none">
+      <strong>Extension NOSTR requise.</strong>
+      FaceCloud signe chaque action avec votre clé MULTIPASS via une extension
+      NIP-07 (<a href="https://github.com/fiatjaf/nos2x" target="_blank" rel="noopener">nos2x</a>,
+      <a href="https://getalby.com" target="_blank" rel="noopener">Alby</a>…).
+      Installez-en une, puis rechargez cette page.
+    </div>
+
+    <div class="cloud-status-line">
+      <span class="cloud-dot" id="state-dot"></span>
+      <span id="state-text">Non connecté.</span>
+    </div>
+
+    <div class="cloud-actions">
+      <button id="btn-login" class="cloud-btn cloud-btn-primary" onclick="handleConnect()">
+        <i class="bi bi-person-badge"></i> Se connecter avec mon MULTIPASS
+      </button>
+    </div>
+
+    <dl id="identity-box" class="cloud-creds" style="display:none">
+      <dt>MULTIPASS</dt>
+      <dd id="ident-email"></dd>
+      <dd></dd>
+      <dt>Clé NOSTR</dt>
+      <dd id="ident-npub"></dd>
+      <dd></dd>
+    </dl>
+
+    <p class="cloud-note">
+      Votre extension NOSTR vous demandera de confirmer chaque action
+      (une signature par appel — elle peut être réglée pour approuver
+      automatiquement ce site).
+    </p>
+
+    <div id="cloud-error" class="cloud-error" style="display:none"></div>
+  </section>
+
+  <!-- ══ 3. Mon cloud chiffré ═════════════════════════════════════════ -->
+  <section class="cloud-card fc-locked" id="card-cloud">
+    <h2>Mon cloud chiffré</h2>
+    <p>
+      Un disque réseau qui se monte sur Linux, macOS ou Windows — sans installer
+      d'application. Indépendant de votre uDRIVE public : rien de ce que vous y
+      déposez n'est publié.
+    </p>
+
+    <div class="cloud-status-line">
+      <span class="cloud-dot" id="dav-dot"></span>
+      <span id="dav-text">En attente de connexion.</span>
+    </div>
+
+    <div class="cloud-actions">
+      <button id="btn-enroll" class="cloud-btn cloud-btn-primary" disabled onclick="activateCloud()">
+        <i class="bi bi-hdd-network"></i> <span id="btn-enroll-label">Activer mon Cloud</span>
+      </button>
+      <button id="btn-refresh" class="cloud-btn cloud-btn-secondary" disabled onclick="refreshStatus()">
+        <i class="bi bi-arrow-clockwise"></i> Actualiser
+      </button>
+      <button id="btn-revoke" class="cloud-btn cloud-btn-danger" style="display:none" onclick="revokeCloud()">
+        <i class="bi bi-x-octagon"></i> Révoquer l'accès
+      </button>
+    </div>
+
+    <!-- Identifiants délivrés par POST /api/cloud/enroll -->
+    <dl id="cloud-creds" class="cloud-creds" style="display:none">
+      <dt>Adresse</dt>
+      <dd id="cred-url"></dd>
+      <dd><button class="cloud-copy" onclick="copyField('cred-url')">Copier</button></dd>
+
+      <dt>Identifiant</dt>
+      <dd id="cred-login"></dd>
+      <dd><button class="cloud-copy" onclick="copyField('cred-login')">Copier</button></dd>
+
+      <dt>Mot de passe</dt>
+      <dd id="cred-token"></dd>
+      <dd><button class="cloud-copy" onclick="copyField('cred-token')">Copier</button></dd>
+    </dl>
+
+    <div id="cloud-warn" class="cloud-warn" style="display:none">
+      <i class="bi bi-exclamation-triangle"></i>
+      Ce mot de passe n'est affiché <strong>qu'une fois</strong>. Notez-le maintenant :
+      il n'est plus consultable ensuite. En cas de perte, réactivez votre Cloud —
+      un nouveau mot de passe remplacera l'ancien.
+    </div>
+
+    <!-- Instructions de montage -->
+    <div id="mount-block" style="display:none;margin-top:1.25rem">
+      <h3 class="fc-subhead">Monter le disque</h3>
+
+      <div class="cloud-os-tabs" role="tablist">
+        <button class="cloud-os-tab active" data-os="linux"   onclick="selectOS('linux')">Linux</button>
+        <button class="cloud-os-tab"        data-os="macos"   onclick="selectOS('macos')">macOS</button>
+        <button class="cloud-os-tab"        data-os="windows" onclick="selectOS('windows')">Windows</button>
+      </div>
+
+      <div class="cloud-os-pane active" data-os="linux">
+        <ol>
+          <li>Installez <code>davfs2</code> :
+            <code class="cloud-code">sudo apt install davfs2</code></li>
+          <li>Créez le point de montage et montez :
+            <code class="cloud-code" id="cmd-linux"></code></li>
+          <li>Saisissez votre identifiant et votre mot de passe à l'invite.</li>
+        </ol>
+        <p class="cloud-note">
+          Avec GNOME Files (Nautilus) : <em>Autres emplacements → Se connecter à un serveur</em>,
+          puis <span id="gvfs-linux" style="font-family:monospace"></span>.
+        </p>
+      </div>
+
+      <div class="cloud-os-pane" data-os="macos">
+        <ol>
+          <li>Dans le Finder : <em>Aller → Se connecter au serveur…</em> (⌘K).</li>
+          <li>Saisissez l'adresse :
+            <code class="cloud-code" id="cmd-macos"></code></li>
+          <li>Choisissez <em>Utilisateur référencé</em> et entrez vos identifiants.</li>
+        </ol>
+      </div>
+
+      <div class="cloud-os-pane" data-os="windows">
+        <ol>
+          <li>Ouvrez l'Explorateur → <em>Ce PC</em>.</li>
+          <li><em>… → Ajouter un emplacement réseau</em> (ou <em>Connecter un lecteur réseau</em>).</li>
+          <li>Saisissez l'adresse :
+            <code class="cloud-code" id="cmd-windows"></code></li>
+        </ol>
+        <p class="cloud-note">
+          Windows exige une connexion HTTPS pour l'authentification de base : utilisez
+          l'adresse <code>https://</code> de votre station.
+        </p>
+      </div>
+
+      <p class="cloud-note">
+        Taille maximale par fichier : <span id="max-size">20 Mo</span>.
+        Dossiers, glisser-déposer, renommage et suppression fonctionnent comme sur
+        n'importe quel disque réseau.
+      </p>
+    </div>
+  </section>
+
+  <!-- ══ 4. Mes photos ════════════════════════════════════════════════ -->
+  <section class="cloud-card fc-locked" id="card-photos">
+    <h2>Mes photos</h2>
+    <p>
+      Vos photos sont analysées automatiquement pour détecter les visages.
+      Les nouveaux visages apparaîtront plus bas dans quelques instants.
+    </p>
+
+    <div id="dropzone" class="fc-dropzone" tabindex="0"
+         onclick="document.getElementById('file-input').click()"
+         onkeypress="if(event.key==='Enter')document.getElementById('file-input').click()">
+      <i class="bi bi-images fc-dropzone-icon"></i>
+      <div class="fc-dropzone-main">Déposez vos photos ici</div>
+      <div class="fc-dropzone-sub">ou cliquez pour parcourir — images uniquement, plusieurs à la fois</div>
+    </div>
+    <input type="file" id="file-input" accept="image/*" multiple
+           style="display:none" onchange="onFilesPicked(this.files)">
+
+    <ul id="upload-list" class="fc-upload-list"></ul>
+  </section>
+
+  <!-- ══ 5. Visages détectés ══════════════════════════════════════════ -->
+  <section class="cloud-card fc-locked" id="card-faces">
+    <div class="fc-section-head">
+      <h2>Visages détectés</h2>
+      <button id="btn-faces-refresh" class="cloud-btn cloud-btn-secondary fc-btn-sm"
+              onclick="loadFaces()">
+        <i class="bi bi-arrow-clockwise"></i> Actualiser
+      </button>
+    </div>
+    <p class="cloud-note" style="margin-top:0">
+      L'analyse tourne en arrière-plan sur la station : après un envoi, un nouveau
+      visage peut mettre de quelques secondes à plusieurs minutes à apparaître.
+      Cliquez sur <em>Actualiser</em> pour revoir la liste.
+    </p>
+
+    <h3 class="fc-subhead">À nommer <span class="fc-count" id="count-unknown">—</span></h3>
+    <p class="cloud-note" style="margin-top:0">
+      Donnez un nom et, si vous le souhaitez, la clé NOSTR (npub ou hex) de la
+      personne. Sans clé, aucune photo n'est partagée.
+    </p>
+    <div id="faces-unknown" class="fc-faces"></div>
+
+    <h3 class="fc-subhead">Déjà identifiés <span class="fc-count" id="count-known">—</span></h3>
+    <div id="faces-known" class="fc-faces"></div>
+  </section>
+
+</main>
+
+<script src="nacl-fast.min.js"></script>
+<script src="nostr.bundle.js"></script>
+<script src="common.js"></script>
+<script src="app_switch.js"></script>
+<script src="feedback.js"></script>
+<script>
+/* ═══════════════════════════════════════════════════════════════════════
+   FaceCloud — cloud.html
+
+   Une seule page, un seul mécanisme d'authentification : NIP-98 (kind 27235)
+   signé par l'extension NOSTR (NIP-07). Chaque appel API signe un event FRAIS
+   (le serveur n'en accepte que dans une fenêtre de ~120 s, cf.
+   UPassport/services/nostr.py::NIP98_MAX_AGE) — d'où `nostrFetch()`, utilisée
+   par TOUTES les sections.
+
+   Backend UPassport (même origine que /earth/, donc aucun CORS) :
+     POST /api/cloud/enroll   → {dav_url, email, token, instructions}
+     GET  /api/cloud/status   → {enrolled, dav_url, email, files, bytes, …}
+     POST /api/cloud/revoke   → {revoked}
+     POST /api/fileupload     → multipart {file} → {file_cid, …}
+     GET  /mailjet/faces      → {faces:[{id,name,pubkey,timestamp}]}
+     POST /mailjet/faces-edit    → multipart {point_id, name, pubkey}
+     POST /mailjet/faces-delete  → multipart {point_id}
+   ═══════════════════════════════════════════════════════════════════════ */
+
+var _davUrl   = null;
+var _email    = null;
+var _connected = false;
+
+/* ── Signature NIP-07 : extension en priorité, clé locale en repli ───── */
+async function signCloudEvent(template) {
+    if (window.nostr && typeof window.nostr.signEvent === 'function') {
+        template.pubkey = window.userPubkey;
+        return await window.nostr.signEvent(template);
+    }
+    if (window.userPrivateKey && window.NostrTools) {
+        return window.NostrTools.finishEvent(template, window.userPrivateKey);
+    }
+    throw new Error('aucune méthode de signature disponible (extension NOSTR absente)');
+}
+
+/* NIP-98 : même convention que craft.html / forge.html / nostr_admin.html —
+   base64url sans padding, tags ['u', url] et ['method', method]. */
+async function buildNip98Header(url, method) {
+    if (!window.userPubkey) return null;
+    var template = {
+        kind: 27235,
+        created_at: Math.floor(Date.now() / 1000),
+        tags: [['u', url], ['method', method]],
+        content: ''
+    };
+    var signed = await signCloudEvent(template);
+    var json = JSON.stringify(signed);
+    return 'Nostr ' + btoa(unescape(encodeURIComponent(json)))
+        .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+}
+
+function apiBase() {
+    // Même origine quand la page est servie par UPassport (/earth/), sinon
+    // l'URL auto-détectée par lib_2_api_connect.js.
+    if (window.getAPIUrl) { try { return window.getAPIUrl(); } catch (e) {} }
+    return window.location.origin;
+}
+
+/* ── LE point d'entrée unique de tous les appels API ──────────────────
+   Signe un event NIP-98 FRAIS à chaque appel (fenêtre serveur ~120 s) et
+   l'attache en header Authorization. `opts.body` peut être un FormData. */
+async function nostrFetch(path, opts) {
+    opts = opts || {};
+    var method = opts.method || 'GET';
+    var url = apiBase().replace(/\/$/, '') + path;
+    var auth = await buildNip98Header(url, method);
+    if (!auth) throw new Error('signature NIP-98 refusée ou indisponible');
+
+    var headers = { 'Authorization': auth };
+    // Content-Type volontairement non fixé : le navigateur pose lui-même la
+    // frontière multipart quand body est un FormData.
+    var resp = await fetch(url, { method: method, headers: headers, body: opts.body || undefined });
+    var data = null;
+    try { data = await resp.json(); } catch (e) {}
+    if (!resp.ok) {
+        var msg = (data && (data.detail || data.error)) || ('HTTP ' + resp.status);
+        throw new Error(typeof msg === 'string' ? msg : JSON.stringify(msg));
+    }
+    return data;
+}
+
+/* ── Connexion ────────────────────────────────────────────────────────── */
+function updateConnectionUI() {
+    var badge = document.getElementById('conn-badge');
+    var btn   = document.getElementById('btn-connect');
+    var name  = document.getElementById('user-name-badge');
+    if (!badge) return;
+    // !! obligatoire : `undefined` passé à classList.toggle(cls, force) est
+    // traité comme « pas de force » et BASCULE la classe — les sections se
+    // déverrouilleraient alors qu'on n'est pas connecté.
+    var ok = !!(window.isNostrConnected && window.userPubkey);
+    badge.textContent = ok ? '🟢' : '🔴';
+    btn.style.display = ok ? 'none' : '';
+    if (ok) {
+        var h = window.userPubkey;
+        name.textContent = h.slice(0, 8) + '…' + h.slice(-4);
+        name.style.display = '';
+        if (window.fetchUserMetadata) window.fetchUserMetadata(h)
+            .then(function (m) { if (m && m.name) name.textContent = m.name; })
+            .catch(function () {});
+    } else {
+        name.style.display = 'none';
+    }
+    onConnectionChanged(ok);
+}
+
+async function handleConnect() {
+    var bars = [document.getElementById('btn-connect'), document.getElementById('btn-login')];
+    bars.forEach(function (b) { if (b) b.disabled = true; });
+    hideError();
+    try {
+        await window.connectNostr(false);
+        updateConnectionUI();
+    } catch (e) {
+        showError('Connexion NOSTR impossible : ' + (e.message || e));
+    } finally {
+        bars.forEach(function (b) { if (b) b.disabled = false; });
+    }
+}
+
+function onConnectionChanged(connected) {
+    if (connected === _connected) return;
+    _connected = connected;
+
+    document.querySelectorAll('.fc-locked').forEach(function (s) {
+        s.classList.toggle('fc-unlocked', connected);
+    });
+    document.getElementById('btn-enroll').disabled  = !connected;
+    document.getElementById('btn-refresh').disabled = !connected;
+    document.getElementById('btn-login').style.display = connected ? 'none' : '';
+    // La signature a fonctionné par un autre moyen (clé locale) : le
+    // rappel « extension requise » n'a plus lieu d'être.
+    if (connected) document.getElementById('no-extension').style.display = 'none';
+
+    if (connected) {
+        setState('state-dot', 'state-text', 'on', 'Connecté. Vérification de votre Cloud…');
+        var npub = window.userPubkey;
+        if (window.hexToNpub) { try { npub = window.hexToNpub(window.userPubkey) || npub; } catch (e) {} }
+        document.getElementById('ident-npub').textContent = npub;
+        document.getElementById('identity-box').style.display = '';
+        refreshStatus();
+        loadFaces();
+    } else {
+        setState('state-dot', 'state-text', '', 'Non connecté.');
+        setState('dav-dot', 'dav-text', '', 'En attente de connexion.');
+        document.getElementById('identity-box').style.display = 'none';
+    }
+}
+
+/* ── Section 3 : cloud chiffré ────────────────────────────────────────── */
+async function refreshStatus() {
+    hideError();
+    try {
+        var s = await nostrFetch('/api/cloud/status', { method: 'GET' });
+        _davUrl = s.dav_url;
+        _email  = s.email;
+        document.getElementById('ident-email').textContent = s.email || '—';
+        setState('state-dot', 'state-text', 'on', 'Connecté en tant que ' + (s.email || '—') + '.');
+        if (s.max_file_size) {
+            document.getElementById('max-size').textContent =
+                Math.round(s.max_file_size / (1024 * 1024)) + ' Mo';
+        }
+        if (s.enrolled) {
+            setState('dav-dot', 'dav-text', 'on',
+                'Cloud actif — ' + (s.files || 0) + ' fichier(s), ' + formatBytes(s.bytes || 0) + '.');
+            document.getElementById('btn-enroll-label').textContent = 'Régénérer le mot de passe';
+            document.getElementById('btn-revoke').style.display = '';
+            showMount();
+        } else {
+            setState('dav-dot', 'dav-text', 'off', 'Cloud pas encore activé sur cette station.');
+            document.getElementById('btn-enroll-label').textContent = 'Activer mon Cloud';
+            document.getElementById('btn-revoke').style.display = 'none';
+        }
+    } catch (e) {
+        setState('dav-dot', 'dav-text', 'off', 'Statut indisponible.');
+        showError(e.message || String(e));
+    }
+}
+
+async function activateCloud() {
+    hideError();
+    var btn = document.getElementById('btn-enroll');
+    var label = document.getElementById('btn-enroll-label');
+    var previous = label.textContent;
+    btn.disabled = true;
+    label.textContent = 'Activation…';
+    try {
+        var r = await nostrFetch('/api/cloud/enroll', { method: 'POST' });
+        _davUrl = r.dav_url;
+        _email  = r.email;
+        document.getElementById('cred-url').textContent   = r.dav_url;
+        document.getElementById('cred-login').textContent = r.email;
+        document.getElementById('cred-token').textContent = r.token;
+        document.getElementById('cloud-creds').style.display = '';
+        document.getElementById('cloud-warn').style.display  = '';
+        document.getElementById('btn-revoke').style.display  = '';
+        label.textContent = 'Régénérer le mot de passe';
+        setState('dav-dot', 'dav-text', 'on', 'Cloud activé. Montez-le avec les identifiants ci-dessous.');
+        showMount();
+    } catch (e) {
+        label.textContent = previous;
+        showError(e.message || String(e));
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+async function revokeCloud() {
+    if (!confirm("Révoquer l'accès WebDAV ? Les disques montés seront déconnectés. "
+               + 'Vos fichiers et vos clés ne sont pas supprimés.')) return;
+    hideError();
+    try {
+        await nostrFetch('/api/cloud/revoke', { method: 'POST' });
+        document.getElementById('cloud-creds').style.display = 'none';
+        document.getElementById('cloud-warn').style.display  = 'none';
+        document.getElementById('btn-revoke').style.display  = 'none';
+        document.getElementById('mount-block').style.display = 'none';
+        setState('dav-dot', 'dav-text', 'off', 'Accès révoqué.');
+        document.getElementById('btn-enroll-label').textContent = 'Activer mon Cloud';
+    } catch (e) {
+        showError(e.message || String(e));
+    }
+}
+
+function showMount() {
+    if (!_davUrl) return;
+    var scheme = _davUrl.indexOf('https://') === 0 ? 'davs' : 'dav';
+    var hostPath = _davUrl.replace(/^https?:\/\//, '');
+    document.getElementById('cmd-linux').textContent =
+        'mkdir -p ~/UPlanet\nsudo mount -t davfs ' + _davUrl + ' ~/UPlanet';
+    document.getElementById('gvfs-linux').textContent = scheme + '://' + hostPath;
+    document.getElementById('cmd-macos').textContent   = _davUrl;
+    document.getElementById('cmd-windows').textContent = _davUrl;
+    document.getElementById('mount-block').style.display = '';
+}
+
+function selectOS(os) {
+    document.querySelectorAll('.cloud-os-tab').forEach(function (t) {
+        t.classList.toggle('active', t.dataset.os === os);
+    });
+    document.querySelectorAll('.cloud-os-pane').forEach(function (p) {
+        p.classList.toggle('active', p.dataset.os === os);
+    });
+}
+
+/* ── Section 4 : envoi de photos ──────────────────────────────────────── */
+(function initDropzone() {
+    document.addEventListener('DOMContentLoaded', function () {
+        var dz = document.getElementById('dropzone');
+        if (!dz) return;
+        ['dragenter', 'dragover'].forEach(function (ev) {
+            dz.addEventListener(ev, function (e) {
+                e.preventDefault(); e.stopPropagation();
+                dz.classList.add('fc-dropzone-hot');
+            });
+        });
+        ['dragleave', 'drop'].forEach(function (ev) {
+            dz.addEventListener(ev, function (e) {
+                e.preventDefault(); e.stopPropagation();
+                dz.classList.remove('fc-dropzone-hot');
+            });
+        });
+        dz.addEventListener('drop', function (e) {
+            if (e.dataTransfer && e.dataTransfer.files) onFilesPicked(e.dataTransfer.files);
+        });
+    });
+})();
+
+function onFilesPicked(fileList) {
+    if (!_connected) { showError('Connectez-vous d\'abord avec votre MULTIPASS.'); return; }
+    var files = Array.prototype.slice.call(fileList || []);
+    var images = files.filter(function (f) { return /^image\//.test(f.type); });
+    var rejected = files.length - images.length;
+    if (rejected > 0) addUploadRow(rejected + ' fichier(s) ignoré(s) — images uniquement', 'err');
+    if (!images.length) return;
+    uploadSequentially(images);
+}
+
+/* Envoi séquentiel : chaque upload signe son propre event NIP-98, et
+   l'extension ouvre une confirmation à la fois. */
+async function uploadSequentially(files) {
+    var ok = 0;
+    for (var i = 0; i < files.length; i++) {
+        var f = files[i];
+        var row = addUploadRow(f.name + ' — envoi…', 'pending');
+        try {
+            var fd = new FormData();
+            fd.append('file', f, f.name);
+            await nostrFetch('/api/fileupload', { method: 'POST', body: fd });
+            setUploadRow(row, f.name + ' — envoyé ✓', 'ok');
+            ok++;
+        } catch (e) {
+            setUploadRow(row, f.name + ' — erreur : ' + (e.message || e), 'err');
+        }
+    }
+    if (ok) {
+        addUploadRow(ok + ' photo(s) envoyée(s). L\'analyse des visages tourne en '
+                   + 'arrière-plan — actualisez la liste ci-dessous dans un moment.', 'info');
+        // Un premier rafraîchissement de courtoisie ; le traitement étant
+        // asynchrone (GPU), rien ne garantit qu'un visage soit déjà catalogué :
+        // le bouton « Actualiser » reste la voie fiable.
+        setTimeout(loadFaces, 8000);
+    }
+}
+
+function addUploadRow(text, cls) {
+    var li = document.createElement('li');
+    li.className = 'fc-upload-row fc-' + cls;
+    li.textContent = text;
+    document.getElementById('upload-list').appendChild(li);
+    return li;
+}
+
+function setUploadRow(li, text, cls) {
+    li.className = 'fc-upload-row fc-' + cls;
+    li.textContent = text;
+}
+
+/* ── Section 5 : visages détectés ─────────────────────────────────────── */
+function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+}
+
+async function loadFaces() {
+    if (!_connected) return;
+    var unknownBox = document.getElementById('faces-unknown');
+    var knownBox   = document.getElementById('faces-known');
+    unknownBox.innerHTML = '<div class="fc-empty">Chargement…</div>';
+    knownBox.innerHTML   = '';
+    try {
+        var data = await nostrFetch('/mailjet/faces', { method: 'GET' });
+        var faces = data.faces || [];
+        var unknown = faces.filter(function (f) { return !f.pubkey; });
+        var known   = faces.filter(function (f) { return !!f.pubkey; });
+
+        document.getElementById('count-unknown').textContent = unknown.length;
+        document.getElementById('count-known').textContent   = known.length;
+
+        unknownBox.innerHTML = unknown.length
+            ? unknown.map(faceCardHtml).join('')
+            : '<div class="fc-empty">Aucun visage en attente'
+              + (data.reason === 'qdrant_unavailable'
+                  ? ' — <em>service d\'analyse indisponible sur cette station</em>' : '')
+              + '.</div>';
+
+        knownBox.innerHTML = known.length
+            ? known.map(faceCardHtml).join('')
+            : '<div class="fc-empty">Personne d\'identifié pour l\'instant.</div>';
+    } catch (e) {
+        document.getElementById('count-unknown').textContent = '—';
+        document.getElementById('count-known').textContent   = '—';
+        unknownBox.innerHTML = '<div class="fc-empty fc-err">Catalogue inaccessible : '
+                             + esc(e.message || e) + '</div>';
+    }
+}
+
+function faceCardHtml(f) {
+    var named = !!f.pubkey;
+    return '<div class="fc-face' + (named ? ' fc-face-known' : '') + '" data-id="' + esc(f.id) + '">'
+      + '<div class="fc-face-head">'
+      +   '<span class="fc-face-name">' + (named ? '✅ ' : '❓ ') + esc(f.name || '(sans nom)') + '</span>'
+      +   (named ? '<code class="fc-face-key">' + esc(f.pubkey.slice(0, 12)) + '…' + esc(f.pubkey.slice(-4)) + '</code>' : '')
+      + '</div>'
+      + '<div class="fc-face-form">'
+      +   '<input type="text" class="fc-input fc-face-name-in" placeholder="Nom de la personne" value="' + esc(f.name) + '">'
+      +   '<input type="text" class="fc-input fc-face-key-in" placeholder="npub1… ou 64 hex (optionnel)" value="' + esc(f.pubkey) + '">'
+      +   '<button type="button" class="cloud-btn cloud-btn-primary fc-btn-sm" onclick="saveFace(this)">Enregistrer</button>'
+      +   '<button type="button" class="cloud-btn cloud-btn-danger fc-btn-sm" onclick="deleteFace(this)">Supprimer</button>'
+      + '</div>'
+      + '<div class="cloud-note fc-face-note">'
+      +   (named ? 'Partage automatique actif si vous vous suivez mutuellement sur NOSTR.'
+                 : 'Sans clé publique, aucune photo n\'est partagée.')
+      +   (f.timestamp ? ' · vu le ' + esc(String(f.timestamp).slice(0, 10)) : '')
+      + '</div>'
+      + '</div>';
+}
+
+/* npub1… → hex 64 (le backend n'accepte que l'hex). */
+function normalizeKey(value) {
+    var v = (value || '').trim();
+    if (!v) return '';
+    if (/^[0-9a-fA-F]{64}$/.test(v)) return v.toLowerCase();
+    if (v.indexOf('npub1') === 0 && window.NostrTools && window.NostrTools.nip19) {
+        try {
+            var d = window.NostrTools.nip19.decode(v);
+            if (d && d.type === 'npub' && typeof d.data === 'string') return d.data.toLowerCase();
+        } catch (e) {}
+    }
+    return null;   // null = saisie invalide (≠ '' qui veut dire « pas de clé »)
+}
+
+async function saveFace(btn) {
+    var card = btn.closest('.fc-face');
+    var key = normalizeKey(card.querySelector('.fc-face-key-in').value);
+    if (key === null) {
+        showError('Clé NOSTR invalide : attendu un npub1… ou 64 caractères hexadécimaux.');
+        return;
+    }
+    hideError();
+    var fd = new FormData();
+    fd.append('point_id', card.getAttribute('data-id'));
+    fd.append('name', card.querySelector('.fc-face-name-in').value.trim());
+    fd.append('pubkey', key);
+    btn.disabled = true;
+    var previous = btn.textContent;
+    btn.textContent = '…';
+    try {
+        await nostrFetch('/mailjet/faces-edit', { method: 'POST', body: fd });
+        await loadFaces();
+        return;
+    } catch (e) {
+        showError('Enregistrement refusé : ' + (e.message || e));
+    }
+    btn.disabled = false;
+    btn.textContent = previous;
+}
+
+async function deleteFace(btn) {
+    if (!confirm('Oublier ce visage ? Il sera re-catalogué comme inconnu s\'il réapparaît '
+               + 'sur une future photo.')) return;
+    hideError();
+    var card = btn.closest('.fc-face');
+    var fd = new FormData();
+    fd.append('point_id', card.getAttribute('data-id'));
+    btn.disabled = true;
+    try {
+        await nostrFetch('/mailjet/faces-delete', { method: 'POST', body: fd });
+        await loadFaces();
+    } catch (e) {
+        showError('Suppression refusée : ' + (e.message || e));
+        btn.disabled = false;
+    }
+}
+
+/* ── Utilitaires UI ───────────────────────────────────────────────────── */
+function setState(dotId, textId, cls, text) {
+    var dot = document.getElementById(dotId);
+    if (dot) dot.className = 'cloud-dot' + (cls ? ' ' + cls : '');
+    var el = document.getElementById(textId);
+    if (el) el.textContent = text;
+}
+
+function showError(msg) {
+    var el = document.getElementById('cloud-error');
+    el.textContent = msg;
+    el.style.display = '';
+    el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function hideError() {
+    document.getElementById('cloud-error').style.display = 'none';
+}
+
+function copyField(id) {
+    var el = document.getElementById(id);
+    var txt = el.textContent;
+    function flash() {
+        var old = el.style.background;
+        el.style.background = '#e6f4ea';
+        setTimeout(function () { el.style.background = old; }, 600);
+    }
+    function fallback() {
+        var ta = document.createElement('textarea');
+        ta.value = txt;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        try { document.execCommand('copy'); flash(); }
+        catch (e) { showError('Copie impossible — sélectionnez le texte manuellement.'); }
+        finally { document.body.removeChild(ta); }
+    }
+    // navigator.clipboard n'existe qu'en contexte sécurisé (https ou 127.0.0.1) :
+    // repli execCommand pour une station servie en http sur le réseau local.
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(txt).then(flash).catch(fallback);
+    } else {
+        fallback();
+    }
+}
+
+function formatBytes(n) {
+    if (n < 1024) return n + ' o';
+    if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' Ko';
+    return (n / (1024 * 1024)).toFixed(1) + ' Mo';
+}
+
+/* ── Init ─────────────────────────────────────────────────────────────── */
+document.addEventListener('DOMContentLoaded', function () {
+    if (!window.nostr) {
+        document.getElementById('no-extension').style.display = '';
+    }
+    updateConnectionUI();
+    if (window.waitForConnection) window.waitForConnection(updateConnectionUI);
+});
+</script>
+</body>
+</html>

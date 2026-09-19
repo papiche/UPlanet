@@ -20,6 +20,8 @@
     // mini:true → visible même sur mobile (<480px). Priorité : items essentiels.
     var NAV = [
         { e: '🌍', l: 'UPlanet',        h: 'index.html',             mini: true },
+        { e: '👥', l: 'Face Cloud',     h: 'cloud.html' , mini: true },
+        { e: '💬', l: 'Coracle',        h: 'https://coracle.copylaradio.com', mini: true },
         { sep: 'Identité 🪪' },
         { e: '🫵', l: 'Profile',        h: 'nostr_profile_viewer.html', mini:true },
         { e: '💎', l: 'Atomic',         h: 'atomic.html',            mini: true },
@@ -35,7 +37,6 @@
         { e: '⚒️', l: 'Forge',          h: 'forge.html',             mini: true },
         { e: '⛑️', l: 'Skills',         h: 'skills.html' },
         { e: '⚖️', l: 'Justice',        h: 'justice.html' },
-        { e: '💬', l: 'Coracle',        h: 'https://coracle.copylaradio.com', mini: true },
         { sep: 'Communauté' },
         { e: '👥', l: 'OpenCollective', h: 'https://opencollective.com/monnaie-libre' , mini: true },
         { e: '🤝', l: 'Contribuer',     h: 'contribute-3D.html',     mini: true },

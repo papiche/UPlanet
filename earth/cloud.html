@@ -330,7 +330,15 @@ function updateConnectionUI() {
     // !! obligatoire : `undefined` passé à classList.toggle(cls, force) est
     // traité comme « pas de force » et BASCULE la classe — les sections se
     // déverrouilleraient alors qu'on n'est pas connecté.
-    onConnectionChanged(!!(window.isNostrConnected && pk));
+    var ok = !!(window.isNostrConnected && pk);
+    onConnectionChanged(ok);
+    // Toujours retenter (hors du garde de transition ci-dessous) : le tout
+    // premier `nostr:connected` peut arriver avant que window.nostr soit
+    // pleinement prêt côté extension (race observée en prod — l'erreur de
+    // signature restait affichée indéfiniment car _connected passait déjà à
+    // true une 1ère fois, avalant silencieusement les `nostr:connected`
+    // suivants qui auraient pu réussir). Ré-appeler ces GET est sans risque.
+    if (ok) { hideError(); refreshStatus(); loadFaces(); }
 }
 
 function connectNostrUser() {
@@ -359,8 +367,8 @@ function onConnectionChanged(connected) {
         if (window.hexToNpub) { try { npub = window.hexToNpub(window.userPubkey) || npub; } catch (e) {} }
         document.getElementById('ident-npub').textContent = npub;
         document.getElementById('identity-box').style.display = '';
-        refreshStatus();
-        loadFaces();
+        // refreshStatus()/loadFaces() : voir updateConnectionUI (retenté à
+        // chaque nostr:connected, pas seulement à cette transition).
     } else {
         setState('state-dot', 'state-text', '', 'Non connecté.');
         setState('dav-dot', 'dav-text', '', 'En attente de connexion.');

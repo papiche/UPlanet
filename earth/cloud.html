@@ -11,19 +11,9 @@
 </head>
 <body class="cloud-container">
 
-<!-- Bandeau de connexion NOSTR (convention earth/, cf. earth/CLAUDE.md) -->
-<div id="nostr-bar" style="position:fixed;top:10px;right:12px;z-index:9000;
-  display:flex;align-items:center;gap:8px;
-  background:rgba(32,33,36,0.85);backdrop-filter:blur(10px);
-  border:1px solid rgba(255,255,255,0.12);border-radius:20px;
-  padding:5px 14px;font-size:12px;color:rgba(255,255,255,0.9)">
-  <span id="conn-badge">🔴</span>
-  <span id="user-name-badge" style="display:none;color:#86efac;font-weight:600"></span>
-  <button id="btn-connect" onclick="handleConnect()"
-    style="background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.25);
-    color:rgba(255,255,255,0.9);padding:3px 10px;border-radius:12px;
-    cursor:pointer;font-size:11px;font-weight:500">⚡ Se connecter</button>
-</div>
+<!-- Bandeau NOSTR géré par uplanet-header.js : badge, connexion, et bouton
+     🏠 de redirection vers la home station en roaming (cf. earth/CLAUDE.md). -->
+<div id="nostr-bar"></div>
 
 <header class="cloud-header">
   <div class="cloud-header-content">
@@ -68,7 +58,7 @@
     </div>
 
     <div class="cloud-actions">
-      <button id="btn-login" class="cloud-btn cloud-btn-primary" onclick="handleConnect()">
+      <button id="btn-login" class="cloud-btn cloud-btn-primary" onclick="connectNostrUser()">
         <i class="bi bi-person-badge"></i> Se connecter avec mon MULTIPASS
       </button>
     </div>
@@ -245,7 +235,7 @@
 <script src="nacl-fast.min.js"></script>
 <script src="nostr.bundle.js"></script>
 <script src="common.js"></script>
-<script src="app_switch.js"></script>
+<script src="uplanet-header.js"></script>
 <script src="feedback.js"></script>
 <script>
 /* ═══════════════════════════════════════════════════════════════════════
@@ -329,43 +319,24 @@ async function nostrFetch(path, opts) {
     return data;
 }
 
-/* ── Connexion ────────────────────────────────────────────────────────── */
+/* ── Connexion ────────────────────────────────────────────────────────────
+   La connexion NOSTR (badge, bouton, bouton 🏠 home-station en roaming) est
+   gérée par uplanet-header.js dans #nostr-bar — cette page ne fait plus que
+   lire l'état global (window.NostrState / window.userPubkey) qu'il maintient
+   et pilote le déverrouillage de ses propres sections. Même délégation que
+   calendars.html (cf. earth/CLAUDE.md). ────────────────────────────────── */
 function updateConnectionUI() {
-    var badge = document.getElementById('conn-badge');
-    var btn   = document.getElementById('btn-connect');
-    var name  = document.getElementById('user-name-badge');
-    if (!badge) return;
+    var pk = (window.NostrState && window.NostrState.userPubkey) || window.userPubkey || '';
     // !! obligatoire : `undefined` passé à classList.toggle(cls, force) est
     // traité comme « pas de force » et BASCULE la classe — les sections se
     // déverrouilleraient alors qu'on n'est pas connecté.
-    var ok = !!(window.isNostrConnected && window.userPubkey);
-    badge.textContent = ok ? '🟢' : '🔴';
-    btn.style.display = ok ? 'none' : '';
-    if (ok) {
-        var h = window.userPubkey;
-        name.textContent = h.slice(0, 8) + '…' + h.slice(-4);
-        name.style.display = '';
-        if (window.fetchUserMetadata) window.fetchUserMetadata(h)
-            .then(function (m) { if (m && m.name) name.textContent = m.name; })
-            .catch(function () {});
-    } else {
-        name.style.display = 'none';
-    }
-    onConnectionChanged(ok);
+    onConnectionChanged(!!(window.isNostrConnected && pk));
 }
 
-async function handleConnect() {
-    var bars = [document.getElementById('btn-connect'), document.getElementById('btn-login')];
-    bars.forEach(function (b) { if (b) b.disabled = true; });
-    hideError();
-    try {
-        await window.connectNostr(false);
-        updateConnectionUI();
-    } catch (e) {
-        showError('Connexion NOSTR impossible : ' + (e.message || e));
-    } finally {
-        bars.forEach(function (b) { if (b) b.disabled = false; });
-    }
+function connectNostrUser() {
+    if (typeof window.uphOpenLogin === 'function') { window.uphOpenLogin(); return; }
+    if (typeof window.uphConnect === 'function') { window.uphConnect(); return; }
+    showError('Extension NOSTR requise (nos2x, Alby…), ou utilisez le bouton 🔑 en haut de page.');
 }
 
 function onConnectionChanged(connected) {
@@ -743,6 +714,9 @@ document.addEventListener('DOMContentLoaded', function () {
         document.getElementById('no-extension').style.display = '';
     }
     updateConnectionUI();
+    // uplanet-header.js dispatche 'nostr:connected' à chaque connexion réussie
+    // (silencieuse à l'ouverture, extension, ou nsec mobile) — cf. calendars.html.
+    document.addEventListener('nostr:connected', updateConnectionUI);
     if (window.waitForConnection) window.waitForConnection(updateConnectionUI);
 });
 </script>

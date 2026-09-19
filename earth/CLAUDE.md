@@ -166,9 +166,18 @@ Une seule page pour : activer le cloud chiffré du MULTIPASS, y envoyer des
 photos, et nommer les visages qui y sont détectés. **Pas** de navigateur de
 fichiers : le disque se monte comme un lecteur réseau standard.
 
-**Stack :** `nacl-fast.min.js` → `nostr.bundle.js` → `common.js` → `app_switch.js` → `feedback.js`
+**Stack :** `nacl-fast.min.js` → `nostr.bundle.js` → `common.js` → `uplanet-header.js` → `feedback.js`
 **Style :** `cloud.enhancements.css` (thème clair Google-Drive, sections
 `PANNEAU D'ACTIVATION` et `FACECLOUD` ; accent `#1a73e8`)
+
+`#nostr-bar` est un conteneur vide géré entièrement par `uplanet-header.js`
+(badge, connexion, bouton 🏠 de redirection vers la home station en roaming) —
+la page ne pilote plus elle-même ce bandeau. `updateConnectionUI()` lit
+`window.NostrState.userPubkey`/`window.userPubkey` et pilote uniquement le
+déverrouillage `.fc-locked`/`.fc-unlocked` de ses propres sections ; le bouton
+« Se connecter avec mon MULTIPASS » délègue à `window.uphOpenLogin()` /
+`window.uphConnect()`, et la page écoute l'event `nostr:connected` dispatché
+par `uplanet-header.js` — même convention que `calendars.html`.
 
 Sections, dans l'ordre : En-tête → Connexion → Mon cloud chiffré → Mes photos
 → Visages détectés. Tant que le MULTIPASS n'est pas connecté, les trois

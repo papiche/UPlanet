@@ -506,16 +506,33 @@ function onFilesPicked(fileList) {
 }
 
 /* Envoi séquentiel : chaque upload signe son propre event NIP-98, et
-   l'extension ouvre une confirmation à la fois. */
+   l'extension ouvre une confirmation à la fois.
+
+   PUT direct sur /dav/Photos/<nom> — PAS /api/fileupload (uDRIVE public).
+   Seul le cloud chiffré déclenche l'analyse FaceID (cf. UPassport/CLAUDE.md,
+   cloud_storage.py::_commit_plaintext) : un upload qui atterrirait dans le
+   uDRIVE public ne serait jamais analysé. Le corps est le fichier lui-même
+   (pas de FormData) — le navigateur pose le bon Content-Type (image/...),
+   que le serveur utilise pour décider de déclencher l'analyse. */
+/* MKCOL best-effort du dossier parent — un PUT sans collection parente déjà
+   créée renvoie 409 (RFC 4918 strict, pas de création implicite dans
+   UCloudDAVProvider). Idempotent : 405/409 sur un MKCOL déjà fait = ignoré. */
+var _photosDirReady = false;
+async function _ensurePhotosDir() {
+    if (_photosDirReady) return;
+    try { await nostrFetch('/dav/Photos', { method: 'MKCOL' }); } catch (e) { /* déjà là */ }
+    _photosDirReady = true;
+}
+
 async function uploadSequentially(files) {
+    await _ensurePhotosDir();
     var ok = 0;
     for (var i = 0; i < files.length; i++) {
         var f = files[i];
         var row = addUploadRow(f.name + ' — envoi…', 'pending');
         try {
-            var fd = new FormData();
-            fd.append('file', f, f.name);
-            await nostrFetch('/api/fileupload', { method: 'POST', body: fd });
+            var davPath = '/dav/Photos/' + encodeURIComponent(f.name);
+            await nostrFetch(davPath, { method: 'PUT', body: f });
             setUploadRow(row, f.name + ' — envoyé ✓', 'ok');
             ok++;
         } catch (e) {

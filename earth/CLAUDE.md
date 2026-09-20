@@ -189,7 +189,7 @@ ajoute `.fc-unlocked`.
 | État cloud | `GET /api/cloud/status` → `{enrolled, dav_url, email, files, bytes, max_file_size}` |
 | Activer / régénérer | `POST /api/cloud/enroll` → `{dav_url, email, token, instructions}` |
 | Révoquer | `POST /api/cloud/revoke` |
-| Envoyer une photo | `POST /api/fileupload` (multipart `file`, `npub` inutile : le NIP-98 suffit) |
+| Envoyer une photo | `PUT /dav/Photos/<nom>` (corps = fichier brut, PAS `/api/fileupload` — seul le cloud chiffré déclenche l'analyse FaceID, cf. `UPassport/CLAUDE.md`) — `MKCOL /dav/Photos` best-effort avant le premier envoi (RFC 4918 strict : pas de création implicite du parent) |
 | Lister les visages | `GET /mailjet/faces` → `{faces:[{id,name,pubkey,timestamp}]}` |
 | Nommer un visage | `POST /mailjet/faces-edit` (multipart `point_id`, `name`, `pubkey`) |
 | Oublier un visage | `POST /mailjet/faces-delete` (multipart `point_id`) |

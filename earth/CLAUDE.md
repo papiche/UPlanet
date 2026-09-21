@@ -190,9 +190,13 @@ ajoute `.fc-unlocked`.
 | Activer / régénérer | `POST /api/cloud/enroll` → `{dav_url, email, token, instructions}` |
 | Révoquer | `POST /api/cloud/revoke` |
 | Envoyer une photo | `PUT /dav/Photos/<nom>` (corps = fichier brut, PAS `/api/fileupload` — seul le cloud chiffré déclenche l'analyse FaceID, cf. `UPassport/CLAUDE.md`) — `MKCOL /dav/Photos` best-effort avant le premier envoi (RFC 4918 strict : pas de création implicite du parent) |
+| Enrôlement supervisé (optionnel) | En-têtes `X-FaceID-Target-Pubkey` (64 hex) / `X-FaceID-Target-Name` sur le `PUT` — chaque visage détecté est catalogué DIRECTEMENT sous cette identité (pas de recherche par similarité ni de `Inconnu_xxx`) |
 | Lister les visages | `GET /mailjet/faces` → `{faces:[{id,name,pubkey,timestamp}]}` |
 | Nommer un visage | `POST /mailjet/faces-edit` (multipart `point_id`, `name`, `pubkey`) |
 | Oublier un visage | `POST /mailjet/faces-delete` (multipart `point_id`) |
+| Miniature d'un visage | `GET /mailjet/faces/thumbnail?point_id=…` → JPEG (déchiffré + recadré à la volée, jamais persisté) — chargé via `nostrFetch(..., {responseType:'blob'})` car un `<img src>` classique ne peut pas porter de header `Authorization` |
+| Lister objets/lieux détectés | `GET /mailjet/inventory` → `{items:[{path,type,category,name,description,confidence,tags,timestamp}]}` |
+| Miniature d'un objet/lieu | `GET /mailjet/inventory/thumbnail?path=…` → JPEG de la photo entière (pas de recadrage, contrairement aux visages) |
 
 **Un seul mécanisme d'auth : NIP-98** (kind 27235, tags `u`/`method`, base64url
 sans padding) — **même convention que `craft.html` / `forge.html` /
@@ -209,6 +213,53 @@ Les visages sont séparés en **À nommer** (`pubkey` vide, `Inconnu_xxxxxxxx`) 
 `null` sur saisie invalide (≠ `''` qui veut dire « pas de clé »).
 L'analyse faciale étant asynchrone (GPU), la page le dit explicitement et
 propose un bouton **Actualiser** plutôt qu'un polling silencieux.
+
+**Section « Mes photos » — trois flux d'envoi** (`setUploadMode()`, onglets
+`.fc-mode-tab`), pour réduire les faux positifs de la détection auto seule :
+- **📤 Ajouter des photos** (`generic`, historique) — détection auto, atterrit
+  dans « À nommer » si inconnu.
+- **🙂 Définir mon FaceID** (`self`) — cible = `window.userPubkey` +
+  `_selfName` (profil kind 0, repli `"Moi"`).
+- **👥 Photos d'un ami** (`friend`) — sélecteur `#friend-picker` peuplé par
+  `loadFriendsDatalist()` (même source que `fc-friends-list`, kind 3), option
+  `__manual__` pour saisir clé+nom à la main (`#friend-manual-box`). Le choix
+  doit précéder l'envoi (bouton bloqué sinon).
+
+Les modes `self`/`friend` envoient `X-FaceID-Target-Pubkey`/`X-FaceID-Target-Name`
+sur le `PUT /dav/Photos/…` (`nostrFetch(path, {..., headers:{...}})` — `opts.headers`
+fusionné après l'`Authorization` NIP-98). Chaque visage détecté est alors
+catalogué DIRECTEMENT sous cette identité côté `satellite_face_matcher.py`
+(pas de recherche par similarité, pas de bootstrap `Inconnu_xxx`) : à réserver
+à des photos où **seule** la personne ciblée apparaît (même visage détecté
+plusieurs fois dans une photo de groupe → tous associés à la même cible).
+
+Le mode **🙂 Définir mon FaceID** propose en plus la **capture webcam**
+(`toggleWebcam()`/`captureWebcamPhoto()`, PC ou smartphone via `getUserMedia({video:{facingMode:'user'}})`
+— caméra frontale, pertinente puisqu'il s'agit toujours d'un selfie) : un
+canvas capture une seule image, l'encode en JPEG (`canvas.toBlob`), en fait un
+`File` et le fait rejoindre `onFilesPicked()` comme n'importe quel fichier
+choisi — même pipeline PUT, mêmes en-têtes `X-FaceID-Target-*`. Le flux vidéo
+est coupé dès la capture (`stopWebcam()`), jamais transmis tel quel.
+
+**Section « Objets & lieux détectés »** (`loadInventory()`) — contrepartie de
+« Visages détectés » pour les photos qui n'en contiennent AUCUN : `faceid.sh`
+enchaîne alors sur `IA/inventory_recognition.py` (Ollama vision), et le
+résultat (`type`/`category`/`name`/`description`/`confidence`/`tags`) est
+listé via `GET /mailjet/inventory`, miniature (photo entière, sans recadrage)
+via `/mailjet/inventory/thumbnail?path=…`. Purement informatif : pas de
+nommage, pas de partage — contrairement au catalogue de visages, il n'y a pas
+de base vectorielle Qdrant, juste les entrées de `.ucloud/index.json` portant
+un champ `scene` (écrit par `satellite_face_matcher.py::_tag_ucloud_scene()`,
+jamais mélangé avec `tags`, réservé aux noms d'amis d'un partage de visage).
+
+Chaque carte affiche une **miniature recadrée sur le visage** (`loadThumbnails()`,
+un fetch signé par image, échec individuel silencieux → placeholder "❓" — sans
+elle, impossible de reconnaître "Inconnu_xxxxxxxx"). Absente pour les visages
+catalogués avant cette fonctionnalité (`has_photo:false`, pas de `source_path`
+dans le payload Qdrant). Le champ clé propose aussi les amis déjà suivis
+(`<input list="fc-friends-list">`, peuplé une fois par `loadFriendsDatalist()`
+via `window.fetchUserFollowsWithMetadata` de `lib_2_api_connect.js`) — saisie
+manuelle toujours possible en plus.
 
 Le mot de passe DAV n'est affiché **qu'une fois** (le serveur ne le re-expose
 jamais ; `status` dit seulement s'il existe). Montage : `davfs2` (Linux),

@@ -186,10 +186,76 @@
   <!-- ══ 4. Mes photos ════════════════════════════════════════════════ -->
   <section class="cloud-card fc-locked" id="card-photos">
     <h2>Mes photos</h2>
-    <p>
+
+    <!-- Trois flux d'envoi, cf. cloud.html (JS) setUploadMode() :
+         « générique » (comportement historique, détection auto + à nommer),
+         « FaceID perso » et « ami désigné » (enrôlement supervisé — le
+         visage est catalogué DIRECTEMENT sous l'identité choisie, sans
+         passer par « Inconnu_xxx », via les en-têtes X-FaceID-Target-*
+         lus par cloud_storage.py::_commit_plaintext). Réduit les faux
+         positifs par rapport à la détection auto seule. -->
+    <div class="fc-mode-tabs" role="tablist">
+      <button type="button" class="fc-mode-tab fc-mode-active" data-mode="generic"
+              onclick="setUploadMode('generic')">📤 Ajouter des photos</button>
+      <button type="button" class="fc-mode-tab" data-mode="self"
+              onclick="setUploadMode('self')">🙂 Définir mon FaceID</button>
+      <button type="button" class="fc-mode-tab" data-mode="friend"
+              onclick="setUploadMode('friend')">👥 Photos d'un ami</button>
+    </div>
+
+    <p class="cloud-note" id="mode-hint-generic" style="margin-top:0.75rem">
       Vos photos sont analysées automatiquement pour détecter les visages.
-      Les nouveaux visages apparaîtront plus bas dans quelques instants.
+      Les nouveaux visages apparaîtront dans « À nommer » ci-dessous — et si
+      aucun visage n'est trouvé, la photo est analysée pour reconnaître
+      objets, lieux ou scènes (section « Objets & lieux détectés » plus bas).
     </p>
+
+    <p class="cloud-note" id="mode-hint-self" style="display:none;margin-top:0.75rem">
+      Ces photos serviront à créer votre propre FaceID : chaque visage détecté
+      sera associé directement à vous, sans passer par « À nommer ».
+      Utilisez des photos où <strong>seul votre visage</strong> apparaît.
+    </p>
+
+    <!-- Webcam (PC ou smartphone, caméra frontale) — flux « self » uniquement :
+         alternative au fichier pour un selfie immédiat, sans repasser par la
+         pellicule. Capture → Blob JPEG → même pipeline que onFilesPicked(). -->
+    <div id="webcam-box" style="display:none;margin-top:0.75rem">
+      <button type="button" class="cloud-btn cloud-btn-secondary fc-btn-sm" id="btn-webcam-toggle"
+              onclick="toggleWebcam()">
+        <i class="bi bi-camera"></i> Utiliser la caméra
+      </button>
+      <div id="webcam-live" style="display:none;margin-top:0.625rem">
+        <video id="webcam-video" autoplay playsinline muted
+               style="width:100%;max-width:320px;border-radius:8px;background:#000;display:block"></video>
+        <div style="margin-top:0.5rem;display:flex;gap:0.5rem">
+          <button type="button" class="cloud-btn cloud-btn-primary fc-btn-sm" onclick="captureWebcamPhoto()">
+            📸 Capturer
+          </button>
+          <button type="button" class="cloud-btn cloud-btn-secondary fc-btn-sm" onclick="stopWebcam()">
+            Annuler
+          </button>
+        </div>
+      </div>
+      <canvas id="webcam-canvas" style="display:none"></canvas>
+    </div>
+
+    <div id="mode-hint-friend" style="display:none;margin-top:0.75rem">
+      <p class="cloud-note" style="margin-top:0">
+        Choisissez d'abord l'ami concerné : chaque visage détecté dans les
+        photos envoyées lui sera associé directement. Utilisez des photos où
+        <strong>seul son visage</strong> apparaît.
+      </p>
+      <select id="friend-picker" class="fc-input" style="width:100%;margin-bottom:0.5rem"
+              onchange="onFriendPicked()">
+        <option value="">— Choisir un ami suivi —</option>
+      </select>
+      <div id="friend-manual-box" class="fc-face-form" style="display:none;margin-top:0">
+        <input type="text" id="friend-manual-key" class="fc-input"
+               placeholder="npub1… ou 64 hex" oninput="onFriendManualChange()">
+        <input type="text" id="friend-manual-name" class="fc-input"
+               placeholder="Nom de cet ami" oninput="onFriendManualChange()">
+      </div>
+    </div>
 
     <div id="dropzone" class="fc-dropzone" tabindex="0"
          onclick="document.getElementById('file-input').click()"
@@ -219,6 +285,11 @@
       Cliquez sur <em>Actualiser</em> pour revoir la liste.
     </p>
 
+    <!-- Amis suivis (kind 3) — partagée par tous les champs clé des cartes
+         ci-dessous (voir loadFriendsDatalist()), pour choisir un ami au lieu
+         de saisir une clé NOSTR à la main. -->
+    <datalist id="fc-friends-list"></datalist>
+
     <h3 class="fc-subhead">À nommer <span class="fc-count" id="count-unknown">—</span></h3>
     <p class="cloud-note" style="margin-top:0">
       Donnez un nom et, si vous le souhaitez, la clé NOSTR (npub ou hex) de la
@@ -228,6 +299,24 @@
 
     <h3 class="fc-subhead">Déjà identifiés <span class="fc-count" id="count-known">—</span></h3>
     <div id="faces-known" class="fc-faces"></div>
+  </section>
+
+  <!-- ══ 6. Objets & lieux détectés ══════════════════════════════════════ -->
+  <section class="cloud-card fc-locked" id="card-inventory">
+    <div class="fc-section-head">
+      <h2>Objets &amp; lieux détectés</h2>
+      <button id="btn-inventory-refresh" class="cloud-btn cloud-btn-secondary fc-btn-sm"
+              onclick="loadInventory()">
+        <i class="bi bi-arrow-clockwise"></i> Actualiser
+      </button>
+    </div>
+    <p class="cloud-note" style="margin-top:0">
+      Quand une photo envoyée en mode « Ajouter des photos » ne contient
+      aucun visage, elle est analysée pour reconnaître ce qu'elle montre —
+      objet, plante, animal ou lieu. Résultat purement informatif : rien
+      n'est jamais partagé automatiquement, contrairement aux visages.
+    </p>
+    <div id="inventory-list" class="fc-faces"></div>
   </section>
 
 </main>
@@ -307,9 +396,17 @@ async function nostrFetch(path, opts) {
     if (!auth) throw new Error('signature NIP-98 refusée ou indisponible');
 
     var headers = { 'Authorization': auth };
+    if (opts.headers) { for (var k in opts.headers) headers[k] = opts.headers[k]; }
     // Content-Type volontairement non fixé : le navigateur pose lui-même la
     // frontière multipart quand body est un FormData.
     var resp = await fetch(url, { method: method, headers: headers, body: opts.body || undefined });
+    // Miniatures de visage (image/jpeg) : un <img src> classique ne peut pas
+    // porter de header Authorization, donc on récupère le blob signé ici et
+    // l'appelant en fait une URL objet (URL.createObjectURL).
+    if (opts.responseType === 'blob') {
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        return await resp.blob();
+    }
     var data = null;
     try { data = await resp.json(); } catch (e) {}
     if (!resp.ok) {
@@ -338,7 +435,7 @@ function updateConnectionUI() {
     // signature restait affichée indéfiniment car _connected passait déjà à
     // true une 1ère fois, avalant silencieusement les `nostr:connected`
     // suivants qui auraient pu réussir). Ré-appeler ces GET est sans risque.
-    if (ok) { hideError(); refreshStatus(); loadFaces(); }
+    if (ok) { hideError(); refreshStatus(); loadFaces(); loadInventory(); }
 }
 
 function connectNostrUser() {
@@ -367,6 +464,13 @@ function onConnectionChanged(connected) {
         if (window.hexToNpub) { try { npub = window.hexToNpub(window.userPubkey) || npub; } catch (e) {} }
         document.getElementById('ident-npub').textContent = npub;
         document.getElementById('identity-box').style.display = '';
+        // Nom affiché pour le flux « Définir mon FaceID » (target_name) —
+        // best-effort, 'Moi' par défaut si le profil (kind 0) est absent.
+        if (typeof window.fetchUserMetadata === 'function') {
+            window.fetchUserMetadata(window.userPubkey)
+                .then(function (m) { if (m && (m.display_name || m.name)) _selfName = m.display_name || m.name; })
+                .catch(function () {});
+        }
         // refreshStatus()/loadFaces() : voir updateConnectionUI (retenté à
         // chaque nostr:connected, pas seulement à cette transition).
     } else {
@@ -495,6 +599,110 @@ function selectOS(os) {
     });
 })();
 
+/* ── Trois flux d'envoi ────────────────────────────────────────────────
+   « generic »  : comportement historique — détection auto, atterrit dans
+                  « À nommer » si le visage n'est pas déjà connu.
+   « self »     : enrôlement supervisé de son propre FaceID (target =
+                  window.userPubkey).
+   « friend »   : enrôlement supervisé d'un ami choisi au préalable (cf.
+                  #friend-picker, peuplé par loadFriendsDatalist()).
+   Les deux derniers modes envoient X-FaceID-Target-Pubkey/-Name, lus par
+   cloud_storage.py::_commit_plaintext et propagés jusqu'à
+   satellite_face_matcher.py qui cataloguera DIRECTEMENT sous cette
+   identité — sans bootstrap "Inconnu_xxx", donc sans faux positif possible
+   sur ces photos-là. */
+var _uploadMode = 'generic';
+var _selfName = 'Moi';
+var _selectedFriend = null;
+
+function setUploadMode(mode) {
+    _uploadMode = mode;
+    document.querySelectorAll('.fc-mode-tab').forEach(function (b) {
+        b.classList.toggle('fc-mode-active', b.getAttribute('data-mode') === mode);
+    });
+    document.getElementById('mode-hint-generic').style.display = mode === 'generic' ? '' : 'none';
+    document.getElementById('mode-hint-self').style.display    = mode === 'self'    ? '' : 'none';
+    document.getElementById('mode-hint-friend').style.display  = mode === 'friend'  ? '' : 'none';
+    document.getElementById('webcam-box').style.display        = mode === 'self'    ? '' : 'none';
+    if (mode !== 'self') stopWebcam();
+    if (mode === 'friend') loadFriendsDatalist();
+}
+
+/* ── Capture webcam (flux « self ») ───────────────────────────────────
+   getUserMedia fonctionne aussi bien sur navigateur mobile (Chrome/Safari
+   Android/iOS) que desktop — facingMode:'user' demande la caméra frontale,
+   pertinente ici puisqu'il s'agit toujours d'un selfie pour son propre
+   FaceID. Le flux n'est jamais envoyé tel quel : une seule image est
+   capturée sur canvas, encodée en JPEG, puis rejoint le pipeline normal
+   (onFilesPicked → uploadSequentially → PUT /dav/Photos/…). */
+var _webcamStream = null;
+
+async function toggleWebcam() {
+    if (_webcamStream) { stopWebcam(); return; }
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        showError('Caméra non disponible sur ce navigateur.');
+        return;
+    }
+    try {
+        _webcamStream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: 'user' }, audio: false
+        });
+        var video = document.getElementById('webcam-video');
+        video.srcObject = _webcamStream;
+        document.getElementById('webcam-live').style.display = '';
+        document.getElementById('btn-webcam-toggle').textContent = 'Fermer la caméra';
+    } catch (e) {
+        showError('Caméra indisponible : ' + (e.message || e));
+    }
+}
+
+function stopWebcam() {
+    if (_webcamStream) {
+        _webcamStream.getTracks().forEach(function (t) { t.stop(); });
+        _webcamStream = null;
+    }
+    var live = document.getElementById('webcam-live');
+    if (live) live.style.display = 'none';
+    var btn = document.getElementById('btn-webcam-toggle');
+    if (btn) btn.innerHTML = '<i class="bi bi-camera"></i> Utiliser la caméra';
+}
+
+function captureWebcamPhoto() {
+    var video = document.getElementById('webcam-video');
+    if (!video || !video.videoWidth) { showError('Caméra pas encore prête, réessayez.'); return; }
+    var canvas = document.getElementById('webcam-canvas');
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    canvas.getContext('2d').drawImage(video, 0, 0);
+    canvas.toBlob(function (blob) {
+        if (!blob) { showError('Capture impossible.'); return; }
+        stopWebcam();
+        var file = new File([blob], 'faceid-webcam-' + Date.now() + '.jpg', { type: 'image/jpeg' });
+        onFilesPicked([file]);
+    }, 'image/jpeg', 0.92);
+}
+
+function onFriendPicked() {
+    var sel = document.getElementById('friend-picker');
+    var manualBox = document.getElementById('friend-manual-box');
+    if (sel.value === '__manual__') {
+        manualBox.style.display = '';
+        _selectedFriend = null;
+        onFriendManualChange();
+        return;
+    }
+    manualBox.style.display = 'none';
+    if (!sel.value) { _selectedFriend = null; return; }
+    var opt = sel.selectedOptions[0];
+    _selectedFriend = { pubkey: sel.value, name: opt ? opt.textContent : '' };
+}
+
+function onFriendManualChange() {
+    var key  = normalizeKey(document.getElementById('friend-manual-key').value);
+    var name = document.getElementById('friend-manual-name').value.trim();
+    _selectedFriend = (key && name) ? { pubkey: key, name: name } : null;
+}
+
 function onFilesPicked(fileList) {
     if (!_connected) { showError('Connectez-vous d\'abord avec votre MULTIPASS.'); return; }
     var files = Array.prototype.slice.call(fileList || []);
@@ -502,7 +710,18 @@ function onFilesPicked(fileList) {
     var rejected = files.length - images.length;
     if (rejected > 0) addUploadRow(rejected + ' fichier(s) ignoré(s) — images uniquement', 'err');
     if (!images.length) return;
-    uploadSequentially(images);
+
+    var target = null;
+    if (_uploadMode === 'self') {
+        target = { pubkey: window.userPubkey, name: _selfName || 'Moi' };
+    } else if (_uploadMode === 'friend') {
+        if (!_selectedFriend || !_selectedFriend.pubkey) {
+            showError('Choisissez d\'abord un ami dans la liste (ou saisissez sa clé et son nom).');
+            return;
+        }
+        target = _selectedFriend;
+    }
+    uploadSequentially(images, target);
 }
 
 /* Envoi séquentiel : chaque upload signe son propre event NIP-98, et
@@ -513,7 +732,10 @@ function onFilesPicked(fileList) {
    cloud_storage.py::_commit_plaintext) : un upload qui atterrirait dans le
    uDRIVE public ne serait jamais analysé. Le corps est le fichier lui-même
    (pas de FormData) — le navigateur pose le bon Content-Type (image/...),
-   que le serveur utilise pour décider de déclencher l'analyse. */
+   que le serveur utilise pour décider de déclencher l'analyse.
+
+   `target` (optionnel) : {pubkey, name} — enrôlement supervisé (modes
+   « self »/« friend »), relayé en en-têtes X-FaceID-Target-*. */
 /* MKCOL best-effort du dossier parent — un PUT sans collection parente déjà
    créée renvoie 409 (RFC 4918 strict, pas de création implicite dans
    UCloudDAVProvider). Idempotent : 405/409 sur un MKCOL déjà fait = ignoré. */
@@ -524,15 +746,20 @@ async function _ensurePhotosDir() {
     _photosDirReady = true;
 }
 
-async function uploadSequentially(files) {
+async function uploadSequentially(files, target) {
     await _ensurePhotosDir();
     var ok = 0;
+    var headers = {};
+    if (target && target.pubkey) {
+        headers['X-FaceID-Target-Pubkey'] = target.pubkey;
+        headers['X-FaceID-Target-Name']   = target.name || '';
+    }
     for (var i = 0; i < files.length; i++) {
         var f = files[i];
         var row = addUploadRow(f.name + ' — envoi…', 'pending');
         try {
             var davPath = '/dav/Photos/' + encodeURIComponent(f.name);
-            await nostrFetch(davPath, { method: 'PUT', body: f });
+            await nostrFetch(davPath, { method: 'PUT', body: f, headers: headers });
             setUploadRow(row, f.name + ' — envoyé ✓', 'ok');
             ok++;
         } catch (e) {
@@ -540,12 +767,17 @@ async function uploadSequentially(files) {
         }
     }
     if (ok) {
-        addUploadRow(ok + ' photo(s) envoyée(s). L\'analyse des visages tourne en '
-                   + 'arrière-plan — actualisez la liste ci-dessous dans un moment.', 'info');
+        var msg = (target && target.pubkey)
+            ? ok + ' photo(s) envoyée(s) pour ' + esc(target.name || 'cet ami')
+              + '. Enrôlement en cours — actualisez la liste ci-dessous dans un moment.'
+            : ok + ' photo(s) envoyée(s). L\'analyse des visages tourne en '
+              + 'arrière-plan — actualisez la liste ci-dessous dans un moment.';
+        addUploadRow(msg, 'info');
         // Un premier rafraîchissement de courtoisie ; le traitement étant
-        // asynchrone (GPU), rien ne garantit qu'un visage soit déjà catalogué :
-        // le bouton « Actualiser » reste la voie fiable.
+        // asynchrone (GPU), rien ne garantit qu'un visage (ou un objet/lieu)
+        // soit déjà catalogué : le bouton « Actualiser » reste la voie fiable.
         setTimeout(loadFaces, 8000);
+        setTimeout(loadInventory, 8000);
     }
 }
 
@@ -594,6 +826,10 @@ async function loadFaces() {
         knownBox.innerHTML = known.length
             ? known.map(faceCardHtml).join('')
             : '<div class="fc-empty">Personne d\'identifié pour l\'instant.</div>';
+
+        loadThumbnails(unknownBox);
+        loadThumbnails(knownBox);
+        loadFriendsDatalist();
     } catch (e) {
         document.getElementById('count-unknown').textContent = '—';
         document.getElementById('count-known').textContent   = '—';
@@ -604,23 +840,151 @@ async function loadFaces() {
 
 function faceCardHtml(f) {
     var named = !!f.pubkey;
+    // Miniature : placeholder ? chargé en tâche de fond par loadThumbnails()
+    // juste après le rendu (nostrFetch signe une requête par image, pas la
+    // peine de le faire pour des cartes pas encore affichées). Sans photo
+    // source enregistrée (visages catalogués avant cette fonctionnalité),
+    // pas d'essai de chargement — juste le placeholder.
+    var thumb = f.has_photo
+        ? '<img class="fc-face-thumb" data-point-id="' + esc(f.id) + '" alt="">'
+        : '<div class="fc-face-thumb-empty" title="Pas de photo enregistrée pour ce visage">❓</div>';
     return '<div class="fc-face' + (named ? ' fc-face-known' : '') + '" data-id="' + esc(f.id) + '">'
-      + '<div class="fc-face-head">'
-      +   '<span class="fc-face-name">' + (named ? '✅ ' : '❓ ') + esc(f.name || '(sans nom)') + '</span>'
-      +   (named ? '<code class="fc-face-key">' + esc(f.pubkey.slice(0, 12)) + '…' + esc(f.pubkey.slice(-4)) + '</code>' : '')
-      + '</div>'
-      + '<div class="fc-face-form">'
-      +   '<input type="text" class="fc-input fc-face-name-in" placeholder="Nom de la personne" value="' + esc(f.name) + '">'
-      +   '<input type="text" class="fc-input fc-face-key-in" placeholder="npub1… ou 64 hex (optionnel)" value="' + esc(f.pubkey) + '">'
-      +   '<button type="button" class="cloud-btn cloud-btn-primary fc-btn-sm" onclick="saveFace(this)">Enregistrer</button>'
-      +   '<button type="button" class="cloud-btn cloud-btn-danger fc-btn-sm" onclick="deleteFace(this)">Supprimer</button>'
-      + '</div>'
-      + '<div class="cloud-note fc-face-note">'
-      +   (named ? 'Partage automatique actif si vous vous suivez mutuellement sur NOSTR.'
+      + '<div class="fc-face-body">'
+      +   thumb
+      +   '<div class="fc-face-content">'
+      +     '<div class="fc-face-head">'
+      +       '<span class="fc-face-name">' + (named ? '✅ ' : '❓ ') + esc(f.name || '(sans nom)') + '</span>'
+      +       (named ? '<code class="fc-face-key">' + esc(f.pubkey.slice(0, 12)) + '…' + esc(f.pubkey.slice(-4)) + '</code>' : '')
+      +     '</div>'
+      +     '<div class="fc-face-form">'
+      +       '<input type="text" class="fc-input fc-face-name-in" placeholder="Nom de la personne" value="' + esc(f.name) + '" list="fc-friends-list">'
+      +       '<input type="text" class="fc-input fc-face-key-in" placeholder="npub1… ou 64 hex (optionnel)" value="' + esc(f.pubkey) + '" list="fc-friends-list">'
+      +       '<button type="button" class="cloud-btn cloud-btn-primary fc-btn-sm" onclick="saveFace(this)">Enregistrer</button>'
+      +       '<button type="button" class="cloud-btn cloud-btn-danger fc-btn-sm" onclick="deleteFace(this)">Supprimer</button>'
+      +     '</div>'
+      +     '<div class="cloud-note fc-face-note">'
+      +       (named ? 'Partage automatique actif si vous vous suivez mutuellement sur NOSTR.'
                  : 'Sans clé publique, aucune photo n\'est partagée.')
-      +   (f.timestamp ? ' · vu le ' + esc(String(f.timestamp).slice(0, 10)) : '')
+      +       (f.timestamp ? ' · vu le ' + esc(String(f.timestamp).slice(0, 10)) : '')
+      +     '</div>'
+      +   '</div>'
       + '</div>'
       + '</div>';
+}
+
+/* Charge chaque miniature en tâche de fond (un fetch signé NIP-98 par
+   visage) — n'empêche pas le reste de la page de s'afficher pendant ce
+   temps. Erreur individuelle silencieuse : le placeholder reste "❓" plutôt
+   que de casser l'affichage des autres cartes. */
+function loadThumbnails(container) {
+    var imgs = container.querySelectorAll('.fc-face-thumb[data-point-id]');
+    imgs.forEach(function (img) {
+        var pointId = img.getAttribute('data-point-id');
+        nostrFetch('/mailjet/faces/thumbnail?point_id=' + encodeURIComponent(pointId),
+            { method: 'GET', responseType: 'blob' })
+            .then(function (blob) { img.src = URL.createObjectURL(blob); })
+            .catch(function () { img.replaceWith(_thumbEmptyEl()); });
+    });
+}
+
+function _thumbEmptyEl() {
+    var d = document.createElement('div');
+    d.className = 'fc-face-thumb-empty';
+    d.title = 'Miniature indisponible';
+    d.textContent = '❓';
+    return d;
+}
+
+/* ── Section 6 : objets & lieux détectés ──────────────────────────────
+   Contrepartie de « Visages détectés » pour les photos où AUCUN visage n'a
+   été trouvé (faceid.sh enchaîne alors sur inventory_recognition.py, cf.
+   Astroport.ONE/IA/CLAUDE.md). Purement informatif — pas de nommage, pas de
+   partage : GET /mailjet/inventory liste les entrées de .ucloud/index.json
+   qui portent un champ `scene` (satellite_face_matcher.py::_tag_ucloud_scene). */
+var _INVENTORY_ICONS = {
+    plant: '🌿', insect: '🐛', animal: '🐾', object: '📦', place: '📍', person: '🧑'
+};
+
+async function loadInventory() {
+    if (!_connected) return;
+    var box = document.getElementById('inventory-list');
+    box.innerHTML = '<div class="fc-empty">Chargement…</div>';
+    try {
+        var data = await nostrFetch('/mailjet/inventory', { method: 'GET' });
+        var items = data.items || [];
+        box.innerHTML = items.length
+            ? items.map(inventoryCardHtml).join('')
+            : '<div class="fc-empty">Rien de détecté pour l\'instant.</div>';
+        loadInventoryThumbnails(box);
+    } catch (e) {
+        box.innerHTML = '<div class="fc-empty fc-err">Catalogue inaccessible : '
+                       + esc(e.message || e) + '</div>';
+    }
+}
+
+function inventoryCardHtml(it) {
+    var icon = _INVENTORY_ICONS[it.type] || '📦';
+    var pct = (typeof it.confidence === 'number') ? Math.round(it.confidence * 100) + '%' : '';
+    var meta = [it.description, pct ? 'confiance ' + pct : '',
+                (it.tags && it.tags.length) ? it.tags.join(', ') : '',
+                it.timestamp ? String(it.timestamp).slice(0, 10) : '']
+        .filter(Boolean).map(esc).join(' · ');
+    return '<div class="fc-face" data-path="' + esc(it.path) + '">'
+      + '<div class="fc-face-body">'
+      +   '<img class="fc-face-thumb" data-inv-path="' + esc(it.path) + '" alt="">'
+      +   '<div class="fc-face-content">'
+      +     '<div class="fc-face-head">'
+      +       '<span class="fc-face-name">' + icon + ' '
+                + esc(it.name || it.category || 'Non identifié') + '</span>'
+      +     '</div>'
+      +     '<div class="cloud-note fc-face-note">' + meta + '</div>'
+      +   '</div>'
+      + '</div>'
+      + '</div>';
+}
+
+function loadInventoryThumbnails(container) {
+    var imgs = container.querySelectorAll('.fc-face-thumb[data-inv-path]');
+    imgs.forEach(function (img) {
+        var path = img.getAttribute('data-inv-path');
+        nostrFetch('/mailjet/inventory/thumbnail?path=' + encodeURIComponent(path),
+            { method: 'GET', responseType: 'blob' })
+            .then(function (blob) { img.src = URL.createObjectURL(blob); })
+            .catch(function () { img.replaceWith(_thumbEmptyEl()); });
+    });
+}
+
+/* Liste d'amis suivis (kind 3) → <datalist> partagée par tous les champs
+   clé — chargée une seule fois par connexion, réutilisée pour chaque carte
+   (nouvelle ou déjà affichée : les <input list="..."> pointent tous vers le
+   même <datalist id="fc-friends-list">, pas besoin de la regénérer). */
+var _friendsLoaded = false;
+async function loadFriendsDatalist() {
+    if (_friendsLoaded || !_connected) return;
+    _friendsLoaded = true;
+    if (typeof window.fetchUserFollowsWithMetadata !== 'function') return;
+    try {
+        var friends = await window.fetchUserFollowsWithMetadata(window.userPubkey, { timeout: 5000 });
+        var options = friends.map(function (f) {
+            var label = f.display_name || f.name || (f.npub ? f.npub.slice(0, 16) + '…' : '');
+            return '<option value="' + esc(f.pubkey) + '">' + esc(label) + '</option>';
+        }).join('');
+
+        var dl = document.getElementById('fc-friends-list');
+        if (dl) dl.innerHTML = options;
+
+        // Même liste d'amis, réutilisée par le sélecteur du flux « Photos
+        // d'un ami » (setUploadMode('friend')) — l'option __manual__ ouvre
+        // la saisie libre clé+nom (onFriendPicked()).
+        var sel = document.getElementById('friend-picker');
+        if (sel) {
+            sel.innerHTML = '<option value="">— Choisir un ami suivi —</option>'
+                + options
+                + '<option value="__manual__">Autre… (saisir une clé)</option>';
+        }
+    } catch (e) {
+        _friendsLoaded = false; // permet de réessayer au prochain appel
+    }
 }
 
 /* npub1… → hex 64 (le backend n'accepte que l'hex). */

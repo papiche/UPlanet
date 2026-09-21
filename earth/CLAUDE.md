@@ -187,7 +187,8 @@ ajoute `.fc-unlocked`.
 | Action | Appel |
 |--------|-------|
 | État cloud | `GET /api/cloud/status` → `{enrolled, dav_url, email, files, bytes, max_file_size}` |
-| Activer / régénérer | `POST /api/cloud/enroll` → `{dav_url, email, token, instructions}` |
+| Activer / régénérer | `POST /api/cloud/enroll` → `{dav_url, email, token, instructions}` (nouveau token, déconnecte les clients déjà montés) |
+| Récupérer le mot de passe existant | `POST /api/cloud/reveal` → même forme, sans régénérer (bouton « Afficher le mot de passe ») |
 | Révoquer | `POST /api/cloud/revoke` |
 | Envoyer une photo | `PUT /dav/Photos/<nom>` (corps = fichier brut, PAS `/api/fileupload` — seul le cloud chiffré déclenche l'analyse FaceID, cf. `UPassport/CLAUDE.md`) — `MKCOL /dav/Photos` best-effort avant le premier envoi (RFC 4918 strict : pas de création implicite du parent) |
 | Enrôlement supervisé (optionnel) | En-têtes `X-FaceID-Target-Pubkey` (64 hex) / `X-FaceID-Target-Name` sur le `PUT` — chaque visage détecté est catalogué DIRECTEMENT sous cette identité (pas de recherche par similarité ni de `Inconnu_xxx`) |
@@ -261,9 +262,20 @@ dans le payload Qdrant). Le champ clé propose aussi les amis déjà suivis
 via `window.fetchUserFollowsWithMetadata` de `lib_2_api_connect.js`) — saisie
 manuelle toujours possible en plus.
 
-Le mot de passe DAV n'est affiché **qu'une fois** (le serveur ne le re-expose
-jamais ; `status` dit seulement s'il existe). Montage : `davfs2` (Linux),
-Finder ⌘K (macOS), Ajouter un emplacement réseau (Windows).
+Le formulaire n'affiche le mot de passe qu'après une action explicite
+(`activateCloud()`/`revealCloudPassword()`, bouton « Activer » ou « Afficher
+le mot de passe ») — jamais automatiquement au chargement ou dans `status`.
+`POST /api/cloud/reveal` permet de le récupérer sans le régénérer : la preuve
+NIP-98 déjà exigée pour appeler cette route donne de toute façon un accès
+complet à `/dav/` en direct, donc la révéler à ce même appelant n'élargit
+rien — ça évite juste de devoir régénérer (et déconnecter les clients
+existants) pour monter le disque sur un nouvel appareil. Montage : gestionnaire de
+fichiers natif — GVFS/Nautilus, KDE Dolphin (Linux), Finder ⌘K (macOS),
+Ajouter un emplacement réseau (Windows). `davfs2` (`sudo mount -t davfs`) est
+volontairement absent des instructions : son client `mount.davfs` plante
+systématiquement (SIGABRT) sur les distributions récentes — bug du paquet,
+indépendant du serveur (vérifié : PROPFIND parfaitement conforme, GVFS monte
+et liste sans problème le même point de montage).
 
 Backend : `UPassport/services/cloud_storage.py`, monté sous `/dav/`
 (AES-256-GCM avant IPFS, une clé par fichier, index/keyring locaux en 0600) ;

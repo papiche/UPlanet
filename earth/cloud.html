@@ -102,6 +102,9 @@
       <button id="btn-refresh" class="cloud-btn cloud-btn-secondary" disabled onclick="refreshStatus()">
         <i class="bi bi-arrow-clockwise"></i> Actualiser
       </button>
+      <button id="btn-reveal" class="cloud-btn cloud-btn-secondary" style="display:none" onclick="revealCloudPassword()">
+        <i class="bi bi-eye"></i> Afficher le mot de passe
+      </button>
       <button id="btn-revoke" class="cloud-btn cloud-btn-danger" style="display:none" onclick="revokeCloud()">
         <i class="bi bi-x-octagon"></i> Révoquer l'accès
       </button>
@@ -141,15 +144,17 @@
 
       <div class="cloud-os-pane active" data-os="linux">
         <ol>
-          <li>Installez <code>davfs2</code> :
-            <code class="cloud-code">sudo apt install davfs2</code></li>
-          <li>Créez le point de montage et montez :
-            <code class="cloud-code" id="cmd-linux"></code></li>
+          <li>Dans le gestionnaire de fichiers (GNOME Files/Nautilus, KDE Dolphin…) :
+            <em>Autres emplacements → Se connecter à un serveur</em> (ou <kbd>Ctrl</kbd>+<kbd>L</kbd>).</li>
+          <li>Saisissez l'adresse :
+            <code class="cloud-code" id="gvfs-linux"></code></li>
           <li>Saisissez votre identifiant et votre mot de passe à l'invite.</li>
         </ol>
         <p class="cloud-note">
-          Avec GNOME Files (Nautilus) : <em>Autres emplacements → Se connecter à un serveur</em>,
-          puis <span id="gvfs-linux" style="font-family:monospace"></span>.
+          ⚠️ <code>davfs2</code> (<code>sudo mount -t davfs</code>) est déconseillé :
+          son client <code>mount.davfs</code> plante systématiquement sur les
+          distributions récentes (bug connu du paquet, indépendant de cette
+          station) — utilisez le gestionnaire de fichiers natif ci-dessus.
         </p>
       </div>
 
@@ -337,8 +342,9 @@
    par TOUTES les sections.
 
    Backend UPassport (même origine que /earth/, donc aucun CORS) :
-     POST /api/cloud/enroll   → {dav_url, email, token, instructions}
+     POST /api/cloud/enroll   → {dav_url, email, token, instructions} (nouveau token)
      GET  /api/cloud/status   → {enrolled, dav_url, email, files, bytes, …}
+     POST /api/cloud/reveal   → {dav_url, email, token, instructions} (token EXISTANT)
      POST /api/cloud/revoke   → {revoked}
      POST /api/fileupload     → multipart {file} → {file_cid, …}
      GET  /mailjet/faces      → {faces:[{id,name,pubkey,timestamp}]}
@@ -497,11 +503,13 @@ async function refreshStatus() {
             setState('dav-dot', 'dav-text', 'on',
                 'Cloud actif — ' + (s.files || 0) + ' fichier(s), ' + formatBytes(s.bytes || 0) + '.');
             document.getElementById('btn-enroll-label').textContent = 'Régénérer le mot de passe';
+            document.getElementById('btn-reveal').style.display = '';
             document.getElementById('btn-revoke').style.display = '';
             showMount();
         } else {
             setState('dav-dot', 'dav-text', 'off', 'Cloud pas encore activé sur cette station.');
             document.getElementById('btn-enroll-label').textContent = 'Activer mon Cloud';
+            document.getElementById('btn-reveal').style.display = 'none';
             document.getElementById('btn-revoke').style.display = 'none';
         }
     } catch (e) {
@@ -538,6 +546,32 @@ async function activateCloud() {
     }
 }
 
+/* Récupère le mot de passe DAV déjà délivré, sans le régénérer — possible
+   uniquement parce qu'on vient de le prouver via NIP-98 (nostrFetch signe un
+   event frais à chaque appel) : cette preuve de possession de la clé
+   MULTIPASS donne de toute façon un accès complet à /dav/ en direct, révéler
+   le token existant n'élargit donc rien pour ce même appelant. */
+async function revealCloudPassword() {
+    hideError();
+    var btn = document.getElementById('btn-reveal');
+    btn.disabled = true;
+    try {
+        var r = await nostrFetch('/api/cloud/reveal', { method: 'POST' });
+        _davUrl = r.dav_url;
+        _email  = r.email;
+        document.getElementById('cred-url').textContent   = r.dav_url;
+        document.getElementById('cred-login').textContent = r.email;
+        document.getElementById('cred-token').textContent = r.token;
+        document.getElementById('cloud-creds').style.display = '';
+        document.getElementById('cloud-warn').style.display  = '';
+        showMount();
+    } catch (e) {
+        showError(e.message || String(e));
+    } finally {
+        btn.disabled = false;
+    }
+}
+
 async function revokeCloud() {
     if (!confirm("Révoquer l'accès WebDAV ? Les disques montés seront déconnectés. "
                + 'Vos fichiers et vos clés ne sont pas supprimés.')) return;
@@ -546,6 +580,7 @@ async function revokeCloud() {
         await nostrFetch('/api/cloud/revoke', { method: 'POST' });
         document.getElementById('cloud-creds').style.display = 'none';
         document.getElementById('cloud-warn').style.display  = 'none';
+        document.getElementById('btn-reveal').style.display  = 'none';
         document.getElementById('btn-revoke').style.display  = 'none';
         document.getElementById('mount-block').style.display = 'none';
         setState('dav-dot', 'dav-text', 'off', 'Accès révoqué.');
@@ -559,8 +594,6 @@ function showMount() {
     if (!_davUrl) return;
     var scheme = _davUrl.indexOf('https://') === 0 ? 'davs' : 'dav';
     var hostPath = _davUrl.replace(/^https?:\/\//, '');
-    document.getElementById('cmd-linux').textContent =
-        'mkdir -p ~/UPlanet\nsudo mount -t davfs ' + _davUrl + ' ~/UPlanet';
     document.getElementById('gvfs-linux').textContent = scheme + '://' + hostPath;
     document.getElementById('cmd-macos').textContent   = _davUrl;
     document.getElementById('cmd-windows').textContent = _davUrl;

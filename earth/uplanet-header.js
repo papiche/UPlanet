@@ -25,6 +25,7 @@
         { sep: 'Identité 🪪' },
         { e: '🫵', l: 'Profile',        h: 'nostr_profile_viewer.html', mini:true },
         { e: '💎', l: 'Atomic',         h: 'atomic.html',            mini: true },
+        { e: '🎫', l: 'Ğ1Billet',       h: 'billet.html',            mini: true },
         { e: '😎', l: 'Mailjet',        h: 'mailjet.html', mini:true },
         { e: '🍪', l: 'Cookies',        h: 'cookie.html', mini:true },
         { sep: 'Station 모' },

@@ -1,0 +1,348 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Ğ1Billet papier — UPlanet</title>
+<style>
+  :root{--ink:#1a1a2e;--accent:#c8a83c;--green:#2d5a1b;--bg:#0f1220;--card:#181c30;--muted:#9aa0b4}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:#f0f0f5;font-family:-apple-system,Segoe UI,Roboto,sans-serif;
+       padding:70px 16px 40px;display:flex;flex-direction:column;align-items:center}
+  main{max-width:620px;width:100%}
+  h1{font-size:1.5rem;margin:0 0 6px}
+  .lead{color:var(--muted);font-size:.95rem;line-height:1.5;margin-bottom:24px}
+  .card{background:var(--card);border:1px solid rgba(255,255,255,.08);border-radius:14px;
+        padding:20px;margin-bottom:16px}
+  label{display:block;font-size:.85rem;color:var(--muted);margin-bottom:6px}
+  input[type=number],input[type=text],select{width:100%;padding:10px 12px;border-radius:8px;
+        border:1px solid rgba(255,255,255,.15);background:#0d0f1c;color:#fff;font-size:1rem}
+  input[type=number]{font-size:1.1rem}
+  .amount-row{display:flex;gap:8px;align-items:stretch}
+  .amount-row #amount{flex:1}
+  .amount-row #unit{flex:0 0 90px}
+  h2.card-title{font-size:.95rem;margin:0 0 10px;color:#f0f0f5}
+  .modes{display:flex;flex-direction:column;gap:10px;margin:16px 0}
+  .mode-opt{display:flex;gap:10px;align-items:flex-start;padding:10px;border-radius:10px;
+             border:1px solid rgba(255,255,255,.08);cursor:pointer}
+  .mode-opt input{margin-top:3px}
+  .mode-opt .t{font-weight:600}
+  .mode-opt .d{color:var(--muted);font-size:.82rem}
+  #balance-hint{font-size:.82rem;color:var(--muted);margin-top:6px;min-height:1.2em}
+  button#generate{width:100%;padding:14px;border:none;border-radius:10px;background:var(--accent);
+        color:#1a1209;font-weight:700;font-size:1rem;cursor:pointer;margin-top:6px}
+  button#generate:disabled{opacity:.5;cursor:not-allowed}
+  #status{font-size:.85rem;margin-top:10px;min-height:1.2em}
+  #status.err{color:#ff8080}
+  #status.ok{color:#8ee08e}
+  .note{font-size:.78rem;color:var(--muted);line-height:1.5;margin-top:18px}
+  .style-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(88px,1fr));gap:8px}
+  .style-card{border:2px solid rgba(255,255,255,.12);border-radius:8px;overflow:hidden;
+        cursor:pointer;background:#0d0f1c;text-align:center;transition:border-color .15s}
+  .style-card:hover{border-color:rgba(200,168,60,.5)}
+  .style-card.selected{border-color:var(--accent)}
+  .style-card img{width:100%;height:56px;object-fit:cover;display:block}
+  .style-card .lbl{font-size:.72rem;color:var(--muted);padding:4px 2px}
+</style>
+</head>
+<body>
+
+<div id="nostr-bar"></div>
+
+<main>
+  <h1>🎫 Ğ1Billet papier</h1>
+  <p class="lead">
+    Fabriquez une planche A4 de 6 portefeuilles papier Ğ1/Ẑen, prête à imprimer
+    et découper — avec un montant au choix par billet. Transférez les fonds vous-même, ou
+    débitez-les directement depuis votre MULTIPASS connecté.
+  </p>
+
+  <div class="card">
+    <label for="amount">Montant — par billet (× 6 sur la planche)</label>
+    <div class="amount-row">
+      <select id="amount">
+        <option value="0">Vierge (à remplir)</option>
+        <option value="5" selected>5</option>
+        <option value="10">10</option>
+        <option value="20">20</option>
+        <option value="50">50</option>
+        <option value="100">100</option>
+        <option value="200">200</option>
+        <option value="500">500</option>
+      </select>
+      <select id="unit">
+        <option value="zen" selected>Ẑen</option>
+        <option value="g1">Ğ1</option>
+      </select>
+    </div>
+    <div id="balance-hint">Connectez-vous pour voir votre solde.</div>
+
+    <div class="modes">
+      <label class="mode-opt">
+        <input type="radio" name="mode" value="manual" checked>
+        <span>
+          <span class="t">Portefeuille vide</span><br>
+          <span class="d">Aucun fonds déplacé ici — les billets sont vides, vous (ou quiconque) enverrez vous-même des Ẑen vers la clé imprimée (Ẑelkova ou autre wallet) pour l'activer.</span>
+        </span>
+      </label>
+      <label class="mode-opt">
+        <input type="radio" name="mode" value="auto">
+        <span>
+          <span class="t">Remplissage Automatique</span><br>
+          <span class="d">Nécessite d'être connecté. Chaque billet est immédiatement activé en lui envoyant les Ẑen du montant depuis votre MULTIPASS.</span>
+        </span>
+      </label>
+    </div>
+    <div id="auto-total-hint" style="display:none" class="note"></div>
+  </div>
+
+  <div class="card">
+    <h2 class="card-title">Fond et logo des billets</h2>
+    <div class="modes">
+      <label class="mode-opt">
+        <input type="radio" name="imgsrc" value="profile" checked>
+        <span>
+          <span class="t">Mon profil NOSTR (par défaut)</span><br>
+          <span class="d">Fond = ma bannière, logo = mon avatar — si connecté(e) et renseignés dans mon profil.</span>
+        </span>
+      </label>
+      <label class="mode-opt">
+        <input type="radio" name="imgsrc" value="style">
+        <span>
+          <span class="t">Styles proposés</span><br>
+          <span class="d">Choisissez un habillage graphique prêt à l'emploi.</span>
+        </span>
+      </label>
+      <label class="mode-opt">
+        <input type="radio" name="imgsrc" value="custom">
+        <span>
+          <span class="t">Images personnalisées</span><br>
+          <span class="d">Indiquez vos propres URLs d'images.</span>
+        </span>
+      </label>
+      <label class="mode-opt">
+        <input type="radio" name="imgsrc" value="none">
+        <span>
+          <span class="t">Aucune</span><br>
+          <span class="d">Fond neutre, sans image.</span>
+        </span>
+      </label>
+    </div>
+    <div id="style-gallery" class="style-grid" style="display:none;margin-top:6px"></div>
+    <div id="custom-img-fields" style="display:none;margin-top:6px">
+      <label for="fond_url">URL du fond</label>
+      <input type="text" id="fond_url" placeholder="https://…">
+      <label for="logo_url" style="margin-top:10px">URL du logo</label>
+      <input type="text" id="logo_url" placeholder="https://…">
+    </div>
+  </div>
+
+  <div class="card">
+    <button id="generate">Générer mon Ğ1Billet</button>
+    <div id="status"></div>
+  </div>
+
+  <p class="note">
+    La planche s'ouvre dans un nouvel onglet, prête à imprimer. Chaque billet n'a qu'un recto :
+    le secret (phrase mnémonique) est imprimé en bande verticale sur son bord gauche — repliez-la
+    vers l'arrière et scotchez-la avant de distribuer les billets. Imprimez avant de fermer cet
+    onglet : la planche ne peut pas être régénérée à l'identique et n'est jamais conservée par
+    le serveur.
+  </p>
+</main>
+
+<script src="nacl-fast.min.js"></script>
+<script src="nostr.bundle.js"></script>
+<script src="common.js"></script>
+<script src="uplanet-header.js"></script>
+<script src="relay.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  var amountEl     = document.getElementById('amount');
+  var hintEl       = document.getElementById('balance-hint');
+  var unitEl       = document.getElementById('unit');
+  var genBtn       = document.getElementById('generate');
+  var statusEl     = document.getElementById('status');
+  var autoHintEl   = document.getElementById('auto-total-hint');
+  var customFields = document.getElementById('custom-img-fields');
+  var styleGallery = document.getElementById('style-gallery');
+  var profileImages = { fond: null, logo: null };
+  var BILLET_COUNT = 6;
+  var STYLES = [
+    { key: 'eugro',     label: 'Eugro' },
+    { key: 'astroport', label: 'Astroport' },
+    { key: 'saubole',   label: 'Saubole' },
+    { key: 'jeu',       label: 'Jeu' },
+    { key: '_',         label: 'Minimal' }
+  ];
+  var selectedStyle = STYLES[0].key;
+
+  function apiBase() {
+    return (window.getAPIUrl ? window.getAPIUrl() : '') || '';
+  }
+
+  function styleUrl(styleKey, file) {
+    return apiBase() + '/static/billet_styles/' + encodeURIComponent(styleKey) + '/' + file;
+  }
+
+  function buildStyleGallery() {
+    styleGallery.innerHTML = '';
+    STYLES.forEach(function (s) {
+      var card = document.createElement('div');
+      card.className = 'style-card' + (s.key === selectedStyle ? ' selected' : '');
+      var img = document.createElement('img');
+      img.src = styleUrl(s.key, 'fond.jpg');
+      img.alt = s.label;
+      var lbl = document.createElement('div');
+      lbl.className = 'lbl';
+      lbl.textContent = s.label;
+      card.appendChild(img);
+      card.appendChild(lbl);
+      card.addEventListener('click', function () {
+        selectedStyle = s.key;
+        styleGallery.querySelectorAll('.style-card').forEach(function (c) {
+          c.classList.remove('selected');
+        });
+        card.classList.add('selected');
+      });
+      styleGallery.appendChild(card);
+    });
+  }
+  buildStyleGallery();
+
+  function setStatus(msg, cls) {
+    statusEl.textContent = msg || '';
+    statusEl.className = cls || '';
+  }
+
+  function updateAutoTotalHint() {
+    var mode = document.querySelector('input[name=mode]:checked').value;
+    var amount = parseFloat(amountEl.value) || 0;
+    var unitLabel = unitEl.options[unitEl.selectedIndex].text;
+    if (mode === 'auto' && amount > 0) {
+      autoHintEl.style.display = '';
+      autoHintEl.textContent = '⚠️ ' + BILLET_COUNT + ' billets × ' + amount + ' ' + unitLabel + ' = ' +
+        (BILLET_COUNT * amount) + ' ' + unitLabel + ' seront débités au total depuis votre MULTIPASS.';
+    } else {
+      autoHintEl.style.display = 'none';
+    }
+  }
+
+  async function refreshProfileImages() {
+    if (!window.isNostrConnected || !window.userPubkey || typeof window.fetchUserMetadata !== 'function') {
+      return;
+    }
+    try {
+      var meta = await window.fetchUserMetadata(window.userPubkey);
+      if (meta) {
+        profileImages.fond = meta.banner || null;
+        profileImages.logo = meta.picture || null;
+      }
+    } catch (e) { /* pas de profil trouvé — pas grave, fond neutre */ }
+  }
+
+  async function refreshBalance() {
+    if (!window.isNostrConnected || !window._uphG1Pub) {
+      hintEl.textContent = 'Connectez-vous pour voir votre solde.';
+      return;
+    }
+    try {
+      var url = apiBase() + '/check_balance?g1pub=' + encodeURIComponent(window._uphG1Pub);
+      var resp = await fetch(url);
+      var data = await resp.json();
+      var zen = (typeof data.zen !== 'undefined') ? data.zen : data.balance;
+      if (typeof zen !== 'undefined' && zen !== null) {
+        hintEl.textContent = 'Solde MULTIPASS : ' + zen + ' Ẑen';
+      } else {
+        hintEl.textContent = '';
+      }
+    } catch (e) {
+      hintEl.textContent = '';
+    }
+  }
+
+  function onConnected() {
+    refreshBalance();
+    refreshProfileImages();
+  }
+
+  document.querySelectorAll('input[name=imgsrc]').forEach(function (el) {
+    el.addEventListener('change', function () {
+      customFields.style.display = (el.value === 'custom' && el.checked) ? '' : 'none';
+      styleGallery.style.display = (el.value === 'style' && el.checked) ? '' : 'none';
+    });
+  });
+  document.querySelectorAll('input[name=mode]').forEach(function (el) {
+    el.addEventListener('change', updateAutoTotalHint);
+  });
+  amountEl.addEventListener('change', updateAutoTotalHint);
+  unitEl.addEventListener('change', updateAutoTotalHint);
+
+  document.getElementById('generate').addEventListener('click', function () {
+    var amount = parseFloat(amountEl.value);
+    var unit = unitEl.value;
+    var mode = document.querySelector('input[name=mode]:checked').value;
+    var imgsrc = document.querySelector('input[name=imgsrc]:checked').value;
+
+    if (isNaN(amount) || amount < 0) {
+      setStatus('Montant invalide.', 'err');
+      return;
+    }
+    if (mode === 'auto' && amount <= 0) {
+      setStatus('Choisissez un montant pour le mode automatique (ou "Vierge" en Portefeuille vide).', 'err');
+      return;
+    }
+    if (mode === 'auto' && !(window.isNostrConnected && window.userPubkey)) {
+      setStatus('Connectez votre MULTIPASS pour le mode automatique.', 'err');
+      return;
+    }
+
+    var fondUrl = null, logoUrl = null;
+    if (imgsrc === 'profile') {
+      fondUrl = profileImages.fond;
+      logoUrl = profileImages.logo;
+    } else if (imgsrc === 'custom') {
+      fondUrl = (document.getElementById('fond_url').value || '').trim() || null;
+      logoUrl = (document.getElementById('logo_url').value || '').trim() || null;
+    } else if (imgsrc === 'style') {
+      fondUrl = styleUrl(selectedStyle, 'fond.jpg');
+      logoUrl = styleUrl(selectedStyle, 'logo.png');
+    }
+
+    genBtn.disabled = true;
+    setStatus('Génération en cours…', '');
+
+    var url = apiBase() + '/qr/billet?amount=' + encodeURIComponent(amount) +
+      '&unit=' + encodeURIComponent(unit) + '&mode=' + encodeURIComponent(mode);
+    if (mode === 'auto') {
+      url += '&npub=' + encodeURIComponent(window.userPubkey);
+    }
+    if (fondUrl) url += '&fond_url=' + encodeURIComponent(fondUrl);
+    if (logoUrl) url += '&logo_url=' + encodeURIComponent(logoUrl);
+
+    // Ouverture immédiate dans un nouvel onglet : c'est ce nouvel onglet, pas
+    // ce script, qui fait la requête serveur (génération + transfert éventuel) —
+    // évite tout blocage de popup lié à un fetch async avant window.open(). Les
+    // images de profil sont pré-chargées (refreshProfileImages sur connexion),
+    // pas de await ici non plus.
+    window.open(url, '_blank');
+    setStatus('Planche ouverte dans un nouvel onglet.', 'ok');
+    genBtn.disabled = false;
+    if (mode === 'auto') {
+      setTimeout(refreshBalance, 4000);
+    }
+  });
+
+  window.addEventListener('nostr:connected', onConnected);
+  if (window.waitForConnection) {
+    window.waitForConnection(onConnected);
+  } else {
+    refreshBalance();
+  }
+  updateAutoTotalHint();
+})();
+</script>
+</body>
+</html>

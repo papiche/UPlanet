@@ -15,8 +15,9 @@
   .card{background:var(--card);border:1px solid rgba(255,255,255,.08);border-radius:14px;
         padding:20px;margin-bottom:16px}
   label{display:block;font-size:.85rem;color:var(--muted);margin-bottom:6px}
-  input[type=number],input[type=text],select{width:100%;padding:10px 12px;border-radius:8px;
+  input[type=number],input[type=text],select,textarea{width:100%;padding:10px 12px;border-radius:8px;
         border:1px solid rgba(255,255,255,.15);background:#0d0f1c;color:#fff;font-size:1rem}
+  textarea{font-family:inherit;font-size:.9rem;line-height:1.5;resize:vertical}
   input[type=number]{font-size:1.1rem}
   .amount-row{display:flex;gap:8px;align-items:stretch}
   .amount-row #amount{flex:1}
@@ -52,7 +53,7 @@
 <main>
   <h1>🎫 Ğ1Billet papier</h1>
   <p class="lead">
-    Fabriquez une planche A4 de 6 portefeuilles papier Ğ1/Ẑen, prête à imprimer
+    Fabriquez une planche A4 de 6 portefeuilles papier Ğ1/Ẑen (PRIMO TX TREE), prête à imprimer
     et découper — avec un montant au choix par billet. Transférez les fonds vous-même, ou
     débitez-les directement depuis votre MULTIPASS connecté.
   </p>
@@ -138,6 +139,21 @@
   </div>
 
   <div class="card">
+    <h2 class="card-title">Verso (optionnel)</h2>
+    <label class="mode-opt" style="margin:0">
+      <input type="checkbox" id="verso-enable">
+      <span>
+        <span class="t">Ajouter un verso à l'impression</span><br>
+        <span class="d">Un petit texte façon "contrat", répété au dos de chacun des 6 billets (même grille que le recto) + QR de soutien vers OpenCollective (opencollective.com/monnaie-libre).</span>
+      </span>
+    </label>
+    <div id="verso-fields" style="display:none;margin-top:12px">
+      <label for="verso_text">Texte du verso — imprimé petit, identique sur les 6 billets (modifiable, 550 caractères max)</label>
+      <textarea id="verso_text" rows="6" maxlength="550"></textarea>
+    </div>
+  </div>
+
+  <div class="card">
     <button id="generate">Générer mon Ğ1Billet</button>
     <div id="status"></div>
   </div>
@@ -168,8 +184,17 @@
   var autoHintEl   = document.getElementById('auto-total-hint');
   var customFields = document.getElementById('custom-img-fields');
   var styleGallery = document.getElementById('style-gallery');
+  var versoEnable  = document.getElementById('verso-enable');
+  var versoFields  = document.getElementById('verso-fields');
+  var versoTextEl  = document.getElementById('verso_text');
   var profileImages = { fond: null, logo: null };
   var BILLET_COUNT = 6;
+  var VERSO_DEFAULT_TEXT =
+    "Le Ẑen n'est pas une monnaie spéculative : c'est l'unité de compte d'un bien commun, celui du laboratoire Web3 Made In Zion. Chaque Astroport installé, chaque ressource inscrite au cadastre commun, y est mesurée et gouvernée collectivement via les toiles de confiance UPlanet. Ce billet est un fragment d'un chantier ouvert — rejoignez-le. Aucune invention n'y est brevetée : code, documentation et recettes restent ouverts (AGPL-3.0 / CC BY / CC BY-SA) — la Charte Open Source est le socle de toute la coopérative.";
+  versoTextEl.value = VERSO_DEFAULT_TEXT;
+  versoEnable.addEventListener('change', function () {
+    versoFields.style.display = versoEnable.checked ? '' : 'none';
+  });
   var STYLES = [
     { key: 'eugro',     label: 'Eugro' },
     { key: 'astroport', label: 'Astroport' },
@@ -321,6 +346,9 @@
     }
     if (fondUrl) url += '&fond_url=' + encodeURIComponent(fondUrl);
     if (logoUrl) url += '&logo_url=' + encodeURIComponent(logoUrl);
+    if (versoEnable.checked) {
+      url += '&verso=1&verso_text=' + encodeURIComponent((versoTextEl.value || '').trim() || VERSO_DEFAULT_TEXT);
+    }
 
     // Ouverture immédiate dans un nouvel onglet : c'est ce nouvel onglet, pas
     // ce script, qui fait la requête serveur (génération + transfert éventuel) —

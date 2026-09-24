@@ -29,7 +29,6 @@
   .mode-opt input{margin-top:3px}
   .mode-opt .t{font-weight:600}
   .mode-opt .d{color:var(--muted);font-size:.82rem}
-  #balance-hint{font-size:.82rem;color:var(--muted);margin-top:6px;min-height:1.2em}
   button#generate{width:100%;padding:14px;border:none;border-radius:10px;background:var(--accent);
         color:#1a1209;font-weight:700;font-size:1rem;cursor:pointer;margin-top:6px}
   button#generate:disabled{opacity:.5;cursor:not-allowed}
@@ -54,8 +53,8 @@
   <h1>🎫 Ğ1Billet papier</h1>
   <p class="lead">
     Fabriquez une planche A4 de 6 portefeuilles papier Ğ1/Ẑen (PRIMO TX TREE), prête à imprimer
-    et découper — avec un montant au choix par billet. Transférez les fonds vous-même, ou
-    débitez-les directement depuis votre MULTIPASS connecté.
+    et découper — avec un montant au choix par billet. Les billets sortent toujours vides ;
+    transférez les fonds vous-même vers la clé imprimée pour les activer.
   </p>
 
   <div class="card">
@@ -76,25 +75,10 @@
         <option value="g1">Ğ1</option>
       </select>
     </div>
-    <div id="balance-hint">Connectez-vous pour voir votre solde.</div>
-
-    <div class="modes">
-      <label class="mode-opt">
-        <input type="radio" name="mode" value="manual" checked>
-        <span>
-          <span class="t">Portefeuille vide</span><br>
-          <span class="d">Aucun fonds déplacé ici — les billets sont vides, vous (ou quiconque) enverrez vous-même des Ẑen vers la clé imprimée (Ẑelkova ou autre wallet) pour l'activer.</span>
-        </span>
-      </label>
-      <label class="mode-opt">
-        <input type="radio" name="mode" value="auto">
-        <span>
-          <span class="t">Remplissage Automatique</span><br>
-          <span class="d">Nécessite d'être connecté. Chaque billet est immédiatement activé en lui envoyant les Ẑen du montant depuis votre MULTIPASS.</span>
-        </span>
-      </label>
-    </div>
-    <div id="auto-total-hint" style="display:none" class="note"></div>
+    <p class="note" style="margin-top:10px">
+      Les billets sortent toujours vides — vous (ou quiconque) enverrez vous-même des Ẑen
+      vers la clé imprimée (Ẑelkova ou autre wallet) pour l'activer.
+    </p>
   </div>
 
   <div class="card">
@@ -177,18 +161,15 @@
   'use strict';
 
   var amountEl     = document.getElementById('amount');
-  var hintEl       = document.getElementById('balance-hint');
   var unitEl       = document.getElementById('unit');
   var genBtn       = document.getElementById('generate');
   var statusEl     = document.getElementById('status');
-  var autoHintEl   = document.getElementById('auto-total-hint');
   var customFields = document.getElementById('custom-img-fields');
   var styleGallery = document.getElementById('style-gallery');
   var versoEnable  = document.getElementById('verso-enable');
   var versoFields  = document.getElementById('verso-fields');
   var versoTextEl  = document.getElementById('verso_text');
   var profileImages = { fond: null, logo: null };
-  var BILLET_COUNT = 6;
   var VERSO_DEFAULT_TEXT =
     "Le Ẑen n'est pas une monnaie spéculative : c'est l'unité de compte d'un bien commun, celui du laboratoire Web3 Made In Zion. Chaque Astroport installé, chaque ressource inscrite au cadastre commun, y est mesurée et gouvernée collectivement via les toiles de confiance UPlanet. Ce billet est un fragment d'un chantier ouvert — rejoignez-le. Aucune invention n'y est brevetée : code, documentation et recettes restent ouverts (AGPL-3.0 / CC BY / CC BY-SA) — la Charte Open Source est le socle de toute la coopérative.";
   versoTextEl.value = VERSO_DEFAULT_TEXT;
@@ -242,19 +223,6 @@
     statusEl.className = cls || '';
   }
 
-  function updateAutoTotalHint() {
-    var mode = document.querySelector('input[name=mode]:checked').value;
-    var amount = parseFloat(amountEl.value) || 0;
-    var unitLabel = unitEl.options[unitEl.selectedIndex].text;
-    if (mode === 'auto' && amount > 0) {
-      autoHintEl.style.display = '';
-      autoHintEl.textContent = '⚠️ ' + BILLET_COUNT + ' billets × ' + amount + ' ' + unitLabel + ' = ' +
-        (BILLET_COUNT * amount) + ' ' + unitLabel + ' seront débités au total depuis votre MULTIPASS.';
-    } else {
-      autoHintEl.style.display = 'none';
-    }
-  }
-
   async function refreshProfileImages() {
     if (!window.isNostrConnected || !window.userPubkey || typeof window.fetchUserMetadata !== 'function') {
       return;
@@ -268,28 +236,7 @@
     } catch (e) { /* pas de profil trouvé — pas grave, fond neutre */ }
   }
 
-  async function refreshBalance() {
-    if (!window.isNostrConnected || !window._uphG1Pub) {
-      hintEl.textContent = 'Connectez-vous pour voir votre solde.';
-      return;
-    }
-    try {
-      var url = apiBase() + '/check_balance?g1pub=' + encodeURIComponent(window._uphG1Pub);
-      var resp = await fetch(url);
-      var data = await resp.json();
-      var zen = (typeof data.zen !== 'undefined') ? data.zen : data.balance;
-      if (typeof zen !== 'undefined' && zen !== null) {
-        hintEl.textContent = 'Solde MULTIPASS : ' + zen + ' Ẑen';
-      } else {
-        hintEl.textContent = '';
-      }
-    } catch (e) {
-      hintEl.textContent = '';
-    }
-  }
-
   function onConnected() {
-    refreshBalance();
     refreshProfileImages();
   }
 
@@ -299,28 +246,14 @@
       styleGallery.style.display = (el.value === 'style' && el.checked) ? '' : 'none';
     });
   });
-  document.querySelectorAll('input[name=mode]').forEach(function (el) {
-    el.addEventListener('change', updateAutoTotalHint);
-  });
-  amountEl.addEventListener('change', updateAutoTotalHint);
-  unitEl.addEventListener('change', updateAutoTotalHint);
 
   document.getElementById('generate').addEventListener('click', function () {
     var amount = parseFloat(amountEl.value);
     var unit = unitEl.value;
-    var mode = document.querySelector('input[name=mode]:checked').value;
     var imgsrc = document.querySelector('input[name=imgsrc]:checked').value;
 
     if (isNaN(amount) || amount < 0) {
       setStatus('Montant invalide.', 'err');
-      return;
-    }
-    if (mode === 'auto' && amount <= 0) {
-      setStatus('Choisissez un montant pour le mode automatique (ou "Vierge" en Portefeuille vide).', 'err');
-      return;
-    }
-    if (mode === 'auto' && !(window.isNostrConnected && window.userPubkey)) {
-      setStatus('Connectez votre MULTIPASS pour le mode automatique.', 'err');
       return;
     }
 
@@ -340,10 +273,7 @@
     setStatus('Génération en cours…', '');
 
     var url = apiBase() + '/qr/billet?amount=' + encodeURIComponent(amount) +
-      '&unit=' + encodeURIComponent(unit) + '&mode=' + encodeURIComponent(mode);
-    if (mode === 'auto') {
-      url += '&npub=' + encodeURIComponent(window.userPubkey);
-    }
+      '&unit=' + encodeURIComponent(unit);
     if (fondUrl) url += '&fond_url=' + encodeURIComponent(fondUrl);
     if (logoUrl) url += '&logo_url=' + encodeURIComponent(logoUrl);
     if (versoEnable.checked) {
@@ -351,25 +281,19 @@
     }
 
     // Ouverture immédiate dans un nouvel onglet : c'est ce nouvel onglet, pas
-    // ce script, qui fait la requête serveur (génération + transfert éventuel) —
-    // évite tout blocage de popup lié à un fetch async avant window.open(). Les
-    // images de profil sont pré-chargées (refreshProfileImages sur connexion),
+    // ce script, qui fait la requête serveur (génération) — évite tout
+    // blocage de popup lié à un fetch async avant window.open(). Les images
+    // de profil sont pré-chargées (refreshProfileImages sur connexion),
     // pas de await ici non plus.
     window.open(url, '_blank');
     setStatus('Planche ouverte dans un nouvel onglet.', 'ok');
     genBtn.disabled = false;
-    if (mode === 'auto') {
-      setTimeout(refreshBalance, 4000);
-    }
   });
 
   window.addEventListener('nostr:connected', onConnected);
   if (window.waitForConnection) {
     window.waitForConnection(onConnected);
-  } else {
-    refreshBalance();
   }
-  updateAutoTotalHint();
 })();
 </script>
 </body>

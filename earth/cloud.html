@@ -188,7 +188,25 @@
     </div>
   </section>
 
-  <!-- ══ 4. Mes photos ════════════════════════════════════════════════ -->
+  <!-- ══ 4. Mes fichiers ══════════════════════════════════════════════ -->
+  <section class="cloud-card fc-locked" id="card-gallery">
+    <div class="fc-section-head">
+      <h2>Mes fichiers</h2>
+      <button id="btn-gallery-refresh" class="cloud-btn cloud-btn-secondary fc-btn-sm"
+              onclick="loadGallery()">
+        <i class="bi bi-arrow-clockwise"></i> Actualiser
+      </button>
+    </div>
+    <p class="cloud-note" style="margin-top:0">
+      Toutes les images présentes sur votre disque chiffré <code>/dav/</code> —
+      qu'un visage ou une scène y ait été détecté ou non. Les visages et objets
+      reconnus apparaissent dans les sections dédiées plus bas ; ici, c'est
+      l'inventaire brut, comme un gestionnaire de fichiers.
+    </p>
+    <div id="gallery-list" class="fc-faces"></div>
+  </section>
+
+  <!-- ══ 5. Mes photos ════════════════════════════════════════════════ -->
   <section class="cloud-card fc-locked" id="card-photos">
     <h2>Mes photos</h2>
 
@@ -275,7 +293,7 @@
     <ul id="upload-list" class="fc-upload-list"></ul>
   </section>
 
-  <!-- ══ 5. Visages détectés ══════════════════════════════════════════ -->
+  <!-- ══ 6. Visages détectés ══════════════════════════════════════════ -->
   <section class="cloud-card fc-locked" id="card-faces">
     <div class="fc-section-head">
       <h2>Visages détectés</h2>
@@ -306,7 +324,7 @@
     <div id="faces-known" class="fc-faces"></div>
   </section>
 
-  <!-- ══ 6. Objets & lieux détectés ══════════════════════════════════════ -->
+  <!-- ══ 7. Objets & lieux détectés ══════════════════════════════════════ -->
   <section class="cloud-card fc-locked" id="card-inventory">
     <div class="fc-section-head">
       <h2>Objets &amp; lieux détectés</h2>
@@ -441,7 +459,7 @@ function updateConnectionUI() {
     // signature restait affichée indéfiniment car _connected passait déjà à
     // true une 1ère fois, avalant silencieusement les `nostr:connected`
     // suivants qui auraient pu réussir). Ré-appeler ces GET est sans risque.
-    if (ok) { hideError(); refreshStatus(); loadFaces(); loadInventory(); }
+    if (ok) { hideError(); refreshStatus(); loadFaces(); loadInventory(); loadGallery(); }
 }
 
 function connectNostrUser() {
@@ -779,26 +797,67 @@ async function _ensurePhotosDir() {
     _photosDirReady = true;
 }
 
+/* Concurrence bornée plutôt que séquentielle stricte : pour plusieurs
+   centaines de photos, envoyer un fichier à la fois multiplierait les
+   allers-retours de signature NIP-98 (chacun = 1 round-trip réseau + 1
+   signature d'extension) sans aucun bénéfice — le GPU qui fait l'analyse
+   FaceID est de toute façon sérialisé plus loin dans le pipeline
+   (`faceid.sh`, un seul job ComfyUI à la fois sur le Brain), donc accélérer
+   l'ENVOI ne surcharge jamais l'analyse : elle continuera de traiter les
+   images une par une, à son rythme, pendant que le transfert avance. Le
+   goulot ici est la signature + le réseau, pas le calcul. */
+var UPLOAD_BATCH_SIZE = 4;
+/* Au-delà de ce nombre de fichiers, une ligne par fichier inonderait le DOM
+   (des centaines de <li>) — on bascule sur une seule ligne de progression
+   agrégée à la place. */
+var UPLOAD_ROW_LIMIT = 20;
+
 async function uploadSequentially(files, target) {
     await _ensurePhotosDir();
-    var ok = 0;
     var headers = {};
     if (target && target.pubkey) {
         headers['X-FaceID-Target-Pubkey'] = target.pubkey;
         headers['X-FaceID-Target-Name']   = target.name || '';
     }
-    for (var i = 0; i < files.length; i++) {
-        var f = files[i];
-        var row = addUploadRow(f.name + ' — envoi…', 'pending');
+
+    var perFileRows = files.length <= UPLOAD_ROW_LIMIT;
+    var progressRow = perFileRows ? null : addUploadRow(
+        'Envoi… 0 / ' + files.length, 'pending');
+
+    var ok = 0, failed = 0, done = 0;
+
+    async function sendOne(f) {
+        var row = perFileRows ? addUploadRow(f.name + ' — envoi…', 'pending') : null;
         try {
             var davPath = '/dav/Photos/' + encodeURIComponent(f.name);
             await nostrFetch(davPath, { method: 'PUT', body: f, headers: headers });
-            setUploadRow(row, f.name + ' — envoyé ✓', 'ok');
             ok++;
+            if (row) setUploadRow(row, f.name + ' — envoyé ✓', 'ok');
         } catch (e) {
-            setUploadRow(row, f.name + ' — erreur : ' + (e.message || e), 'err');
+            failed++;
+            if (row) setUploadRow(row, f.name + ' — erreur : ' + (e.message || e), 'err');
+        }
+        done++;
+        if (progressRow) {
+            setUploadRow(progressRow,
+                'Envoi… ' + done + ' / ' + files.length
+                + (failed ? ' (' + failed + ' erreur(s))' : ''),
+                'pending');
         }
     }
+
+    for (var i = 0; i < files.length; i += UPLOAD_BATCH_SIZE) {
+        var batch = files.slice(i, i + UPLOAD_BATCH_SIZE);
+        await Promise.all(batch.map(sendOne));
+    }
+
+    if (progressRow) {
+        setUploadRow(progressRow,
+            ok + ' / ' + files.length + ' envoyée(s)'
+            + (failed ? ', ' + failed + ' échec(s)' : ''),
+            failed ? 'err' : 'ok');
+    }
+
     if (ok) {
         var msg = (target && target.pubkey)
             ? ok + ' photo(s) envoyée(s) pour ' + esc(target.name || 'cet ami')
@@ -806,6 +865,9 @@ async function uploadSequentially(files, target) {
             : ok + ' photo(s) envoyée(s). L\'analyse des visages tourne en '
               + 'arrière-plan — actualisez la liste ci-dessous dans un moment.';
         addUploadRow(msg, 'info');
+        // La galerie brute reflète juste le PUT (déjà fait) — pas besoin
+        // d'attendre le GPU, contrairement aux visages/objets ci-dessous.
+        loadGallery();
         // Un premier rafraîchissement de courtoisie ; le traitement étant
         // asynchrone (GPU), rien ne garantit qu'un visage (ou un objet/lieu)
         // soit déjà catalogué : le bouton « Actualiser » reste la voie fiable.
@@ -985,6 +1047,75 @@ function loadInventoryThumbnails(container) {
             .then(function (blob) { img.src = URL.createObjectURL(blob); })
             .catch(function () { img.replaceWith(_thumbEmptyEl()); });
     });
+}
+
+/* ── Section 4 : Mes fichiers (galerie brute /dav/) ───────────────────
+   Contrairement à « Visages détectés » et « Objets & lieux détectés » (qui
+   ne montrent que ce que FaceID/l'inventaire ont catalogué), cette section
+   liste TOUT ce qui est présent sur le disque chiffré — GET /api/cloud/files,
+   qui lit directement .ucloud/index.json sans filtrage. Pour plusieurs
+   centaines de fichiers, les miniatures sont chargées PAR LOTS (voir
+   THUMB_BATCH_SIZE plus bas) pour ne pas ouvrir des centaines de requêtes
+   simultanées ni saturer l'extension NOSTR (une signature par miniature). */
+var _galleryLimit = 60;   // pagination simple : n'affiche/déchiffre que les N plus récents d'abord
+async function loadGallery() {
+    if (!_connected) return;
+    var box = document.getElementById('gallery-list');
+    box.innerHTML = '<div class="fc-empty">Chargement…</div>';
+    try {
+        var data = await nostrFetch('/api/cloud/files', { method: 'GET' });
+        var files = (data.files || []).filter(function (f) { return /^image\//.test(f.mime); });
+        if (!files.length) {
+            box.innerHTML = '<div class="fc-empty">Aucune image sur votre cloud chiffré pour l\'instant.</div>';
+            return;
+        }
+        var shown = files.slice(0, _galleryLimit);
+        box.innerHTML = shown.map(galleryCardHtml).join('')
+            + (files.length > shown.length
+                ? '<button type="button" class="cloud-btn cloud-btn-secondary fc-btn-sm" '
+                  + 'style="margin-top:0.75rem" onclick="_galleryLimit+=60;loadGallery()">'
+                  + 'Afficher plus (' + (files.length - shown.length) + ' restant(s))</button>'
+                : '');
+        loadGalleryThumbnails(box);
+    } catch (e) {
+        box.innerHTML = '<div class="fc-empty fc-err">Galerie inaccessible : ' + esc(e.message || e) + '</div>';
+    }
+}
+
+function galleryCardHtml(f) {
+    var meta = [formatBytes(f.size),
+                f.mtime ? new Date(f.mtime * 1000).toLocaleDateString() : '',
+                f.tags && f.tags.length ? '👤 ' + f.tags.join(', ') : '',
+                f.has_scene ? '🔎 scène analysée' : '']
+        .filter(Boolean).map(esc).join(' · ');
+    return '<div class="fc-face">'
+      + '<div class="fc-face-body">'
+      +   '<img class="fc-face-thumb" data-gallery-path="' + esc(f.path) + '" alt="">'
+      +   '<div class="fc-face-content">'
+      +     '<div class="fc-face-head"><span class="fc-face-name">' + esc(f.path.split('/').pop()) + '</span></div>'
+      +     '<div class="cloud-note fc-face-note">' + meta + '</div>'
+      +   '</div>'
+      + '</div>'
+      + '</div>';
+}
+
+/* Chargement des miniatures par lots de 6 en parallèle : assez pour rester
+   fluide visuellement, assez peu pour ne pas empiler des centaines de
+   fetch+signatures NIP-98 d'un coup sur une galerie de plusieurs centaines
+   de photos. Chaque lot attend le précédent (Promise.all séquentiel). */
+var THUMB_BATCH_SIZE = 6;
+async function loadGalleryThumbnails(container) {
+    var imgs = Array.prototype.slice.call(container.querySelectorAll('.fc-face-thumb[data-gallery-path]'));
+    for (var i = 0; i < imgs.length; i += THUMB_BATCH_SIZE) {
+        var batch = imgs.slice(i, i + THUMB_BATCH_SIZE);
+        await Promise.all(batch.map(function (img) {
+            var path = img.getAttribute('data-gallery-path');
+            return nostrFetch('/api/cloud/thumbnail?path=' + encodeURIComponent(path),
+                { method: 'GET', responseType: 'blob' })
+                .then(function (blob) { img.src = URL.createObjectURL(blob); })
+                .catch(function () { img.replaceWith(_thumbEmptyEl()); });
+        }));
+    }
 }
 
 /* Liste d'amis suivis (kind 3) → <datalist> partagée par tous les champs

@@ -163,8 +163,10 @@ Permet de planifier une session (Kind 31922) avec les tags `craft` et `min_opera
 ## `cloud.html` — FaceCloud (cloud chiffré + reconnaissance faciale)
 
 Une seule page pour : activer le cloud chiffré du MULTIPASS, y envoyer des
-photos, et nommer les visages qui y sont détectés. **Pas** de navigateur de
-fichiers : le disque se monte comme un lecteur réseau standard.
+photos, parcourir ce qui s'y trouve (galerie « Mes fichiers »), et nommer les
+visages qui y sont détectés. Ce n'est PAS un navigateur de fichiers complet
+(pas de dossiers, pas de renommage/suppression depuis la page) : pour ça, le
+disque se monte comme un lecteur réseau standard.
 
 **Stack :** `nacl-fast.min.js` → `nostr.bundle.js` → `common.js` → `uplanet-header.js` → `feedback.js`
 **Style :** `cloud.enhancements.css` (thème clair Google-Drive, sections
@@ -179,10 +181,25 @@ déverrouillage `.fc-locked`/`.fc-unlocked` de ses propres sections ; le bouton
 `window.uphConnect()`, et la page écoute l'event `nostr:connected` dispatché
 par `uplanet-header.js` — même convention que `calendars.html`.
 
-Sections, dans l'ordre : En-tête → Connexion → Mon cloud chiffré → Mes photos
-→ Visages détectés. Tant que le MULTIPASS n'est pas connecté, les trois
-dernières portent `.fc-locked` (grisées, `pointer-events:none`) ; la connexion
-ajoute `.fc-unlocked`.
+Sections, dans l'ordre : En-tête → Connexion → Mon cloud chiffré → Mes fichiers
+→ Mes photos → Visages détectés → Objets & lieux détectés. Tant que le
+MULTIPASS n'est pas connecté, les quatre dernières portent `.fc-locked`
+(grisées, `pointer-events:none`) ; la connexion ajoute `.fc-unlocked`.
+
+**« Mes fichiers »** (depuis 2026-09-24) est une galerie BRUTE de `/dav/` —
+toutes les images de `.ucloud/index.json`, qu'un visage/une scène y ait été
+détecté ou non (contrairement aux sections Visages/Objets, qui ne montrent
+que ce qui a été catalogué). Pagination simple (60 par page, bouton
+« Afficher plus ») et miniatures chargées par lots de 6 en parallèle
+(`THUMB_BATCH_SIZE`) — pas des centaines de requêtes signées NIP-98 d'un coup.
+
+**Envoi en masse (plusieurs centaines de fichiers)** : `uploadSequentially()`
+envoie par lots de 4 en concurrence (`UPLOAD_BATCH_SIZE`), pas un par un — le
+goulot d'étranglement est la signature NIP-98 + le réseau, jamais l'analyse
+GPU (sérialisée plus loin par le verrou exclusif de `faceid.sh` sur le Brain,
+quel que soit le rythme d'arrivée des PUT). Au-delà de 20 fichiers
+(`UPLOAD_ROW_LIMIT`), l'UI bascule d'une ligne par fichier vers une seule
+ligne de progression agrégée (« Envoi… X / N ») pour ne pas inonder le DOM.
 
 | Action | Appel |
 |--------|-------|
@@ -190,6 +207,8 @@ ajoute `.fc-unlocked`.
 | Activer / régénérer | `POST /api/cloud/enroll` → `{dav_url, email, token, instructions}` (nouveau token, déconnecte les clients déjà montés) |
 | Récupérer le mot de passe existant | `POST /api/cloud/reveal` → même forme, sans régénérer (bouton « Afficher le mot de passe ») |
 | Révoquer | `POST /api/cloud/revoke` |
+| Lister tous les fichiers | `GET /api/cloud/files` → `{files:[{path,mime,size,mtime,tags,has_scene,readonly}]}`, triés par date — alimente « Mes fichiers » |
+| Miniature d'un fichier quelconque | `GET /api/cloud/thumbnail?path=…` → JPEG (300×300, déchiffré à la volée), sans catalogage préalable requis |
 | Envoyer une photo | `PUT /dav/Photos/<nom>` (corps = fichier brut, PAS `/api/fileupload` — seul le cloud chiffré déclenche l'analyse FaceID, cf. `UPassport/CLAUDE.md`) — `MKCOL /dav/Photos` best-effort avant le premier envoi (RFC 4918 strict : pas de création implicite du parent) |
 | Enrôlement supervisé (optionnel) | En-têtes `X-FaceID-Target-Pubkey` (64 hex) / `X-FaceID-Target-Name` sur le `PUT` — chaque visage détecté est catalogué DIRECTEMENT sous cette identité (pas de recherche par similarité ni de `Inconnu_xxx`) |
 | Lister les visages | `GET /mailjet/faces` → `{faces:[{id,name,pubkey,timestamp}]}` |

@@ -1080,6 +1080,11 @@
                                 style="background:#1e293b;border-color:rgba(74,222,128,0.2);color:#f1f5f9;">
                         </div>
                     </div>
+                    <p class="small mb-2" style="color:#94a3b8;">
+                        <i class="bi bi-info-circle"></i> Latitude négative = hémisphère Sud : les suggestions
+                        de saison de chaque jour sont alors décalées de 6 mois, et le calendrier est regroupé
+                        par lieu (repère UMAP).
+                    </p>
                     <div id="nostr-publish-status" class="small mt-2" style="min-height:20px;"></div>
                 </div>
                 <div class="modal-footer" style="border-top:1px solid rgba(74,222,128,0.2);">
@@ -3074,29 +3079,12 @@
             el.textContent = `📍 Hémisphère ${personalGeo.hemisphere === 'nord' ? 'Nord' : 'Sud'} (${personalGeo.lat.toFixed(1)}, ${personalGeo.lon.toFixed(1)})`;
         }
 
-        // Suggestions saisonnières génériques (climat tempéré), décalées de 6 mois pour l'hémisphère sud
-        const SEASONAL_HINTS = {
-            1:  { semis: 'Semis sous abri (godets, serre)',        recolte: 'Poireaux, choux d\'hiver',        entretien: 'Protection gel, paillage' },
-            2:  { semis: 'Semis sous abri (tomates, poivrons)',    recolte: 'Derniers légumes d\'hiver',        entretien: 'Taille des arbres fruitiers' },
-            3:  { semis: 'Semis pleine terre (radis, carottes)',   recolte: 'Épinards, mâche',                  entretien: 'Préparation du sol' },
-            4:  { semis: 'Semis pleine terre (haricots, salades)', recolte: 'Asperges, radis',                  entretien: 'Buttage, désherbage' },
-            5:  { semis: 'Plantation tomates, courges',            recolte: 'Fraises, salades',                 entretien: 'Tuteurage, arrosage' },
-            6:  { semis: 'Semis de saison (haricots, betteraves)', recolte: 'Cerises, petits pois',              entretien: 'Paillage, arrosage régulier' },
-            7:  { semis: 'Semis d\'automne (choux, épinards)',     recolte: 'Tomates, courgettes, fruits d\'été', entretien: 'Arrosage, taille des tomates' },
-            8:  { semis: 'Semis d\'automne (mâche, épinards)',     recolte: 'Aubergines, poivrons, fruits',      entretien: 'Récolte des graines' },
-            9:  { semis: 'Semis d\'hiver (fèves, ail)',            recolte: 'Pommes, poires, courges',           entretien: 'Nettoyage du potager' },
-            10: { semis: 'Plantation ail, oignons',                 recolte: 'Coings, noix, dernières courges',  entretien: 'Paillage hivernal' },
-            11: { semis: 'Semis sous abri (fèves)',                recolte: 'Choux, poireaux, endives',          entretien: 'Protection contre le gel' },
-            12: { semis: 'Peu de semis (repos hivernal)',          recolte: 'Légumes racines, choux',            entretien: 'Entretien des outils, planification' }
-        };
-
+        // Table et logique saisonnières : source unique dans lunar-calendar.js
+        // (window.SEASONAL_HINTS / window.getSeasonalMonthForHemisphere), partagée
+        // avec le générateur "Créer un calendrier lunaire" pour que les deux
+        // assistants de conseil de cette page donnent toujours la même réponse.
         function getSeasonalMonth() {
-            const now = new Date();
-            let month = now.getMonth() + 1;
-            if (personalGeo && personalGeo.hemisphere === 'sud') {
-                month = ((month + 5) % 12) + 1; // décalage de 6 mois
-            }
-            return month;
+            return window.getSeasonalMonthForHemisphere(new Date(), personalGeo ? personalGeo.hemisphere : 'nord');
         }
 
         function getSeasonalEmoji(type) {
@@ -3107,7 +3095,7 @@
             const container = document.getElementById(containerId);
             if (!container) return;
             const month = getSeasonalMonth();
-            const hints = SEASONAL_HINTS[month];
+            const hints = window.SEASONAL_HINTS[month];
             const monthName = new Date(2024, month - 1, 1).toLocaleDateString('fr-FR', { month: 'long' });
 
             container.innerHTML = `
@@ -3213,6 +3201,15 @@
                     yearSel.appendChild(opt);
                 }
             }
+            // Pré-remplir Latitude/Longitude si déjà connues (bouton 📍 Localiser du
+            // calendrier personnel) — évite de ressaisir sa position une seconde fois.
+            if (personalGeo) {
+                const latInput = document.getElementById('latitude');
+                const lonInput = document.getElementById('longitude');
+                if (latInput && !latInput.value) latInput.value = personalGeo.lat.toFixed(2);
+                if (lonInput && !lonInput.value) lonInput.value = personalGeo.lon.toFixed(2);
+            }
+
             // Reset status
             const statusEl = document.getElementById('nostr-publish-status');
             if (statusEl) statusEl.innerHTML = '';

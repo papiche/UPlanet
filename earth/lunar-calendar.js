@@ -598,14 +598,31 @@ function populateLunarYearSelector() {
 }
 
 /**
+ * Shift a calendar month (1-12) by 6 months for the Southern Hemisphere, so
+ * planting/harvest windows written for Northern-Hemisphere temperate seasons
+ * (e.g. tomatoes in April) land on their Southern-Hemisphere equivalent
+ * (October) instead of being silently wrong below the equator.
+ * @param {number} month - 1-12
+ * @param {string} hemisphere - 'nord' (default, no shift) or 'sud'
+ */
+function shiftMonthForHemisphere(month, hemisphere) {
+    if (hemisphere !== 'sud') return month;
+    return ((month + 5) % 12) + 1;
+}
+
+/**
  * Generate enhanced iCal content for vegetarian gardener
  * Includes practical advice for balanced vegetarian nutrition, planting/harvest schedules, weather tips
  * Multiple production styles to maximize variety in UMAP (small urban agricultural space)
- * 
+ *
  * @param {number} year - Year for the calendar
  * @param {string} style - Production style: 'autonomy' (autonomie), 'variety' (variété), 'conservation' (conservation), 'continuous' (continu), 'umap' (optimisé UMAP)
+ * @param {string} [hemisphere] - 'nord' (default) or 'sud' — shifts every planting/harvest
+ *   window by 6 months so the schedule matches the actual local seasons below the equator.
  */
-function generateVegetarianGardenerICal(year, style = 'umap') {
+function generateVegetarianGardenerICal(year, style = 'umap', hemisphere = 'nord') {
+    const localTimeZone = (typeof Intl !== 'undefined' && Intl.DateTimeFormat().resolvedOptions().timeZone)
+        || 'Europe/Paris';
     let ical = [
         'BEGIN:VCALENDAR',
         'VERSION:2.0',
@@ -613,10 +630,10 @@ function generateVegetarianGardenerICal(year, style = 'umap') {
         'CALSCALE:GREGORIAN',
         'METHOD:PUBLISH',
         `X-WR-CALNAME:Jardin Végétarien ${year} - Calendrier Lunaire`,
-        'X-WR-TIMEZONE:Europe/Paris',
+        `X-WR-TIMEZONE:${localTimeZone}`,
         'X-WR-CALDESC:Calendrier biodynamique pour jardinier végétarien - Semis, récoltes, conseils nutrition'
     ];
-    
+
     // Production styles for different gardening approaches
     // Adapted for UPlanet "Forêt Jardin" (Food Forest) community project
     const productionStyles = {
@@ -864,7 +881,8 @@ function generateVegetarianGardenerICal(year, style = 'umap') {
     // Generate planting and harvest events for each vegetable category
     Object.keys(essentialVegetables).forEach(category => {
         const veg = essentialVegetables[category];
-        const firstPlanting = new Date(year, veg.planting.month - 1, veg.planting.day);
+        const plantingMonth = shiftMonthForHemisphere(veg.planting.month, hemisphere);
+        const firstPlanting = new Date(year, plantingMonth - 1, veg.planting.day);
         
         // Generate planting events (recurring)
         let plantingDate = new Date(firstPlanting);
@@ -1623,16 +1641,12 @@ function addWeatherAdviceEvents(ical, year) {
 // ========================================
 
 /**
- * Generate preview of advice for the next 7 days based on selected production style
- * @param {string} style - Production style (foret, umap, variety, autonomy, conservation, continuous)
- * @returns {Array} Array of day objects with advice
+ * Style-specific advice templates, keyed by production style.
+ * Shared by getDayAdvice() (any single date, used for NOSTR event content)
+ * and generateWeeklyPreview() (7-day UI preview widget) — a single source
+ * of truth so both never drift apart.
  */
-function generateWeeklyPreview(style = 'foret') {
-    const today = new Date();
-    const preview = [];
-    
-    // Style-specific advice templates
-    const styleAdvice = {
+const STYLE_ADVICE = {
         foret: {
             name: '🌳 Forêt Jardin',
             color: '#22c55e',
@@ -1730,84 +1744,122 @@ function generateWeeklyPreview(style = 'foret') {
                 '💡 Échelonnez TOUT'
             ]
         }
+};
+
+/**
+ * Day of year (1-366), used to deterministically rotate the daily tip
+ * instead of Math.random() — so re-generating the same calendar twice
+ * (or looking at day N from different entry points) gives the same advice.
+ */
+function getDayOfYear(date) {
+    const start = new Date(date.getFullYear(), 0, 0);
+    return Math.floor((date - start) / 86400000);
+}
+
+/**
+ * Compute the style-specific advice for ONE arbitrary date.
+ * This is the single implementation used both for the 7-day UI preview
+ * and for every event published to NOSTR (any day of the year), so advice
+ * is never limited to a rolling 7-day window.
+ * @param {string} style - Production style (foret, umap, variety, autonomy, conservation, continuous)
+ * @param {Date} date - The calendar date this advice is for
+ * @param {Object} [bioInfo] - Optional precomputed getBiodynamicInfo(date) result (avoids recompute)
+ * @returns {Object} { mainIcon, bgColor, activities, tip, lunar, styleName, styleColor }
+ */
+function getDayAdvice(style, date, bioInfo) {
+    bioInfo = bioInfo || getBiodynamicInfo(date);
+    const currentStyle = STYLE_ADVICE[style] || STYLE_ADVICE.foret;
+
+    let activities = [];
+    let mainIcon = '';
+    let bgColor = '';
+
+    if (bioInfo.isAvoidDay) {
+        activities = currentStyle.activities.avoid;
+        mainIcon = '❌';
+        bgColor = 'rgba(239, 68, 68, 0.15)';
+    } else {
+        const dayType = bioInfo.dayType || 'feuille';
+        activities = currentStyle.activities[dayType] || currentStyle.activities.feuille;
+
+        switch (dayType) {
+            case 'feuille':
+                mainIcon = '🌱';
+                bgColor = 'rgba(74, 222, 128, 0.15)';
+                break;
+            case 'racine':
+                mainIcon = '🥕';
+                bgColor = 'rgba(139, 92, 42, 0.15)';
+                break;
+            case 'fruit':
+                mainIcon = '🍎';
+                bgColor = 'rgba(251, 191, 36, 0.15)';
+                break;
+            case 'fleur':
+                mainIcon = '🌸';
+                bgColor = 'rgba(236, 72, 153, 0.15)';
+                break;
+            default:
+                mainIcon = '🌿';
+                bgColor = 'rgba(74, 222, 128, 0.15)';
+        }
+    }
+
+    const lunarInfo = {
+        phase: bioInfo.phaseIcon,
+        phaseName: bioInfo.phaseName,
+        illumination: bioInfo.illumination,
+        ascending: bioInfo.isAscending,
+        dayType: bioInfo.dayTypeName,
+        zodiac: bioInfo.signName
     };
-    
-    const currentStyle = styleAdvice[style] || styleAdvice.foret;
-    
+
+    // Deterministic tip rotation (stable across regenerations), one tip per day of year
+    const tip = currentStyle.tips[getDayOfYear(date) % currentStyle.tips.length];
+
+    return {
+        mainIcon,
+        bgColor,
+        activities,
+        lunar: lunarInfo,
+        tip,
+        styleName: currentStyle.name,
+        styleColor: currentStyle.color
+    };
+}
+
+/**
+ * Generate preview of advice for the next 7 days based on selected production style
+ * @param {string} style - Production style (foret, umap, variety, autonomy, conservation, continuous)
+ * @returns {Array} Array of day objects with advice
+ */
+function generateWeeklyPreview(style = 'foret') {
+    const today = new Date();
+    const preview = [];
+
     for (let i = 0; i < 7; i++) {
         const date = new Date(today);
         date.setDate(today.getDate() + i);
-        
+
         const bioInfo = getBiodynamicInfo(date);
-        const dayName = date.toLocaleDateString('fr-FR', { weekday: 'short' });
-        const dayNum = date.getDate();
-        const monthName = date.toLocaleDateString('fr-FR', { month: 'short' });
-        
-        // Get activities based on lunar day type
-        let activities = [];
-        let mainIcon = '';
-        let bgColor = '';
-        
-        if (bioInfo.isAvoidDay) {
-            activities = currentStyle.activities.avoid;
-            mainIcon = '❌';
-            bgColor = 'rgba(239, 68, 68, 0.15)';
-        } else {
-            const dayType = bioInfo.dayType || 'feuille';
-            activities = currentStyle.activities[dayType] || currentStyle.activities.feuille;
-            
-            switch(dayType) {
-                case 'feuille':
-                    mainIcon = '🌱';
-                    bgColor = 'rgba(74, 222, 128, 0.15)';
-                    break;
-                case 'racine':
-                    mainIcon = '🥕';
-                    bgColor = 'rgba(139, 92, 42, 0.15)';
-                    break;
-                case 'fruit':
-                    mainIcon = '🍎';
-                    bgColor = 'rgba(251, 191, 36, 0.15)';
-                    break;
-                case 'fleur':
-                    mainIcon = '🌸';
-                    bgColor = 'rgba(236, 72, 153, 0.15)';
-                    break;
-                default:
-                    mainIcon = '🌿';
-                    bgColor = 'rgba(74, 222, 128, 0.15)';
-            }
-        }
-        
-        // Add lunar info
-        const lunarInfo = {
-            phase: bioInfo.phaseIcon,
-            phaseName: bioInfo.phaseName,
-            illumination: bioInfo.illumination,
-            ascending: bioInfo.isAscending,
-            dayType: bioInfo.dayTypeName,
-            zodiac: bioInfo.signName
-        };
-        
-        // Select one random tip
-        const tip = currentStyle.tips[Math.floor(Math.random() * currentStyle.tips.length)];
-        
+        const advice = getDayAdvice(style, date, bioInfo);
+
         preview.push({
             date: date,
-            dayName: dayName,
-            dayNum: dayNum,
-            monthName: monthName,
+            dayName: date.toLocaleDateString('fr-FR', { weekday: 'short' }),
+            dayNum: date.getDate(),
+            monthName: date.toLocaleDateString('fr-FR', { month: 'short' }),
             isToday: i === 0,
-            mainIcon: mainIcon,
-            bgColor: bgColor,
-            activities: activities,
-            lunar: lunarInfo,
-            tip: tip,
-            styleName: currentStyle.name,
-            styleColor: currentStyle.color
+            mainIcon: advice.mainIcon,
+            bgColor: advice.bgColor,
+            activities: advice.activities,
+            lunar: advice.lunar,
+            tip: advice.tip,
+            styleName: advice.styleName,
+            styleColor: advice.styleColor
         });
     }
-    
+
     return preview;
 }
 
@@ -2285,6 +2337,50 @@ const NOSTR_CALENDAR_STYLES = {
 };
 
 /**
+ * Generic seasonal gardening hints (temperate climate, Northern Hemisphere reference).
+ * Single source of truth shared by publishCalendarToNostr() (per-day NOSTR events,
+ * hemisphere-aware via `location`) and calendars.html's personal-event assistant
+ * (window.SEASONAL_HINTS / window.getSeasonalHint) — previously duplicated in both
+ * files with only the personal-event one applying the hemisphere shift.
+ * Southern Hemisphere is approximated by a 6-month shift, not a real tropical
+ * wet/dry-season model (see UPlanet/earth/oasis-calendrier.html for that nuance).
+ */
+const SEASONAL_HINTS = {
+    1:  { semis: 'Semis sous abri (godets, serre)',        recolte: 'Poireaux, choux d\'hiver',          entretien: 'Protection gel, paillage' },
+    2:  { semis: 'Semis sous abri (tomates, poivrons)',    recolte: 'Derniers légumes d\'hiver',          entretien: 'Taille des arbres fruitiers' },
+    3:  { semis: 'Semis pleine terre (radis, carottes)',   recolte: 'Épinards, mâche',                    entretien: 'Préparation du sol' },
+    4:  { semis: 'Semis pleine terre (haricots, salades)', recolte: 'Asperges, radis',                    entretien: 'Buttage, désherbage' },
+    5:  { semis: 'Plantation tomates, courges',            recolte: 'Fraises, salades',                   entretien: 'Tuteurage, arrosage' },
+    6:  { semis: 'Semis de saison (haricots, betteraves)', recolte: 'Cerises, petits pois',               entretien: 'Paillage, arrosage régulier' },
+    7:  { semis: 'Semis d\'automne (choux, épinards)',     recolte: 'Tomates, courgettes, fruits d\'été', entretien: 'Arrosage, taille des tomates' },
+    8:  { semis: 'Semis d\'automne (mâche, épinards)',     recolte: 'Aubergines, poivrons, fruits',       entretien: 'Récolte des graines' },
+    9:  { semis: 'Semis d\'hiver (fèves, ail)',            recolte: 'Pommes, poires, courges',            entretien: 'Nettoyage du potager' },
+    10: { semis: 'Plantation ail, oignons',                recolte: 'Coings, noix, dernières courges',    entretien: 'Paillage hivernal' },
+    11: { semis: 'Semis sous abri (fèves)',                recolte: 'Choux, poireaux, endives',           entretien: 'Protection contre le gel' },
+    12: { semis: 'Peu de semis (repos hivernal)',          recolte: 'Légumes racines, choux',             entretien: 'Entretien des outils, planification' }
+};
+
+/**
+ * @param {Date} date
+ * @param {string} [hemisphere] - 'nord' (default) or 'sud' (6-month shift)
+ * @returns {number} Month 1-12 to use as a key into SEASONAL_HINTS
+ */
+function getSeasonalMonthForHemisphere(date, hemisphere) {
+    let month = date.getMonth() + 1;
+    if (hemisphere === 'sud') month = ((month + 5) % 12) + 1;
+    return month;
+}
+
+/**
+ * @param {Date} date
+ * @param {string} [hemisphere] - 'nord' (default) or 'sud'
+ * @returns {Object|null} { semis, recolte, entretien } for that date's season
+ */
+function getSeasonalHint(date, hemisphere) {
+    return SEASONAL_HINTS[getSeasonalMonthForHemisphere(date, hemisphere)] || null;
+}
+
+/**
  * Publish a calendar to NOSTR (NIP-52 compliant)
  * Creates a Kind 31924 calendar and Kind 31922 date-based events
  * 
@@ -2351,51 +2447,64 @@ async function publishCalendarToNostr(options) {
         console.log('[LunarCalendar] ✅ Calendar signed:', signedCalendar.id.slice(0, 16) + '...');
         const publishedEvents = [];
         
-        // Generate events for the next N days
-        console.log('[LunarCalendar] 📆 Generating', daysToPublish, 'calendar events...');
+        // Generate events across the selected year — starting today if that year
+        // is the current one (never create events in the past), otherwise Jan 1st.
+        // Stops cleanly at Dec 31st of `year` instead of silently skipping days
+        // that fall outside it, so "365 jours (année complète)" actually means
+        // the full calendar year for a future year, not ~9 months of it.
+        console.log('[LunarCalendar] 📆 Generating up to', daysToPublish, 'calendar events for', year, '...');
         const today = new Date();
+        const yearStart = new Date(year, 0, 1);
+        const yearEnd = new Date(year, 11, 31);
+        const rangeStart = (year === today.getFullYear() && today > yearStart)
+            ? new Date(today.getFullYear(), today.getMonth(), today.getDate())
+            : yearStart;
+        const hemisphere = (location && typeof location.lat === 'number' && location.lat < 0) ? 'sud' : 'nord';
         const eventsToCreate = [];
-        
+
         for (let i = 0; i < daysToPublish; i++) {
-            const date = new Date(today);
-            date.setDate(today.getDate() + i);
-            
-            // Only include if within the specified year
-            if (date.getFullYear() !== year && i > 0) continue;
-            
+            const date = new Date(rangeStart);
+            date.setDate(rangeStart.getDate() + i);
+
+            if (date > yearEnd) break; // reached the end of the selected year
+
             const bioInfo = getBiodynamicInfo(date);
             const dateStr = date.toISOString().split('T')[0]; // YYYY-MM-DD
-            
+
             // Build event title based on day type
             let title = `${bioInfo.dayTypeIcon} ${bioInfo.dayTypeName}`;
             let summary = '';
-            
+
             if (bioInfo.isAvoidDay) {
                 title = `❌ Repos - ${bioInfo.avoidReason}`;
                 summary = 'Jour défavorable - Éviter semis et plantations importantes';
             } else {
                 summary = `${bioInfo.ascDescLabel} • ${bioInfo.phaseIcon} ${bioInfo.phaseName} (${bioInfo.illumination}%)`;
             }
-            
-            // Get style-specific advice for this day type
-            const preview = generateWeeklyPreview(style);
-            const dayPreview = preview.find(p => 
-                p.date.toISOString().split('T')[0] === dateStr
-            );
-            
+
+            // Style-specific advice for THIS exact date — computed directly (not
+            // looked up in a rolling 7-day preview), so it's present for every
+            // published day, not just the first week.
+            const advice = getDayAdvice(style, date, bioInfo);
+            const seasonal = getSeasonalHint(date, hemisphere);
+
             let content = `${styleInfo.emoji} ${styleInfo.name}\n\n`;
             content += `🌙 ${bioInfo.phaseIcon} ${bioInfo.phaseName} (${bioInfo.illumination}%)\n`;
             content += `${bioInfo.ascDescLabel}\n`;
             content += `📅 ${bioInfo.dayTypeIcon} ${bioInfo.dayTypeName} (${bioInfo.signIcon} ${bioInfo.signName})\n\n`;
-            
-            if (dayPreview && dayPreview.activities) {
+
+            if (advice && advice.activities) {
                 content += `📋 Conseils du jour:\n`;
-                dayPreview.activities.forEach(a => {
+                advice.activities.forEach(a => {
                     content += `• ${a}\n`;
                 });
-                content += `\n${dayPreview.tip}`;
+                content += `\n${advice.tip}\n`;
             }
-            
+
+            if (seasonal) {
+                content += `\n🌍 Saison (hémisphère ${hemisphere === 'sud' ? 'Sud' : 'Nord'}): ${seasonal.semis} · Récolte: ${seasonal.recolte}`;
+            }
+
             // Create date-based event (Kind 31922)
             const eventTags = [
                 ["d", `${calendarId}-${dateStr}`],
@@ -2966,13 +3075,22 @@ if (typeof window !== 'undefined') {
     
     // Preview functions
     window.generateWeeklyPreview = generateWeeklyPreview;
+    window.getDayAdvice = getDayAdvice;
     window.renderWeeklyPreview = renderWeeklyPreview;
     window.initializePreview = initializePreview;
-    
+
+    // Seasonal hints — single source of truth shared with calendars.html's
+    // personal-event assistant (window.SEASONAL_HINTS / window.getSeasonalHint /
+    // window.getSeasonalMonthForHemisphere)
+    window.SEASONAL_HINTS = SEASONAL_HINTS;
+    window.getSeasonalHint = getSeasonalHint;
+    window.getSeasonalMonthForHemisphere = getSeasonalMonthForHemisphere;
+
     // iCal generation functions
     window.formatICalDate = formatICalDate;
     window.formatICalDateTime = formatICalDateTime;
     window.generateVegetarianGardenerICal = generateVegetarianGardenerICal;
+    window.shiftMonthForHemisphere = shiftMonthForHemisphere;
     
     // NOSTR Calendar functions (NIP-52)
     window.publishCalendarToNostr = publishCalendarToNostr;

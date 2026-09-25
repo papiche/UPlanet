@@ -20,14 +20,15 @@
     // mini:true → visible même sur mobile (<480px). Priorité : items essentiels.
     var NAV = [
         { e: '🌍', l: 'UPlanet',        h: 'index.html',             mini: true },
-        { e: '👥', l: 'Face Cloud',     h: 'cloud.html' , mini: true },
         { e: '💬', l: 'Coracle',        h: 'https://coracle.copylaradio.com', mini: true },
+        { e: '🌳', l: 'Ẑelkova',        h: 'zelkova.html',           mini: true },
         { sep: 'Identité 🪪' },
         { e: '🫵', l: 'Profile',        h: 'nostr_profile_viewer.html', mini:true },
         { e: '💎', l: 'Atomic',         h: 'atomic.html',            mini: true },
         { e: '🎫', l: 'Ğ1Billet',       h: 'billet.html',            mini: true },
         { e: '😎', l: 'Mailjet',        h: 'mailjet.html', mini:true },
         { e: '🍪', l: 'Cookies',        h: 'cookie.html', mini:true },
+        { e: '👥', l: 'Face Cloud',     h: 'cloud.html' , mini: true },
         { sep: 'Station 모' },
         { e: '📡', l: 'NODE Admin',     h: 'nostr_admin.html' },
         { e: '🧾', l: 'OC Admin',       h: 'oc_admin.html' },

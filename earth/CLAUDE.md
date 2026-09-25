@@ -211,7 +211,7 @@ ligne de progression agrégée (« Envoi… X / N ») pour ne pas inonder le DOM
 | Miniature d'un fichier quelconque | `GET /api/cloud/thumbnail?path=…` → JPEG (300×300, déchiffré à la volée), sans catalogage préalable requis |
 | Envoyer une photo | `PUT /dav/Photos/<nom>` (corps = fichier brut, PAS `/api/fileupload` — seul le cloud chiffré déclenche l'analyse FaceID, cf. `UPassport/CLAUDE.md`) — `MKCOL /dav/Photos` best-effort avant le premier envoi (RFC 4918 strict : pas de création implicite du parent) |
 | Enrôlement supervisé (optionnel) | En-têtes `X-FaceID-Target-Pubkey` (64 hex) / `X-FaceID-Target-Name` sur le `PUT` — chaque visage détecté est catalogué DIRECTEMENT sous cette identité (pas de recherche par similarité ni de `Inconnu_xxx`) |
-| Lister les visages | `GET /mailjet/faces` → `{faces:[{id,name,pubkey,timestamp}]}` |
+| Lister les visages | `GET /mailjet/faces` → `{faces:[{id,name,pubkey,timestamp,maybe}]}` — `maybe:{name,pubkey,score}` (rapprochement archives longue durée, cf. `maybeBannerHtml()`/`confirmMaybeSuggestion()`) proposé quand un visage SANS pubkey ressemble (cosinus 0.55–0.82) à un visage déjà nommé, sans jamais fusionner automatiquement |
 | Nommer un visage | `POST /mailjet/faces-edit` (multipart `point_id`, `name`, `pubkey`) |
 | Oublier un visage | `POST /mailjet/faces-delete` (multipart `point_id`) |
 | Miniature d'un visage | `GET /mailjet/faces/thumbnail?point_id=…` → JPEG (déchiffré + recadré à la volée, jamais persisté) — chargé via `nostrFetch(..., {responseType:'blob'})` car un `<img src>` classique ne peut pas porter de header `Authorization` |

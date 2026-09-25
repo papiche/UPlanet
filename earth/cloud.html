@@ -933,6 +933,39 @@ async function loadFaces() {
     }
 }
 
+/* Rapprochement pour archives longue durée (~30 ans) : la même personne
+   photographiée à des âges très différents peut ne pas matcher
+   automatiquement (embedding trop éloigné du seuil 0.82 de
+   satellite_face_matcher.py) sans pour autant être quelqu'un d'autre.
+   `f.maybe` (calculé côté serveur, cf. GET /mailjet/faces) propose alors le
+   visage déjà nommé le plus proche (bande 0.55–0.82) — jamais appliqué
+   automatiquement, toujours une suggestion à confirmer d'un clic (miniature
+   affichée juste au-dessus pour vérifier avant de confirmer). */
+function maybeBannerHtml(f) {
+    if (f.pubkey || !f.maybe) return '';
+    var pct = Math.round(f.maybe.score * 100);
+    return '<div class="fc-maybe-banner" style="margin:0.5rem 0;padding:0.5rem 0.75rem;'
+      + 'background:#fff8e1;border:1px solid #ffe082;border-radius:8px;font-size:0.85rem">'
+      + '🕰️ Peut-être <strong>' + esc(f.maybe.name || '(sans nom)') + '</strong> '
+      + '(' + pct + '% de ressemblance — le même visage à un autre âge ?) '
+      + '<button type="button" class="cloud-btn cloud-btn-secondary fc-btn-sm" '
+      +   'data-maybe-name="' + esc(f.maybe.name) + '" data-maybe-pubkey="' + esc(f.maybe.pubkey) + '" '
+      +   'onclick="confirmMaybeSuggestion(this)">Oui, c\'est '
+      +   esc(f.maybe.name || 'cette personne') + '</button>'
+      + '</div>';
+}
+
+/* Pré-remplit les champs avec la suggestion puis réutilise saveFace() tel
+   quel — un seul clic suffit (la miniature + le nom proposé constituent déjà
+   la confirmation visuelle, pas la peine d'imposer un second clic sur
+   « Enregistrer » quand on doit rapprocher des centaines d'entrées). */
+function confirmMaybeSuggestion(btn) {
+    var card = btn.closest('.fc-face');
+    card.querySelector('.fc-face-name-in').value = btn.getAttribute('data-maybe-name') || '';
+    card.querySelector('.fc-face-key-in').value  = btn.getAttribute('data-maybe-pubkey') || '';
+    saveFace(card.querySelector('.fc-face-form .cloud-btn-primary'));
+}
+
 function faceCardHtml(f) {
     var named = !!f.pubkey;
     // Miniature : placeholder ? chargé en tâche de fond par loadThumbnails()
@@ -951,6 +984,7 @@ function faceCardHtml(f) {
       +       '<span class="fc-face-name">' + (named ? '✅ ' : '❓ ') + esc(f.name || '(sans nom)') + '</span>'
       +       (named ? '<code class="fc-face-key">' + esc(f.pubkey.slice(0, 12)) + '…' + esc(f.pubkey.slice(-4)) + '</code>' : '')
       +     '</div>'
+      +     maybeBannerHtml(f)
       +     '<div class="fc-face-form">'
       +       '<input type="text" class="fc-input fc-face-name-in" placeholder="Nom de la personne" value="' + esc(f.name) + '" list="fc-friends-list">'
       +       '<input type="text" class="fc-input fc-face-key-in" placeholder="npub1… ou 64 hex (optionnel)" value="' + esc(f.pubkey) + '" list="fc-friends-list">'

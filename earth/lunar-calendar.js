@@ -420,6 +420,62 @@ function formatICalDateTime(date) {
 }
 
 /**
+ * True UTC iCal timestamp (YYYYMMDDTHHMMSSZ) from a Date's actual instant —
+ * unlike formatICalDateTime() above (which reads LOCAL hours/minutes/seconds
+ * but appends a "Z" as if they were already UTC), this one is correct for
+ * any timezone. Used by buildSingleEventICS() for the "email this event"
+ * feature, where a wrong DTSTART would silently invite people to the wrong
+ * hour.
+ */
+function toICalUTCDateTime(date) {
+    return date.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+}
+
+/**
+ * Escape text per RFC 5545 §3.3.11 (used inside a VEVENT's SUMMARY/DESCRIPTION).
+ */
+function escapeICalText(text) {
+    return String(text || '')
+        .replace(/\\/g, '\\\\')
+        .replace(/;/g, '\\;')
+        .replace(/,/g, '\\,')
+        .replace(/\n/g, '\\n');
+}
+
+/**
+ * Build a minimal, single-VEVENT .ics document — used by the "envoyer par
+ * email" action (calendars.html editEventModal) to attach a calendar
+ * invite that a recipient's mail client can offer to add directly.
+ * @param {Object} opts
+ * @param {string} opts.title
+ * @param {string} [opts.description]
+ * @param {Date} opts.start
+ * @param {Date} [opts.end] - defaults to start + 1h
+ * @returns {string} Full VCALENDAR text
+ */
+function buildSingleEventICS(opts) {
+    const start = opts.start;
+    const end = opts.end || new Date(start.getTime() + 3600000);
+    const uid = `uplanet-${start.getTime()}-${Math.random().toString(36).slice(2, 8)}@uplanet`;
+    return [
+        'BEGIN:VCALENDAR',
+        'VERSION:2.0',
+        'PRODID:-//UPlanet//Calendars//EN',
+        'CALSCALE:GREGORIAN',
+        'METHOD:PUBLISH',
+        'BEGIN:VEVENT',
+        `UID:${uid}`,
+        `DTSTAMP:${toICalUTCDateTime(new Date())}`,
+        `DTSTART:${toICalUTCDateTime(start)}`,
+        `DTEND:${toICalUTCDateTime(end)}`,
+        `SUMMARY:${escapeICalText(opts.title)}`,
+        `DESCRIPTION:${escapeICalText(opts.description || '')}`,
+        'END:VEVENT',
+        'END:VCALENDAR'
+    ].join('\r\n');
+}
+
+/**
  * Initialize lunar calendar UI
  */
 function initializeLunarCalendar() {
@@ -3089,6 +3145,8 @@ if (typeof window !== 'undefined') {
     // iCal generation functions
     window.formatICalDate = formatICalDate;
     window.formatICalDateTime = formatICalDateTime;
+    window.toICalUTCDateTime = toICalUTCDateTime;
+    window.buildSingleEventICS = buildSingleEventICS;
     window.generateVegetarianGardenerICal = generateVegetarianGardenerICal;
     window.shiftMonthForHemisphere = shiftMonthForHemisphere;
     

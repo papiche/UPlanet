@@ -996,6 +996,16 @@
                             <i class="bi bi-plus-circle"></i> Ajouter un rappel
                         </button>
                     </div>
+                    <div class="mb-2">
+                        <label class="form-label">✉️ Envoyer par email</label>
+                        <div class="input-group">
+                            <input type="email" class="form-control" id="edit-event-email-to" placeholder="ami@example.com">
+                            <button type="button" class="btn btn-outline-success" id="edit-event-email-btn" onclick="sendEventByEmail()">
+                                <i class="bi bi-send"></i> Envoyer
+                            </button>
+                        </div>
+                        <div class="small text-secondary mt-1">Un fichier .ics est joint pour que le destinataire puisse ajouter l'événement directement à son agenda.</div>
+                    </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
@@ -2376,6 +2386,7 @@
                 document.getElementById('edit-event-end').value = formatDateTimeLocal(endStr);
             }
             populateReminderRows('edit-event-reminders', event.tags);
+            document.getElementById('edit-event-email-to').value = '';
 
             const modal = new bootstrap.Modal(document.getElementById('editEventModal'));
             modal.show();
@@ -2450,7 +2461,70 @@
                 showNotification({ type: 'error', title: 'Erreur', message: error.message });
             }
         }
-        
+
+        // Envoie l'événement actuellement ouvert dans editEventModal par email,
+        // avec un .ics en pièce jointe (POST /api/calendar/email, auth NIP-98
+        // fraîche — même convention que forge.html/craft.html/cloud.html).
+        async function sendEventByEmail() {
+            const toEmail = document.getElementById('edit-event-email-to').value.trim();
+            if (!toEmail) {
+                showNotification({ type: 'error', title: 'Email requis', message: 'Indiquez l\'adresse du destinataire.' });
+                return;
+            }
+
+            const title = document.getElementById('edit-event-title').value.trim();
+            const description = document.getElementById('edit-event-description').value;
+            const startStr = document.getElementById('edit-event-start').value;
+            const endStr = document.getElementById('edit-event-end').value;
+
+            if (!title || !startStr) {
+                showNotification({ type: 'error', title: 'Erreur', message: 'Titre et date de début requis avant l\'envoi.' });
+                return;
+            }
+
+            const btn = document.getElementById('edit-event-email-btn');
+            const originalHtml = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+
+            try {
+                const start = new Date(startStr);
+                const end = endStr ? new Date(endStr) : new Date(start.getTime() + 3600000);
+                const ics = window.buildSingleEventICS({ title, description, start, end });
+                const fromName = (document.getElementById('user-name') || {}).textContent || '';
+
+                const url = getAPIUrl() + '/api/calendar/email';
+                const authEv = {
+                    kind: 27235,
+                    pubkey: localUserPubkey,
+                    created_at: Math.floor(Date.now() / 1000),
+                    tags: [['u', url], ['method', 'POST']],
+                    content: ''
+                };
+                const signed = await window.nostr.signEvent(authEv);
+                const token = btoa(unescape(encodeURIComponent(JSON.stringify(signed))));
+
+                const resp = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Nostr ' + token },
+                    body: JSON.stringify({ to_email: toEmail, subject: title, summary: title, description, ics, from_name: fromName })
+                });
+                const result = await resp.json().catch(() => ({}));
+                if (!resp.ok || !result.ok) {
+                    throw new Error(result.error || `Erreur HTTP ${resp.status}`);
+                }
+
+                showNotification({ type: 'success', title: 'Email envoyé', message: `Invitation envoyée à ${toEmail}.` });
+                document.getElementById('edit-event-email-to').value = '';
+            } catch (error) {
+                console.error('[Calendars] Error sending event by email:', error);
+                showNotification({ type: 'error', title: "Échec de l'envoi", message: error.message });
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = originalHtml;
+            }
+        }
+
         function showDeleteModal(type, id, name) {
             document.getElementById('delete-type').value = type;
             document.getElementById('delete-id').value = id;

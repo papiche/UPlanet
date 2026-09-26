@@ -368,6 +368,10 @@
      GET  /mailjet/faces      → {faces:[{id,name,pubkey,timestamp}]}
      POST /mailjet/faces-edit    → multipart {point_id, name, pubkey}
      POST /mailjet/faces-delete  → multipart {point_id}
+     POST /mailjet/faces-invite  → multipart {point_id, to_email} → {ok, photos}
+                                    Invite la personne (email) à créer son
+                                    MULTIPASS ; si elle le fait sous 7 jours,
+                                    les photos sont copiées dans son cloud.
    ═══════════════════════════════════════════════════════════════════════ */
 
 var _davUrl   = null;
@@ -991,6 +995,11 @@ function faceCardHtml(f) {
       +       '<button type="button" class="cloud-btn cloud-btn-primary fc-btn-sm" onclick="saveFace(this)">Enregistrer</button>'
       +       '<button type="button" class="cloud-btn cloud-btn-danger fc-btn-sm" onclick="deleteFace(this)">Supprimer</button>'
       +     '</div>'
+      +     (named ? '' :
+      '<div class="fc-face-invite" style="margin-top:.4rem;display:flex;gap:.4rem;flex-wrap:wrap">'
+      +   '<input type="email" class="fc-input fc-face-invite-email" placeholder="email pour l\'inviter à créer son MULTIPASS" style="flex:1;min-width:200px">'
+      +   '<button type="button" class="cloud-btn cloud-btn-secondary fc-btn-sm" onclick="inviteFace(this)">✉️ Inviter par email</button>'
+      + '</div>')
       +     '<div class="cloud-note fc-face-note">'
       +       (named ? 'Partage automatique actif si vous vous suivez mutuellement sur NOSTR.'
                  : 'Sans clé publique, aucune photo n\'est partagée.')
@@ -999,6 +1008,41 @@ function faceCardHtml(f) {
       +   '</div>'
       + '</div>'
       + '</div>';
+}
+
+/* Invite la personne détectée sur un visage "Inconnu_xxx" à créer son
+   MULTIPASS : POST /mailjet/faces-invite envoie un email avec un aperçu
+   (miniatures recadrées, en pièce jointe) + un lien d'inscription portant un
+   jeton de "claim" à usage unique. Si elle s'inscrit avec CETTE adresse email
+   sous 7 jours, les photos complètes sont copiées automatiquement dans son
+   propre cloud chiffré (traitement serveur, cf. UPassport routers/mailjet.py
+   process_pending_face_claims) — l'expéditeur garde sa copie intacte. */
+async function inviteFace(btn) {
+    var card = btn.closest('.fc-face');
+    var pointId = card.getAttribute('data-id');
+    var emailInput = card.querySelector('.fc-face-invite-email');
+    var toEmail = (emailInput.value || '').trim();
+    if (!toEmail) {
+        alert("Indiquez l'adresse email de la personne à inviter.");
+        return;
+    }
+    var original = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Envoi…';
+    try {
+        var fd = new FormData();
+        fd.append('point_id', pointId);
+        fd.append('to_email', toEmail);
+        var result = await nostrFetch('/mailjet/faces-invite', { method: 'POST', body: fd });
+        var n = result.photos || 0;
+        btn.textContent = '✅ Envoyé (' + n + ' photo' + (n > 1 ? 's' : '') + ')';
+        emailInput.value = '';
+        setTimeout(function () { btn.textContent = original; btn.disabled = false; }, 3000);
+    } catch (e) {
+        alert("Échec de l'invitation : " + (e.message || e));
+        btn.textContent = original;
+        btn.disabled = false;
+    }
 }
 
 /* Charge chaque miniature en tâche de fond (un fetch signé NIP-98 par

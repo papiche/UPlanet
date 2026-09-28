@@ -29,6 +29,7 @@
         { e: '😎', l: 'Mailjet',        h: 'mailjet.html', mini:true },
         { e: '🍪', l: 'Cookies',        h: 'cookie.html', mini:true },
         { e: '👥', l: 'Face Cloud',     h: 'cloud.html' , mini: true },
+        { e: '📸', l: 'PlantNet',       h: 'plantnet.html', mini:true },
         { sep: 'Station 모' },
         { e: '📡', l: 'NODE Admin',     h: 'nostr_admin.html' },
         { e: '🧾', l: 'OC Admin',       h: 'oc_admin.html' },

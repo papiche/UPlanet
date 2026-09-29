@@ -316,9 +316,19 @@
     <h3 class="fc-subhead">À nommer <span class="fc-count" id="count-unknown">—</span></h3>
     <p class="cloud-note" style="margin-top:0">
       Donnez un nom et, si vous le souhaitez, la clé NOSTR (npub ou hex) de la
-      personne. Sans clé, aucune photo n'est partagée.
+      personne. Sans clé, aucune photo n'est partagée. Une même personne peut
+      apparaître sur plusieurs cartes distinctes (visages détectés
+      séparément) : cochez-les — ou utilisez « Tout sélectionner » sur un
+      groupe suggéré 🧩 — puis attribuez-leur un nom en une seule fois.
     </p>
     <div id="faces-unknown" class="fc-faces"></div>
+    <div id="fc-bulk-bar" class="fc-bulk-bar">
+      <span><strong id="fc-bulk-count">0</strong> visages sélectionnés — la même personne ?</span>
+      <input type="text" id="fc-bulk-name" class="fc-input" placeholder="Nom de la personne" list="fc-friends-list">
+      <input type="text" id="fc-bulk-key" class="fc-input" placeholder="npub1… ou 64 hex (optionnel)" list="fc-friends-list">
+      <button type="button" class="cloud-btn cloud-btn-primary fc-btn-sm" onclick="bulkAssignFaces()">Assigner à la sélection</button>
+      <button type="button" class="cloud-btn cloud-btn-secondary fc-btn-sm" onclick="clearFaceSelection()">Annuler</button>
+    </div>
 
     <h3 class="fc-subhead">Déjà identifiés <span class="fc-count" id="count-known">—</span></h3>
     <div id="faces-known" class="fc-faces"></div>
@@ -915,8 +925,9 @@ async function loadFaces() {
         document.getElementById('count-unknown').textContent = unknown.length;
         document.getElementById('count-known').textContent   = known.length;
 
+        clearFaceSelection();
         unknownBox.innerHTML = unknown.length
-            ? unknown.map(faceCardHtml).join('')
+            ? groupedFacesHtml(unknown)
             : '<div class="fc-empty">Aucun visage en attente'
               + (data.reason === 'qdrant_unavailable'
                   ? ' — <em>service d\'analyse indisponible sur cette station</em>' : '')
@@ -970,6 +981,98 @@ function confirmMaybeSuggestion(btn) {
     saveFace(card.querySelector('.fc-face-form .cloud-btn-primary'));
 }
 
+/* Regroupement visuel des visages SANS pubkey dont l'embedding se rapproche
+   (calculé serveur, cf. GET /mailjet/faces ::_cluster_unnamed_faces — jamais
+   stocké, purement une suggestion). Chaque groupe se présente comme un bloc
+   distinct avec un bouton "Tout sélectionner" qui alimente la sélection
+   manuelle (checkboxes) — le nommage groupé reste TOUJOURS un geste explicite
+   de l'utilisateur, jamais automatique. */
+function groupedFacesHtml(unknown) {
+    var rendered = {};
+    return unknown.map(function (f) {
+        if (!f.group_id) return faceCardHtml(f);
+        if (rendered[f.group_id]) return '';
+        rendered[f.group_id] = true;
+        var members = unknown.filter(function (g) { return g.group_id === f.group_id; });
+        return '<div class="fc-face-group" data-group-id="' + esc(f.group_id) + '">'
+          + '<div class="fc-face-group-head">'
+          +   '<span>🧩 Peut-être la même personne (' + members.length + ' photos)</span>'
+          +   '<button type="button" class="cloud-btn cloud-btn-secondary fc-btn-sm" '
+          +     'onclick="selectFaceGroup(\'' + esc(f.group_id) + '\')">Tout sélectionner</button>'
+          + '</div>'
+          + '<div class="fc-faces">' + members.map(faceCardHtml).join('') + '</div>'
+          + '</div>';
+    }).join('');
+}
+
+/* Sélection manuelle multi-cartes (checkboxes sur les visages "À nommer"
+   uniquement) pour attribuer un nom/pubkey commun en un seul appel
+   (POST /mailjet/faces-edit-bulk) — indépendante des groupes suggérés
+   ci-dessus, que l'utilisateur peut toujours corriger à la main. */
+function getSelectedFaceIds() {
+    return Array.prototype.map.call(
+        document.querySelectorAll('#faces-unknown .fc-face-select:checked'),
+        function (cb) { return cb.getAttribute('data-id'); }
+    );
+}
+
+function onFaceSelectionChange() {
+    var ids = getSelectedFaceIds();
+    var bar = document.getElementById('fc-bulk-bar');
+    if (!bar) return;
+    bar.style.display = ids.length >= 2 ? 'flex' : 'none';
+    document.getElementById('fc-bulk-count').textContent = ids.length;
+}
+
+function selectFaceGroup(groupId) {
+    var box = document.querySelector('.fc-face-group[data-group-id="' + groupId.replace(/"/g, '') + '"]');
+    if (!box) return;
+    box.querySelectorAll('.fc-face-select').forEach(function (cb) { cb.checked = true; });
+    onFaceSelectionChange();
+    var bar = document.getElementById('fc-bulk-bar');
+    if (bar) bar.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function clearFaceSelection() {
+    document.querySelectorAll('#faces-unknown .fc-face-select').forEach(function (cb) { cb.checked = false; });
+    var bar = document.getElementById('fc-bulk-bar');
+    if (bar) bar.style.display = 'none';
+    var nameInput = document.getElementById('fc-bulk-name');
+    var keyInput  = document.getElementById('fc-bulk-key');
+    if (nameInput) nameInput.value = '';
+    if (keyInput)  keyInput.value  = '';
+}
+
+async function bulkAssignFaces() {
+    var ids = getSelectedFaceIds();
+    if (ids.length < 2) return;
+    var nameInput = document.getElementById('fc-bulk-name');
+    var keyInput  = document.getElementById('fc-bulk-key');
+    var key = normalizeKey(keyInput.value);
+    if (key === null) {
+        showError('Clé NOSTR invalide : attendu un npub1… ou 64 caractères hexadécimaux.');
+        return;
+    }
+    hideError();
+    var btn = document.querySelector('#fc-bulk-bar .cloud-btn-primary');
+    var previous = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = '…';
+    var fd = new FormData();
+    fd.append('point_ids', ids.join(','));
+    fd.append('name', nameInput.value.trim());
+    fd.append('pubkey', key);
+    try {
+        await nostrFetch('/mailjet/faces-edit-bulk', { method: 'POST', body: fd });
+        await loadFaces();
+        return;
+    } catch (e) {
+        showError('Enregistrement groupé refusé : ' + (e.message || e));
+    }
+    btn.disabled = false;
+    btn.textContent = previous;
+}
+
 function faceCardHtml(f) {
     var named = !!f.pubkey;
     // Miniature : placeholder ? chargé en tâche de fond par loadThumbnails()
@@ -980,8 +1083,13 @@ function faceCardHtml(f) {
     var thumb = f.has_photo
         ? '<img class="fc-face-thumb" data-point-id="' + esc(f.id) + '" alt="">'
         : '<div class="fc-face-thumb-empty" title="Pas de photo enregistrée pour ce visage">❓</div>';
+    var selectBox = named ? '' :
+        '<label class="fc-face-select-wrap" title="Sélectionner pour un nommage groupé">'
+      +   '<input type="checkbox" class="fc-face-select" data-id="' + esc(f.id) + '" onchange="onFaceSelectionChange()">'
+      + '</label>';
     return '<div class="fc-face' + (named ? ' fc-face-known' : '') + '" data-id="' + esc(f.id) + '">'
       + '<div class="fc-face-body">'
+      +   selectBox
       +   thumb
       +   '<div class="fc-face-content">'
       +     '<div class="fc-face-head">'

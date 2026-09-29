@@ -211,8 +211,9 @@ ligne de progression agrégée (« Envoi… X / N ») pour ne pas inonder le DOM
 | Miniature d'un fichier quelconque | `GET /api/cloud/thumbnail?path=…` → JPEG (300×300, déchiffré à la volée), sans catalogage préalable requis |
 | Envoyer une photo | `PUT /dav/Photos/<nom>` (corps = fichier brut, PAS `/api/fileupload` — seul le cloud chiffré déclenche l'analyse FaceID, cf. `UPassport/CLAUDE.md`) — `MKCOL /dav/Photos` best-effort avant le premier envoi (RFC 4918 strict : pas de création implicite du parent) |
 | Enrôlement supervisé (optionnel) | En-têtes `X-FaceID-Target-Pubkey` (64 hex) / `X-FaceID-Target-Name` sur le `PUT` — chaque visage détecté est catalogué DIRECTEMENT sous cette identité (pas de recherche par similarité ni de `Inconnu_xxx`) |
-| Lister les visages | `GET /mailjet/faces` → `{faces:[{id,name,pubkey,timestamp,maybe}]}` — `maybe:{name,pubkey,score}` (rapprochement archives longue durée, cf. `maybeBannerHtml()`/`confirmMaybeSuggestion()`) proposé quand un visage SANS pubkey ressemble (cosinus 0.55–0.82) à un visage déjà nommé, sans jamais fusionner automatiquement |
+| Lister les visages | `GET /mailjet/faces` → `{faces:[{id,name,pubkey,timestamp,maybe,group_id,group_size}]}` — `maybe:{name,pubkey,score}` (rapprochement archives longue durée, cf. `maybeBannerHtml()`/`confirmMaybeSuggestion()`) proposé quand un visage SANS pubkey ressemble (cosinus 0.55–0.82) à un visage déjà nommé, sans jamais fusionner automatiquement ; `group_id`/`group_size` (cf. `groupedFacesHtml()`) regroupe entre eux (union-find, cosinus ≥ 0.55, jamais persisté) plusieurs visages SANS pubkey qui se ressemblent — même personne détectée sur plusieurs photos, pas encore identifiée |
 | Nommer un visage | `POST /mailjet/faces-edit` (multipart `point_id`, `name`, `pubkey`) |
+| Nommer plusieurs visages d'un coup | `POST /mailjet/faces-edit-bulk` (multipart `point_ids` séparés par virgules, `name`, `pubkey`) — même payload merge Qdrant, appliqué à toute une sélection (groupe suggéré via « Tout sélectionner », ou cases à cocher manuelles sur ≥2 cartes « À nommer ») en un seul appel NIP-98 |
 | Oublier un visage | `POST /mailjet/faces-delete` (multipart `point_id`) |
 | Miniature d'un visage | `GET /mailjet/faces/thumbnail?point_id=…` → JPEG (déchiffré + recadré à la volée, jamais persisté) — chargé via `nostrFetch(..., {responseType:'blob'})` car un `<img src>` classique ne peut pas porter de header `Authorization` |
 | Lister objets/lieux détectés | `GET /mailjet/inventory` → `{items:[{path,type,category,name,description,confidence,tags,timestamp}]}` |
@@ -233,6 +234,18 @@ Les visages sont séparés en **À nommer** (`pubkey` vide, `Inconnu_xxxxxxxx`) 
 `null` sur saisie invalide (≠ `''` qui veut dire « pas de clé »).
 L'analyse faciale étant asynchrone (GPU), la page le dit explicitement et
 propose un bouton **Actualiser** plutôt qu'un polling silencieux.
+
+**Rassembler plusieurs « Inconnu » avant identification** — une même personne
+peut être détectée sur plusieurs photos avec des embeddings assez différents
+pour ne créer aucun lien automatique (`point_id` = hash de l'embedding, cf.
+`UPassport/CLAUDE.md`). `groupedFacesHtml()` affiche en un bloc distinct 🧩
+les cartes que le serveur rapproche (`group_id`), avec un bouton « Tout
+sélectionner » ; indépendamment, chaque carte « À nommer » porte une case à
+cocher (`.fc-face-select`) manuelle. Dès que ≥2 cartes sont cochées (groupe
+suggéré ou sélection libre), la barre `#fc-bulk-bar` apparaît (position
+sticky en bas de section) : un seul nom/pubkey saisi puis `bulkAssignFaces()`
+appelle `POST /mailjet/faces-edit-bulk` une seule fois pour toute la
+sélection. Toujours une action explicite — jamais de fusion automatique.
 
 **Section « Mes photos » — trois flux d'envoi** (`setUploadMode()`, onglets
 `.fc-mode-tab`), pour réduire les faux positifs de la détection auto seule :

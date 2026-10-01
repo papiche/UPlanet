@@ -32,6 +32,11 @@
   button#generate{width:100%;padding:14px;border:none;border-radius:10px;background:var(--accent);
         color:#1a1209;font-weight:700;font-size:1rem;cursor:pointer;margin-top:6px}
   button#generate:disabled{opacity:.5;cursor:not-allowed}
+  #connect-gate{display:none;align-items:center;gap:10px;background:rgba(200,168,60,.1);
+        border:1px solid rgba(200,168,60,.35);border-radius:10px;padding:10px 12px;margin-bottom:12px;
+        font-size:.85rem;color:#f0f0f5}
+  #connect-gate button{flex:0 0 auto;padding:8px 14px;border:none;border-radius:8px;background:var(--accent);
+        color:#1a1209;font-weight:700;cursor:pointer;font-size:.85rem}
   #status{font-size:.85rem;margin-top:10px;min-height:1.2em}
   #status.err{color:#ff8080}
   #status.ok{color:#8ee08e}
@@ -55,6 +60,8 @@
     Fabriquez une planche A4 de 6 portefeuilles papier Ğ1/Ẑen (PRIMO TX TREE), prête à imprimer
     et découper — avec un montant au choix par billet. Les billets sortent toujours vides ;
     transférez les fonds vous-même vers la clé imprimée pour les activer.
+    Connexion MULTIPASS requise : chaque billet émis est associé à votre identité (traçabilité
+    de l'émission, le billet lui-même reste un bearer Ğ1 classique, utilisable par qui le détient).
   </p>
 
   <div class="card">
@@ -138,7 +145,11 @@
   </div>
 
   <div class="card">
-    <button id="generate">Générer mon Ğ1Billet</button>
+    <div id="connect-gate">
+      <span>🔒 Connectez-vous avec votre MULTIPASS pour créer un Ğ1Billet.</span>
+      <button id="connect-gate-btn" type="button">⚡ Se connecter</button>
+    </div>
+    <button id="generate" disabled>Générer mon Ğ1Billet</button>
     <div id="status"></div>
   </div>
 
@@ -236,8 +247,54 @@
     } catch (e) { /* pas de profil trouvé — pas grave, fond neutre */ }
   }
 
+  // ── Connexion MULTIPASS obligatoire : seule une identité connectée peut
+  // créer un Ğ1Billet (auth NIP-98 exigée côté serveur, cf. UPassport
+  // routers/qr.py::generate_billet) — le bouton reste désactivé tant que
+  // non connecté.
+  var connectGate   = document.getElementById('connect-gate');
+  var connectGateBtn = document.getElementById('connect-gate-btn');
+  function updateConnectGate() {
+    var connected = !!(window.isNostrConnected && window.userPubkey);
+    connectGate.style.display = connected ? 'none' : 'flex';
+    genBtn.disabled = !connected;
+  }
+  connectGateBtn.addEventListener('click', function () {
+    if (window.uphConnect) { window.uphConnect(); }
+    else if (window.connectNostr) { window.connectNostr(false); }
+  });
+
   function onConnected() {
     refreshProfileImages();
+    updateConnectGate();
+  }
+  updateConnectGate();
+
+  /* ── Signature NIP-98 (kind 27235) — même convention que cloud.html /
+     forge.html / craft.html : extension NOSTR (NIP-07) en priorité, clé
+     locale en repli. Auth OBLIGATOIRE pour /qr/billet (cf. qr.py). ────── */
+  async function signBilletEvent(template) {
+    if (window.nostr && typeof window.nostr.signEvent === 'function') {
+      template.pubkey = window.userPubkey;
+      return await window.nostr.signEvent(template);
+    }
+    if (window.userPrivateKey && window.NostrTools) {
+      return window.NostrTools.finishEvent(template, window.userPrivateKey);
+    }
+    throw new Error('aucune méthode de signature disponible (extension NOSTR absente)');
+  }
+
+  async function buildNip98Header(url, method) {
+    if (!window.userPubkey) return null;
+    var template = {
+      kind: 27235,
+      created_at: Math.floor(Date.now() / 1000),
+      tags: [['u', url], ['method', method]],
+      content: ''
+    };
+    var signed = await signBilletEvent(template);
+    var json = JSON.stringify(signed);
+    return 'Nostr ' + btoa(unescape(encodeURIComponent(json)))
+      .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
   }
 
   document.querySelectorAll('input[name=imgsrc]').forEach(function (el) {
@@ -247,7 +304,13 @@
     });
   });
 
-  document.getElementById('generate').addEventListener('click', function () {
+  document.getElementById('generate').addEventListener('click', async function () {
+    if (!window.isNostrConnected || !window.userPubkey) {
+      setStatus('Connexion MULTIPASS requise.', 'err');
+      updateConnectGate();
+      return;
+    }
+
     var amount = parseFloat(amountEl.value);
     var unit = unitEl.value;
     var imgsrc = document.querySelector('input[name=imgsrc]:checked').value;
@@ -269,9 +332,6 @@
       logoUrl = styleUrl(selectedStyle, 'logo.png');
     }
 
-    genBtn.disabled = true;
-    setStatus('Génération en cours…', '');
-
     var url = apiBase() + '/qr/billet?amount=' + encodeURIComponent(amount) +
       '&unit=' + encodeURIComponent(unit);
     if (fondUrl) url += '&fond_url=' + encodeURIComponent(fondUrl);
@@ -280,14 +340,40 @@
       url += '&verso=1&verso_text=' + encodeURIComponent((versoTextEl.value || '').trim() || VERSO_DEFAULT_TEXT);
     }
 
-    // Ouverture immédiate dans un nouvel onglet : c'est ce nouvel onglet, pas
-    // ce script, qui fait la requête serveur (génération) — évite tout
-    // blocage de popup lié à un fetch async avant window.open(). Les images
-    // de profil sont pré-chargées (refreshProfileImages sur connexion),
-    // pas de await ici non plus.
-    window.open(url, '_blank');
-    setStatus('Planche ouverte dans un nouvel onglet.', 'ok');
-    genBtn.disabled = false;
+    // Onglet ouvert immédiatement (synchrone, avant tout await) pour éviter
+    // le blocage popup — on y écrit le HTML reçu une fois la requête
+    // authentifiée (NIP-98) terminée, au lieu d'y naviguer directement (une
+    // navigation simple ne peut pas porter de header Authorization).
+    var tab = window.open('', '_blank');
+
+    genBtn.disabled = true;
+    setStatus('Signature de la requête…', '');
+
+    try {
+      var auth = await buildNip98Header(url, 'GET');
+      if (!auth) throw new Error('signature NIP-98 indisponible');
+
+      setStatus('Génération en cours…', '');
+      var resp = await fetch(url, { method: 'GET', headers: { Authorization: auth } });
+      var html = await resp.text();
+      if (!resp.ok) {
+        var msg = 'HTTP ' + resp.status;
+        try { msg = JSON.parse(html).detail || JSON.parse(html).error || msg; } catch (e) {}
+        throw new Error(msg);
+      }
+
+      if (tab) {
+        tab.document.open();
+        tab.document.write(html);
+        tab.document.close();
+      }
+      setStatus('Planche ouverte dans un nouvel onglet.', 'ok');
+    } catch (e) {
+      if (tab) tab.close();
+      setStatus('❌ ' + (e && e.message ? e.message : 'Échec de la génération.'), 'err');
+    } finally {
+      genBtn.disabled = false;
+    }
   });
 
   window.addEventListener('nostr:connected', onConnected);

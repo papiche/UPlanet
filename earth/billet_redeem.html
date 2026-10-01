@@ -1,0 +1,491 @@
+<!doctype html>
+<html lang="fr" data-theme="dark" data-no-dynamic-theme>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Ğ1Billet — Reconstruction</title>
+<style>
+  :root{--ink:#1a1a2e;--accent:#c8a83c;--green:#2d5a1b;--bg:#0f1220;--card:#181c30;--muted:#9aa0b4;--err:#ff8080;--ok:#8ee08e}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:#f0f0f5;font-family:-apple-system,Segoe UI,Roboto,sans-serif;
+       padding:70px 16px 40px;display:flex;flex-direction:column;align-items:center}
+  main{max-width:640px;width:100%}
+  h1{font-size:1.4rem;margin:0 0 6px}
+  h2.card-title{font-size:.95rem;margin:0 0 10px;color:#f0f0f5}
+  .lead{color:var(--muted);font-size:.9rem;line-height:1.55;margin-bottom:20px}
+  .card{background:var(--card);border:1px solid rgba(255,255,255,.08);border-radius:14px;
+        padding:18px;margin-bottom:16px}
+  .slot{border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:14px;margin-bottom:12px}
+  .slot.filled{border-color:rgba(142,224,142,.5)}
+  .slot .t{font-weight:700;display:flex;align-items:center;gap:8px}
+  .slot .d{color:var(--muted);font-size:.8rem;margin:4px 0 10px;line-height:1.5}
+  .slot input[type=file]{display:block;width:100%;margin-bottom:8px;font-size:.82rem;color:var(--muted)}
+  .slot textarea{width:100%;min-height:44px;font-family:monospace;font-size:.78rem;padding:8px;
+        border-radius:8px;border:1px solid rgba(255,255,255,.15);background:#0d0f1c;color:#fff;resize:vertical}
+  .slot .state{font-size:.78rem;margin-top:6px;min-height:1.1em}
+  .slot .state.ok{color:var(--ok)}
+  .slot .state.err{color:var(--err)}
+  label{display:block;font-size:.85rem;color:var(--muted);margin-bottom:6px}
+  input[type=text]{width:100%;padding:10px 12px;border-radius:8px;border:1px solid rgba(255,255,255,.15);
+        background:#0d0f1c;color:#fff;font-size:.95rem;font-family:monospace}
+  button{padding:12px 16px;border:none;border-radius:10px;background:var(--accent);color:#1a1209;
+        font-weight:700;font-size:.95rem;cursor:pointer}
+  button:disabled{opacity:.4;cursor:not-allowed}
+  button.secondary{background:rgba(255,255,255,.1);color:#fff;font-weight:600}
+  #status{font-size:.85rem;margin-top:10px;min-height:1.2em}
+  #status.err{color:var(--err)}
+  #status.ok{color:var(--ok)}
+  .result{display:none}
+  .result.show{display:block}
+  .kv{margin-bottom:12px}
+  .kv label{margin-bottom:4px}
+  .kv .val{font-family:monospace;font-size:.82rem;word-break:break-all;background:#0d0f1c;
+        border:1px solid rgba(255,255,255,.15);border-radius:8px;padding:10px 12px}
+  .match{font-size:.85rem;margin-top:4px}
+  .match.ok{color:var(--ok)}
+  .match.err{color:var(--err)}
+  .warn{background:rgba(255,128,128,.12);border:1px solid rgba(255,128,128,.4);border-radius:10px;
+        padding:12px 14px;font-size:.82rem;line-height:1.5;margin-bottom:16px}
+  .note{font-size:.78rem;color:var(--muted);line-height:1.55;margin-top:18px}
+  .note code{background:#0d0f1c;border:1px solid rgba(255,255,255,.15);border-radius:4px;padding:1px 5px;font-size:.92em}
+  canvas{display:none}
+</style>
+</head>
+<body>
+
+<main>
+  <h1>🔑 Ğ1Billet — Reconstruction guidée</h1>
+  <p class="lead">
+    Un Ğ1Billet papier scinde sa clé secrète en 3 parts (Shamir, 2-sur-3) : aucune part seule ne
+    permet de dépenser le billet. Suivez les 3 étapes ci-dessous — la clé se reconstruit
+    automatiquement dès que 2 parts sont valides. Tout se passe <b>dans ce navigateur</b> — rien
+    n'est envoyé à aucun serveur.
+  </p>
+
+  <div class="warn">
+    🔒 La clé reconstruite donne un accès total aux fonds du billet. Ne la partagez pas, ne la
+    laissez pas affichée, et fermez cet onglet une fois l'import terminé dans votre wallet.
+  </div>
+
+  <div class="card">
+    <h2 class="card-title">① Portefeuille à créditer</h2>
+    <p class="d" style="color:var(--muted);font-size:.82rem;margin-bottom:10px">
+      Indiquez le G1PUB du wallet qui doit recevoir les fonds du billet (votre wallet personnel —
+      pas celui du billet). Servira à préparer la commande d'encaissement à l'étape 4.
+    </p>
+    <label for="dest-g1pub">G1PUB de destination</label>
+    <input type="text" id="dest-g1pub" placeholder="g1…">
+    <div style="margin-top:8px">
+      <input type="file" accept="image/*" capture="environment" id="dest-scan">
+      <div class="state" id="dest-state"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2 class="card-title">Parts du billet (2 minimum sur 3)</h2>
+
+    <div class="slot" id="slot-p1">
+      <div class="t">② P1 — QR visible (imprimé en clair sur le billet)</div>
+      <div class="d">Photographiez ou importez le QR de gauche (celui à côté du montant), ou collez son contenu hexadécimal (64 caractères).</div>
+      <input type="file" accept="image/*" capture="environment" data-slot="1">
+      <textarea placeholder="…ou collez ici l'hexadécimal de P1 (64 caractères)" data-slot="1"></textarea>
+      <div class="state" data-state="1"></div>
+    </div>
+
+    <div class="slot" id="slot-p2">
+      <div class="t">③ P2 — bande repliée / scellée</div>
+      <div class="d">Dépliez la bande collée sur le bord gauche du billet, puis photographiez le QR qui s'y trouve, ou recopiez son contenu.</div>
+      <input type="file" accept="image/*" capture="environment" data-slot="2">
+      <textarea placeholder="…ou collez ici l'hexadécimal de P2 (64 caractères)" data-slot="2"></textarea>
+      <div class="state" data-state="2"></div>
+    </div>
+
+    <div class="slot" id="slot-p3">
+      <div class="t">P3 — réserve de recours <span style="font-weight:400;color:var(--muted)">(support uniquement, optionnel)</span></div>
+      <div class="d">
+        Normalement inutile : P1+P2, imprimées toutes les deux sur le billet, suffisent. Ce champ ne sert
+        que si le support vous a transmis P3 déjà <b>déchiffrée</b> (ex. billet endommagé) — cette page ne
+        sait pas la déchiffrer elle-même.
+      </div>
+      <textarea placeholder="Hexadécimal de P3 déchiffrée (64 caractères) — fourni par le support" data-slot="3"></textarea>
+      <div class="state" data-state="3"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <label for="verify-g1pub">G1PUB imprimé sur le billet (vérification — pré-rempli si vous avez scanné le QR de reconstruction)</label>
+    <input type="text" id="verify-g1pub" placeholder="g1…">
+    <div style="margin-top:14px;display:flex;gap:10px">
+      <button id="reconstruct" disabled>Reconstruire la clé</button>
+      <button class="secondary" id="clear-btn">Effacer tout</button>
+    </div>
+    <div id="status"></div>
+  </div>
+
+  <div class="card result" id="result-card">
+    <h2 class="card-title">④ Clé reconstruite</h2>
+    <div class="kv">
+      <label>Seed (hex, 32 octets) — à importer dans votre wallet Ğ1</label>
+      <div class="val" id="res-seed"></div>
+    </div>
+    <div class="kv">
+      <label>G1PUB (base58)</label>
+      <div class="val" id="res-g1pub"></div>
+    </div>
+    <div class="kv">
+      <label>Adresse SS58 (Duniter v2)</label>
+      <div class="val" id="res-ss58"></div>
+      <div class="match" id="res-match"></div>
+    </div>
+    <div class="kv">
+      <label>Solde actuel (blockchain Ğ1 — lecture publique, aucune donnée secrète envoyée)</label>
+      <div style="display:flex;gap:10px;align-items:center">
+        <div class="val" id="res-balance" style="flex:1">—</div>
+        <button class="secondary" id="check-balance-btn" type="button" style="padding:10px 14px;font-size:.85rem">Vérifier</button>
+      </div>
+    </div>
+    <p class="note">
+      Importez ce seed dans un wallet Ğ1 acceptant une clé/seed brute (Cesium, Ğ1 Duniter v2, …)
+      pour disposer des fonds. Une fois l'import fait, rechargez ou fermez cette page.
+    </p>
+  </div>
+
+  <div class="card result" id="cashout-card">
+    <h2 class="card-title">💸 Encaisser vers « ① Portefeuille à créditer »</h2>
+    <p class="note">
+      Aucun wallet mobile du projet ne sait aujourd'hui importer directement ce seed brut en un clic.
+      Deux façons fiables de transférer les fonds, une fois la clé reconstruite ci-dessus :
+    </p>
+    <p class="note">
+      <b>1. Import manuel dans un wallet existant</b> — collez le seed dans un wallet Ğ1/Duniter v2
+      acceptant une clé privée brute (pas une mnémonique, puisque ce secret reconstruit n'en a pas),
+      puis envoyez tout le solde vers le G1PUB saisi à l'étape ①.
+    </p>
+    <p class="note">
+      <b>2. Ligne de commande (Capitaine / support, sur une station Astroport.ONE)</b> — réutilise
+      <code>keygen</code> et <code>PAYforSURE.sh</code>, les mêmes outils que la génération du billet
+      (<code>billet_gen.sh</code>) : aucun nouveau code cryptographique, juste le seed reconstruit.
+    </p>
+    <label style="margin-top:10px">Commande prête à copier (le seed n'y figure qu'en mémoire locale, jamais envoyé nulle part)</label>
+    <div class="val" id="cashout-cmd" style="white-space:pre-wrap">—</div>
+  </div>
+
+  <p class="note">
+    Référence du calcul (Shamir 2-sur-3, GF(256), polynôme 0x11B) : même algèbre que l'application
+    TrocZen — aucune des 3 parts prise isolément ne révèle le secret.
+  </p>
+</main>
+
+<canvas id="qr-canvas"></canvas>
+
+<script src="nacl-fast.min.js"></script>
+<script src="blake2b_browser.js"></script>
+<script src="jsQR.min.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  var HEX64 = /^[0-9a-f]{64}$/i;
+  var shares = {1: null, 2: null, 3: null}; // Uint8Array(32) once valid
+  var lastReconstructed = null; // {seedHex, g1pub, ss58}
+
+  var statusEl = document.getElementById('status');
+  function setStatus(msg, cls) { statusEl.textContent = msg || ''; statusEl.className = cls || ''; }
+
+  // ── Détection d'URL API — même logique que lib_2_api_connect.js::detectUSPOTAPI,
+  // dupliquée ici (page volontairement autonome, pas de dépendance à common.js
+  // pour un simple appel de lecture publique). ──────────────────────────────
+  function apiBase() {
+    var u = new URL(window.location.href);
+    var hostname = u.hostname, port = u.port, protocol = u.protocol.split(':')[0];
+    if ((hostname === '127.0.0.1' || hostname === 'localhost') && (port === '8080' || port === '54321')) {
+      return 'http://127.0.0.1:54321';
+    }
+    if (hostname.endsWith('.home')) return 'http://127.0.0.1:54321';
+    if (hostname.startsWith('ipfs.')) return protocol + '://u.' + hostname.slice('ipfs.'.length);
+    if (hostname.startsWith('u.')) return protocol + '://' + hostname;
+    return 'https://u.copylaradio.com';
+  }
+
+  function hexToBytes(hex) {
+    var out = new Uint8Array(hex.length / 2);
+    for (var i = 0; i < out.length; i++) out[i] = parseInt(hex.substr(i * 2, 2), 16);
+    return out;
+  }
+  function bytesToHex(bytes) {
+    var s = '';
+    for (var i = 0; i < bytes.length; i++) s += bytes[i].toString(16).padStart(2, '0');
+    return s;
+  }
+
+  function setSlotState(slot, bytes, msg, cls) {
+    shares[slot] = bytes;
+    document.querySelector('[data-state="' + slot + '"]').textContent = msg || '';
+    document.querySelector('[data-state="' + slot + '"]').className = 'state' + (cls ? ' ' + cls : '');
+    document.getElementById('slot-p' + slot).classList.toggle('filled', !!bytes);
+    updateReconstructButton();
+  }
+
+  function acceptHex(slot, hex, source) {
+    hex = (hex || '').trim().replace(/\s+/g, '');
+    if (!HEX64.test(hex)) {
+      setSlotState(slot, null, 'Format invalide (attendu : 64 caractères hexadécimaux).', 'err');
+      return;
+    }
+    setSlotState(slot, hexToBytes(hex), '✅ P' + slot + ' chargée' + (source ? ' (' + source + ')' : '') + '.', 'ok');
+  }
+
+  // ── Saisie manuelle (textarea) ─────────────────────────────────────────
+  document.querySelectorAll('textarea[data-slot]').forEach(function (ta) {
+    ta.addEventListener('input', function () {
+      var slot = parseInt(ta.getAttribute('data-slot'), 10);
+      if (!ta.value.trim()) { setSlotState(slot, null, '', ''); return; }
+      acceptHex(slot, ta.value, 'saisie manuelle');
+    });
+  });
+
+  // ── Photo / import d'image → décodage QR (jsQR), générique : `onResult`
+  // reçoit le texte brut décodé (hex d'une part, ou URL/g1pub d'un QR
+  // destination) et décide quoi en faire. ──────────────────────────────
+  var canvas = document.getElementById('qr-canvas');
+  var ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+  function decodeImageFile(file, onResult, onError) {
+    var img = new Image();
+    var url = URL.createObjectURL(file);
+    img.onload = function () {
+      canvas.width = img.width;
+      canvas.height = img.height;
+      ctx.drawImage(img, 0, 0);
+      var imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      URL.revokeObjectURL(url);
+      var code = window.jsQR(imgData.data, imgData.width, imgData.height);
+      if (!code || !code.data) { onError('❌ Aucun QR détecté dans cette image.'); return; }
+      onResult(code.data);
+    };
+    img.onerror = function () {
+      URL.revokeObjectURL(url);
+      onError('❌ Image illisible.');
+    };
+    img.src = url;
+  }
+
+  document.querySelectorAll('input[type=file][data-slot]').forEach(function (inp) {
+    inp.addEventListener('change', function () {
+      var slot = parseInt(inp.getAttribute('data-slot'), 10);
+      var file = inp.files && inp.files[0];
+      if (!file) return;
+      setSlotState(slot, null, '⏳ Décodage…', '');
+      decodeImageFile(
+        file,
+        function (text) { acceptHex(slot, text, 'QR scanné'); },
+        function (msg) { setSlotState(slot, null, msg, 'err'); }
+      );
+    });
+  });
+
+  // ── Étape ① — destination : saisie manuelle, ou scan d'un QR G1PUB
+  // (wallet personnel). N'est PAS une part Shamir : pas de validation hex. ──
+  var destEl = document.getElementById('dest-g1pub');
+  var destStateEl = document.getElementById('dest-state');
+  document.getElementById('dest-scan').addEventListener('change', function (ev) {
+    var file = ev.target.files && ev.target.files[0];
+    if (!file) return;
+    destStateEl.textContent = '⏳ Décodage…'; destStateEl.className = 'state';
+    decodeImageFile(
+      file,
+      function (text) {
+        destEl.value = text.trim();
+        destStateEl.textContent = '✅ G1PUB scanné.'; destStateEl.className = 'state ok';
+        updateCashoutCmd();
+      },
+      function (msg) { destStateEl.textContent = msg; destStateEl.className = 'state err'; }
+    );
+  });
+  destEl.addEventListener('input', updateCashoutCmd);
+
+  // ── GF(256) Shamir combine (2 parts, seuil 2) — même algèbre que
+  // TrocZen (crypto_service.dart::shamirCombineBytesDirect), vérifiée par
+  // round-trip croisé Python(split)/JS(combine) côté serveur. ──────────
+  function gf256Mul(a, b) {
+    var p = 0;
+    for (var i = 0; i < 8; i++) {
+      if (b & 1) p ^= a;
+      var hi = a & 0x80;
+      a = (a << 1) & 0xFF;
+      if (hi) a ^= 0x1B;
+      b >>= 1;
+    }
+    return p;
+  }
+  function gf256Pow(a, n) { var r = 1; for (var i = 0; i < n; i++) r = gf256Mul(r, a); return r; }
+  function gf256Inv(a) { return gf256Pow(a, 254); }
+  function gf256Div(a, b) { return gf256Mul(a, gf256Inv(b)); }
+
+  function combine(x1, y1, x2, y2) {
+    var denom = x1 ^ x2;
+    if (denom === 0) throw new Error('Parts identiques ou corrompues (x1=x2).');
+    var l1 = gf256Div(x2, denom), l2 = gf256Div(x1, denom);
+    var out = new Uint8Array(32);
+    for (var i = 0; i < 32; i++) out[i] = gf256Mul(y1[i], l1) ^ gf256Mul(y2[i], l2);
+    return out;
+  }
+
+  function updateReconstructButton() {
+    var filled = [1, 2, 3].filter(function (s) { return !!shares[s]; });
+    document.getElementById('reconstruct').disabled = filled.length < 2;
+    // Séquence guidée : dès que 2 parts sont valides, on enchaîne
+    // automatiquement la reconstruction — pas besoin de cliquer.
+    if (filled.length >= 2) tryReconstruct();
+  }
+
+  // ── Dérivation G1 depuis le seed reconstruit — même code que
+  // UPlanet/earth/keygen.html (nacl.sign.keyPair.fromSeed + SS58 blake2b/bs58). ──
+  var BS58_ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+  function bs58encode(buf) {
+    if (!buf.length) return '';
+    var i, j, digits = [0];
+    for (i = 0; i < buf.length; i++) {
+      for (j = 0; j < digits.length; j++) digits[j] <<= 8;
+      digits[0] += buf[i];
+      var carry = 0;
+      for (j = 0; j < digits.length; j++) {
+        digits[j] += carry;
+        carry = (digits[j] / 58) | 0;
+        digits[j] %= 58;
+      }
+      while (carry) { digits.push(carry % 58); carry = (carry / 58) | 0; }
+    }
+    for (i = 0; i < buf.length && buf[i] === 0; i++) digits.push(0);
+    return digits.reverse().map(function (d) { return BS58_ALPHABET[d]; }).join('');
+  }
+
+  function deriveG1(seed) {
+    var edKeyPair = nacl.sign.keyPair.fromSeed(seed);
+    var pubKeyBytes = edKeyPair.publicKey;
+    var g1pub = bs58encode(pubKeyBytes);
+
+    var SS58_PREFIX = 4450;
+    var first = ((SS58_PREFIX & 0xFC) >> 2) | 0x40;
+    var second = (SS58_PREFIX >> 8) | ((SS58_PREFIX & 0x03) << 6);
+    var payload = new Uint8Array(2 + pubKeyBytes.length);
+    payload[0] = first; payload[1] = second;
+    payload.set(pubKeyBytes, 2);
+
+    var prefixBytes = new TextEncoder().encode('SS58PRE');
+    var checksumInput = new Uint8Array(prefixBytes.length + payload.length);
+    checksumInput.set(prefixBytes, 0);
+    checksumInput.set(payload, prefixBytes.length);
+    var checksum = window.blake2b.blake2b(checksumInput, null, 64).slice(0, 2);
+
+    var ss58Bytes = new Uint8Array(payload.length + checksum.length);
+    ss58Bytes.set(payload, 0);
+    ss58Bytes.set(checksum, payload.length);
+
+    return { g1pub: g1pub, ss58: bs58encode(ss58Bytes) };
+  }
+
+  function tryReconstruct() {
+    var filled = [1, 2, 3].filter(function (s) { return !!shares[s]; });
+    if (filled.length < 2) return;
+    var a = filled[0], b = filled[1];
+    setStatus('Reconstruction en cours…', '');
+    try {
+      var seed = combine(a, shares[a], b, shares[b]);
+      var seedHex = bytesToHex(seed);
+      var derived = deriveG1(seed);
+
+      document.getElementById('res-seed').textContent = seedHex;
+      document.getElementById('res-g1pub').textContent = derived.g1pub;
+      document.getElementById('res-ss58').textContent = derived.ss58;
+      document.getElementById('res-balance').textContent = '—';
+      lastReconstructed = { seedHex: seedHex, g1pub: derived.g1pub, ss58: derived.ss58 };
+      updateCashoutCmd();
+
+      var expected = (document.getElementById('verify-g1pub').value || '').trim();
+      var matchEl = document.getElementById('res-match');
+      if (expected) {
+        var ok = (expected === derived.ss58 || expected === derived.g1pub);
+        matchEl.textContent = ok
+          ? '✅ Correspond au G1PUB imprimé sur le billet.'
+          : '❌ NE correspond PAS au G1PUB saisi — vérifiez vos parts (billet différent, part corrompue, ou saisie erronée).';
+        matchEl.className = 'match ' + (ok ? 'ok' : 'err');
+      } else {
+        matchEl.textContent = '';
+        matchEl.className = 'match';
+      }
+
+      document.getElementById('result-card').classList.add('show');
+      document.getElementById('cashout-card').classList.add('show');
+      setStatus('Clé reconstruite à partir de P' + a + ' + P' + b + '.', 'ok');
+    } catch (e) {
+      setStatus('❌ ' + (e && e.message ? e.message : 'Échec de la reconstruction.'), 'err');
+    }
+  }
+  document.getElementById('reconstruct').addEventListener('click', tryReconstruct);
+
+  // ── Vérifier le solde — lecture publique (/check_balance), aucune donnée
+  // secrète transmise (seul le g1pub, déjà imprimé en clair sur le billet). ──
+  document.getElementById('check-balance-btn').addEventListener('click', async function () {
+    if (!lastReconstructed) return;
+    var balEl = document.getElementById('res-balance');
+    balEl.textContent = '⏳ Vérification…';
+    try {
+      var resp = await fetch(apiBase() + '/check_balance?g1pub=' + encodeURIComponent(lastReconstructed.ss58));
+      var data = await resp.json();
+      if (!resp.ok) throw new Error(data.detail || ('HTTP ' + resp.status));
+      balEl.textContent = (data.balance || '0') + (data.zen !== undefined ? '  (≈ ' + data.zen + ' Ẑen)' : '');
+    } catch (e) {
+      balEl.textContent = '❌ ' + (e && e.message ? e.message : 'Échec de la vérification.');
+    }
+  });
+
+  // ── Commande d'encaissement CLI (Capitaine/support) — réutilise keygen +
+  // PAYforSURE.sh, les mêmes outils que billet_gen.sh. Rien n'est envoyé :
+  // juste un texte affiché localement, à copier sur une station. ──────────
+  function updateCashoutCmd() {
+    var cmdEl = document.getElementById('cashout-cmd');
+    if (!lastReconstructed) { cmdEl.textContent = '—'; return; }
+    var dest = (document.getElementById('dest-g1pub').value || '<DESTINATION_G1PUB>').trim() || '<DESTINATION_G1PUB>';
+    cmdEl.textContent =
+      'echo "' + lastReconstructed.seedHex + '" > /dev/shm/billet.cred\n' +
+      '~/.zen/Astroport.ONE/tools/keygen -t duniter -o /dev/shm/billet.dunikey -i /dev/shm/billet.cred\n' +
+      '~/.zen/Astroport.ONE/tools/G1check.sh ' + lastReconstructed.ss58 + '   # vérifier le solde\n' +
+      '~/.zen/Astroport.ONE/tools/PAYforSURE.sh /dev/shm/billet.dunikey <MONTANT> ' + dest + '\n' +
+      'rm -f /dev/shm/billet.cred /dev/shm/billet.dunikey';
+  }
+
+  document.getElementById('clear-btn').addEventListener('click', function () {
+    shares = {1: null, 2: null, 3: null};
+    document.querySelectorAll('textarea[data-slot]').forEach(function (ta) { ta.value = ''; });
+    document.querySelectorAll('input[type=file][data-slot]').forEach(function (inp) { inp.value = ''; });
+    document.querySelectorAll('.slot').forEach(function (s) { s.classList.remove('filled'); });
+    document.querySelectorAll('.state').forEach(function (s) { s.textContent = ''; s.className = 'state'; });
+    document.getElementById('verify-g1pub').value = '';
+    document.getElementById('res-seed').textContent = '';
+    document.getElementById('res-g1pub').textContent = '';
+    document.getElementById('res-ss58').textContent = '';
+    document.getElementById('res-match').textContent = '';
+    document.getElementById('res-balance').textContent = '—';
+    document.getElementById('dest-g1pub').value = '';
+    document.getElementById('cashout-cmd').textContent = '—';
+    lastReconstructed = null;
+    document.getElementById('result-card').classList.remove('show');
+    document.getElementById('cashout-card').classList.remove('show');
+    updateReconstructButton();
+    setStatus('', '');
+  });
+
+  // ── Pré-remplissage depuis le QR "reconstruction" du billet
+  // (billet_redeem.html?g1pub=...) — uniquement le champ de vérification,
+  // jamais la destination (qui n'est jamais le billet lui-même). ──────────
+  (function prefillFromQuery() {
+    try {
+      var g1pub = new URL(window.location.href).searchParams.get('g1pub');
+      if (g1pub) document.getElementById('verify-g1pub').value = g1pub;
+    } catch (e) { /* URL invalide — pas de pré-remplissage, pas bloquant */ }
+  })();
+})();
+</script>
+</body>
+</html>

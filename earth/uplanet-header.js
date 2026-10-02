@@ -28,7 +28,7 @@
         { e: '🎫', l: 'Ğ1Billet',       h: 'billet.html',            mini: true },
         { e: '😎', l: 'Mailjet',        h: 'mailjet.html', mini:true },
         { e: '🍪', l: 'Cookies',        h: 'cookie.html', mini:true },
-        { e: '👥', l: 'Face Cloud',     h: 'cloud.html' , mini: true },
+        { e: '👥', l: 'Face Cloud',     h: 'ucloud.html' , mini: true },
         { e: '🎬', l: 'Studio vidéo IA', h: 'story.html' },
         { e: '📸', l: 'PlantNet',       h: 'plantnet.html', mini:true },
         { sep: 'Station 모' },
@@ -169,11 +169,14 @@
         + '.uph-saved-acct-label{flex:1;font-size:10px;color:rgba(255,255,255,.75);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
         + '.uph-saved-del{font-size:10px;color:rgba(255,255,255,.25);cursor:pointer;flex-shrink:0;line-height:1}'
         + '.uph-saved-del:hover{color:#f87171}'
-        + '#uph-nsec-btn{width:100%;background:rgba(251,191,36,.1);border:1px solid rgba(251,191,36,.3);'
-        + 'color:#fbbf24;border-radius:8px;padding:4px 0;font-size:10.5px;cursor:pointer;font-weight:500;'
+        + '#uph-rec-pass{margin-top:4px}'
+        + '#uph-rec-btn{width:100%;background:rgba(251,191,36,.1);border:1px solid rgba(251,191,36,.3);'
+        + 'color:#fbbf24;border-radius:8px;padding:4px 0;margin-top:6px;font-size:10.5px;cursor:pointer;font-weight:500;'
         + 'font-family:system-ui,sans-serif}'
-        + '#uph-nsec-btn:hover{background:rgba(251,191,36,.2)}'
-        + '#uph-nsec-err{color:#f87171;font-size:9px;min-height:11px;display:block}'
+        + '#uph-rec-btn:hover{background:rgba(251,191,36,.2)}'
+        + '#uph-rec-btn:disabled{opacity:.5;cursor:default}'
+        + '#uph-rec-status{color:rgba(255,255,255,.4);font-size:9px;min-height:11px;display:block}'
+        + '#uph-rec-err{color:#f87171;font-size:9px;min-height:11px;display:block}'
         + '#uph-multipass-btn{width:100%;background:rgba(102,126,234,.12);border:1px solid rgba(102,126,234,.3);'
         + 'color:#aab4ff;border-radius:10px;padding:7px 0;font-size:11.5px;cursor:pointer;font-weight:600;'
         + 'font-family:system-ui,sans-serif}'
@@ -793,10 +796,12 @@
             + '<button id="uph-mext-btn">⚡ Connecter via extension NOSTR</button>'
             + '<hr class="uph-msep">'
             + '<div style="margin-bottom:12px">'
-            + '<label style="font-size:10px;color:rgba(255,255,255,.5);display:block;margin-bottom:4px">📱 Connexion mobile (clé nsec)</label>'
-            + '<input type="password" id="uph-nsec-input" placeholder="Coller votre clé nsec1…" autocomplete="off" spellcheck="false">'
-            + '<button id="uph-nsec-btn" style="margin-top:6px">🔐 Connecter avec nsec</button>'
-            + '<span id="uph-nsec-err"></span>'
+            + '<label style="font-size:10px;color:rgba(255,255,255,.5);display:block;margin-bottom:4px">📱 Connexion mobile (email + code PASS)</label>'
+            + '<input type="email" id="uph-rec-email" placeholder="votre@email.xyz" autocomplete="email" spellcheck="false">'
+            + '<input type="password" id="uph-rec-pass" placeholder="Code PASS (reçu par email)" autocomplete="off" spellcheck="false">'
+            + '<button id="uph-rec-btn">🔐 Récupérer mon accès</button>'
+            + '<span id="uph-rec-status"></span>'
+            + '<span id="uph-rec-err"></span>'
             + '</div>'
             + '<hr class="uph-msep">'
             + '<div style="text-align:center;padding:10px 0;font-size:11px;color:rgba(255,255,255,.45);line-height:1.6">'
@@ -818,105 +823,17 @@
             });
         }
 
-        // ── Connexion manuelle par clé nsec (mobile sans extension) ────────────
-        var nsecBtn = document.getElementById('uph-nsec-btn');
-        if (nsecBtn) {
-            nsecBtn.addEventListener('click', function () {
-                var input  = document.getElementById('uph-nsec-input');
-                var errEl  = document.getElementById('uph-nsec-err');
-                var nsec   = input ? input.value.trim() : '';
-                if (errEl) errEl.textContent = '';
-                if (!nsec) { if (errEl) errEl.textContent = 'Veuillez coller votre clé nsec1…'; return; }
+        // ── Récupération mobile par email + code PASS (sans extension NOSTR) ───
+        // Interroge la station Home détectée (via le tag home_station publié sur
+        // le relay constellation) pour récupérer le nsec via POST /g1nostr
+        // (recover_only=true) — contourne l'absence d'extension NOSTR sur mobile
+        // sans jamais demander à l'utilisateur de coller sa clé privée.
+        var recBtn = document.getElementById('uph-rec-btn');
+        if (recBtn) {
+            var emailInput = document.getElementById('uph-rec-email');
+            if (emailInput) emailInput.addEventListener('input', function () { _recAttempts = 0; });
 
-                try {
-                    var nt = window.NostrTools || window.Nostr;
-                    if (!nt || !nt.nip19) throw new Error('NostrTools non chargé');
-
-                    var decoded = nt.nip19.decode(nsec);
-                    if (decoded.type !== 'nsec') throw new Error('Format invalide — nsec1… attendu');
-
-                    // decoded.data est un Uint8Array → hex
-                    var privHex = Array.from(decoded.data)
-                        .map(function(b) { return b.toString(16).padStart(2, '0'); }).join('');
-                    var pubHex  = nt.getPublicKey(privHex);
-
-                    // Mettre à jour l'état NOSTR global
-                    var ns = window.NostrState || (window.NostrState = {});
-                    ns.userPrivateKey   = privHex;
-                    ns.userPubkey       = pubHex;
-                    ns.isNostrConnected = true;
-                    window.userPrivateKey   = privHex;
-                    window.userPubkey       = pubHex;
-                    window.isNostrConnected = true;
-                    if (typeof window.syncLegacyVariables === 'function') window.syncLegacyVariables();
-
-                    // Polyfill window.nostr pour les pages qui signent directement
-                    // (atomic_chat.html, atomic_map.html, etc.) — priorité à l'extension si déjà là
-                    if (typeof window.nostr === 'undefined' || !window.nostr) {
-                        (function (priv, pub) {
-                            window.nostr = {
-                                getPublicKey: function () { return Promise.resolve(pub); },
-                                signEvent: function (ev) {
-                                    try {
-                                        var _nt = window.NostrTools || window.Nostr;
-                                        return Promise.resolve(_nt.finishEvent(ev, priv));
-                                    } catch (e) { return Promise.reject(e); }
-                                },
-                                // NIP-44 v2 : encrypt(pubkey, plaintext) / decrypt(pubkey, ciphertext)
-                                // nostr.bundle.js expose nip44.encrypt(conversationKey, text) →
-                                // on dérive la conversationKey en interne via utils.v2.getConversationKey
-                                nip44: {
-                                    encrypt: function (pk, text) {
-                                        try {
-                                            var _nt = window.NostrTools || window.Nostr;
-                                            if (!_nt || !_nt.nip44) return Promise.reject(new Error('nip44 N/A'));
-                                            var ck = _nt.nip44.utils.v2.getConversationKey(priv, pk);
-                                            return Promise.resolve(_nt.nip44.encrypt(ck, text));
-                                        } catch (e) { return Promise.reject(e); }
-                                    },
-                                    decrypt: function (pk, ciph) {
-                                        try {
-                                            var _nt = window.NostrTools || window.Nostr;
-                                            if (!_nt || !_nt.nip44) return Promise.reject(new Error('nip44 N/A'));
-                                            var ck = _nt.nip44.utils.v2.getConversationKey(priv, pk);
-                                            return Promise.resolve(_nt.nip44.decrypt(ck, ciph));
-                                        } catch (e) { return Promise.reject(e); }
-                                    }
-                                },
-                                nip04: {
-                                    encrypt: function (pk, text) {
-                                        try {
-                                            var _nt = window.NostrTools || window.Nostr;
-                                            if (!_nt || !_nt.nip04) return Promise.reject(new Error('nip04 N/A'));
-                                            return Promise.resolve(_nt.nip04.encrypt(priv, pk, text));
-                                        } catch (e) { return Promise.reject(e); }
-                                    },
-                                    decrypt: function (pk, ciph) {
-                                        try {
-                                            var _nt = window.NostrTools || window.Nostr;
-                                            if (!_nt || !_nt.nip04) return Promise.reject(new Error('nip04 N/A'));
-                                            return Promise.resolve(_nt.nip04.decrypt(priv, pk, ciph));
-                                        } catch (e) { return Promise.reject(e); }
-                                    }
-                                }
-                            };
-                        }(privHex, pubHex));
-                    }
-
-                    // Effacer l'input pour ne pas laisser la clé dans le DOM
-                    if (input) input.value = '';
-
-                    _closeModal();
-                    _applyPubkey(pubHex);
-                    _cachePubkey(pubHex);
-                    _refreshUI();
-                    if (!_dataLoaded) { _dataLoaded = true; _loadAll(); }
-                    document.dispatchEvent(new CustomEvent('nostr:connected', { detail: { pubkey: pubHex } }));
-
-                } catch (e) {
-                    if (errEl) errEl.textContent = 'Clé invalide : ' + (e.message || e);
-                }
-            });
+            recBtn.addEventListener('click', function () { _handleRecover(); });
         }
 
         _initLoginForm();
@@ -1061,6 +978,237 @@
         if (h.startsWith('u.'))    return p + '://u.' + h.slice(2);
         // relay.* = WebSocket strfry uniquement, pas de pages HTML
         return 'https://u.copylaradio.com';
+    }
+
+    // ── Récupération d'accès par email + code PASS (mobile sans extension) ────
+    // Même principe que atomic.html (_relayUrl/_wsQuery/_resolveHomeStationUrl) :
+    // réimplémenté ici car uplanet-header.js est chargé seul sur la plupart des
+    // pages, sans relay.js/atomic.html.
+    var _recAttempts = 0;
+
+    function _uphGatewayUrl() {
+        if (typeof window.IPFS_GATEWAY === 'string' && window.IPFS_GATEWAY) return window.IPFS_GATEWAY;
+        return _apiUrl().replace(/^(https?:\/\/)u\./, '$1ipfs.').replace(':54321', ':8080');
+    }
+
+    function _uphRelayUrl() {
+        if (typeof window.getRelayUrl === 'function') {
+            try { var u = window.getRelayUrl(); if (u) return u; } catch (e) {}
+        }
+        var h = location.hostname;
+        if (h === '127.0.0.1' || h === 'localhost') return 'ws://127.0.0.1:7777';
+        if (h.indexOf('ipfs.') === 0) return 'wss://relay.' + h.slice(5);
+        if (h.indexOf('u.') === 0)    return 'wss://relay.' + h.slice(2);
+        return 'wss://relay.copylaradio.com';
+    }
+
+    function _uphWsQuery(relay, filter, timeout) {
+        return new Promise(function (resolve) {
+            var evs = [], ws;
+            var done = function () { try { ws && ws.close(); } catch (e) {} resolve(evs); };
+            var t = setTimeout(done, timeout || 5000);
+            try {
+                ws = new WebSocket(relay);
+                var sub = 'uph-rec-' + Math.random().toString(36).slice(2, 8);
+                ws.onopen = function () { ws.send(JSON.stringify(['REQ', sub, filter])); };
+                ws.onmessage = function (e) {
+                    try {
+                        var m = JSON.parse(e.data);
+                        if (m[0] === 'EVENT' && m[1] === sub) evs.push(m[2]);
+                        else if (m[0] === 'EOSE') { clearTimeout(t); done(); }
+                    } catch (e2) {}
+                };
+                ws.onerror = ws.onclose = function () { clearTimeout(t); resolve(evs); };
+            } catch (e) { clearTimeout(t); resolve([]); }
+        });
+    }
+
+    // IPFSNODEID (home_station) → uSPOT réel via son 12345.json publié
+    async function _uphResolveHomeStationUrl(ipfsnodeid) {
+        if (!ipfsnodeid) return null;
+        try {
+            var url = _uphGatewayUrl().replace(/\/$/, '') + '/ipns/' + ipfsnodeid + '/12345.json';
+            var r = await fetch(url, { signal: AbortSignal.timeout(8000) });
+            if (!r.ok) return null;
+            var d = await r.json();
+            return d.uSPOT ? { uspot: d.uSPOT, relay: d.myRELAY || null } : null;
+        } catch (e) { return null; }
+    }
+
+    // Email → station Home (tag home_station du profil kind 0, cf. atomic.html)
+    async function _uphFindHomeStation(email) {
+        try {
+            var evs = await _uphWsQuery(_uphRelayUrl(), { kinds: [0], '#i': ['email:' + email], limit: 1 }, 4000);
+            if (!evs.length) return null;
+            var meta = {};
+            try { meta = JSON.parse(evs[0].content); } catch (e) {}
+            if (!meta.home_station) return null;
+            return await _uphResolveHomeStationUrl(meta.home_station.split(':')[0]);
+        } catch (e) { return null; }
+    }
+
+    // Décode un nsec1… et bascule l'état NOSTR global dessus — utilisé après
+    // récupération via /g1nostr (le nsec ne transite jamais par un champ saisi
+    // par l'utilisateur, uniquement reçu signé/chiffré depuis la station Home).
+    function _applyNsecAndConnect(nsec) {
+        var nt = window.NostrTools || window.Nostr;
+        if (!nt || !nt.nip19) throw new Error('NostrTools non chargé');
+
+        var decoded = nt.nip19.decode(nsec);
+        if (decoded.type !== 'nsec') throw new Error('Format nsec invalide');
+
+        // decoded.data est un Uint8Array → hex
+        var privHex = Array.from(decoded.data)
+            .map(function (b) { return b.toString(16).padStart(2, '0'); }).join('');
+        var pubHex = nt.getPublicKey(privHex);
+
+        // Mettre à jour l'état NOSTR global
+        var ns = window.NostrState || (window.NostrState = {});
+        ns.userPrivateKey = privHex;
+        ns.userPubkey = pubHex;
+        ns.isNostrConnected = true;
+        window.userPrivateKey = privHex;
+        window.userPubkey = pubHex;
+        window.isNostrConnected = true;
+        if (typeof window.syncLegacyVariables === 'function') window.syncLegacyVariables();
+
+        // Polyfill window.nostr pour les pages qui signent directement
+        // (atomic_chat.html, atomic_map.html, etc.) — priorité à l'extension si déjà là
+        if (typeof window.nostr === 'undefined' || !window.nostr) {
+            (function (priv, pub) {
+                window.nostr = {
+                    getPublicKey: function () { return Promise.resolve(pub); },
+                    signEvent: function (ev) {
+                        try {
+                            var _nt = window.NostrTools || window.Nostr;
+                            return Promise.resolve(_nt.finishEvent(ev, priv));
+                        } catch (e) { return Promise.reject(e); }
+                    },
+                    // NIP-44 v2 : encrypt(pubkey, plaintext) / decrypt(pubkey, ciphertext)
+                    // nostr.bundle.js expose nip44.encrypt(conversationKey, text) →
+                    // on dérive la conversationKey en interne via utils.v2.getConversationKey
+                    nip44: {
+                        encrypt: function (pk, text) {
+                            try {
+                                var _nt = window.NostrTools || window.Nostr;
+                                if (!_nt || !_nt.nip44) return Promise.reject(new Error('nip44 N/A'));
+                                var ck = _nt.nip44.utils.v2.getConversationKey(priv, pk);
+                                return Promise.resolve(_nt.nip44.encrypt(ck, text));
+                            } catch (e) { return Promise.reject(e); }
+                        },
+                        decrypt: function (pk, ciph) {
+                            try {
+                                var _nt = window.NostrTools || window.Nostr;
+                                if (!_nt || !_nt.nip44) return Promise.reject(new Error('nip44 N/A'));
+                                var ck = _nt.nip44.utils.v2.getConversationKey(priv, pk);
+                                return Promise.resolve(_nt.nip44.decrypt(ck, ciph));
+                            } catch (e) { return Promise.reject(e); }
+                        }
+                    },
+                    nip04: {
+                        encrypt: function (pk, text) {
+                            try {
+                                var _nt = window.NostrTools || window.Nostr;
+                                if (!_nt || !_nt.nip04) return Promise.reject(new Error('nip04 N/A'));
+                                return Promise.resolve(_nt.nip04.encrypt(priv, pk, text));
+                            } catch (e) { return Promise.reject(e); }
+                        },
+                        decrypt: function (pk, ciph) {
+                            try {
+                                var _nt = window.NostrTools || window.Nostr;
+                                if (!_nt || !_nt.nip04) return Promise.reject(new Error('nip04 N/A'));
+                                return Promise.resolve(_nt.nip04.decrypt(priv, pk, ciph));
+                            } catch (e) { return Promise.reject(e); }
+                        }
+                    }
+                };
+            }(privHex, pubHex));
+        }
+
+        _closeModal();
+        _applyPubkey(pubHex);
+        _cachePubkey(pubHex);
+        _refreshUI();
+        if (!_dataLoaded) { _dataLoaded = true; _loadAll(); }
+        document.dispatchEvent(new CustomEvent('nostr:connected', { detail: { pubkey: pubHex } }));
+    }
+
+    // POST /g1nostr (recover_only=true) sur la station Home détectée — 3 échecs
+    // de code PASS déclenchent POST /g1nostr/alert (invalide le PASS, avertit le
+    // capitaine), même convention que Zelkova (multipass_service.dart::reportPassAttempts).
+    async function _handleRecover() {
+        var emailInput = document.getElementById('uph-rec-email');
+        var passInput  = document.getElementById('uph-rec-pass');
+        var btn        = document.getElementById('uph-rec-btn');
+        var statusEl   = document.getElementById('uph-rec-status');
+        var errEl      = document.getElementById('uph-rec-err');
+        if (!btn) return;
+
+        var email = emailInput ? emailInput.value.trim() : '';
+        var pass  = passInput  ? passInput.value.trim()  : '';
+        if (errEl) errEl.textContent = '';
+
+        if (!email || email.indexOf('@') === -1) { if (errEl) errEl.textContent = 'Email invalide'; return; }
+        if (!pass) { if (errEl) errEl.textContent = 'Veuillez saisir votre code PASS (reçu par email)'; return; }
+
+        btn.disabled = true;
+        if (statusEl) statusEl.textContent = '🔍 Recherche de votre station…';
+
+        try {
+            var station = await _uphFindHomeStation(email);
+            var base = (station && station.uspot) ? station.uspot : _apiUrl();
+
+            if (statusEl) statusEl.textContent = '🔐 Vérification du code PASS…';
+
+            var fd = new FormData();
+            fd.append('email', email);
+            fd.append('pass_code', pass);
+            fd.append('recover_only', 'true');
+            fd.append('format', 'json');
+            fd.append('lang', navigator.language || 'fr');
+
+            var r = await fetch(base.replace(/\/+$/, '') + '/g1nostr', {
+                method: 'POST', body: fd, signal: AbortSignal.timeout(15000)
+            });
+
+            if (r.status === 200) {
+                var data = await r.json();
+                if (!data.nsec) throw new Error('Réponse serveur incomplète (nsec absent)');
+                _recAttempts = 0;
+                if (passInput) passInput.value = '';
+                if (statusEl) statusEl.textContent = '';
+                _applyNsecAndConnect(data.nsec);
+                return;
+            }
+
+            if (r.status === 401) {
+                _recAttempts++;
+                if (_recAttempts >= 3) {
+                    if (errEl) errEl.textContent = '🔒 Trop de tentatives — accès verrouillé, le capitaine a été averti par email.';
+                    fetch(base.replace(/\/+$/, '') + '/g1nostr/alert', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ email: email, attempts: 3 })
+                    }).catch(function () {});
+                    _recAttempts = 0;
+                } else {
+                    if (errEl) errEl.textContent = 'Code PASS incorrect (' + _recAttempts + '/3)';
+                }
+            } else if (r.status === 404) {
+                if (errEl) errEl.textContent = 'Aucun MULTIPASS trouvé pour cet email sur la station détectée.';
+            } else if (r.status === 403) {
+                if (errEl) errEl.textContent = 'Accès désactivé après trop de tentatives — contactez votre capitaine.';
+            } else {
+                var detail = '';
+                try { var j = await r.json(); detail = j.detail || ''; } catch (e) {}
+                if (errEl) errEl.textContent = detail || ('Erreur serveur (' + r.status + ')');
+            }
+        } catch (e) {
+            if (errEl) errEl.textContent = 'Connexion impossible : ' + (e.message || e);
+        } finally {
+            btn.disabled = false;
+            if (statusEl) statusEl.textContent = '';
+        }
     }
 
     // ── Partage test de résonance depuis UPH (accessible toutes pages) ────────

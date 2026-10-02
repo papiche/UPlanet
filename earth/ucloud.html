@@ -210,7 +210,7 @@
   <section class="cloud-card fc-locked" id="card-photos">
     <h2>Mes photos</h2>
 
-    <!-- Trois flux d'envoi, cf. cloud.html (JS) setUploadMode() :
+    <!-- Trois flux d'envoi, cf. ucloud.html (JS) setUploadMode() :
          « générique » (comportement historique, détection auto + à nommer),
          « FaceID perso » et « ami désigné » (enrôlement supervisé — le
          visage est catalogué DIRECTEMENT sous l'identité choisie, sans
@@ -228,9 +228,9 @@
 
     <p class="cloud-note" id="mode-hint-generic" style="margin-top:0.75rem">
       Vos photos sont analysées automatiquement pour détecter les visages.
-      Les nouveaux visages apparaîtront dans « À nommer » ci-dessous — et si
-      aucun visage n'est trouvé, la photo est analysée pour reconnaître
-      objets, lieux ou scènes (section « Objets & lieux détectés » plus bas).
+      Les nouveaux visages apparaîtront dans « À nommer » ci-dessous — ce
+      cloud est réservé aux photos de visages : une photo où aucun visage
+      n'est détecté n'est pas conservée.
     </p>
 
     <p class="cloud-note" id="mode-hint-self" style="display:none;margin-top:0.75rem">
@@ -297,10 +297,16 @@
   <section class="cloud-card fc-locked" id="card-faces">
     <div class="fc-section-head">
       <h2>Visages détectés</h2>
-      <button id="btn-faces-refresh" class="cloud-btn cloud-btn-secondary fc-btn-sm"
-              onclick="loadFaces()">
-        <i class="bi bi-arrow-clockwise"></i> Actualiser
-      </button>
+      <div style="display:flex;gap:.4rem;flex-wrap:wrap">
+        <button id="btn-faces-view-toggle" class="cloud-btn cloud-btn-secondary fc-btn-sm"
+                onclick="toggleFacesView()">
+          🌌 Vue nébuleuse
+        </button>
+        <button id="btn-faces-refresh" class="cloud-btn cloud-btn-secondary fc-btn-sm"
+                onclick="loadFaces()">
+          <i class="bi bi-arrow-clockwise"></i> Actualiser
+        </button>
+      </div>
     </div>
     <p class="cloud-note" style="margin-top:0">
       L'analyse tourne en arrière-plan sur la station : après un envoi, un nouveau
@@ -313,15 +319,37 @@
          de saisir une clé NOSTR à la main. -->
     <datalist id="fc-friends-list"></datalist>
 
-    <h3 class="fc-subhead">À nommer <span class="fc-count" id="count-unknown">—</span></h3>
-    <p class="cloud-note" style="margin-top:0">
-      Donnez un nom et, si vous le souhaitez, la clé NOSTR (npub ou hex) de la
-      personne. Sans clé, aucune photo n'est partagée. Une même personne peut
-      apparaître sur plusieurs cartes distinctes (visages détectés
-      séparément) : cochez-les — ou utilisez « Tout sélectionner » sur un
-      groupe suggéré 🧩 — puis attribuez-leur un nom en une seule fois.
-    </p>
-    <div id="faces-unknown" class="fc-faces"></div>
+    <!-- Vue nébuleuse (p5.js, face-nebula.js) : parcours spatial de TOUS les
+         visages (identifiés + à nommer), positionnés par projection PCA de
+         leur embedding (cf. GET /mailjet/faces ::_pca_2d). Alimente la MÊME
+         sélection partagée que les cases à cocher de la vue liste — un seul
+         mécanisme de nommage groupé (#fc-bulk-bar), deux façons d'y entrer. -->
+    <div id="faces-nebula-wrap" style="display:none">
+      <p class="cloud-note" style="margin-top:0">
+        Chaque point affiche la vignette du visage dès qu'elle charge (sinon
+        un point de couleur en attendant) — survolez-le pour voir la photo
+        entière. Liseré : 🟢 déjà identifié · 🟠 à nommer · 🟣 à nommer, groupe
+        suggéré. Molette : zoomer · glisser : déplacer · clic : (dé)sélectionner
+        · Maj+glisser : sélection rectangle · double-clic : recadrer.
+      </p>
+      <div id="faces-nebula" style="height:460px;border:1px solid #e0e0e0;border-radius:8px;overflow:hidden"></div>
+    </div>
+
+    <div id="faces-list-wrap">
+      <h3 class="fc-subhead">À nommer <span class="fc-count" id="count-unknown">—</span></h3>
+      <p class="cloud-note" style="margin-top:0">
+        Donnez un nom et, si vous le souhaitez, la clé NOSTR (npub ou hex) de la
+        personne. Sans clé, aucune photo n'est partagée. Une même personne peut
+        apparaître sur plusieurs cartes distinctes (visages détectés
+        séparément) : cochez-les — ou utilisez « Tout sélectionner » sur un
+        groupe suggéré 🧩 — puis attribuez-leur un nom en une seule fois.
+      </p>
+      <div id="faces-unknown" class="fc-faces"></div>
+
+      <h3 class="fc-subhead">Déjà identifiés <span class="fc-count" id="count-known">—</span></h3>
+      <div id="faces-known" class="fc-faces"></div>
+    </div>
+
     <div id="fc-bulk-bar" class="fc-bulk-bar">
       <span><strong id="fc-bulk-count">0</strong> visages sélectionnés — la même personne ?</span>
       <input type="text" id="fc-bulk-name" class="fc-input" placeholder="Nom de la personne" list="fc-friends-list">
@@ -329,27 +357,6 @@
       <button type="button" class="cloud-btn cloud-btn-primary fc-btn-sm" onclick="bulkAssignFaces()">Assigner à la sélection</button>
       <button type="button" class="cloud-btn cloud-btn-secondary fc-btn-sm" onclick="clearFaceSelection()">Annuler</button>
     </div>
-
-    <h3 class="fc-subhead">Déjà identifiés <span class="fc-count" id="count-known">—</span></h3>
-    <div id="faces-known" class="fc-faces"></div>
-  </section>
-
-  <!-- ══ 7. Objets & lieux détectés ══════════════════════════════════════ -->
-  <section class="cloud-card fc-locked" id="card-inventory">
-    <div class="fc-section-head">
-      <h2>Objets &amp; lieux détectés</h2>
-      <button id="btn-inventory-refresh" class="cloud-btn cloud-btn-secondary fc-btn-sm"
-              onclick="loadInventory()">
-        <i class="bi bi-arrow-clockwise"></i> Actualiser
-      </button>
-    </div>
-    <p class="cloud-note" style="margin-top:0">
-      Quand une photo envoyée en mode « Ajouter des photos » ne contient
-      aucun visage, elle est analysée pour reconnaître ce qu'elle montre —
-      objet, plante, animal ou lieu. Résultat purement informatif : rien
-      n'est jamais partagé automatiquement, contrairement aux visages.
-    </p>
-    <div id="inventory-list" class="fc-faces"></div>
   </section>
 
 </main>
@@ -359,9 +366,11 @@
 <script src="common.js"></script>
 <script src="uplanet-header.js"></script>
 <script src="feedback.js"></script>
+<script src="p5.min.js"></script>
+<script src="face-nebula.js"></script>
 <script>
 /* ═══════════════════════════════════════════════════════════════════════
-   FaceCloud — cloud.html
+   FaceCloud — ucloud.html
 
    Une seule page, un seul mécanisme d'authentification : NIP-98 (kind 27235)
    signé par l'extension NOSTR (NIP-07). Chaque appel API signe un event FRAIS
@@ -473,7 +482,7 @@ function updateConnectionUI() {
     // signature restait affichée indéfiniment car _connected passait déjà à
     // true une 1ère fois, avalant silencieusement les `nostr:connected`
     // suivants qui auraient pu réussir). Ré-appeler ces GET est sans risque.
-    if (ok) { hideError(); refreshStatus(); loadFaces(); loadInventory(); loadGallery(); }
+    if (ok) { hideError(); refreshStatus(); loadFaces(); loadGallery(); }
 }
 
 function connectNostrUser() {
@@ -880,13 +889,13 @@ async function uploadSequentially(files, target) {
               + 'arrière-plan — actualisez la liste ci-dessous dans un moment.';
         addUploadRow(msg, 'info');
         // La galerie brute reflète juste le PUT (déjà fait) — pas besoin
-        // d'attendre le GPU, contrairement aux visages/objets ci-dessous.
+        // d'attendre le GPU, contrairement aux visages ci-dessous.
         loadGallery();
         // Un premier rafraîchissement de courtoisie ; le traitement étant
-        // asynchrone (GPU), rien ne garantit qu'un visage (ou un objet/lieu)
-        // soit déjà catalogué : le bouton « Actualiser » reste la voie fiable.
+        // asynchrone (GPU), rien ne garantit qu'un visage soit déjà catalogué
+        // (ou que la photo, faute de visage, ait déjà été supprimée) : le
+        // bouton « Actualiser » reste la voie fiable.
         setTimeout(loadFaces, 8000);
-        setTimeout(loadInventory, 8000);
     }
 }
 
@@ -910,6 +919,9 @@ function esc(s) {
     });
 }
 
+var _lastAllFaces = [];       // dernière réponse complète (pour la nébuleuse + selectFaceGroup)
+var _facesViewMode = 'list';  // 'list' | 'nebula'
+
 async function loadFaces() {
     if (!_connected) return;
     var unknownBox = document.getElementById('faces-unknown');
@@ -919,6 +931,7 @@ async function loadFaces() {
     try {
         var data = await nostrFetch('/mailjet/faces', { method: 'GET' });
         var faces = data.faces || [];
+        _lastAllFaces = faces;
         var unknown = faces.filter(function (f) { return !f.pubkey; });
         var known   = faces.filter(function (f) { return !!f.pubkey; });
 
@@ -940,12 +953,160 @@ async function loadFaces() {
         loadThumbnails(unknownBox);
         loadThumbnails(knownBox);
         loadFriendsDatalist();
+        if (_facesViewMode === 'nebula') _renderNebula();
     } catch (e) {
         document.getElementById('count-unknown').textContent = '—';
         document.getElementById('count-known').textContent   = '—';
         unknownBox.innerHTML = '<div class="fc-empty fc-err">Catalogue inaccessible : '
                              + esc(e.message || e) + '</div>';
     }
+}
+
+/* Bascule vue liste ↔ vue nébuleuse (face-nebula.js, p5.js) — les deux
+   partagent les mêmes données (_lastAllFaces, pas de second fetch) et la
+   même sélection (_facesSelected), donc #fc-bulk-bar fonctionne à l'identique
+   dans les deux modes. */
+function toggleFacesView() {
+    var btn = document.getElementById('btn-faces-view-toggle');
+    if (_facesViewMode === 'list') {
+        _facesViewMode = 'nebula';
+        document.getElementById('faces-list-wrap').style.display = 'none';
+        document.getElementById('faces-nebula-wrap').style.display = '';
+        btn.innerHTML = '📋 Vue liste';
+        _renderNebula();
+    } else {
+        _facesViewMode = 'list';
+        document.getElementById('faces-nebula-wrap').style.display = 'none';
+        document.getElementById('faces-list-wrap').style.display = '';
+        btn.innerHTML = '🌌 Vue nébuleuse';
+        if (window.FaceNebula) window.FaceNebula.destroy();
+        var preview = document.getElementById('nebula-hover-preview');
+        if (preview) preview.style.display = 'none';
+        _clearNebulaPhotoCache();
+    }
+}
+
+function _renderNebula() {
+    if (!window.FaceNebula || !_lastAllFaces.length) return;
+    window.FaceNebula.init(document.getElementById('faces-nebula'), _lastAllFaces, {
+        isSelected: function (id) { return _facesSelected.has(id); },
+        onToggleSelect: function (id) { toggleFaceSelection(id); },
+        onRectSelect: function (ids) {
+            ids.forEach(function (id) { _facesSelected.add(id); });
+            onFaceSelectionChange();
+        },
+        onHover: _onNebulaHover,
+    });
+    loadNebulaThumbnails(_lastAllFaces);
+}
+
+/* Vignettes (recadrées sur le visage) des points de la nébuleuse — même
+   endpoint et même discipline de lots que loadThumbnails()/THUMB_BATCH_SIZE
+   (défini plus bas), pour ne pas ouvrir des centaines de requêtes NIP-98
+   d'un coup. FaceNebula affiche chaque vignette dès qu'elle arrive (pas
+   besoin d'attendre le lot entier). */
+async function loadNebulaThumbnails(faces) {
+    var withPhoto = faces.filter(function (f) { return f.has_photo; });
+    for (var i = 0; i < withPhoto.length; i += THUMB_BATCH_SIZE) {
+        var batch = withPhoto.slice(i, i + THUMB_BATCH_SIZE);
+        await Promise.all(batch.map(function (f) {
+            return nostrFetch('/mailjet/faces/thumbnail?point_id=' + encodeURIComponent(f.id),
+                { method: 'GET', responseType: 'blob' })
+                .then(function (blob) {
+                    if (window.FaceNebula) window.FaceNebula.setThumbUrl(f.id, URL.createObjectURL(blob));
+                })
+                .catch(function () { /* reste le point coloré, pas de vignette */ });
+        }));
+    }
+}
+
+/* Photo ENTIÈRE au survol d'un point (contexte complet, pas juste le visage
+   recadré) — GET /mailjet/faces/photo, chargée à la demande et mise en cache
+   par point_id (pas de préchargement systématique, contrairement aux
+   vignettes : la photo entière est plus lourde et seul un survol la justifie).
+   L'aperçu est un <img> position:fixed ajouté au <body> — PAS un enfant du
+   conteneur nébuleuse, qui a overflow:hidden.
+
+   Le cache de blob URL est borné (_NEBULA_PHOTO_CACHE_MAX) et révoqué en
+   quittant la vue nébuleuse (toggleFacesView) : sans ça, une session longue
+   à survoler beaucoup de visages distincts accumulerait indéfiniment des
+   blobs déchiffrés en mémoire. */
+var _nebulaPhotoCache = {};
+var _NEBULA_PHOTO_CACHE_MAX = 50;
+
+function _clearNebulaPhotoCache() {
+    Object.keys(_nebulaPhotoCache).forEach(function (id) {
+        try { URL.revokeObjectURL(_nebulaPhotoCache[id]); } catch (e) {}
+    });
+    _nebulaPhotoCache = {};
+}
+
+function _nebulaPreviewEl() {
+    var el = document.getElementById('nebula-hover-preview');
+    if (!el) {
+        el = document.createElement('img');
+        el.id = 'nebula-hover-preview';
+        el.style.cssText = 'position:fixed;z-index:9999;max-width:260px;max-height:260px;'
+            + 'border-radius:8px;box-shadow:0 4px 18px rgba(0,0,0,0.45);border:2px solid #fff;'
+            + 'pointer-events:none;display:none;object-fit:contain;background:#111';
+        document.body.appendChild(el);
+    }
+    return el;
+}
+
+var _nebulaHoverId = null;
+var _nebulaHoverTimer = null;
+var NEBULA_HOVER_DELAY_MS = 150;
+
+/* Débounce : un passage rapide de la souris sur plusieurs points ne doit pas
+   déclencher un déchiffrement serveur par point simplement traversé — seul
+   un survol qui "tient" au-delà du délai charge réellement la photo. */
+function _onNebulaHover(face, pageX, pageY) {
+    _nebulaHoverId = face ? face.id : null;
+    if (_nebulaHoverTimer) { clearTimeout(_nebulaHoverTimer); _nebulaHoverTimer = null; }
+    if (!face || !face.has_photo) {
+        _nebulaPreviewEl().style.display = 'none';
+        return;
+    }
+    _nebulaHoverTimer = setTimeout(function () {
+        _showNebulaPreview(face, pageX, pageY);
+    }, NEBULA_HOVER_DELAY_MS);
+}
+
+function _showNebulaPreview(face, pageX, pageY) {
+    if (_nebulaHoverId !== face.id) return;   // le survol a déjà changé entre-temps
+    var el = _nebulaPreviewEl();
+
+    var left = pageX + 16, top = pageY - 16;
+    if (left + 260 > window.innerWidth) left = pageX - 276;
+    if (top + 260 > window.innerHeight) top = window.innerHeight - 270;
+    if (top < 8) top = 8;
+    el.style.left = left + 'px';
+    el.style.top  = top + 'px';
+
+    if (_nebulaPhotoCache[face.id]) {
+        el.src = _nebulaPhotoCache[face.id];
+        el.style.display = '';
+        return;
+    }
+    el.style.display = 'none';
+    var hoveredId = face.id;
+    nostrFetch('/mailjet/faces/photo?point_id=' + encodeURIComponent(hoveredId),
+        { method: 'GET', responseType: 'blob' })
+        .then(function (blob) {
+            if (Object.keys(_nebulaPhotoCache).length >= _NEBULA_PHOTO_CACHE_MAX) {
+                _clearNebulaPhotoCache();
+            }
+            var url = URL.createObjectURL(blob);
+            _nebulaPhotoCache[hoveredId] = url;
+            // Le survol a pu changer entre-temps (fetch asynchrone) : on ne
+            // montre l'aperçu que s'il concerne toujours le visage courant.
+            if (_nebulaHoverId === hoveredId) {
+                el.src = url;
+                el.style.display = '';
+            }
+        })
+        .catch(function () { /* pas d'aperçu si le déchiffrement échoue */ });
 }
 
 /* Rapprochement pour archives longue durée (~30 ans) : la même personne
@@ -1005,38 +1166,46 @@ function groupedFacesHtml(unknown) {
     }).join('');
 }
 
-/* Sélection manuelle multi-cartes (checkboxes sur les visages "À nommer"
-   uniquement) pour attribuer un nom/pubkey commun en un seul appel
-   (POST /mailjet/faces-edit-bulk) — indépendante des groupes suggérés
-   ci-dessus, que l'utilisateur peut toujours corriger à la main. */
+/* Sélection multi-visages PARTAGÉE entre la vue liste (checkboxes sur les
+   cartes "À nommer") et la vue nébuleuse (clic/sélection rectangle,
+   face-nebula.js) — un seul Set, un seul #fc-bulk-bar, pour attribuer un
+   nom/pubkey commun en un seul appel (POST /mailjet/faces-edit-bulk). */
+var _facesSelected = new Set();
+
 function getSelectedFaceIds() {
-    return Array.prototype.map.call(
-        document.querySelectorAll('#faces-unknown .fc-face-select:checked'),
-        function (cb) { return cb.getAttribute('data-id'); }
-    );
+    return Array.from(_facesSelected);
+}
+
+function toggleFaceSelection(id, checked) {
+    if (checked === undefined) checked = !_facesSelected.has(id);
+    if (checked) _facesSelected.add(id); else _facesSelected.delete(id);
+    onFaceSelectionChange();
 }
 
 function onFaceSelectionChange() {
     var ids = getSelectedFaceIds();
     var bar = document.getElementById('fc-bulk-bar');
-    if (!bar) return;
-    bar.style.display = ids.length >= 2 ? 'flex' : 'none';
-    document.getElementById('fc-bulk-count').textContent = ids.length;
+    if (bar) {
+        bar.style.display = ids.length >= 2 ? 'flex' : 'none';
+        document.getElementById('fc-bulk-count').textContent = ids.length;
+    }
+    document.querySelectorAll('#faces-unknown .fc-face-select').forEach(function (cb) {
+        cb.checked = _facesSelected.has(cb.getAttribute('data-id'));
+    });
 }
 
 function selectFaceGroup(groupId) {
-    var box = document.querySelector('.fc-face-group[data-group-id="' + groupId.replace(/"/g, '') + '"]');
-    if (!box) return;
-    box.querySelectorAll('.fc-face-select').forEach(function (cb) { cb.checked = true; });
+    _lastAllFaces
+        .filter(function (f) { return f.group_id === groupId; })
+        .forEach(function (f) { _facesSelected.add(f.id); });
     onFaceSelectionChange();
     var bar = document.getElementById('fc-bulk-bar');
     if (bar) bar.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
 function clearFaceSelection() {
-    document.querySelectorAll('#faces-unknown .fc-face-select').forEach(function (cb) { cb.checked = false; });
-    var bar = document.getElementById('fc-bulk-bar');
-    if (bar) bar.style.display = 'none';
+    _facesSelected.clear();
+    onFaceSelectionChange();
     var nameInput = document.getElementById('fc-bulk-name');
     var keyInput  = document.getElementById('fc-bulk-key');
     if (nameInput) nameInput.value = '';
@@ -1085,7 +1254,9 @@ function faceCardHtml(f) {
         : '<div class="fc-face-thumb-empty" title="Pas de photo enregistrée pour ce visage">❓</div>';
     var selectBox = named ? '' :
         '<label class="fc-face-select-wrap" title="Sélectionner pour un nommage groupé">'
-      +   '<input type="checkbox" class="fc-face-select" data-id="' + esc(f.id) + '" onchange="onFaceSelectionChange()">'
+      +   '<input type="checkbox" class="fc-face-select" data-id="' + esc(f.id) + '"'
+      +     (_facesSelected.has(f.id) ? ' checked' : '')
+      +     ' onchange="toggleFaceSelection(this.getAttribute(\'data-id\'), this.checked)">'
       + '</label>';
     return '<div class="fc-face' + (named ? ' fc-face-known' : '') + '" data-id="' + esc(f.id) + '">'
       + '<div class="fc-face-body">'
@@ -1176,73 +1347,17 @@ function _thumbEmptyEl() {
     return d;
 }
 
-/* ── Section 6 : objets & lieux détectés ──────────────────────────────
-   Contrepartie de « Visages détectés » pour les photos où AUCUN visage n'a
-   été trouvé (faceid.sh enchaîne alors sur inventory_recognition.py, cf.
-   Astroport.ONE/IA/CLAUDE.md). Purement informatif — pas de nommage, pas de
-   partage : GET /mailjet/inventory liste les entrées de .ucloud/index.json
-   qui portent un champ `scene` (satellite_face_matcher.py::_tag_ucloud_scene). */
-var _INVENTORY_ICONS = {
-    plant: '🌿', insect: '🐛', animal: '🐾', object: '📦', place: '📍', person: '🧑'
-};
-
-async function loadInventory() {
-    if (!_connected) return;
-    var box = document.getElementById('inventory-list');
-    box.innerHTML = '<div class="fc-empty">Chargement…</div>';
-    try {
-        var data = await nostrFetch('/mailjet/inventory', { method: 'GET' });
-        var items = data.items || [];
-        box.innerHTML = items.length
-            ? items.map(inventoryCardHtml).join('')
-            : '<div class="fc-empty">Rien de détecté pour l\'instant.</div>';
-        loadInventoryThumbnails(box);
-    } catch (e) {
-        box.innerHTML = '<div class="fc-empty fc-err">Catalogue inaccessible : '
-                       + esc(e.message || e) + '</div>';
-    }
-}
-
-function inventoryCardHtml(it) {
-    var icon = _INVENTORY_ICONS[it.type] || '📦';
-    var pct = (typeof it.confidence === 'number') ? Math.round(it.confidence * 100) + '%' : '';
-    var meta = [it.description, pct ? 'confiance ' + pct : '',
-                (it.tags && it.tags.length) ? it.tags.join(', ') : '',
-                it.timestamp ? String(it.timestamp).slice(0, 10) : '']
-        .filter(Boolean).map(esc).join(' · ');
-    return '<div class="fc-face" data-path="' + esc(it.path) + '">'
-      + '<div class="fc-face-body">'
-      +   '<img class="fc-face-thumb" data-inv-path="' + esc(it.path) + '" alt="">'
-      +   '<div class="fc-face-content">'
-      +     '<div class="fc-face-head">'
-      +       '<span class="fc-face-name">' + icon + ' '
-                + esc(it.name || it.category || 'Non identifié') + '</span>'
-      +     '</div>'
-      +     '<div class="cloud-note fc-face-note">' + meta + '</div>'
-      +   '</div>'
-      + '</div>'
-      + '</div>';
-}
-
-function loadInventoryThumbnails(container) {
-    var imgs = container.querySelectorAll('.fc-face-thumb[data-inv-path]');
-    imgs.forEach(function (img) {
-        var path = img.getAttribute('data-inv-path');
-        nostrFetch('/mailjet/inventory/thumbnail?path=' + encodeURIComponent(path),
-            { method: 'GET', responseType: 'blob' })
-            .then(function (blob) { img.src = URL.createObjectURL(blob); })
-            .catch(function () { img.replaceWith(_thumbEmptyEl()); });
-    });
-}
-
 /* ── Section 4 : Mes fichiers (galerie brute /dav/) ───────────────────
-   Contrairement à « Visages détectés » et « Objets & lieux détectés » (qui
-   ne montrent que ce que FaceID/l'inventaire ont catalogué), cette section
-   liste TOUT ce qui est présent sur le disque chiffré — GET /api/cloud/files,
-   qui lit directement .ucloud/index.json sans filtrage. Pour plusieurs
-   centaines de fichiers, les miniatures sont chargées PAR LOTS (voir
-   THUMB_BATCH_SIZE plus bas) pour ne pas ouvrir des centaines de requêtes
-   simultanées ni saturer l'extension NOSTR (une signature par miniature). */
+   Contrairement à « Visages détectés » (qui ne montre que ce que FaceID a
+   catalogué), cette section liste TOUT ce qui est présent sur le disque
+   chiffré — GET /api/cloud/files, qui lit directement .ucloud/index.json
+   sans filtrage. En pratique, .ucloud étant réservé aux images de visages,
+   cette galerie ne contient plus que des photos avec au moins un visage
+   (une photo sans visage est supprimée avant même d'y apparaître durablement).
+   Pour plusieurs centaines de fichiers, les miniatures sont chargées PAR LOTS
+   (voir THUMB_BATCH_SIZE plus bas) pour ne pas ouvrir des centaines de
+   requêtes simultanées ni saturer l'extension NOSTR (une signature par
+   miniature). */
 var _galleryLimit = 60;   // pagination simple : n'affiche/déchiffre que les N plus récents d'abord
 async function loadGallery() {
     if (!_connected) return;
@@ -1271,8 +1386,7 @@ async function loadGallery() {
 function galleryCardHtml(f) {
     var meta = [formatBytes(f.size),
                 f.mtime ? new Date(f.mtime * 1000).toLocaleDateString() : '',
-                f.tags && f.tags.length ? '👤 ' + f.tags.join(', ') : '',
-                f.has_scene ? '🔎 scène analysée' : '']
+                f.tags && f.tags.length ? '👤 ' + f.tags.join(', ') : '']
         .filter(Boolean).map(esc).join(' · ');
     return '<div class="fc-face">'
       + '<div class="fc-face-body">'

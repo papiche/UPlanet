@@ -157,10 +157,11 @@ Permet de planifier une session (Kind 31922) avec les tags `craft` et `min_opera
 | **SkillCloud** | `skills.js` | `SkillCloud.init(opts)` — widget p5.js Kind 30503/30504 |
 | **RelaySelector** | `relay.js` | `RelaySelector.init(opts)`, `RelaySelector.query(wsUrl, filter, opts)` |
 | **WoTx²Nav** | `wotx2-nav.js` | Auto-injecte une barre d'onglets fixe bas de page (⚒️ Forge / ☁️ Skills / ⛏️ MineLife / 📦 Objets). Charger après `uplanet-header.js`. Ajoute `padding-bottom` au `body` automatiquement. |
+| **FaceNebula** | `face-nebula.js` | `FaceNebula.init(containerEl, faces, opts)`, `.destroy()` — widget p5.js nébuleuse de visages (positions PCA 2D), cf. `ucloud.html` |
 
 ---
 
-## `cloud.html` — FaceCloud (cloud chiffré + reconnaissance faciale)
+## `ucloud.html` — FaceCloud (cloud chiffré + reconnaissance faciale)
 
 Une seule page pour : activer le cloud chiffré du MULTIPASS, y envoyer des
 photos, parcourir ce qui s'y trouve (galerie « Mes fichiers »), et nommer les
@@ -168,7 +169,14 @@ visages qui y sont détectés. Ce n'est PAS un navigateur de fichiers complet
 (pas de dossiers, pas de renommage/suppression depuis la page) : pour ça, le
 disque se monte comme un lecteur réseau standard.
 
-**Stack :** `nacl-fast.min.js` → `nostr.bundle.js` → `common.js` → `uplanet-header.js` → `feedback.js`
+⚠️ **`.ucloud` est réservé aux images contenant un visage** (depuis
+2026-10-02) : si l'analyse FaceID (asynchrone, GPU) ne détecte AUCUN visage
+sur une photo envoyée, l'entrée est supprimée automatiquement — ni analyse de
+contenu/scène, ni conservation (`satellite_face_matcher.py::_delete_ucloud_entry()`,
+cf. `UPassport/CLAUDE.md`). L'ancienne section « Objets & lieux détectés »
+et les endpoints `/mailjet/inventory*` ont été retirés en conséquence.
+
+**Stack :** `nacl-fast.min.js` → `nostr.bundle.js` → `common.js` → `uplanet-header.js` → `feedback.js` → `p5.min.js` → `face-nebula.js`
 **Style :** `cloud.enhancements.css` (thème clair Google-Drive, sections
 `PANNEAU D'ACTIVATION` et `FACECLOUD` ; accent `#1a73e8`)
 
@@ -182,16 +190,17 @@ déverrouillage `.fc-locked`/`.fc-unlocked` de ses propres sections ; le bouton
 par `uplanet-header.js` — même convention que `calendars.html`.
 
 Sections, dans l'ordre : En-tête → Connexion → Mon cloud chiffré → Mes fichiers
-→ Mes photos → Visages détectés → Objets & lieux détectés. Tant que le
-MULTIPASS n'est pas connecté, les quatre dernières portent `.fc-locked`
-(grisées, `pointer-events:none`) ; la connexion ajoute `.fc-unlocked`.
+→ Mes photos → Visages détectés. Tant que le MULTIPASS n'est pas connecté,
+les trois dernières portent `.fc-locked` (grisées, `pointer-events:none`) ;
+la connexion ajoute `.fc-unlocked`.
 
 **« Mes fichiers »** (depuis 2026-09-24) est une galerie BRUTE de `/dav/` —
-toutes les images de `.ucloud/index.json`, qu'un visage/une scène y ait été
-détecté ou non (contrairement aux sections Visages/Objets, qui ne montrent
-que ce qui a été catalogué). Pagination simple (60 par page, bouton
-« Afficher plus ») et miniatures chargées par lots de 6 en parallèle
-(`THUMB_BATCH_SIZE`) — pas des centaines de requêtes signées NIP-98 d'un coup.
+toutes les images de `.ucloud/index.json`, qu'un visage y ait été catalogué
+ou non encore (l'analyse FaceID est asynchrone) ; en pratique, une image sans
+aucun visage finit par en disparaître (cf. politique de rétention ci-dessus).
+Pagination simple (60 par page, bouton « Afficher plus ») et miniatures
+chargées par lots de 6 en parallèle (`THUMB_BATCH_SIZE`) — pas des centaines
+de requêtes signées NIP-98 d'un coup.
 
 **Envoi en masse (plusieurs centaines de fichiers)** : `uploadSequentially()`
 envoie par lots de 4 en concurrence (`UPLOAD_BATCH_SIZE`), pas un par un — le
@@ -207,7 +216,7 @@ ligne de progression agrégée (« Envoi… X / N ») pour ne pas inonder le DOM
 | Activer / régénérer | `POST /api/cloud/enroll` → `{dav_url, email, token, instructions}` (nouveau token, déconnecte les clients déjà montés) |
 | Récupérer le mot de passe existant | `POST /api/cloud/reveal` → même forme, sans régénérer (bouton « Afficher le mot de passe ») |
 | Révoquer | `POST /api/cloud/revoke` |
-| Lister tous les fichiers | `GET /api/cloud/files` → `{files:[{path,mime,size,mtime,tags,has_scene,readonly}]}`, triés par date — alimente « Mes fichiers » |
+| Lister tous les fichiers | `GET /api/cloud/files` → `{files:[{path,mime,size,mtime,tags,readonly}]}`, triés par date — alimente « Mes fichiers » |
 | Miniature d'un fichier quelconque | `GET /api/cloud/thumbnail?path=…` → JPEG (300×300, déchiffré à la volée), sans catalogage préalable requis |
 | Envoyer une photo | `PUT /dav/Photos/<nom>` (corps = fichier brut, PAS `/api/fileupload` — seul le cloud chiffré déclenche l'analyse FaceID, cf. `UPassport/CLAUDE.md`) — `MKCOL /dav/Photos` best-effort avant le premier envoi (RFC 4918 strict : pas de création implicite du parent) |
 | Enrôlement supervisé (optionnel) | En-têtes `X-FaceID-Target-Pubkey` (64 hex) / `X-FaceID-Target-Name` sur le `PUT` — chaque visage détecté est catalogué DIRECTEMENT sous cette identité (pas de recherche par similarité ni de `Inconnu_xxx`) |
@@ -216,8 +225,7 @@ ligne de progression agrégée (« Envoi… X / N ») pour ne pas inonder le DOM
 | Nommer plusieurs visages d'un coup | `POST /mailjet/faces-edit-bulk` (multipart `point_ids` séparés par virgules, `name`, `pubkey`) — même payload merge Qdrant, appliqué à toute une sélection (groupe suggéré via « Tout sélectionner », ou cases à cocher manuelles sur ≥2 cartes « À nommer ») en un seul appel NIP-98 |
 | Oublier un visage | `POST /mailjet/faces-delete` (multipart `point_id`) |
 | Miniature d'un visage | `GET /mailjet/faces/thumbnail?point_id=…` → JPEG (déchiffré + recadré à la volée, jamais persisté) — chargé via `nostrFetch(..., {responseType:'blob'})` car un `<img src>` classique ne peut pas porter de header `Authorization` |
-| Lister objets/lieux détectés | `GET /mailjet/inventory` → `{items:[{path,type,category,name,description,confidence,tags,timestamp}]}` |
-| Miniature d'un objet/lieu | `GET /mailjet/inventory/thumbnail?path=…` → JPEG de la photo entière (pas de recadrage, contrairement aux visages) |
+| Photo entière d'un visage | `GET /mailjet/faces/photo?point_id=…` → JPEG ≤1024px, PAS recadrée (contexte complet) — aperçu au survol d'un point dans la vue nébuleuse |
 
 **Un seul mécanisme d'auth : NIP-98** (kind 27235, tags `u`/`method`, base64url
 sans padding) — **même convention que `craft.html` / `forge.html` /
@@ -247,6 +255,57 @@ sticky en bas de section) : un seul nom/pubkey saisi puis `bulkAssignFaces()`
 appelle `POST /mailjet/faces-edit-bulk` une seule fois pour toute la
 sélection. Toujours une action explicite — jamais de fusion automatique.
 
+**Vue nébuleuse** (`face-nebula.js`, p5.js en mode instance — même convention
+que `skills.js`/`SkillCloud`) — mode alternatif à la liste (bouton « 🌌 Vue
+nébuleuse » / « 📋 Vue liste », `toggleFacesView()`), pour parcourir/associer
+visuellement le catalogue : chaque visage (nommé ou non) est un point, placé
+selon `x`/`y` (projection PCA 2D de l'embedding, calculée côté serveur par
+`_pca_2d()`, cf. `UPassport/CLAUDE.md` — les vecteurs 512D eux-mêmes ne
+quittent jamais le backend). Molette = zoom centré sur le curseur, glisser =
+pan, clic sur un point = bascule sa sélection, **Maj**+glisser = sélection
+rectangle, double-clic = recadre tout. Liseré : vert = déjà identifié,
+amber = à nommer, violet = à nommer + `group_id` suggéré.
+
+**Vignettes + photo entière au survol** — chaque point affiche, dès qu'elle
+est chargée, la vignette recadrée du visage (`GET /mailjet/faces/thumbnail`,
+même endpoint que la vue liste) découpée en cercle via `drawingContext`
+(canvas 2D brut, p5 n'a pas de clip circulaire natif) ; tant qu'elle n'est pas
+là, le point reste coloré (dégradation gracieuse). `loadNebulaThumbnails()`
+les charge par lots (`THUMB_BATCH_SIZE`, mêmes lots que la galerie « Mes
+fichiers ») et les pousse une à une via `FaceNebula.setThumbUrl(id, blobUrl)`
+— le module ne connaît ni `nostrFetch` ni l'auth NIP-98, juste les URL qu'on
+lui donne. Au survol, `onHover(face, pageX, pageY)` déclenche un fetch (mis en
+cache par `point_id`, pas de préchargement systématique) vers
+`GET /mailjet/faces/photo` — la photo ENTIÈRE (pas recadrée, ≤1024px,
+`_resize_full_jpeg()` côté serveur) affichée dans un `<img id=
+"nebula-hover-preview">` `position:fixed` ajouté au `<body>` (pas un enfant du
+conteneur nébuleuse, qui a `overflow:hidden`).
+
+La nébuleuse et la liste partagent la MÊME sélection (`_facesSelected`, un
+`Set` d'ids — `toggleFaceSelection()`/`onFaceSelectionChange()`) et donc le
+même `#fc-bulk-bar` : on peut commencer une sélection en nébuleuse puis
+basculer en liste (ou l'inverse) sans la perdre, et `bulkAssignFaces()` reste
+le seul point d'appel à `POST /mailjet/faces-edit-bulk`. Pas de second fetch
+réseau pour les positions : la nébuleuse se construit sur `_lastAllFaces`, la
+réponse déjà récupérée par `loadFaces()`. `FaceNebula.destroy()` retire
+l'instance p5 au retour en vue liste (pas de canvas qui tourne en
+arrière-plan inutilement) et cache l'aperçu photo s'il était affiché.
+
+**Hygiène mémoire des blob URL** — `URL.createObjectURL()` (vignettes +
+aperçu photo entière) n'est jamais révoqué automatiquement par le
+navigateur : `FaceNebula` révoque les vignettes dans `init()` (avant de
+recharger) et `destroy()` ; côté hôte, `_clearNebulaPhotoCache()` révoque
+le cache d'aperçus (`_nebulaPhotoCache`, plafonné à `_NEBULA_PHOTO_CACHE_MAX`
+= 50 entrées) en quittant la vue nébuleuse ou quand le plafond est atteint.
+Sans ça, une session longue à parcourir beaucoup de visages distincts
+accumulerait indéfiniment des images déchiffrées en mémoire.
+
+**Débounce du survol** — `_onNebulaHover()` ne déclenche le fetch
+`GET /mailjet/faces/photo` qu'après `NEBULA_HOVER_DELAY_MS` (150 ms) de
+survol stable sur le MÊME visage (`_showNebulaPreview()`) ; un passage rapide
+de la souris sur plusieurs points annule le minuteur à chaque changement au
+lieu de lancer un déchiffrement serveur par point traversé.
+
 **Section « Mes photos » — trois flux d'envoi** (`setUploadMode()`, onglets
 `.fc-mode-tab`), pour réduire les faux positifs de la détection auto seule :
 - **📤 Ajouter des photos** (`generic`, historique) — détection auto, atterrit
@@ -273,17 +332,6 @@ canvas capture une seule image, l'encode en JPEG (`canvas.toBlob`), en fait un
 `File` et le fait rejoindre `onFilesPicked()` comme n'importe quel fichier
 choisi — même pipeline PUT, mêmes en-têtes `X-FaceID-Target-*`. Le flux vidéo
 est coupé dès la capture (`stopWebcam()`), jamais transmis tel quel.
-
-**Section « Objets & lieux détectés »** (`loadInventory()`) — contrepartie de
-« Visages détectés » pour les photos qui n'en contiennent AUCUN : `faceid.sh`
-enchaîne alors sur `IA/inventory_recognition.py` (Ollama vision), et le
-résultat (`type`/`category`/`name`/`description`/`confidence`/`tags`) est
-listé via `GET /mailjet/inventory`, miniature (photo entière, sans recadrage)
-via `/mailjet/inventory/thumbnail?path=…`. Purement informatif : pas de
-nommage, pas de partage — contrairement au catalogue de visages, il n'y a pas
-de base vectorielle Qdrant, juste les entrées de `.ucloud/index.json` portant
-un champ `scene` (écrit par `satellite_face_matcher.py::_tag_ucloud_scene()`,
-jamais mélangé avec `tags`, réservé aux noms d'amis d'un partage de visage).
 
 Chaque carte affiche une **miniature recadrée sur le visage** (`loadThumbnails()`,
 un fetch signé par image, échec individuel silencieux → placeholder "❓" — sans

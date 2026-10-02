@@ -524,3 +524,15 @@ L'affichage du score final est normalisé : `pctDisplay = Math.round((k - 0.5) *
 cd UPlanet
 ./microledger.me.sh   # ipfs add earth/ + update .chain + git commit + push
 ```
+
+
+## `story.html` — Studio vidéo IA (personnages et scènes, Kind 30510)
+
+Table de montage : bibliothèque (scènes / personnages ; à moi / coopérative), éditeur de scène en **pellicule** (un plan = une
+image numérotée avec ses perforations), mode avancé `storyboard.json`. Quatre types de plan (image animée, un personnage parle,
+capture d'écran, carton final) : le formulaire compose le prompt, `shot.ui` mémorise les champs pour les rouvrir. Casting = personnages
+de la bibliothèque (ajoutés à l'enregistrement via `attach`). Personnage : apparence, voix, phrase d'essai → « Générer portrait et voix ».
+« Générer » enregistre si besoin puis lance le job ; barre de progression fixe (un segment par plan, ETA) ; chaque plan prêt devient
+lisible dans sa vignette. « Historique » : toutes les versions (anciens CID) avec leurs rendus, ouvrir ou restaurer. Paquet d'un autre
+Capitaine : lecture seule + « Copier dans ma bibliothèque ». Auth NIP-98 à chaque appel (comme `cloud.html`), réservée au Capitaine.
+Aucun `innerHTML` : tout passe par `textContent` (helper `h()`).

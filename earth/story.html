@@ -1,0 +1,663 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Studio vidéo IA — UPlanet</title>
+<link rel="icon" type="image/x-icon" href="favicon.ico">
+<link rel="stylesheet" href="bootstrap.min.css">
+<link rel="stylesheet" href="fonts/bootstrap-icons.css">
+<style>
+  :root {
+    --table:#0f1923; --rail:#142230; --base:#0a1017; --line:#26384a; --hole:#2b3a48;
+    --frame:#e9eef2; --frame-ink:#17212b; --frame-mut:#5b6b7a; --frame-line:#c5d0d9;
+    --txt:#e6edf3; --mut:#8ea3b5; --tally:#ff4d3d; --ready:#3ecf9a; --leader:#e8c25a;
+    --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  }
+  * { box-sizing:border-box; }
+  body { background:var(--table); color:var(--txt); font-family:var(--sans); margin:0; }
+  button { font:inherit; cursor:pointer; }
+  :focus-visible { outline:2px solid var(--leader); outline-offset:2px; }
+  .sr { position:absolute; left:-9999px; }
+
+  .studio { display:grid; grid-template-columns:290px minmax(0,1fr); min-height:calc(100vh - 60px); }
+  @media (max-width:900px) { .studio { grid-template-columns:1fr; } }
+
+  /* ── Bibliothèque ── */
+  .rail { background:var(--rail); border-right:1px solid var(--line); padding:14px; }
+  .rail h2 { font-family:var(--serif); font-size:1.35rem; margin:0 0 10px; font-weight:600; }
+  .seg { display:flex; gap:4px; margin-bottom:10px; flex-wrap:wrap; }
+  .seg button { background:none; border:1px solid var(--line); color:var(--mut); border-radius:99px; padding:3px 12px; font-size:.82rem; }
+  .seg button[aria-pressed=true] { color:var(--table); background:var(--txt); border-color:var(--txt); }
+  .shelf { display:grid; gap:8px; }
+  .poster { display:grid; grid-template-columns:54px 1fr; gap:10px; align-items:center; text-align:left; width:100%;
+            background:var(--table); border:1px solid var(--line); border-radius:8px; padding:6px; color:var(--txt); }
+  .poster:hover, .poster[aria-current=true] { border-color:var(--txt); }
+  .poster .pic { width:54px; height:54px; border-radius:5px; background:var(--base); display:grid; place-items:center;
+                 font-family:var(--serif); font-size:1.4rem; color:var(--mut); overflow:hidden; }
+  .poster .pic img { width:100%; height:100%; object-fit:cover; }
+  .poster b { display:block; font-weight:600; }
+  .poster small { color:var(--mut); }
+  .tag { font-size:.7rem; border:1px solid var(--line); border-radius:99px; padding:0 7px; color:var(--mut); margin-left:4px; }
+  .tag.coop { color:var(--ready); border-color:var(--ready); }
+  .newbtn { width:100%; margin-bottom:12px; background:var(--txt); color:var(--table); border:0; border-radius:8px; padding:8px; font-weight:600; }
+
+  /* ── Table de montage ── */
+  .bench { padding:64px clamp(12px,3vw,32px) 130px; min-width:0; }
+  .empty { margin:12vh auto; max-width:30rem; text-align:center; color:var(--mut); }
+  .empty h1 { font-family:var(--serif); font-size:2rem; color:var(--txt); font-weight:600; }
+  .head { display:flex; flex-wrap:wrap; gap:10px 16px; align-items:flex-end; justify-content:space-between; margin-bottom:14px; }
+  .head h1 { font-family:var(--serif); font-size:clamp(1.6rem,3vw,2.3rem); margin:0; font-weight:600; letter-spacing:-.01em; }
+  .head .meta { color:var(--mut); font-size:.88rem; }
+  .actions { display:flex; gap:8px; flex-wrap:wrap; }
+  .btn { background:none; border:1px solid var(--line); color:var(--txt); border-radius:8px; padding:7px 14px; }
+  .btn:hover { border-color:var(--txt); }
+  .btn.go { background:var(--tally); border-color:var(--tally); color:#fff; font-weight:700; }
+  .btn.go:disabled { opacity:.45; cursor:not-allowed; }
+  .btn.keep { background:var(--leader); border-color:var(--leader); color:#1a1405; font-weight:600; }
+  .banner { border:1px solid var(--leader); color:var(--leader); border-radius:8px; padding:8px 12px; margin-bottom:12px; font-size:.9rem; }
+  .banner button { margin-left:10px; }
+  .toast { position:fixed; right:16px; bottom:84px; z-index:30; max-width:26rem; padding:10px 14px; border-radius:8px; display:none; }
+  .toast.show { display:block; } .toast.err { background:#3b1a1a; color:#ff9b93; } .toast.ok { background:#12382b; color:var(--ready); }
+
+  .final { background:var(--base); border:1px solid var(--line); border-radius:10px; padding:10px; margin-bottom:16px; }
+  .final video { width:100%; max-height:52vh; border-radius:6px; background:#000; }
+  .final .cap { color:var(--mut); font-size:.85rem; margin:6px 2px 0; }
+
+  details.sets { margin-bottom:14px; border:1px solid var(--line); border-radius:10px; padding:8px 12px; }
+  details.sets summary { cursor:pointer; color:var(--mut); }
+  .setrow { display:flex; flex-wrap:wrap; gap:14px; margin-top:10px; align-items:flex-end; }
+  .field { display:flex; flex-direction:column; gap:3px; min-width:0; }
+  .field > span { color:var(--mut); font-size:.78rem; }
+  input[type=text], input[type=number], input[type=url], select, textarea {
+    background:#0b131b; color:var(--txt); border:1px solid var(--line); border-radius:6px; padding:6px 8px; font:inherit; width:100%; }
+
+  .cast { display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:16px; }
+  .chip { display:flex; align-items:center; gap:8px; border:1px solid var(--line); border-radius:99px; padding:3px 12px 3px 3px; background:var(--rail); }
+  .chip .pic { width:34px; height:34px; border-radius:50%; background:var(--base); overflow:hidden; display:grid; place-items:center; font-family:var(--serif); }
+  .chip .pic img { width:100%; height:100%; object-fit:cover; }
+  .chip button { background:none; border:0; color:var(--mut); padding:0 2px; }
+
+  /* ── La pellicule ── */
+  .strip { display:grid; grid-template-columns:repeat(auto-fill,minmax(310px,1fr)); gap:16px; background:var(--base);
+           border:1px solid var(--line); border-radius:10px; padding:16px; }
+  .frame { position:relative; background:var(--frame); color:var(--frame-ink); border-radius:4px; padding:26px 12px 26px; min-width:0; }
+  .frame::before, .frame::after { content:""; position:absolute; left:8px; right:8px; height:9px;
+      background:repeating-linear-gradient(90deg,var(--hole) 0 12px,transparent 12px 24px); border-radius:2px; }
+  .frame::before { top:8px; } .frame::after { bottom:8px; }
+  .frame.running { box-shadow:0 0 0 2px var(--tally); }
+  .frame.done { box-shadow:0 0 0 2px var(--ready); }
+  .frame .no { font-family:var(--serif); font-size:1.7rem; line-height:1; color:var(--frame-mut); }
+  .ftop { display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; }
+  .ftools button { background:none; border:0; color:var(--frame-mut); padding:2px 6px; font-size:1rem; }
+  .ftools button:hover { color:var(--tally); }
+  .kinds { display:grid; grid-template-columns:repeat(4,1fr); gap:4px; margin-bottom:8px; }
+  .kinds button { background:#dbe3e9; border:1px solid var(--frame-line); border-radius:6px; padding:4px 2px; font-size:.74rem; color:var(--frame-ink); }
+  .kinds button[aria-pressed=true] { background:var(--frame-ink); color:#fff; border-color:var(--frame-ink); }
+  .frame .field > span { color:var(--frame-mut); }
+  .frame input, .frame select, .frame textarea { background:#fff; color:var(--frame-ink); border-color:var(--frame-line); }
+  .frame .row { display:flex; gap:8px; margin-top:6px; } .frame .row > * { flex:1; min-width:0; }
+  .frame .field { margin-top:6px; }
+  .frame textarea { min-height:3.6em; resize:vertical; }
+  .clip { margin-top:8px; background:#000; border-radius:4px; width:100%; aspect-ratio:16/9; display:block; }
+  .clip.v { aspect-ratio:9/16; max-height:340px; margin-inline:auto; width:auto; }
+  .wait { margin-top:8px; border:1px dashed var(--frame-line); border-radius:4px; color:var(--frame-mut); font-size:.8rem;
+          aspect-ratio:16/9; display:grid; place-items:center; text-align:center; padding:6px; }
+  .bad { color:var(--tally); font-size:.78rem; margin-top:4px; }
+  .add { border:2px dashed var(--line); border-radius:4px; background:none; color:var(--mut); display:flex; flex-direction:column;
+         align-items:center; justify-content:center; gap:8px; padding:20px 10px; min-height:140px; }
+  .add div { display:flex; gap:6px; flex-wrap:wrap; justify-content:center; }
+  .add button { background:var(--rail); color:var(--txt); border:1px solid var(--line); border-radius:6px; padding:5px 10px; font-size:.82rem; }
+
+  .json { margin-top:14px; } .json textarea { font-family:ui-monospace,Menlo,monospace; font-size:.8rem; min-height:260px; }
+
+  /* ── Personnage ── */
+  .charwrap { display:grid; grid-template-columns:minmax(0,260px) 1fr; gap:20px; }
+  @media (max-width:760px) { .charwrap { grid-template-columns:1fr; } }
+  .portrait { background:var(--base); border:1px solid var(--line); border-radius:10px; aspect-ratio:1; display:grid; place-items:center;
+              color:var(--mut); overflow:hidden; text-align:center; padding:8px; }
+  .portrait img { width:100%; height:100%; object-fit:cover; }
+  .charwrap .field { margin-bottom:12px; }
+  .checks label { margin-right:14px; color:var(--mut); font-size:.88rem; }
+
+  /* ── Suivi de progression ── */
+  .progress { position:fixed; left:0; right:0; bottom:0; z-index:20; background:#0a1017f2; border-top:1px solid var(--line); padding:10px clamp(12px,3vw,32px); display:none; }
+  .progress.show { display:block; }
+  @media (min-width:901px) { .progress { left:290px; } }
+  .pbar { display:flex; gap:4px; margin:6px 0; }
+  .pbar i { flex:1; height:12px; border-radius:2px; background:var(--hole); }
+  .pbar i.done { background:var(--ready); } .pbar i.now { background:var(--tally); animation:blink 1.1s steps(2) infinite; }
+  @media (prefers-reduced-motion:reduce) { .pbar i.now { animation:none; } }
+  @keyframes blink { 50% { opacity:.35; } }
+  .pline { display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap; font-size:.88rem; color:var(--mut); }
+  .pline b { color:var(--txt); }
+
+  /* ── Historique ── */
+  dialog { background:var(--rail); color:var(--txt); border:1px solid var(--line); border-radius:12px; padding:0; width:min(760px,94vw); max-height:88vh; }
+  dialog::backdrop { background:#000a; }
+  .dlg { padding:18px; overflow:auto; max-height:88vh; }
+  .dlg h2 { font-family:var(--serif); margin:0 0 12px; }
+  .ver { border-left:3px solid var(--line); padding:6px 0 14px 14px; margin-left:6px; position:relative; }
+  .ver.cur { border-color:var(--ready); }
+  .ver::before { content:""; position:absolute; left:-7px; top:10px; width:11px; height:11px; border-radius:50%; background:var(--table); border:2px solid var(--line); }
+  .ver.cur::before { border-color:var(--ready); background:var(--ready); }
+  .ver .when { color:var(--mut); font-size:.85rem; }
+  .rend { display:flex; gap:8px; flex-wrap:wrap; margin-top:6px; }
+  .rend video { width:240px; border-radius:6px; background:#000; }
+  .smallbtn { background:none; border:1px solid var(--line); color:var(--txt); border-radius:6px; padding:3px 10px; font-size:.82rem; }
+  .pick { display:grid; gap:8px; }
+  .cq { display:flex; gap:6px; flex-wrap:wrap; margin:10px 0; }
+  .cq button[aria-pressed=true] { background:var(--txt); color:var(--table); }
+</style>
+</head>
+<body>
+<div id="nostr-bar"></div>
+
+<div class="studio">
+  <aside class="rail">
+    <h2>Bibliothèque</h2>
+    <button class="newbtn" id="btn-new" type="button" disabled>Nouveau…</button>
+    <div class="seg" role="group" aria-label="Type"><button type="button" data-type="scene" aria-pressed="true">Scènes</button><button type="button" data-type="character" aria-pressed="false">Personnages</button></div>
+    <div class="seg" role="group" aria-label="Origine"><button type="button" data-from="all" aria-pressed="true">Tous</button><button type="button" data-from="mine" aria-pressed="false">À moi</button><button type="button" data-from="coop" aria-pressed="false">Coopérative</button></div>
+    <div class="shelf" id="shelf"></div>
+  </aside>
+
+  <main class="bench" id="bench">
+    <div class="empty" id="login-box">
+      <h1>Studio vidéo IA</h1>
+      <p>Connectez-vous avec la clé du Capitaine (bandeau en haut de page) pour écrire et produire vos scènes.</p>
+    </div>
+  </main>
+</div>
+
+<section class="progress" id="progress" aria-live="polite"></section>
+<div class="toast" id="toast" role="status"></div>
+
+<dialog id="dlg-history"><div class="dlg" id="history-body"></div></dialog>
+<dialog id="dlg-new"><div class="dlg">
+  <h2>Nouveau</h2>
+  <div class="cq" id="new-type"><button class="smallbtn" type="button" data-t="scene" aria-pressed="true">Une scène</button><button class="smallbtn" type="button" data-t="character" aria-pressed="false">Un personnage</button></div>
+  <label class="field"><span>Nom</span><input type="text" id="new-name" maxlength="60" autocomplete="off"></label>
+  <div class="cq" id="new-scope"><button class="smallbtn" type="button" data-s="private" aria-pressed="true">Privé : vous et vos amis</button><button class="smallbtn" type="button" data-s="coop" aria-pressed="false">Coopérative : tous les Capitaines</button></div>
+  <p class="meta" style="color:var(--mut);font-size:.85rem">En coopérative, chaque Capitaine peut regarder, écouter et copier votre travail. Vous seul le modifiez.</p>
+  <div class="actions"><button class="btn keep" id="new-ok" type="button">Créer</button><button class="btn" id="new-cancel" type="button">Annuler</button></div>
+</div></dialog>
+<dialog id="dlg-cast"><div class="dlg"><h2>Ajouter un personnage</h2><div class="pick" id="cast-pick"></div>
+  <div class="actions" style="margin-top:12px"><button class="btn" id="cast-close" type="button">Fermer</button></div></div></dialog>
+
+<script src="nacl-fast.min.js"></script>
+<script src="nostr.bundle.js"></script>
+<script src="common.js"></script>
+<script src="uplanet-header.js"></script>
+<script>
+/* ═══ Authentification : NIP-98 signé à chaque appel (même mécanisme que cloud.html) ═══ */
+async function signEvent(t) {
+    if (window.nostr && typeof window.nostr.signEvent === 'function') { t.pubkey = window.userPubkey; return await window.nostr.signEvent(t); }
+    if (window.userPrivateKey && window.NostrTools) return window.NostrTools.finishEvent(t, window.userPrivateKey);
+    throw new Error('aucune méthode de signature disponible (extension NOSTR absente)');
+}
+async function nip98(url, method) {
+    if (!window.userPubkey) return null;
+    var s = await signEvent({ kind: 27235, created_at: Math.floor(Date.now() / 1000), tags: [['u', url], ['method', method]], content: '' });
+    return 'Nostr ' + btoa(unescape(encodeURIComponent(JSON.stringify(s)))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+}
+function apiBase() { if (window.getAPIUrl) { try { return window.getAPIUrl(); } catch (e) {} } return window.location.origin; }
+async function api(path, o) {
+    o = o || {};
+    var method = o.method || 'GET', url = apiBase().replace(/\/$/, '') + path, auth = await nip98(url, method);
+    if (!auth) throw new Error('signature NIP-98 refusée ou indisponible');
+    var headers = { 'Authorization': auth }; if (o.json) headers['Content-Type'] = 'application/json';
+    var r = await fetch(url, { method: method, headers: headers, body: o.json ? JSON.stringify(o.json) : undefined });
+    if (o.blob) { if (!r.ok) throw new Error('HTTP ' + r.status); return await r.blob(); }
+    var d = null; try { d = await r.json(); } catch (e) {}
+    if (!r.ok) { var m = (d && (d.detail || d.error)) || ('HTTP ' + r.status); throw new Error(typeof m === 'string' ? m : JSON.stringify(m)); }
+    return d;
+}
+var q = encodeURIComponent;
+
+/* ═══ Petits utilitaires (aucun innerHTML : tout passe par textContent) ═══ */
+var $ = function (id) { return document.getElementById(id); };
+function h(tag, attrs) {
+    var n = document.createElement(tag), kids = Array.prototype.slice.call(arguments, 2);
+    Object.keys(attrs || {}).forEach(function (k) {
+        var v = attrs[k];
+        if (k === 'class') n.className = v; else if (k === 'text') n.textContent = v; else if (k === 'value') n.value = v;
+        else if (k.slice(0, 2) === 'on') n.addEventListener(k.slice(2), v);
+        else if (v === true) n.setAttribute(k, ''); else if (v !== false && v != null) n.setAttribute(k, v);
+    });
+    kids.flat().forEach(function (c) { if (c != null && c !== false) n.appendChild(typeof c === 'string' ? document.createTextNode(c) : c); });
+    return n;
+}
+function toast(kind, text) { var t = $('toast'); t.className = 'toast show ' + kind; t.textContent = text; clearTimeout(toast._t); toast._t = setTimeout(function () { t.className = 'toast'; }, kind === 'err' ? 9000 : 4000); }
+function fmtDate(ts) { return new Date(ts * 1000).toLocaleString('fr-FR', { dateStyle: 'medium', timeStyle: 'short' }); }
+function fmtDur(s) { s = Math.max(0, Math.round(s)); return Math.floor(s / 60) + ' min ' + String(s % 60).padStart(2, '0') + ' s'; }
+
+var blobCache = {};   // clé → URL objet : une image ou un son n'est téléchargé (et signé) qu'une fois
+async function blobUrl(key, path) {
+    if (!blobCache[key]) blobCache[key] = api(path, { blob: true }).then(function (b) { return URL.createObjectURL(b); });
+    return blobCache[key];
+}
+
+/* ═══ État ═══ */
+var S = { lib: [], me: null, gateway: '', type: 'scene', from: 'all', cur: null, sb: null, desc: '', pending: [], meta: null,
+          edits: {}, dirty: false, job: null, jobTimer: null, shotUrls: {}, showJson: false, castPics: {}, libPics: {} };
+
+/* ═══ Bibliothèque ═══ */
+async function loadLib(keep) {
+    try {
+        var d = await api('/api/story/assets');
+        S.lib = d.assets; S.me = d.me; S.gateway = d.ipfs_gateway || '';
+        drawShelf();
+        if (!keep && !S.cur) drawEmpty();
+    } catch (e) { toast('err', e.message); }
+}
+function drawShelf() {
+    var shelf = $('shelf'); shelf.textContent = '';
+    var items = S.lib.filter(function (a) { return a.type === S.type && (S.from === 'all' || (S.from === 'mine' ? a.mine : a.scope === 'coop')); });
+    if (!items.length) shelf.appendChild(h('p', { style: 'color:var(--mut)', text: S.type === 'scene' ? 'Aucune scène ici. Créez-en une avec « Nouveau… ».' : 'Aucun personnage ici. Créez-en un avec « Nouveau… ».' }));
+    items.forEach(function (a) {
+        var pic = h('span', { class: 'pic', text: a.name.charAt(0).toUpperCase() });
+        if (a.type === 'character') lazyPortrait(a, pic);
+        var b = h('button', { class: 'poster', type: 'button', 'aria-current': S.cur && S.cur.latest_cid === a.cid ? 'true' : 'false', onclick: function () { openAsset(a.cid); } },
+            pic, h('span', {}, h('b', { text: a.name }), h('small', { text: 'v' + a.version + (a.type === 'scene' && a.summary && a.summary.shots ? ' · ' + a.summary.shots + ' plans' : '') }),
+                h('span', { class: 'tag' + (a.scope === 'coop' ? ' coop' : ''), text: a.scope === 'coop' ? (a.mine ? 'coopérative' : 'd’un Capitaine') : 'privé' })));
+        shelf.appendChild(b);
+    });
+}
+function lazyPortrait(a, pic) {
+    blobUrl('lib:' + a.cid, '/api/story/asset/' + q(a.cid) + '/file?path=' + q('cast/' + a.name + '/portrait.png'))
+        .then(function (u) { pic.textContent = ''; pic.appendChild(h('img', { src: u, alt: '' })); }).catch(function () {});
+}
+
+/* ═══ Ouverture d'un paquet ═══ */
+async function openAsset(cid) {
+    if (S.dirty && !confirm('Des modifications ne sont pas enregistrées. Les abandonner ?')) return;
+    var d;
+    try { d = await api('/api/story/asset/' + q(cid)); } catch (e) { toast('err', e.message); return; }
+    S.cur = d; S.pending = []; S.edits = {}; S.dirty = false; S.showJson = false; S.shotUrls = {}; S.castPics = {};
+    S.desc = d.manifest.description || '';
+    var f = {}; d.files.forEach(function (x) { f[x.path] = x; });
+    if (d.manifest.type === 'scene') {
+        try { S.sb = JSON.parse((f['storyboard.json'] || {}).text || '{}'); } catch (e) { S.sb = {}; }
+        S.sb.shots = S.sb.shots || []; S.sb.cast = S.sb.cast || {};
+    } else {
+        var mp = Object.keys(f).filter(function (p) { return p.endsWith('character.json'); })[0];
+        try { S.meta = mp ? JSON.parse(f[mp].text) : {}; } catch (e) { S.meta = {}; }
+        S.meta.name = d.manifest.name;
+    }
+    S.files = f;
+    draw(); drawShelf();
+    findRunningJob();
+}
+function setDirty() { S.dirty = true; var b = $('btn-save'); if (b) { b.disabled = false; b.textContent = 'Enregistrer une version'; } var g = $('btn-go'); if (g) g.textContent = 'Enregistrer et générer'; }
+
+function drawEmpty() {
+    var b = $('bench'); b.textContent = '';
+    b.appendChild(h('div', { class: 'empty' }, h('h1', { text: 'Votre table de montage' }),
+        h('p', { text: 'Choisissez une scène ou un personnage dans la bibliothèque, ou créez-en un. Chaque enregistrement garde la version précédente : rien ne se perd.' })));
+}
+
+function draw() {
+    var d = S.cur, m = d.manifest, b = $('bench'); b.textContent = '';
+    var readonly = !d.mine;
+    var actions = h('div', { class: 'actions' });
+    if (readonly) actions.appendChild(h('button', { class: 'btn keep', type: 'button', text: 'Copier dans ma bibliothèque', onclick: forkIt }));
+    else actions.appendChild(h('button', { class: 'btn keep', id: 'btn-save', type: 'button', text: 'Enregistrer une version', disabled: !S.dirty, onclick: function () { save(); } }));
+    actions.appendChild(h('button', { class: 'btn', type: 'button', text: 'Historique', onclick: openHistory }));
+    actions.appendChild(h('button', { class: 'btn go', id: 'btn-go', type: 'button', text: S.dirty ? 'Enregistrer et générer' : (m.type === 'scene' ? 'Générer la vidéo' : 'Générer portrait et voix'), onclick: generate }));
+    b.appendChild(h('div', { class: 'head' },
+        h('div', {}, h('h1', { text: m.name }), h('div', { class: 'meta', text: 'Version ' + d.version + (d.scope === 'coop' ? ' · coopérative' : ' · privée') + (d.mine ? '' : ' · lecture seule') })),
+        actions));
+    if (!d.is_latest) b.appendChild(h('div', { class: 'banner' }, 'Vous regardez une ancienne version.',
+        h('button', { class: 'smallbtn', type: 'button', text: 'Aller à la version actuelle', onclick: function () { openAsset(d.latest_cid); } })));
+    if (!d.mine) b.appendChild(h('div', { class: 'banner', text: 'Ce paquet appartient à un autre Capitaine de la coopérative. Vous pouvez le regarder, l’écouter et lancer un rendu sur votre machine ; pour le modifier, copiez-le d’abord.' }));
+    b.appendChild(h('div', { id: 'final-slot' }));
+    b.appendChild(h('label', { class: 'field', style: 'margin-bottom:14px' }, h('span', { text: 'Description' }),
+        h('input', { type: 'text', value: S.desc, disabled: readonly, oninput: function (e) { S.desc = e.target.value; setDirty(); } })));
+    if (m.type === 'scene') drawScene(b, readonly); else drawCharacter(b, readonly);
+    showLastRender();
+}
+
+/* ═══ Scène : réglages, casting, pellicule ═══ */
+var KINDS = [['clip', 'Image animée'], ['speak', 'Un personnage parle'], ['screen', 'Capture d’écran'], ['card', 'Carton final']];
+function kindOf(s) { return s.ui && s.ui.kind || (s.card ? 'card' : s.screen != null ? 'screen' : (s.cast && s.cast.length) ? 'speak' : 'clip'); }
+function pretty(n) { return n.charAt(0).toUpperCase() + n.slice(1); }
+function compose(s) {
+    var u = s.ui || {}, who = u.who || (s.cast && s.cast[0]) || s.presenter;
+    if (u.kind === 'speak' || u.kind === 'screen') {
+        var line = u.say ? ' ' + pretty(who || '') + ' says in French: "' + u.say.replace(/"/g, "'") + '"' : '';
+        s.prompt = ((u.scene || '').trim() + line).trim();
+    }
+}
+function newShot(kind) {
+    var who = Object.keys(S.sb.cast)[0] || '';
+    if (kind === 'card') return { card: { title: 'Titre', subtitle: '', links: [] }, duration: 6, ui: { kind: 'card' } };
+    if (kind === 'screen') return { screen: 'https://', duration: 6, prompt: '', ui: { kind: 'screen', who: '', say: '' } };
+    if (kind === 'speak') return { cast: who ? [who] : [], duration: 6, prompt: '', ui: { kind: 'speak', who: who, say: '', scene: '' } };
+    return { prompt: '', duration: 5, ui: { kind: 'clip' } };
+}
+function drawScene(b, ro) {
+    var sb = S.sb;
+    var ratio = h('div', { class: 'seg', role: 'group', 'aria-label': 'Format' });
+    [['16:9', 'Paysage 16:9'], ['9:16', 'Téléphone 9:16'], ['1:1', 'Carré 1:1']].forEach(function (r) {
+        ratio.appendChild(h('button', { type: 'button', disabled: ro, 'aria-pressed': String((sb.ratio || '16:9') === r[0]), text: r[1], onclick: function () { sb.ratio = r[0]; setDirty(); draw(); } }));
+    });
+    b.appendChild(h('details', { class: 'sets' }, h('summary', { text: 'Réglages de la scène' }),
+        h('div', { class: 'setrow' },
+            h('div', { class: 'field' }, h('span', { text: 'Format' }), ratio),
+            h('label', { class: 'field' }, h('span', { text: 'Style' }), sel([['clean', 'Net'], ['vhs', 'Cassette VHS']], sb.style || 'clean', ro, function (v) { sb.style = v; setDirty(); })),
+            h('label', { class: 'field' }, h('span', { text: 'Qualité' }), sel([['0.25', 'Brouillon (rapide)'], ['0.4', 'Standard'], ['0.6', 'Soignée (lente)']], String(sb.megapixels || 0.4), ro, function (v) { sb.megapixels = parseFloat(v); setDirty(); })),
+            h('label', { class: 'field', style: 'flex:1 1 280px' }, h('span', { text: 'Voix du narrateur (pour la voix-off des plans)' }),
+                h('input', { type: 'text', value: (sb.narrator && sb.narrator.voice_design) || '', disabled: ro, placeholder: 'Calm, warm male voice, documentary style',
+                    oninput: function (e) { if (e.target.value.trim()) sb.narrator = { voice_design: e.target.value.trim() }; else delete sb.narrator; setDirty(); } })))));
+
+    var cast = h('div', { class: 'cast' }, h('b', { text: 'Casting' }));
+    Object.keys(sb.cast).forEach(function (n) {
+        var pic = h('span', { class: 'pic', text: n.charAt(0).toUpperCase() });
+        if (S.files['cast/' + n + '/portrait.png']) blobUrl('cur:' + S.cur.cid + ':' + n, '/api/story/asset/' + q(S.cur.cid) + '/file?path=' + q('cast/' + n + '/portrait.png')).then(function (u) { pic.textContent = ''; pic.appendChild(h('img', { src: u, alt: '' })); }).catch(function () {});
+        var used = sb.shots.some(function (s) { return (s.cast || []).indexOf(n) >= 0 || s.presenter === n; });
+        cast.appendChild(h('span', { class: 'chip' }, pic, n, ro || used ? null : h('button', { type: 'button', title: 'Retirer du casting', 'aria-label': 'Retirer ' + n, text: '×', onclick: function () { delete sb.cast[n]; S.pending = S.pending.filter(function (p) { return p.name !== n; }); S.edits['cast/' + n] = true; setDirty(); draw(); } })));
+    });
+    if (!ro) cast.appendChild(h('button', { class: 'smallbtn', type: 'button', text: '+ Ajouter un personnage', onclick: pickCast }));
+    if (!Object.keys(sb.cast).length) cast.appendChild(h('span', { style: 'color:var(--mut);font-size:.88rem', text: 'Aucun personnage : ajoutez-en pour faire parler quelqu’un.' }));
+    b.appendChild(cast);
+
+    var strip = h('div', { class: 'strip', id: 'strip' });
+    sb.shots.forEach(function (s, i) { strip.appendChild(shotCard(s, i, ro)); });
+    if (!ro) strip.appendChild(h('div', { class: 'add' }, h('span', { style: 'font-size:.85rem', text: 'Ajouter un plan' }),
+        h('div', {}, KINDS.map(function (k) { return h('button', { type: 'button', text: k[1], onclick: function () { sb.shots.push(newShot(k[0])); setDirty(); draw(); } }); }))));
+    b.appendChild(strip);
+
+    b.appendChild(h('details', { class: 'json', ontoggle: function (e) { S.showJson = e.target.open; } }, h('summary', { style: 'color:var(--mut);cursor:pointer', text: 'Mode avancé : storyboard.json' }),
+        h('textarea', { spellcheck: 'false', disabled: ro, value: JSON.stringify(sb, function (k, v) { return k === '_bad' ? undefined : v; }, 1), oninput: function (e) {
+            try { var j = JSON.parse(e.target.value); j.shots = j.shots || []; j.cast = j.cast || {}; S.sb = j; setDirty(); e.target.style.borderColor = ''; } catch (x) { e.target.style.borderColor = 'var(--tally)'; } },
+            onchange: function () { draw(); document.querySelector('details.json').open = true; } })));
+    paintShots();
+}
+function sel(opts, val, ro, fn) {
+    return h('select', { disabled: ro, onchange: function (e) { fn(e.target.value); } }, opts.map(function (o) { return h('option', { value: o[0], selected: String(o[0]) === String(val), text: o[1] }); }));
+}
+function shotCard(s, i, ro) {
+    var kind = kindOf(s), u = s.ui = s.ui || { kind: kind };
+    var names = Object.keys(S.sb.cast);
+    var card = h('article', { class: 'frame', 'data-i': String(i) });
+    card.appendChild(h('div', { class: 'ftop' }, h('span', { class: 'no', text: String(i + 1) }),
+        ro ? null : h('span', { class: 'ftools' },
+            h('button', { type: 'button', title: 'Monter', 'aria-label': 'Monter le plan ' + (i + 1), text: '↑', disabled: i === 0, onclick: function () { move(i, -1); } }),
+            h('button', { type: 'button', title: 'Descendre', 'aria-label': 'Descendre le plan ' + (i + 1), text: '↓', disabled: i === S.sb.shots.length - 1, onclick: function () { move(i, 1); } }),
+            h('button', { type: 'button', title: 'Dupliquer', 'aria-label': 'Dupliquer le plan ' + (i + 1), text: '⧉', onclick: function () { S.sb.shots.splice(i + 1, 0, JSON.parse(JSON.stringify(s))); setDirty(); draw(); } }),
+            h('button', { type: 'button', title: 'Supprimer', 'aria-label': 'Supprimer le plan ' + (i + 1), text: '✕', onclick: function () { if (S.sb.shots.length > 1) { S.sb.shots.splice(i, 1); setDirty(); draw(); } else toast('err', 'Une scène garde au moins un plan.'); } }))));
+    card.appendChild(h('div', { class: 'preview', id: 'pv' + i }));
+    if (!ro) card.appendChild(h('div', { class: 'kinds', role: 'group', 'aria-label': 'Type de plan' }, KINDS.map(function (k) {
+        return h('button', { type: 'button', 'aria-pressed': String(kind === k[0]), text: k[1], onclick: function () { if (kind !== k[0]) { var n = newShot(k[0]); n.duration = s.duration || n.duration; n.title = s.title; n.voiceover = s.voiceover; S.sb.shots[i] = n; setDirty(); draw(); } } });
+    })));
+    function inp(label, val, fn, opts) { opts = opts || {}; return h('label', { class: 'field' }, h('span', { text: label }), h(opts.area ? 'textarea' : 'input', Object.assign({ type: 'text', disabled: ro, value: val || '', placeholder: opts.ph || '', oninput: function (e) { fn(e.target.value); setDirty(); validate(card, s); } }, opts.area ? {} : {})));
+    }
+    if (kind === 'clip') {
+        card.appendChild(inp('Que voit-on, que se passe-t-il ?', s.prompt, function (v) { s.prompt = v; }, { area: true, ph: 'A fox runs across a snowy field at dawn, soft music.' }));
+        card.appendChild(inp('Image de départ (facultatif)', s.image_prompt, function (v) { if (v) s.image_prompt = v; else delete s.image_prompt; }, { ph: 'Décrivez la première image' }));
+        if (i > 0) card.appendChild(h('label', { class: 'field', style: 'flex-direction:row;gap:8px;align-items:center' }, h('input', { type: 'checkbox', style: 'width:auto', checked: !!s.continue, disabled: ro, onchange: function (e) { if (e.target.checked) { s.continue = true; delete s.image_prompt; } else delete s.continue; setDirty(); } }), h('span', { text: 'Repartir de la dernière image du plan précédent' })));
+    } else if (kind === 'speak') {
+        card.appendChild(h('label', { class: 'field' }, h('span', { text: 'Qui parle ?' }),
+            names.length ? sel(names.map(function (n) { return [n, n]; }), u.who || names[0], ro, function (v) { u.who = v; s.cast = [v]; compose(s); setDirty(); }) : h('div', { class: 'bad', text: 'Ajoutez d’abord un personnage au casting.' })));
+        if (names.length && !(s.cast && s.cast.length)) { s.cast = [names[0]]; u.who = names[0]; }
+        card.appendChild(inp('Ce qu’il ou elle dit (en français)', u.say, function (v) { u.say = v; compose(s); }, { area: true, ph: 'Bonjour, voici ma station.' }));
+        card.appendChild(inp('Le lieu et l’action', u.scene, function (v) { u.scene = v; compose(s); }, { ph: 'Close-up in a cosy kitchen, warm light' }));
+    } else if (kind === 'screen') {
+        card.appendChild(inp('Adresse de la page à montrer', s.screen, function (v) { s.screen = v; }, { ph: 'https://u.copylaradio.com/g1' }));
+        card.appendChild(h('label', { class: 'field' }, h('span', { text: 'Présentateur en médaillon (facultatif)' }),
+            sel([['', 'Aucun']].concat(names.map(function (n) { return [n, n]; })), s.presenter || '', ro, function (v) { if (v) s.presenter = v; else { delete s.presenter; u.say = ''; s.prompt = ''; } u.who = v; compose(s); setDirty(); draw(); })));
+        if (s.presenter) card.appendChild(inp('Ce qu’il ou elle dit', u.say, function (v) { u.say = v; compose(s); }, { area: true }));
+    } else {
+        var c = s.card = s.card || { title: '', links: [] };
+        card.appendChild(inp('Titre', c.title, function (v) { c.title = v; }));
+        card.appendChild(inp('Sous-titre', c.subtitle, function (v) { c.subtitle = v; }));
+        card.appendChild(inp('Liens avec QR code, un par ligne : texte | adresse', (c.links || []).map(function (l) { return l.label + ' | ' + l.url; }).join('\n'),
+            function (v) { c.links = v.split('\n').map(function (ln) { var p = ln.split('|'); return p.length > 1 ? { label: p[0].trim(), url: p.slice(1).join('|').trim() } : null; }).filter(Boolean); }, { area: true, ph: 'S’inscrire | https://u.copylaradio.com/g1' }));
+    }
+    card.appendChild(h('label', { class: 'field' }, h('span', { text: 'Durée (secondes)' }),
+        h('input', { type: 'number', min: 3, max: 15, disabled: ro, value: String(s.duration || 5), oninput: function (e) { s.duration = Math.max(3, Math.min(15, parseInt(e.target.value) || 5)); setDirty(); } })));
+    var more = h('details', { style: 'margin-top:8px', open: !!(s.title || s.voiceover) }, h('summary', { style: 'color:var(--frame-mut);font-size:.8rem;cursor:pointer', text: 'Texte à l’image et voix-off' }),
+        h('label', { class: 'field' }, h('span', { text: 'Texte affiché en bas de l’image' }), h('input', { type: 'text', disabled: ro, value: s.title || '', oninput: function (e) { if (e.target.value) s.title = e.target.value; else delete s.title; setDirty(); } })));
+    if (kind !== 'card') more.appendChild(inp('Voix-off du narrateur (en français)', s.voiceover, function (v) { if (v) s.voiceover = v; else delete s.voiceover; }, { area: true }));
+    card.appendChild(more);
+    card.appendChild(h('div', { class: 'bad', id: 'bad' + i }));
+    validate(card, s);
+    return card;
+}
+function validate(card, s) {
+    var k = kindOf(s), msg = '';
+    if (k === 'clip' && !(s.prompt || '').trim()) msg = 'Décrivez ce que l’on voit.';
+    if (k === 'speak' && (!(s.cast && s.cast.length) || !(s.ui.say || '').trim())) msg = 'Choisissez qui parle et ce qu’il dit.';
+    if (k === 'screen' && !/^https?:\/\/\S+|^\//.test(s.screen || '')) msg = 'Indiquez l’adresse de la page.';
+    if (k === 'card' && !(s.card && s.card.title)) msg = 'Donnez un titre au carton.';
+    var el = card.querySelector('.bad'); if (el) el.textContent = msg;
+    s._bad = !!msg;
+}
+function move(i, d) { var a = S.sb.shots, j = i + d; if (j < 0 || j >= a.length) return; var t = a[i]; a[i] = a[j]; a[j] = t; setDirty(); draw(); }
+
+/* ═══ Casting : choisir un personnage de la bibliothèque ═══ */
+function pickCast() {
+    var box = $('cast-pick'); box.textContent = '';
+    var chars = S.lib.filter(function (a) { return a.type === 'character'; });
+    if (!chars.length) box.appendChild(h('p', { style: 'color:var(--mut)', text: 'Aucun personnage. Créez-en un depuis « Personnages » dans la bibliothèque.' }));
+    chars.forEach(function (c) {
+        var pic = h('span', { class: 'pic', text: c.name.charAt(0).toUpperCase() }); lazyPortrait(c, pic);
+        box.appendChild(h('button', { class: 'poster', type: 'button', onclick: function () {
+            if (S.sb.cast[c.name]) { toast('err', c.name + ' est déjà dans le casting.'); return; }
+            S.sb.cast[c.name] = {}; S.pending.push({ cid: c.cid, name: c.name }); setDirty(); $('dlg-cast').close(); draw();
+        } }, pic, h('span', {}, h('b', { text: c.name }), h('small', { text: c.mine ? 'à moi' : 'coopérative' }))));
+    });
+    $('dlg-cast').showModal();
+}
+
+/* ═══ Personnage ═══ */
+function drawCharacter(b, ro) {
+    var m = S.meta, name = S.cur.manifest.name;
+    var port = h('div', { class: 'portrait', id: 'portrait' }, S.files['cast/' + name + '/portrait.png'] ? '…' : 'Pas encore de portrait');
+    if (S.files['cast/' + name + '/portrait.png']) blobUrl('cur:' + S.cur.cid + ':p', '/api/story/asset/' + q(S.cur.cid) + '/file?path=' + q('cast/' + name + '/portrait.png')).then(function (u) { port.textContent = ''; port.appendChild(h('img', { src: u, alt: 'Portrait de ' + name })); });
+    var voice = h('div', {}, S.files['cast/' + name + '/voice.wav'] ? '…' : h('span', { style: 'color:var(--mut)', text: 'Pas encore de voix' }));
+    if (S.files['cast/' + name + '/voice.wav']) blobUrl('cur:' + S.cur.cid + ':v', '/api/story/asset/' + q(S.cur.cid) + '/file?path=' + q('cast/' + name + '/voice.wav')).then(function (u) { voice.textContent = ''; voice.appendChild(h('audio', { src: u, controls: true, style: 'width:100%' })); });
+    function f(label, key, ph, area) {
+        return h('label', { class: 'field' }, h('span', { text: label }), h(area ? 'textarea' : 'input', { type: 'text', disabled: ro, value: m[key] || '', placeholder: ph, oninput: function (e) { m[key] = e.target.value; S.edits['__meta'] = true; setDirty(); } }));
+    }
+    b.appendChild(h('div', { class: 'charwrap' }, h('div', {}, port, h('div', { style: 'margin-top:10px' }, voice)),
+        h('div', {},
+            f('Apparence (visage, âge, vêtements)', 'look', 'woman in her 30s, short black hair, green jacket', true),
+            f('Voix (timbre, âge, ton)', 'voice_design', 'warm low-pitched woman, calm and friendly'),
+            f('Phrase d’essai, dite en français', 'voice_line', 'Bonjour, je m’appelle ' + name + ' et je vous accompagne.', true),
+            ro ? null : h('div', { class: 'checks' }, h('label', {}, h('input', { type: 'checkbox', id: 'rg-p' }), ' Refaire le portrait'), h('label', {}, h('input', { type: 'checkbox', id: 'rg-v' }), ' Refaire la voix')),
+            ro ? null : h('label', { class: 'field' }, h('span', { text: 'Ou remplacer le portrait par votre image' }),
+                h('input', { type: 'file', accept: 'image/*', onchange: function (e) {
+                    var file = e.target.files[0]; if (!file) return;
+                    if (file.size > 12 * 1048576) { toast('err', 'Image trop grosse (12 Mo maximum).'); return; }
+                    var r = new FileReader(); r.onload = function () { S.edits['cast/' + name + '/portrait.png'] = { b64: r.result.split(',')[1] }; setDirty(); toast('ok', 'Portrait prêt à enregistrer.'); }; r.readAsDataURL(file); } })),
+            h('p', { style: 'color:var(--mut);font-size:.82rem', text: 'N’utilisez le visage ou la voix d’une personne réelle qu’avec son accord.' }))));
+}
+
+/* ═══ Enregistrer ═══ */
+async function save(quiet) {
+    var d = S.cur, body = { changes: {}, reshare: true };
+    if (d.manifest.type === 'scene') {
+        var bad = S.sb.shots.findIndex(function (s) { return s._bad; });
+        if (bad >= 0) { toast('err', 'Le plan ' + (bad + 1) + ' est incomplet.'); return null; }
+        var clean = JSON.parse(JSON.stringify(S.sb, function (k, v) { return k === '_bad' ? undefined : v; }));
+        body.changes['storyboard.json'] = { text: JSON.stringify(clean, null, 1) };
+        Object.keys(S.edits).forEach(function (k) { if (k.indexOf('cast/') === 0) Object.keys(S.files).filter(function (p) { return p.indexOf(k + '/') === 0; }).forEach(function (p) { body.changes[p] = { delete: true }; }); });
+        if (S.pending.length) body.attach = S.pending;
+    } else {
+        var mp = Object.keys(S.files).filter(function (p) { return p.endsWith('character.json'); })[0] || 'cast/' + d.manifest.name + '/character.json';
+        body.changes[mp] = { text: JSON.stringify(S.meta, null, 1) };
+        Object.keys(S.edits).forEach(function (k) { if (S.edits[k] && S.edits[k].b64) body.changes[k] = S.edits[k]; });
+    }
+    if (S.desc !== (d.manifest.description || '')) body.description = S.desc;
+    try {
+        var r = await api('/api/story/asset/' + q(d.cid), { method: 'PUT', json: body });
+        S.dirty = false;
+        if (!quiet) toast('ok', 'Version ' + r.version + ' enregistrée' + (r.reshared ? ' · clé renvoyée à ' + r.reshared + ' ami(s)' : '') + '.');
+        await loadLib(true); await openAsset(r.cid);
+        return r.cid;
+    } catch (e) { toast('err', e.message); return null; }
+}
+async function forkIt() {
+    var name = prompt('Nom de votre copie :', S.cur.manifest.name + ' (copie)'); if (!name) return;
+    try { var r = await api('/api/story/asset/' + q(S.cur.cid) + '/fork', { method: 'POST', json: { name: name.replace(/[^\p{L}\p{N} _'-]/gu, '').trim() } }); await loadLib(true); await openAsset(r.cid); toast('ok', 'Copie créée dans votre bibliothèque.'); }
+    catch (e) { toast('err', e.message); }
+}
+
+/* ═══ Générer et suivre ═══ */
+async function generate() {
+    var d = S.cur, cid = d.cid;
+    if (S.job && /queued|running/.test(S.job.status)) { toast('err', 'Un rendu est déjà en cours.'); return; }
+    var regen = [];
+    if (d.manifest.type === 'character') {
+        if (($('rg-p') || {}).checked) regen.push('portrait'); if (($('rg-v') || {}).checked) regen.push('voice');
+    }
+    if (S.dirty) { cid = await save(true); if (!cid) return; }
+    try { S.job = await api('/api/story/asset/' + q(cid) + '/render', { method: 'POST', json: { regen: regen } }); toast('ok', 'Rendu lancé.'); watchJob(); }
+    catch (e) { toast('err', e.message); }
+}
+async function findRunningJob() {
+    try {
+        var j = (await api('/api/story/jobs')).jobs.filter(function (x) { return (x.status === 'running' || x.status === 'queued') && x.name === S.cur.manifest.name && x.kind === S.cur.manifest.type; })[0];
+        if (j) { S.job = j; watchJob(); }
+    } catch (e) {}
+}
+function watchJob() { clearInterval(S.jobTimer); drawProgress(); S.jobTimer = setInterval(pollJob, 2000); }
+async function pollJob() {
+    if (!S.job) return;
+    try { S.job = await api('/api/story/jobs/' + S.job.id); } catch (e) { return; }
+    drawProgress(); paintShots();
+    if (!/queued|running/.test(S.job.status)) {
+        clearInterval(S.jobTimer);
+        var j = S.job;
+        if (j.status === 'done') {
+            toast('ok', j.kind === 'scene' ? 'Vidéo prête (' + j.render.duration + ' s).' : 'Portrait et voix prêts.');
+            await loadLib(true);
+            if (j.kind === 'character' && j.render && j.render.new_cid) await openAsset(j.render.new_cid); else showLastRender(true);
+        } else if (j.status === 'failed') toast('err', 'Rendu interrompu : ' + (j.error || 'voir le journal'));
+        drawProgress();
+    }
+}
+function drawProgress() {
+    var p = $('progress'), j = S.job;
+    if (!j) { p.className = 'progress'; return; }
+    p.className = 'progress show'; p.textContent = '';
+    var active = /queued|running/.test(j.status);
+    var bar = h('div', { class: 'pbar', role: 'progressbar', 'aria-valuemin': 0, 'aria-valuemax': j.shots_total, 'aria-valuenow': j.shots_done });
+    for (var i = 0; i < Math.max(j.shots_total, 1); i++) bar.appendChild(h('i', { class: i < j.shots_done ? 'done' : (active && i === j.current ? 'now' : '') }));
+    var label = j.status === 'queued' ? 'En attente : un autre rendu occupe la carte graphique.' :
+        j.status === 'done' ? 'Terminé en ' + fmtDur(j.elapsed) + '.' :
+        j.status === 'failed' ? 'Interrompu : ' + (j.error || '') :
+        j.status === 'cancelled' ? 'Annulé.' :
+        ({ prepare: 'Préparation', cast: 'Personnages', voiceover: 'Voix-off', shot: 'Plan ' + (j.current + 1) + ' sur ' + j.shots_total, finish: 'Finition des plans', assemble: 'Assemblage', done: 'Terminé' }[j.stage] || j.stage) + (j.message && j.stage === 'cast' ? ' · ' + j.message : '');
+    p.appendChild(h('div', { class: 'pline' }, h('span', {}, h('b', { text: j.name + ' · v' + j.version }), ' — ' + label),
+        h('span', {}, active ? fmtDur(j.elapsed) + (j.eta ? ' · encore ~' + fmtDur(j.eta) : '') : '',
+            active ? h('button', { class: 'smallbtn', style: 'margin-left:10px', type: 'button', text: 'Annuler', onclick: function () { api('/api/story/jobs/' + j.id + '/cancel', { method: 'POST' }).then(pollJob); } })
+                   : h('button', { class: 'smallbtn', style: 'margin-left:10px', type: 'button', text: 'Fermer', onclick: function () { S.job = null; drawProgress(); } }))));
+    p.appendChild(bar);
+}
+/* Chaque plan terminé devient lisible (image et son) dans sa vignette, sans attendre la fin du rendu */
+function paintShots() {
+    var j = S.job; if (!j || j.kind !== 'scene' || !S.cur || S.cur.manifest.type !== 'scene') return;
+    document.querySelectorAll('.frame').forEach(function (card) {
+        var i = +card.dataset.i, pv = card.querySelector('.preview'), sh = j.shots[i];
+        card.classList.toggle('running', /queued|running/.test(j.status) && j.current === i);
+        if (!sh || !pv) return;
+        if (sh.ready && !pv.dataset.on) {
+            pv.dataset.on = '1'; card.classList.add('done');
+            api('/api/story/jobs/' + j.id + '/file?name=' + q(sh.file), { blob: true }).then(function (b) {
+                pv.textContent = ''; pv.appendChild(h('video', { class: 'clip' + ((S.sb.ratio || '16:9') === '9:16' ? ' v' : ''), src: URL.createObjectURL(b), controls: true, preload: 'metadata' }));
+            }).catch(function () { delete pv.dataset.on; });
+        } else if (!sh.ready && !pv.dataset.on && /queued|running/.test(j.status)) {
+            if (!pv.firstChild) pv.appendChild(h('div', { class: 'wait', text: j.current === i ? 'En cours de génération…' : 'En attente' }));
+            else pv.firstChild.textContent = j.current === i ? 'En cours de génération…' : 'En attente';
+        }
+    });
+}
+/* Dernier rendu de la version affichée : la vidéo complète, avec le son */
+async function showLastRender(fresh) {
+    var slot = $('final-slot'); if (!slot || !S.cur || S.cur.manifest.type !== 'scene') return;
+    try {
+        var vs = (await api('/api/story/asset/' + q(S.cur.cid) + '/versions')).versions;
+        var v = vs.filter(function (x) { return x.cid === S.cur.cid; })[0];
+        if (!v || !v.renders.length) { slot.textContent = ''; return; }
+        var r = v.renders[v.renders.length - 1];
+        slot.textContent = ''; slot.appendChild(h('div', { class: 'final' }, videoFor(v.cid, r), h('div', { class: 'cap', text: 'Rendu du ' + fmtDate(r.created) + ' · ' + r.duration + ' s · version ' + v.version })));
+    } catch (e) {}
+}
+function videoFor(vcid, r) {
+    var vid = h('video', { controls: true, preload: 'metadata' });
+    if (r.id && !r.foreign && !r.mp4_cid_only) {
+        api('/api/story/render/' + q(vcid) + '/' + q(r.id) + '/file?name=scene.mp4', { blob: true }).then(function (b) { vid.src = URL.createObjectURL(b); })
+            .catch(function () { if (r.mp4_cid) vid.src = S.gateway + '/ipfs/' + r.mp4_cid; });
+    } else if (r.mp4_cid) vid.src = S.gateway + '/ipfs/' + r.mp4_cid;
+    return vid;
+}
+
+/* ═══ Historique des versions ═══ */
+async function openHistory() {
+    var body = $('history-body'); body.textContent = 'Chargement…'; $('dlg-history').showModal();
+    try {
+        var vs = (await api('/api/story/asset/' + q(S.cur.cid) + '/versions')).versions;
+        body.textContent = '';
+        body.appendChild(h('h2', { text: 'Historique de ' + S.cur.manifest.name }));
+        vs.forEach(function (v) {
+            var holder = h('div', { class: 'rend' });
+            v.renders.forEach(function (r) {
+                var btn = h('button', { class: 'smallbtn', type: 'button', text: '▶ Rendu du ' + fmtDate(r.created) + (r.duration ? ' (' + r.duration + ' s)' : ''), onclick: function () { btn.replaceWith(videoFor(v.cid, r)); } });
+                holder.appendChild(btn);
+            });
+            body.appendChild(h('div', { class: 'ver' + (v.latest ? ' cur' : '') },
+                h('div', {}, h('b', { text: 'Version ' + v.version }), v.latest ? h('span', { class: 'tag coop', text: 'actuelle' }) : null, h('span', { class: 'when', text: ' · ' + fmtDate(v.created) })),
+                v.description ? h('div', { class: 'when', text: v.description }) : null,
+                holder.childNodes.length ? holder : h('div', { class: 'when', text: 'Pas encore de rendu pour cette version.' }),
+                h('div', { class: 'actions', style: 'margin-top:6px' },
+                    h('button', { class: 'smallbtn', type: 'button', text: v.cid === S.cur.cid ? 'Affichée' : 'Ouvrir', disabled: v.cid === S.cur.cid, onclick: function () { $('dlg-history').close(); openAsset(v.cid); } }),
+                    !v.latest && S.cur.mine ? h('button', { class: 'smallbtn', type: 'button', text: 'Restaurer comme nouvelle version', onclick: function () {
+                        api('/api/story/asset/' + q(v.cid) + '/restore', { method: 'POST' }).then(function (r) { $('dlg-history').close(); toast('ok', 'Version ' + r.version + ' créée à partir de l’ancienne.'); return loadLib(true).then(function () { return openAsset(r.cid); }); }).catch(function (e) { toast('err', e.message); }); } }) : null)));
+        });
+        body.appendChild(h('div', { class: 'actions', style: 'margin-top:10px' }, h('button', { class: 'btn', type: 'button', text: 'Fermer', onclick: function () { $('dlg-history').close(); } })));
+    } catch (e) { body.textContent = e.message; }
+}
+
+/* ═══ Création ═══ */
+function wirePicker(id, attr) { $(id).addEventListener('click', function (e) { var b = e.target.closest('button'); if (!b) return; $(id).querySelectorAll('button').forEach(function (x) { x.setAttribute('aria-pressed', String(x === b)); }); }); }
+function wire() {
+    wirePicker('new-type'); wirePicker('new-scope');
+    document.querySelectorAll('.rail .seg button').forEach(function (b) {
+        b.addEventListener('click', function () {
+            var grp = b.parentNode; grp.querySelectorAll('button').forEach(function (x) { x.setAttribute('aria-pressed', String(x === b)); });
+            if (b.dataset.type) S.type = b.dataset.type; if (b.dataset.from) S.from = b.dataset.from; drawShelf();
+        });
+    });
+    $('btn-new').onclick = function () { $('new-name').value = ''; $('dlg-new').showModal(); $('new-name').focus(); };
+    $('new-cancel').onclick = function () { $('dlg-new').close(); };
+    $('cast-close').onclick = function () { $('dlg-cast').close(); };
+    $('new-ok').onclick = async function () {
+        var t = $('new-type').querySelector('[aria-pressed=true]').dataset.t, s = $('new-scope').querySelector('[aria-pressed=true]').dataset.s, name = $('new-name').value.trim();
+        if (!name) { $('new-name').focus(); return; }
+        try { var r = await api('/api/story/assets', { method: 'POST', json: { type: t, name: name, scope: s } }); $('dlg-new').close(); S.type = t;
+            document.querySelectorAll('.rail .seg button[data-type]').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.type === t)); });
+            await loadLib(true); await openAsset(r.cid); }
+        catch (e) { toast('err', e.message); }
+    };
+    window.addEventListener('beforeunload', function (e) { if (S.dirty) { e.preventDefault(); e.returnValue = ''; } });
+}
+
+var _ready = false;
+function updateConnectionUI() {
+    var pk = (window.NostrState && window.NostrState.userPubkey) || window.userPubkey || '';
+    var ok = !!(window.isNostrConnected && pk);
+    $('btn-new').disabled = !ok;
+    if (ok && !_ready) { _ready = true; drawEmpty(); loadLib(); }
+}
+document.addEventListener('DOMContentLoaded', function () {
+    wire(); updateConnectionUI();
+    document.addEventListener('nostr:connected', updateConnectionUI);
+    if (window.waitForConnection) window.waitForConnection(updateConnectionUI);
+});
+</script>
+</body>
+</html>

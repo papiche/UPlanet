@@ -158,6 +158,8 @@
   <aside class="rail">
     <h2>Bibliothèque</h2>
     <button class="newbtn" id="btn-new" type="button" disabled>Nouveau…</button>
+    <button class="newbtn" id="btn-import" type="button" disabled style="background:none;color:var(--txt);border:1px solid var(--line)">Importer un paquet…</button>
+    <input type="file" id="import-file" accept=".tar.gz,.tgz,application/gzip" class="sr">
     <div class="seg" role="group" aria-label="Type"><button type="button" data-type="scene" aria-pressed="true">Scènes</button><button type="button" data-type="character" aria-pressed="false">Personnages</button></div>
     <div class="seg" role="group" aria-label="Origine"><button type="button" data-from="all" aria-pressed="true">Tous</button><button type="button" data-from="mine" aria-pressed="false">À moi</button><button type="button" data-from="coop" aria-pressed="false">Coopérative</button></div>
     <div class="shelf" id="shelf"></div>
@@ -208,7 +210,7 @@ async function api(path, o) {
     var method = o.method || 'GET', url = apiBase().replace(/\/$/, '') + path, auth = await nip98(url, method);
     if (!auth) throw new Error('signature NIP-98 refusée ou indisponible');
     var headers = { 'Authorization': auth }; if (o.json) headers['Content-Type'] = 'application/json';
-    var r = await fetch(url, { method: method, headers: headers, body: o.json ? JSON.stringify(o.json) : undefined });
+    var r = await fetch(url, { method: method, headers: headers, body: o.json ? JSON.stringify(o.json) : (o.form || undefined) });
     if (o.blob) { if (!r.ok) throw new Error('HTTP ' + r.status); return await r.blob(); }
     var d = null; try { d = await r.json(); } catch (e) {}
     if (!r.ok) { var m = (d && (d.detail || d.error)) || ('HTTP ' + r.status); throw new Error(typeof m === 'string' ? m : JSON.stringify(m)); }
@@ -241,7 +243,9 @@ async function blobUrl(key, path) {
 
 /* ═══ État ═══ */
 var S = { lib: [], me: null, gateway: '', type: 'scene', from: 'all', cur: null, sb: null, desc: '', pending: [], meta: null,
-          edits: {}, dirty: false, job: null, jobTimer: null, shotUrls: {}, showJson: false, castPics: {}, libPics: {} };
+          edits: {}, dirty: false, job: null, jobTimer: null, shotUrls: {}, showJson: false, castPics: {}, libPics: {},
+          shotJobs: {}, shotJobTimers: {} };
+function clearShotJobTimers() { Object.keys(S.shotJobTimers).forEach(function (i) { clearInterval(S.shotJobTimers[i]); }); S.shotJobTimers = {}; }
 
 /* ═══ Bibliothèque ═══ */
 async function loadLib(keep) {
@@ -276,6 +280,7 @@ async function openAsset(cid) {
     var d;
     try { d = await api('/api/story/asset/' + q(cid)); } catch (e) { toast('err', e.message); return; }
     S.cur = d; S.pending = []; S.edits = {}; S.dirty = false; S.showJson = false; S.shotUrls = {}; S.castPics = {};
+    clearShotJobTimers(); S.shotJobs = {};
     S.desc = d.manifest.description || '';
     var f = {}; d.files.forEach(function (x) { f[x.path] = x; });
     if (d.manifest.type === 'scene') {
@@ -290,7 +295,12 @@ async function openAsset(cid) {
     draw(); drawShelf();
     findRunningJob();
 }
-function setDirty() { S.dirty = true; var b = $('btn-save'); if (b) { b.disabled = false; b.textContent = 'Enregistrer une version'; } var g = $('btn-go'); if (g) g.textContent = 'Enregistrer et générer'; }
+function setDirty() {
+    S.dirty = true;
+    var b = $('btn-save'); if (b) b.disabled = false;
+    var g = $('btn-go'); if (g) { g.disabled = true; g.title = 'Enregistrez d’abord vos modifications'; }
+    document.querySelectorAll('[id^="shotgen-"]').forEach(function (btn) { btn.disabled = true; btn.title = 'Enregistrez d’abord vos modifications'; });
+}
 
 function drawEmpty() {
     var b = $('bench'); b.textContent = '';
@@ -304,8 +314,11 @@ function draw() {
     var actions = h('div', { class: 'actions' });
     if (readonly) actions.appendChild(h('button', { class: 'btn keep', type: 'button', text: 'Copier dans ma bibliothèque', onclick: forkIt }));
     else actions.appendChild(h('button', { class: 'btn keep', id: 'btn-save', type: 'button', text: 'Enregistrer une version', disabled: !S.dirty, onclick: function () { save(); } }));
+    actions.appendChild(h('button', { class: 'btn', type: 'button', text: 'Exporter', title: 'Télécharger ce paquet (tar.gz) pour le sauvegarder ou le transférer manuellement', onclick: exportIt }));
     actions.appendChild(h('button', { class: 'btn', type: 'button', text: 'Historique', onclick: openHistory }));
-    actions.appendChild(h('button', { class: 'btn go', id: 'btn-go', type: 'button', text: S.dirty ? 'Enregistrer et générer' : (m.type === 'scene' ? 'Générer la vidéo' : 'Générer portrait et voix'), onclick: generate }));
+    actions.appendChild(h('button', { class: 'btn go', id: 'btn-go', type: 'button', text: m.type === 'scene' ? 'Générer la vidéo' : 'Générer portrait et voix',
+        disabled: S.dirty, title: S.dirty ? 'Enregistrez d’abord vos modifications' : '', onclick: generate }));
+    if (!readonly) actions.appendChild(h('button', { class: 'btn', type: 'button', style: 'color:var(--tally);border-color:var(--tally)', text: 'Supprimer', onclick: deleteIt }));
     b.appendChild(h('div', { class: 'head' },
         h('div', {}, h('h1', { text: m.name }), h('div', { class: 'meta', text: 'Version ' + d.version + (d.scope === 'coop' ? ' · coopérative' : ' · privée') + (d.mine ? '' : ' · lecture seule') })),
         actions));
@@ -330,6 +343,32 @@ function compose(s) {
         s.prompt = ((u.scene || '').trim() + line).trim();
     }
 }
+/* Un plan importé (CLI, ou storyboard partagé) encode tout dans s.prompt, p.ex. :
+   "<lieu et action> <Nom> says in French: \"<réplique>\" <suite éventuelle>" — on le
+   décompose une seule fois dans les champs dédiés (scène/réplique) à la première ouverture,
+   pour que « Ce qu'il dit »/« Le lieu et l'action » ne soient pas vides par rapport à un plan
+   créé depuis l'interface. Sans ce motif reconnaissable, rien n'est deviné (voir importedHint). */
+function splitImportedPrompt(prompt) {
+    var m = /^([\s\S]*?)\s*\bsays?\b[^":]*:\s*"([^"]*)"([\s\S]*)$/i.exec(prompt || '');
+    if (!m) return null;
+    var before = m[1].trim(), after = m[3].trim();
+    return { scene: (before + (after ? ' ' + after : '')).replace(/\s+/g, ' ').trim(), say: m[2] };
+}
+function autofillFromPrompt(s, u) {
+    if (u._parsed) return;
+    u._parsed = true;
+    if (u.say || u.scene) return;
+    var parsed = splitImportedPrompt(s.prompt);
+    if (parsed) { u.scene = parsed.scene; u.say = parsed.say; }
+}
+/* Motif non reconnu (pas de réplique entre guillemets) : on affiche la description d'origine
+   en aperçu plutôt que de la cacher — elle reste utilisée telle quelle tant qu'on ne remplit
+   pas les champs ci-dessous */
+function importedHint(s, u) {
+    if (u.say || u.scene || !(s.prompt || '').trim()) return null;
+    var txt = s.prompt.length > 160 ? s.prompt.slice(0, 160) + '…' : s.prompt;
+    return h('p', { style: 'color:var(--mut);font-size:.82rem;margin:2px 0 8px', text: 'Plan importé, description complète : « ' + txt + ' » — remplissez les champs ci-dessous pour la remplacer.' });
+}
 function newShot(kind) {
     var who = Object.keys(S.sb.cast)[0] || '';
     if (kind === 'card') return { card: { title: 'Titre', subtitle: '', links: [] }, duration: 6, ui: { kind: 'card' } };
@@ -348,6 +387,8 @@ function drawScene(b, ro) {
             h('div', { class: 'field' }, h('span', { text: 'Format' }), ratio),
             h('label', { class: 'field' }, h('span', { text: 'Style' }), sel([['clean', 'Net'], ['vhs', 'Cassette VHS']], sb.style || 'clean', ro, function (v) { sb.style = v; setDirty(); })),
             h('label', { class: 'field' }, h('span', { text: 'Qualité' }), sel([['0.25', 'Brouillon (rapide)'], ['0.4', 'Standard'], ['0.6', 'Soignée (lente)']], String(sb.megapixels || 0.4), ro, function (v) { sb.megapixels = parseFloat(v); setDirty(); })),
+            h('label', { class: 'field' }, h('span', { text: 'Voix de secours (voix-off, sans narrateur dédié)' }),
+                sel([['amelie', 'Amélie'], ['pierre', 'Pierre']], sb.voice || 'amelie', ro, function (v) { sb.voice = v; setDirty(); })),
             h('label', { class: 'field', style: 'flex:1 1 280px' }, h('span', { text: 'Voix du narrateur (pour la voix-off des plans)' }),
                 h('input', { type: 'text', value: (sb.narrator && sb.narrator.voice_design) || '', disabled: ro, placeholder: 'Calm, warm male voice, documentary style',
                     oninput: function (e) { if (e.target.value.trim()) sb.narrator = { voice_design: e.target.value.trim() }; else delete sb.narrator; setDirty(); } })))));
@@ -370,7 +411,7 @@ function drawScene(b, ro) {
     b.appendChild(strip);
 
     b.appendChild(h('details', { class: 'json', ontoggle: function (e) { S.showJson = e.target.open; } }, h('summary', { style: 'color:var(--mut);cursor:pointer', text: 'Mode avancé : storyboard.json' }),
-        h('textarea', { spellcheck: 'false', disabled: ro, value: JSON.stringify(sb, function (k, v) { return k === '_bad' ? undefined : v; }, 1), oninput: function (e) {
+        h('textarea', { spellcheck: 'false', disabled: ro, value: JSON.stringify(sb, function (k, v) { return (k === '_bad' || k === '_parsed') ? undefined : v; }, 1), oninput: function (e) {
             try { var j = JSON.parse(e.target.value); j.shots = j.shots || []; j.cast = j.cast || {}; S.sb = j; setDirty(); e.target.style.borderColor = ''; } catch (x) { e.target.style.borderColor = 'var(--tally)'; } },
             onchange: function () { draw(); document.querySelector('details.json').open = true; } })));
     paintShots();
@@ -378,8 +419,75 @@ function drawScene(b, ro) {
 function sel(opts, val, ro, fn) {
     return h('select', { disabled: ro, onchange: function (e) { fn(e.target.value); } }, opts.map(function (o) { return h('option', { value: o[0], selected: String(o[0]) === String(val), text: o[1] }); }));
 }
+/* ═══ Générer un plan indépendamment (sans refaire toute la scène) ═══
+   Chaque prise remplace l'aperçu courant mais la précédente est archivée côté serveur
+   (voir shotTakesBlock) — rien n'est perdu en recommençant un plan plusieurs fois. */
+function shotGenRow(s, i) {
+    var job = S.shotJobs[i], running = job && /queued|running/.test(job.status);
+    var needsPrev = i > 0 && s.continue === true;
+    return h('div', { class: 'row', style: 'margin:6px 0' },
+        h('button', { class: 'smallbtn', id: 'shotgen-' + i, type: 'button', disabled: S.dirty || running,
+            title: S.dirty ? 'Enregistrez d’abord vos modifications' : (needsPrev ? 'Ce plan repart de l’image du plan précédent : assurez-vous qu’il a déjà été généré au moins une fois.' : ''),
+            text: running ? (job.status === 'queued' ? 'En file d’attente…' : 'Génération…') : '🎬 Générer ce plan', onclick: function () { generateShot(i); } }));
+}
+async function generateShot(i) {
+    if (S.dirty) { toast('err', 'Enregistrez d’abord vos modifications.'); return; }
+    try {
+        S.shotJobs[i] = await api('/api/story/asset/' + q(S.cur.cid) + '/render-shot', { method: 'POST', json: { index: i } });
+    } catch (e) { toast('err', e.message); return; }
+    var btn = $('shotgen-' + i); if (btn) { btn.disabled = true; btn.textContent = 'En file d’attente…'; }
+    updateShotPreview(i);
+    clearInterval(S.shotJobTimers[i]);
+    S.shotJobTimers[i] = setInterval(function () { pollShotJob(i); }, 2000);
+}
+async function pollShotJob(i) {
+    var job = S.shotJobs[i]; if (!job) return;
+    try { job = S.shotJobs[i] = await api('/api/story/jobs/' + job.id); } catch (e) { return; }
+    var btn = $('shotgen-' + i);
+    if (btn) btn.textContent = job.status === 'queued' ? 'En file d’attente…' : (job.status === 'running' ? 'Génération…' : btn.textContent);
+    if (!/queued|running/.test(job.status)) {
+        clearInterval(S.shotJobTimers[i]); delete S.shotJobTimers[i];
+        if (btn) { btn.disabled = false; btn.textContent = '🎬 Générer ce plan'; }
+        if (job.status === 'done') { toast('ok', 'Plan ' + (i + 1) + ' généré.'); updateShotPreview(i); }
+        else if (job.status === 'failed') toast('err', 'Plan ' + (i + 1) + ' : ' + (job.error || 'échec du rendu'));
+    }
+}
+function updateShotPreview(i) {
+    var job = S.shotJobs[i], pv = $('pv' + i); if (!job || !pv) return;
+    if (/queued|running/.test(job.status)) {
+        pv.textContent = ''; pv.appendChild(h('div', { class: 'wait', text: job.status === 'queued' ? 'En file d’attente…' : 'Génération en cours…' }));
+    } else if (job.status === 'done') {
+        api('/api/story/jobs/' + job.id + '/file?name=' + q('shot_' + String(i).padStart(2, '0') + '.mp4'), { blob: true }).then(function (b) {
+            pv.textContent = ''; pv.appendChild(h('video', { class: 'clip' + ((S.sb.ratio || '16:9') === '9:16' ? ' v' : ''), src: URL.createObjectURL(b), controls: true, preload: 'metadata' }));
+        }).catch(function () {});
+    }
+}
+/* Prises précédentes d'un plan (archivées par le serveur à chaque nouvelle génération) :
+   on peut les rejouer dans l'aperçu sans perdre la prise courante */
+function shotTakesBlock(i) {
+    var det = h('details', { style: 'margin-top:4px' }, h('summary', { style: 'color:var(--frame-mut);font-size:.78rem;cursor:pointer', text: 'Prises précédentes' }));
+    var body = h('div', { style: 'margin-top:6px;display:flex;gap:6px;flex-wrap:wrap' }, h('span', { style: 'color:var(--frame-mut);font-size:.78rem', text: 'Chargement…' }));
+    det.appendChild(body);
+    det.addEventListener('toggle', function () {
+        if (!det.open || det.dataset.loaded) return;
+        det.dataset.loaded = '1';
+        api('/api/story/asset/' + q(S.cur.cid) + '/shot/' + i + '/takes').then(function (r) {
+            body.textContent = '';
+            if (!r.takes.length) { body.appendChild(h('span', { style: 'color:var(--frame-mut);font-size:.78rem', text: 'Aucune prise précédente.' })); return; }
+            r.takes.forEach(function (t) {
+                body.appendChild(h('button', { class: 'smallbtn', type: 'button', text: '▶ ' + fmtDate(t.created), onclick: function () {
+                    api('/api/story/asset/' + q(S.cur.cid) + '/shot/' + i + '/takes/' + q(t.id) + '/file', { blob: true }).then(function (b) {
+                        var pv = $('pv' + i); pv.textContent = ''; pv.appendChild(h('video', { class: 'clip', src: URL.createObjectURL(b), controls: true, preload: 'metadata' }));
+                    }).catch(function (e) { toast('err', e.message); });
+                } }));
+            });
+        }).catch(function (e) { body.textContent = e.message; });
+    });
+    return det;
+}
 function shotCard(s, i, ro) {
     var kind = kindOf(s), u = s.ui = s.ui || { kind: kind };
+    autofillFromPrompt(s, u);
     var names = Object.keys(S.sb.cast);
     var card = h('article', { class: 'frame', 'data-i': String(i) });
     card.appendChild(h('div', { class: 'ftop' }, h('span', { class: 'no', text: String(i + 1) }),
@@ -389,6 +497,7 @@ function shotCard(s, i, ro) {
             h('button', { type: 'button', title: 'Dupliquer', 'aria-label': 'Dupliquer le plan ' + (i + 1), text: '⧉', onclick: function () { S.sb.shots.splice(i + 1, 0, JSON.parse(JSON.stringify(s))); setDirty(); draw(); } }),
             h('button', { type: 'button', title: 'Supprimer', 'aria-label': 'Supprimer le plan ' + (i + 1), text: '✕', onclick: function () { if (S.sb.shots.length > 1) { S.sb.shots.splice(i, 1); setDirty(); draw(); } else toast('err', 'Une scène garde au moins un plan.'); } }))));
     card.appendChild(h('div', { class: 'preview', id: 'pv' + i }));
+    if (!ro) { card.appendChild(shotGenRow(s, i)); card.appendChild(shotTakesBlock(i)); }
     if (!ro) card.appendChild(h('div', { class: 'kinds', role: 'group', 'aria-label': 'Type de plan' }, KINDS.map(function (k) {
         return h('button', { type: 'button', 'aria-pressed': String(kind === k[0]), text: k[1], onclick: function () { if (kind !== k[0]) { var n = newShot(k[0]); n.duration = s.duration || n.duration; n.title = s.title; n.voiceover = s.voiceover; S.sb.shots[i] = n; setDirty(); draw(); } } });
     })));
@@ -402,13 +511,20 @@ function shotCard(s, i, ro) {
         card.appendChild(h('label', { class: 'field' }, h('span', { text: 'Qui parle ?' }),
             names.length ? sel(names.map(function (n) { return [n, n]; }), u.who || names[0], ro, function (v) { u.who = v; s.cast = [v]; compose(s); setDirty(); }) : h('div', { class: 'bad', text: 'Ajoutez d’abord un personnage au casting.' })));
         if (names.length && !(s.cast && s.cast.length)) { s.cast = [names[0]]; u.who = names[0]; }
+        var hint1 = importedHint(s, u); if (hint1) card.appendChild(hint1);
         card.appendChild(inp('Ce qu’il ou elle dit (en français)', u.say, function (v) { u.say = v; compose(s); }, { area: true, ph: 'Bonjour, voici ma station.' }));
         card.appendChild(inp('Le lieu et l’action', u.scene, function (v) { u.scene = v; compose(s); }, { ph: 'Close-up in a cosy kitchen, warm light' }));
     } else if (kind === 'screen') {
         card.appendChild(inp('Adresse de la page à montrer', s.screen, function (v) { s.screen = v; }, { ph: 'https://u.copylaradio.com/g1' }));
+        card.appendChild(h('label', { class: 'field' }, h('span', { text: 'Mouvement de caméra' }),
+            sel([['', 'Automatique'], ['scroll', 'Défilement (page longue)'], ['zoom', 'Léger zoom']], s.motion || '', ro, function (v) { if (v) s.motion = v; else delete s.motion; setDirty(); })));
+        card.appendChild(inp('JavaScript à exécuter avant la capture (un par ligne, facultatif)',
+            (Array.isArray(s.screen_js) ? s.screen_js : (s.screen_js ? [s.screen_js] : [])).join('\n'),
+            function (v) { var lines = v.split('\n').map(function (l) { return l.trim(); }).filter(Boolean); if (!lines.length) delete s.screen_js; else s.screen_js = lines.length === 1 ? lines[0] : lines; },
+            { area: true, ph: "document.querySelector('#tab').click()" }));
         card.appendChild(h('label', { class: 'field' }, h('span', { text: 'Présentateur en médaillon (facultatif)' }),
             sel([['', 'Aucun']].concat(names.map(function (n) { return [n, n]; })), s.presenter || '', ro, function (v) { if (v) s.presenter = v; else { delete s.presenter; u.say = ''; s.prompt = ''; } u.who = v; compose(s); setDirty(); draw(); })));
-        if (s.presenter) card.appendChild(inp('Ce qu’il ou elle dit', u.say, function (v) { u.say = v; compose(s); }, { area: true }));
+        if (s.presenter) { var hint2 = importedHint(s, u); if (hint2) card.appendChild(hint2); card.appendChild(inp('Ce qu’il ou elle dit', u.say, function (v) { u.say = v; compose(s); }, { area: true })); }
     } else {
         var c = s.card = s.card || { title: '', links: [] };
         card.appendChild(inp('Titre', c.title, function (v) { c.title = v; }));
@@ -416,8 +532,11 @@ function shotCard(s, i, ro) {
         card.appendChild(inp('Liens avec QR code, un par ligne : texte | adresse', (c.links || []).map(function (l) { return l.label + ' | ' + l.url; }).join('\n'),
             function (v) { c.links = v.split('\n').map(function (ln) { var p = ln.split('|'); return p.length > 1 ? { label: p[0].trim(), url: p.slice(1).join('|').trim() } : null; }).filter(Boolean); }, { area: true, ph: 'S’inscrire | https://u.copylaradio.com/g1' }));
     }
-    card.appendChild(h('label', { class: 'field' }, h('span', { text: 'Durée (secondes)' }),
-        h('input', { type: 'number', min: 3, max: 15, disabled: ro, value: String(s.duration || 5), oninput: function (e) { s.duration = Math.max(3, Math.min(15, parseInt(e.target.value) || 5)); setDirty(); } })));
+    card.appendChild(h('div', { class: 'row' },
+        h('label', { class: 'field' }, h('span', { text: 'Durée (secondes)' }),
+            h('input', { type: 'number', min: 3, max: 15, disabled: ro, value: String(s.duration || 5), oninput: function (e) { s.duration = Math.max(3, Math.min(15, parseInt(e.target.value) || 5)); setDirty(); } })),
+        kind === 'card' ? null : h('label', { class: 'field' }, h('span', { text: 'Graine (facultatif)' }),
+            h('input', { type: 'number', disabled: ro, value: s.seed != null ? String(s.seed) : '', placeholder: 'auto', oninput: function (e) { var v = e.target.value.trim(); if (v === '') delete s.seed; else s.seed = parseInt(v) || 0; setDirty(); } }))));
     var more = h('details', { style: 'margin-top:8px', open: !!(s.title || s.voiceover) }, h('summary', { style: 'color:var(--frame-mut);font-size:.8rem;cursor:pointer', text: 'Texte à l’image et voix-off' }),
         h('label', { class: 'field' }, h('span', { text: 'Texte affiché en bas de l’image' }), h('input', { type: 'text', disabled: ro, value: s.title || '', oninput: function (e) { if (e.target.value) s.title = e.target.value; else delete s.title; setDirty(); } })));
     if (kind !== 'card') more.appendChild(inp('Voix-off du narrateur (en français)', s.voiceover, function (v) { if (v) s.voiceover = v; else delete s.voiceover; }, { area: true }));
@@ -473,6 +592,11 @@ function drawCharacter(b, ro) {
                     var file = e.target.files[0]; if (!file) return;
                     if (file.size > 12 * 1048576) { toast('err', 'Image trop grosse (12 Mo maximum).'); return; }
                     var r = new FileReader(); r.onload = function () { S.edits['cast/' + name + '/portrait.png'] = { b64: r.result.split(',')[1] }; setDirty(); toast('ok', 'Portrait prêt à enregistrer.'); }; r.readAsDataURL(file); } })),
+            ro ? null : h('label', { class: 'field' }, h('span', { text: 'Ou remplacer la voix par votre fichier audio' }),
+                h('input', { type: 'file', accept: 'audio/*', onchange: function (e) {
+                    var file = e.target.files[0]; if (!file) return;
+                    if (file.size > 20 * 1048576) { toast('err', 'Fichier audio trop gros (20 Mo maximum).'); return; }
+                    var r = new FileReader(); r.onload = function () { S.edits['cast/' + name + '/voice.wav'] = { b64: r.result.split(',')[1] }; setDirty(); toast('ok', 'Voix prête à enregistrer.'); }; r.readAsDataURL(file); } })),
             h('p', { style: 'color:var(--mut);font-size:.82rem', text: 'N’utilisez le visage ou la voix d’une personne réelle qu’avec son accord.' }))));
 }
 
@@ -482,7 +606,7 @@ async function save(quiet) {
     if (d.manifest.type === 'scene') {
         var bad = S.sb.shots.findIndex(function (s) { return s._bad; });
         if (bad >= 0) { toast('err', 'Le plan ' + (bad + 1) + ' est incomplet.'); return null; }
-        var clean = JSON.parse(JSON.stringify(S.sb, function (k, v) { return k === '_bad' ? undefined : v; }));
+        var clean = JSON.parse(JSON.stringify(S.sb, function (k, v) { return (k === '_bad' || k === '_parsed') ? undefined : v; }));
         body.changes['storyboard.json'] = { text: JSON.stringify(clean, null, 1) };
         Object.keys(S.edits).forEach(function (k) { if (k.indexOf('cast/') === 0) Object.keys(S.files).filter(function (p) { return p.indexOf(k + '/') === 0; }).forEach(function (p) { body.changes[p] = { delete: true }; }); });
         if (S.pending.length) body.attach = S.pending;
@@ -505,18 +629,52 @@ async function forkIt() {
     try { var r = await api('/api/story/asset/' + q(S.cur.cid) + '/fork', { method: 'POST', json: { name: name.replace(/[^\p{L}\p{N} _'-]/gu, '').trim() } }); await loadLib(true); await openAsset(r.cid); toast('ok', 'Copie créée dans votre bibliothèque.'); }
     catch (e) { toast('err', e.message); }
 }
+/* Paquet en clair (portrait+voix, ou storyboard+plans+vidéo) : sauvegarde locale ou transfert
+   manuel vers une autre station, hors IPFS/NOSTR de celle-ci */
+async function exportIt() {
+    try {
+        var blob = await api('/api/story/asset/' + q(S.cur.cid) + '/export', { blob: true });
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = S.cur.manifest.type + '-' + S.cur.manifest.name.toLowerCase().replace(/[^a-z0-9]+/g, '-') + '.tar.gz';
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(function () { URL.revokeObjectURL(a.href); }, 4000);
+        toast('ok', 'Paquet exporté.');
+    } catch (e) { toast('err', e.message); }
+}
+async function importFile(file) {
+    var fd = new FormData(); fd.append('file', file); fd.append('scope', 'private');
+    try {
+        var r = await api('/api/story/import', { method: 'POST', form: fd });
+        toast('ok', (r.type === 'scene' ? 'Scène' : 'Personnage') + ' « ' + r.name + ' » importé(e).');
+        S.type = r.type;
+        document.querySelectorAll('.rail .seg button[data-type]').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.type === r.type)); });
+        await loadLib(true); await openAsset(r.cid);
+    } catch (e) { toast('err', e.message); }
+}
 
 /* ═══ Générer et suivre ═══ */
 async function generate() {
-    var d = S.cur, cid = d.cid;
+    var d = S.cur;
+    if (S.dirty) { toast('err', 'Enregistrez d’abord vos modifications.'); return; }
     if (S.job && /queued|running/.test(S.job.status)) { toast('err', 'Un rendu est déjà en cours.'); return; }
     var regen = [];
     if (d.manifest.type === 'character') {
         if (($('rg-p') || {}).checked) regen.push('portrait'); if (($('rg-v') || {}).checked) regen.push('voice');
     }
-    if (S.dirty) { cid = await save(true); if (!cid) return; }
-    try { S.job = await api('/api/story/asset/' + q(cid) + '/render', { method: 'POST', json: { regen: regen } }); toast('ok', 'Rendu lancé.'); watchJob(); }
+    try { S.job = await api('/api/story/asset/' + q(d.cid) + '/render', { method: 'POST', json: { regen: regen } }); toast('ok', 'Rendu lancé.'); watchJob(); }
     catch (e) { toast('err', e.message); }
+}
+async function deleteIt() {
+    var d = S.cur;
+    if (!confirm('Supprimer définitivement « ' + d.manifest.name + ' » de votre bibliothèque ?\n\nToutes les versions seront retirées d’ici (le contenu déjà sur IPFS n’est pas effacé, mais cette interface ne le proposera plus).')) return;
+    try {
+        await api('/api/story/asset/' + q(d.cid), { method: 'DELETE' });
+        toast('ok', 'Supprimé.');
+        S.cur = null; S.dirty = false;
+        await loadLib(true);
+        drawEmpty();
+    } catch (e) { toast('err', e.message); }
 }
 async function findRunningJob() {
     try {
@@ -633,6 +791,8 @@ function wire() {
         });
     });
     $('btn-new').onclick = function () { $('new-name').value = ''; $('dlg-new').showModal(); $('new-name').focus(); };
+    $('btn-import').onclick = function () { $('import-file').click(); };
+    $('import-file').onchange = function (e) { var f = e.target.files[0]; e.target.value = ''; if (f) importFile(f); };
     $('new-cancel').onclick = function () { $('dlg-new').close(); };
     $('cast-close').onclick = function () { $('dlg-cast').close(); };
     $('new-ok').onclick = async function () {
@@ -650,7 +810,7 @@ var _ready = false;
 function updateConnectionUI() {
     var pk = (window.NostrState && window.NostrState.userPubkey) || window.userPubkey || '';
     var ok = !!(window.isNostrConnected && pk);
-    $('btn-new').disabled = !ok;
+    $('btn-new').disabled = !ok; $('btn-import').disabled = !ok;
     if (ok && !_ready) { _ready = true; drawEmpty(); loadLib(); }
 }
 document.addEventListener('DOMContentLoaded', function () {

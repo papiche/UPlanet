@@ -831,7 +831,20 @@
         var recBtn = document.getElementById('uph-rec-btn');
         if (recBtn) {
             var emailInput = document.getElementById('uph-rec-email');
-            if (emailInput) emailInput.addEventListener('input', function () { _recAttempts = 0; });
+            if (emailInput) {
+                emailInput.addEventListener('input', function () {
+                    _recAttempts = 0;
+                    var email = emailInput.value.trim();
+                    clearTimeout(_recDetectTimer);
+                    if (!email || email.indexOf('@') === -1) {
+                        _recStation = { email: '', info: null };
+                        var s0 = document.getElementById('uph-rec-status');
+                        if (s0) s0.textContent = '';
+                        return;
+                    }
+                    _recDetectTimer = setTimeout(function () { _detectRecoveryStation(email); }, 700);
+                });
+            }
 
             recBtn.addEventListener('click', function () { _handleRecover(); });
         }
@@ -985,6 +998,8 @@
     // réimplémenté ici car uplanet-header.js est chargé seul sur la plupart des
     // pages, sans relay.js/atomic.html.
     var _recAttempts = 0;
+    var _recDetectTimer = null;
+    var _recStation = { email: '', info: null };  // cache { uspot, relay } résolu pour _recStation.email
 
     function _uphGatewayUrl() {
         if (typeof window.IPFS_GATEWAY === 'string' && window.IPFS_GATEWAY) return window.IPFS_GATEWAY;
@@ -1045,6 +1060,27 @@
             if (!meta.home_station) return null;
             return await _uphResolveHomeStationUrl(meta.home_station.split(':')[0]);
         } catch (e) { return null; }
+    }
+
+    // Déclenché (debounce 700ms) dès la saisie de l'email — résout la station
+    // Home et la met en cache (_recStation) AVANT que l'utilisateur ne saisisse
+    // son code PASS, pour que _handleRecover() s'adresse directement au bon
+    // uSPOT sans refaire la recherche au moment du clic.
+    async function _detectRecoveryStation(email) {
+        var statusEl = document.getElementById('uph-rec-status');
+        if (statusEl) statusEl.textContent = '🔍 Recherche de votre station…';
+        var info = await _uphFindHomeStation(email);
+        // L'email a pu changer pendant la résolution (async) — ignorer un
+        // résultat devenu obsolète plutôt que de l'appliquer au mauvais champ.
+        var curEmail = (document.getElementById('uph-rec-email') || {}).value || '';
+        if (curEmail.trim() !== email) return;
+        _recStation = { email: email, info: info };
+        if (!statusEl) return;
+        if (info && info.uspot) {
+            statusEl.textContent = '🏠 Station : ' + info.uspot.replace(/^https?:\/\//, '').replace(':54321', '');
+        } else {
+            statusEl.textContent = '';
+        }
     }
 
     // Décode un nsec1… et bascule l'état NOSTR global dessus — utilisé après
@@ -1152,10 +1188,17 @@
         if (!pass) { if (errEl) errEl.textContent = 'Veuillez saisir votre code PASS (reçu par email)'; return; }
 
         btn.disabled = true;
-        if (statusEl) statusEl.textContent = '🔍 Recherche de votre station…';
 
         try {
-            var station = await _uphFindHomeStation(email);
+            // Réutilise la résolution déjà lancée à la saisie de l'email
+            // (_detectRecoveryStation, debounce 700ms) — ne relance la recherche
+            // que si elle n'a pas eu lieu ou ne correspond plus à cet email.
+            var station = (_recStation.email === email) ? _recStation.info : null;
+            if (station === null && _recStation.email !== email) {
+                if (statusEl) statusEl.textContent = '🔍 Recherche de votre station…';
+                station = await _uphFindHomeStation(email);
+                _recStation = { email: email, info: station };
+            }
             var base = (station && station.uspot) ? station.uspot : _apiUrl();
 
             if (statusEl) statusEl.textContent = '🔐 Vérification du code PASS…';
@@ -1166,6 +1209,10 @@
             fd.append('recover_only', 'true');
             fd.append('format', 'json');
             fd.append('lang', navigator.language || 'fr');
+            // lat/lon sont des champs requis par G1NostrForm mais ignorés en
+            // recover_only (aucune géoloc nécessaire pour une récupération)
+            fd.append('lat', '0.00');
+            fd.append('lon', '0.00');
 
             var r = await fetch(base.replace(/\/+$/, '') + '/g1nostr', {
                 method: 'POST', body: fd, signal: AbortSignal.timeout(15000)
@@ -1200,7 +1247,15 @@
                 if (errEl) errEl.textContent = 'Accès désactivé après trop de tentatives — contactez votre capitaine.';
             } else {
                 var detail = '';
-                try { var j = await r.json(); detail = j.detail || ''; } catch (e) {}
+                try {
+                    var j = await r.json();
+                    // FastAPI 422 : detail est une liste d'objets {loc, msg, type}
+                    if (Array.isArray(j.detail)) {
+                        detail = j.detail.map(function (d) { return d.msg || JSON.stringify(d); }).join(' ; ');
+                    } else if (typeof j.detail === 'string') {
+                        detail = j.detail;
+                    }
+                } catch (e) {}
                 if (errEl) errEl.textContent = detail || ('Erreur serveur (' + r.status + ')');
             }
         } catch (e) {

@@ -580,7 +580,12 @@ Table de montage : bibliothèque (scènes / personnages ; à moi / coopérative)
 image numérotée avec ses perforations), mode avancé `storyboard.json`. Quatre types de plan (image animée, un personnage parle,
 capture d'écran, carton final) : le formulaire compose le prompt, `shot.ui` mémorise les champs pour les rouvrir. Casting = personnages
 de la bibliothèque (ajoutés à l'enregistrement via `attach`). Personnage : apparence, voix, phrase d'essai → « Générer portrait et voix ».
-« Générer » enregistre si besoin puis lance le job ; barre de progression fixe (un segment par plan, ETA) ; chaque plan prêt devient
-lisible dans sa vignette. « Historique » : toutes les versions (anciens CID) avec leurs rendus, ouvrir ou restaurer. Paquet d'un autre
-Capitaine : lecture seule + « Copier dans ma bibliothèque ». Auth NIP-98 à chaque appel (comme `cloud.html`), réservée au Capitaine.
-Aucun `innerHTML` : tout passe par `textContent` (helper `h()`).
+« Générer » reste désactivé tant que des modifications ne sont pas enregistrées (pas d'enregistrement silencieux) ; barre de
+progression fixe (un segment par plan, ETA) ; chaque plan prêt devient lisible dans sa vignette. Chaque plan a aussi son propre
+bouton « 🎬 Générer ce plan » (ne refait que lui, même cache de travail que la scène) + « Prises précédentes » repliable pour
+rejouer d'anciennes prises (jamais écrasées). « Historique » : toutes les versions (anciens CID) avec leurs rendus, ouvrir ou
+restaurer. Paquet d'un autre Capitaine : lecture seule + « Copier dans ma bibliothèque ». « Exporter » télécharge le paquet en
+clair (tar.gz, hors chiffrement/IPFS/NOSTR de cette station) pour sauvegarde ou transfert manuel ; « Importer un paquet… »
+(bibliothèque) l'installe comme nouvel asset (nom dédupliqué automatiquement en cas de collision). « Supprimer » retire toute la
+lignée de ma bibliothèque + demande de suppression NIP-09 (best-effort). Auth NIP-98 à chaque appel (comme `cloud.html`),
+réservée au Capitaine. Aucun `innerHTML` : tout passe par `textContent` (helper `h()`).

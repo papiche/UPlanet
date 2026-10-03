@@ -81,8 +81,22 @@
     <div id="cloud-error" class="cloud-error" style="display:none"></div>
   </section>
 
+  <!-- ══ Onglets ══════════════════════════════════════════════════════
+       Chaque section ci-dessous est devenue un panneau d'onglet
+       (classe uc-tab-pane + data-tab) plutôt qu'un bloc empilé — même
+       verrouillage .fc-locked/.fc-unlocked qu'avant (inchangé), juste un
+       seul panneau visible à la fois. selectUcloudTab() bascule les deux
+       en parallèle (bouton .uc-tab-active / panneau .uc-tab-active). -->
+  <div class="uc-tabs" role="tablist">
+    <button type="button" class="uc-tab uc-tab-active" data-tab="activate" onclick="selectUcloudTab('activate')">🔐 Activer</button>
+    <button type="button" class="uc-tab" data-tab="photos" onclick="selectUcloudTab('photos')">📸 Mes photos</button>
+    <button type="button" class="uc-tab" data-tab="gallery" onclick="selectUcloudTab('gallery')">🗂️ Mes fichiers</button>
+    <button type="button" class="uc-tab" data-tab="faces" onclick="selectUcloudTab('faces')">👥 Visages</button>
+    <button type="button" class="uc-tab" data-tab="webdav" onclick="selectUcloudTab('webdav')">☁️ Importer</button>
+  </div>
+
   <!-- ══ 3. Mon cloud chiffré ═════════════════════════════════════════ -->
-  <section class="cloud-card fc-locked" id="card-cloud">
+  <section class="cloud-card fc-locked uc-tab-pane uc-tab-active" data-tab="activate" id="card-cloud">
     <h2>Mon cloud chiffré</h2>
     <p>
       Un disque réseau qui se monte sur Linux, macOS ou Windows — sans installer
@@ -124,13 +138,6 @@
       <dd id="cred-token"></dd>
       <dd><button class="cloud-copy" onclick="copyField('cred-token')">Copier</button></dd>
     </dl>
-
-    <div id="cloud-warn" class="cloud-warn" style="display:none">
-      <i class="bi bi-exclamation-triangle"></i>
-      Ce mot de passe n'est affiché <strong>qu'une fois</strong>. Notez-le maintenant :
-      il n'est plus consultable ensuite. En cas de perte, réactivez votre Cloud —
-      un nouveau mot de passe remplacera l'ancien.
-    </div>
 
     <!-- Instructions de montage -->
     <div id="mount-block" style="display:none;margin-top:1.25rem">
@@ -189,7 +196,7 @@
   </section>
 
   <!-- ══ 4. Mes fichiers ══════════════════════════════════════════════ -->
-  <section class="cloud-card fc-locked" id="card-gallery">
+  <section class="cloud-card fc-locked uc-tab-pane" data-tab="gallery" id="card-gallery">
     <div class="fc-section-head">
       <h2>Mes fichiers</h2>
       <button id="btn-gallery-refresh" class="cloud-btn cloud-btn-secondary fc-btn-sm"
@@ -201,13 +208,21 @@
       Toutes les images présentes sur votre disque chiffré <code>/dav/</code> —
       qu'un visage ou une scène y ait été détecté ou non. Les visages et objets
       reconnus apparaissent dans les sections dédiées plus bas ; ici, c'est
-      l'inventaire brut, comme un gestionnaire de fichiers.
+      l'inventaire brut, comme un gestionnaire de fichiers. Cochez une ou
+      plusieurs photos pour les supprimer.
     </p>
     <div id="gallery-list" class="fc-faces"></div>
+    <div id="gallery-bulk-bar" class="fc-bulk-bar">
+      <span><strong id="gallery-bulk-count">0</strong> fichier(s) sélectionné(s)</span>
+      <button type="button" class="cloud-btn cloud-btn-danger fc-btn-sm" onclick="deleteSelectedGalleryFiles()">
+        <i class="bi bi-trash"></i> Supprimer la sélection
+      </button>
+      <button type="button" class="cloud-btn cloud-btn-secondary fc-btn-sm" onclick="clearGallerySelection()">Annuler</button>
+    </div>
   </section>
 
   <!-- ══ 5. Mes photos ════════════════════════════════════════════════ -->
-  <section class="cloud-card fc-locked" id="card-photos">
+  <section class="cloud-card fc-locked uc-tab-pane" data-tab="photos" id="card-photos">
     <h2>Mes photos</h2>
 
     <!-- Trois flux d'envoi, cf. ucloud.html (JS) setUploadMode() :
@@ -294,7 +309,7 @@
   </section>
 
   <!-- ══ 6. Visages détectés ══════════════════════════════════════════ -->
-  <section class="cloud-card fc-locked" id="card-faces">
+  <section class="cloud-card fc-locked uc-tab-pane" data-tab="faces" id="card-faces">
     <div class="fc-section-head">
       <h2>Visages détectés</h2>
       <div style="display:flex;gap:.4rem;flex-wrap:wrap">
@@ -323,16 +338,24 @@
          visages (identifiés + à nommer), positionnés par projection PCA de
          leur embedding (cf. GET /mailjet/faces ::_pca_2d). Alimente la MÊME
          sélection partagée que les cases à cocher de la vue liste — un seul
-         mécanisme de nommage groupé (#fc-bulk-bar), deux façons d'y entrer. -->
+         mécanisme de nommage groupé (#fc-bulk-bar), deux façons d'y entrer.
+         En plein écran (toggleNebulaFullscreen()), #fc-bulk-bar est déplacée
+         DANS ce conteneur (même nœud DOM, pas une copie) pour rester visible
+         et utilisable sans quitter la vue agrandie. -->
     <div id="faces-nebula-wrap" style="display:none">
-      <p class="cloud-note" style="margin-top:0">
-        Chaque point affiche la vignette du visage dès qu'elle charge (sinon
-        un point de couleur en attendant) — survolez-le pour voir la photo
-        entière. Liseré : 🟢 déjà identifié · 🟠 à nommer · 🟣 à nommer, groupe
-        suggéré. Molette : zoomer · glisser : déplacer · clic : (dé)sélectionner
-        · Maj+glisser : sélection rectangle · double-clic : recadrer.
-      </p>
-      <div id="faces-nebula" style="height:460px;border:1px solid #e0e0e0;border-radius:8px;overflow:hidden"></div>
+      <div class="fc-section-head">
+        <p class="cloud-note" style="margin:0;flex:1 1 auto">
+          Chaque point affiche la vignette du visage dès qu'elle charge (sinon
+          un point de couleur en attendant) — survolez-le pour voir la photo
+          entière. Liseré : 🟢 déjà identifié · 🟠 à nommer · 🟣 à nommer, groupe
+          suggéré. Molette : zoomer · glisser : déplacer · clic : (dé)sélectionner
+          · Maj+glisser : sélection rectangle · double-clic : recadrer.
+        </p>
+        <button type="button" id="btn-nebula-fullscreen" class="cloud-btn cloud-btn-secondary fc-btn-sm"
+                onclick="toggleNebulaFullscreen()">⛶ Plein écran</button>
+      </div>
+      <div id="fc-selected-preview" class="fc-selected-preview" style="display:none"></div>
+      <div id="faces-nebula" class="fc-nebula-canvas"></div>
     </div>
 
     <div id="faces-list-wrap">
@@ -356,6 +379,76 @@
       <input type="text" id="fc-bulk-key" class="fc-input" placeholder="npub1… ou 64 hex (optionnel)" list="fc-friends-list">
       <button type="button" class="cloud-btn cloud-btn-primary fc-btn-sm" onclick="bulkAssignFaces()">Assigner à la sélection</button>
       <button type="button" class="cloud-btn cloud-btn-secondary fc-btn-sm" onclick="clearFaceSelection()">Annuler</button>
+    </div>
+  </section>
+
+  <!-- ══ 7. Importer depuis un autre cloud ═══════════════════════════════ -->
+  <section class="cloud-card fc-locked uc-tab-pane" data-tab="webdav" id="card-webdav">
+    <div class="fc-section-head">
+      <h2>Importer depuis un autre cloud</h2>
+      <button id="btn-webdav-refresh" class="cloud-btn cloud-btn-secondary fc-btn-sm"
+              onclick="loadWebdavSources()">
+        <i class="bi bi-arrow-clockwise"></i> Actualiser
+      </button>
+    </div>
+    <p class="cloud-note" style="margin-top:0">
+      Reliez un dossier d'un AUTRE serveur WebDAV (NextCloud, ownCloud, une
+      autre station Astroport…) : il est parcouru automatiquement une fois
+      par jour, lors du rafraîchissement quotidien de votre MULTIPASS, et les
+      nouvelles photos rejoignent votre FaceCloud exactement comme un envoi
+      manuel. Plafonné à quelques photos par jour et par source pour ne
+      jamais saturer l'analyse GPU — un gros dossier se rattrape en
+      plusieurs jours, pas d'un coup.
+    </p>
+
+    <div id="webdav-sources-list" class="fc-faces"></div>
+
+    <h3 class="fc-subhead" style="margin-top:1.5rem">Ajouter une source</h3>
+    <div class="cloud-webdav-form">
+      <div class="cloud-form-row">
+        <input type="text" id="wd-label" class="fc-input" placeholder="Nom (ex: Mon ancien NextCloud)">
+        <input type="text" id="wd-url" class="fc-input" placeholder="URL WebDAV (https://…/remote.php/dav/files/alice/)">
+      </div>
+      <div class="cloud-form-row">
+        <input type="text" id="wd-username" class="fc-input" placeholder="Identifiant" autocomplete="off">
+        <input type="password" id="wd-password" class="fc-input" placeholder="Mot de passe" autocomplete="new-password">
+      </div>
+      <div class="cloud-actions">
+        <button type="button" class="cloud-btn cloud-btn-secondary" onclick="testWebdavConnection()">
+          <i class="bi bi-plug"></i> Tester la connexion
+        </button>
+        <button type="button" class="cloud-btn cloud-btn-secondary" onclick="browseWebdav('')">
+          <i class="bi bi-folder2-open"></i> Parcourir
+        </button>
+      </div>
+      <div id="wd-test-result" style="display:none;margin-top:0.5rem"></div>
+
+      <div id="wd-browser" style="display:none;margin-top:0.75rem" data-current-path="">
+        <div class="cloud-webdav-breadcrumb" id="wd-breadcrumb"></div>
+        <div id="wd-browser-list" class="cloud-webdav-list"></div>
+        <div class="cloud-actions" style="margin-top:0.5rem">
+          <button type="button" class="cloud-btn cloud-btn-primary fc-btn-sm" onclick="chooseWebdavFolder()">
+            <i class="bi bi-check2"></i> Choisir ce dossier
+          </button>
+        </div>
+      </div>
+
+      <div id="wd-confirm" style="display:none;margin-top:0.75rem">
+        <p class="cloud-note" style="margin-top:0">
+          Dossier choisi : <code id="wd-chosen-path"></code>
+        </p>
+        <div class="cloud-form-row">
+          <input type="text" id="wd-dest-prefix" class="fc-input" placeholder="Destination dans FaceCloud (/Photos/Import)">
+        </div>
+        <div class="cloud-actions">
+          <button type="button" class="cloud-btn cloud-btn-primary" onclick="addWebdavSource()">
+            <i class="bi bi-plus-circle"></i> Ajouter cette source
+          </button>
+          <button type="button" class="cloud-btn cloud-btn-secondary" onclick="cancelWebdavForm()">Annuler</button>
+        </div>
+      </div>
+
+      <div id="wd-form-error" class="cloud-error" style="display:none"></div>
     </div>
   </section>
 
@@ -482,7 +575,7 @@ function updateConnectionUI() {
     // signature restait affichée indéfiniment car _connected passait déjà à
     // true une 1ère fois, avalant silencieusement les `nostr:connected`
     // suivants qui auraient pu réussir). Ré-appeler ces GET est sans risque.
-    if (ok) { hideError(); refreshStatus(); loadFaces(); loadGallery(); }
+    if (ok) { hideError(); refreshStatus(); loadFaces(); loadGallery(); loadWebdavSources(); }
 }
 
 function connectNostrUser() {
@@ -525,6 +618,21 @@ function onConnectionChanged(connected) {
         setState('dav-dot', 'dav-text', '', 'En attente de connexion.');
         document.getElementById('identity-box').style.display = 'none';
     }
+}
+
+/* ── Onglets ───────────────────────────────────────────────────────────
+   Un seul panneau visible à la fois (.uc-tab-pane.uc-tab-active) — même
+   verrouillage .fc-locked/.fc-unlocked qu'avant (inchangé) : les onglets
+   restent cliquables avant connexion, pour laisser voir ce qu'ils
+   contiennent, mais leur contenu reste grisé/inerte tant qu'on n'est pas
+   connecté (déjà géré par onConnectionChanged ci-dessus). */
+function selectUcloudTab(name) {
+    document.querySelectorAll('.uc-tab').forEach(function (btn) {
+        btn.classList.toggle('uc-tab-active', btn.getAttribute('data-tab') === name);
+    });
+    document.querySelectorAll('.uc-tab-pane').forEach(function (pane) {
+        pane.classList.toggle('uc-tab-active', pane.getAttribute('data-tab') === name);
+    });
 }
 
 /* ── Section 3 : cloud chiffré ────────────────────────────────────────── */
@@ -810,14 +918,31 @@ function onFilesPicked(fileList) {
 
    `target` (optionnel) : {pubkey, name} — enrôlement supervisé (modes
    « self »/« friend »), relayé en en-têtes X-FaceID-Target-*. */
-/* MKCOL best-effort du dossier parent — un PUT sans collection parente déjà
-   créée renvoie 409 (RFC 4918 strict, pas de création implicite dans
-   UCloudDAVProvider). Idempotent : 405/409 sur un MKCOL déjà fait = ignoré. */
-var _photosDirReady = false;
-async function _ensurePhotosDir() {
-    if (_photosDirReady) return;
-    try { await nostrFetch('/dav/Photos', { method: 'MKCOL' }); } catch (e) { /* déjà là */ }
-    _photosDirReady = true;
+/* Rangement par date — /Photos/YYYY/MM/<nom> plutôt que /Photos/<nom> à plat
+   (depuis 2026-10-04, cohérent avec webdav_import.py::_dated_dest) : date du
+   jour de l'envoi (pas de date de prise de vue EXIF côté navigateur — aucune
+   bibliothèque de ce type n'est vendorisée ici, cf. earth/CLAUDE.md "ne
+   jamais charger de ressource externe"). */
+function _photoDateDir() {
+    var d = new Date();
+    return '/Photos/' + d.getFullYear() + '/' + String(d.getMonth() + 1).padStart(2, '0');
+}
+
+/* MKCOL best-effort de CHAQUE segment du dossier parent, dans l'ordre — un
+   PUT (ou un MKCOL) sans collection parente déjà créée renvoie 409 (RFC 4918
+   strict, pas de création implicite dans UCloudDAVProvider). Idempotent :
+   405/409 sur un MKCOL déjà fait = ignoré. Mémorise les dossiers déjà
+   assurés pour ne pas rejouer 3 MKCOL à chaque photo du même mois. */
+var _photosDirsReady = {};
+async function _ensurePhotosDir(dirPath) {
+    var segments = dirPath.split('/').filter(Boolean);
+    var acc = '';
+    for (var i = 0; i < segments.length; i++) {
+        acc += '/' + segments[i];
+        if (_photosDirsReady[acc]) continue;
+        try { await nostrFetch('/dav' + acc, { method: 'MKCOL' }); } catch (e) { /* déjà là */ }
+        _photosDirsReady[acc] = true;
+    }
 }
 
 /* Concurrence bornée plutôt que séquentielle stricte : pour plusieurs
@@ -836,7 +961,8 @@ var UPLOAD_BATCH_SIZE = 4;
 var UPLOAD_ROW_LIMIT = 20;
 
 async function uploadSequentially(files, target) {
-    await _ensurePhotosDir();
+    var dateDir = _photoDateDir();
+    await _ensurePhotosDir(dateDir);
     var headers = {};
     if (target && target.pubkey) {
         headers['X-FaceID-Target-Pubkey'] = target.pubkey;
@@ -852,7 +978,7 @@ async function uploadSequentially(files, target) {
     async function sendOne(f) {
         var row = perFileRows ? addUploadRow(f.name + ' — envoi…', 'pending') : null;
         try {
-            var davPath = '/dav/Photos/' + encodeURIComponent(f.name);
+            var davPath = '/dav' + dateDir + '/' + encodeURIComponent(f.name);
             await nostrFetch(davPath, { method: 'PUT', body: f, headers: headers });
             ok++;
             if (row) setUploadRow(row, f.name + ' — envoyé ✓', 'ok');
@@ -975,6 +1101,7 @@ function toggleFacesView() {
         btn.innerHTML = '📋 Vue liste';
         _renderNebula();
     } else {
+        if (_nebulaFullscreen) toggleNebulaFullscreen();   // ne pas laisser l'overlay orphelin
         _facesViewMode = 'list';
         document.getElementById('faces-nebula-wrap').style.display = 'none';
         document.getElementById('faces-list-wrap').style.display = '';
@@ -984,6 +1111,32 @@ function toggleFacesView() {
         if (preview) preview.style.display = 'none';
         _clearNebulaPhotoCache();
     }
+}
+
+/* Overlay position:fixed plutôt que la Fullscreen API native (Element.
+   requestFullscreen() a un support très inégal sur iOS Safari — cf. le
+   guide d'usage smartphone de earth/CLAUDE.md). #fc-bulk-bar est déplacée
+   DANS #faces-nebula-wrap pendant le plein écran (même nœud DOM, pas une
+   copie : ses champs/handlers survivent) puis remise à sa place en sortant. */
+var _nebulaFullscreen = false;
+
+function toggleNebulaFullscreen() {
+    _nebulaFullscreen = !_nebulaFullscreen;
+    var wrap = document.getElementById('faces-nebula-wrap');
+    var bar = document.getElementById('fc-bulk-bar');
+    var btn = document.getElementById('btn-nebula-fullscreen');
+    if (_nebulaFullscreen) {
+        wrap.classList.add('uc-nebula-fullscreen');
+        wrap.appendChild(bar);
+        btn.textContent = '✕ Quitter le plein écran';
+        document.body.style.overflow = 'hidden';
+    } else {
+        wrap.classList.remove('uc-nebula-fullscreen');
+        document.getElementById('card-faces').appendChild(bar);
+        btn.textContent = '⛶ Plein écran';
+        document.body.style.overflow = '';
+    }
+    if (window.FaceNebula) window.FaceNebula.resize();
 }
 
 function _renderNebula() {
@@ -1005,6 +1158,8 @@ function _renderNebula() {
    (défini plus bas), pour ne pas ouvrir des centaines de requêtes NIP-98
    d'un coup. FaceNebula affiche chaque vignette dès qu'elle arrive (pas
    besoin d'attendre le lot entier). */
+var _thumbUrlCache = {};   // id -> blob URL, partagé avec fc-selected-preview
+
 async function loadNebulaThumbnails(faces) {
     var withPhoto = faces.filter(function (f) { return f.has_photo; });
     for (var i = 0; i < withPhoto.length; i += THUMB_BATCH_SIZE) {
@@ -1013,7 +1168,13 @@ async function loadNebulaThumbnails(faces) {
             return nostrFetch('/mailjet/faces/thumbnail?point_id=' + encodeURIComponent(f.id),
                 { method: 'GET', responseType: 'blob' })
                 .then(function (blob) {
-                    if (window.FaceNebula) window.FaceNebula.setThumbUrl(f.id, URL.createObjectURL(blob));
+                    var url = URL.createObjectURL(blob);
+                    _thumbUrlCache[f.id] = url;
+                    if (window.FaceNebula) window.FaceNebula.setThumbUrl(f.id, url);
+                    // La vignette a pu finir de charger PENDANT que ce visage
+                    // était déjà sélectionné (nébuleuse) : rafraîchit l'aperçu
+                    // s'il attendait justement cette image.
+                    if (_facesSelected.has(f.id)) renderSelectedPreview();
                 })
                 .catch(function () { /* reste le point coloré, pas de vignette */ });
         }));
@@ -1192,6 +1353,35 @@ function onFaceSelectionChange() {
     document.querySelectorAll('#faces-unknown .fc-face-select').forEach(function (cb) {
         cb.checked = _facesSelected.has(cb.getAttribute('data-id'));
     });
+    renderSelectedPreview();
+}
+
+/* Bande de vignettes de la sélection courante — surtout utile en nébuleuse
+   (un point sélectionné n'est qu'un cercle coloré/surligné sur le canvas,
+   contrairement à une carte de la vue liste qui montre déjà sa vignette) :
+   voir visuellement QUI on est en train d'associer avant de taper un nom,
+   et pouvoir retirer un visage mal sélectionné d'un clic. */
+function renderSelectedPreview() {
+    var box = document.getElementById('fc-selected-preview');
+    if (!box) return;
+    var ids = getSelectedFaceIds();
+    if (!ids.length) { box.style.display = 'none'; box.innerHTML = ''; return; }
+    box.style.display = 'flex';
+    box.innerHTML = ids.map(function (id) {
+        var f = _lastAllFaces.filter(function (x) { return x.id === id; })[0];
+        var label = f ? (f.name || 'Inconnu') : id;
+        var url = _thumbUrlCache[id];
+        var thumb = url
+            ? '<img src="' + esc(url) + '" alt="">'
+            : '<div class="fc-selected-preview-empty">❓</div>';
+        return '<div class="fc-selected-preview-item" title="' + esc(label) + '" '
+             + 'onclick="toggleFaceSelection(\'' + esc(id) + '\', false)">'
+             + thumb
+             + '<button type="button" class="fc-selected-preview-remove" '
+             + 'title="Retirer de la sélection" '
+             + 'onclick="event.stopPropagation();toggleFaceSelection(\'' + esc(id) + '\', false)">×</button>'
+             + '</div>';
+    }).join('');
 }
 
 function selectFaceGroup(groupId) {
@@ -1334,7 +1524,11 @@ function loadThumbnails(container) {
         var pointId = img.getAttribute('data-point-id');
         nostrFetch('/mailjet/faces/thumbnail?point_id=' + encodeURIComponent(pointId),
             { method: 'GET', responseType: 'blob' })
-            .then(function (blob) { img.src = URL.createObjectURL(blob); })
+            .then(function (blob) {
+                var url = URL.createObjectURL(blob);
+                _thumbUrlCache[pointId] = url;   // partagé avec fc-selected-preview
+                img.src = url;
+            })
             .catch(function () { img.replaceWith(_thumbEmptyEl()); });
     });
 }
@@ -1359,8 +1553,11 @@ function _thumbEmptyEl() {
    requêtes simultanées ni saturer l'extension NOSTR (une signature par
    miniature). */
 var _galleryLimit = 60;   // pagination simple : n'affiche/déchiffre que les N plus récents d'abord
+var _gallerySelected = new Set();
+
 async function loadGallery() {
     if (!_connected) return;
+    clearGallerySelection();
     var box = document.getElementById('gallery-list');
     box.innerHTML = '<div class="fc-empty">Chargement…</div>';
     try {
@@ -1386,10 +1583,16 @@ async function loadGallery() {
 function galleryCardHtml(f) {
     var meta = [formatBytes(f.size),
                 f.mtime ? new Date(f.mtime * 1000).toLocaleDateString() : '',
-                f.tags && f.tags.length ? '👤 ' + f.tags.join(', ') : '']
+                f.tags && f.tags.length ? '👤 ' + f.tags.join(', ') : '',
+                f.faceid_status === 'no_face' ? '🔍 analysé, pas de visage' : '']
         .filter(Boolean).map(esc).join(' · ');
-    return '<div class="fc-face">'
+    return '<div class="fc-face" data-path="' + esc(f.path) + '">'
       + '<div class="fc-face-body">'
+      +   '<label class="fc-face-select-wrap" title="Sélectionner pour suppression">'
+      +     '<input type="checkbox" class="fc-face-select" data-path="' + esc(f.path) + '" '
+      +       (_gallerySelected.has(f.path) ? 'checked ' : '')
+      +       'onchange="toggleGallerySelection(this.getAttribute(\'data-path\'), this.checked)">'
+      +   '</label>'
       +   '<img class="fc-face-thumb" data-gallery-path="' + esc(f.path) + '" alt="">'
       +   '<div class="fc-face-content">'
       +     '<div class="fc-face-head"><span class="fc-face-name">' + esc(f.path.split('/').pop()) + '</span></div>'
@@ -1397,6 +1600,56 @@ function galleryCardHtml(f) {
       +   '</div>'
       + '</div>'
       + '</div>';
+}
+
+function toggleGallerySelection(path, checked) {
+    if (checked === undefined) checked = !_gallerySelected.has(path);
+    if (checked) _gallerySelected.add(path); else _gallerySelected.delete(path);
+    onGallerySelectionChange();
+}
+
+function onGallerySelectionChange() {
+    var n = _gallerySelected.size;
+    var bar = document.getElementById('gallery-bulk-bar');
+    if (bar) {
+        bar.style.display = n > 0 ? 'flex' : 'none';
+        document.getElementById('gallery-bulk-count').textContent = n;
+    }
+    document.querySelectorAll('#gallery-list .fc-face-select').forEach(function (cb) {
+        cb.checked = _gallerySelected.has(cb.getAttribute('data-path'));
+    });
+}
+
+function clearGallerySelection() {
+    _gallerySelected.clear();
+    onGallerySelectionChange();
+}
+
+async function deleteSelectedGalleryFiles() {
+    var paths = Array.from(_gallerySelected);
+    if (!paths.length) return;
+    if (!confirm('Supprimer définitivement ' + paths.length + ' fichier(s) ? '
+               + 'Le blob chiffré reste sur IPFS mais sa clé de déchiffrement '
+               + 'est détruite — irréversible.')) return;
+    var btn = document.querySelector('#gallery-bulk-bar .cloud-btn-danger');
+    var previous = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = '…';
+    try {
+        var fd = new FormData();
+        fd.append('paths', JSON.stringify(paths));
+        var result = await nostrFetch('/api/cloud/files/delete', { method: 'POST', body: fd });
+        if (result.skipped_readonly && result.skipped_readonly.length) {
+            showError((result.deleted || []).length + ' supprimé(s) ; '
+                + result.skipped_readonly.length + ' en lecture seule (partagés) '
+                + 'ignoré(s) et non supprimé(s).');
+        }
+        await loadGallery();
+    } catch (e) {
+        showError('Suppression refusée : ' + (e.message || e));
+    }
+    btn.disabled = false;
+    btn.textContent = previous;
 }
 
 /* Chargement des miniatures par lots de 6 en parallèle : assez pour rester
@@ -1555,6 +1808,250 @@ function copyField(id) {
     }
 }
 
+/* ── Section 7 : import depuis un autre cloud (WebDAV externe) ────────────
+   Trois étapes : parcourir (PROPFIND via POST /api/cloud/webdav-browse, les
+   identifiants ne sont PAS persistés par cet appel) → choisir un dossier →
+   enregistrer la source (POST /api/cloud/webdav-sources, qui revalide la
+   connexion avant d'écrire quoi que ce soit). L'import réel tourne hors de
+   cette page (cron quotidien ou bouton "Importer maintenant", en arrière-
+   plan) — cette section ne fait qu'afficher le dernier résultat connu. */
+async function loadWebdavSources() {
+    if (!_connected) return;
+    var box = document.getElementById('webdav-sources-list');
+    box.innerHTML = '<div class="fc-empty">Chargement…</div>';
+    try {
+        var data = await nostrFetch('/api/cloud/webdav-sources', { method: 'GET' });
+        var sources = data.sources || [];
+        box.innerHTML = sources.length
+            ? sources.map(webdavSourceCardHtml).join('')
+            : '<div class="fc-empty">Aucune source configurée pour l\'instant.</div>';
+    } catch (e) {
+        box.innerHTML = '<div class="fc-empty fc-err">Sources inaccessibles : '
+                       + esc(e.message || e) + '</div>';
+    }
+}
+
+function webdavSourceCardHtml(s) {
+    var sync = s.last_sync;
+    var syncText;
+    if (!sync) {
+        syncText = 'Pas encore synchronisée — se fera au prochain rafraîchissement '
+                 + 'quotidien, ou cliquez « Importer maintenant ».';
+    } else if (sync.error) {
+        syncText = '❌ Erreur : ' + esc(sync.error);
+    } else {
+        syncText = '✅ ' + sync.imported + ' importée(s), ' + sync.skipped + ' ignorée(s)'
+                 + (sync.errors ? ', ' + sync.errors + ' erreur(s)' : '')
+                 + ' · ' + new Date(sync.at * 1000).toLocaleString();
+    }
+    var dest = s.remote_path ? ('/' + s.remote_path) : '/';
+    return '<div class="fc-face" data-id="' + esc(s.id) + '">'
+      + '<div class="fc-face-body">'
+      +   '<div class="fc-face-content">'
+      +     '<div class="fc-face-head"><span class="fc-face-name">☁️ ' + esc(s.label) + '</span></div>'
+      +     '<div class="cloud-note fc-face-note">' + esc(s.url) + esc(dest) + ' → ' + esc(s.dest_prefix) + '</div>'
+      +     '<div class="cloud-note fc-face-note">' + syncText + '</div>'
+      +     '<div class="cloud-note fc-face-note" id="wd-status-' + esc(s.id) + '"></div>'
+      +     '<div class="fc-face-form">'
+      +       '<button type="button" class="cloud-btn cloud-btn-secondary fc-btn-sm" '
+      +         'onclick="checkWebdavSourceStatus(\'' + esc(s.id) + '\', this)">🔍 Vérifier la synchro</button>'
+      +       '<button type="button" class="cloud-btn cloud-btn-secondary fc-btn-sm" '
+      +         'onclick="syncWebdavSourceNow(\'' + esc(s.id) + '\', this)">Importer maintenant</button>'
+      +       '<button type="button" class="cloud-btn cloud-btn-danger fc-btn-sm" '
+      +         'onclick="deleteWebdavSource(\'' + esc(s.id) + '\')">Supprimer</button>'
+      +     '</div>'
+      +   '</div>'
+      + '</div>'
+      + '</div>';
+}
+
+/* À la demande SEULEMENT (bouton dédié) — PROPFIND récursif complet du
+   dossier distant, potentiellement lent : jamais appelé automatiquement au
+   chargement de loadWebdavSources(). */
+async function checkWebdavSourceStatus(id, btn) {
+    var box = document.getElementById('wd-status-' + id);
+    var previous = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = '…';
+    if (box) box.textContent = 'Comptage des fichiers distants…';
+    try {
+        var data = await nostrFetch('/api/cloud/webdav-sources/' + encodeURIComponent(id) + '/status',
+            { method: 'GET' });
+        if (box) {
+            box.textContent = '📊 ' + data.local_count + ' importée(s) localement / '
+                + data.remote_count + (data.remote_capped ? '+' : '') + ' présente(s) côté source';
+        }
+    } catch (e) {
+        if (box) box.textContent = '❌ ' + (e.message || e);
+    }
+    btn.disabled = false;
+    btn.textContent = previous;
+}
+
+async function syncWebdavSourceNow(id, btn) {
+    var previous = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = '…';
+    try {
+        await nostrFetch('/api/cloud/webdav-sources/' + encodeURIComponent(id) + '/sync', { method: 'POST' });
+        alert('Import lancé en arrière-plan — actualisez dans quelques instants pour voir le résultat.');
+    } catch (e) {
+        showError('Import impossible : ' + (e.message || e));
+    }
+    btn.disabled = false;
+    btn.textContent = previous;
+}
+
+async function deleteWebdavSource(id) {
+    if (!confirm('Supprimer cette source ? Les photos déjà importées restent dans votre FaceCloud.')) return;
+    try {
+        await nostrFetch('/api/cloud/webdav-sources/' + encodeURIComponent(id), { method: 'DELETE' });
+        loadWebdavSources();
+    } catch (e) {
+        showError('Suppression impossible : ' + (e.message || e));
+    }
+}
+
+var _wdChosenPath = null;
+
+function _wdError(msg) {
+    var el = document.getElementById('wd-form-error');
+    if (!msg) { el.style.display = 'none'; el.textContent = ''; return; }
+    el.textContent = msg;
+    el.style.display = '';
+}
+
+/* Test léger : un simple PROPFIND sur la racine (même endpoint que
+   "Parcourir"), mais sans ouvrir le navigateur de dossiers — juste un
+   message de réussite/échec. Permet de vérifier les identifiants AVANT de
+   s'engager dans la sélection d'un dossier, ou de valider une source dont
+   on connaît déjà le chemin distant sans avoir besoin de le parcourir. */
+async function testWebdavConnection() {
+    var url = document.getElementById('wd-url').value.trim();
+    var username = document.getElementById('wd-username').value.trim();
+    var password = document.getElementById('wd-password').value;
+    var result = document.getElementById('wd-test-result');
+    if (!url || !username || !password) {
+        _wdError('Renseignez URL, identifiant et mot de passe avant de tester.');
+        return;
+    }
+    _wdError('');
+    result.style.display = '';
+    result.className = 'cloud-note';
+    result.textContent = 'Connexion en cours…';
+    var fd = new FormData();
+    fd.append('url', url);
+    fd.append('username', username);
+    fd.append('password', password);
+    fd.append('path', '');
+    try {
+        var data = await nostrFetch('/api/cloud/webdav-browse', { method: 'POST', body: fd });
+        var n = (data.items || []).length;
+        result.className = 'cloud-note';
+        result.style.color = '#1e8e3e';
+        result.textContent = '✅ Connexion réussie — ' + n + ' élément(s) à la racine.';
+    } catch (e) {
+        result.style.color = '#c5221f';
+        result.textContent = '❌ ' + (e.message || e);
+    }
+}
+
+async function browseWebdav(path) {
+    var url = document.getElementById('wd-url').value.trim();
+    var username = document.getElementById('wd-username').value.trim();
+    var password = document.getElementById('wd-password').value;
+    if (!url || !username || !password) {
+        _wdError('Renseignez URL, identifiant et mot de passe avant de parcourir.');
+        return;
+    }
+    _wdError('');
+    var fd = new FormData();
+    fd.append('url', url);
+    fd.append('username', username);
+    fd.append('password', password);
+    fd.append('path', path || '');
+    try {
+        var data = await nostrFetch('/api/cloud/webdav-browse', { method: 'POST', body: fd });
+        renderWebdavBrowser(path || '', data.items || []);
+    } catch (e) {
+        _wdError('Connexion impossible : ' + (e.message || e));
+    }
+}
+
+function renderWebdavBrowser(path, items) {
+    document.getElementById('wd-browser').style.display = '';
+    document.getElementById('wd-browser').setAttribute('data-current-path', path);
+    document.getElementById('wd-confirm').style.display = 'none';
+
+    var crumbs = ['<button type="button" class="cloud-webdav-crumb" onclick="browseWebdav(\'\')">🏠 racine</button>'];
+    var acc = '';
+    (path ? path.split('/') : []).forEach(function (seg) {
+        if (!seg) return;
+        acc = acc ? acc + '/' + seg : seg;
+        crumbs.push('<span class="cloud-webdav-sep">/</span>'
+            + '<button type="button" class="cloud-webdav-crumb" onclick="browseWebdav(\''
+            + esc(acc).replace(/'/g, "\\'") + '\')">' + esc(seg) + '</button>');
+    });
+    document.getElementById('wd-breadcrumb').innerHTML = crumbs.join('');
+
+    var dirs = items.filter(function (it) { return it.is_dir; });
+    var files = items.filter(function (it) { return !it.is_dir; });
+    var html = dirs.map(function (it) {
+        return '<div class="cloud-webdav-item cloud-webdav-dir" onclick="browseWebdav(\''
+             + esc(it.path).replace(/'/g, "\\'") + '\')">📁 ' + esc(it.name) + '</div>';
+    }).join('') + files.map(function (it) {
+        return '<div class="cloud-webdav-item cloud-webdav-file">🖼️ ' + esc(it.name) + '</div>';
+    }).join('');
+    document.getElementById('wd-browser-list').innerHTML = html || '<div class="fc-empty">Dossier vide.</div>';
+}
+
+function chooseWebdavFolder() {
+    var path = document.getElementById('wd-browser').getAttribute('data-current-path') || '';
+    _wdChosenPath = path;
+    document.getElementById('wd-chosen-path').textContent = path ? ('/' + path) : '/ (racine)';
+    var label = document.getElementById('wd-label').value.trim();
+    document.getElementById('wd-dest-prefix').value =
+        '/Photos/Import' + (label ? '_' + label.replace(/[^a-zA-Z0-9]+/g, '') : '');
+    document.getElementById('wd-confirm').style.display = '';
+}
+
+function cancelWebdavForm() {
+    _wdChosenPath = null;
+    document.getElementById('wd-browser').style.display = 'none';
+    document.getElementById('wd-confirm').style.display = 'none';
+}
+
+async function addWebdavSource() {
+    var label = document.getElementById('wd-label').value.trim();
+    var url = document.getElementById('wd-url').value.trim();
+    var username = document.getElementById('wd-username').value.trim();
+    var password = document.getElementById('wd-password').value;
+    var destPrefix = document.getElementById('wd-dest-prefix').value.trim() || '/Photos/Import';
+    if (!label || !url || !username || !password) {
+        _wdError('Tous les champs sont requis.');
+        return;
+    }
+    _wdError('');
+    var fd = new FormData();
+    fd.append('label', label);
+    fd.append('url', url);
+    fd.append('username', username);
+    fd.append('password', password);
+    fd.append('remote_path', _wdChosenPath || '');
+    fd.append('dest_prefix', destPrefix);
+    try {
+        await nostrFetch('/api/cloud/webdav-sources', { method: 'POST', body: fd });
+        document.getElementById('wd-label').value = '';
+        document.getElementById('wd-url').value = '';
+        document.getElementById('wd-username').value = '';
+        document.getElementById('wd-password').value = '';
+        cancelWebdavForm();
+        loadWebdavSources();
+    } catch (e) {
+        _wdError('Ajout refusé : ' + (e.message || e));
+    }
+}
+
 function formatBytes(n) {
     if (n < 1024) return n + ' o';
     if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' Ko';
@@ -1571,6 +2068,11 @@ document.addEventListener('DOMContentLoaded', function () {
     // (silencieuse à l'ouverture, extension, ou nsec mobile) — cf. calendars.html.
     document.addEventListener('nostr:connected', updateConnectionUI);
     if (window.waitForConnection) window.waitForConnection(updateConnectionUI);
+    // Overlay position:fixed (pas la Fullscreen API) : Échap n'a aucun effet
+    // natif, on le branche nous-mêmes pour l'UX attendue.
+    document.addEventListener('keydown', function (ev) {
+        if (ev.key === 'Escape' && _nebulaFullscreen) toggleNebulaFullscreen();
+    });
 });
 </script>
 </body>

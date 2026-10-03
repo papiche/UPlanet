@@ -304,6 +304,18 @@
         _thumbUrls[id] = url;
     };
 
+    /* Recalcule la taille du canvas depuis les dimensions ACTUELLES de son
+       conteneur — nécessaire après toggleNebulaFullscreen() (ucloud.html),
+       qui change la taille de #faces-nebula par CSS sans déclencher
+       l'événement 'resize' natif du navigateur (la fenêtre, elle, ne change
+       pas de taille). Même calcul que p.windowResized() ci-dessus. */
+    FaceNebula.resize = function () {
+        if (!_p5inst || !_el) return;
+        _W = _el.clientWidth || _W;
+        _H = Math.max(_el.clientHeight || 0, 420);
+        _p5inst.resizeCanvas(_W, _H);
+    };
+
     FaceNebula.destroy = function () {
         if (_p5inst) { try { _p5inst.remove(); } catch (e) {} _p5inst = null; }
         _revokeThumbUrls();

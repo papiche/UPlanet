@@ -169,12 +169,16 @@ visages qui y sont détectés. Ce n'est PAS un navigateur de fichiers complet
 (pas de dossiers, pas de renommage/suppression depuis la page) : pour ça, le
 disque se monte comme un lecteur réseau standard.
 
-⚠️ **`.ucloud` est réservé aux images contenant un visage** (depuis
-2026-10-02) : si l'analyse FaceID (asynchrone, GPU) ne détecte AUCUN visage
-sur une photo envoyée, l'entrée est supprimée automatiquement — ni analyse de
-contenu/scène, ni conservation (`satellite_face_matcher.py::_delete_ucloud_entry()`,
-cf. `UPassport/CLAUDE.md`). L'ancienne section « Objets & lieux détectés »
-et les endpoints `/mailjet/inventory*` ont été retirés en conséquence.
+**Toute image envoyée est conservée, visage ou non** (depuis 2026-10-04) :
+si l'analyse FaceID (asynchrone, GPU) ne détecte AUCUN visage, l'entrée
+reste dans `.ucloud` — simplement marquée `faceid_status: "no_face"`
+(`satellite_face_matcher.py::_tag_ucloud_no_face()`, cf.
+`UPassport/CLAUDE.md`) plutôt que supprimée (politique du 2026-10-02 au
+2026-10-04, abandonnée : le fichier est déjà sur IPFS à coût marginal,
+autant garder la porte ouverte à un post-traitement futur). L'ancienne
+section « Objets & lieux détectés » et les endpoints `/mailjet/inventory*`
+restent, eux, retirés — aucune analyse de contenu/scène n'est relancée sur
+ces photos, seule la conservation a changé.
 
 **Stack :** `nacl-fast.min.js` → `nostr.bundle.js` → `common.js` → `uplanet-header.js` → `feedback.js` → `p5.min.js` → `face-nebula.js`
 **Style :** `cloud.enhancements.css` (thème clair Google-Drive, sections
@@ -189,18 +193,42 @@ déverrouillage `.fc-locked`/`.fc-unlocked` de ses propres sections ; le bouton
 `window.uphConnect()`, et la page écoute l'event `nostr:connected` dispatché
 par `uplanet-header.js` — même convention que `calendars.html`.
 
-Sections, dans l'ordre : En-tête → Connexion → Mon cloud chiffré → Mes fichiers
-→ Mes photos → Visages détectés. Tant que le MULTIPASS n'est pas connecté,
-les trois dernières portent `.fc-locked` (grisées, `pointer-events:none`) ;
-la connexion ajoute `.fc-unlocked`.
+**Onglets** (depuis 2026-10-03) — En-tête et Connexion restent toujours
+visibles, hors onglets (ce sont les portes d'entrée) ; les quatre sections
+suivantes + la nouvelle « Importer depuis un autre cloud » sont devenues des
+panneaux d'onglet (🔐 Activer / 📸 Mes photos / 🗂️ Mes fichiers / 👥 Visages /
+☁️ Importer) : `class="uc-tab-pane" data-tab="…"` sur chaque `<section>`
+existante (ids/contenu INCHANGÉS), `selectUcloudTab(name)` bascule
+`.uc-tab-active` sur le bouton et le panneau correspondants. Un seul panneau
+visible à la fois (`display:none`/`block`) — le verrouillage
+`.fc-locked`/`.fc-unlocked` reste indépendant et inchangé : un onglet reste
+cliquable avant connexion (pour voir ce qu'il contient), mais son contenu
+reste grisé/inerte (`pointer-events:none`) tant qu'on n'est pas connecté.
+
+Panneaux, dans l'ordre des onglets : Mon cloud chiffré (`activate`) → Mes
+photos (`photos`) → Mes fichiers (`gallery`) → Visages détectés (`faces`) →
+Importer depuis un autre cloud (`webdav`). Tant que le MULTIPASS n'est pas
+connecté, les cinq portent `.fc-locked` ; la connexion ajoute `.fc-unlocked`.
 
 **« Mes fichiers »** (depuis 2026-09-24) est une galerie BRUTE de `/dav/` —
-toutes les images de `.ucloud/index.json`, qu'un visage y ait été catalogué
-ou non encore (l'analyse FaceID est asynchrone) ; en pratique, une image sans
-aucun visage finit par en disparaître (cf. politique de rétention ci-dessus).
+TOUTES les images de `.ucloud/index.json`, qu'un visage y ait été catalogué,
+qu'aucun n'ait été trouvé (`faceid_status: "no_face"`, affiché « 🔍 analysé,
+pas de visage » dans la carte, cf. `galleryCardHtml()`), ou pas encore
+analysée (l'analyse FaceID est asynchrone). Rien n'y disparaît plus
+automatiquement depuis le 2026-10-04 (cf. politique de rétention ci-dessus).
 Pagination simple (60 par page, bouton « Afficher plus ») et miniatures
 chargées par lots de 6 en parallèle (`THUMB_BATCH_SIZE`) — pas des centaines
 de requêtes signées NIP-98 d'un coup.
+
+**Sélection + suppression** (depuis 2026-10-04) — chaque carte porte une
+case à cocher (`.fc-face-select`, `_gallerySelected`, un `Set` séparé de
+celui des visages) ; dès qu'au moins une est cochée, `#gallery-bulk-bar`
+affiche « Supprimer la sélection » → `deleteSelectedGalleryFiles()` →
+`POST /api/cloud/files/delete` (tableau JSON de chemins) en une seule
+confirmation. Suppression DÉFINITIVE : clé de keyring détruite ET CID
+dépingle d'IPFS (`cloud_storage.unpin_orphaned_cids()`, cf.
+`UPassport/CLAUDE.md`) — les entrées en lecture seule (partagées par un
+autre compte) sont ignorées, jamais supprimées d'ici.
 
 **Envoi en masse (plusieurs centaines de fichiers)** : `uploadSequentially()`
 envoie par lots de 4 en concurrence (`UPLOAD_BATCH_SIZE`), pas un par un — le
@@ -216,7 +244,8 @@ ligne de progression agrégée (« Envoi… X / N ») pour ne pas inonder le DOM
 | Activer / régénérer | `POST /api/cloud/enroll` → `{dav_url, email, token, instructions}` (nouveau token, déconnecte les clients déjà montés) |
 | Récupérer le mot de passe existant | `POST /api/cloud/reveal` → même forme, sans régénérer (bouton « Afficher le mot de passe ») |
 | Révoquer | `POST /api/cloud/revoke` |
-| Lister tous les fichiers | `GET /api/cloud/files` → `{files:[{path,mime,size,mtime,tags,readonly}]}`, triés par date — alimente « Mes fichiers » |
+| Lister tous les fichiers | `GET /api/cloud/files` → `{files:[{path,mime,size,mtime,tags,readonly,faceid_status}]}`, triés par date — alimente « Mes fichiers » |
+| Supprimer des fichiers | `POST /api/cloud/files/delete` (multipart `paths`, tableau JSON, 200 max) → index + clé + dépin IPFS. Lecture seule ignorée, renvoyé dans `skipped_readonly` |
 | Miniature d'un fichier quelconque | `GET /api/cloud/thumbnail?path=…` → JPEG (300×300, déchiffré à la volée), sans catalogage préalable requis |
 | Envoyer une photo | `PUT /dav/Photos/<nom>` (corps = fichier brut, PAS `/api/fileupload` — seul le cloud chiffré déclenche l'analyse FaceID, cf. `UPassport/CLAUDE.md`) — `MKCOL /dav/Photos` best-effort avant le premier envoi (RFC 4918 strict : pas de création implicite du parent) |
 | Enrôlement supervisé (optionnel) | En-têtes `X-FaceID-Target-Pubkey` (64 hex) / `X-FaceID-Target-Name` sur le `PUT` — chaque visage détecté est catalogué DIRECTEMENT sous cette identité (pas de recherche par similarité ni de `Inconnu_xxx`) |
@@ -226,6 +255,12 @@ ligne de progression agrégée (« Envoi… X / N ») pour ne pas inonder le DOM
 | Oublier un visage | `POST /mailjet/faces-delete` (multipart `point_id`) |
 | Miniature d'un visage | `GET /mailjet/faces/thumbnail?point_id=…` → JPEG (déchiffré + recadré à la volée, jamais persisté) — chargé via `nostrFetch(..., {responseType:'blob'})` car un `<img src>` classique ne peut pas porter de header `Authorization` |
 | Photo entière d'un visage | `GET /mailjet/faces/photo?point_id=…` → JPEG ≤1024px, PAS recadrée (contexte complet) — aperçu au survol d'un point dans la vue nébuleuse |
+| Lister les sources WebDAV externes | `GET /api/cloud/webdav-sources` → `{sources:[{id,label,url,username,remote_path,dest_prefix,created_at,last_sync}]}` — mot de passe jamais renvoyé |
+| Parcourir un dossier distant | `POST /api/cloud/webdav-browse` (multipart `url`,`username`,`password`,`path`) → `{path, items:[{name,path,is_dir,size,mtime}]}` — PROPFIND Depth:1, rien n'est persisté |
+| Ajouter une source WebDAV | `POST /api/cloud/webdav-sources` (multipart `label`,`url`,`username`,`password`,`remote_path`,`dest_prefix`) — revalide la connexion avant d'enregistrer |
+| Supprimer une source | `DELETE /api/cloud/webdav-sources/{id}` |
+| Importer maintenant | `POST /api/cloud/webdav-sources/{id}/sync` → lance l'import en arrière-plan (résultat dans `last_sync` au prochain `GET`) |
+| Niveau de synchro | `GET /api/cloud/webdav-sources/{id}/status` → `{remote_count, remote_capped, local_count}` — à la demande (bouton « 🔍 Vérifier la synchro »), PROPFIND récursif complet du dossier distant, jamais automatique |
 
 **Un seul mécanisme d'auth : NIP-98** (kind 27235, tags `u`/`method`, base64url
 sans padding) — **même convention que `craft.html` / `forge.html` /
@@ -306,6 +341,43 @@ survol stable sur le MÊME visage (`_showNebulaPreview()`) ; un passage rapide
 de la souris sur plusieurs points annule le minuteur à chaque changement au
 lieu de lancer un déchiffrement serveur par point traversé.
 
+**Plein écran** (`toggleNebulaFullscreen()`, depuis 2026-10-04) — overlay
+`position:fixed` (classe `.uc-nebula-fullscreen` sur `#faces-nebula-wrap`),
+PAS la Fullscreen API native (`Element.requestFullscreen()` a un support
+très inégal sur iOS Safari — cf. section usage smartphone plus bas).
+`#fc-bulk-bar` est déplacée DANS `#faces-nebula-wrap` le temps du plein
+écran (même nœud DOM via `appendChild`, pas une copie — ses champs/handlers
+survivent) puis remise en fin de `#card-faces` en sortant ; `FaceNebula.resize()`
+recalcule la taille du canvas depuis son conteneur (le CSS change, pas la
+fenêtre : aucun `resize` natif ne se déclenche tout seul). Échap ferme
+(écouteur `keydown` dédié, pour la même raison qu'il n'y a pas de Fullscreen
+API). `toggleFacesView()` vers la vue liste ferme le plein écran au passage
+s'il était actif — jamais d'overlay orphelin.
+
+**Aperçu de la sélection** (`#fc-selected-preview`, `renderSelectedPreview()`)
+— bande de vignettes des visages actuellement sélectionnés, affichée dans
+`#faces-nebula-wrap` et mise à jour à chaque `onFaceSelectionChange()` :
+utile surtout en nébuleuse, où un point sélectionné n'est qu'un cercle
+surligné sur le canvas (contrairement à une carte de la vue liste, qui
+montre déjà sa vignette) — voir visuellement QUI on associe avant de taper
+un nom, cliquer une vignette (ou son ✕) pour la retirer de la sélection.
+Réutilise `_thumbUrlCache` (id → blob URL), alimenté à la fois par
+`loadThumbnails()` (vue liste) et `loadNebulaThumbnails()` (nébuleuse) — pas
+de second fetch pour cette bande, juste les vignettes déjà chargées.
+
+**Rangement par date** (`_photoDateDir()`, depuis 2026-10-04) — chaque envoi
+manuel atterrit sous `/Photos/YYYY/MM/<nom>` (date du jour de l'envoi, pas
+une date de prise de vue EXIF — aucune bibliothèque de lecture EXIF n'est
+vendorisée côté navigateur ici), plus par un simple `/Photos/<nom>` à plat.
+`_ensurePhotosDir(dirPath)` fait un `MKCOL` de CHAQUE segment manquant dans
+l'ordre (`/Photos`, `/Photos/YYYY`, `/Photos/YYYY/MM` — RFC 4918 strict,
+pas de création implicite du parent), mémorisé dans `_photosDirsReady` pour
+ne pas rejouer 3 `MKCOL` à chaque photo du même mois. Aucune détection de
+collision de nom ici (contrairement à `webdav_import.py::_unique_dest()`,
+qui a le contenu en main côté serveur pour la faire) : deux photos
+différentes portant EXACTEMENT le même nom dans le même mois s'écraseraient
+silencieusement — limitation connue, risque jugé faible en usage manuel.
+
 **Section « Mes photos » — trois flux d'envoi** (`setUploadMode()`, onglets
 `.fc-mode-tab`), pour réduire les faux positifs de la détection auto seule :
 - **📤 Ajouter des photos** (`generic`, historique) — détection auto, atterrit
@@ -364,6 +436,55 @@ catalogue de visages dans Qdrant `faces_{hex}`, alimenté par
 
 ⚠️ L'ancienne route serveur `GET /cloud` (template `UPassport/templates/cloud.html`,
 drive NOSTR kind 1063/21/22) est **supprimée** : FaceCloud est la seule page cloud.
+
+**Onglet « Importer depuis un autre cloud »** (`webdav`, depuis 2026-10-03) —
+relier un dossier d'un AUTRE serveur WebDAV (NextCloud, ownCloud, une autre
+station Astroport…) pour qu'il alimente automatiquement ce FaceCloud, une
+fois par jour, lors du rafraîchissement quotidien MULTIPASS (cron
+`Astroport.ONE/RUNTIME/NOSTRCARD.refresh.sh`, cf. `UPassport/CLAUDE.md
+::webdav_import.py`). Trois étapes dans l'UI :
+1. **Identifiants** — label, URL WebDAV, identifiant, mot de passe (champs
+   `#wd-label`/`#wd-url`/`#wd-username`/`#wd-password`).
+2. **Tester la connexion** (`testWebdavConnection()`, depuis 2026-10-04) —
+   même appel que « Parcourir » mais sans ouvrir le navigateur de dossiers :
+   juste un message ✅/❌ (`#wd-test-result`) pour valider les identifiants
+   AVANT de s'engager dans la sélection d'un dossier.
+3. **Parcourir** (`browseWebdav(path)`) — `POST /api/cloud/webdav-browse`
+   (PROPFIND Depth:1, rien n'est persisté par cet appel) ; fil d'Ariane
+   cliquable (`#wd-breadcrumb`) pour remonter, dossiers cliquables pour
+   descendre (`renderWebdavBrowser()`). « Choisir ce dossier »
+   (`chooseWebdavFolder()`) fige le chemin courant et pré-remplit la
+   destination (`/Photos/Import_<label>`) — ce `dest_prefix` n'est qu'un
+   PRÉFIXE : le classement réel sous ce préfixe se fait par date
+   (`{dest_prefix}/YYYY/MM/<nom>`, cf. `UPassport/CLAUDE.md
+   ::webdav_import.py::_dated_dest()`), pas par arborescence distante
+   reproduite.
+4. **Ajouter cette source** (`addWebdavSource()`) — `POST
+   /api/cloud/webdav-sources`, qui revalide la connexion côté serveur avant
+   d'écrire quoi que ce soit (échec immédiat plutôt que silencieux le
+   lendemain en cron).
+
+Chaque source listée (`loadWebdavSources()`/`webdavSourceCardHtml()`)
+affiche le dernier résultat connu (`last_sync` : importées/ignorées/erreurs,
+ou rien encore) et trois actions : **🔍 Vérifier la synchro**
+(`checkWebdavSourceStatus()`, depuis 2026-10-04 — `GET
+.../status`, compte les fichiers côté source distante ET déjà importés
+localement, à la demande seulement : un parcours réseau complet peut être
+lent, jamais déclenché automatiquement), **Importer maintenant**
+(`syncWebdavSourceNow()`, lance l'import en arrière-plan côté serveur —
+même discipline asynchrone que l'analyse FaceID, s'actualise via le bouton
+Actualiser) et **Supprimer** (`deleteWebdavSource()`, les photos déjà
+importées restent dans `.ucloud`). Les identifiants du mot de passe ne sont
+JAMAIS renvoyés par le `GET` de la liste.
+
+**Protection GPU** — ce qui motive cette fonctionnalité (importer en masse
+depuis un vieux cloud) est exactement ce qui pourrait saturer la file
+FaceID (DM NOSTR `vision_analysis_job`, TTL 30 min, traités en série).
+`webdav_import.py` ne borne donc PAS ses imports par une constante
+arbitraire par compte : son budget quotidien est calculé à partir du nombre
+de MULTIPASS hébergés sur LA STATION (un budget station-entière réparti
+équitablement) — voir `UPassport/CLAUDE.md` pour le détail du calcul. Rien
+côté `ucloud.html` ne contourne cette limite.
 
 ## Modules partagés
 

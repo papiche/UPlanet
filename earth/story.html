@@ -146,7 +146,37 @@
   .rend { display:flex; gap:8px; flex-wrap:wrap; margin-top:6px; }
   .rend video { width:240px; border-radius:6px; background:#000; }
   .smallbtn { background:none; border:1px solid var(--line); color:var(--txt); border-radius:6px; padding:3px 10px; font-size:.82rem; }
+  /* Dans une carte de plan (fond clair) : texte et bordures foncés, sinon blanc sur blanc */
+  .frame .smallbtn { color:var(--frame-ink); border-color:var(--frame-line); background:#fff; }
+  .frame .smallbtn:hover:not(:disabled) { border-color:var(--frame-ink); }
+  .frame .smallbtn:disabled { color:var(--frame-mut); opacity:.6; }
+  .frame .tag { color:var(--frame-mut); border-color:var(--frame-line); }
+  .frame .tag.coop { color:#15805a; border-color:#15805a; }
   .pick { display:grid; gap:8px; }
+  .tray { position:fixed; right:14px; bottom:14px; z-index:25; width:min(440px,calc(100vw - 28px)); background:#0a1017f2; border:1px solid var(--line); border-radius:6px; display:none; box-shadow:0 8px 28px #0008; }
+  .tray.show { display:block; }
+  .tray > summary { padding:9px 12px; cursor:pointer; font-weight:600; }
+  .tray .tbody { padding:0 12px 12px; max-height:60vh; overflow:auto; }
+  .tray .item { display:flex; gap:6px; align-items:center; padding:5px 0; border-top:1px solid var(--line); font-size:.82rem; }
+  .tray .item .lab { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .tray video { width:100%; margin-top:8px; background:#000; border-radius:4px; }
+  .dhead { position:sticky; top:-18px; z-index:2; display:flex; align-items:center; justify-content:space-between; gap:10px; margin:-18px -18px 10px; padding:14px 18px 10px; background:var(--rail); border-bottom:1px solid var(--line); }
+  .dhead h2 { margin:0; }
+  .dx { background:none; border:1px solid var(--line); color:var(--txt); border-radius:6px; width:34px; height:34px; font-size:1rem; cursor:pointer; }
+  .dx:hover { border-color:var(--txt); }
+  #dlg-udrive { width:min(980px,96vw); }
+  #dlg-udrive .dlg { overflow-x:hidden; }
+  .ubar { display:flex; gap:10px; align-items:center; margin:8px 0 2px; }
+  .ubar input { flex:1; min-width:0; }
+  .ugrid { display:grid; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); gap:12px; margin-top:10px; }
+  .ucard { background:var(--table); border:1px solid var(--line); border-radius:8px; overflow:hidden; display:flex; flex-direction:column; min-width:0; }
+  .ucard .th { position:relative; aspect-ratio:16/9; background:#000; display:flex; align-items:center; justify-content:center; cursor:pointer; }
+  .ucard .th video { width:100%; height:100%; object-fit:contain; background:#000; }
+  .ucard .th .ph { color:var(--mut); font-size:1.8rem; position:absolute; }
+  .ucard .th .dur { position:absolute; right:6px; bottom:6px; background:#000b; color:#fff; font-size:.72rem; padding:1px 6px; border-radius:4px; }
+  .ucard .nm { padding:7px 9px 0; font-size:.8rem; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; overflow-wrap:anywhere; }
+  .ucard .mt { padding:2px 9px 7px; font-size:.72rem; color:var(--mut); }
+  .ucard .ac { display:flex; gap:6px; padding:0 9px 9px; flex-wrap:wrap; margin-top:auto; }
   .cq { display:flex; gap:6px; flex-wrap:wrap; margin:10px 0; }
   .cq button[aria-pressed=true] { background:var(--txt); color:var(--table); }
 </style>
@@ -173,6 +203,7 @@
   </main>
 </div>
 
+<details class="tray" id="tray"><summary id="tray-sum">Montage</summary><div class="tbody" id="tray-body"></div></details>
 <section class="progress" id="progress" aria-live="polite"></section>
 <div class="toast" id="toast" role="status"></div>
 
@@ -185,6 +216,8 @@
   <p class="meta" style="color:var(--mut);font-size:.85rem">En coopérative, chaque Capitaine peut regarder, écouter et copier votre travail. Vous seul le modifiez.</p>
   <div class="actions"><button class="btn keep" id="new-ok" type="button">Créer</button><button class="btn" id="new-cancel" type="button">Annuler</button></div>
 </div></dialog>
+<dialog id="dlg-udrive"><div class="dlg"><div class="dhead"><h2>Mon uDRIVE : vidéos</h2><button class="dx" id="udrive-x" type="button" aria-label="Fermer" title="Fermer (Échap)">✕</button></div><p class="meta" style="color:var(--mut);font-size:.85rem">Les vidéos de votre uDRIVE (IPFS). N’utilisez que des séquences dont vous avez les droits : ce lien est public.</p>
+  <div class="pick" id="udrive-list"></div><div class="actions" style="margin-top:12px"><button class="btn" id="udrive-close" type="button">Fermer</button></div></div></dialog>
 <dialog id="dlg-cast"><div class="dlg"><h2>Ajouter un personnage</h2><div class="pick" id="cast-pick"></div>
   <div class="actions" style="margin-top:12px"><button class="btn" id="cast-close" type="button">Fermer</button></div></div></dialog>
 
@@ -333,8 +366,8 @@ function draw() {
 }
 
 /* ═══ Scène : réglages, casting, pellicule ═══ */
-var KINDS = [['clip', 'Image animée'], ['speak', 'Un personnage parle'], ['screen', 'Capture d’écran'], ['card', 'Carton final']];
-function kindOf(s) { return s.ui && s.ui.kind || (s.card ? 'card' : s.screen != null ? 'screen' : (s.cast && s.cast.length) ? 'speak' : 'clip'); }
+var KINDS = [['clip', 'Image animée'], ['speak', 'Un personnage parle'], ['video', 'Vidéo (uDRIVE / IPFS)'], ['screen', 'Capture d’écran'], ['card', 'Carton final']];
+function kindOf(s) { return s.ui && s.ui.kind || (s.card ? 'card' : typeof s.video === 'string' ? 'video' : s.screen != null ? 'screen' : (s.cast && s.cast.length) ? 'speak' : 'clip'); }
 function pretty(n) { return n.charAt(0).toUpperCase() + n.slice(1); }
 function compose(s) {
     var u = s.ui || {}, who = u.who || (s.cast && s.cast[0]) || s.presenter;
@@ -372,6 +405,7 @@ function importedHint(s, u) {
 function newShot(kind) {
     var who = Object.keys(S.sb.cast)[0] || '';
     if (kind === 'card') return { card: { title: 'Titre', subtitle: '', links: [] }, duration: 6, ui: { kind: 'card' } };
+    if (kind === 'video') return { video: '', duration: 6, ui: { kind: 'video' } };
     if (kind === 'screen') return { screen: 'https://', duration: 6, prompt: '', ui: { kind: 'screen', who: '', say: '' } };
     if (kind === 'speak') return { cast: who ? [who] : [], duration: 6, prompt: '', ui: { kind: 'speak', who: who, say: '', scene: '' } };
     return { prompt: '', duration: 5, ui: { kind: 'clip' } };
@@ -448,7 +482,7 @@ async function pollShotJob(i) {
     if (!/queued|running/.test(job.status)) {
         clearInterval(S.shotJobTimers[i]); delete S.shotJobTimers[i];
         if (btn) { btn.disabled = false; btn.textContent = '🎬 Générer ce plan'; }
-        if (job.status === 'done') { toast('ok', 'Plan ' + (i + 1) + ' généré.'); updateShotPreview(i); }
+        if (job.status === 'done') { toast('ok', 'Plan ' + (i + 1) + ' généré.'); updateShotPreview(i); var td = $('takes-' + i); if (td && td.open) loadTakes(i, td.lastChild); else if (td) delete td.dataset.loaded; }
         else if (job.status === 'failed') toast('err', 'Plan ' + (i + 1) + ' : ' + (job.error || 'échec du rendu'));
     }
 }
@@ -462,26 +496,47 @@ function updateShotPreview(i) {
         }).catch(function () {});
     }
 }
-/* Prises précédentes d'un plan (archivées par le serveur à chaque nouvelle génération) :
-   on peut les rejouer dans l'aperçu sans perdre la prise courante */
+/* Prises d'un plan : brouillon, normal, relance après changement de prompt… Rien n'est écrasé,
+   chaque prise garde sa fiche (qualité, steps, prompt) et son CID IPFS pour la partager. */
+function takeTitle(t) {
+    var q = t.quality === 'draft' ? 'Brouillon' : (t.quality === 'normal' ? 'Normal' : (t.legacy ? 'Prise' : (t.quality || 'Prise')));
+    return q + (t.steps ? ' · ' + t.steps + ' steps' : '') + ' · ' + fmtDate(t.created);
+}
+function loadTakes(i, body) {
+    body.textContent = '';
+    body.appendChild(h('span', { class: 'when', text: 'Chargement…' }));
+    api('/api/story/asset/' + q(S.cur.cid) + '/shot/' + i + '/takes').then(function (r) {
+        body.textContent = '';
+        if (!r.takes.length) { body.appendChild(h('span', { class: 'when', text: 'Aucune prise pour ce plan.' })); return; }
+        var cur = (S.sb.shots[i] && S.sb.shots[i].prompt) || '';
+        r.takes.forEach(function (t) {
+            var changed = t.prompt !== undefined && t.prompt !== cur;
+            body.appendChild(h('div', { class: 'row', style: 'gap:6px;align-items:center;flex-wrap:wrap;margin:2px 0' },
+                h('button', { class: 'smallbtn', type: 'button', text: '▶ ' + takeTitle(t), onclick: function () {
+                    var pv = $('pv' + i);
+                    function show(src) { pv.textContent = ''; pv.appendChild(h('video', { class: 'clip' + ((S.sb.ratio || '16:9') === '9:16' ? ' v' : ''), src: src, controls: true, preload: 'metadata' })); }
+                    api('/api/story/asset/' + q(S.cur.cid) + '/shot/' + i + '/takes/' + q(t.id) + '/file', { blob: true })
+                        .then(function (b) { show(URL.createObjectURL(b)); })
+                        .catch(function (e) { if (t.cid) show(S.gateway + '/ipfs/' + t.cid); else toast('err', e.message); });
+                } }),
+                t.current ? h('span', { class: 'tag coop', text: 'utilisée dans le montage' }) : null,
+                changed ? h('span', { class: 'when', title: t.prompt, text: 'prompt différent de l’actuel' }) : null,
+                h('button', { class: 'smallbtn', type: 'button', title: 'Ajouter cette prise au montage', text: '➕ montage', onclick: function () {
+                    addClip({ label: 'Plan ' + (i + 1) + ' · ' + takeTitle(t), kind: 'take', cid: S.cur.cid, index: i, take: t.id, tcid: t.cid || null }); } }),
+                t.cid ? h('button', { class: 'smallbtn', type: 'button', title: 'Copier le lien IPFS de cette prise', text: '🔗 IPFS', onclick: function () {
+                    var url = S.gateway + '/ipfs/' + t.cid;
+                    (navigator.clipboard ? navigator.clipboard.writeText(url) : Promise.reject()).then(function () { toast('ok', 'Lien IPFS copié.'); }, function () { window.prompt('Lien IPFS', url); });
+                } }) : null));
+        });
+    }).catch(function (e) { body.textContent = e.message; });
+}
 function shotTakesBlock(i) {
-    var det = h('details', { style: 'margin-top:4px' }, h('summary', { style: 'color:var(--frame-mut);font-size:.78rem;cursor:pointer', text: 'Prises précédentes' }));
-    var body = h('div', { style: 'margin-top:6px;display:flex;gap:6px;flex-wrap:wrap' }, h('span', { style: 'color:var(--frame-mut);font-size:.78rem', text: 'Chargement…' }));
+    var det = h('details', { id: 'takes-' + i, style: 'margin-top:4px' }, h('summary', { style: 'color:var(--frame-mut);font-size:.78rem;cursor:pointer', text: 'Prises (brouillon, normal, relances)' }));
+    var body = h('div', { style: 'margin-top:6px' });
     det.appendChild(body);
     det.addEventListener('toggle', function () {
         if (!det.open || det.dataset.loaded) return;
-        det.dataset.loaded = '1';
-        api('/api/story/asset/' + q(S.cur.cid) + '/shot/' + i + '/takes').then(function (r) {
-            body.textContent = '';
-            if (!r.takes.length) { body.appendChild(h('span', { style: 'color:var(--frame-mut);font-size:.78rem', text: 'Aucune prise précédente.' })); return; }
-            r.takes.forEach(function (t) {
-                body.appendChild(h('button', { class: 'smallbtn', type: 'button', text: '▶ ' + fmtDate(t.created), onclick: function () {
-                    api('/api/story/asset/' + q(S.cur.cid) + '/shot/' + i + '/takes/' + q(t.id) + '/file', { blob: true }).then(function (b) {
-                        var pv = $('pv' + i); pv.textContent = ''; pv.appendChild(h('video', { class: 'clip', src: URL.createObjectURL(b), controls: true, preload: 'metadata' }));
-                    }).catch(function (e) { toast('err', e.message); });
-                } }));
-            });
-        }).catch(function (e) { body.textContent = e.message; });
+        det.dataset.loaded = '1'; loadTakes(i, body);
     });
     return det;
 }
@@ -497,9 +552,10 @@ function shotCard(s, i, ro) {
             h('button', { type: 'button', title: 'Dupliquer', 'aria-label': 'Dupliquer le plan ' + (i + 1), text: '⧉', onclick: function () { S.sb.shots.splice(i + 1, 0, JSON.parse(JSON.stringify(s))); setDirty(); draw(); } }),
             h('button', { type: 'button', title: 'Supprimer', 'aria-label': 'Supprimer le plan ' + (i + 1), text: '✕', onclick: function () { if (S.sb.shots.length > 1) { S.sb.shots.splice(i, 1); setDirty(); draw(); } else toast('err', 'Une scène garde au moins un plan.'); } }))));
     card.appendChild(h('div', { class: 'preview', id: 'pv' + i }));
+    card.appendChild(h('div', { class: 'row', id: 'mt' + i, style: 'margin:4px 0' }));
     if (!ro) { card.appendChild(shotGenRow(s, i)); card.appendChild(shotTakesBlock(i)); }
     if (!ro) card.appendChild(h('div', { class: 'kinds', role: 'group', 'aria-label': 'Type de plan' }, KINDS.map(function (k) {
-        return h('button', { type: 'button', 'aria-pressed': String(kind === k[0]), text: k[1], onclick: function () { if (kind !== k[0]) { var n = newShot(k[0]); n.duration = s.duration || n.duration; n.title = s.title; n.voiceover = s.voiceover; S.sb.shots[i] = n; setDirty(); draw(); } } });
+        return h('button', { type: 'button', 'aria-pressed': String(kind === k[0]), text: k[1], onclick: function () { if (kind !== k[0]) { var n = newShot(k[0]); n.duration = s.duration || n.duration; n.title = s.title; if (k[0] !== 'video' && k[0] !== 'card') n.voiceover = s.voiceover; S.sb.shots[i] = n; setDirty(); draw(); } } });
     })));
     function inp(label, val, fn, opts) { opts = opts || {}; return h('label', { class: 'field' }, h('span', { text: label }), h(opts.area ? 'textarea' : 'input', Object.assign({ type: 'text', disabled: ro, value: val || '', placeholder: opts.ph || '', oninput: function (e) { fn(e.target.value); setDirty(); validate(card, s); } }, opts.area ? {} : {})));
     }
@@ -513,7 +569,13 @@ function shotCard(s, i, ro) {
         if (names.length && !(s.cast && s.cast.length)) { s.cast = [names[0]]; u.who = names[0]; }
         var hint1 = importedHint(s, u); if (hint1) card.appendChild(hint1);
         card.appendChild(inp('Ce qu’il ou elle dit (en français)', u.say, function (v) { u.say = v; compose(s); }, { area: true, ph: 'Bonjour, voici ma station.' }));
-        card.appendChild(inp('Le lieu et l’action', u.scene, function (v) { u.scene = v; compose(s); }, { ph: 'Close-up in a cosy kitchen, warm light' }));
+        card.appendChild(inp('Le lieu et l’action', u.scene, function (v) { u.scene = v; compose(s); }, { area: true, ph: 'Close-up in a cosy kitchen, warm light' }));
+    } else if (kind === 'video') {
+        card.appendChild(inp('Lien IPFS de la séquence', s.video, function (v) { s.video = v.trim(); }, { ph: 'ipfs://Qm…/ma-video.mp4' }));
+        if (!ro) card.appendChild(h('button', { class: 'smallbtn', type: 'button', text: '📂 Choisir dans mon uDRIVE', onclick: function () {
+            pickUdrive(function (f) { s.video = 'ipfs://' + f.link; if (!s.title) s.title = ''; setDirty(); draw(); }); } }));
+        card.appendChild(h('label', { class: 'field' }, h('span', { text: 'Début dans la séquence (secondes, facultatif)' }),
+            h('input', { type: 'number', min: 0, disabled: ro, value: s.start != null ? String(s.start) : '', placeholder: '0', oninput: function (e) { var v = e.target.value.trim(); if (v === '') delete s.start; else s.start = Math.max(0, parseFloat(v) || 0); setDirty(); } })));
     } else if (kind === 'screen') {
         card.appendChild(inp('Adresse de la page à montrer', s.screen, function (v) { s.screen = v; }, { ph: 'https://u.copylaradio.com/g1' }));
         card.appendChild(h('label', { class: 'field' }, h('span', { text: 'Mouvement de caméra' }),
@@ -535,11 +597,11 @@ function shotCard(s, i, ro) {
     card.appendChild(h('div', { class: 'row' },
         h('label', { class: 'field' }, h('span', { text: 'Durée (secondes)' }),
             h('input', { type: 'number', min: 3, max: 15, disabled: ro, value: String(s.duration || 5), oninput: function (e) { s.duration = Math.max(3, Math.min(15, parseInt(e.target.value) || 5)); setDirty(); } })),
-        kind === 'card' ? null : h('label', { class: 'field' }, h('span', { text: 'Graine (facultatif)' }),
+        (kind === 'card' || kind === 'video') ? null : h('label', { class: 'field' }, h('span', { text: 'Graine (facultatif)' }),
             h('input', { type: 'number', disabled: ro, value: s.seed != null ? String(s.seed) : '', placeholder: 'auto', oninput: function (e) { var v = e.target.value.trim(); if (v === '') delete s.seed; else s.seed = parseInt(v) || 0; setDirty(); } }))));
     var more = h('details', { style: 'margin-top:8px', open: !!(s.title || s.voiceover) }, h('summary', { style: 'color:var(--frame-mut);font-size:.8rem;cursor:pointer', text: 'Texte à l’image et voix-off' }),
         h('label', { class: 'field' }, h('span', { text: 'Texte affiché en bas de l’image' }), h('input', { type: 'text', disabled: ro, value: s.title || '', oninput: function (e) { if (e.target.value) s.title = e.target.value; else delete s.title; setDirty(); } })));
-    if (kind !== 'card') more.appendChild(inp('Voix-off du narrateur (en français)', s.voiceover, function (v) { if (v) s.voiceover = v; else delete s.voiceover; }, { area: true }));
+    if (kind !== 'card' && kind !== 'video') more.appendChild(inp('Voix-off du narrateur (en français)', s.voiceover, function (v) { if (v) s.voiceover = v; else delete s.voiceover; }, { area: true }));
     card.appendChild(more);
     card.appendChild(h('div', { class: 'bad', id: 'bad' + i }));
     validate(card, s);
@@ -551,6 +613,7 @@ function validate(card, s) {
     if (k === 'speak' && (!(s.cast && s.cast.length) || !(s.ui.say || '').trim())) msg = 'Choisissez qui parle et ce qu’il dit.';
     if (k === 'screen' && !/^https?:\/\/\S+|^\//.test(s.screen || '')) msg = 'Indiquez l’adresse de la page.';
     if (k === 'card' && !(s.card && s.card.title)) msg = 'Donnez un titre au carton.';
+    if (k === 'video' && !/^(ipfs:\/\/|\/ipfs\/)?(Qm|bafy)\S/.test(s.video || '')) msg = 'Indiquez le lien IPFS de la vidéo (ou choisissez-la dans votre uDRIVE).';
     var el = card.querySelector('.bad'); if (el) el.textContent = msg;
     s._bad = !!msg;
 }
@@ -740,10 +803,37 @@ async function showLastRender(fresh) {
     try {
         var vs = (await api('/api/story/asset/' + q(S.cur.cid) + '/versions')).versions;
         var v = vs.filter(function (x) { return x.cid === S.cur.cid; })[0];
-        if (!v || !v.renders.length) { slot.textContent = ''; return; }
+        if (!v || !v.renders.length) { slot.textContent = ''; S.render = null; paintPlans(); return; }
         var r = v.renders[v.renders.length - 1];
-        slot.textContent = ''; slot.appendChild(h('div', { class: 'final' }, videoFor(v.cid, r), h('div', { class: 'cap', text: 'Rendu du ' + fmtDate(r.created) + ' · ' + r.duration + ' s · version ' + v.version })));
+        S.render = { vcid: v.cid, r: r };
+        slot.textContent = ''; slot.appendChild(h('div', { class: 'final' }, videoFor(v.cid, r), h('div', { class: 'cap', text: 'Rendu du ' + fmtDate(r.created) + ' · ' + r.duration + ' s · version ' + v.version }), plansBlock(v.cid, r)));
+        paintPlans();
     } catch (e) {}
+}
+/* Plans du rendu (finis : voix-off, volume, titre), lisibles un à un ; CID IPFS quand le rendu est public */
+function plansBlock(vcid, r) {
+    var names = (r.plans && r.plans.length) ? r.plans.map(function (p) { return p.file; }) : (r.shots || []);
+    if (!names.length) return null;
+    var cids = {}; (r.plans || []).forEach(function (p) { cids[p.file] = p.cid; });
+    var det = h('details', { style: 'margin-top:6px' }, h('summary', { style: 'color:var(--frame-mut);font-size:.78rem;cursor:pointer', text: 'Plans de ce rendu (' + names.length + ')' }));
+    var body = h('div', { style: 'margin-top:6px;display:flex;gap:6px;flex-wrap:wrap' });
+    names.forEach(function (name, k) {
+        var cid = cids[name];
+        body.appendChild(h('div', { class: 'row', style: 'gap:4px;align-items:center' },
+            h('button', { class: 'smallbtn', type: 'button', text: '▶ Plan ' + (k + 1), onclick: function (e) {
+                var btn = e.currentTarget, vid = h('video', { controls: true, preload: 'metadata', class: 'clip', style: 'max-width:320px' });
+                if (r.id && !r.foreign) api('/api/story/render/' + q(vcid) + '/' + q(r.id) + '/file?name=' + q(name), { blob: true })
+                    .then(function (b) { vid.src = URL.createObjectURL(b); }).catch(function () { if (cid) vid.src = S.gateway + '/ipfs/' + cid; });
+                else if (cid) vid.src = S.gateway + '/ipfs/' + cid;
+                btn.replaceWith(vid);
+            } }),
+            cid ? h('button', { class: 'smallbtn', type: 'button', title: 'Copier le lien IPFS de ce plan', text: '🔗', onclick: function () {
+                var url = S.gateway + '/ipfs/' + cid;
+                (navigator.clipboard ? navigator.clipboard.writeText(url) : Promise.reject()).then(function () { toast('ok', 'Lien IPFS copié.'); }, function () { window.prompt('Lien IPFS', url); });
+            } }) : null));
+    });
+    det.appendChild(body);
+    return det;
 }
 function videoFor(vcid, r) {
     var vid = h('video', { controls: true, preload: 'metadata' });
@@ -752,6 +842,219 @@ function videoFor(vcid, r) {
             .catch(function () { if (r.mp4_cid) vid.src = S.gateway + '/ipfs/' + r.mp4_cid; });
     } else if (r.mp4_cid) vid.src = S.gateway + '/ipfs/' + r.mp4_cid;
     return vid;
+}
+
+/* ═══ uDRIVE : vidéos de l'utilisateur connecté (même source que Coracle : profil NOSTR → ipns_vault + email →
+   .../ipns/<vault>/<email>/APP/uDRIVE/manifest.json, chaque fichier porte un ipfs_link « CID/nom ») ═══ */
+function ipfsGw() { return (S.gateway || (location.protocol + '//' + location.hostname + ':8080')).replace(/\/$/, ''); }
+function ipfsUrl(link) { return ipfsGw() + '/ipfs/' + String(link).replace(/^ipfs:\/\//, '').replace(/^\/ipfs\//, '').split('/').map(encodeURIComponent).join('/'); }
+var VIDEO_EXT = /\.(mp4|webm|mov|mkv|m4v)$/i;
+async function loadUdrive() {
+    if (S.udrive) return S.udrive;
+    if (!window.fetchUserUDriveInfo || !window.userPubkey) throw new Error('profil NOSTR indisponible : reconnectez-vous');
+    // 1. profil NOSTR (kind 0, tags i) lu sur le relais principal de la page, comme Coracle
+    var info = await window.fetchUserUDriveInfo(window.userPubkey).catch(function () { return {}; }) || {};
+    var vault = info.ipnsVault, email = info.email, from = 'profil NOSTR';
+    // 2. repli : l'API de votre station (/api/myGPS, appelée par l'en-tête UPlanet) donne le même coffre et le même email,
+    //    sans dépendre de la copie du profil sur le relais public (absente, ancienne ou injoignable)
+    if (!vault || !email) {
+        vault = vault || window._uphNostrNS || (window.NostrState && window.NostrState.uphNostrNS) || '';
+        email = email || window._uphEmail || (window.NostrState && window.NostrState.uphEmail) || '';
+        from = 'API de la station';
+    }
+    if (!vault || !email) {
+        var miss = [!vault ? 'ipns_vault' : '', !email ? 'email' : ''].filter(Boolean).join(' et ');
+        throw new Error('uDRIVE introuvable : ' + miss + ' absent du profil lu sur le relais principal, et l’API de la station ne les donne pas non plus (connectez-vous avec le MULTIPASS de la station).');
+    }
+    info = { ipnsVault: vault, email: email };
+    var url = ipfsGw() + '/ipns/' + String(info.ipnsVault).replace(/^\/?ipns\//, '') + '/' + info.email + '/APP/uDRIVE/manifest.json';
+    var r = await fetch(url, { headers: { Accept: 'application/json' } });
+    if (!r.ok) throw new Error('manifest uDRIVE : HTTP ' + r.status);
+    var d = await r.json();
+    S.udrive = (Array.isArray(d.files) ? d.files : []).filter(function (f) { return f && f.ipfs_link && (f.type === 'video' || VIDEO_EXT.test(f.name || '')); })
+        .map(function (f) { return { name: f.name || f.ipfs_link.split('/').pop(), link: f.ipfs_link, size: f.formatted_size || '',
+            dur: f.formatted_duration || '', dims: f.dimensions || (f.width && f.height ? f.width + '×' + f.height : ''), mod: f.last_modified || 0 }; });
+    return S.udrive;
+}
+async function pickUdrive(onPick) {
+    var box = $('udrive-list'); box.textContent = 'Chargement…'; $('dlg-udrive').showModal();
+    try {
+        var files = (await loadUdrive()).slice().sort(function (a, b) { return (b.mod || 0) - (a.mod || 0); });
+        box.textContent = '';
+        if (!files.length) { box.appendChild(h('p', { style: 'color:var(--mut)', text: 'Aucune vidéo dans votre uDRIVE.' })); return; }
+        var grid = h('div', { class: 'ugrid' }), count = h('span', { class: 'when', text: files.length + ' vidéos' });
+        var search = h('input', { type: 'text', placeholder: 'Rechercher par nom…', 'aria-label': 'Rechercher une vidéo', oninput: function (e) {
+            var t = e.target.value.trim().toLowerCase(), n = 0;
+            grid.childNodes.forEach(function (c) { var ok = !t || c.dataset.name.indexOf(t) >= 0; c.style.display = ok ? '' : 'none'; if (ok) n++; });
+            count.textContent = n + ' / ' + files.length + ' vidéos'; } });
+        box.appendChild(h('div', { class: 'ubar' }, search, count)); box.appendChild(grid);
+        // Vignette = première image de la vidéo, chargée seulement quand la carte est visible (un uDRIVE peut
+        // contenir des dizaines de fichiers de plusieurs centaines de Mo : on ne lit que le début de chacun)
+        var io = 'IntersectionObserver' in window ? new IntersectionObserver(function (ents) {
+            ents.forEach(function (en) { if (en.isIntersecting) { io.unobserve(en.target); en.target._load(); } });
+        }, { root: box.closest('.dlg'), rootMargin: '200px' }) : null;
+        files.forEach(function (f) {
+            var th = h('div', { class: 'th', title: 'Cliquer pour lire' }, h('span', { class: 'ph', text: '🎞' }), f.dur ? h('span', { class: 'dur', text: f.dur }) : null);
+            th._loaded = false;
+            var card = h('div', { class: 'ucard', 'data-name': f.name.toLowerCase() }, th,
+                h('div', { class: 'nm', title: f.name, text: f.name }),
+                h('div', { class: 'mt', text: [f.dims, f.size].filter(Boolean).join(' · ') }),
+                h('div', { class: 'ac' },
+                    onPick ? h('button', { class: 'smallbtn', type: 'button', text: 'Utiliser', onclick: function () { $('dlg-udrive').close(); onPick(f); } }) : null,
+                    h('button', { class: 'smallbtn', type: 'button', text: '➕ montage', onclick: function () { addClip({ label: f.name, kind: 'ipfs', link: f.link }); } })));
+            th._load = function () {
+                if (th._loaded) return; th._loaded = true;
+                var v = h('video', { muted: true, playsinline: true, preload: 'metadata', src: ipfsUrl(f.link) + '#t=0.5' });
+                v.addEventListener('loadeddata', function () { var ph = th.querySelector('.ph'); if (ph) ph.remove(); });
+                th.insertBefore(v, th.firstChild);
+            };
+            card._load = th._load;
+            th.addEventListener('click', function () {
+                th._load(); var v = th.querySelector('video'); if (!v) return;
+                if (v.controls) { v.pause(); v.controls = false; v.muted = true; } else { v.controls = true; v.muted = false; v.play().catch(function () {}); }
+            });
+            grid.appendChild(card);
+            if (io) io.observe(card); else card._load();
+        });
+    } catch (e) { box.textContent = e.message; }
+}
+
+/* ═══ Plans dans leurs cartes (rendu le plus récent) et sélection pour le montage ═══ */
+function planName(i) { return 'part_' + String(i).padStart(2, '0') + '.mp4'; }
+function planCid(r, name) { var p = (r.plans || []).filter(function (x) { return x.file === name; })[0]; return p ? p.cid : null; }
+function paintPlans() {
+    document.querySelectorAll('.frame').forEach(function (card) {
+        var i = +card.dataset.i, pv = card.querySelector('.preview'), mt = card.querySelector('.row[id^=mt]'), s = S.sb && S.sb.shots[i];
+        if (!s) return;
+        if (mt) {
+            mt.textContent = '';
+            var clip = null;
+            if (S.render && S.render.r.shots && S.render.r.shots.indexOf(planName(i)) >= 0) {
+                var r = S.render.r, name = planName(i);
+                clip = { label: 'Plan ' + (i + 1) + ' · ' + (S.cur ? S.cur.manifest.name : ''), kind: 'render', vcid: S.render.vcid, rid: r.id, name: name, cid: planCid(r, name), foreign: !!r.foreign };
+            } else if (kindOf(s) === 'video' && s.video) clip = { label: 'Plan ' + (i + 1) + ' (vidéo importée)', kind: 'ipfs', link: String(s.video).replace(/^ipfs:\/\//, '').replace(/^\/ipfs\//, '') };
+            if (clip) mt.appendChild(h('button', { class: 'smallbtn', type: 'button', title: 'Ajouter ce plan au montage', text: '➕ Au montage', onclick: function () { addClip(clip); } }));
+        }
+        if (!pv || pv.firstChild) return;
+        var src = null;
+        if (kindOf(s) === 'video' && s.video && /^(ipfs:\/\/|\/ipfs\/)?(Qm|bafy)/.test(s.video)) src = function () { return Promise.resolve(ipfsUrl(s.video)); };
+        else if (S.render && S.render.r.shots && S.render.r.shots.indexOf(planName(i)) >= 0) {
+            var rr = S.render.r, nm = planName(i), cid = planCid(rr, nm), vc = S.render.vcid;
+            src = function () {
+                if (rr.id && !rr.foreign) return api('/api/story/render/' + q(vc) + '/' + q(rr.id) + '/file?name=' + q(nm), { blob: true }).then(function (b) { return URL.createObjectURL(b); }).catch(function (e) { if (cid) return ipfsUrl(cid); throw e; });
+                return cid ? Promise.resolve(ipfsUrl(cid)) : Promise.reject(new Error('plan non partagé'));
+            };
+        }
+        if (src) pv.appendChild(h('button', { class: 'smallbtn', type: 'button', style: 'margin-top:8px', text: '▶ Voir le plan', onclick: function (e) {
+            var btn = e.currentTarget;
+            src().then(function (u) { pv.textContent = ''; pv.appendChild(h('video', { class: 'clip' + ((S.sb.ratio || '16:9') === '9:16' ? ' v' : ''), src: u, controls: true, preload: 'metadata' })); })
+                .catch(function (er) { toast('err', er.message); });
+        } }));
+    });
+}
+
+/* ═══ Tiroir de montage : copier des plans d'une scène, les coller dans une autre ou les assembler ═══ */
+S.clips = (function () { try { return JSON.parse(sessionStorage.getItem('story.clips') || '[]'); } catch (e) { return []; } })();
+function saveClips() { try { sessionStorage.setItem('story.clips', JSON.stringify(S.clips)); } catch (e) {} drawTray(); }
+function addClip(c) { S.clips.push(c); saveClips(); toast('ok', 'Ajouté au montage (' + S.clips.length + ').'); $('tray').open = true; }
+function clipLink(c) { return c.kind === 'ipfs' ? c.link : (c.kind === 'render' ? c.cid : c.tcid) || null; }
+async function clipBlob(c) {
+    var link = clipLink(c);
+    if (link) { var r = await fetch(ipfsUrl(link)); if (r.ok) return await r.blob(); }
+    if (c.kind === 'render' && !c.foreign) return await api('/api/story/render/' + q(c.vcid) + '/' + q(c.rid) + '/file?name=' + q(c.name), { blob: true });
+    if (c.kind === 'take') return await api('/api/story/asset/' + q(c.cid) + '/shot/' + c.index + '/takes/' + q(c.take) + '/file', { blob: true });
+    throw new Error('source introuvable : ' + c.label);
+}
+function probeVideo(blob) {
+    return new Promise(function (resolve) {
+        var v = document.createElement('video'), u = URL.createObjectURL(blob);
+        v.preload = 'metadata'; v.onloadedmetadata = function () { resolve({ w: v.videoWidth, h: v.videoHeight, d: v.duration }); URL.revokeObjectURL(u); };
+        v.onerror = function () { resolve({ w: 0, h: 0, d: 0 }); URL.revokeObjectURL(u); }; v.src = u;
+    });
+}
+function drawTray() {
+    var tray = $('tray'), body = $('tray-body');
+    tray.classList.toggle('show', S.clips.length > 0);
+    $('tray-sum').textContent = '🎞 Montage (' + S.clips.length + ' plan' + (S.clips.length > 1 ? 's' : '') + ')';
+    var keep = S.mont && S.mont.node;
+    body.textContent = '';
+    S.clips.forEach(function (c, k) {
+        body.appendChild(h('div', { class: 'item' },
+            h('span', { class: 'lab', title: c.label, text: (k + 1) + '. ' + c.label }),
+            h('button', { class: 'smallbtn', type: 'button', title: 'Monter', text: '↑', disabled: k === 0, onclick: function () { var t = S.clips[k]; S.clips[k] = S.clips[k - 1]; S.clips[k - 1] = t; saveClips(); } }),
+            h('button', { class: 'smallbtn', type: 'button', title: 'Descendre', text: '↓', disabled: k === S.clips.length - 1, onclick: function () { var t = S.clips[k]; S.clips[k] = S.clips[k + 1]; S.clips[k + 1] = t; saveClips(); } }),
+            clipLink(c) && S.cur && S.cur.manifest.type === 'scene' && S.cur.mine ? h('button', { class: 'smallbtn', type: 'button', title: 'Coller dans la scène ouverte comme plan vidéo', text: '⧉ coller', onclick: function () { pasteClip(c); } }) : null,
+            h('button', { class: 'smallbtn', type: 'button', title: 'Retirer', text: '✕', onclick: function () { S.clips.splice(k, 1); saveClips(); } })));
+    });
+    body.appendChild(h('div', { class: 'actions', style: 'margin-top:8px' },
+        h('button', { class: 'btn keep', type: 'button', id: 'mont-go', text: 'Assembler dans le navigateur', onclick: assembleClips }),
+        h('button', { class: 'btn', type: 'button', text: '📂 uDRIVE', title: 'Ajouter des vidéos de mon uDRIVE au montage', onclick: function () { pickUdrive(null); } }),
+        h('button', { class: 'btn', type: 'button', text: 'Vider', onclick: function () { S.clips = []; S.mont = null; saveClips(); } })));
+    body.appendChild(h('p', { class: 'when', id: 'mont-msg', style: 'margin:6px 0 0' }));
+    if (keep) body.appendChild(keep);
+}
+async function pasteClip(c) {
+    var link = clipLink(c); if (!link) return;
+    var shot = { video: 'ipfs://' + link, duration: 6, ui: { kind: 'video' } };
+    try { var b = await clipBlob(c), m = await probeVideo(b); if (m.d) shot.duration = Math.max(1, Math.round(m.d)); } catch (e) {}
+    S.sb.shots.push(shot); setDirty(); draw(); toast('ok', 'Plan vidéo collé à la fin de la scène : enregistrez, puis régénérez.');
+}
+
+/* ── Assemblage dans le navigateur (ffmpeg.wasm, déjà utilisé par le Grimoire) ── */
+var FF = null;
+function loadScriptOnce(src) {
+    return new Promise(function (res, rej) {
+        if (document.querySelector('script[src="' + src + '"]')) { res(); return; }
+        var sc = document.createElement('script'); sc.src = src; sc.onload = res; sc.onerror = function () { rej(new Error(src + ' introuvable')); }; document.head.appendChild(sc);
+    });
+}
+async function ffLoad(say) {
+    if (FF) return FF;
+    say('Chargement de ffmpeg (30 Mo, une fois)…');
+    await loadScriptOnce('ffmpeg/ffmpeg.js');
+    if (!window.FFmpegWASM || !window.FFmpegWASM.FFmpeg) throw new Error('ffmpeg.wasm indisponible (earth/ffmpeg/ absent)');
+    var ff = new window.FFmpegWASM.FFmpeg();
+    await ff.load({ coreURL: new URL('ffmpeg/ffmpeg-core.js', location.href).href });
+    FF = ff; return ff;
+}
+async function assembleClips() {
+    var go = $('mont-go'); if (!S.clips.length || go.disabled) return;
+    function say(t) { var m = $('mont-msg'); if (m) m.textContent = t; }
+    go.disabled = true;
+    try {
+        var ff = await ffLoad(say), files = [], metas = [];
+        for (var k = 0; k < S.clips.length; k++) {
+            say('Téléchargement du plan ' + (k + 1) + '/' + S.clips.length + '…');
+            var blob = await clipBlob(S.clips[k]); metas.push(await probeVideo(blob));
+            var name = 'c' + k + '.mp4'; await ff.writeFile(name, new Uint8Array(await blob.arrayBuffer())); files.push(name);
+        }
+        // Plans finis du même rendu et de même taille : copie de flux (instantané). Sinon : remise au format du premier plan.
+        var copyOk = S.clips.every(function (c) { return c.kind === 'render'; }) && metas.every(function (m) { return m.w === metas[0].w && m.h === metas[0].h && m.w > 0; });
+        // format cible : celui du plan le plus grand (un plan brut plus petit ne doit pas tirer l'ensemble vers le bas)
+        var big = metas.reduce(function (a, m) { return m.w * m.h > a.w * a.h ? m : a; }, metas[0]);
+        var W = big.w || 1280, H = big.h || 720; W -= W % 2; H -= H % 2;
+        if (!copyOk) {
+            for (var n = 0; n < files.length; n++) {
+                say('Mise au format du plan ' + (n + 1) + '/' + files.length + '…');
+                var vf = 'scale=' + W + ':' + H + ':force_original_aspect_ratio=increase,crop=' + W + ':' + H + ',setsar=1,fps=24,format=yuv420p', out = 'n' + n + '.mp4';
+                var enc = ['-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '23', '-c:a', 'aac', '-ar', '48000', '-ac', '2'];
+                var rc = await ff.exec(['-i', files[n], '-vf', vf].concat(enc, ['-shortest', '-y', out]));
+                if (rc !== 0) rc = await ff.exec(['-i', files[n], '-f', 'lavfi', '-i', 'anullsrc=r=48000:cl=stereo', '-vf', vf, '-map', '0:v', '-map', '1:a'].concat(enc, ['-shortest', '-y', out]));
+                if (rc !== 0) throw new Error('plan ' + (n + 1) + ' : conversion impossible');
+                files[n] = out;
+            }
+        }
+        say('Assemblage…');
+        await ff.writeFile('list.txt', new TextEncoder().encode(files.map(function (f) { return "file '" + f + "'"; }).join('\n')));
+        var rc2 = await ff.exec(['-f', 'concat', '-safe', '0', '-i', 'list.txt', '-c', 'copy', '-movflags', '+faststart', '-y', 'montage.mp4']);
+        if (rc2 !== 0) throw new Error('assemblage impossible');
+        var data = await ff.readFile('montage.mp4'), res = new Blob([data], { type: 'video/mp4' }), url = URL.createObjectURL(res);
+        var node = h('div', {}, h('video', { src: url, controls: true, preload: 'metadata' }),
+            h('div', { class: 'actions', style: 'margin-top:6px' }, h('a', { class: 'btn', href: url, download: 'montage.mp4', text: 'Télécharger (.mp4)' })));
+        S.mont = { node: node }; drawTray();
+        say('Montage prêt (' + Math.round(res.size / 1048576 * 10) / 10 + ' Mo). Il n’a pas été envoyé : téléchargez-le puis déposez-le dans votre uDRIVE pour le réutiliser comme plan.');
+    } catch (e) { say('Erreur : ' + e.message); toast('err', e.message); }
+    finally { var g = $('mont-go'); if (g) g.disabled = false; }
 }
 
 /* ═══ Historique des versions ═══ */
@@ -795,6 +1098,11 @@ function wire() {
     $('import-file').onchange = function (e) { var f = e.target.files[0]; e.target.value = ''; if (f) importFile(f); };
     $('new-cancel').onclick = function () { $('dlg-new').close(); };
     $('cast-close').onclick = function () { $('dlg-cast').close(); };
+    $('udrive-close').onclick = function () { $('dlg-udrive').close(); };
+    $('udrive-x').onclick = function () { $('dlg-udrive').close(); };
+    // clic sur le fond sombre (en dehors de la boîte) : fermeture ; la boîte remplit son <dialog>, donc cible = le <dialog> lui-même
+    document.querySelectorAll('dialog').forEach(function (d) { d.addEventListener('click', function (e) { if (e.target === d) d.close(); }); });
+    drawTray();
     $('new-ok').onclick = async function () {
         var t = $('new-type').querySelector('[aria-pressed=true]').dataset.t, s = $('new-scope').querySelector('[aria-pressed=true]').dataset.s, name = $('new-name').value.trim();
         if (!name) { $('new-name').focus(); return; }

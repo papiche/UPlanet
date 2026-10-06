@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Les trois étages — le schéma</title>
+<style>
+  /* Les trois étages d'une constellation : Utilisateur / Capitaine / Armateur (plan « écran » de generate_scene.sh). */
+  html, body { margin:0; height:100%; background:#05070f; overflow:hidden; font-family:"Noto Sans","DejaVu Sans",system-ui,sans-serif; color:#eaf0ff; }
+  #stage { position:absolute; left:0; top:0; width:1280px; height:720px; transform-origin:0 0; background:radial-gradient(ellipse at 50% 55%, #0d1838 0%, #070b1c 55%, #04050b 100%); }
+  svg { position:absolute; inset:0; width:100%; height:100%; }
+  .cap { position:absolute; left:0; right:0; top:5%; text-align:center; }
+  .cap .tag { display:inline-block; padding:.2em .8em; border:1px solid #3b4d86; border-radius:99px; color:#8fa4de; font-size:18px; letter-spacing:.14em; text-transform:uppercase; }
+  .cap .big { margin-top:.3em; font-size:64px; font-weight:800; letter-spacing:-.02em; line-height:1.05; }
+</style>
+</head>
+<body>
+<div id="stage"><svg id="svg" viewBox="0 0 1280 720" preserveAspectRatio="xMidYMid meet"></svg><div class="cap"><span class="tag">Constellation fondatrice · 1 GPU + 24 satellites</span><div class="big">Trois étages, <span style="color:#5be0ff">un réseau</span></div></div></div>
+<script>
+(function () {
+  // mise à l'échelle : la scène est dessinée en 1280×720 et s'adapte à la fenêtre sans être recadrée
+  var stage = document.getElementById('stage');
+  function fit() { var k = Math.min(innerWidth / 1280, innerHeight / 720); stage.style.transform = 'scale(' + k + ')'; stage.style.left = ((innerWidth - 1280 * k) / 2) + 'px'; stage.style.top = ((innerHeight - 720 * k) / 2) + 'px'; }
+  addEventListener('resize', fit); fit();
+  var NS = 'http://www.w3.org/2000/svg', svg = document.getElementById('svg');
+  function el(t, a, p) { var e = document.createElementNS(NS, t); Object.keys(a || {}).forEach(function (k) { e.setAttribute(k, a[k]); }); (p || svg).appendChild(e); return e; }
+  function txt(x, y, s, size, fill, weight, anchor) { var t = el('text', { x: x, y: y, 'text-anchor': anchor || 'middle', 'font-size': size, fill: fill || '#eaf0ff', 'font-weight': weight || 600 }); t.textContent = s; return t; }
+  var seed = 5; function rnd() { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; }
+  var defs = el('defs');
+  [['gC', '#5be0ff'], ['gG', '#f5c542'], ['gP', '#b58cff']].forEach(function (g) {
+    var f = el('filter', { id: g[0], x: '-50%', y: '-50%', width: '200%', height: '200%' }, defs);
+    el('feGaussianBlur', { stdDeviation: 5, result: 'b' }, f); var m = el('feMerge', {}, f); el('feMergeNode', { in: 'b' }, m); el('feMergeNode', { in: 'SourceGraphic' }, m);
+  });
+  for (var i = 0; i < 70; i++) el('circle', { cx: rnd() * 1280, cy: rnd() * 720, r: .4 + rnd() * 1.1, fill: '#9fb4ff', opacity: .12 + rnd() * .4 });
+  // trois étages, du haut (le plus proche de vous) au bas (le matériel)
+  var tiers = [
+    { y: 215, col: '#5be0ff', f: 'gC', name: 'Utilisateur', l1: 'un MULTIPASS · vos amis N1 et N2', ic: 'user' },
+    { y: 370, col: '#f5c542', f: 'gG', name: 'Capitaine', l1: 'héberge · tiers de confiance · exécute BRO', ic: 'cap' },
+    { y: 525, col: '#b58cff', f: 'gP', name: 'Armateur', l1: 'le matériel : Raspberry Pi ou PC avec GPU', ic: 'hw' }
+  ];
+  tiers.forEach(function (t, k) {
+    var g = el('g', { filter: 'url(#' + t.f + ')' });
+    el('rect', { x: 250, y: t.y, width: 780, height: 118, rx: 22, fill: '#0b1226', stroke: t.col, 'stroke-width': 4 }, g);
+    var ic = el('g', { transform: 'translate(335,' + (t.y + 59) + ')', stroke: t.col, fill: 'none', 'stroke-width': 6, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' });
+    if (t.ic === 'user') { el('circle', { cx: 0, cy: -14, r: 16 }, ic); el('path', { d: 'M-30,34 a30,30 0 0 1 60,0' }, ic); }
+    if (t.ic === 'cap') { el('path', { d: 'M-34,18 l12,-34 l22,18 l22,-18 l12,34 z' }, ic); el('circle', { cx: 0, cy: -26, r: 6, fill: t.col }, ic); }
+    if (t.ic === 'hw') { el('rect', { x: -36, y: -22, width: 72, height: 44, rx: 6 }, ic); el('path', { d: 'M-22,-22 v-12 M0,-22 v-12 M22,-22 v-12 M-22,22 v12 M0,22 v12 M22,22 v12' }, ic); }
+    txt(410, t.y + 52, t.name, 42, t.col, 800, 'start'); txt(410, t.y + 90, t.l1, 24, '#b9c6e6', 500, 'start');
+    if (k < 2) {   // flux de ẐEN : la participation aux frais descend vers ceux qui fournissent le service
+      var ax = 640, ay1 = t.y + 122, ay2 = tiers[k + 1].y - 4;
+      el('line', { x1: ax, y1: ay1, x2: ax, y2: ay2, stroke: '#f5c542', 'stroke-width': 4, 'stroke-dasharray': '3 8', 'stroke-linecap': 'round', opacity: .8 });
+      el('path', { d: 'M' + ax + ',' + ay2 + ' l-10,-14 M' + ax + ',' + ay2 + ' l10,-14', stroke: '#f5c542', 'stroke-width': 5, 'stroke-linecap': 'round', fill: 'none' });
+      txt(ax + 24, (ay1 + ay2) / 2 + 8, 'ẐEN', 22, '#f5c542', 700, 'start');
+    }
+  });
+})();
+</script>
+</body>
+</html>

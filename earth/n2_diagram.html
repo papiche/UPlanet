@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Protocole N² — le schéma</title>
+<style>
+  /* Schéma du réseau N1 / N2, pensé pour être filmé (plans « écran » de generate_scene.sh) :
+     ?step=1..5 affiche l'étape (cumulative), sans animation à attendre. */
+  html, body { margin:0; height:100%; background:#05070f; overflow:hidden; font-family: "Noto Sans", "DejaVu Sans", system-ui, sans-serif; }
+  #stage { position:absolute; left:0; top:0; width:1280px; height:720px; transform-origin:0 0; background:radial-gradient(ellipse at 62% 50%, #0d1838 0%, #070b1c 55%, #04050b 100%); }
+  svg { position:absolute; inset:0; width:100%; height:100%; }
+  .cap { position:absolute; left:6%; top:50%; transform:translateY(-50%); max-width:31%; color:#eaf0ff; }
+  .cap .big { font-size:79px; font-weight:800; line-height:1.02; letter-spacing:-.02em; }
+  .cap .sub { margin-top:.5em; font-size:32px; color:#b9c6e6; line-height:1.25; }
+  .cap .tag { display:inline-block; margin-bottom:.8em; padding:.2em .7em; border:1px solid #3b4d86; border-radius:99px; color:#8fa4de; font-size:18px; letter-spacing:.14em; text-transform:uppercase; }
+  .gold { color:#f5c542; } .silver { color:#a9c0ee; } .cyan { color:#5be0ff; } .red { color:#ff6b72; }
+
+  #ctl { position:fixed; left:50%; bottom:14px; transform:translateX(-50%); display:flex; align-items:center; gap:10px; z-index:9; background:#0a1017e6; border:1px solid #26384a; border-radius:99px; padding:6px 10px; font:600 14px/1 system-ui,sans-serif; color:#cfe0ff; }
+  #ctl button { background:none; border:1px solid #3b4d86; color:#cfe0ff; border-radius:99px; padding:7px 14px; font:inherit; cursor:pointer; }
+  #ctl button:hover:not(:disabled) { border-color:#5be0ff; color:#fff; } #ctl button:disabled { opacity:.35; cursor:default; }
+  #ctl .dots { display:flex; gap:6px; } #ctl .dots i { width:9px; height:9px; border-radius:50%; background:#2a3a52; cursor:pointer; } #ctl .dots i.on { background:#5be0ff; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <svg id="svg" viewBox="0 0 1280 720" preserveAspectRatio="xMidYMid meet"></svg>
+  <div class="cap" id="cap"></div>
+</div>
+<div id="ctl"><button id="prev" type="button" aria-label="Étape précédente">‹ Précédent</button><span class="dots" id="dots"></span><button id="next" type="button" aria-label="Étape suivante">Suivant ›</button></div>
+<script>
+(function () {
+  var STEP = Math.max(1, Math.min(5, parseInt(new URLSearchParams(location.search).get('step') || '1', 10) || 5));
+  var MAXSTEP = 5;
+
+  // mise à l'échelle : la scène est dessinée en 1280×720 et s'adapte à la fenêtre sans être recadrée
+  var stage = document.getElementById('stage');
+  function fit() { var s = Math.min(innerWidth / 1280, innerHeight / 720); stage.style.transform = 'scale(' + s + ')'; stage.style.left = ((innerWidth - 1280 * s) / 2) + 'px'; stage.style.top = ((innerHeight - 720 * s) / 2) + 'px'; }
+  addEventListener('resize', fit); fit();
+  function render() {
+  var NS = 'http://www.w3.org/2000/svg', svg = document.getElementById('svg'); svg.textContent = '';
+  var CX = 855, CY = 360, R1 = 125, R2 = 245, RS = 268, R3 = 318;
+  function el(tag, attrs, parent) { var e = document.createElementNS(NS, tag); Object.keys(attrs || {}).forEach(function (k) { e.setAttribute(k, attrs[k]); }); (parent || svg).appendChild(e); return e; }
+  // PRNG déterministe : le schéma est identique à chaque capture
+  var seed = 7; function rnd() { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; }
+  var defs = el('defs');
+  [['gGold', '#f5c542'], ['gSilver', '#a9c0ee'], ['gCyan', '#5be0ff'], ['gRed', '#ff6b72']].forEach(function (g) {
+    var f = el('filter', { id: g[0], x: '-100%', y: '-100%', width: '300%', height: '300%' }, defs);
+    el('feGaussianBlur', { stdDeviation: 5, result: 'b' }, f);
+    var m = el('feMerge', {}, f); el('feMergeNode', { in: 'b' }, m); el('feMergeNode', { in: 'SourceGraphic' }, m);
+  });
+  for (var i = 0; i < 90; i++) el('circle', { cx: rnd() * 1280, cy: rnd() * 720, r: .4 + rnd() * 1.1, fill: '#9fb4ff', opacity: .15 + rnd() * .45 });
+  function pol(r, a) { return [CX + r * Math.cos(a), CY + r * Math.sin(a)]; }
+  var n1 = [], n2 = [], out = [];
+  for (var i = 0; i < 6; i++) n1.push(pol(R1, i * Math.PI / 3 + .35));
+  n1.forEach(function (p, i) {
+    var base = i * Math.PI / 3 + .35;
+    [-.2, 0, .2].forEach(function (d, j) { if (i % 2 === 1 && j === 1) return; n2.push({ p: pol(R2, base + d), parent: p }); });
+  });
+  for (var i = 0; i < 12; i++) { var a = i * Math.PI / 6 + .1 + rnd() * .1; out.push({ p: pol(R3 + rnd() * 26, a), a: a }); }
+  // anneaux
+  if (STEP >= 2) el('circle', { cx: CX, cy: CY, r: R1, fill: 'none', stroke: '#f5c542', 'stroke-opacity': .35, 'stroke-width': 2, 'stroke-dasharray': '4 8' });
+  if (STEP >= 3) el('circle', { cx: CX, cy: CY, r: R2, fill: 'none', stroke: '#a9c0ee', 'stroke-opacity': .3, 'stroke-width': 2, 'stroke-dasharray': '4 8' });
+  // liens
+  if (STEP >= 2) n1.forEach(function (p) { el('line', { x1: CX, y1: CY, x2: p[0], y2: p[1], stroke: '#f5c542', 'stroke-opacity': .55, 'stroke-width': 3 }); });
+  if (STEP >= 3) n2.forEach(function (n) { el('line', { x1: n.parent[0], y1: n.parent[1], x2: n.p[0], y2: n.p[1], stroke: '#a9c0ee', 'stroke-opacity': .45, 'stroke-width': 2 }); });
+  if (STEP >= 4) {
+    out.forEach(function (o) {   // les inconnus s'arrêtent au bouclier
+      var e = pol(RS + 4, o.a);
+      el('line', { x1: o.p[0], y1: o.p[1], x2: e[0], y2: e[1], stroke: '#ff6b72', 'stroke-opacity': .5, 'stroke-width': 2, 'stroke-dasharray': '3 5' });
+      var x = pol(RS + 4, o.a); el('path', { d: 'M' + (x[0] - 6) + ',' + (x[1] - 6) + 'L' + (x[0] + 6) + ',' + (x[1] + 6) + 'M' + (x[0] + 6) + ',' + (x[1] - 6) + 'L' + (x[0] - 6) + ',' + (x[1] + 6), stroke: '#ff6b72', 'stroke-width': 3, 'stroke-linecap': 'round' });
+      el('circle', { cx: o.p[0], cy: o.p[1], r: 9, fill: '#3a1519', stroke: '#ff6b72', 'stroke-width': 2, opacity: .85 });
+    });
+    el('circle', { cx: CX, cy: CY, r: RS, fill: 'none', stroke: '#5be0ff', 'stroke-width': 4, 'stroke-opacity': .9, filter: 'url(#gCyan)' });
+    var lg = el('text', { x: 78, y: 668, 'font-size': 22, 'font-weight': 600, fill: '#ff8a8f' }); lg.textContent = '✕  sans authentification : lecture refusée';
+  }
+  if (STEP >= 5) {   // un chemin de confiance : un inconnu du N2 relié à vous par un ami commun
+    var tgt = n2[4], par = tgt.parent;
+    el('polyline', { points: tgt.p.join(',') + ' ' + par.join(',') + ' ' + CX + ',' + CY, fill: 'none', stroke: '#5be0ff', 'stroke-width': 6, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', filter: 'url(#gCyan)' });
+  }
+  // nœuds
+  if (STEP >= 3) n2.forEach(function (n, i) { el('circle', { cx: n.p[0], cy: n.p[1], r: 11, fill: '#0e1530', stroke: '#a9c0ee', 'stroke-width': 3, filter: 'url(#gSilver)' }); });
+  if (STEP >= 2) n1.forEach(function (p) { el('circle', { cx: p[0], cy: p[1], r: 16, fill: '#2a2108', stroke: '#f5c542', 'stroke-width': 4, filter: 'url(#gGold)' }); });
+  el('circle', { cx: CX, cy: CY, r: 33, fill: '#06222b', stroke: '#ffffff', 'stroke-width': 5, filter: 'url(#gCyan)' });
+  var t = el('text', { x: CX, y: CY + 8, 'text-anchor': 'middle', 'font-size': 19, 'font-weight': 800, fill: '#ffffff' }); t.textContent = 'VOUS';
+  var CAP = {
+    1: ['Le réseau', 'Vous', 'au centre de votre réseau'],
+    2: ['Premier cercle', '<span class="gold">N1</span>', 'vos amis directs'],
+    3: ['Deux cercles', '<span class="gold">N1</span> + <span class="silver">N2</span>', 'vos amis, puis les amis de vos amis'],
+    4: ['En production', '<span class="cyan">Le bouclier</span>', 'la lecture du relais exige une authentification'],
+    5: ['La confiance', 'Un ami en <span class="cyan">commun</span>', 'vous connaissez toujours quelqu’un qui les connaît']
+  }[STEP];
+  document.title = 'Protocole N² — étape ' + STEP;
+  document.getElementById('cap').innerHTML = '<div class="tag">' + CAP[0] + '</div><div class="big">' + CAP[1] + '</div><div class="sub">' + CAP[2] + '</div>';
+  }
+
+  // navigation à la main ; ?nav=0 masque les boutons (captures vidéo de generate_scene.sh)
+  var ctl = document.getElementById('ctl');
+  if (new URLSearchParams(location.search).get('nav') === '0') ctl.style.display = 'none';
+  function go(n) { n = Math.max(1, Math.min(MAXSTEP, n)); if (n === STEP) return; STEP = n; var u = new URL(location.href); u.searchParams.set('step', String(n)); history.replaceState(null, '', u); render(); sync(); }
+  function sync() { document.getElementById('prev').disabled = STEP <= 1; document.getElementById('next').disabled = STEP >= MAXSTEP;
+    var d = document.getElementById('dots'); d.textContent = ''; for (var k = 1; k <= MAXSTEP; k++) { (function (k) { var i = document.createElement('i'); if (k === STEP) i.className = 'on'; i.onclick = function () { go(k); }; d.appendChild(i); })(k); } }
+  document.getElementById('prev').onclick = function () { go(STEP - 1); };
+  document.getElementById('next').onclick = function () { go(STEP + 1); };
+  addEventListener('keydown', function (e) { if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') { go(STEP + 1); e.preventDefault(); } else if (e.key === 'ArrowLeft' || e.key === 'PageUp') { go(STEP - 1); e.preventDefault(); } });
+  render(); sync();
+})();
+</script>
+</body>
+</html>

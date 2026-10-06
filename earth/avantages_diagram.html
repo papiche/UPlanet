@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ce que vous y trouvez — le schéma</title>
+<style>
+  /* Les avantages pour chacun (plan « écran » de generate_scene.sh) : une carte par rôle. */
+  html, body { margin:0; height:100%; background:#05070f; overflow:hidden; font-family:"Noto Sans","DejaVu Sans",system-ui,sans-serif; color:#eaf0ff; }
+  #stage { position:absolute; left:0; top:0; width:1280px; height:720px; transform-origin:0 0; background:radial-gradient(ellipse at 50% 60%, #0d1838 0%, #070b1c 55%, #04050b 100%); }
+  svg { position:absolute; inset:0; width:100%; height:100%; }
+  .cap { position:absolute; left:0; right:0; top:5%; text-align:center; }
+  .cap .tag { display:inline-block; padding:.2em .8em; border:1px solid #3b4d86; border-radius:99px; color:#8fa4de; font-size:18px; letter-spacing:.14em; text-transform:uppercase; }
+  .cap .big { margin-top:.3em; font-size:64px; font-weight:800; letter-spacing:-.02em; line-height:1.05; }
+</style>
+</head>
+<body>
+<div id="stage"><svg id="svg" viewBox="0 0 1280 720" preserveAspectRatio="xMidYMid meet"></svg><div class="cap"><span class="tag">Pour chacun</span><div class="big">Ce que <span style="color:#5be0ff">vous y trouvez</span></div></div></div>
+<script>
+(function () {
+  var stage = document.getElementById('stage');
+  function fit() { var k = Math.min(innerWidth / 1280, innerHeight / 720); stage.style.transform = 'scale(' + k + ')'; stage.style.left = ((innerWidth - 1280 * k) / 2) + 'px'; stage.style.top = ((innerHeight - 720 * k) / 2) + 'px'; }
+  addEventListener('resize', fit); fit();
+  var NS = 'http://www.w3.org/2000/svg', svg = document.getElementById('svg');
+  function el(t, a, p) { var e = document.createElementNS(NS, t); Object.keys(a || {}).forEach(function (k) { e.setAttribute(k, a[k]); }); (p || svg).appendChild(e); return e; }
+  function txt(x, y, s, size, fill, weight, anchor) { var t = el('text', { x: x, y: y, 'text-anchor': anchor || 'middle', 'font-size': size, fill: fill || '#eaf0ff', 'font-weight': weight || 600 }); t.textContent = s; return t; }
+  var seed = 9; function rnd() { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; }
+  var defs = el('defs');
+  [['gC', '#5be0ff'], ['gG', '#f5c542'], ['gP', '#b58cff'], ['gW', '#6dffb0']].forEach(function (g) {
+    var f = el('filter', { id: g[0], x: '-30%', y: '-30%', width: '160%', height: '160%' }, defs);
+    el('feGaussianBlur', { stdDeviation: 5, result: 'b' }, f); var m = el('feMerge', {}, f); el('feMergeNode', { in: 'b' }, m); el('feMergeNode', { in: 'SourceGraphic' }, m);
+  });
+  for (var i = 0; i < 70; i++) el('circle', { cx: rnd() * 1280, cy: rnd() * 720, r: .4 + rnd() * 1.1, fill: '#9fb4ff', opacity: .12 + rnd() * .4 });
+  var cards = [
+    { x: 30,  col: '#5be0ff', f: 'gC', who: 'Utilisateur', a: 'Vos données', b: 'chez vous', c: 'chiffrées · amis N1 et N2', ic: 'user' },
+    { x: 330, col: '#f5c542', f: 'gG', who: 'Capitaine',   a: 'Votre IA,',   b: 'votre code',        c: 'BRO adaptable · AGPL',       ic: 'cap' },
+    { x: 630, col: '#b58cff', f: 'gP', who: 'Armateur',    a: 'Vos frais',   b: 'remboursés',        c: 'électricité · internet',     ic: 'hw' },
+    { x: 930, col: '#6dffb0', f: 'gW', who: 'Tous',        a: 'Un réseau',   b: 'qui résiste',       c: 'réplication N² + IPFS',      ic: 'net' }
+  ];
+  cards.forEach(function (k) {
+    var g = el('g', { filter: 'url(#' + k.f + ')' });
+    el('rect', { x: k.x, y: 215, width: 300, height: 400, rx: 24, fill: '#0b1226', stroke: k.col, 'stroke-width': 4 }, g);
+    var ic = el('g', { transform: 'translate(' + (k.x + 150) + ',300)', stroke: k.col, fill: 'none', 'stroke-width': 6, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' });
+    if (k.ic === 'user') { el('circle', { cx: 0, cy: -14, r: 18 }, ic); el('path', { d: 'M-34,38 a34,34 0 0 1 68,0' }, ic); }
+    if (k.ic === 'cap')  { el('path', { d: 'M-38,22 l14,-38 l24,20 l24,-20 l14,38 z' }, ic); el('circle', { cx: 0, cy: -30, r: 6, fill: k.col }, ic); }
+    if (k.ic === 'hw')   { el('rect', { x: -40, y: -24, width: 80, height: 48, rx: 6 }, ic); el('path', { d: 'M-24,-24 v-12 M0,-24 v-12 M24,-24 v-12 M-24,24 v12 M0,24 v12 M24,24 v12' }, ic); }
+    if (k.ic === 'net')  { [[-30,-18],[30,-18],[0,26]].forEach(function (p) { el('line', { x1: 0, y1: 0, x2: p[0], y2: p[1] }, ic); el('circle', { cx: p[0], cy: p[1], r: 9 }, ic); }); el('circle', { cx: 0, cy: 0, r: 12, fill: k.col }, ic); }
+    txt(k.x + 150, 392, k.who, 26, k.col, 700); 
+    txt(k.x + 150, 462, k.a, 36, '#eaf0ff', 800); txt(k.x + 150, 510, k.b, 36, '#eaf0ff', 800);
+    txt(k.x + 150, 575, k.c, 19, '#9fb0c6', 500);
+  });
+})();
+</script>
+</body>
+</html>

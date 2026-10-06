@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Votre clé — le schéma</title>
+<style>
+  /* Schéma de la clé (plans « écran » de generate_scene.sh) : ?step=1 le cadenas https et la clé, ?step=2 la clé en trois parts. */
+  html, body { margin:0; height:100%; background:#05070f; overflow:hidden; font-family:"Noto Sans","DejaVu Sans",system-ui,sans-serif; color:#eaf0ff; }
+  #stage { position:absolute; left:0; top:0; width:1280px; height:720px; transform-origin:0 0; background:radial-gradient(ellipse at 62% 50%, #0d1838 0%, #070b1c 55%, #04050b 100%); }
+  svg { position:absolute; inset:0; width:100%; height:100%; }
+  .cap { position:absolute; left:0; right:0; top:6%; text-align:center; }
+  .cap .tag { display:inline-block; padding:.2em .8em; border:1px solid #3b4d86; border-radius:99px; color:#8fa4de; font-size:18px; letter-spacing:.14em; text-transform:uppercase; }
+  .cap .big { margin-top:.35em; font-size:64px; font-weight:800; letter-spacing:-.02em; line-height:1.05; }
+  .cyan { color:#5be0ff; } .gold { color:#f5c542; } .mute { color:#8b97b5; }
+
+  #ctl { position:fixed; left:50%; bottom:14px; transform:translateX(-50%); display:flex; align-items:center; gap:10px; z-index:9; background:#0a1017e6; border:1px solid #26384a; border-radius:99px; padding:6px 10px; font:600 14px/1 system-ui,sans-serif; color:#cfe0ff; }
+  #ctl button { background:none; border:1px solid #3b4d86; color:#cfe0ff; border-radius:99px; padding:7px 14px; font:inherit; cursor:pointer; }
+  #ctl button:hover:not(:disabled) { border-color:#5be0ff; color:#fff; } #ctl button:disabled { opacity:.35; cursor:default; }
+  #ctl .dots { display:flex; gap:6px; } #ctl .dots i { width:9px; height:9px; border-radius:50%; background:#2a3a52; cursor:pointer; } #ctl .dots i.on { background:#5be0ff; }
+</style>
+</head>
+<body>
+<div id="stage"><svg id="svg" viewBox="0 0 1280 720" preserveAspectRatio="xMidYMid meet"></svg><div class="cap" id="cap"></div></div>
+<div id="ctl"><button id="prev" type="button" aria-label="Étape précédente">‹ Précédent</button><span class="dots" id="dots"></span><button id="next" type="button" aria-label="Étape suivante">Suivant ›</button></div>
+<script>
+(function () {
+  var STEP = Math.max(1, Math.min(2, parseInt(new URLSearchParams(location.search).get('step') || '1', 10) || 1));
+  var MAXSTEP = 2;
+
+  // mise à l'échelle : la scène est dessinée en 1280×720 et s'adapte à la fenêtre sans être recadrée
+  var stage = document.getElementById('stage');
+  function fit() { var s = Math.min(innerWidth / 1280, innerHeight / 720); stage.style.transform = 'scale(' + s + ')'; stage.style.left = ((innerWidth - 1280 * s) / 2) + 'px'; stage.style.top = ((innerHeight - 720 * s) / 2) + 'px'; }
+  addEventListener('resize', fit); fit();
+  function render() {
+  var NS = 'http://www.w3.org/2000/svg', svg = document.getElementById('svg'); svg.textContent = '';
+  function el(t, a, p) { var e = document.createElementNS(NS, t); Object.keys(a || {}).forEach(function (k) { e.setAttribute(k, a[k]); }); (p || svg).appendChild(e); return e; }
+  function txt(x, y, s, size, fill, weight, anchor) { var t = el('text', { x: x, y: y, 'text-anchor': anchor || 'middle', 'font-size': size, fill: fill || '#eaf0ff', 'font-weight': weight || 600 }); t.textContent = s; return t; }
+  var seed = 11; function rnd() { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; }
+  var defs = el('defs');
+  [['gC', '#5be0ff'], ['gG', '#f5c542'], ['gW', '#a9c0ee']].forEach(function (g) {
+    var f = el('filter', { id: g[0], x: '-100%', y: '-100%', width: '300%', height: '300%' }, defs);
+    el('feGaussianBlur', { stdDeviation: 6, result: 'b' }, f); var m = el('feMerge', {}, f); el('feMergeNode', { in: 'b' }, m); el('feMergeNode', { in: 'SourceGraphic' }, m);
+  });
+  for (var i = 0; i < 80; i++) el('circle', { cx: rnd() * 1280, cy: rnd() * 720, r: .4 + rnd() * 1.1, fill: '#9fb4ff', opacity: .15 + rnd() * .4 });
+
+  function padlock(cx, cy, s, col) {
+    var g = el('g', { transform: 'translate(' + cx + ',' + cy + ') scale(' + s + ')', stroke: col, fill: 'none', 'stroke-width': 7, 'stroke-linecap': 'round', filter: 'url(#gW)' });
+    el('path', { d: 'M-34,-8 V-34 a34,34 0 0 1 68,0 V-8' }, g); el('rect', { x: -52, y: -8, width: 104, height: 84, rx: 14, fill: '#0d1530' }, g);
+    el('circle', { cx: 0, cy: 28, r: 9, fill: col, stroke: 'none' }, g); return g;
+  }
+  function key(cx, cy, s, col, rot) {
+    var g = el('g', { transform: 'translate(' + cx + ',' + cy + ') rotate(' + (rot || 0) + ') scale(' + s + ')', stroke: col, fill: 'none', 'stroke-width': 8, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', filter: 'url(#gC)' });
+    el('circle', { cx: -50, cy: 0, r: 30, fill: '#06222b' }, g); el('circle', { cx: -50, cy: 0, r: 10, fill: col, stroke: 'none' }, g);
+    el('path', { d: 'M-20,0 H80 M52,0 V22 M72,0 V16' }, g); return g;
+  }
+  function arrow(x1, y1, x2, y2, col) {
+    el('line', { x1: x1, y1: y1, x2: x2, y2: y2, stroke: col, 'stroke-width': 4, 'stroke-dasharray': '4 9', 'stroke-linecap': 'round', opacity: .9 });
+    var a = Math.atan2(y2 - y1, x2 - x1); el('path', { d: 'M' + x2 + ',' + y2 + ' l' + (-16 * Math.cos(a - .5)) + ',' + (-16 * Math.sin(a - .5)) + ' M' + x2 + ',' + y2 + ' l' + (-16 * Math.cos(a + .5)) + ',' + (-16 * Math.sin(a + .5)), stroke: col, 'stroke-width': 5, 'stroke-linecap': 'round', fill: 'none' });
+  }
+  var cap;
+  if (STEP === 1) {
+    cap = ['Le « s » de https', 'Le cadenas prouve <span class="mute">le site</span>.<br>Votre clé prouve <span class="cyan">que c’est vous</span>.'];
+    // moitié gauche : https, le site prouve son identité (via une autorité)
+    el('line', { x1: 640, y1: 270, x2: 640, y2: 690, stroke: '#26384a', 'stroke-width': 2, 'stroke-dasharray': '6 10' });
+    txt(320, 330, 'https', 34, '#8b97b5', 700); padlock(320, 410, 1.05, '#a9c0ee');
+    el('rect', { x: 215, y: 560, width: 210, height: 80, rx: 12, fill: '#0f1730', stroke: '#3b4d86', 'stroke-width': 3 }); txt(320, 610, 'le site', 30, '#a9c0ee', 700);
+    arrow(320, 515, 320, 553, '#8b97b5');
+    txt(320, 676, 'le site prouve qui il est', 22, '#8b97b5', 500);
+    // moitié droite : UPlanet, vous signez
+    txt(960, 330, 'UPlanet', 34, '#5be0ff', 800); key(930, 430, 1.35, '#5be0ff', -18);
+    el('rect', { x: 855, y: 560, width: 210, height: 80, rx: 12, fill: '#06222b', stroke: '#5be0ff', 'stroke-width': 3, filter: 'url(#gC)' }); txt(960, 610, 'le réseau', 30, '#5be0ff', 700);
+    arrow(960, 515, 960, 553, '#5be0ff');
+    txt(960, 676, 'votre clé prouve que c’est vous', 22, '#5be0ff', 600);
+  } else {
+    cap = ['Votre MULTIPASS', 'Une clé, <span class="cyan">trois parts</span>'];
+    var parts = [['Vous', 380, '#5be0ff', 'garde votre part'], ['Votre Capitaine', 640, '#f5c542', 'tiers de confiance'], ['La constellation', 900, '#a9c0ee', 'secret commun']];
+    // la clé entière, au-dessus, se découpe
+    key(640, 300, 1.15, '#ffffff', 0);
+    parts.forEach(function (p, i) {
+      var x = p[1], col = p[2];
+      el('path', { d: 'M640,350 C640,410 ' + x + ',410 ' + x + ',460', stroke: col, 'stroke-width': 3, fill: 'none', 'stroke-dasharray': '5 8', opacity: .8 });
+      var g = el('g', { transform: 'translate(' + x + ',520)', filter: 'url(#' + (col === '#f5c542' ? 'gG' : col === '#5be0ff' ? 'gC' : 'gW') + ')' });
+      el('rect', { x: -88, y: -56, width: 176, height: 112, rx: 16, fill: '#0c1328', stroke: col, 'stroke-width': 4 }, g);
+      var kk = el('g', { transform: 'translate(0,-12) scale(.5)', stroke: col, fill: 'none', 'stroke-width': 10, 'stroke-linecap': 'round' }, g);
+      el('circle', { cx: -40, cy: 0, r: 26 }, kk); el('path', { d: 'M-14,0 H60 M38,0 V18' }, kk);
+      txt(x, 620, p[0], 28, col, 800); txt(x, 655, p[3], 20, '#9fb0c6', 500);
+    });
+  }
+  document.title = 'Votre clé — étape ' + STEP;
+  document.getElementById('cap').innerHTML = '<span class="tag">' + cap[0] + '</span><div class="big">' + cap[1] + '</div>';
+  }
+
+  // navigation à la main ; ?nav=0 masque les boutons (captures vidéo de generate_scene.sh)
+  var ctl = document.getElementById('ctl');
+  if (new URLSearchParams(location.search).get('nav') === '0') ctl.style.display = 'none';
+  function go(n) { n = Math.max(1, Math.min(MAXSTEP, n)); if (n === STEP) return; STEP = n; var u = new URL(location.href); u.searchParams.set('step', String(n)); history.replaceState(null, '', u); render(); sync(); }
+  function sync() { document.getElementById('prev').disabled = STEP <= 1; document.getElementById('next').disabled = STEP >= MAXSTEP;
+    var d = document.getElementById('dots'); d.textContent = ''; for (var k = 1; k <= MAXSTEP; k++) { (function (k) { var i = document.createElement('i'); if (k === STEP) i.className = 'on'; i.onclick = function () { go(k); }; d.appendChild(i); })(k); } }
+  document.getElementById('prev').onclick = function () { go(STEP - 1); };
+  document.getElementById('next').onclick = function () { go(STEP + 1); };
+  addEventListener('keydown', function (e) { if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') { go(STEP + 1); e.preventDefault(); } else if (e.key === 'ArrowLeft' || e.key === 'PageUp') { go(STEP - 1); e.preventDefault(); } });
+  render(); sync();
+})();
+</script>
+</body>
+</html>

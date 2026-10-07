@@ -48,6 +48,26 @@
   .style-card.selected{border-color:var(--accent)}
   .style-card img{width:100%;height:56px;object-fit:cover;display:block}
   .style-card .lbl{font-size:.72rem;color:var(--muted);padding:4px 2px}
+
+  /* ── Panneau de financement (6 contrôles) — apparaît une fois la planche
+     générée, cf. window.__G1BILLETS__ embarqué par generate_billet. */
+  .fund-row{display:flex;align-items:center;gap:8px;padding:10px 0;
+        border-bottom:1px solid rgba(255,255,255,.07)}
+  .fund-row:last-child{border-bottom:none}
+  .fund-row .lbl{flex:0 0 auto;width:34px;height:34px;border-radius:9px;background:rgba(200,168,60,.14);
+        color:var(--accent);font-weight:800;font-size:.8rem;display:flex;align-items:center;justify-content:center}
+  .fund-row .g1{flex:1;min-width:0;font-family:ui-monospace,monospace;font-size:.74rem;color:var(--muted);
+        overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .fund-row input[type=number]{width:72px;flex:0 0 auto;padding:7px 8px;font-size:.88rem;border-radius:7px;
+        border:1px solid rgba(255,255,255,.15);background:#0d0f1c;color:#fff}
+  .fund-row button{flex:0 0 auto;padding:8px 12px;border:none;border-radius:8px;background:var(--accent);
+        color:#1a1209;font-weight:700;font-size:.8rem;cursor:pointer;white-space:nowrap}
+  .fund-row button:disabled{opacity:.45;cursor:not-allowed}
+  .fund-row button.secondary{background:rgba(255,255,255,.1);color:#fff}
+  .fund-row .fs{flex:0 0 100%;font-size:.76rem;margin-top:4px;min-height:1.1em}
+  .fund-row .fs.ok{color:#8ee08e}
+  .fund-row .fs.err{color:#ff8080}
+  .fund-row .fs.pending{color:var(--accent)}
 </style>
 </head>
 <body>
@@ -57,11 +77,10 @@
 <main>
   <h1>🎫 Ğ1Billet papier</h1>
   <p class="lead">
-    Fabriquez une planche A4 de 6 portefeuilles papier Ğ1/Ẑen (PRIMO TX TREE), prête à imprimer
-    et découper — avec un montant au choix par billet. Les billets sortent toujours vides ;
-    transférez les fonds vous-même vers la clé imprimée pour les activer.
-    Connexion MULTIPASS requise : chaque billet émis est associé à votre identité (traçabilité
-    de l'émission, le billet lui-même reste un bearer Ğ1 classique, utilisable par qui le détient).
+    Fabriquez une planche A4 de 6 portefeuilles papier Ẑen, prête à imprimer
+    et découper — avec un montant au choix inscrit sur les billets. 
+    Connexion MULTIPASS requise pour l'émission : chaque billet est rattaché à l'identité de son émetteur. 
+    Une fois émis, le G1BILLET reste un titre au porteur : sa possession suffit pour l'utiliser ou le transmettre.
   </p>
 
   <div class="card">
@@ -130,12 +149,12 @@
   </div>
 
   <div class="card">
-    <h2 class="card-title">Verso (optionnel)</h2>
+    <h2 class="card-title">Verso</h2>
     <label class="mode-opt" style="margin:0">
       <input type="checkbox" id="verso-enable">
       <span>
         <span class="t">Ajouter un verso à l'impression</span><br>
-        <span class="d">Un petit texte façon "contrat", répété au dos de chacun des 6 billets (même grille que le recto) + QR de soutien vers OpenCollective (opencollective.com/monnaie-libre).</span>
+        <span class="d">Un à écrire au dos de chacun des 6 billets + QR de soutien vers opencollective.com/monnaie-libre</span>
       </span>
     </label>
     <div id="verso-fields" style="display:none;margin-top:12px">
@@ -146,20 +165,22 @@
 
   <div class="card">
     <div id="connect-gate">
-      <span>🔒 Connectez-vous avec votre MULTIPASS pour créer un Ğ1Billet.</span>
+      <span id="connect-gate-msg">🔒 Connectez-vous avec votre MULTIPASS pour créer un Ğ1Billet.</span>
       <button id="connect-gate-btn" type="button">⚡ Se connecter</button>
     </div>
     <button id="generate" disabled>Générer mon Ğ1Billet</button>
     <div id="status"></div>
   </div>
 
-  <p class="note">
-    La planche s'ouvre dans un nouvel onglet, prête à imprimer. Chaque billet n'a qu'un recto :
-    le secret (phrase mnémonique) est imprimé en bande verticale sur son bord gauche — repliez-la
-    vers l'arrière et scotchez-la avant de distribuer les billets. Imprimez avant de fermer cet
-    onglet : la planche ne peut pas être régénérée à l'identique et n'est jamais conservée par
-    le serveur.
-  </p>
+  <div class="card" id="fund-panel" style="display:none">
+    <h2 class="card-title">💰 Financer la planche</h2>
+    <p class="note" style="margin-top:0">
+      Optionnel — initialisez chaque billet individuellement (1 Ğ1 d'activation depuis
+      UPLANETNAME_G1, puis le montant annoncé depuis votre MULTIPASS). Un échec sur un
+      billet n'affecte pas les autres : relancez-le autant que nécessaire.
+    </p>
+    <div id="fund-list"></div>
+  </div>
 </main>
 
 <script src="nacl-fast.min.js"></script>
@@ -247,16 +268,41 @@
     } catch (e) { /* pas de profil trouvé — pas grave, fond neutre */ }
   }
 
-  // ── Connexion MULTIPASS obligatoire : seule une identité connectée peut
-  // créer un Ğ1Billet (auth NIP-98 exigée côté serveur, cf. UPassport
-  // routers/qr.py::generate_billet) — le bouton reste désactivé tant que
-  // non connecté.
-  var connectGate   = document.getElementById('connect-gate');
+  // ── Connexion MULTIPASS RÉELLE obligatoire — pas juste "une clé NOSTR
+  // connectée" : n'importe qui peut installer une extension NOSTR et en
+  // générer une en 10 secondes, sans jamais s'inscrire. window.isMultipass
+  // (uplanet-header.js::_loadProfile, vrai uniquement si le profil kind 0
+  // contient un g1pub — posé par UPassport /g1nostr à l'inscription) donne
+  // un signal fiable côté client ; le serveur revérifie de toute façon
+  // (is_multipass_user, cf. UPassport routers/qr.py::generate_billet) —
+  // cette passerelle n'est qu'un confort d'UX, pas la vraie barrière, mais
+  // elle évite de laisser quelqu'un remplir tout le formulaire puis se
+  // faire rejeter seulement à l'étape finale, et réduit la pollution NOSTR
+  // (6 témoins publiés par planche générée, cf. _publish_billet_witness)
+  // causée par des générations "pour essayer" par des comptes jamais
+  // inscrits qui ne financeront jamais rien.
+  var connectGate    = document.getElementById('connect-gate');
+  var connectGateMsg = document.getElementById('connect-gate-msg');
   var connectGateBtn = document.getElementById('connect-gate-btn');
   function updateConnectGate() {
     var connected = !!(window.isNostrConnected && window.userPubkey);
-    connectGate.style.display = connected ? 'none' : 'flex';
-    genBtn.disabled = !connected;
+    var isMultipass = window.isMultipass === true;
+
+    if (!connected) {
+      connectGate.style.display = 'flex';
+      connectGateMsg.textContent = '🔒 Connectez-vous avec votre MULTIPASS pour créer un Ğ1Billet.';
+      connectGateBtn.style.display = '';
+      genBtn.disabled = true;
+    } else if (!isMultipass) {
+      connectGate.style.display = 'flex';
+      connectGateMsg.innerHTML = '⚠️ Cette identité NOSTR n\'est pas un MULTIPASS enregistré — ' +
+        '<a href="g1.html" style="color:var(--accent)">créez-en un ici</a>.';
+      connectGateBtn.style.display = 'none';
+      genBtn.disabled = true;
+    } else {
+      connectGate.style.display = 'none';
+      genBtn.disabled = false;
+    }
   }
   connectGateBtn.addEventListener('click', function () {
     if (window.uphConnect) { window.uphConnect(); }
@@ -266,6 +312,15 @@
   function onConnected() {
     refreshProfileImages();
     updateConnectGate();
+    // window.isMultipass n'est connu qu'une fois le profil kind 0 chargé
+    // (asynchrone, cf. uplanet-header.js::_loadProfile) — quelques
+    // tentatives suffisent, pas besoin d'un event dédié pour un simple
+    // confort d'affichage (le serveur reste la vraie barrière).
+    var tries = 0;
+    var poll = setInterval(function () {
+      updateConnectGate();
+      if (window.isMultipass !== undefined || ++tries >= 12) clearInterval(poll);
+    }, 500);
   }
   updateConnectGate();
 
@@ -307,6 +362,13 @@
   document.getElementById('generate').addEventListener('click', async function () {
     if (!window.isNostrConnected || !window.userPubkey) {
       setStatus('Connexion MULTIPASS requise.', 'err');
+      updateConnectGate();
+      return;
+    }
+    if (window.isMultipass !== true) {
+      // Signal client (spoofable) : simple confort d'UX, pas une barrière —
+      // le serveur revérifie de toute façon (is_multipass_user, cf. qr.py).
+      setStatus('Cette identité NOSTR n\'est pas un MULTIPASS enregistré.', 'err');
       updateConnectGate();
       return;
     }
@@ -368,6 +430,15 @@
         tab.document.close();
       }
       setStatus('Planche ouverte dans un nouvel onglet.', 'ok');
+
+      // ── Panneau de financement : window.__G1BILLETS__ est embarqué par
+      // generate_billet dans la page imprimable elle-même (cf. qr.py) — on
+      // le lit depuis l'onglet, même origine (ouvert par window.open puis
+      // rempli via document.write), pas besoin de reparser le HTML. ───────
+      try {
+        var billets = tab && tab.window && tab.window.__G1BILLETS__;
+        if (Array.isArray(billets) && billets.length) buildFundPanel(billets);
+      } catch (e) { /* onglet fermé entretemps, ou bloqué — pas grave, financement manuel toujours possible */ }
     } catch (e) {
       if (tab) tab.close();
       setStatus('❌ ' + (e && e.message ? e.message : 'Échec de la génération.'), 'err');
@@ -375,6 +446,78 @@
       genBtn.disabled = false;
     }
   });
+
+  // ── Panneau de financement — 6 contrôles indépendants (remplace l'ancien
+  // mode `auto` tout-ou-rien, retiré pour fiabilité, cf. qr.py::fund_billet). ──
+  var fundPanel = document.getElementById('fund-panel');
+  var fundList  = document.getElementById('fund-list');
+
+  function short(s) { return s && s.length > 16 ? s.slice(0, 6) + '…' + s.slice(-6) : (s || ''); }
+
+  function buildFundPanel(billets) {
+    fundList.innerHTML = '';
+    billets.forEach(function (b, i) {
+      var row = document.createElement('div');
+      row.className = 'fund-row';
+      row.innerHTML =
+        '<div class="lbl">#' + (i + 1) + '</div>' +
+        '<div class="g1" title="' + b.g1pub + '">' + short(b.g1pub) + '</div>' +
+        '<input type="number" min="0" step="0.1" value="' + b.amount + '">' +
+        '<button type="button" class="secondary" data-act="check">Vérifier</button>' +
+        '<button type="button" data-act="fund">💰 Financer</button>' +
+        '<div class="fs"></div>';
+      var amountInput = row.querySelector('input');
+      var fsEl = row.querySelector('.fs');
+      var checkBtn = row.querySelector('[data-act=check]');
+      var fundBtn  = row.querySelector('[data-act=fund]');
+
+      function setFs(msg, cls) { fsEl.textContent = msg || ''; fsEl.className = 'fs' + (cls ? ' ' + cls : ''); }
+
+      checkBtn.addEventListener('click', async function () {
+        setFs('⏳ Vérification…', 'pending');
+        try {
+          var resp = await fetch(apiBase() + '/check_balance?g1pub=' + encodeURIComponent(b.g1pub));
+          var data = await resp.json();
+          if (!resp.ok) throw new Error(data.detail || ('HTTP ' + resp.status));
+          var zen = data.zen !== undefined ? data.zen : data.balance;
+          setFs('💳 Solde actuel : ' + (zen || '0') + (data.zen !== undefined ? ' Ẑen' : ' Ğ1'), 'ok');
+        } catch (e) {
+          setFs('❌ ' + (e && e.message ? e.message : 'Vérification impossible.'), 'err');
+        }
+      });
+
+      fundBtn.addEventListener('click', async function () {
+        var amt = parseFloat(amountInput.value);
+        if (isNaN(amt) || amt <= 0) { setFs('Montant invalide.', 'err'); return; }
+        checkBtn.disabled = true; fundBtn.disabled = true;
+        setFs('⏳ Financement en cours…', 'pending');
+        try {
+          var url = apiBase() + '/qr/billet/fund';
+          var auth = await buildNip98Header(url, 'POST');
+          if (!auth) throw new Error('signature NIP-98 indisponible');
+          var resp = await fetch(url, {
+            method: 'POST',
+            headers: { Authorization: auth, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ g1pub: b.g1pub, amount: amt, unit: b.unit }),
+          });
+          var data = await resp.json();
+          if (!resp.ok || !data.ok) throw new Error(data.detail || ('HTTP ' + resp.status));
+          setFs(
+            data.already ? '✅ Déjà financé — solde ' + data.balance.toFixed(2) + ' Ğ1'
+                          : '✅ Financé — solde ' + (data.balance || 0).toFixed(2) + ' Ğ1',
+            'ok'
+          );
+        } catch (e) {
+          setFs('❌ ' + (e && e.message ? e.message : 'Échec du financement.'), 'err');
+        } finally {
+          checkBtn.disabled = false; fundBtn.disabled = false;
+        }
+      });
+
+      fundList.appendChild(row);
+    });
+    fundPanel.style.display = '';
+  }
 
   window.addEventListener('nostr:connected', onConnected);
   if (window.waitForConnection) {

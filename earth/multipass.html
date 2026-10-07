@@ -25,6 +25,8 @@ a:hover{text-decoration:underline}
     display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px}
 .id-email{font-size:1rem;font-weight:600;color:var(--teal,#00ffcc)}
 .id-g1pub{font-size:.7rem;color:rgba(255,255,255,.4);font-family:monospace;word-break:break-all;margin-top:2px}
+.id-npub{font-size:.7rem;color:var(--teal,#00ffcc);font-family:monospace;word-break:break-all;margin-top:6px}
+.id-npub-qr{width:110px;height:110px;background:#fff;padding:5px;border-radius:8px;margin-top:6px;display:block}
 .id-links{display:flex;gap:8px;flex-wrap:wrap}
 .pill{font-size:.78rem;padding:3px 12px;border-radius:20px;border:1px solid;cursor:pointer;
       text-decoration:none;white-space:nowrap;display:inline-block}
@@ -236,6 +238,25 @@ function setF(f)    { S.filter=f; render(); }
 function setSort(s) { S.sort=s;   render(); }
 
 /* ═══════════════════════════════════════
+   Npub (pour scan Coracle) — UNIQUEMENT depuis un email connu : une g1pub
+   ne permet PAS de retrouver le npub de façon fiable (un MULTIPASS porte
+   plusieurs clés G1 distinctes — Ğ1-Duniter, Ğ1-N2/Nostr —, donc aucune
+   recherche inverse g1pub→npub n'est possible ici). Le npub est inclus
+   DIRECTEMENT dans la réponse déjà reçue de /check_g1history (ajouté côté
+   serveur quand l'appel s'est fait par email) — pas de second appel réseau,
+   pas de endpoint dédié qui créerait un oracle d'énumération email→npub.
+   ═══════════════════════════════════════ */
+function showNpub(npub) {
+    var block = document.getElementById('id-npub-block');
+    var text  = document.getElementById('id-npub-text');
+    var qr    = document.getElementById('id-npub-qr');
+    if (!npub || !block || !text || !qr) return;
+    text.textContent = npub;
+    qr.src = API + '/qr?data=' + encodeURIComponent('nostr:' + npub) + '&version=4&level=M';
+    block.style.display = '';
+}
+
+/* ═══════════════════════════════════════
    Load history
    ═══════════════════════════════════════ */
 async function loadHistory(identifier) {
@@ -288,7 +309,11 @@ async function loadHistory(identifier) {
         document.getElementById('root').innerHTML =
             '<div class="id-block">'
            +'<div><div class="id-email">'+(S.email || g1pub)+'</div>'
-           +'<div class="id-g1pub">'+g1pub+'</div></div>'
+           +'<div class="id-g1pub">'+g1pub+'</div>'
+           +'<div id="id-npub-block" style="display:none">'
+           +'<div class="id-npub" id="id-npub-text"></div>'
+           +'<img class="id-npub-qr" id="id-npub-qr" alt="QR npub — à scanner avec Coracle">'
+           +'</div></div>'
            +'<div class="id-links">'
            +(zcUrl ? '<a class="pill pill-green" href="'+zcUrl+'" title="Investissements coopératifs ẐEN">💳 ZenCard</a>' : '')
            +'</div>'
@@ -303,6 +328,7 @@ async function loadHistory(identifier) {
            +'<div class="txlist" id="mp-list"></div>';
 
         render();
+        if (data.npub) showNpub(data.npub);
 
     } catch(e) {
         document.getElementById('root').innerHTML =

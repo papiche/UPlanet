@@ -1989,58 +1989,41 @@ async function deleteMessage(eventId) {
  */
 async function uploadPhotoToIPFS(file) {
     try {
-        // Ensure user is connected
-        if (!userPubkey) {
-            throw new Error('Please connect with MULTIPASS before uploading');
+        // Connexion unifiée avec uplanet-header.js : NostrState lu en direct
+        // (la var locale `userPubkey` n'est qu'un instantané du chargement)
+        let pk = NostrState.userPubkey || window.userPubkey;
+        if (!pk && typeof window.uphConnect === 'function') {
+            await window.uphConnect();
+            pk = NostrState.userPubkey || window.userPubkey;
+        }
+        if (!pk) {
+            if (typeof window.uphOpenLogin === 'function') window.uphOpenLogin();
+            throw new Error('Connectez-vous avec votre MULTIPASS (🔑 Accès) avant d\'envoyer une photo');
         }
 
-        // Check authentication before upload with auto-retry
+        // Vérification NIP-42 côté UPassport (/api/test-nostr), une relance automatique
         console.log('🔐 Verifying authentication before upload...');
-        let isAuthenticated = await verifyAuthenticationWithAPI(userPubkey);
+        let auth = await window.verifyAuthenticationWithAPI(pk);
 
-        if (!isAuthenticated) {
-            console.log('⚠️ No recent NIP-42 event found, auto-retrying authentication...');
-
-            // Show notification to user
+        if (!auth.auth_verified) {
+            console.log('⚠️ No recent NIP-42 event found, auto-retrying authentication...', auth.message);
             if (typeof showNotification !== 'undefined') {
                 showNotification({
-                    message: '🔄 Sending authentication event automatically...',
+                    message: '🔄 Envoi automatique de l\'authentification NIP-42...',
                     type: 'info',
                     duration: 3000
                 });
             }
 
-            try {
-                // Force re-authentication
-                console.log('🔄 Forcing NIP-42 authentication...');
-                await connectNostr(true); // Force NIP-42 auth
+            await connectNostr(true); // Force NIP-42 auth
+            if (typeof window.uphRefresh === 'function') window.uphRefresh();
+            await new Promise(resolve => setTimeout(resolve, 2500));
 
-                // Wait for relay to process
-                console.log('⏳ Waiting for relay to process authentication...');
-                await new Promise(resolve => setTimeout(resolve, 2500));
-
-                // Verify again
-                console.log('🔍 Verifying authentication after retry...');
-                isAuthenticated = await verifyAuthenticationWithAPI(userPubkey);
-
-                if (!isAuthenticated) {
-                    throw new Error('Authentication failed after automatic retry. Please ensure you have a MULTIPASS account and try clicking Connect manually.');
-                }
-
-                console.log('✅ Auto-authentication successful!');
-
-                // Show success notification
-                if (typeof showNotification !== 'undefined') {
-                    showNotification({
-                        message: '✅ Authentication successful!',
-                        type: 'success',
-                        duration: 2000
-                    });
-                }
-            } catch (authError) {
-                console.error('❌ Auto-authentication failed:', authError);
-                throw new Error(`Authentication failed: ${authError.message}. Please click Connect with MULTIPASS and try again.`);
+            auth = await window.verifyAuthenticationWithAPI(pk);
+            if (!auth.auth_verified) {
+                throw new Error(`Authentification NIP-42 non vérifiée (${auth.message || 'inconnue'}). Reconnectez-vous via 🔑 Accès.`);
             }
+            console.log('✅ Auto-authentication successful!');
         } else {
             console.log('✅ Authentication verified, proceeding with upload');
         }
@@ -2049,9 +2032,9 @@ async function uploadPhotoToIPFS(file) {
         formData.append('file', file);
 
         // Add npub if connected to NOSTR
-        if (userPubkey && userPubkey.length === 64) {
-            console.log('Adding public key to photo upload:', userPubkey);
-            formData.append('npub', userPubkey);
+        if (pk.length === 64) {
+            console.log('Adding public key to photo upload:', pk);
+            formData.append('npub', pk);
         }
 
         const uploadUrl = `${getAPIBaseUrl()}/api/fileupload`;

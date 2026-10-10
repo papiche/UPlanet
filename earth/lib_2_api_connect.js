@@ -1246,7 +1246,8 @@ async function checkRecentNIP42Auth(relayUrl, maxAgeHours = 24) {
  * @returns {Promise<Object>} - Authentication status object with detailed info
  */
 async function verifyAuthenticationWithAPI(pubkey = null) {
-    const keyToCheck = pubkey || userPubkey;
+    // Lire NostrState en direct : la var locale `userPubkey` est un instantané pris au chargement
+    const keyToCheck = pubkey || NostrState.userPubkey || window.userPubkey;
 
     if (!keyToCheck) {
         console.warn('⚠️ No pubkey provided for authentication verification');
@@ -1260,7 +1261,8 @@ async function verifyAuthenticationWithAPI(pubkey = null) {
     try {
         console.log(`🔐 Verifying authentication for: ${keyToCheck.substring(0, 8)}...`);
 
-        const response = await fetch('/api/test-nostr', {
+        // URL absolue UPassport : en relatif, la requête partirait vers la passerelle IPFS
+        const response = await fetch(`${getAPIBaseUrl()}/api/test-nostr`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/x-www-form-urlencoded',
@@ -1315,8 +1317,13 @@ async function ensureAuthentication(options = {}) {
         showUI = true
     } = options;
 
-    // Check if user is connected
+    // Check if user is connected (NostrState en direct — partagé avec uplanet-header.js)
+    const userPubkey = NostrState.userPubkey || window.userPubkey;
     if (!userPubkey) {
+        if (showUI && typeof window.uphOpenLogin === 'function') {
+            window.uphOpenLogin();
+            return false;
+        }
         if (showUI) {
             showNotification({
                 message: 'Please connect with MULTIPASS first',
@@ -1508,6 +1515,7 @@ if (typeof window !== 'undefined') {
     window.ensureNIP42AuthIfNeeded = ensureNIP42AuthIfNeeded;
     window.showNotification = showNotification;
     window.ensureAuthentication = ensureAuthentication;
+    window.verifyAuthenticationWithAPI = verifyAuthenticationWithAPI;
     window.applyDynamicTheme = applyDynamicTheme;
     window.initSmoothScroll = initSmoothScroll;
     window.getAPIBaseUrl = getAPIBaseUrl;

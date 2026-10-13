@@ -1093,9 +1093,12 @@
         var decoded = nt.nip19.decode(nsec);
         if (decoded.type !== 'nsec') throw new Error('Format nsec invalide');
 
-        // decoded.data est un Uint8Array → hex
-        var privHex = Array.from(decoded.data)
-            .map(function (b) { return b.toString(16).padStart(2, '0'); }).join('');
+        // decoded.data : chaîne hex (nostr-tools v1, celle de nostr.bundle.js)
+        // ou Uint8Array (v2). Convertir une chaîne comme un tableau d'octets
+        // donnait une clé invalide — la connexion mobile email + PASS échouait
+        // avec « private key must be 32 bytes ».
+        var privHex = typeof decoded.data === 'string' ? decoded.data.toLowerCase()
+            : Array.from(decoded.data).map(function (b) { return b.toString(16).padStart(2, '0'); }).join('');
         var pubHex = nt.getPublicKey(privHex);
 
         // Mettre à jour l'état NOSTR global
@@ -1322,6 +1325,9 @@
     window.uphRefresh    = _refreshUI;
     window.uphConnect    = _handleConnect;
     window.uphOpenLogin  = _openModal;   // appelé par connectNostr() quand pas d'extension
+    // Connexion par une clé tout juste reçue de la station (création de MULTIPASS
+    // dans FaceCloud) : clé gardée EN MÉMOIRE seulement, comme après récupération PASS.
+    window.uphLoginWithNsec = _applyNsecAndConnect;
     window.uphSetPubkey = function (pk) {
         if (!pk) return;
         _applyPubkey(pk);

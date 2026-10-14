@@ -3545,13 +3545,256 @@ async function loadArborStatus() {
         // Le corps du panneau n'a besoin d'être rendu que si l'onglet est visible —
         // évite un travail DOM inutile quand loadArborStatus() est déclenché en
         // arrière-plan depuis _checkCaptain() pour peupler seulement le badge.
-        if (body) body.innerHTML = renderArborStatus(data);
+        // Le chat (renderArborChatPane) et le bâton (#arbor-baton-body) sont
+        // reconstruits à CHAQUE appel (y compris le polling 15s pendant un run) —
+        // _replayArborChatHistory() restaure la conversation depuis l'état JS
+        // (_arborChatHistory survit au innerHTML, ce n'est qu'un tableau en mémoire),
+        // jamais depuis le serveur : pas de mémoire persistée côté Arbor pour ce
+        // dialogue (cf. docstring arbor_chat.py).
+        if (body) {
+            body.innerHTML = renderArborChatPane() +
+                '<div id="arbor-baton-body"><div class="state-empty" style="padding:14px"><div class="icon">🪄</div><div>Chargement…</div></div></div>' +
+                renderArborStatus(data);
+            _replayArborChatHistory();
+            loadArborBatonStatus();
+        }
         if (data.state && data.state.status === 'running') {
             clearTimeout(_arborPollTimer);
             _arborPollTimer = setTimeout(function() { loadArborStatus(); }, 15000);
         }
     } catch(e) {
         if (e.message !== '403' && body) body.innerHTML = '<div style="color:var(--danger);padding:14px">Erreur : ' + escHtml(e.message) + '</div>';
+    }
+}
+
+// ── Dialogue conversationnel avec Arbor ─────────────────────────────────────
+// Historique en mémoire JS uniquement (pas de persistance serveur, cf.
+// arbor_chat.py) — survit aux reconstructions de #arbor-body (polling,
+// changement d'onglet) mais PAS à un rechargement de page : décision
+// délibérée, l'état qui compte (bâton, branches, audit) est de toute façon
+// ré-interrogé à chaque tour depuis la source de vérité, jamais depuis cette
+// conversation.
+var _arborChatHistory = []; // [{role:'user'|'assistant', content, action?}]
+
+function renderArborChatPane() {
+    return '<div style="margin-bottom:16px;border:1px solid var(--border);border-radius:8px;overflow:hidden">' +
+        '<div style="padding:8px 12px;background:var(--bg);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;flex-wrap:wrap">' +
+        '<span style="font-size:.85rem;font-weight:600">💬 Dialogue avec Arbor</span>' +
+        '<span style="font-size:.68rem;color:var(--text2)">définissez ensemble les tâches à réaliser — rien n\'est lancé sans validation explicite</span>' +
+        '</div>' +
+        '<div id="arbor-chat-messages" style="max-height:360px;overflow-y:auto;padding:10px 12px;display:flex;flex-direction:column;gap:8px;background:var(--bg)"></div>' +
+        '<div style="display:flex;gap:8px;padding:10px 12px;border-top:1px solid var(--border)">' +
+        '<textarea id="arbor-chat-input" rows="1" placeholder="Décrivez un besoin, posez une question à Arbor…" ' +
+        'style="flex:1;resize:none;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:8px;font-size:.8rem;box-sizing:border-box" ' +
+        'onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();sendArborChatMessage();}"></textarea>' +
+        '<button class="btn-regen" id="arbor-chat-send" onclick="sendArborChatMessage()">Envoyer</button>' +
+        '</div></div>';
+}
+
+function renderArborChatBubble(role, content) {
+    var isUser = role === 'user';
+    return '<div style="align-self:' + (isUser ? 'flex-end' : 'flex-start') + ';max-width:85%;' +
+        'background:' + (isUser ? 'var(--accent,#2563eb)' : 'var(--bg2,rgba(127,127,127,.12))') + ';' +
+        'color:' + (isUser ? '#fff' : 'var(--text)') + ';border-radius:12px;padding:8px 12px;' +
+        'font-size:.8rem;white-space:pre-wrap;line-height:1.5">' + escHtml(content) + '</div>';
+}
+
+function renderArborActionCard(action) {
+    var parts = [];
+    if (action.mode) parts.push('<b>mode</b> : ' + escHtml(action.mode));
+    if (action.need) parts.push('<b>besoin</b> : ' + escHtml(action.need));
+    if (action.slug) parts.push('<b>slug</b> : ' + escHtml(action.slug));
+    if (action.domain) parts.push('<b>domaine</b> : ' + escHtml(action.domain));
+    return '<div class="arbor-action-card" data-action="' + escAttr(JSON.stringify(action)) + '" ' +
+        'style="align-self:flex-start;max-width:90%;border:1px solid rgba(74,222,128,.4);border-radius:10px;' +
+        'padding:10px 12px;background:rgba(74,222,128,.08);font-size:.78rem">' +
+        '<div style="margin-bottom:6px">🧬 <b>Action proposée</b></div>' +
+        '<div style="color:var(--text2);margin-bottom:8px">' + (parts.join('<br>') || '—') + '</div>' +
+        '<button class="btn-regen" onclick="confirmArborChatAction(this)">✅ Lancer</button> ' +
+        '<button class="btn-regen" style="background:transparent" onclick="dismissArborChatAction(this)">✖ Ignorer</button>' +
+        '</div>';
+}
+
+function _replayArborChatHistory() {
+    var box = document.getElementById('arbor-chat-messages');
+    if (!box) return;
+    box.innerHTML = _arborChatHistory.map(function(turn) {
+        var html = renderArborChatBubble(turn.role, turn.content);
+        if (turn.action) html += renderArborActionCard(turn.action);
+        return html;
+    }).join('');
+    box.scrollTop = box.scrollHeight;
+}
+
+function appendArborChatMessages(html) {
+    var box = document.getElementById('arbor-chat-messages');
+    if (!box) return;
+    box.insertAdjacentHTML('beforeend', html);
+    box.scrollTop = box.scrollHeight;
+}
+
+async function sendArborChatMessage() {
+    var input = document.getElementById('arbor-chat-input');
+    if (!input) return;
+    var message = (input.value || '').trim();
+    if (!message) return;
+    if (!_hasAdminAuth()) { showToast('Connectez-vous en tant que Capitaine (extension NOSTR)', 'err'); return; }
+    if (message.length > 2000) { showToast('Message trop long (max 2000 caractères).', 'warn'); return; }
+
+    var historyBeforeThisTurn = _arborChatHistory.slice();
+    input.value = '';
+    input.disabled = true;
+    var sendBtn = document.getElementById('arbor-chat-send');
+    if (sendBtn) { sendBtn.disabled = true; sendBtn.textContent = '⏳…'; }
+    _arborChatHistory.push({ role: 'user', content: message });
+    appendArborChatMessages(renderArborChatBubble('user', message));
+    appendArborChatMessages('<div id="arbor-chat-typing" style="align-self:flex-start;font-size:.75rem;color:var(--text2)">Arbor réfléchit…</div>');
+    try {
+        var data = await apiFetch(_apiUrl + '/api/nostr/admin/arbor_chat', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: message, history: historyBeforeThisTurn })
+        });
+        var typing = document.getElementById('arbor-chat-typing');
+        if (typing) typing.remove();
+        _arborChatHistory.push({ role: 'assistant', content: data.reply, action: data.proposed_action || null });
+        appendArborChatMessages(renderArborChatBubble('assistant', data.reply));
+        if (data.proposed_action) appendArborChatMessages(renderArborActionCard(data.proposed_action));
+    } catch(e) {
+        var typing2 = document.getElementById('arbor-chat-typing');
+        if (typing2) typing2.remove();
+        if (e.message !== '403') appendArborChatMessages('<div style="color:var(--danger);font-size:.78rem">Erreur : ' + escHtml(e.message) + '</div>');
+    } finally {
+        input.disabled = false; input.focus();
+        if (sendBtn) { sendBtn.disabled = false; sendBtn.textContent = 'Envoyer'; }
+    }
+}
+
+function dismissArborChatAction(btnEl) {
+    var card = btnEl.closest('.arbor-action-card');
+    if (!card) return;
+    // Retire aussi l'action de l'historique rejoué — sinon elle réapparaîtrait
+    // (réactivable) à la prochaine reconstruction du panneau (poll, changement d'onglet).
+    _arborChatHistory.forEach(function(turn) {
+        if (turn.action && JSON.stringify(turn.action) === card.dataset.action) turn.action = null;
+    });
+    card.remove();
+}
+
+async function confirmArborChatAction(btnEl) {
+    var card = btnEl.closest('.arbor-action-card');
+    if (!card) return;
+    var action;
+    try { action = JSON.parse(card.dataset.action); } catch(e) { showToast('Action illisible.', 'err'); return; }
+    if (!action || !action.mode) return;
+    if (!confirm('Lancer cette action ARBOR (' + action.mode + ') ? Aucun merge automatique — une branche isolée sera produite pour relecture.')) return;
+    Array.prototype.forEach.call(card.querySelectorAll('button'), function(b) { b.disabled = true; });
+    try {
+        await apiFetch(_apiUrl + '/api/nostr/admin/arbor_trigger', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                mode: action.mode, need: action.need || undefined, slug: action.slug || undefined,
+                owner_email: action.owner_email || undefined, domain: action.domain || undefined,
+                url: action.url || undefined, model: action.model || undefined,
+            })
+        });
+        showToast('Action ARBOR lancée (' + action.mode + ')', 'ok');
+        opsLog([{ type: 'ok', text: 'arbor_chat → arbor_trigger ' + action.mode }]);
+        _arborChatHistory.forEach(function(turn) {
+            if (turn.action && JSON.stringify(turn.action) === JSON.stringify(action)) turn.action = null;
+        });
+        card.remove();
+        _arborLoaded = true;
+        loadArborStatus();
+    } catch(e) {
+        Array.prototype.forEach.call(card.querySelectorAll('button'), function(b) { b.disabled = false; });
+        if (e.message !== '403') showToast('Erreur : ' + e.message, 'err');
+    }
+}
+
+// ── Bâton de parole (cycle automatique quotidien) ───────────────────────────
+function renderArborBaton(data) {
+    var isMe = data.is_local_holder;
+    var vacant = data.vacant;
+    var elig = data.local_eligibility || {};
+    var stations = data.swarm_eligible_stations || [];
+    var sinceStr = data.since ? new Date(data.since * 1000).toLocaleString('fr-FR') : '—';
+
+    var html = '<div style="margin-bottom:14px;border:1px solid var(--border);border-radius:6px;padding:10px 12px">' +
+        '<h5 style="font-size:.8rem;color:var(--text2);margin:0 0 8px">🪄 Bâton de parole (cycle quotidien automatique)</h5>';
+
+    if (vacant) {
+        html += '<div style="font-size:.78rem;color:var(--warn,#d69e2e);margin-bottom:8px">⚠️ Vacant — une station éligible se l\'attribuera au prochain passage.</div>';
+    } else if (isMe) {
+        html += '<div style="font-size:.78rem;color:var(--ok,#4ade80);margin-bottom:8px">✅ Cette station le détient depuis ' + escHtml(sinceStr) + '.</div>';
+    } else {
+        html += '<div style="font-size:.78rem;color:var(--text2);margin-bottom:8px">Détenu par <code>' +
+            escHtml((data.holder || '').slice(0, 16)) + '…</code> depuis ' + escHtml(sinceStr) + '.</div>';
+    }
+
+    html += '<div style="font-size:.72rem;color:var(--text2);margin-bottom:8px">Éligibilité de cette station : ' +
+        (elig.eligible
+            ? '✅ oui (remote <code>' + escHtml(elig.remote || '') + '</code>)'
+            : '❌ non — ' + escHtml(elig.reason || 'raison inconnue')) +
+        ' <button class="btn-regen" style="padding:2px 8px;font-size:.68rem" onclick="recheckArborEligibility(this)">🔄 revérifier</button></div>';
+
+    if (isMe) {
+        html += '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">' +
+            '<select id="arbor-baton-target" style="flex:1;min-width:180px;background:var(--bg);border:1px solid var(--border);border-radius:5px;color:var(--text);padding:5px 9px;font-size:.76rem"' +
+            (stations.length ? '' : ' disabled') + '>' +
+            (stations.length
+                ? stations.map(function(s) {
+                    return '<option value="' + escAttr(s.hex) + '">' + escHtml(s.hostname) +
+                        (s.captain ? ' (' + escHtml(s.captain) + ')' : '') + '</option>';
+                }).join('')
+                : '<option>Aucune autre station éligible connue</option>') +
+            '</select>' +
+            '<button class="btn-regen" ' + (stations.length ? '' : 'disabled') + ' onclick="handoffArborBaton()">🤝 Passer le bâton</button>' +
+            '</div>';
+    }
+
+    html += '</div>';
+    return html;
+}
+
+async function loadArborBatonStatus() {
+    var container = document.getElementById('arbor-baton-body');
+    if (!container) return;
+    try {
+        var data = await apiFetch(_apiUrl + '/api/nostr/admin/arbor_baton_status');
+        container.innerHTML = renderArborBaton(data);
+    } catch(e) {
+        if (e.message !== '403') container.innerHTML = '<div style="color:var(--danger);font-size:.78rem">Erreur bâton : ' + escHtml(e.message) + '</div>';
+    }
+}
+
+async function recheckArborEligibility(btnEl) {
+    btnEl.disabled = true; var saved = btnEl.textContent; btnEl.textContent = '⏳…';
+    try {
+        await apiFetch(_apiUrl + '/api/nostr/admin/arbor_baton_eligibility_check', { method: 'POST' });
+        loadArborBatonStatus();
+    } catch(e) {
+        if (e.message !== '403') showToast('Erreur : ' + e.message, 'err');
+    } finally {
+        btnEl.disabled = false; btnEl.textContent = saved;
+    }
+}
+
+async function handoffArborBaton() {
+    var sel = document.getElementById('arbor-baton-target');
+    var target = sel && sel.value;
+    if (!target) return;
+    var label = sel.options[sel.selectedIndex].textContent;
+    if (!confirm('Passer le bâton de parole à ' + label + ' ? Le cycle quotidien automatique tournera désormais là-bas.')) return;
+    try {
+        await apiFetch(_apiUrl + '/api/nostr/admin/arbor_baton_handoff', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ target_hex: target })
+        });
+        showToast('Bâton transmis à ' + label, 'ok');
+        opsLog([{ type: 'ok', text: 'arbor_baton_handoff → ' + label }]);
+        loadArborBatonStatus();
+    } catch(e) {
+        if (e.message !== '403') showToast('Erreur : ' + e.message, 'err');
     }
 }
 

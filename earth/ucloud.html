@@ -265,6 +265,19 @@
     </div>
   </div>
 
+  <div class="fc-panel" id="faceref-card" hidden>
+    <label class="fc-row" style="gap:12px;align-items:flex-start;cursor:pointer">
+      <input type="checkbox" id="faceref-toggle" style="margin-top:4px;width:20px;height:20px">
+      <span><b>Laisser mes amis me retrouver dans leurs photos</b><br>
+        <span class="fc-hint" id="faceref-hint" style="margin:0"></span></span>
+    </label>
+    <div class="fc-row" id="faceref-given" hidden style="margin-top:8px">
+      <span class="fc-hint" id="faceref-count" style="margin:0"></span>
+      <span class="fc-spacer"></span>
+      <button class="fc-btn fc-btn-sm fc-btn-ghost" id="faceref-revoke">Retirer chez tous</button>
+    </div>
+  </div>
+
   <div class="fc-panel fc-circles" id="circles-panel" hidden>
     <div class="fc-row fc-ring-tools">
       <h3 style="margin:0">Mes cercles</h3>
@@ -861,7 +874,7 @@ function selectTab(name) {
     if (name === 'people' && !App.boardReady && App.faces.length) renderBoard(true);
     if (name === 'contacts' && typeof loadContacts === 'function') loadContacts();
     if (name === 'photos') loadGallery();
-    if (name === 'circles') { renderSelfPicker(); renderCircles(); }
+    if (name === 'circles') { renderSelfPicker(); renderCircles(); loadFaceRef(); }
     if (name === 'map') openMapTab();
     document.getElementById('more-sheet').hidden = true;
     document.querySelectorAll('.fc-tab-more').forEach(function (b) { b.setAttribute('aria-selected', String(name === 'contacts' || name === 'sources' || name === 'settings')); b.setAttribute('aria-expanded', 'false'); });
@@ -3779,6 +3792,14 @@ async function startAccount(claim) {
             if (window.uphOpenLogin) window.uphOpenLogin();
             return;
         }
+        if (data.status === 'elsewhere') {               // MULTIPASS déjà ouvert sur une autre station : jamais de doublon
+            $('login-error').hidden = false;
+            $('login-error').textContent = 'Vous avez déjà un MULTIPASS (sur une autre station de la constellation, avec cette adresse).'
+                + (data.delivered ? ' ' + data.delivered + ' photo' + (data.delivered > 1 ? 's' : '') + ' ont été envoyée' + (data.delivered > 1 ? 's' : '') + ' directement dans votre cloud : connectez-vous avec le code PASS reçu par email.'
+                                  : ' Ouvrez ce lien depuis votre station habituelle pour recevoir vos photos, ou connectez-vous avec votre code PASS.');
+            if (window.uphOpenLogin) window.uphOpenLogin();
+            return;
+        }
         App.justCreated = { photos: data.photos || 0, from: App.invite ? App.invite.from_name : '' };
         if (window.uphLoginWithNsec) window.uphLoginWithNsec(data.nsec);
     } catch (e) {
@@ -3857,6 +3878,42 @@ function guideAction(key) {
         if (reviewCount()) openReview();
     }
 }
+
+/* ── Mon visage de référence confié aux amis (un interrupteur, un retrait) ─────────
+   GET/POST /api/cloud/face-ref, POST /api/cloud/face-ref/revoke. Quand je donne mes photos à quelqu'un, ma station
+   joint mon empreinte de visage ; la sienne me reconnaît alors seule dans ses photos (et me les renvoie si nous nous
+   suivons). Désactivable ici, retirable chez tous : les photos déjà reçues ne bougent pas. */
+async function loadFaceRef() {
+    var card = $('faceref-card');
+    if (!App.connected) { card.hidden = true; return; }
+    var d;
+    try { d = await nostrFetch('/api/cloud/face-ref'); } catch (e) { card.hidden = true; return; }
+    card.hidden = false;
+    $('faceref-toggle').checked = !!d.enabled;
+    $('faceref-toggle').disabled = !d.has_reference;
+    $('faceref-hint').textContent = d.has_reference
+        ? (d.enabled ? 'Quand vous offrez vos photos à quelqu\'un, sa station apprend à vous reconnaître : vous recevez aussi ses photos de vous. Vous pouvez le retirer à tout moment.'
+                     : 'Désactivé : vos amis ne vous reconnaissent pas automatiquement dans leurs photos.')
+        : 'Choisissez d\'abord votre visage (« Qui êtes-vous ? » ci-dessus) : c\'est lui qui sera reconnu.';
+    var n = (d.given || []).length;
+    $('faceref-given').hidden = !n;
+    $('faceref-count').textContent = n ? 'Vous pouvez être reconnu·e par ' + plural(n, 'ami', 'amis') + '.' : '';
+}
+document.addEventListener('DOMContentLoaded', function () {
+    $('faceref-toggle').addEventListener('change', async function () {
+        try { await nostrFetch('/api/cloud/face-ref', { method: 'POST', body: form({ enabled: this.checked ? '1' : '0' }) }); }
+        catch (e) { toast(e.message, true); }
+        loadFaceRef();
+    });
+    $('faceref-revoke').addEventListener('click', async function () {
+        if (!(await confirmDialog('Retirer votre visage chez vos amis ?', 'Leurs stations l\'oublient : elles ne vous reconnaîtront plus dans leurs nouvelles photos. Les photos déjà reçues restent chez vous.', 'Retirer'))) return;
+        try {
+            var r = await nostrFetch('/api/cloud/face-ref/revoke', { method: 'POST', body: form({}), timeout: 60000 });
+            toast(r.pending && r.pending.length ? plural(r.revoked.length, 'ami a', 'amis ont') + ' effacé votre visage, ' + r.pending.length + ' à confirmer.' : 'Votre visage a été retiré.');
+        } catch (e) { toast(e.message, true); }
+        loadFaceRef();
+    });
+});
 
 /* ── Photos reçues : par expéditeur (bloquer, supprimer) ───────────────── */
 async function renderSenders() {

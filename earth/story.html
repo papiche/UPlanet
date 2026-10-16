@@ -238,7 +238,14 @@
   .shoot input[type=range] { flex:1; min-width:140px; accent-color:var(--tally); }
   .shoot textarea { width:100%; min-height:54px; background:var(--table); color:var(--txt); border:1px solid var(--line); border-radius:8px; padding:6px 8px; font:inherit; }
   .decor-prev { width:84px; height:84px; border-radius:8px; object-fit:cover; border:1px solid var(--line); }
-  #dlg-decor { width:min(860px,96vw); }
+  #dlg-decor, #dlg-photos { width:min(860px,96vw); }
+  .photo-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(120px,1fr)); gap:8px; margin:8px 0; max-height:56vh; overflow:auto; }
+  .photo-grid button { position:relative; padding:0; border:3px solid transparent; border-radius:10px; background:var(--base); aspect-ratio:1; overflow:hidden; }
+  .photo-grid button img { width:100%; height:100%; object-fit:cover; display:block; }
+  .photo-grid button[aria-pressed=true] { border-color:var(--ready); }
+  .photo-grid .rank { position:absolute; top:6px; left:6px; min-width:26px; height:26px; border-radius:13px; background:var(--ready); color:#06210f; font-weight:800; display:grid; place-items:center; padding:0 6px; }
+  .fun-photos { display:flex; flex-wrap:wrap; gap:6px 14px; margin:6px 0; color:var(--mut); font-size:.9rem; }
+  .linkbtn { background:none; border:0; color:var(--txt); text-decoration:underline; padding:0; font:inherit; cursor:pointer; }
   .decor-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(104px,1fr)); gap:6px; margin:8px 0; max-height:54vh; overflow:auto; }
   .decor-grid button { padding:0; border:2px solid transparent; border-radius:8px; background:var(--base); aspect-ratio:1; overflow:hidden; }
   .decor-grid button:hover { border-color:var(--txt); }
@@ -256,6 +263,7 @@
   <aside class="rail">
     <h2>Bibliothèque</h2>
     <button class="newbtn fun" id="btn-fun" type="button" disabled title="Choisissez un proche de votre ucloud, racontez l'idée à l'assistant : il prépare la vidéo drôle à lui envoyer">🎬 Vidéo FUN pour un ami</button>
+    <a class="newbtn" id="link-ucloud" href="ucloud.html#videos" title="Vos personnes, vos photos et vos vidéos FUN rangées dans /VideoFUN/" style="display:block;text-align:center;text-decoration:none;background:none;color:var(--txt);border:1px solid var(--line)">☁️ Mes vidéos (FaceCloud)</a>
     <button class="newbtn" id="btn-new" type="button" disabled>Nouveau…</button>
     <button class="newbtn" id="btn-import" type="button" disabled style="background:none;color:var(--txt);border:1px solid var(--line)">Importer un paquet…</button>
     <input type="file" id="import-file" accept=".tar.gz,.tgz,application/gzip" class="sr">
@@ -282,6 +290,7 @@
   <section id="fun-1">
     <p class="meta" style="color:var(--mut)">Qui joue dans la vidéo ? Choisissez jusqu'à 3 personnes parmi celles que vous avez rangées dans votre ucloud : leur plus beau portrait devient le visage du personnage.</p>
     <div class="people" id="fun-people" role="group" aria-label="Personnes de votre ucloud"></div>
+    <div class="fun-photos" id="fun-photos"></div>
     <div id="fun-existing"></div>
     <div class="voicebox" id="fun-me" hidden>
       <b>🎙 C'est vous : calibrez votre voix</b>
@@ -323,6 +332,13 @@
   <div class="fun-send"><input class="field" type="search" id="decor-q" maxlength="120" placeholder="Chercher dans mes photos : plage, jardin, cuisine…" autocomplete="off"><button class="btn" id="decor-go" type="button">Chercher</button></div>
   <p class="meta" id="decor-msg" style="color:var(--mut);min-height:1.2em"></p>
   <div class="decor-grid" id="decor-grid"></div>
+</div></dialog>
+<dialog id="dlg-photos"><div class="dlg">
+  <div class="dhead"><h2 id="photos-title">📷 Quelles photos ?</h2><button class="dx" id="photos-x" type="button" aria-label="Fermer">✕</button></div>
+  <p class="meta" style="color:var(--mut)">Touchez les photos où le visage est le plus net et le plus ressemblant (jusqu'à 4). La première touchée est la principale ; les autres aident l'IA à garder le même visage sous tous les angles.</p>
+  <p class="meta" id="photos-msg" style="color:var(--mut);min-height:1.2em"></p>
+  <div class="photo-grid" id="photos-grid"></div>
+  <div class="actions"><button class="btn keep" id="photos-ok" type="button">Valider</button><button class="btn" id="photos-auto" type="button">Choix automatique</button></div>
 </div></dialog>
 <dialog id="dlg-share"><div class="dlg">
   <div class="dhead"><h2>📤 Envoyer à un ami</h2><button class="dx" id="share-x" type="button" aria-label="Fermer">✕</button></div>
@@ -780,7 +796,7 @@ function drawCharacter(b, ro) {
     function f(label, key, ph, area) {
         return h('label', { class: 'field' }, h('span', { text: label }), h(area ? 'textarea' : 'input', { type: 'text', disabled: ro, value: m[key] || '', placeholder: ph, oninput: function (e) { m[key] = e.target.value; S.edits['__meta'] = true; setDirty(); } }));
     }
-    b.appendChild(h('div', { class: 'charwrap' }, h('div', {}, port, h('div', { style: 'margin-top:10px' }, voice)),
+    b.appendChild(h('div', { class: 'charwrap' }, h('div', {}, port, (!ro && m.source === 'facecloud') ? h('button', { class: 'smallbtn', type: 'button', style: 'margin-top:8px', text: '📷 Changer les photos…', onclick: changeCharacterPhotos }) : null, h('div', { style: 'margin-top:10px' }, voice)),
         h('div', {},
             f('Apparence (visage, âge, vêtements)', 'look', 'woman in her 30s, short black hair, green jacket', true),
             f('Voix (timbre, âge, ton)', 'voice_design', 'warm low-pitched woman, calm and friendly'),
@@ -793,6 +809,21 @@ function drawCharacter(b, ro) {
                     var r = new FileReader(); r.onload = function () { S.edits['cast/' + name + '/portrait.png'] = { b64: r.result.split(',')[1] }; setDirty(); toast('ok', 'Portrait prêt à enregistrer.'); }; r.readAsDataURL(file); } })),
             ro ? null : voicePanel(),
             h('p', { style: 'color:var(--mut);font-size:.82rem', text: 'N’utilisez le visage ou la voix d’une personne réelle qu’avec son accord.' }))));
+}
+
+/* Personnage tiré de FaceCloud : choisir d'autres photos de la même personne (fiche, apparence et voix restent). */
+async function changeCharacterPhotos() {
+    if (S.dirty) { toast('err', 'Enregistrez d’abord vos modifications.'); return; }
+    var name = S.cur.manifest.name;
+    try {
+        if (!S.people) S.people = (await api('/api/story/people')).people || [];
+        var person = S.people.filter(function (p) { return p.name.toLowerCase() === name.toLowerCase(); })[0];
+        if (!person) { toast('err', name + ' n’est plus rangé(e) dans FaceCloud : impossible de proposer ses photos.'); return; }
+        var ids = await pickPhotos(person, null);
+        if (!ids) return;
+        var r = await api('/api/story/character-from-person', { method: 'POST', json: { name: name, point_ids: person.sample_ids, photo_ids: ids, consent: true, render: false, portrait_only: true } });
+        toast('ok', 'Photos changées (' + r.photos + ').'); await loadLib(true); await openAsset(r.cid);
+    } catch (e) { toast('err', 'Photos non changées : ' + e.message); }
 }
 
 /* ═══ Voix : un enregistrement (micro ou fichier) REMPLACE la voix générée ═══
@@ -1638,7 +1669,7 @@ function wire() {
 
 /* ═══ Vidéo FUN pour un ami : la star (une personne de l'ucloud) → l'idée (assistant IA) → la scène ═══
    Rien n'est affiché par innerHTML : tout passe par textContent (noms de personnes et réponses de l'IA sont des données). */
-var FUN = { people: [], thumbs: {}, pick: {}, msgs: [], cast: [], busy: false, step: 1, sb: null, decor: null, contact: '' };
+var FUN = { people: [], thumbs: {}, pick: {}, photos: {}, msgs: [], cast: [], busy: false, step: 1, sb: null, decor: null, contact: '' };
 var FUN_IDEAS = ['Anniversaire surprise', 'Un grand merci', 'Parodie de bande-annonce', 'Chasse au trésor', 'Voeux de bonne année', 'Super-héros du quotidien'];
 
 function funStep(n) {
@@ -1651,7 +1682,7 @@ function hasCharacter(name) { return existingCharacters().some(function (a) { re
 
 async function openFun() {
     if (S.dirty && !confirm('Des modifications ne sont pas enregistrées. Les abandonner ?')) return;
-    FUN = { people: [], thumbs: {}, pick: {}, msgs: [], cast: [], busy: false, step: 1, sb: null, extra: {}, decor: null, contact: '' };
+    FUN = { people: [], thumbs: {}, pick: {}, photos: {}, msgs: [], cast: [], busy: false, step: 1, sb: null, extra: {}, decor: null, contact: '' };
     drawDecor(); $('fun-secs').value = 8; $('fun-secs-v').textContent = '8 s'; $('fun-brief').value = '';
     $('fun-consent').checked = false; $('fun-me').hidden = true; $('fun-me-audio').hidden = true; $('fun-me-msg').textContent = ''; $('fun-1-msg').textContent = ''; $('fun-2-msg').textContent = '';
     $('dlg-fun').showModal(); funStep(1);
@@ -1685,6 +1716,49 @@ function drawFunPeople() {
         ex.appendChild(row);
     }
 }
+/* Choix des photos du visage : une grille de photos de la personne (la sélection automatique est cochée d'avance), on touche pour changer.
+   Rend la liste ordonnée d'identifiants de visages, ou null si on annule. */
+function pickPhotos(person, current) {
+    return new Promise(function (resolve) {
+        var d = $('dlg-photos'), grid = $('photos-grid'), msg = $('photos-msg'), sel = (current || []).slice(), auto = [], done = false;
+        $('photos-title').textContent = '📷 Photos de ' + person.name;
+        grid.textContent = ''; msg.textContent = 'Chargement des photos…';
+        function draw(cands) {
+            grid.textContent = '';
+            cands.forEach(function (c) {
+                var i = sel.indexOf(c.id);
+                var b = h('button', { type: 'button', 'aria-pressed': String(i >= 0), onclick: function () {
+                    var k = sel.indexOf(c.id);
+                    if (k >= 0) sel.splice(k, 1); else if (sel.length >= 4) { msg.textContent = '4 photos au plus.'; return; } else sel.push(c.id);
+                    msg.textContent = ''; draw(cands); } }, h('img', { src: c.preview, alt: '' }));
+                if (i >= 0) b.appendChild(h('span', { class: 'rank', text: i === 0 ? '⭐ 1' : String(i + 1) }));
+                grid.appendChild(b);
+            });
+        }
+        function finish(v) { if (done) return; done = true; if (d.open) d.close(); resolve(v); }
+        d.onclose = function () { finish(null); };
+        $('photos-x').onclick = function () { finish(null); };
+        $('photos-ok').onclick = function () { if (!sel.length) { msg.textContent = 'Touchez au moins une photo.'; return; } finish(sel.slice()); };
+        d.showModal();
+        api('/api/story/portrait-candidates', { method: 'POST', json: { point_ids: person.sample_ids } }).then(function (r) {
+            auto = r.suggested || [];
+            if (!sel.length) sel = auto.slice();
+            msg.textContent = '';
+            $('photos-auto').onclick = function () { sel = auto.slice(); draw(r.candidates); };
+            draw(r.candidates);
+        }).catch(function (e) { msg.textContent = 'Photos indisponibles : ' + e.message; });
+    });
+}
+function drawFunPhotos() {
+    var box = $('fun-photos'); box.textContent = '';
+    Object.keys(FUN.pick).forEach(function (k) {
+        var p = FUN.pick[k], n = (FUN.photos[k] || []).length;
+        box.appendChild(h('span', {}, '📷 ' + p.name + ' : ' + (n ? n + (n > 1 ? ' photos choisies' : ' photo choisie') : 'photos choisies automatiquement') + ' · ',
+            h('button', { class: 'linkbtn', type: 'button', text: 'changer', onclick: async function () {
+                var r = await pickPhotos(p, FUN.photos[k]); if (r) { FUN.photos[k] = r; drawFunPhotos(); } } })));
+    });
+}
+
 /* « C'est moi » : un micro direct pour capter la phrase qui calibre la voix (envoyée à la création du personnage). */
 function drawMeVoice() {
     var me = Object.keys(FUN.pick).map(function (k) { return FUN.pick[k]; }).filter(function (p) { return p.me; })[0];
@@ -1702,7 +1776,7 @@ function drawMeVoice() {
 function togglePerson(p) {
     if (FUN.pick[p.key]) delete FUN.pick[p.key];
     else { if (Object.keys(FUN.pick).length >= 3) { $('fun-1-msg').textContent = '3 personnes au plus par vidéo.'; return; } FUN.pick[p.key] = p; }
-    $('fun-1-msg').textContent = ''; drawFunPeople(); drawMeVoice();
+    $('fun-1-msg').textContent = ''; drawFunPeople(); drawMeVoice(); drawFunPhotos();
 }
 async function funToIdea(skip) {
     var picked = skip ? [] : Object.keys(FUN.pick).map(function (k) { return FUN.pick[k]; });
@@ -1711,18 +1785,27 @@ async function funToIdea(skip) {
     var next = $('fun-next-1'); next.disabled = true; var jobs = [];
     FUN.contact = (picked[0] && picked[0].contact) || '';
     FUN.cast = picked.map(function (p) { return p.name; }).concat(skip ? [] : Object.keys(FUN.extra).filter(function (n) { return FUN.extra[n]; }));
+    function voiceUpload(cid) {                         // voix enregistrée au micro : remplace la voix générée
+        var fv = new FormData(); fv.append('file', FUN.meVoice, 'voix.webm'); fv.append('consent', 'true');
+        return api('/api/story/asset/' + q(cid) + '/voice', { method: 'POST', form: fv });
+    }
     try {
-        for (var i = 0; i < need.length; i++) {
-            $('fun-1-msg').textContent = 'Portrait de ' + need[i].name + ' (' + (i + 1) + '/' + need.length + ')…';
-            var mine = need[i].me && FUN.meVoice;           // voix enregistrée : pas de voix générée
-            var r = await api('/api/story/character-from-person', { method: 'POST', json: { name: need[i].name, point_ids: need[i].sample_ids, consent: true, render: !mine } });
-            if (mine) { $('fun-1-msg').textContent = 'Calibrage de votre voix…'; var fv = new FormData(); fv.append('file', FUN.meVoice, 'voix.webm'); fv.append('consent', 'true');
-                try { await api('/api/story/asset/' + q(r.cid) + '/voice', { method: 'POST', form: fv }); } catch (e) { toast('err', 'Voix non calibrée : ' + e.message); } }
-            FUN.cast[FUN.cast.indexOf(need[i].name)] = r.name;
+        for (var i = 0; i < picked.length; i++) {
+            var p = picked[i], chosen = FUN.photos[p.key], mine = p.me && FUN.meVoice, exists = hasCharacter(p.name);
+            if (exists && !chosen && !mine) continue;                       // personnage déjà prêt, rien à changer
+            $('fun-1-msg').textContent = (exists ? 'Mise à jour de ' : 'Portrait de ') + p.name + '…';
+            var body = { name: p.name, point_ids: p.sample_ids, consent: true, render: !mine && !exists };
+            if (chosen) body.photo_ids = chosen;
+            if (exists) body.portrait_only = true;                          // un personnage existant garde sa fiche et sa voix : seules les photos changent
+            var r;
+            if (exists && !chosen) r = { cid: existingCharacters().filter(function (a) { return a.name.toLowerCase() === p.name.toLowerCase(); })[0].cid, name: p.name };
+            else r = await api('/api/story/character-from-person', { method: 'POST', json: body });
+            if (mine) { $('fun-1-msg').textContent = 'Calibrage de votre voix…'; try { await voiceUpload(r.cid); } catch (e) { toast('err', 'Voix non calibrée : ' + e.message); } }
+            FUN.cast[FUN.cast.indexOf(p.name)] = r.name;
             if (r.job) jobs.push({ id: r.job.id, name: r.name });
             else if (r.job_error) toast('err', 'Voix de ' + r.name + ' non lancée : ' + r.job_error);
         }
-        if (need.length) await loadLib(true);
+        await loadLib(true);
         await funWaitVoices(jobs);
     } catch (e) { $('fun-1-msg').textContent = 'Impossible : ' + e.message; next.disabled = false; return; }
     next.disabled = false; funStartChat();

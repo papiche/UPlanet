@@ -20,6 +20,7 @@
     <button class="fc-tab" role="tab" data-tab="photos" aria-selected="false"><i class="ic" aria-hidden="true">▦</i><span class="lb">Photos</span></button>
     <button class="fc-tab" role="tab" data-tab="map" aria-selected="false"><i class="ic" aria-hidden="true">⌖</i><span class="lb">Carte</span></button>
     <button class="fc-tab" role="tab" data-tab="circles" aria-selected="false"><i class="ic" aria-hidden="true">◎</i><span class="lb">Cercles</span></button>
+    <button class="fc-tab fc-tab-sec" role="tab" data-tab="videos" aria-selected="false"><i class="ic" aria-hidden="true">🎬</i><span class="lb">Vidéos</span></button>
     <button class="fc-tab fc-tab-sec" role="tab" data-tab="contacts" aria-selected="false"><i class="ic" aria-hidden="true">☰</i><span class="lb">Contacts</span></button>
     <button class="fc-tab fc-tab-sec" role="tab" data-tab="sources" aria-selected="false"><i class="ic" aria-hidden="true">⇩</i><span class="lb">Sources</span></button>
     <button class="fc-tab fc-tab-sec" role="tab" data-tab="settings" aria-selected="false"><i class="ic" aria-hidden="true">⚙</i><span class="lb">Réglages</span></button>
@@ -127,7 +128,8 @@
         <button class="fc-btn fc-btn-sm" id="tray-photo">Voir la photo</button>
         <button class="fc-btn fc-btn-sm fc-btn-primary" id="tray-new">Nouvelle personne</button>
         <button class="fc-btn fc-btn-sm" id="tray-unassign" hidden>Retirer de la pochette</button>
-        <button class="fc-btn fc-btn-sm fc-btn-danger" id="tray-forget">Pas à reconnaître</button>
+        <button class="fc-btn fc-btn-sm fc-btn-danger" id="tray-forget" title="Oublier seulement ces visages : les photos restent">Pas à reconnaître</button>
+        <button class="fc-btn fc-btn-sm fc-btn-danger-solid" id="tray-delphotos" title="Supprimer les PHOTOS où figurent ces visages (si personne d'autre n'y est)">🗑 Supprimer les photos</button>
         <button class="fc-btn fc-btn-sm fc-btn-ghost" id="tray-clear" aria-label="Annuler la sélection">✕</button>
       </div>
     </div>
@@ -192,12 +194,13 @@
         <button data-filter="received" aria-pressed="false">Reçues <span class="n"></span></button>
       </div>
       <button class="fc-chip-geo" id="gal-geo" hidden title="Retirer ce filtre"></button>
-      <input class="fc-input fc-gal-search" id="gal-search" type="search" placeholder="Chercher une photo, un lieu, une description…" aria-label="Chercher dans les photos">
+      <input class="fc-input fc-gal-search" id="gal-search" type="search" placeholder="Chercher : moutons plage, cuisine, mariage…" title="Cherche dans les descriptions et les noms de fichiers : accents, majuscules et pluriels sont ignorés, tous les mots doivent y être" aria-label="Chercher dans les photos">
     </div>
   </div>
   <div class="fc-upload-pill" id="upload-status" hidden role="status" aria-live="polite"></div>
   <div class="fc-senders" id="senders" hidden></div>
   <div class="fc-quota-banner" id="quota-banner" hidden></div>
+  <p class="fc-hint fc-gal-sinfo" id="gal-sinfo" hidden></p>
   <div class="fc-memos" id="memos" hidden></div>
   <div class="fc-timeline" id="gallery" aria-live="polite"></div>
   <div class="fc-gal-end" id="gal-sentinel"></div>
@@ -318,6 +321,15 @@
 </section>
 
 <!-- ══ Sources ═════════════════════════════════════════════════════════ -->
+<!-- ══ Vidéos FUN : /VideoFUN/ (dossier DAV), faites dans le Studio, à envoyer aux amis ═════════ -->
+<section id="view-videos" class="fc-page" hidden>
+  <div class="fc-gal-top"><h2>Vidéos FUN <span class="fc-count" id="vid-count"></span></h2>
+    <div class="fc-gal-actions"><a class="fc-btn fc-btn-primary" href="story.html" title="Choisir un proche, raconter l'idée à l'assistant, tourner la vidéo">🎬 Créer une vidéo FUN</a></div></div>
+  <p class="fc-hint">Les vidéos faites dans le Studio sont rangées ici, dans le dossier <b>/VideoFUN/&lt;ami&gt;/</b> de votre cloud chiffré : vous les retrouvez aussi
+    dans votre application Fichiers ou Nextcloud (accès WebDAV). Envoyez-les à vos amis par un lien secret, ou supprimez-les.</p>
+  <div id="vid-list"></div>
+</section>
+
 <section id="view-sources" class="fc-page" hidden>
   <h2>Sources</h2>
   <p class="fc-hint">Reliez le dossier photos d'un autre cloud. FaceCloud en importe une part chaque jour,
@@ -430,10 +442,17 @@
     <div class="fc-row">
       <button class="fc-btn" id="dr-save">Enregistrer</button>
       <button class="fc-btn" id="dr-show">Voir sur la table</button>
+      <button class="fc-btn fc-btn-danger" id="dr-delete" type="button" title="Supprimer cette personne et ses photos">🗑 Supprimer cette personne…</button>
       <button class="fc-btn" id="dr-add-photos" hidden>Ajouter des photos de cette personne</button>
     </div>
     <details class="fc-tl" id="dr-timeline"><summary>Sa frise <small id="dr-tl-sub"></small></summary>
       <div id="dr-tl-body"><p class="fc-hint">Chargement…</p></div>
+    </details>
+    <details class="fc-tl" id="dr-skills"><summary>Savoir-faire <small id="dr-sk-sub"></small></summary>
+      <div id="dr-sk-body"><p class="fc-hint">Chargement…</p></div>
+    </details>
+    <details class="fc-tl" id="dr-friend"><summary>Fiche : échanges et vidéos <small id="dr-fr-sub"></small></summary>
+      <div id="dr-fr-body"><p class="fc-hint">Chargement…</p></div>
     </details>
     <div class="fc-section-title" id="dr-faces-title"></div>
     <div class="fc-facegrid" id="dr-faces"></div>
@@ -522,12 +541,48 @@
 
 <div class="fc-nudge" id="nudge" role="status" aria-live="polite" hidden></div>
 
+<dialog class="fc-dialog fc-dialog-wide" id="dlg-plan">
+  <form method="dialog">
+    <h3 id="pl-title"></h3>
+    <p class="fc-hint" id="pl-intro" style="margin:0 0 8px"></p>
+    <div class="fc-pv-big" id="pl-big" hidden></div>
+    <h4 class="fc-pv-h" id="pl-del-h"></h4>
+    <div id="pl-del"></div>
+    <h4 class="fc-pv-h" id="pl-keep-h"></h4>
+    <div id="pl-keep"></div>
+    <div class="fc-dialog-actions">
+      <button class="fc-btn" value="cancel" formnovalidate>Annuler</button>
+      <button class="fc-btn fc-btn-danger-solid" id="pl-ok" type="button">Supprimer</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog class="fc-dialog fc-dialog-wide" id="dlg-delperson">
+  <form method="dialog">
+    <h3 id="dp-title">Supprimer des personnes et leurs photos</h3>
+    <p class="fc-hint" style="margin:0 0 8px">Une photo est supprimée quand <b>toutes</b> les personnes identifiées dessus sont dans votre sélection (elle seule, ou avec d'autres personnes à supprimer).
+      Si quelqu'un d'autre y figure, la photo est conservée.</p>
+    <input class="fc-input" id="dp-filter" type="search" placeholder="Ajouter d'autres personnes à supprimer…" autocomplete="off">
+    <div class="fc-dp-list" id="dp-list"></div>
+    <label class="fc-dp-opt"><input type="checkbox" id="dp-unknown"> Supprimer aussi les photos où figurent des visages <b>non identifiés</b></label>
+    <div class="fc-dp-plan" id="dp-plan"></div>
+    <div class="fc-pv-big" id="dp-big" hidden></div>
+    <div class="fc-dp-thumbs" id="dp-thumbs"></div>
+    <div id="dp-keep"></div>
+    <p class="fc-hint" id="dp-msg"></p>
+    <div class="fc-dialog-actions">
+      <button class="fc-btn" value="cancel" formnovalidate id="dp-cancel">Annuler</button>
+      <button class="fc-btn fc-btn-primary fc-btn-danger-solid" id="dp-ok" type="button">Supprimer</button>
+    </div>
+  </form>
+</dialog>
+
 <dialog class="fc-dialog" id="dlg-share">
   <form method="dialog">
     <h3 id="share-title">Inviter</h3>
     <p class="fc-hint" id="share-text" style="margin:0 0 10px"></p>
     <div class="fc-share-grid" id="share-grid"><p class="fc-hint">Préparation du lien…</p></div>
-    <p class="fc-hint fc-share-warn">Le lien ouvre ses photos : envoyez-le seulement à la personne concernée. Il ne marche qu'une fois et expire dans 7 jours.</p>
+    <p class="fc-hint fc-share-warn" id="share-warn">Le lien ouvre ses photos : envoyez-le seulement à la personne concernée. Il ne marche qu'une fois et expire dans 7 jours.</p>
     <p class="fc-hint" id="share-msg"></p>
     <div class="fc-dialog-actions"><button class="fc-btn" value="close">Fermer</button></div>
   </form>
@@ -861,7 +916,7 @@ function hashTab() {
 function sessionTab() { try { return sessionStorage.getItem('fc-tab'); } catch (e) { return null; } }
 
 /* ── Onglets ────────────────────────────────────────────────────────── */
-var VIEWS = { people: 'view-people', photos: 'view-photos', map: 'view-map', circles: 'view-circles', contacts: 'view-contacts', sources: 'view-sources', settings: 'view-settings' };
+var VIEWS = { people: 'view-people', photos: 'view-photos', map: 'view-map', circles: 'view-circles', videos: 'view-videos', contacts: 'view-contacts', sources: 'view-sources', settings: 'view-settings' };
 function selectTab(name) {
     hidePeek();                      // l'aperçu de survol de la table ne suit pas l'onglet
     document.body.dataset.tab = name;
@@ -877,8 +932,9 @@ function selectTab(name) {
     if (name === 'circles') { renderSelfPicker(); renderCircles(); loadFaceRef(); }
     if (name === 'map') openMapTab();
     document.getElementById('more-sheet').hidden = true;
-    document.querySelectorAll('.fc-tab-more').forEach(function (b) { b.setAttribute('aria-selected', String(name === 'contacts' || name === 'sources' || name === 'settings')); b.setAttribute('aria-expanded', 'false'); });
+    document.querySelectorAll('.fc-tab-more').forEach(function (b) { b.setAttribute('aria-selected', String(name === 'videos' || name === 'contacts' || name === 'sources' || name === 'settings')); b.setAttribute('aria-expanded', 'false'); });
     window.scrollTo(0, 0);
+    if (name === 'videos') loadVideos();
     if (name === 'sources') loadSources();
     if (name === 'settings') { renderSettings(); loadBackup(); loadAnalysis(); loadQuota(); }
 }
@@ -964,6 +1020,7 @@ async function loadFaces(fit) {
     try {
         var data = await nostrFetch('/mailjet/faces');
         App.faces = data.faces || [];
+        App.facesTruncated = !!data.truncated;
     } catch (e) {
         toast('Visages indisponibles : ' + e.message, true);
         return;
@@ -1381,6 +1438,10 @@ function openPerson(key, refreshOnly) {
     }).join('') + (p.faces.length > 120 ? '<p class="fc-hint">… et ' + (p.faces.length - 120) + ' autres</p>' : '');
     if (typeof renderPersonIdentity === 'function') renderPersonIdentity(p);
     var tl = $('dr-timeline');
+    var sk = $('dr-skills');
+    if (!refreshOnly) { sk.open = false; SK.key = null; $('dr-sk-body').innerHTML = '<p class="fc-hint">Chargement…</p>'; $('dr-sk-sub').textContent = ''; }
+    var fr = $('dr-friend');
+    if (!refreshOnly) { fr.open = false; FR.key = null; $('dr-fr-body').innerHTML = '<p class="fc-hint">Chargement…</p>'; $('dr-fr-sub').textContent = ''; }
     if (!refreshOnly) { tl.open = false; TL.key = null; $('dr-tl-sub').textContent = p.photos.size ? '· ' + plural(p.photos.size, 'photo', 'photos') : ''; $('dr-tl-body').innerHTML = '<p class="fc-hint">Chargement…</p>'; }
     $('drawer').classList.add('is-open');
     $('drawer').setAttribute('aria-hidden', 'false');
@@ -1422,6 +1483,126 @@ async function loadTimeline(p) {
     });
     body.innerHTML = html;
     files.forEach(function (f) { if (_photoThumbs[f.path]) paintThumb(f.path); else queueThumb(f.path); });
+}
+/* ── Savoir-faire : « qui d'autre maîtrise ça dans le coin ? » ───────────────────────────────────────
+   Mes savoir-faire = certificats NOSTR signés par MA clé (kind 30503, x1 auto-proclamé) ; ils sont recherchables par territoire : l'annuaire du
+   coin est signé par la clé de la case (UMAP ≈ 1 km, SECTOR ≈ 11 km, REGION ≈ 111 km). Je choisis jusqu'où je suis visible. Pour les autres
+   personnes : leurs certificats publics, en lecture seule. Voir UPassport/services/skill_map.py. */
+var SK = { key: null, pos: null, mine: [], scope: 'sector', same: true };
+var SK_VIS = { none: 'Pas dans l\'annuaire du coin', region: 'Ma région (≈ 100 km)', sector: 'Mon secteur (≈ 10 km)', umap: 'Mon quartier (≈ 1 km, précis)' };
+function skQuery() { return SK.pos ? '&lat=' + SK.pos.lat + '&lon=' + SK.pos.lon : ''; }
+async function loadSkills(p) {
+    var body = $('dr-sk-body'), mine = p.pubkey && p.pubkey === currentPubkey();
+    SK.key = p.key;
+    try {
+        if (mine) {
+            var d = await nostrFetch('/api/skills/mine' + (SK.pos ? '?lat=' + SK.pos.lat + '&lon=' + SK.pos.lon : ''));
+            if (SK.key !== p.key) return;
+            SK.mine = d.skills || []; if (d.position && !SK.pos) SK.pos = d.position;
+            renderMySkills(d);
+        } else if (p.pubkey) {
+            var o = await nostrFetch('/api/skills/of?hex=' + encodeURIComponent(p.pubkey));
+            if (SK.key !== p.key) return;
+            $('dr-sk-sub').textContent = o.skills.length ? '· ' + o.skills.length : '';
+            body.innerHTML = o.skills.length ? o.skills.map(function (s) { return '<p style="margin:4px 0">' + esc(s.icon || '🛠') + ' <b>' + esc(s.skill) + '</b> <small>x' + s.level + '</small>' + (s.description ? ' — ' + esc(s.description) : '') + '</p>'; }).join('')
+                : '<p class="fc-hint">' + esc(p.name) + ' n\'a déclaré aucun savoir-faire.</p>';
+        } else body.innerHTML = '<p class="fc-hint">Les savoir-faire apparaissent dès que ' + esc(p.name) + ' a un MULTIPASS.</p>';
+    } catch (e) { if (SK.key === p.key) body.innerHTML = '<p class="fc-error">Indisponible : ' + esc(e.message) + '</p>'; }
+}
+function renderMySkills(d) {
+    var body = $('dr-sk-body');
+    $('dr-sk-sub').textContent = SK.mine.length ? '· ' + SK.mine.length : '';
+    var h = '<p class="fc-hint">Ce que vous savez faire. Les autres membres près de vous peuvent le trouver, et vous les trouver : de quoi se rencontrer, faire ensemble et documenter.</p>';
+    h += SK.mine.map(function (s, i) {
+        return '<div class="fc-frvid" data-sk="' + i + '"><span>' + esc(s.icon || '🛠') + ' <b>' + esc(s.skill) + '</b> <small>x' + s.level + '</small>'
+            + '<br><small>' + esc(SK_VIS[s.visibility] || '') + '</small></span><span class="fc-row"><button class="fc-btn fc-btn-sm fc-btn-primary" data-sk-near="' + i + '">👥 Qui d\'autre dans le coin ?</button>'
+            + '<button class="fc-btn fc-btn-sm" data-sk-del="' + i + '" title="Retirer">🗑</button></span></div>';
+    }).join('');
+    h += '<div class="fc-frvid" style="display:block"><b>Ajouter un savoir-faire</b>'
+        + '<label class="fc-field"><span>Lequel ? (boulanger, plomberie, guitare…)</span><input class="fc-input" id="sk-name" maxlength="60"></label>'
+        + '<label class="fc-field"><span>En deux mots (facultatif)</span><input class="fc-input" id="sk-desc" maxlength="200"></label>'
+        + '<label class="fc-field"><span>Qui peut me trouver ?</span><select class="fc-input" id="sk-vis">' + ['sector', 'region', 'umap', 'none'].map(function (v) { return '<option value="' + v + '">' + esc(SK_VIS[v]) + '</option>'; }).join('') + '</select></label>'
+        + '<p class="fc-hint">Plus c\'est précis, plus on sait où vous êtes. Le secteur suffit pour se rencontrer sans révéler votre rue.</p>'
+        + '<button class="fc-btn fc-btn-primary" id="sk-add" type="button">Ajouter</button> <span class="fc-hint" id="sk-msg"></span></div>';
+    if (!SK.pos) h += '<p class="fc-hint">Position inconnue : <button class="fc-btn fc-btn-sm" id="sk-geo" type="button">📍 Utiliser ma position</button></p>';
+    h += '<div id="sk-near"></div>';
+    body.innerHTML = h;
+}
+async function addSkill() {
+    var name = $('sk-name').value.trim(), msg = $('sk-msg');
+    if (name.length < 2) { msg.textContent = 'Indiquez un savoir-faire.'; return; }
+    msg.textContent = 'Publication…';
+    var fd = { skill: name, level: 1, description: $('sk-desc').value.trim(), visibility: $('sk-vis').value };
+    if (SK.pos) { fd.lat = SK.pos.lat; fd.lon = SK.pos.lon; }
+    try { await nostrFetch('/api/skills', { method: 'POST', body: form(fd), timeout: 60000 }); toast('Savoir-faire ajouté'); var p = App.personByKey[App.current]; if (p) loadSkills(p); }
+    catch (e) { msg.textContent = e.message; }
+}
+async function findNearby(i) {
+    var s = SK.mine[i], box = $('sk-near');
+    box.innerHTML = '<p class="fc-hint">Recherche des autres « ' + esc(s.skill) + ' » autour de vous…</p>';
+    var out = '';
+    try {
+        for (var sc of ['sector', 'region']) {
+            var d = await nostrFetch('/api/skills/nearby?skill=' + encodeURIComponent(s.skill) + '&scope=' + sc + '&min_level=' + (SK.same ? s.level : 1) + skQuery());
+            if (d.members.length || sc === 'region') {
+                out = '<h4 class="fc-tl-year">Autres « ' + esc(s.skill) + ' » ' + (sc === 'sector' ? 'dans votre secteur' : 'dans votre région') + ' <small>' + plural(d.members.length, 'personne', 'personnes') + '</small></h4>'
+                    + (d.members.length ? d.members.map(function (m) {
+                        var known = (App.persons || []).filter(function (q) { return q.pubkey === m.hex; })[0];
+                        return '<p style="margin:4px 0">🧑‍🍳 <b>' + esc(m.name || (known && known.name) || m.hex.slice(0, 10) + '…') + '</b> <small>x' + m.level + '</small>'
+                            + (known ? ' <button class="fc-btn fc-btn-sm" data-sk-open="' + esc(known.key) + '">Sa fiche</button>' : '') + '</p>'; }).join('')
+                        : '<p class="fc-hint">Personne d\'autre pour l\'instant. Vous êtes peut-être le premier : invitez-en un.</p>');
+                break;
+            }
+        }
+        out += '<label class="consent"><input type="checkbox" id="sk-same"' + (SK.same ? ' checked' : '') + '><span>Seulement ceux d\'un niveau égal ou supérieur au mien</span></label>';
+        box.innerHTML = out;
+    } catch (e) { box.innerHTML = '<p class="fc-error">Recherche impossible : ' + esc(e.message) + '</p>'; }
+}
+async function deleteSkill(i) {
+    var s = SK.mine[i];
+    if (!(await confirmDialog('Retirer « ' + s.skill + ' » ?', 'Votre certificat et votre présence dans l\'annuaire du coin sont retirés.', 'Retirer'))) return;
+    try { await nostrFetch('/api/skills?skill=' + encodeURIComponent(s.skill), { method: 'DELETE', timeout: 60000 }); toast('Retiré'); var p = App.personByKey[App.current]; if (p) loadSkills(p); }
+    catch (e) { toast(e.message, true); }
+}
+/* ── Fiche d'un ami : tout ce que le cloud range pour cette personne, au même endroit ───────────────
+   Photos où elle apparaît (visages, déjà chargés) · envoyées à elle (`p.sent`) · reçues d'elle · vidéos FUN pour elle · liens d'envoi
+   (GET /api/cloud/friend). Les vidéos réutilisent les actions de l'onglet Vidéos : lire, envoyer. */
+var FR = { key: null, videos: [] };
+async function loadFriend(p) {
+    var body = $('dr-fr-body');
+    FR.key = p.key;
+    var d;
+    try {
+        d = await nostrFetch('/api/cloud/friend?name=' + encodeURIComponent(p.name) + '&hex=' + encodeURIComponent(p.pubkey || '') + '&contact=' + encodeURIComponent(p.contact || ''));
+    } catch (e) { if (FR.key === p.key) body.innerHTML = '<p class="fc-error">Fiche indisponible : ' + esc(e.message) + '</p>'; return; }
+    if (FR.key !== p.key) return;
+    FR.videos = d.videos || [];
+    var st = personState(p), rc = d.received || { count: 0, items: [] };
+    var h = '<h4 class="fc-tl-year">Photos <small>' + plural(p.photos.size, 'photo', 'photos') + ' où ' + esc(p.name) + ' apparaît</small></h4>'
+        + '<p class="fc-hint">' + (p.sent ? 'Envoyées à ' + esc(p.name) + ' : ' + esc(st.text.replace(/^✓ /, '')) + '.' : 'Rien n\'a encore été envoyé à ' + esc(p.name) + '.') + '</p>'
+        + '<h4 class="fc-tl-year">Reçu de ' + esc(p.name) + ' <small>' + (rc.count ? plural(rc.count, 'photo', 'photos') + (rc.last ? ', dernière le ' + esc(fmtDay(rc.last)) : '') : 'rien')  + '</small></h4>';
+    if (rc.items.length) h += '<div class="fc-sheet-grid">' + rc.items.slice(0, 12).map(function (f) {
+        return '<figure class="fc-photo is-loading" data-path="' + esc(f.path) + '" title="' + esc(fmtDay(f.mtime)) + '"></figure>'; }).join('') + '</div>';
+    h += '<h4 class="fc-tl-year">Vidéos FUN pour ' + esc(p.name) + ' <small>' + (FR.videos.length ? plural(FR.videos.length, 'vidéo', 'vidéos') : 'aucune') + '</small></h4>'
+        + FR.videos.map(function (v, i) {
+            return '<div class="fc-frvid" data-fv="' + i + '"><b>' + esc(v.title) + '</b> <small>' + (v.duration ? Math.round(v.duration) + ' s · ' : '') + esc(new Date((v.created || v.mtime) * 1000).toLocaleDateString()) + '</small>'
+                + '<span class="fc-row"><button class="fc-btn fc-btn-sm" data-fplay="' + i + '">▶ Voir</button><button class="fc-btn fc-btn-sm fc-btn-primary" data-fshare="' + i + '">📤 Envoyer</button></span></div>';
+        }).join('')
+        + '<p><a class="fc-btn fc-btn-sm" href="story.html">🎬 Créer une vidéo pour ' + esc(p.name) + '</a></p>';
+    if ((d.videos_received || []).length) h += '<h4 class="fc-tl-year">Vidéos reçues de ' + esc(p.name) + ' <small>' + plural(d.videos_received.length, 'vidéo', 'vidéos') + '</small></h4>'
+        + d.videos_received.map(function (v) { return '<p class="fc-hint" style="margin:2px 0">🎬 ' + esc(v.title) + ' · ' + esc(new Date((v.created || v.mtime) * 1000).toLocaleDateString()) + '</p>'; }).join('')
+        + '<p class="fc-hint">Elles sont dans l\'onglet Vidéos.</p>';
+    if ((d.shares || []).length) h += '<h4 class="fc-tl-year">Liens envoyés <small>encore valables</small></h4>' + d.shares.map(function (s) {
+        return '<p class="fc-hint" style="margin:2px 0">« ' + esc(s.title) + ' » · ' + (s.views ? 'regardée ' + plural(s.views, 'fois', 'fois') : 'pas encore regardée') + ' · valable jusqu\'au ' + esc(new Date(s.expires * 1000).toLocaleDateString()) + '</p>'; }).join('');
+    body.innerHTML = h;
+    $('dr-fr-sub').textContent = '· ' + plural(FR.videos.length, 'vidéo', 'vidéos') + (rc.count ? ', ' + plural(rc.count, 'reçue', 'reçues') : '');
+    (d.received.items || []).slice(0, 12).forEach(function (f) { if (_photoThumbs[f.path]) paintThumb(f.path); else queueThumb(f.path); });
+}
+async function playFriendVideo(i) {
+    var row = document.querySelector('.fc-frvid[data-fv="' + i + '"]');
+    if (!row || row.querySelector('video')) return;
+    try { var el = document.createElement('video'); el.src = URL.createObjectURL(await videoBlob(FR.videos[i])); el.controls = true; el.autoplay = true; el.playsInline = true; el.style.cssText = 'width:100%;margin-top:6px;border-radius:10px;background:#000'; row.appendChild(el); }
+    catch (e) { toast('Lecture impossible : ' + e.message, true); }
 }
 function closePerson() {
     App.current = null;
@@ -2196,8 +2377,26 @@ function shareMessage(name, n, url) {
         + '(lien personnel, valable 7 jours)\n'
         + 'Et si tu as des photos de moi' + (me ? ', ' + me + ' sera' : ', je serai') + ' ravi·e de les recevoir en retour 😉';
 }
+/* Les canaux d'envoi (WhatsApp, Telegram, SMS, mail, partage du téléphone, copie) : les MÊMES pour une invitation FaceCloud
+   et pour une vidéo FUN — seul le message change. */
+function fillShareChannels(grid, url, text, subject, mailTo) {
+    var t = encodeURIComponent(text), u = encodeURIComponent(url);
+    var links = [
+        ['💬', 'WhatsApp', 'https://wa.me/?text=' + t],
+        ['✈️', 'Telegram', 'https://t.me/share/url?url=' + u + '&text=' + encodeURIComponent(text.replace(url, '').trim())],
+        ['📱', 'SMS', 'sms:?&body=' + t],
+        ['✉️', 'Mon application mail', 'mailto:' + encodeURIComponent(mailTo || '') + '?subject=' + encodeURIComponent(subject) + '&body=' + t]
+    ];
+    grid.innerHTML = links.map(function (l) {
+        return '<a class="fc-share-btn" href="' + esc(l[2]) + '" target="_blank" rel="noopener"><span>' + l[0] + '</span>' + esc(l[1]) + '</a>';
+    }).join('')
+        + (navigator.share ? '<button type="button" class="fc-share-btn" data-share-native><span>📤</span>Autres applications…</button>' : '')
+        + '<button type="button" class="fc-share-btn" data-share-copy><span>🔗</span>Copier le lien</button>';
+    grid._url = url; grid._text = text;
+}
 async function openShareDialog(p, ids) {
     var d = $('dlg-share'), grid = $('share-grid'), msg = $('share-msg');
+    $('share-warn').textContent = 'Le lien ouvre ses photos : envoyez-le seulement à la personne concernée. Il ne marche qu\'une fois et expire dans 7 jours.';
     $('share-title').textContent = 'Inviter ' + p.name;
     $('share-text').textContent = 'Choisissez l\'application que ' + p.name + ' utilise : un message prêt à envoyer, avec le lien vers ses photos.';
     grid.innerHTML = '<p class="fc-hint">Préparation du lien…</p>'; msg.textContent = '';
@@ -2209,19 +2408,8 @@ async function openShareDialog(p, ids) {
     } catch (e) { grid.innerHTML = '<p class="fc-error">Lien impossible : ' + esc(e.message) + '</p>'; return; }
     var sent = { at: Math.floor(Date.now() / 1000), mode: 'link', photos: info.photos };
     ids.forEach(function (id) { var fc = App.byId[id]; if (fc) fc.sent = sent; });
-    var text = shareMessage(p.name, info.photos, info.url), t = encodeURIComponent(text), u = encodeURIComponent(info.url);
-    var links = [
-        ['💬', 'WhatsApp', 'https://wa.me/?text=' + t],
-        ['✈️', 'Telegram', 'https://t.me/share/url?url=' + u + '&text=' + encodeURIComponent(text.replace(info.url, '').trim())],
-        ['📱', 'SMS', 'sms:?&body=' + t],
-        ['✉️', 'Mon application mail', 'mailto:' + encodeURIComponent(p.email || '') + '?subject=' + encodeURIComponent('Des photos de toi') + '&body=' + t]
-    ];
-    grid.innerHTML = links.map(function (l) {
-        return '<a class="fc-share-btn" href="' + esc(l[2]) + '" target="_blank" rel="noopener"><span>' + l[0] + '</span>' + esc(l[1]) + '</a>';
-    }).join('')
-        + (navigator.share ? '<button type="button" class="fc-share-btn" data-share-native><span>📤</span>Autres applications…</button>' : '')
-        + '<button type="button" class="fc-share-btn" data-share-copy><span>🔗</span>Copier le lien</button>';
-    grid._url = info.url; grid._text = text; grid._name = p.name;
+    var text = shareMessage(p.name, info.photos, info.url);
+    fillShareChannels(grid, info.url, text, 'Des photos de toi', p.email || '');
     msg.textContent = plural(info.photos, 'photo attend', 'photos attendent') + ' ' + p.name + '.';
 }
 async function onShareClick(ev) {
@@ -2336,6 +2524,7 @@ var TQ = { list: [], running: 0, error: null };
 
 function monthKey(f) { var d = new Date((f.taken_at || f.mtime || 0) * 1000); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'); }
 function monthLabel(key) {
+    if (key === 'rank') return 'Résultats, du plus proche au moins proche';
     var p = key.split('-'), d = new Date(+p[0], +p[1] - 1, 1);
     var s = d.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
     return s.charAt(0).toUpperCase() + s.slice(1);
@@ -2468,7 +2657,9 @@ async function fetchGalleryPage() {
     if (G.loading || G.done) return;
     G.loading = true;
     var seq = G.seq;
-    var url = '/api/cloud/files/page?limit=' + PAGE + '&offset=' + G.offset + '&filter=' + G.filter + (G.q ? '&q=' + encodeURIComponent(G.q) : '') + geoParams() + (G.offset === 0 ? '&counts=1' : '');
+    // Avec une recherche : classement PAR LE SENS (GET /api/cloud/search) ; sinon la frise par date.
+    var url = G.q ? '/api/cloud/search?limit=' + PAGE + '&offset=' + G.offset + '&filter=' + G.filter + '&q=' + encodeURIComponent(G.q) + geoParams()
+        : '/api/cloud/files/page?limit=' + PAGE + '&offset=' + G.offset + '&filter=' + G.filter + geoParams() + (G.offset === 0 ? '&counts=1' : '');
     var data;
     try { data = await nostrFetch(url, { timeout: 60000 }); }
     catch (e) {
@@ -2480,6 +2671,8 @@ async function fetchGalleryPage() {
     }
     if (seq !== G.seq) return;                 // le filtre a changé pendant l'attente
     if (data.total >= 0) G.total = data.total;        // le serveur ne recompte pas à chaque page (-1)
+    if (G.q) { G.ranked = true; G.search = { mode: data.mode, note: data.note, index: data.index }; } else { G.ranked = false; G.search = null; }
+    renderSearchInfo();
     if (data.counts) G.counts = data.counts;
     var files = data.files || [];
     if (G.offset === 0) $('gallery').innerHTML = '';
@@ -2492,6 +2685,16 @@ async function fetchGalleryPage() {
     if (G.offset === files.length) { loadDupsSummary(); renderSenders(); loadMemos(); loadQuota(); }
     // La page est courte (grand écran) : le sentinel est déjà visible, la suite se charge toute seule.
     if (!G.done && _sentObs) { _sentObs.unobserve($('gal-sentinel')); _sentObs.observe($('gal-sentinel')); }
+}
+function renderSearchInfo() {
+    var box = $('gal-sinfo'), s = G.search;
+    if (!G.q || !s) { box.hidden = true; return; }
+    var idx = s.index || {}, bits = [];
+    bits.push(s.mode === 'semantic' ? '🔎 Recherche par le sens' : '🔤 Recherche par mots');
+    if (idx.pending > 0 && s.mode === 'semantic') bits.push(plural(idx.pending, 'description', 'descriptions') + ' en cours d\'indexation : de nouveaux résultats peuvent apparaître');
+    if (idx.described === 0) bits.push('aucune photo n\'est encore décrite : lancez les descriptions dans Réglages › Analyses');
+    if (s.note) bits.push(s.note);
+    box.textContent = bits.join(' · '); box.hidden = false;
 }
 function renderGalleryHeader() {
     var c = G.counts || {};
@@ -2522,7 +2725,7 @@ function appendTiles(files) {
     var buckets = [];                            // [{key, html}] dans l'ordre
     files.forEach(function (f) {
         var idx = G.items.length; G.items.push(f);
-        var k = monthKey(f), last = buckets[buckets.length - 1];
+        var k = G.ranked ? 'rank' : monthKey(f), last = buckets[buckets.length - 1];
         if (!last || last.key !== k) { last = { key: k, html: '' }; buckets.push(last); }
         last.html += tileHtml(f, idx); last.n = (last.n || 0) + 1;
     });
@@ -2607,6 +2810,162 @@ function onGallerySelection() {
     $('photo-bulk').hidden = !n;
     $('photo-bulk-count').textContent = plural(n, 'photo choisie', 'photos choisies');
     $('view-photos').classList.toggle('is-selecting', n > 0);
+}
+/* ── Supprimer des personnes ET leurs photos ──────────────────────────────────────
+   Une photo part quand TOUTES les personnes identifiées dessus sont dans la sélection (elle seule, ou avec d'autres
+   personnes à supprimer). Un visage non identifié compte comme « quelqu'un d'autre » sauf case cochée. Les photos
+   gardées perdent seulement les visages des personnes supprimées. Refus si la liste des visages est tronquée
+   (on ne peut pas être sûr que personne d'autre n'apparaît). Les copies déjà envoyées aux proches restent chez eux. */
+/* Aperçu de photos dans un dialogue : grille de vignettes (+ « Afficher plus ») ; un clic affiche la photo en grand
+   DANS le dialogue (la visionneuse plein écran passerait SOUS un dialogue modal). */
+var PV = { lim: {} };
+function pvGrid(id, paths, title) {
+    var box = $(id), lim = PV.lim[id] = PV.lim[id] || 24;
+    if (!paths.length) { box.innerHTML = ''; return; }
+    box._title = title === undefined ? box._title : title;
+    box.innerHTML = (box._title ? '<h4 class="fc-pv-h">' + box._title + '</h4>' : '') + '<div class="fc-pv-grid">' + paths.slice(0, lim).map(function (pth) {
+        return '<figure class="fc-photo is-loading" data-path="' + esc(pth) + '" data-pv="' + esc(pth) + '" tabindex="0" title="' + esc(pth.split('/').pop()) + '"></figure>'; }).join('') + '</div>'
+        + (paths.length > lim ? '<button type="button" class="fc-btn fc-btn-sm" data-pv-more="' + id + '">Afficher plus (' + (paths.length - lim) + ')</button>' : '');
+    box._paths = paths;
+    paths.slice(0, lim).forEach(function (pth) { if (_photoThumbs[pth]) paintThumb(pth); else queueThumb(pth); });
+}
+function pvBig(bigId, pth) {
+    var big = $(bigId);
+    if (big._cur === pth) { big.hidden = true; big._cur = null; return; }
+    big._cur = pth; big.hidden = false; big.innerHTML = '<div class="fc-lb-spin" style="position:static;margin:20px auto"></div>';
+    lbPreview(pth).then(function (url) { if (big._cur === pth) big.innerHTML = '<img src="' + url + '" alt=""><small>' + esc(pth) + ' — cliquez pour fermer</small>'; })
+        .catch(function (e) { big.innerHTML = '<p class="fc-error">Photo indisponible : ' + esc(e.message) + '</p>'; });
+}
+function pvWire(dialogId, bigId) {
+    $(dialogId).addEventListener('click', function (ev) {
+        var more = ev.target.closest('[data-pv-more]');
+        if (more) { var id = more.getAttribute('data-pv-more'); PV.lim[id] += 48; pvGrid(id, $(id)._paths); return; }
+        var fig = ev.target.closest('[data-pv]'); if (fig) { pvBig(bigId, fig.getAttribute('data-pv')); return; }
+        if (ev.target.closest('#' + bigId)) { $(bigId).hidden = true; $(bigId)._cur = null; }
+    });
+}
+/* Plan de suppression à valider : `del` = photos effacées, `keep` = photos qui RESTENT. Rend true si confirmé. */
+function confirmPlan(o) {
+    return new Promise(function (resolve) {
+        var d = $('dlg-plan');
+        PV.lim['pl-del'] = 24; PV.lim['pl-keep'] = 24;
+        $('pl-title').textContent = o.title; $('pl-intro').textContent = o.intro;
+        $('pl-big').hidden = true; $('pl-big')._cur = null;
+        $('pl-del-h').textContent = '🗑 Seront supprimées (' + o.del.length + ')';
+        $('pl-keep-h').textContent = o.keep.length ? '✋ Resteront (' + o.keep.length + ') : d\'autres visages non choisis y figurent' : '';
+        $('pl-keep-h').hidden = !o.keep.length;
+        pvGrid('pl-del', o.del); pvGrid('pl-keep', o.keep);
+        $('pl-ok').textContent = o.okLabel;
+        var done = false;
+        function finish(v) { if (done) return; done = true; $('pl-ok').removeEventListener('click', yes); d.removeEventListener('close', no); if (d.open) d.close(); resolve(v); }
+        function yes() { finish(true); }
+        function no() { finish(false); }
+        $('pl-ok').addEventListener('click', yes); d.addEventListener('close', no);
+        d.showModal();
+    });
+}
+var DP = { sel: new Set(), plan: null };
+function delPlan() {
+    var withUnknown = $('dp-unknown').checked, byPhoto = {}, mine = [];
+    App.faces.forEach(function (fc) {
+        var k = personKey(fc), chosen = !!(k && DP.sel.has(k));
+        if (chosen) mine.push(fc.id);
+        if (!fc.photo) return;
+        var b = byPhoto[fc.photo] || (byPhoto[fc.photo] = { chosen: 0, other: 0, unknown: 0 });
+        if (chosen) b.chosen++; else if (k) b.other++; else b.unknown++;
+    });
+    var del = [], keepOther = 0, keepUnknown = 0, keepPaths = [];
+    Object.keys(byPhoto).forEach(function (path) {
+        var b = byPhoto[path];
+        if (!b.chosen) return;
+        if (b.other) { keepOther++; keepPaths.push(path); }
+        else if (b.unknown && !withUnknown) { keepUnknown++; keepPaths.push(path); }
+        else del.push(path);
+    });
+    return { del: del.sort(), keepOther: keepOther, keepUnknown: keepUnknown, keepPaths: keepPaths.sort(), faces: mine };
+}
+function renderDelPerson() {
+    var plan = DP.plan = delPlan(), msg = $('dp-msg');
+    var chips = Array.from(DP.sel).map(function (k) { var p = App.personByKey[k]; return p ? '<span class="fc-dp-chip">' + esc(p.name) + ' <small>' + plural(p.photos.size, 'photo', 'photos') + '</small><button type="button" data-dp-rm="' + esc(k) + '" aria-label="Retirer">×</button></span>' : ''; }).join('');
+    var q = ($('dp-filter').value || '').trim().toLowerCase();
+    var cands = (App.persons || []).filter(function (p) { return !DP.sel.has(p.key) && (!q || p.name.toLowerCase().indexOf(q) >= 0); }).slice(0, 12);
+    $('dp-list').innerHTML = '<div class="fc-dp-chips">' + chips + '</div>' + (q || cands.length ? '<div class="fc-dp-cands">' + cands.map(function (p) {
+        return '<button type="button" class="fc-btn fc-btn-sm" data-dp-add="' + esc(p.key) + '">+ ' + esc(p.name) + '</button>'; }).join('') + '</div>' : '');
+    $('dp-plan').innerHTML = '<p><b>' + plural(plan.del.length, 'photo sera supprimée', 'photos seront supprimées') + '</b> définitivement de votre cloud'
+        + (plan.faces.length ? ', et ' + plural(plan.faces.length, 'visage oublié', 'visages oubliés') : '') + '.</p>'
+        + (plan.keepOther ? '<p class="fc-hint">✋ ' + plural(plan.keepOther, 'photo conservée', 'photos conservées') + ' : d\'autres personnes y figurent (seuls les visages supprimés sont oubliés).</p>' : '')
+        + (plan.keepUnknown ? '<p class="fc-hint">✋ ' + plural(plan.keepUnknown, 'photo conservée', 'photos conservées') + ' : des visages non identifiés y figurent (cochez la case ci-dessus pour les supprimer aussi).</p>' : '');
+    var ok = $('dp-ok');
+    ok.disabled = !plan.faces.length || App.facesTruncated;
+    ok.textContent = plan.del.length ? 'Supprimer ' + plural(plan.del.length, 'photo', 'photos') + ' et ' + plural(DP.sel.size, 'personne', 'personnes') : 'Supprimer ' + plural(DP.sel.size, 'personne', 'personnes');
+    msg.textContent = App.facesTruncated ? 'La liste des visages est incomplète (trop de visages) : suppression bloquée par sécurité.' : '';
+    // Aperçu : les photos qui vont disparaître et celles qui restent (clic = en grand dans le dialogue).
+    PV.lim['dp-thumbs'] = PV.lim['dp-thumbs'] || 24; PV.lim['dp-keep'] = PV.lim['dp-keep'] || 24;
+    pvGrid('dp-thumbs', plan.del, '🗑 Seront supprimées (' + plan.del.length + ')');
+    pvGrid('dp-keep', plan.keepPaths, '✋ Resteront (' + plan.keepPaths.length + ')');
+}
+function openDelPerson(keys) {
+    PV.lim['dp-thumbs'] = 24; PV.lim['dp-keep'] = 24; $('dp-big').hidden = true; $('dp-big')._cur = null;
+    DP.sel = new Set(keys); $('dp-filter').value = ''; $('dp-unknown').checked = false;
+    renderDelPerson();
+    if (!$('dlg-delperson').open) $('dlg-delperson').showModal();
+}
+async function confirmDelPerson() {
+    var plan = DP.plan, ok = $('dp-ok'), msg = $('dp-msg');
+    if (!plan || App.facesTruncated) return;
+    ok.disabled = true; var deleted = 0, skipped = 0;
+    try {
+        for (var i = 0; i < plan.del.length; i += 200) {
+            msg.textContent = '⏳ Suppression des photos… ' + Math.min(i + 200, plan.del.length) + ' / ' + plan.del.length;
+            var r = await nostrFetch('/api/cloud/files/delete', { method: 'POST', body: form({ paths: JSON.stringify(plan.del.slice(i, i + 200)) }), timeout: 180000 });
+            deleted += (r.deleted || []).length; skipped += (r.skipped_readonly || []).length;
+        }
+        for (var j = 0; j < plan.faces.length; j += 2000) {
+            msg.textContent = '⏳ Oubli des visages…';
+            await nostrFetch('/mailjet/faces-delete', { method: 'POST', body: form({ point_ids: plan.faces.slice(j, j + 2000).join(',') }), timeout: 120000 });
+        }
+    } catch (e) { msg.textContent = 'Suppression interrompue : ' + e.message + '. Rien d\'autre n\'a été touché ; relancez pour finir.'; ok.disabled = false; loadFaces(false); return; }
+    $('dlg-delperson').close();
+    closePerson(); App.current = null;
+    G.selected.clear(); G.stale = true; MEMO.loaded = false;
+    if (!$('view-photos').hidden) loadGallery(true);
+    await loadFaces(false); refreshStatus(); if (typeof loadQuota === 'function') loadQuota();
+    toast(plural(DP.sel.size, 'personne supprimée', 'personnes supprimées') + ' · ' + plural(deleted, 'photo effacée', 'photos effacées')
+        + (skipped ? ' · ' + plural(skipped, 'copie reçue ignorée (lecture seule)', 'copies reçues ignorées (lecture seule)') : ''));
+}
+/* Depuis la table de tri : supprime les PHOTOS des visages choisis (pas seulement leur emplacement). Une photo part si
+   TOUS les visages qui y figurent sont dans la sélection (seul, ou accompagné de visages eux aussi choisis) ; sinon elle
+   reste intacte, ses visages aussi. Les visages d'une photo supprimée disparaissent avec elle (côté serveur). */
+async function deleteFacePhotos(ids) {
+    if (App.facesTruncated) { toast('Liste des visages incomplète (trop de visages) : suppression bloquée par sécurité.', true); return; }
+    var sel = new Set(ids), byPhoto = {}, noPhoto = 0;
+    App.faces.forEach(function (fc) { if (fc.photo) (byPhoto[fc.photo] = byPhoto[fc.photo] || []).push(fc.id); });
+    var del = [], keep = [], seen = {};
+    ids.forEach(function (id) {
+        var fc = App.byId[id]; if (!fc) return;
+        if (!fc.photo) { noPhoto++; return; }
+        if (seen[fc.photo]) return; seen[fc.photo] = 1;
+        if (byPhoto[fc.photo].every(function (x) { return sel.has(x); })) del.push(fc.photo); else keep.push(fc.photo);
+    });
+    if (!del.length) { toast(keep.length ? 'Aucune photo supprimée : d\'autres visages (non choisis) figurent sur ' + plural(keep.length, 'photo', 'photos') + '.' : 'Aucune photo liée à ces visages.', true); return; }
+    var ok = await confirmPlan({ title: 'Supprimer ' + plural(del.length, 'photo', 'photos') + ' ?',
+        intro: 'Les photos où figurent ces visages (seuls, ou avec d\'autres visages eux aussi choisis) sont effacées définitivement de votre cloud, avec leurs visages. '
+            + 'Les copies déjà envoyées à vos proches restent chez eux. Cliquez une vignette pour la voir en grand.',
+        del: del, keep: keep, okLabel: 'Supprimer ' + plural(del.length, 'photo', 'photos') });
+    if (!ok) return;
+    var deleted = 0, skipped = 0;
+    try {
+        for (var i = 0; i < del.length; i += 200) {
+            toast('Suppression… ' + Math.min(i + 200, del.length) + ' / ' + del.length);
+            var r = await nostrFetch('/api/cloud/files/delete', { method: 'POST', body: form({ paths: JSON.stringify(del.slice(i, i + 200)) }), timeout: 180000 });
+            deleted += (r.deleted || []).length; skipped += (r.skipped_readonly || []).length;
+        }
+    } catch (e) { toast('Suppression interrompue : ' + e.message, true); loadFaces(false); return; }
+    FaceBoard.clearSelection();
+    G.stale = true; MEMO.loaded = false;
+    if (!$('view-photos').hidden) loadGallery(true);
+    await loadFaces(false); refreshStatus(); if (typeof loadQuota === 'function') loadQuota();
+    toast(plural(deleted, 'photo effacée', 'photos effacées') + (skipped ? ' · ' + plural(skipped, 'copie reçue ignorée (lecture seule)', 'copies reçues ignorées (lecture seule)') : ''));
 }
 async function deleteSelectedPhotos() {
     var paths = Array.from(G.selected);
@@ -2973,6 +3332,7 @@ var AN = { data: null, timer: null, was: {} };
 var AN_TASKS = [
     { key: 'faces', icon: '🙂', title: 'Visages', what: 'Trouve les visages de chaque photo pour les ranger par personne.' },
     { key: 'enrich', icon: '📍', title: 'Dates, lieux et doublons', what: 'Lit la date de prise de vue et le GPS dans la photo, et calcule une empreinte visuelle pour repérer les doublons. Sans IA.' },
+    { key: 'embed', icon: '🔎', title: 'Recherche par le sens', what: 'Transforme chaque description en « empreinte de sens » pour retrouver une photo avec vos propres mots (« vacances à la mer », « fête d\'anniversaire »), même s\'ils ne sont pas écrits dedans. Tout reste sur la station.' },
     { key: 'describe', icon: '✍️', title: 'Descriptions', what: 'Écrit en français ce que montre chaque photo — cherchable, modifiable à la main. Une description que vous écrivez n\'est jamais remplacée.' }
 ];
 var AN_ROUTE = { direct: ['Accès direct', 'cette station parle elle-même à la machine d\'IA'], relay: ['Relais NOSTR', 'messages chiffrés vers un Brain GPU'],
@@ -2985,7 +3345,7 @@ function fmtEta(min) {
     return h >= 48 ? '≈ ' + Math.round(h / 24) + ' jours' : '≈ ' + h + ' h' + (m ? ' ' + String(m).padStart(2, '0') : '');
 }
 function anTask(d, key) {
-    var t = d[key], total = d.images, mode = d.mode[key], run = t.run || {}, done, remaining, lines = [];
+    var t = d[key], total = d.images, mode = d.mode[key] || d.mode.describe, run = t.run || {}, done, remaining, lines = [];
     if (key === 'faces') {
         done = t.done; remaining = t.waiting + t.pending + t.timeout;
         if (t.waiting) lines.push(plural(t.waiting, 'photo jamais analysée', 'photos jamais analysées'));
@@ -2995,6 +3355,9 @@ function anTask(d, key) {
     } else if (key === 'enrich') {
         done = total - t.pending; remaining = t.pending;
         lines.push(plural(t.dated, 'photo datée', 'photos datées') + ' · ' + plural(t.located, 'localisée', 'localisées'));
+    } else if (key === 'embed') {
+        total = t.described; done = t.indexed; remaining = t.pending;
+        lines.push('modèle ' + t.model);
     } else {
         done = t.done; remaining = t.pending;
     }
@@ -3011,6 +3374,7 @@ function anRunLine(x, key) {
     }
     if (r.error === 'direct_unavailable') return '<p class="fc-an-err">Accès direct impossible : ComfyUI ne répond pas, et le capitaine a interdit le relais. Demandez-lui de passer en mode « auto » ou « relais ».</p>';
     if (r.error === 'model_unavailable') return '<p class="fc-an-err">Le modèle d\'IA ne répond pas (5 échecs d\'affilée) : analyse arrêtée. Vérifiez qu\'Ollama est joignable depuis la station.</p>';
+    if (key === 'embed' && r.error) return '<p class="fc-an-err">Vectorisation arrêtée : ' + esc(r.error) + '</p>';
     if (r.error === 'no_path') return '<p class="fc-an-err">Ni accès direct ni relais NOSTR : rien ne peut démarrer.</p>';
     if (r.total && r.started_at) return '<p class="fc-an-last">Dernier passage : ' + plural(r.done || 0, 'photo traitée', 'photos traitées') + (r.failed ? ', ' + plural(r.failed, 'échec', 'échecs') : '') + '.</p>';
     return '';
@@ -3060,11 +3424,11 @@ function updateAnalysisBanner() {
 function renderAnalysis() {
     var d = AN.data; if (!d) return;
     var ref = d.refresh || {};
-    $('an-intro').innerHTML = 'Chaque photo passe par trois analyses. Voici, pour chacune, <b>ce qui est fait</b>, <b>ce qui reste</b> et <b>par quel chemin</b> elle tourne. '
+    $('an-intro').innerHTML = 'Chaque photo passe par quatre analyses. Voici, pour chacune, <b>ce qui est fait</b>, <b>ce qui reste</b> et <b>par quel chemin</b> elle tourne. '
         + plural(d.images, 'photo', 'photos') + ' (vos copies reçues ne sont pas analysées : ce sont celles de vos proches).';
     $('an-cards').innerHTML = AN_TASKS.map(function (t) {
         var x = anTask(d, t.key), pct = x.total ? Math.round(100 * x.done / x.total) : 100, r = AN_ROUTE[x.mode.effective] || AN_ROUTE.none, running = !!x.run.running;
-        var btn = x.remaining > 0 ? 'Analyser les ' + x.remaining + (t.key === 'describe' ? ' sans description' : ' restantes') : (t.key === 'faces' ? 'Tout est analysé' : 'Tout est fait');
+        var btn = x.remaining > 0 ? (t.key === 'embed' ? 'Indexer les ' + x.remaining + ' descriptions' : 'Analyser les ' + x.remaining + (t.key === 'describe' ? ' sans description' : ' restantes')) : (t.key === 'faces' ? 'Tout est analysé' : 'Tout est fait');
         return '<div class="fc-an-card' + (running ? ' is-running' : '') + '"><div class="fc-an-head"><span class="fc-an-ic">' + t.icon + '</span><div><h4>' + esc(t.title) + '</h4>'
             + '<span class="fc-an-route" title="' + esc(x.mode.why) + '">' + esc(r[0]) + '</span></div></div>'
             + '<p class="fc-hint">' + esc(t.what) + '</p>'
@@ -3073,7 +3437,8 @@ function renderAnalysis() {
             + (x.lines.length ? '<p class="fc-hint">' + esc(x.lines.join(' · ')) + '</p>' : '')
             + anRunLine(x, t.key)
             + '<p class="fc-hint fc-an-why">' + esc(x.mode.why) + '</p>'
-            + '<button class="fc-btn fc-btn-sm' + (x.remaining ? ' fc-btn-primary' : '') + '" data-an-run="' + t.key + '"' + (running || x.remaining <= 0 ? ' disabled' : '') + '>' + esc(running ? 'En cours…' : btn) + '</button></div>';
+            + '<button class="fc-btn fc-btn-sm' + (x.remaining ? ' fc-btn-primary' : '') + '" data-an-run="' + t.key + '"' + (running || x.remaining <= 0 ? ' disabled' : '') + '>' + esc(running ? 'En cours…' : btn) + '</button>'
+            + (t.key === 'describe' && d.describe.stale ? ' <button class="fc-btn fc-btn-sm" data-an-redo="1"' + (running ? ' disabled' : '') + ' title="Descriptions écrites par un ancien modèle, souvent moins bonnes — celles que vous avez écrites ne sont jamais touchées">Refaire ' + plural(d.describe.stale, 'description', 'descriptions') + ' avec ' + esc(d.describe.model) + '</button>' : '') + '</div>';
     }).join('');
     // Chemin choisi par le capitaine
     var m = d.mode, box = $('an-mode'), modes = [
@@ -3091,10 +3456,10 @@ function renderAnalysis() {
           + 'import de vos sources WebDAV, sauvegarde FaceCloud. ' + (ref.done_today ? '<b>Fait aujourd\'hui.</b>' : ref.due ? '<b>Prévu dans l\'heure qui vient.</b>' : 'Pas encore passé aujourd\'hui.') + '</p>'
         : '<p class="fc-hint">L\'heure de rafraîchissement de votre MULTIPASS n\'est pas encore fixée (elle l\'est à son premier passage).</p>');
 }
-async function runAnalysis(task, btn, paths) {
+async function runAnalysis(task, btn, paths, redo) {
     if (btn) btn.disabled = true;
     try {
-        var r = await nostrFetch('/api/cloud/analysis/run', { method: 'POST', body: form({ task: task, paths: paths ? JSON.stringify(paths) : '' }), timeout: 60000 });
+        var r = await nostrFetch('/api/cloud/analysis/run', { method: 'POST', body: form({ task: task, paths: paths ? JSON.stringify(paths) : '', redo: redo ? '1' : '0' }), timeout: 60000 });
         var ro = AN_ROUTE[(r.route || {}).effective] || AN_ROUTE.none;
         toast('Analyse lancée · chemin : ' + ro[0] + '. Elle continue en arrière-plan.');
         AN.fast = true; M.launching = Date.now();
@@ -3383,6 +3748,98 @@ function selectOS(os) {
         macos: 'Finder → Aller → Se connecter au serveur (⌘K), puis : ' + url,
         windows: 'Explorateur → Ce PC → Ajouter un emplacement réseau, puis : ' + url + ' (adresse https obligatoire)'
     }[os];
+}
+
+/* ── Vidéos FUN : /VideoFUN/ (GET /api/cloud/videofun) ─────────────────────────────────────────────
+   Les vidéos du Studio y sont copiées (chiffrées) à la fin du rendu ; on les lit, on les envoie par lien secret
+   (POST /api/story/share {path}), on les supprime. Une vidéo déposée à la main par DAV apparaît aussi. */
+var VID = { list: [], loaded: false };
+async function loadVideos() {
+    var box = $('vid-list');
+    box.innerHTML = '<p class="fc-hint">Chargement…</p>';
+    try {
+        var d = await nostrFetch('/api/cloud/videofun');
+        VID.list = d.videos || []; VID.loaded = true;
+        renderVideos();
+    } catch (e) { box.innerHTML = '<p class="fc-error">Vidéos indisponibles : ' + esc(e.message) + '</p>'; }
+}
+function fmtMB(n) { return (n / 1048576).toFixed(1).replace('.', ',') + ' Mo'; }
+function renderVideos() {
+    var box = $('vid-list'), list = VID.list;
+    $('vid-count').textContent = list.length ? '(' + list.length + ')' : '';
+    if (!list.length) {
+        box.innerHTML = '<div class="fc-gal-empty"><div class="big">🎬</div><h3>Pas encore de vidéo</h3><p>Choisissez un proche, racontez votre idée à l\'assistant : la vidéo drôle arrive ici, prête à lui envoyer.</p>'
+            + '<a class="fc-btn fc-btn-primary" href="story.html">Créer ma première vidéo FUN</a></div>';
+        return;
+    }
+    var byFolder = {};
+    list.forEach(function (v) { (byFolder[v.folder || 'Divers'] = byFolder[v.folder || 'Divers'] || []).push(v); });
+    box.innerHTML = Object.keys(byFolder).map(function (f) {
+        return '<h3 class="fc-vid-h">' + esc(f) + ' <small>' + plural(byFolder[f].length, 'vidéo', 'vidéos') + ' · /VideoFUN/' + esc(f) + '/</small></h3><div class="fc-vgrid">'
+            + byFolder[f].map(function (v) {
+                var i = list.indexOf(v);
+                return '<article class="fc-vcard" data-vi="' + i + '"><div class="fc-vplay" data-vplay="' + i + '" role="button" tabindex="0" aria-label="Lire"><span>▶</span></div>'
+                    + '<h4>' + esc(v.title) + '</h4><p class="fc-hint">' + (v.duration ? Math.round(v.duration) + ' s · ' : '') + fmtMB(v.size) + ' · ' + esc(new Date((v.created || v.mtime) * 1000).toLocaleDateString())
+                    + (v.received ? ' · envoyée par ' + esc(v.from_name || 'un ami') : v.cast && v.cast.length ? ' · avec ' + esc(v.cast.join(', ')) : '') + '</p>'
+                    + '<div class="fc-row"><button class="fc-btn fc-btn-sm fc-btn-primary" data-vshare="' + i + '">📤 Envoyer</button>'
+                    + '<button class="fc-btn fc-btn-sm" data-vdl="' + i + '" title="Télécharger">⤓</button>'
+                    + '<button class="fc-btn fc-btn-sm fc-btn-danger" data-vdel="' + i + '" title="Supprimer">🗑</button></div></article>';
+            }).join('') + '</div>';
+    }).join('');
+}
+async function videoBlob(v) { return nostrFetch('/api/cloud/videofun/file?path=' + encodeURIComponent(v.path), { blob: true, timeout: 120000 }); }
+async function playVideo(i) {
+    var v = VID.list[i], card = document.querySelector('.fc-vcard[data-vi="' + i + '"] .fc-vplay');
+    if (!card || card.querySelector('video')) return;
+    card.innerHTML = '<span>…</span>';
+    try {
+        var url = URL.createObjectURL(await videoBlob(v));
+        card.innerHTML = ''; var el = document.createElement('video'); el.src = url; el.controls = true; el.autoplay = true; el.playsInline = true; card.appendChild(el);
+    } catch (e) { card.innerHTML = '<span>⚠</span>'; toast('Lecture impossible : ' + e.message, true); }
+}
+async function shareVideo(i, list) {
+    var v = (list || VID.list)[i], d = $('dlg-share'), grid = $('share-grid'), msg = $('share-msg');
+    $('share-warn').textContent = 'Le lien ouvre cette vidéo : envoyez-le seulement à la personne concernée. Vous pouvez le révoquer en supprimant la vidéo.';
+    $('share-title').textContent = 'Envoyer « ' + v.title + ' »';
+    $('share-text').textContent = 'Votre ami regarde la vidéo directement dans son navigateur, sans compte ni application. Le lien est secret, valable 14 jours.';
+    grid.innerHTML = '<p class="fc-hint">Préparation du lien…</p>'; msg.textContent = '';
+    if (!d.open) d.showModal();
+    try {
+        var r = await nostrFetch('/api/story/share', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: v.path, title: v.title, to: v.to || '' }) });
+        var who = v.to || '';
+        fillShareChannels(grid, r.url, '🎬 ' + (who ? who + ', j\'ai' : 'J\'ai') + ' fait une vidéo pour toi : ' + r.url, v.title, '');
+        var fp = (App.persons || []).filter(function (q) { return q.name && who && q.name.toLowerCase() === who.toLowerCase() && (q.pubkey || q.email); })[0];
+        if (fp) {       // un ami qui a un MULTIPASS : la vidéo peut arriver directement dans son cloud, sans lien
+            var cb = document.createElement('button'); cb.type = 'button'; cb.className = 'fc-share-btn fc-share-cloud'; cb.setAttribute('data-vcloud', '1');
+            cb.innerHTML = '<span>☁️</span>Dans le cloud de ' + esc(fp.name) + ' (sans lien)';
+            cb.onclick = function () { sendVideoToCloud(v, fp, cb, msg); };
+            grid.insertBefore(cb, grid.firstChild);
+        }
+        msg.textContent = 'Lien valable jusqu\'au ' + new Date(r.expires * 1000).toLocaleDateString() + '.';
+    } catch (e) { grid.innerHTML = '<p class="fc-error">Lien impossible : ' + esc(e.message) + '</p>'; }
+}
+async function sendVideoToCloud(v, p, btn, msg) {
+    btn.disabled = true; msg.textContent = 'Envoi dans le cloud de ' + p.name + '…';
+    try {
+        var r = await nostrFetch('/api/cloud/videofun/send', { method: 'POST', body: form({ path: v.path, pubkey: p.pubkey || '', to_email: p.email || '' }), timeout: 180000 });
+        msg.textContent = r.status === 'duplicate' ? p.name + ' l\'a déjà.' : (r.mode === 'node' ? 'Envoyée vers la station de ' + p.name + ' : elle arrive dans quelques minutes dans son dossier Vidéos.'
+            : 'Envoyée : ' + p.name + ' la retrouve dans son onglet Vidéos.');
+        toast('Vidéo envoyée à ' + p.name);
+    } catch (e) {
+        btn.disabled = false;
+        msg.textContent = e.status === 404 ? p.name + ' n\'a pas de MULTIPASS connu : utilisez un des liens ci-dessus.' : 'Envoi impossible : ' + e.message;
+    }
+}
+async function deleteVideo(i) {
+    var v = VID.list[i];
+    if (!(await confirmDialog('Supprimer cette vidéo ?', '« ' + v.title + ' » est effacée de votre cloud (les liens déjà envoyés cessent de marcher).', 'Supprimer'))) return;
+    try { await nostrFetch('/api/cloud/videofun?path=' + encodeURIComponent(v.path), { method: 'DELETE' }); toast('Vidéo supprimée'); loadVideos(); loadQuota(); }
+    catch (e) { toast('Suppression impossible : ' + e.message, true); }
+}
+async function downloadVideo(i) {
+    var v = VID.list[i];
+    try { var blob = await videoBlob(v), a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = v.name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(function () { URL.revokeObjectURL(a.href); }, 4000); }
+    catch (e) { toast('Téléchargement impossible : ' + e.message, true); }
 }
 
 /* ── Sauvegarde hors station (UPassport/ucloud_backup.py) ──────────── */
@@ -4054,6 +4511,7 @@ document.addEventListener('DOMContentLoaded', function () {
     $('tray-new').addEventListener('click', function () { askName(App.selection); });
     $('tray-photo').addEventListener('click', function () { if (App.selection.length) openPhotoOfFace(App.selection[App.selection.length - 1]); });
     $('tray-forget').addEventListener('click', function () { forget(App.selection); });
+    $('tray-delphotos').addEventListener('click', function () { deleteFacePhotos(App.selection.slice()); });
     $('tray-unassign').addEventListener('click', function () { unassign(App.selection); });
     $('tray-clear').addEventListener('click', function () { FaceBoard.clearSelection(); });
     $('tray-move').addEventListener('change', function (ev) {
@@ -4107,6 +4565,13 @@ document.addEventListener('DOMContentLoaded', function () {
     $('dr-send').addEventListener('click', sendPerson);
     $('dr-share').addEventListener('click', function () { var p = App.personByKey[App.current]; if (p && p.faces.length) openShareDialog(p, p.faces.map(function (f) { return f.id; })); });
     $('share-grid').addEventListener('click', onShareClick);
+    $('vid-list').addEventListener('click', function (ev) {
+        var t;
+        if ((t = ev.target.closest('[data-vplay]'))) { if (!ev.target.closest('video')) playVideo(+t.getAttribute('data-vplay')); }
+        else if ((t = ev.target.closest('[data-vshare]'))) shareVideo(+t.getAttribute('data-vshare'));
+        else if ((t = ev.target.closest('[data-vdl]'))) downloadVideo(+t.getAttribute('data-vdl'));
+        else if ((t = ev.target.closest('[data-vdel]'))) deleteVideo(+t.getAttribute('data-vdel'));
+    });
     $('nudge').addEventListener('click', function (ev) {
         var b = ev.target.closest('[data-nudge]'); if (!b) return;
         var act = this._actions[+b.getAttribute('data-nudge')]; this.hidden = true; clearTimeout(NUDGE.timer); if (act && act.run) act.run();
@@ -4115,6 +4580,17 @@ document.addEventListener('DOMContentLoaded', function () {
     $('dr-in-email').addEventListener('input', function () {
         var p = App.personByKey[App.current];
         $('dr-send').disabled = !(this.value.trim() || (p && p.pubkey));
+    });
+    $('dr-delete').addEventListener('click', function () { if (App.current) openDelPerson([App.current]); });
+    $('dp-filter').addEventListener('input', renderDelPerson);
+    $('dp-filter').addEventListener('keydown', function (ev) { if (ev.key === 'Enter') ev.preventDefault(); });
+    $('dp-unknown').addEventListener('change', renderDelPerson);
+    $('dp-ok').addEventListener('click', confirmDelPerson);
+    pvWire('dlg-plan', 'pl-big'); pvWire('dlg-delperson', 'dp-big');
+    $('dp-list').addEventListener('click', function (ev) {
+        var a = ev.target.closest('[data-dp-add]'), r = ev.target.closest('[data-dp-rm]');
+        if (a) { DP.sel.add(a.getAttribute('data-dp-add')); $('dp-filter').value = ''; renderDelPerson(); }
+        else if (r && DP.sel.size > 1) { DP.sel.delete(r.getAttribute('data-dp-rm')); renderDelPerson(); }
     });
     $('dr-show').addEventListener('click', function () {
         var p = App.personByKey[App.current];
@@ -4150,6 +4626,25 @@ document.addEventListener('DOMContentLoaded', function () {
         if (b.hasAttribute('data-memo')) { var m = MEMO.memories[+b.getAttribute('data-memo')]; openInterval(m.since, m.until, 'Il y a ' + plural(m.ago, 'an', 'ans')); }
         else if (b.hasAttribute('data-event')) { var e = MEMO.events[+b.getAttribute('data-event')]; openInterval(e.since, e.until, fmtSpan(e.since, e.until)); }
         else { shareEvent(MEMO.events[+b.getAttribute('data-event-share')]); }
+    });
+    $('dr-skills').addEventListener('toggle', function () { var p = App.personByKey[App.current]; if (this.open && p && SK.key !== p.key) loadSkills(p); });
+    $('dr-sk-body').addEventListener('click', function (ev) {
+        var b = ev.target.closest('[data-sk-near],[data-sk-del],[data-sk-open],#sk-add,#sk-geo');
+        if (!b) return;
+        if (b.id === 'sk-add') addSkill();
+        else if (b.id === 'sk-geo') navigator.geolocation ? navigator.geolocation.getCurrentPosition(function (g) { SK.pos = { lat: +g.coords.latitude.toFixed(4), lon: +g.coords.longitude.toFixed(4) }; var p = App.personByKey[App.current]; if (p) loadSkills(p); },
+            function (e) { toast('Position refusée : ' + e.message, true); }) : toast('Position indisponible sur ce navigateur', true);
+        else if (b.hasAttribute('data-sk-near')) findNearby(+b.getAttribute('data-sk-near'));
+        else if (b.hasAttribute('data-sk-del')) deleteSkill(+b.getAttribute('data-sk-del'));
+        else if (b.hasAttribute('data-sk-open')) openPerson(b.getAttribute('data-sk-open'));
+    });
+    $('dr-sk-body').addEventListener('change', function (ev) { if (ev.target.id === 'sk-same') SK.same = ev.target.checked; });
+    $('dr-friend').addEventListener('toggle', function () { var p = App.personByKey[App.current]; if (this.open && p && FR.key !== p.key) loadFriend(p); });
+    $('dr-fr-body').addEventListener('click', function (ev) {
+        var b = ev.target.closest('[data-fplay],[data-fshare]');
+        if (!b) return;
+        if (b.hasAttribute('data-fplay')) playFriendVideo(+b.getAttribute('data-fplay'));
+        else shareVideo(+b.getAttribute('data-fshare'), FR.videos);
     });
     $('dr-timeline').addEventListener('toggle', function () { var p = App.personByKey[App.current]; if (this.open && p && TL.key !== p.key) loadTimeline(p); });
     $('dr-tl-body').addEventListener('click', function (ev) {
@@ -4434,7 +4929,11 @@ document.addEventListener('DOMContentLoaded', function () {
         } catch (e) { toast(e.message, true); }
         b.disabled = false; b.textContent = 'Restaurer depuis la sauvegarde';
     });
-    $('an-cards').addEventListener('click', function (ev) { var b = ev.target.closest('[data-an-run]'); if (b) runAnalysis(b.dataset.anRun, b); });
+    $('an-cards').addEventListener('click', function (ev) {
+        var b = ev.target.closest('[data-an-run]'), r = ev.target.closest('[data-an-redo]');
+        if (b) runAnalysis(b.dataset.anRun, b);
+        else if (r) confirmDialog('Refaire les descriptions ?', 'Les descriptions écrites par l\'IA avec un ancien modèle sont remplacées, une par une, par celles du modèle actuel (' + ((AN.data && AN.data.describe.model) || '') + '). Vos descriptions écrites à la main ne sont jamais touchées. Cela peut durer plusieurs heures ; vous pouvez continuer à utiliser FaceCloud.', 'Refaire').then(function (ok) { if (ok) runAnalysis('describe', r, null, true); });
+    });
     $('an-mode').addEventListener('change', async function (ev) {
         if (ev.target.name !== 'an-mode') return;
         try { await nostrFetch('/api/facecloud/analysis/mode', { method: 'POST', body: form({ mode: ev.target.value }) }); toast('Chemin des analyses : ' + ev.target.value); loadAnalysis(); }

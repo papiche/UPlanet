@@ -3558,10 +3558,11 @@ async function loadArborStatus() {
             _replayArborChatHistory();
             loadArborBatonStatus();
         }
-        if (data.state && data.state.status === 'running') {
-            clearTimeout(_arborPollTimer);
-            _arborPollTimer = setTimeout(function() { loadArborStatus(); }, 15000);
-        }
+        _arborLastRunId = (data.state && data.state.run_id) || '';
+        // Run en cours (ex. page rechargée pendant un run) : suivi en direct du
+        // seul bloc #arbor-run-body — jamais de reconstruction du panneau entier
+        // (le champ de dialogue et les formulaires perdraient leur saisie).
+        if (data.state && data.state.status === 'running' && !_arborWatchTimer) startArborRunWatch();
     } catch(e) {
         if (e.message !== '403' && body) body.innerHTML = '<div style="color:var(--danger);padding:14px">Erreur : ' + escHtml(e.message) + '</div>';
     }
@@ -3705,6 +3706,7 @@ async function confirmArborChatAction(btnEl) {
         card.remove();
         _arborLoaded = true;
         loadArborStatus();
+        startArborRunWatch();
     } catch(e) {
         Array.prototype.forEach.call(card.querySelectorAll('button'), function(b) { b.disabled = false; });
         if (e.message !== '403') showToast('Erreur : ' + e.message, 'err');
@@ -3798,6 +3800,95 @@ async function handoffArborBaton() {
     }
 }
 
+var _arborLastRunId = '';
+var _arborWatchTimer = null;
+var _arborWatchTicks = 0;
+var _arborWatchBaseRunId = '';
+
+function _arborFmtDuration(sec) {
+    if (sec < 0 || isNaN(sec)) return '—';
+    var m = Math.floor(sec / 60), s = Math.floor(sec % 60);
+    return (m ? m + ' min ' : '') + s + ' s';
+}
+
+// Retour détaillé du dernier run (en cours, terminé ou échoué) : état, durée,
+// code retour, branche produite et journal (arbor_run.<id>.log, 200 dernières lignes).
+function renderArborRun(data) {
+    var st = data.state;
+    if (!st || !st.status) {
+        return '<div style="border:1px solid var(--border);border-radius:6px;padding:10px 12px;margin-bottom:14px;font-size:.78rem;color:var(--text2)">' +
+            '📡 Aucun run enregistré sur cette station — le suivi détaillé apparaîtra ici dès le prochain déclenchement.</div>';
+    }
+    var running = st.status === 'running';
+    var failed = st.status === 'failed' || (st.status === 'done' && st.rc !== undefined && Number(st.rc) !== 0);
+    var color = running ? '251,191,36' : (failed ? '239,68,68' : '74,222,128');
+    var icon = running ? '⏳' : (failed ? '❌' : '✅');
+    var label = running ? 'Run en cours' : (failed ? 'Run en échec' : 'Run terminé');
+    var t0 = st.started_at ? Date.parse(st.started_at) : NaN;
+    var t1 = st.finished_at ? Date.parse(st.finished_at) : Date.now();
+    var details = [
+        '<b>mode</b> : ' + escHtml(st.mode || '?'),
+        st.origin ? '<b>origine</b> : ' + escHtml(st.origin) : '',
+        st.started_at ? '<b>début</b> : ' + escHtml(new Date(st.started_at).toLocaleString('fr-FR')) : '',
+        !isNaN(t0) ? '<b>durée</b> : ' + _arborFmtDuration((t1 - t0) / 1000) + (running ? ' (en cours)' : '') : '',
+        st.rc !== undefined ? '<b>code retour</b> : ' + escHtml(String(st.rc)) : '',
+        st.branch ? '<b>branche</b> : <code>' + escHtml(st.branch) + '</code>' : '',
+        data.log_lines !== undefined ? '<b>journal</b> : ' + data.log_lines + ' ligne(s)' : ''
+    ].filter(Boolean).join(' · ');
+    var html = '<div style="border:1px solid rgba(' + color + ',.45);border-radius:6px;padding:10px 12px;margin-bottom:14px;' +
+        'background:rgba(' + color + ',.07);font-size:.78rem">' +
+        '<div style="font-weight:700;margin-bottom:4px">' + icon + ' ' + label + '</div>' +
+        '<div style="color:var(--text2);line-height:1.6;margin-bottom:6px">' + details + '</div>';
+    if (data.log_tail) {
+        html += '<pre id="arbor-run-log" style="margin:0;max-height:320px;overflow:auto;font-size:.7rem;line-height:1.45;white-space:pre-wrap;word-break:break-word;' +
+            'background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px">' + escHtml(data.log_tail) + '</pre>';
+    } else {
+        html += '<div style="font-size:.72rem;color:var(--text2)">Journal pas encore écrit' + (st.log ? ' (<code>' + escHtml(st.log) + '</code>)' : '') + '…</div>';
+    }
+    if (running) html += '<div style="font-size:.68rem;color:var(--text2);margin-top:6px">🔄 rafraîchi toutes les 3 s</div>';
+    return html + '</div>';
+}
+
+function stopArborRunWatch() {
+    if (_arborWatchTimer) { clearInterval(_arborWatchTimer); _arborWatchTimer = null; }
+}
+
+// Suivi léger après un déclenchement : met à jour #arbor-run-body seulement.
+// Attend jusqu'à ~45 s l'apparition d'un NOUVEAU run (autre run_id) — même s'il
+// est déjà fini/en échec à la première lecture — puis suit jusqu'à sa fin et
+// recharge alors tout le panneau (branches, audit, cookies).
+function startArborRunWatch() {
+    stopArborRunWatch();
+    _arborWatchTicks = 0;
+    _arborWatchBaseRunId = _arborLastRunId;
+    var tick = async function() {
+        try {
+            var data = await apiFetch(_apiUrl + '/api/nostr/admin/arbor_status');
+            var st = data.state || {};
+            var isNew = st.status === 'running' || (st.run_id && st.run_id !== _arborWatchBaseRunId);
+            if (!isNew) {
+                if (++_arborWatchTicks > 15) stopArborRunWatch();
+                return;
+            }
+            var box = document.getElementById('arbor-run-body');
+            var oldLog = document.getElementById('arbor-run-log');
+            var atBottom = !oldLog || (oldLog.scrollHeight - oldLog.scrollTop - oldLog.clientHeight < 24);
+            if (box) box.innerHTML = renderArborRun(data);
+            var newLog = document.getElementById('arbor-run-log');
+            if (newLog) newLog.scrollTop = atBottom ? newLog.scrollHeight : (oldLog ? oldLog.scrollTop : 0);
+            updateArborBadge(data);
+            if (st.status !== 'running') {
+                stopArborRunWatch();
+                _arborLoaded = true;
+                loadArborStatus();
+                showToast(st.status === 'failed' || Number(st.rc) !== 0 ? 'Run ARBOR en échec — voir le journal' : 'Run ARBOR terminé', st.status === 'failed' || Number(st.rc) !== 0 ? 'err' : 'ok');
+            }
+        } catch(e) { /* erreur transitoire : prochain tick */ }
+    };
+    _arborWatchTimer = setInterval(tick, 3000);
+    tick();
+}
+
 var _arborPendingCookies = [];
 
 function updateArborBadge(data) {
@@ -3851,11 +3942,7 @@ function renderArborStatus(data) {
         (enabled ? '<b style="color:var(--ok,#4ade80)">✅ activé</b>' : '<b style="color:var(--text2)">🔒 désactivé</b>') +
         ' · cooldown ' + escHtml(String(data.cooldown_min)) + ' min</span></div>';
 
-    if (data.state && data.state.status === 'running') {
-        html += '<div style="border:1px solid rgba(251,191,36,.4);border-radius:6px;padding:10px 12px;margin-bottom:14px;' +
-            'background:rgba(251,191,36,.08);font-size:.8rem">⏳ Run en cours — mode <b>' + escHtml(data.state.mode || '?') +
-            '</b>, démarré à ' + escHtml(data.state.started_at || '?') + '</div>';
-    }
+    html += '<div id="arbor-run-body">' + renderArborRun(data) + '</div>';
 
     html += renderArborPendingActions(data);
 
@@ -3932,6 +4019,7 @@ async function triggerArbor(mode) {
         opsLog([{ type: 'ok', text: 'arbor_trigger ' + mode }]);
         _arborLoaded = true;
         loadArborStatus();
+        startArborRunWatch();
     } catch(e) {
         if (e.message !== '403') showToast('Erreur : ' + e.message, 'err');
     }
@@ -3951,6 +4039,7 @@ async function triggerArborForge() {
         opsLog([{ type: 'ok', text: 'arbor_trigger forge : ' + need.slice(0, 60) }]);
         _arborLoaded = true;
         loadArborStatus();
+        startArborRunWatch();
     } catch(e) {
         if (e.message !== '403') showToast('Erreur : ' + e.message, 'err');
     }
@@ -3967,6 +4056,7 @@ async function triggerArborForgeScraper(email, domain, btnEl) {
         showToast('Forge du scraper ' + domain + ' démarrée', 'ok');
         opsLog([{ type: 'ok', text: 'arbor_trigger forge-scraper : ' + domain + ' (' + email + ')' }]);
         loadArborStatus();
+        startArborRunWatch();
     } catch(e) {
         if (e.message !== '403') showToast('Erreur : ' + e.message, 'err');
     } finally {

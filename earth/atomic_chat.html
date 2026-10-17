@@ -172,6 +172,8 @@
             </div>
             <!-- Solde Ğ1-N² (♥) — visible uniquement sur le canal LOVE (peerHex === _loveHex, ma propre clé) -->
             <span id="chat-love-balance" style="display:none;font-size:.78rem;font-weight:700;color:#ff6b9d;background:rgba(255,107,157,.14);border:1px solid rgba(255,107,157,.35);border-radius:20px;padding:3px 11px;margin-right:8px;white-space:nowrap" title="Solde Ğ1-N² (économie LOVE, locale à cette station)"></span>
+            <!-- Appel visio (vdo.ninja, salle privée) — affiché pour un vrai contact seulement -->
+            <button class="sb-icon-btn" id="btn-visio" onclick="_startVisioCall()" style="display:none" title="Appeler en visio" aria-label="Appeler en visio">📹</button>
             <!-- Sélection multiple / suppression -->
             <button class="sb-icon-btn" id="btn-select-mode" onclick="_toggleSelectMode()" title="Sélectionner des messages">☑️</button>
             <button id="btn-select-all" onclick="_toggleSelectAll()" style="display:none" title="Tout sélectionner / désélectionner">☐ Tout</button>
@@ -629,6 +631,7 @@ function _renderConvList(items) {
 }
 
 function _previewText(text) {
+    if (window.Visio) { var v = Visio.inspectInvite(text); if (v) return v.expired ? '📹 Invitation visio (expirée)' : '📹 Invitation visio'; }
     try { var j=JSON.parse(text); if(j._uenc_img) return '📷 Image'; } catch(_) {}
     return text;
 }
@@ -786,7 +789,8 @@ async function _openChat(peerHex) {
             : '💬';
     }
     if (nmEl) nmEl.innerHTML = '<a href="nostr_profile_viewer.html?hex='+peerHex+(_myPub?'&origin='+_myPub:'')+'" target="_blank" style="color:inherit;text-decoration:none">'+_esc(_peerProf.name)+'</a><span class="enc-badge">'+encLabel+'</span>';
-    if (subEl) subEl.textContent = peerHex.slice(0,16)+'…';
+    if (subEl) subEl.innerHTML = _esc(peerHex.slice(0,16))+'…<span id="chat-peer-presence"></span>';
+    _paintVisioHeader();
 
     // Solde Ğ1-N² (♥) du pair affiché — sur le canal LOVE (ma propre clé) ce
     // sera MON solde ; sur une future conversation avec le contact LOVE d'un
@@ -968,7 +972,8 @@ function _renderMsgRow(m, peerPic, grp) {
     var meta = '<span class="msg-meta">'+ttlBadge+_fmt(m.time)+tick+'</span>';
 
     var content;
-    try {
+    var vis = window.Visio && Visio.inspectInvite(m.text);
+    if (vis) { content = _visioCardHtml(m, vis) + meta; } else try {
         var j = JSON.parse(m.text);
         if (j._uenc_img) {
             var cached = _imgCache[m.id];
@@ -1136,6 +1141,73 @@ async function _send() {
         _updateConvPreview(_peer, text, true);
     }
 }
+
+// ── Visio vdo.ninja : appel depuis la conversation, carte d'invitation dans le fil ─────────────────────────
+// Salle PRIVÉE (POST /api/visio/room) ; l'invitation est un message du fil (trace durable, chiffré comme les autres)
+// ET, si l'ami est en ligne (présence activée), une sonnerie éphémère qui le prévient où qu'il soit sur UPlanet.
+function _isPerson(peer) { return !!peer && peer !== _myPub && peer !== _nodeHex && peer !== _loveHex; }
+
+function _visioCardHtml(m, vis) {
+    var who = m.isMe ? 'Vous avez invité en visio' : 'Invitation à une visio';
+    var btn = vis.expired
+        ? (m.isMe ? '' : '<button type="button" style="margin-top:6px;cursor:pointer" onclick="_startVisioCall()">Rappeler</button>')
+        : '<button type="button" style="margin-top:6px;cursor:pointer" onclick="_joinVisio(\''+_esc(m.id)+'\')">Rejoindre</button>';
+    return '<div class="visio-card"><div>📹 '+who+(vis.expired ? ' — <i>expirée</i>' : '')+'</div>'+btn+'</div>';
+}
+
+function _joinVisio(msgId) {
+    var m = _msgs.find(function(x){ return x.id === msgId; });
+    var vis = m && window.Visio && Visio.inspectInvite(m.text);
+    if (!vis || vis.expired) { showNotification({ message: 'Cette invitation est expirée.', type: 'warning' }); return; }
+    var me = _profCache[_myPub];
+    Visio.open(vis.inv, { label: me && me.name });
+}
+
+// Envoie `text` comme message ordinaire du fil (même chemin que la saisie : chiffrement, TTL, coche d'envoi)
+async function _sendInviteText(hex, text) {
+    if (hex !== _peer) throw new Error('Conversation changée pendant l\'envoi.');
+    var inp = document.getElementById('chat-input'), draft = inp.value;
+    inp.value = text;
+    await _send();
+    inp.value = draft;
+}
+
+async function _startVisioCall() {
+    if (!_isPerson(_peer)) return;
+    if (!window.Visio) { showNotification({ message: 'Visio indisponible sur cette page.', type: 'warning' }); return; }
+    _detectEnc();
+    if (!_encMode) { showNotification({ message: '⚠ Extension NOSTR requise (Alby, nos2x, Flamingo…)', type: 'warning' }); return; }
+    var btn = document.getElementById('btn-visio'), peer = _peer;
+    if (btn) btn.disabled = true;
+    try {
+        var room = await Visio.createRoom();
+        var how = await Visio.invite(peer, room, { dmAlways: true, dm: _sendInviteText });
+        var me = _profCache[_myPub];
+        Visio.open(room, { label: me && me.name });
+        showNotification({ message: how === 'dm' ? 'Invitation envoyée dans la conversation.' : 'Appel en cours — votre ami est prévenu.', type: 'success' });
+    } catch (e) {
+        showNotification({ message: 'Visio : ' + (e.message || e), type: 'error' });
+    } finally {
+        if (btn) btn.disabled = false;
+    }
+}
+
+// Bouton 📹 + pastille « en ligne » dans l'en-tête (présence : seulement si le membre l'a activée dans Mon compte)
+var _presHooked = false;
+function _paintVisioHeader() {
+    var btn = document.getElementById('btn-visio');
+    if (btn) btn.style.display = (_isPerson(_peer) && window.Visio && window.nostr) ? '' : 'none';
+    var sp = document.getElementById('chat-peer-presence');
+    if (sp) {
+        var g = (window.Presence && _isPerson(_peer)) ? Presence.get(_peer) : null;
+        sp.textContent = g && g.fresh && g.status !== 'offline'
+            ? (g.status === 'visio' ? ' · 📹 en visio' : g.status === 'away' ? ' · ⏳ absent' : ' · ● en ligne') : '';
+    }
+    if (window.Presence && !_presHooked) { _presHooked = true; Presence.on(_paintVisioHeader); }
+}
+setInterval(_paintVisioHeader, 10000);
+// Sonnerie reçue alors que le chat de cet ami est déjà ouvert : la carte est dans le fil, pas de doublon flottant
+window.visioSuppressInvite = function(hex) { return _peer === hex && document.visibilityState === 'visible'; };
 
 // ── Delete message (NIP-09 / Kind 5) ─────────────────────────────────────────
 async function _deleteMsg(msgId) {
@@ -1354,6 +1426,7 @@ function _subscribeLive() {
             if (ev.pubkey === _myPub && !isSelfMsg) return;
             var peer = isSelfMsg ? _myPub : ev.pubkey;
             var text = await _cachedDecrypt(ev);
+            if (!isSelfMsg && _peer !== peer && window.Visio) Visio.handleText(peer, text, ev.id);   // carte « Rejoindre » (amis mutuels, invitation fraîche)
             if (!_profCache[peer]) await _profile(peer);
             // Mise à jour aperçu conv
             var found = false;
@@ -1762,6 +1835,7 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 <script src="common.js"></script>
 <script src="uplanet-header.js"></script>
+<script src="visio.js"></script>
 <!-- Widgets chat — doivent être chargés avant _onConnected -->
 <script src="a4l-chat-sidebar.js"></script>
 <script src="a4l-chat-profile.js"></script>

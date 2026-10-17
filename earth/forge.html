@@ -634,6 +634,7 @@ body{background:var(--bg);color:var(--txt);font-family:'Segoe UI',system-ui,sans
 <script src="nacl-fast.min.js"></script>
 <script src="nostr.bundle.js"></script>
 <script src="common.js"></script>
+<script src="knowledge-rev.js"></script>
 <script src="uplanet-header.js"></script>
 <script>
 'use strict';
@@ -674,7 +675,21 @@ function fetchEvs(filter, timeout) {
     });
 }
 
-function requireSigned(evTemplate) {
+// Publication d'un événement : les savoirs (30500-30505) republiés sous le même d-tag
+// sont chaînés à leur version précédente (tags prev/rev → CID IPFS) — cf. knowledge-rev.js.
+// Le parent est la dernière version de l'auteur courant ; échec d'épinglage = refus visible.
+function requireSigned(evTemplate, base) {
+    var dTag = (evTemplate.tags || []).filter(function(t) { return t[0] === 'd'; })[0];
+    if (!window.KnowledgeRev || !dTag || window.KnowledgeRev.KINDS.indexOf(evTemplate.kind) < 0) return _signAndPublish(evTemplate);
+    return window.KnowledgeRev.chain(evTemplate, {
+        base: base || null,
+        lookup: function(tpl) {
+            return fetchEvs({ kinds: [tpl.kind], authors: [window.userPubkey], '#d': [dTag[1]], limit: 1 }, 5000)
+                .then(function(evs) { return evs.sort(function(a, b) { return b.created_at - a.created_at; })[0] || null; });
+        }
+    }).then(function() { return _signAndPublish(evTemplate); });
+}
+function _signAndPublish(evTemplate) {
     return new Promise(function(resolve, reject) {
         if (!window.userPubkey || !window.nostrRelay) {
             reject(new Error('Non connecté')); return;

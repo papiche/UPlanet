@@ -131,6 +131,9 @@ async function sendMultipassPayment(amount, destination, source, userEmail, user
             body: formData
         });
 
+        if (response.status === 410) {
+            throw new Error('Paiement par /zen_send retiré : envoyez une réaction Kind 7 (+N) à un membre, ou utilisez Ẑelkova (Duniter).');
+        }
         if (!response.ok) {
             throw new Error(`Payment failed: ${response.status} ${response.statusText}`);
         }

@@ -536,6 +536,15 @@
     .events-table td:nth-child(5) { display: none; }
   }
 </style>
+<link rel="stylesheet" href="nostr_admin_ui.css">
+<script src="nostr_admin_ui.js"></script>
+<script src="knowledge-rev.js"></script>
+<script src="nostr_admin_docker.js"></script>
+<script src="nostr_admin_station.js"></script>
+<script src="nostr_admin_tunnels.js"></script>
+<script src="face-hedgehog.js"></script>
+<script src="nostr_admin_qdrant.js"></script>
+<script src="nostr_admin_savoirs.js"></script>
 </head>
 <body>
 
@@ -560,14 +569,17 @@
 
 <!-- Tabs -->
 <div class="adm-tabs">
-  <div class="adm-tab active" id="tab-query" onclick="switchTab('query')">🔍 Requête</div>
+  <div class="adm-tab active" id="tab-home" onclick="switchTab('home')">🏠 Accueil<span id="tab-home-badge" style="display:none;margin-left:5px;background:var(--danger);color:#fff;border-radius:9px;padding:0 6px;font-size:.68rem;font-weight:700"></span></div>
+  <div class="adm-tab" id="tab-station" onclick="switchTab('station')">🖥️ Station<span id="tab-station-badge" style="display:none;margin-left:5px;background:var(--danger);color:#fff;border-radius:9px;padding:0 6px;font-size:.68rem;font-weight:700"></span></div>
+  <div class="adm-tab" id="tab-tunnels" onclick="switchTab('tunnels')">🔌 Tunnels</div>
+  <div class="adm-tab" id="tab-qdrant" onclick="switchTab('qdrant')">🗄️ Qdrant</div>
+  <div class="adm-tab" id="tab-arbor" onclick="switchTab('arbor')">🧬 ARBOR<span id="tab-arbor-badge" style="display:none;margin-left:5px;background:var(--danger);color:#fff;border-radius:9px;padding:0 6px;font-size:.68rem;font-weight:700"></span></div>
+  <div class="adm-tab" id="tab-query" onclick="switchTab('query')">🔍 Requête</div>
   <div class="adm-tab" id="tab-profile" onclick="switchTab('profile')">👤 Profil</div>
   <div class="adm-tab" id="tab-tree" onclick="switchTab('tree')">🌳 Arbre</div>
   <div class="adm-tab" id="tab-memory" onclick="switchTab('memory')">🧠 Mémoire</div>
-  <div class="adm-tab" id="tab-grimoire" onclick="switchTab('grimoire')">📖 Grimoire</div>
-  <div class="adm-tab" id="tab-miz" onclick="switchTab('miz')">🏛️ MIZ Académie</div>
   <div class="adm-tab" id="tab-node" onclick="switchTab('node')">⚙️ NODE</div>
-  <div class="adm-tab" id="tab-arbor" onclick="switchTab('arbor')">🧬 ARBOR<span id="tab-arbor-badge" style="display:none;margin-left:5px;background:var(--danger);color:#fff;border-radius:9px;padding:0 6px;font-size:.68rem;font-weight:700"></span></div>
+  <div class="adm-tab" id="tab-savoirs" onclick="switchTab('savoirs')">📚 Savoirs</div>
 </div>
 
 <!-- Profile panel -->
@@ -634,6 +646,8 @@
         <button class="btn-query" id="btn-prof-viewer" style="padding:5px 14px;font-size:.78rem" onclick="openProfileViewer()">
           👁 Voir profil
         </button>
+        <details class="arb-adv" style="margin:0;display:inline-block"><summary style="padding:5px 12px;font-size:.78rem;color:var(--danger)">⋯ Zone dangereuse</summary>
+        <div class="arb-adv-body" style="display:flex;gap:6px;flex-wrap:wrap;position:absolute;z-index:50;background:var(--surface);border:1px solid var(--danger);border-radius:8px;padding:10px;margin-top:4px;max-width:min(560px,90vw)">
         <button class="btn-del-local" id="btn-del-local" disabled onclick="deleteProfileLocal()" title="Supprime les événements sélectionnés (ou tous si aucune sélection) du relay LOCAL uniquement">
           📍 Supprimer (relay local)
         </button>
@@ -643,6 +657,7 @@
         <button class="btn-del-kind" id="btn-del-dms" disabled onclick="deleteProfileKind(4)" title="Supprime uniquement les Kind 4 (DMs chiffrés) du relay LOCAL">
           🧹 Purger DMs Kind 4 (local)
         </button>
+        </div></details>
         <span id="prof-evcount" style="font-size:.75rem;color:var(--text2);align-self:center"></span>
       </div>
     </div>
@@ -685,9 +700,13 @@
       placeholder="64 chars hex — ou connectez-vous via ⚡"
       onkeydown="if(event.key==='Enter')loadTree()"
       style="flex:1;min-width:200px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:6px 12px;font-family:var(--mono);font-size:.8rem;outline:none">
+    <select id="tree-who" class="al-select" onchange="treePickIdentity(this.value)" title="Choisir une identité">
+      <option value="">Identité…</option>
+    </select>
     <button class="btn-query" id="btn-load-tree" onclick="loadTree()" style="padding:6px 18px;font-size:.82rem;white-space:nowrap">🌳 Charger l'arbre</button>
     <span id="tree-status" style="font-size:.75rem;color:var(--text2)"></span>
   </div>
+  <div id="tree-activity" style="display:none"></div>
   <div id="tree-empty" class="state-empty">
     <div class="icon">🌳</div>
     <div>Chargez l'arbre de votre identité NOSTR — tous vos événements classés par groupe de protocole.</div>
@@ -712,15 +731,12 @@
 <div id="pane-memory" style="display:none">
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 16px 4px">
     <button class="btn-query" id="btn-load-multipass" onclick="loadMultipassList()" style="padding:6px 18px;font-size:.82rem;white-space:nowrap">📋 Charger les comptes MULTIPASS</button>
-    <input type="search" id="mem-search" placeholder="🔍 Rechercher un email…" oninput="renderMultipassGrid()"
-      style="flex:1;min-width:220px;max-width:340px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:6px 12px;font-size:.82rem;outline:none">
-    <span id="mem-list-status" style="font-size:.75rem;color:var(--text2)"></span>
   </div>
   <div id="mem-empty" class="state-empty">
     <div class="icon">🧠</div>
     <div>Chargez la liste des MULTIPASS de la station pour voir l'état de leurs mémoires (fichiers, JSONL, Qdrant) et les cookies liés (NOSTR kind 31903).</div>
   </div>
-  <div id="mem-grid" class="mem-admin-grid" style="display:none"></div>
+  <div id="mem-grid" style="display:none;padding:12px 16px"></div>
   <div id="mem-detail-panel" style="display:none" class="tree-kind-panel">
     <div class="tree-panel-header">
       <span class="tree-panel-title" id="mem-detail-title">—</span>
@@ -751,9 +767,7 @@
       <button class="btn-query" id="btn-import-grimoire" onclick="importGrimoireRecipes()" disabled style="padding:6px 18px;font-size:.82rem;white-space:nowrap;background:linear-gradient(135deg,#38a169,#4f8ef7)">🚀 Publier les recettes manquantes</button>
       <span id="grimoire-status-text" style="font-size:.78rem;color:var(--text2)"></span>
     </div>
-    <input type="search" id="grimoire-search" placeholder="🔍 Rechercher une recette par nom…" oninput="renderGrimoireStatus()"
-      style="width:100%;max-width:340px;margin-bottom:10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:6px 12px;font-size:.82rem;outline:none">
-    <div id="grimoire-status-list" class="mem-admin-grid" style="padding:0"></div>
+    <div id="grimoire-status-list" style="padding:0"></div>
     <div id="grimoire-log" style="display:none" class="ops-log"></div>
 
     <!-- Panneau détail recette — visualiser / modifier / réaliser -->
@@ -838,7 +852,33 @@
 </div>
 
 <!-- Filters -->
-<div id="pane-query">
+<!-- Station — santé, services, journaux, essaim, économie (lecture seule) -->
+<div id="pane-station" style="display:none">
+  <div class="hm-wrap" id="station-body"><div class="state-empty"><div class="icon">🖥️</div><div>Identifiez-vous comme Capitaine pour voir l'état de la station.</div></div></div>
+</div>
+
+<!-- Tunnels IPFS P2P — publiés, clients, persistants, disponibles -->
+<div id="pane-tunnels" style="display:none">
+  <div class="hm-wrap" id="tunnels-body"><div class="state-empty"><div class="icon">🔌</div><div>Identifiez-vous comme Capitaine pour gérer les tunnels P2P.</div></div></div>
+</div>
+
+<!-- Qdrant — constellation des collections et nuages de points -->
+<div id="pane-qdrant" style="display:none">
+  <div class="hm-wrap" id="qdrant-body"><div class="state-empty"><div class="icon">🗄️</div><div>Identifiez-vous comme Capitaine pour explorer la base vectorielle.</div></div></div>
+</div>
+
+<!-- Savoirs — toile de confiance WoTx² (recettes, compétences, attestations, forks) ; intègre Grimoire et MIZ -->
+<div id="pane-savoirs" style="display:none">
+  <div class="hm-wrap" id="savoirs-body"><div class="state-empty"><div class="icon">📚</div><div>Chargement des savoirs partagés…</div></div></div>
+</div>
+<div id="sv-stash" style="display:none"></div>
+
+<!-- Accueil — état de la station et file « À traiter » -->
+<div id="pane-home">
+  <div class="hm-wrap" id="home-body"><div class="state-empty"><div class="icon">🏠</div><div>Identifiez-vous comme Capitaine pour voir l'état de la station.</div></div></div>
+</div>
+
+<div id="pane-query" style="display:none">
 <div class="filter-panel">
   <div class="row g-2 align-items-end">
     <div class="col-12">
@@ -848,15 +888,18 @@
         <button class="kind-btn" data-kind="0">0 · Profil</button>
         <button class="kind-btn" data-kind="1">1 · Note</button>
         <button class="kind-btn" data-kind="4">4 · DM chiffré</button>
+        <button class="kind-btn" data-kind="30078">30078 · Paramétrable</button>
+        <button class="kind-btn" data-kind="30800">30800 · DID</button>
+        <button class="kind-btn kind-more" type="button" onclick="document.getElementById('kind-more-box').style.display='flex';this.style.display='none'">＋ autres kinds…</button>
+      </div>
+      <div class="kind-btns" id="kind-more-box" style="display:none;margin-top:4px">
         <button class="kind-btn" data-kind="5">5 · Suppression</button>
         <button class="kind-btn" data-kind="7">7 · Réaction</button>
         <button class="kind-btn" data-kind="42">42 · UMAP Chat</button>
         <button class="kind-btn" data-kind="30023">30023 · Long-form</button>
-        <button class="kind-btn" data-kind="30078">30078 · Paramétrable</button>
         <button class="kind-btn" data-kind="30500">30500 · Permit WoTx²</button>
         <button class="kind-btn" data-kind="30503">30503 · Certificat WoTx²</button>
         <button class="kind-btn" data-kind="30504">30504 · Formation WoTx²</button>
-        <button class="kind-btn" data-kind="30800">30800 · DID</button>
         <button class="kind-btn" data-kind="30312">30312 · ORE</button>
         <button class="kind-btn" data-kind="30904">30904 · Crowdfunding</button>
         <button class="kind-btn" data-kind="10600">10600 · Analytics</button>
@@ -888,7 +931,8 @@
       <button class="btn-query w-100" id="btn-query" onclick="doQuery()" style="white-space:nowrap">🔍 Requêter</button>
     </div>
   </div>
-  <div class="row g-2 mt-1">
+  <details class="arb-adv" style="margin:10px 0 0"><summary>🔧 Filtres avancés <span class="al-sub">dates, p-tag, t-tag</span></summary>
+  <div class="arb-adv-body"><div class="row g-2 mt-1">
     <div class="col-sm-6 col-lg-3">
       <label for="f-since">Depuis (date)</label>
       <input type="datetime-local" id="f-since">
@@ -905,7 +949,7 @@
       <label for="f-ttag">T-tag (hashtag)</label>
       <input type="text" id="f-ttag" placeholder="ex: UPlanet,atom4love">
     </div>
-  </div>
+  </div></div></details>
 </div>
 
 <!-- Results bar -->
@@ -913,7 +957,12 @@
   <input type="checkbox" id="chk-all" title="Tout sélectionner / désélectionner" onchange="toggleAll(this.checked)">
   <span class="results-count" id="results-count">0 événement(s)</span>
   <button class="btn-delete-sel" id="btn-del-sel" disabled onclick="deleteSelected()" title="Supprime les événements cochés du relay LOCAL uniquement">📍 Supprimer sélection locale (0)</button>
-  <button class="btn-delete-sel" id="btn-purge-filter" onclick="purgeFilter()" style="background:#8b0000; margin-left:auto;" title="Supprime TOUS les résultats affichés du relay LOCAL">☢️ Purger ces résultats (local)</button>
+  <input type="search" id="res-search" class="al-search" placeholder="🔍 Filtrer les résultats…" oninput="renderEvents()" style="max-width:220px">
+  <select id="res-sort" class="al-select" onchange="renderEvents()" title="Trier">
+    <option value="date">Tri : date</option><option value="kind">Tri : kind</option><option value="author">Tri : auteur</option>
+  </select>
+  <details class="arb-adv" style="margin:0 0 0 auto;display:inline-block"><summary style="padding:3px 10px;font-size:.74rem;color:var(--danger)">⋯ Zone dangereuse</summary>
+  <div class="arb-adv-body" style="position:absolute;z-index:50;background:var(--surface);border:1px solid var(--danger);border-radius:8px;padding:10px;margin-top:4px"><button class="btn-delete-sel" id="btn-purge-filter" onclick="purgeFilter()" style="background:#8b0000; " title="Supprime TOUS les résultats affichés du relay LOCAL">☢️ Purger ces résultats (local)</button></div></details>
 </div>
 
 <!-- Events table -->
@@ -1076,13 +1125,14 @@ function _checkCaptain(pubkey) {
                 // Charge automatiquement l'onglet déjà ouvert si sa condition d'auth n'attendait que ceci
                 var active = document.querySelector('.adm-tab.active');
                 var t = active && active.id.replace('tab-', '');
-                if (t === 'grimoire') { _updateGrimoireAuthBanner(); if (!_grimoireLoaded) { _grimoireLoaded = true; loadGrimoireStatus(); } }
-                if (t === 'miz' && !_mizStatsLoaded) { _mizStatsLoaded = true; loadMizStats(); }
+                if (t === 'savoirs') SavoirsUI.load();
                 if (t === 'node' && !_nodeConfigLoaded) { _nodeConfigLoaded = true; loadNodeConfig(); loadSynastryStatus(); }
                 // ARBOR chargé systématiquement à la connexion (pas seulement si l'onglet
                 // est actif) — le badge sur #tab-arbor doit être visible depuis n'importe
                 // quel autre onglet, sans attendre que le capitaine clique sur 🧬 ARBOR.
                 if (!_arborLoaded) { _arborLoaded = true; loadArborStatus(); }
+                if (!_stationLoaded) { _stationLoaded = true; StationUI.load(false); }
+                if (!_tunnelsLoaded) { _tunnelsLoaded = true; TunnelsUI.load(); }
             } else if (_captainHex) {
                 badge.innerHTML = '⚠️ Non-capitaine'; badge.className = 'uph-captain-warn'; badge.style.display = '';
                 var sl = document.getElementById('story-link'); if (sl) sl.style.display = 'none';
@@ -1247,9 +1297,24 @@ function renderEvents() {
         empty.style.display = ''; return;
     }
     empty.style.display = 'none'; bar.style.display = 'flex'; wrap.style.display = '';
-    document.getElementById('results-count').textContent = _events.length + ' événement(s)';
+    var rq = (document.getElementById('res-search') || {}).value || '';
+    rq = rq.toLowerCase();
+    var rsort = (document.getElementById('res-sort') || {}).value || 'date';
+    var order = _events.map(function(ev, i) { return i; }).filter(function(i) {
+        if (!rq) return true;
+        var ev = _events[i];
+        return (ev.id + ' ' + ev.pubkey + ' ' + ev.kind + ' ' + getDtag(ev) + ' ' + (ev.content || '')).toLowerCase().indexOf(rq) !== -1;
+    });
+    order.sort(function(x, y) {
+        var a = _events[x], b = _events[y];
+        if (rsort === 'kind') return a.kind - b.kind || b.created_at - a.created_at;
+        if (rsort === 'author') return a.pubkey.localeCompare(b.pubkey) || b.created_at - a.created_at;
+        return b.created_at - a.created_at;
+    });
+    document.getElementById('results-count').textContent = (rq ? order.length + ' / ' : '') + _events.length + ' événement(s)';
     document.getElementById('chk-all').checked = false;
-    document.getElementById('events-tbody').innerHTML = _events.map(function(ev, i) {
+    document.getElementById('events-tbody').innerHTML = order.map(function(i) {
+        var ev = _events[i];
         var sel = _selected.has(ev.id);
         return '<tr class="'+(sel?'selected':'')+'">' +
             '<td><input type="checkbox" data-id="'+ev.id+'" '+(sel?'checked':'')+' onchange="onRowCheck(this)"></td>' +
@@ -1313,25 +1378,30 @@ async function purgeFilter() {
 
 // ── Navigation ───────────────────────────────────────────────────────────
 function switchTab(tab) {
-    ['query', 'profile', 'tree', 'memory', 'grimoire', 'miz', 'node', 'arbor'].forEach(function(t) {
+    ['home', 'station', 'tunnels', 'qdrant', 'query', 'profile', 'tree', 'memory', 'savoirs', 'node', 'arbor'].forEach(function(t) {
         var tabEl  = document.getElementById('tab-'  + t);
         var paneEl = document.getElementById('pane-' + t);
         if (tabEl)  tabEl.classList.toggle('active', t === tab);
         if (paneEl) paneEl.style.display = (t === tab) ? '' : 'none';
     });
-    if (tab === 'tree' && _userPubkey) {
-        var inp = document.getElementById('tree-hex-input');
-        if (inp && !inp.value) inp.value = _userPubkey;
+    if (tab === 'tree') {
+        treeEnsureAccounts();
+        if (_userPubkey) {
+            var inp = document.getElementById('tree-hex-input');
+            if (inp && !inp.value) { inp.value = _userPubkey; if (!_treeEvents.length) loadTree(); }
+        }
     }
     // Auto-chargement au premier affichage (comme l'arbre préremplit la pubkey)
     var uphOk = _hasAdminAuth();
-    if (tab === 'grimoire') {
-        _updateGrimoireAuthBanner();
-        if (uphOk && !_grimoireLoaded) { _grimoireLoaded = true; loadGrimoireStatus(); }
-    }
-    if (tab === 'miz' && uphOk && !_mizStatsLoaded) { _mizStatsLoaded = true; loadMizStats(); }
+    if (tab === 'savoirs') SavoirsUI.ensure();
+    // anciens liens : #grimoire / #miz mènent aux sous-onglets de Savoirs
     if (tab === 'node' && uphOk && !_nodeConfigLoaded) { _nodeConfigLoaded = true; loadNodeConfig(); loadSynastryStatus(); }
     if (tab === 'arbor' && uphOk && !_arborLoaded) { _arborLoaded = true; loadArborStatus(); }
+    if (tab === 'station' && uphOk && !_stationLoaded) { _stationLoaded = true; StationUI.load(false); }
+    if (tab !== 'station') StationUI.setAuto(false);
+    if (tab === 'tunnels' && uphOk && !_tunnelsLoaded) { _tunnelsLoaded = true; TunnelsUI.load(); }
+    if (tab !== 'tunnels') TunnelsUI.setAuto(false);
+    if (tab === 'qdrant' && uphOk && !_qdrantLoaded) { _qdrantLoaded = true; QdrantUI.load(); }
 }
 function openProfile(pubkey) {
     document.getElementById('f-author').value = pubkey;
@@ -1797,14 +1867,18 @@ function clearProfileSelection() {
     updateProfileGridUI();
 }
 
-function renderRelayProfiles() {
-    var container = document.getElementById('relay-profiles-list');
-    if (!container) return;
-    if (!_relayProfiles.length) {
-        container.innerHTML = '<div style="color:var(--text2);font-size:.8rem;padding:10px 0">Aucun profil Kind 0 sur ce relay.</div>';
-        return;
-    }
-    container.innerHTML = _relayProfiles.map(function(ev) {
+function _profileInfo(ev) {
+    var meta = {}; try { meta = JSON.parse(ev.content); } catch(e) {}
+    var email = '';
+    (ev.tags || []).forEach(function(tag) {
+        if (!email && tag[0] === 'i' && typeof tag[1] === 'string' && tag[1].indexOf('email:') === 0) email = tag[1].slice(6);
+    });
+    if (!email && meta.email) email = meta.email;
+    var isBot = meta.bot === true || meta.bot === 'true' || meta.bot === 1;
+    return { name: meta.name || meta.display_name || ev.pubkey.slice(0, 12) + '…', email: email, about: meta.about || '', bot: isBot, hasBotFlag: typeof meta.bot !== 'undefined' };
+}
+
+function _profileCardHtml(ev) {
         var meta = {}; try { meta = JSON.parse(ev.content); } catch(e) {}
         var rawName = meta.name || meta.display_name || ev.pubkey.slice(0,12)+'…';
         var name = escHtml(rawName);
@@ -1844,7 +1918,42 @@ function renderRelayProfiles() {
             '</div>'+
             '<a href="nostr_profile_viewer.html?hex='+ev.pubkey+'" target="_blank" title="Voir profil" onclick="event.stopPropagation()" style="color:var(--text2);font-size:.85rem;padding:3px 5px;text-decoration:none;flex-shrink:0" onmouseover="this.style.color=\'var(--accent)\'" onmouseout="this.style.color=\'var(--text2)\'">👁</a>'+
             '</div></div>';
-    }).join('');
+}
+
+var _profList = null;
+function renderRelayProfiles() {
+    var container = document.getElementById('relay-profiles-list');
+    if (!container) return;
+    container.className = '';  // la grille est désormais gérée par AdmList (cartes / liste / compact)
+    function pick(ev) { return 'toggleProfileSelect(' + jsAttr(ev.pubkey) + ')'; }
+    function sel(ev) { return _selectedPubkeys.has(ev.pubkey) ? ' rp-selected' : ''; }
+    function badges(i) {
+        return (i.hasBotFlag ? '<span class="al-badge ' + (i.bot ? 'warn' : '') + '">' + (i.bot ? '🤖 bot' : 'humain') + '</span>' : '') +
+            (i.email ? '<span class="al-sub">✉️ ' + escHtml(i.email) + '</span>' : '');
+    }
+    AdmList.mount(container, {
+        id: 'relay-profiles', items: _relayProfiles, defaultView: 'cards', pageSize: 36,
+        empty: 'Aucun profil Kind 0 sur ce relay.',
+        search: function(ev) { var i = _profileInfo(ev); return i.name + ' ' + i.email + ' ' + i.about + ' ' + ev.pubkey; },
+        sorts: [
+            { key: 'name', label: 'nom', cmp: function(a, b) { return _profileInfo(a).name.toLowerCase().localeCompare(_profileInfo(b).name.toLowerCase()); } },
+            { key: 'date', label: 'mise à jour', cmp: function(a, b) { return b.created_at - a.created_at; } }
+        ],
+        filters: [
+            { key: 'email', label: 'Avec email', test: function(ev) { return !!_profileInfo(ev).email; } },
+            { key: 'bot', label: 'Bots', test: function(ev) { return _profileInfo(ev).bot; } },
+            { key: 'human', label: 'Humains', test: function(ev) { var i = _profileInfo(ev); return i.hasBotFlag && !i.bot; } }
+        ],
+        card: function(ev) { return _profileCardHtml(ev); },
+        row: function(ev) {
+            var i = _profileInfo(ev);
+            return '<div class="al-row relay-profile-item' + sel(ev) + '" data-pubkey="' + ev.pubkey + '" style="cursor:pointer" onclick="' + pick(ev) + '"><b class="al-grow">' + escHtml(i.name) + '</b>' + badges(i) + '</div>';
+        },
+        line: function(ev) {
+            var i = _profileInfo(ev);
+            return '<div class="al-line relay-profile-item' + sel(ev) + '" data-pubkey="' + ev.pubkey + '" style="cursor:pointer" onclick="' + pick(ev) + '"><span class="al-grow">' + escHtml(i.name) + '</span>' + badges(i) + '</div>';
+        }
+    });
     updateProfileGridUI();
 }
 
@@ -2010,6 +2119,74 @@ async function loadTree() {
     }
 }
 
+// ── Arbre : choix d'identité + bandeau d'activité (SVG) ─────────────────────
+function treeFillIdentities() {
+    var sel = document.getElementById('tree-who');
+    if (!sel) return;
+    var opts = '<option value="">Identité…</option>';
+    if (_userPubkey) opts += '<option value="' + escAttr(_userPubkey) + '">⚓ Moi (' + escHtml(_userPubkey.slice(0, 8)) + '…)</option>';
+    var own = (typeof StationUI !== 'undefined' && StationUI.data && StationUI.data()) ? (StationUI.data().station || {}) : {};
+    if (own.NODEHEX) opts += '<option value="' + escAttr(own.NODEHEX) + '">🛰️ Nœud de la station</option>';
+    (_multipassAccounts || []).forEach(function(a) {
+        if (a.hex) opts += '<option value="' + escAttr(a.hex) + '">👤 ' + escHtml(a.email) + '</option>';
+    });
+    sel.innerHTML = opts;
+}
+async function treePickIdentity(hex) {
+    if (!hex) return;
+    document.getElementById('tree-hex-input').value = hex;
+    loadTree();
+}
+async function treeEnsureAccounts() {
+    if (_multipassAccounts && _multipassAccounts.length) { treeFillIdentities(); return; }
+    try {
+        var d = await apiFetch(_apiUrl + '/api/nostr/admin/multipass_list?' + new URLSearchParams());
+        _multipassAccounts = d.accounts || [];
+    } catch(e) { /* liste facultative */ }
+    treeFillIdentities();
+}
+
+// Rythme d'activité (90 jours) + répartition par famille de kinds : on voit
+// d'un coup d'œil si l'identité est vivante, et de quoi elle est faite.
+function renderTreeActivity() {
+    var box = document.getElementById('tree-activity');
+    if (!box) return;
+    if (!_treeEvents.length) { box.style.display = 'none'; return; }
+    var DAYS = 90, now = Math.floor(Date.now() / 86400000), buckets = new Array(DAYS).fill(0);
+    _treeEvents.forEach(function(ev) {
+        var d = now - Math.floor(ev.created_at / 86400);
+        if (d >= 0 && d < DAYS) buckets[DAYS - 1 - d]++;
+    });
+    var max = Math.max.apply(null, buckets.concat([1]));
+    var W = 600, H = 70, bw = W / DAYS;
+    var bars = buckets.map(function(v, i) {
+        var h = v ? Math.max(2, v / max * (H - 8)) : 0;
+        return v ? '<rect x="' + (i * bw + 0.5).toFixed(1) + '" y="' + (H - h).toFixed(1) + '" width="' + (bw - 1).toFixed(1) + '" height="' + h.toFixed(1) + '" rx="1.5" class="ta-bar"><title>' + v + ' événement(s)</title></rect>' : '';
+    }).join('');
+    var older = _treeEvents.filter(function(ev) { return now - Math.floor(ev.created_at / 86400) >= DAYS; }).length;
+    var tot = {};
+    _KIND_GROUPS.forEach(function(g) { tot[g.id] = 0; });
+    _treeEvents.forEach(function(ev) {
+        var g = _KIND_GROUPS.filter(function(x) { return x.kinds.some(function(k) { return k.k === ev.kind; }); })[0];
+        if (g) tot[g.id]++;
+    });
+    var known = Object.keys(tot).reduce(function(s2, k) { return s2 + tot[k]; }, 0);
+    var other = _treeEvents.length - known;
+    var segs = _KIND_GROUPS.map(function(g) { return { n: tot[g.id], c: g.color, l: g.label }; });
+    if (other > 0) segs.push({ n: other, c: '#8892a4', l: 'AUTRES' });
+    var stack = segs.filter(function(x) { return x.n; }).map(function(x) {
+        return '<div class="ta-seg" style="flex:' + x.n + ';background:' + x.c + '" title="' + escAttr(x.l + ' : ' + x.n) + '"></div>';
+    }).join('');
+    var last = _treeEvents.reduce(function(m, ev) { return Math.max(m, ev.created_at); }, 0);
+    box.innerHTML = '<div class="ta-wrap"><div class="ta-head"><b>' + _treeEvents.length + ' événement(s)</b>' +
+        '<span class="al-sub">dernier : ' + escHtml(fmtDate(last)) + (older ? ' · ' + older + ' de plus de ' + DAYS + ' j' : '') + '</span></div>' +
+        '<svg viewBox="0 0 ' + W + ' ' + H + '" class="ta-svg" preserveAspectRatio="none" role="img" aria-label="Activité sur 90 jours">' + bars + '</svg>' +
+        '<div class="al-sub" style="display:flex;justify-content:space-between"><span>il y a 90 jours</span><span>aujourd\'hui</span></div>' +
+        '<div class="ta-stack">' + stack + '</div>' +
+        '<div class="ta-legend">' + segs.filter(function(x) { return x.n; }).map(function(x) { return '<span><i style="background:' + x.c + '"></i>' + escHtml(x.l) + ' ' + x.n + '</span>'; }).join('') + '</div></div>';
+    box.style.display = '';
+}
+
 function renderTree() {
     var byKind = {};
     _treeEvents.forEach(function(ev) {
@@ -2042,6 +2219,7 @@ function renderTree() {
             + '<div class="tree-kind-list">' + kindRows + '</div>'
             + '</div>';
     }).join('');
+    renderTreeActivity();
     var grid = document.getElementById('tree-grid');
     grid.innerHTML = html;
     grid.style.display = 'grid';
@@ -2180,7 +2358,7 @@ function _renderTreeCard(ev, idx, canDel) {
     else                           inner = _renderCardGeneric(ev);
     var sel = _treeSelected.has(ev.id);
     var cid = 'tc-' + ev.id.slice(0, 8);
-    return '<div class="tree-card' + (sel ? ' tc-selected' : '') + '" id="' + cid + '">'
+    return '<div class="tree-card' + (sel ? ' tc-selected' : '') + '" id="' + cid + '" data-evid="' + ev.id + '">'
         + (canDel ? '<input type="checkbox" class="tc-check"' + (sel ? ' checked' : '')
             + ' onchange="onTreeCardCheck(this,\'' + ev.id + '\')" title="Sélectionner">' : '')
         + '<div class="tc-body">' + inner + '</div>'
@@ -2211,9 +2389,24 @@ function showKindPanel(kind, name) {
     var selBar = document.getElementById('tree-select-bar');
     if (selBar) selBar.style.display = canDel ? '' : 'none';
     var body = document.getElementById('tree-panel-body');
-    body.innerHTML = evts.map(function(ev) {
-        return _renderTreeCard(ev, _treeEvents.indexOf(ev), canDel);
-    }).join('');
+    body.className = '';  // la grille est gérée par AdmList (cartes / liste / compact)
+    function slim(ev, mode) {
+        var chk = canDel ? '<input type="checkbox" class="tc-check" style="position:static"' + (_treeSelected.has(ev.id) ? ' checked' : '') +
+            ' onchange="onTreeCardCheck(this,\'' + ev.id + '\')">' : '';
+        var label = escHtml((getDtag(ev) || ev.content || ev.id).toString().replace(/\s+/g, ' ').slice(0, mode === 'line' ? 70 : 110));
+        return '<div class="' + (mode === 'row' ? 'al-row' : 'al-line') + '" data-evid="' + ev.id + '">' + chk +
+            '<span class="al-grow">' + label + '</span><span class="al-sub">' + escHtml(fmtDate(ev.created_at)) + '</span>' +
+            '<button class="btn-ev-view" onclick="showEventModal(_treeEvents[' + _treeEvents.indexOf(ev) + '])" title="Voir JSON">👁</button>' +
+            (canDel ? '<button class="tc-del-btn" onclick="deleteSingleTreeEvent(\'' + ev.id + '\')" title="Supprimer">🗑</button>' : '') + '</div>';
+    }
+    AdmList.mount(body, {
+        id: 'tree-kind', items: evts, defaultView: 'cards', pageSize: 36,
+        search: function(ev) { return (getDtag(ev) || '') + ' ' + (ev.content || '') + ' ' + ev.id + ' ' + (ev.tags || []).map(function(t) { return t.join(' '); }).join(' '); },
+        sorts: [{ key: 'date', label: 'date', cmp: function(a, b) { return b.created_at - a.created_at; } },
+                { key: 'dtag', label: 'd-tag', cmp: function(a, b) { return String(getDtag(a)).localeCompare(String(getDtag(b))); } }],
+        card: function(ev) { return _renderTreeCard(ev, _treeEvents.indexOf(ev), canDel); },
+        row: function(ev) { return slim(ev, 'row'); }, line: function(ev) { return slim(ev, 'line'); }
+    });
     panel.style.display = '';
     panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     updateTreeSelUI();
@@ -2233,7 +2426,7 @@ function onTreeCardCheck(chk, evId) {
     if (chk.checked) _treeSelected.add(evId);
     else _treeSelected.delete(evId);
     var card = chk.parentElement;
-    while (card && !card.classList.contains('tree-card')) card = card.parentElement;
+    while (card && !card.hasAttribute('data-evid')) card = card.parentElement;
     if (card) card.classList.toggle('tc-selected', chk.checked);
     updateTreeSelUI();
 }
@@ -2242,7 +2435,7 @@ function toggleTreeAll(checked) {
     evts.forEach(function(ev) { if (checked) _treeSelected.add(ev.id); else _treeSelected.delete(ev.id); });
     var body = document.getElementById('tree-panel-body');
     if (body) {
-        body.querySelectorAll('.tree-card').forEach(function(card) {
+        body.querySelectorAll('[data-evid]').forEach(function(card) {
             card.classList.toggle('tc-selected', checked);
             var chk = card.querySelector('.tc-check');
             if (chk) chk.checked = checked;
@@ -2316,36 +2509,37 @@ async function loadMultipassList() {
     }
 }
 
+var _mpList = null;
 function renderMultipassGrid() {
     var empty = document.getElementById('mem-empty');
     var grid  = document.getElementById('mem-grid');
     if (_multipassAccounts.length === 0) { empty.style.display = ''; grid.style.display = 'none'; return; }
-
-    var searchInp = document.getElementById('mem-search');
-    var q = searchInp ? searchInp.value.trim().toLowerCase() : '';
-    var accounts = q
-        ? _multipassAccounts.filter(function(a) { return (a.email || '').toLowerCase().indexOf(q) !== -1; })
-        : _multipassAccounts;
-
-    var status = document.getElementById('mem-list-status');
-    if (status) {
-        status.textContent = q
-            ? accounts.length + ' / ' + _multipassAccounts.length + ' compte(s) — filtré sur "' + q + '"'
-            : _multipassAccounts.length + ' compte(s)';
-    }
-
-    if (accounts.length === 0) {
-        empty.style.display = ''; grid.style.display = 'none';
-        empty.innerHTML = '<div class="icon">🔍</div><div>Aucun compte MULTIPASS pour « ' + escHtml(q) + ' ».</div>';
-        return;
-    }
     empty.style.display = 'none'; grid.style.display = '';
-    grid.innerHTML = accounts.map(function(a) {
-        return '<div class="mem-account-card" onclick="openMemDetail(' + jsAttr(a.email) + ',' + jsAttr(a.hex || '') + ')">' +
-            '<div class="mem-account-email">👤 ' + escHtml(a.email) + '</div>' +
-            '<div class="mem-account-hex">' + (a.hex ? escHtml(a.hex.slice(0, 16)) + '…' : 'hex inconnu') + '</div>' +
-        '</div>';
-    }).join('');
+    var status = document.getElementById('mem-list-status');
+    if (status) status.textContent = _multipassAccounts.length + ' compte(s)';
+    function open(a) { return 'openMemDetail(' + jsAttr(a.email) + ',' + jsAttr(a.hex || '') + ')'; }
+    var hexTxt = function(a) { return a.hex ? escHtml(a.hex.slice(0, 16)) + '…' : 'hex inconnu'; };
+    AdmList.mount(grid, {
+        id: 'multipass', items: _multipassAccounts, defaultView: 'cards', pageSize: 36,
+        empty: 'Aucun compte MULTIPASS.',
+        search: function(a) { return (a.email || '') + ' ' + (a.hex || ''); },
+        sorts: [
+            { key: 'email', label: 'email', cmp: function(a, b) { return String(a.email).localeCompare(String(b.email)); } },
+            { key: 'domain', label: 'domaine', cmp: function(a, b) { return String(a.email).split('@')[1].localeCompare(String(b.email).split('@')[1]) || String(a.email).localeCompare(String(b.email)); } }
+        ],
+        filters: [
+            { key: 'nohex', label: 'Sans hex', test: function(a) { return !a.hex; } }
+        ],
+        card: function(a) {
+            return '<div class="al-card" style="cursor:pointer" onclick="' + open(a) + '"><b class="al-grow">👤 ' + escHtml(a.email) + '</b><span class="al-sub">' + hexTxt(a) + '</span></div>';
+        },
+        row: function(a) {
+            return '<div class="al-row" style="cursor:pointer" onclick="' + open(a) + '"><b class="al-grow">👤 ' + escHtml(a.email) + '</b><span class="al-sub">' + hexTxt(a) + '</span></div>';
+        },
+        line: function(a) {
+            return '<div class="al-line" style="cursor:pointer" onclick="' + open(a) + '"><span class="al-grow">' + escHtml(a.email) + '</span><span class="al-sub">' + hexTxt(a) + '</span></div>';
+        }
+    });
 }
 
 async function openMemDetail(email, hex) {
@@ -2386,9 +2580,10 @@ function renderMemDetail(email, hex, s, cookieDomains) {
     function line(label, value) {
         return '<div class="mem-stat-line"><span>' + label + '</span><b>' + escHtml(String(value)) + '</b></div>';
     }
-    function resetBtn(scope, label) {
-        return '<div class="mem-reset-row"><button class="tc-del-btn" onclick="resetMemory(' +
-            jsAttr(email) + ',' + jsAttr(hex) + ',' + jsAttr(scope) + ',this)">🗑 ' + label + '</button></div>';
+    var dangerScopes = [];
+    function resetBtn(scope, label, title) {
+        dangerScopes.push({ scope: scope, title: title || scope });
+        return '';
     }
     var html = '';
     if (s.can_regenerate_from_mastodon) {
@@ -2399,32 +2594,37 @@ function renderMemDetail(email, hex, s, cookieDomains) {
             '<button class="btn-regen" onclick="regenerateLifeos(' + jsAttr(email) + ',this)">🔄 Régénérer depuis Mastodon</button>' +
             '</div>';
     }
-    html += '<div style="margin-bottom:14px"><h5 style="font-size:.8rem;color:var(--text2);margin:0 0 4px">💬 Conversations</h5>' +
+    html += '<div class="mem-sec-grid">';
+    html += '<div class="al-card"><h5 style="font-size:.8rem;color:var(--text2);margin:0 0 4px">💬 Conversations</h5>' +
         line('Messages', s.conversations.message_count) + line('Slots actifs', s.conversations.slots_present.length) +
         line('Taille', Math.round(s.conversations.size_bytes / 1024) + ' Ko') + line('Points Qdrant', s.conversations.qdrant_points) +
-        resetBtn('conversations', 'Réinitialiser') + '</div>';
-    html += '<div style="margin-bottom:14px"><h5 style="font-size:.8rem;color:var(--text2);margin:0 0 4px">🤖 Mémoire BRO (#rec)</h5>' +
+        resetBtn('conversations', 'Réinitialiser', 'Conversations') + '</div>';
+    html += '<div class="al-card"><h5 style="font-size:.8rem;color:var(--text2);margin:0 0 4px">🤖 Mémoire BRO (#rec)</h5>' +
         line('Souvenirs', s.bro_memory.message_count) + line('Points Qdrant', s.bro_memory.qdrant_points) +
-        resetBtn('bro_memory', 'Réinitialiser') + '</div>';
-    html += '<div style="margin-bottom:14px"><h5 style="font-size:.8rem;color:var(--text2);margin:0 0 4px">🎭 Persona</h5>' +
+        resetBtn('bro_memory', 'Réinitialiser', 'Mémoire BRO') + '</div>';
+    html += '<div class="al-card"><h5 style="font-size:.8rem;color:var(--text2);margin:0 0 4px">🎭 Persona</h5>' +
         line('Traits', s.persona.message_count) + line('Points Qdrant', s.persona.qdrant_points) +
-        resetBtn('persona', 'Réinitialiser') + '</div>';
-    html += '<div style="margin-bottom:14px"><h5 style="font-size:.8rem;color:var(--text2);margin:0 0 4px">💕 MUSE / LOVE</h5>' +
+        resetBtn('persona', 'Réinitialiser', 'Persona') + '</div>';
+    html += '<div class="al-card"><h5 style="font-size:.8rem;color:var(--text2);margin:0 0 4px">💕 MUSE / LOVE</h5>' +
         line('Souvenirs', s.love.memories_count) + line('Dialogues', s.love.dialog_count) +
         line('Matchs', s.love.matches_count) + line('Profil', s.love.has_profile ? 'déclaré' : 'non renseigné') +
-        line('Points Qdrant', s.love.qdrant_points) + resetBtn('love', 'Réinitialiser') + '</div>';
-    html += '<div style="margin-bottom:14px"><h5 style="font-size:.8rem;color:var(--text2);margin:0 0 4px">🧾 Préférences apprises (identity)</h5>' +
+        line('Points Qdrant', s.love.qdrant_points) + resetBtn('love', 'Réinitialiser', 'MUSE / LOVE') + '</div>';
+    html += '<div class="al-card"><h5 style="font-size:.8rem;color:var(--text2);margin:0 0 4px">🧾 Préférences apprises (identity)</h5>' +
         line('Lignes', s.identity.preferences_lines) + line('Historique', s.identity.preferences_history_entries) +
-        resetBtn('identity_learned', 'Réinitialiser') + '</div>';
-    html += '<div style="margin-bottom:14px"><h5 style="font-size:.8rem;color:var(--text2);margin:0 0 4px">📝 Profil LifeOS (5 fichiers)</h5>' +
+        resetBtn('identity_learned', 'Réinitialiser', 'Préférences apprises') + '</div>';
+    html += '<div class="al-card"><h5 style="font-size:.8rem;color:var(--text2);margin:0 0 4px">📝 Profil LifeOS (5 fichiers)</h5>' +
         '<div class="mem-reset-row"><button class="btn-regen" onclick="openIdentityEditor(' + jsAttr(email) + ')">✏️ Éditer le LifeOS</button></div></div>';
     if (cookieDomains.length) {
-        html += '<div style="margin-bottom:14px"><h5 style="font-size:.8rem;color:var(--text2);margin:0 0 4px">🍪 Cookies liés (NOSTR kind 31903)</h5>' +
+        html += '<div class="al-card"><h5 style="font-size:.8rem;color:var(--text2);margin:0 0 4px">🍪 Cookies liés (NOSTR kind 31903)</h5>' +
             '<div style="font-size:.78rem;color:var(--text)">' + cookieDomains.map(escHtml).join(', ') + '</div></div>';
     }
-    html += '<div style="border-top:1px solid var(--border);padding-top:10px;text-align:right">' +
-        '<button class="tc-del-btn" style="background:rgba(220,38,38,.28)" onclick="resetMemory(' +
-        jsAttr(email) + ',' + jsAttr(hex) + ',\'all\',this)">⚠️ Tout réinitialiser</button></div>';
+    html += '</div>';
+    html += '<details class="arb-adv" style="margin-top:16px;border-color:var(--danger)"><summary style="color:var(--danger)">⋯ Zone dangereuse <span class="al-sub">réinitialisations et destruction du compte</span></summary><div class="arb-adv-body">';
+    html += '<h5 class="hm-h">Réinitialiser une mémoire</h5><div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">' +
+        dangerScopes.map(function(d) {
+            return '<button class="tc-del-btn" onclick="resetMemory(' + jsAttr(email) + ',' + jsAttr(hex) + ',' + jsAttr(d.scope) + ',this)">🗑 ' + escHtml(d.title) + '</button>';
+        }).join('') +
+        '<button class="tc-del-btn" style="background:rgba(220,38,38,.28)" onclick="resetMemory(' + jsAttr(email) + ',' + jsAttr(hex) + ',\'all\',this)">⚠️ Tout réinitialiser</button></div>';
     html += '<div style="border:1px solid var(--danger);border-radius:8px;padding:12px 14px;margin-top:16px;background:rgba(229,62,62,.06)">' +
         '<h5 style="font-size:.8rem;color:var(--err-text);margin:0 0 6px">☠️ Destruction du compte MULTIPASS</h5>' +
         '<p style="font-size:.74rem;color:var(--text2);margin:0 0 10px">' +
@@ -2441,17 +2641,20 @@ function renderMemDetail(email, hex, s, cookieDomains) {
         '<button class="tc-del-btn" style="background:rgba(220,38,38,.4)" onclick="destroyMultipass(' +
         jsAttr(email) + ',this)">☠️ Détruire ce compte</button>' +
         '</div></div>';
+    html += '</div></details>';
     return html;
 }
 
 async function destroyMultipass(email, btnEl) {
     var reasonSel = btnEl.parentElement.querySelector('.destroy-reason-select');
     var reason = reasonSel ? reasonSel.value : 'INSOLVENCY';
-    if (!confirm('Détruire DÉFINITIVEMENT le compte MULTIPASS « ' + email + ' » sur cette station ?\n\n' +
+    var typed = prompt('Détruire DÉFINITIVEMENT le compte MULTIPASS « ' + email + ' » sur cette station ?\n\n' +
         'Motif : ' + reason + '\n\n' +
         'Une sauvegarde chiffrée sera exportée et le solde Ğ1 restitué au wallet primal, mais ' +
         'toutes les données NOSTR locales de ce compte seront supprimées. IRRÉVERSIBLE.\n\n' +
-        'Tapez OK pour confirmer.')) return;
+        'Tapez l\'email du compte pour confirmer :');
+    if (typed === null) return;
+    if (typed.trim().toLowerCase() !== String(email).toLowerCase()) { showToast('Email différent — destruction annulée.', 'warn'); return; }
     btnEl.disabled = true; reasonSel.disabled = true;
     var savedText = btnEl.textContent; btnEl.textContent = '⏳ Lancement…';
     try {
@@ -2576,7 +2779,23 @@ function _gSlugify(text) {
 /* Publication d'un event NOSTR signé côté client (NIP-07 ou nsec mémoire) — distinct
    de apiFetch/adminDelete qui passent par l'API REST admin (auth Capitaine) : ici on a
    besoin d'une vraie signature pour créer un nouvel événement Kind 30500. */
-function requireSignedRelay(evTemplate) {
+// Les savoirs (30500-30505) republiés sous le même d-tag sont chaînés à leur version
+// précédente (tags prev/rev → CID IPFS, cf. knowledge-rev.js). `base` : événement sur
+// lequel on s'appuie si l'auteur courant n'a pas encore de version (reprise / fork).
+function requireSignedRelay(evTemplate, base) {
+    var dTag = (evTemplate.tags || []).filter(function(x) { return x[0] === 'd'; })[0];
+    if (!window.KnowledgeRev || !dTag || KnowledgeRev.KINDS.indexOf(evTemplate.kind) < 0) return _signPublishRelay(evTemplate);
+    var relay = (typeof window.getRelayUrl === 'function' && window.getRelayUrl()) || 'ws://127.0.0.1:7777';
+    return KnowledgeRev.chain(evTemplate, {
+        base: base || null,
+        lookup: function(tpl) {
+            if (!window.userPubkey) return Promise.resolve(null);
+            return RelaySelector.query(relay, { kinds: [tpl.kind], authors: [window.userPubkey], '#d': [dTag[1]], limit: 1 }, { timeout: 6000 })
+                .then(function(evs) { return (evs || []).sort(function(a, b) { return b.created_at - a.created_at; })[0] || null; });
+        }
+    }).then(function() { return _signPublishRelay(evTemplate); });
+}
+function _signPublishRelay(evTemplate) {
     return new Promise(function(resolve, reject) {
         if (!window.userPubkey || !window.nostrRelay) { reject(new Error('Non connecté — connectez votre extension NOSTR (⚡ ci-dessus)')); return; }
         evTemplate.pubkey     = window.userPubkey;
@@ -2876,6 +3095,9 @@ var _grimoireLoaded = false;
 var _mizStatsLoaded = false;
 var _nodeConfigLoaded = false;
 var _arborLoaded = false;
+var _stationLoaded = false;
+var _tunnelsLoaded = false;
+var _qdrantLoaded = false;
 
 /* Bandeau d'état — publication nécessite l'extension NOSTR (NIP-07), statut et
    suppression nécessitent en plus d'être reconnu Capitaine de la station.
@@ -2921,38 +3143,32 @@ async function loadGrimoireStatus() {
 function renderGrimoireStatus() {
     var list = document.getElementById('grimoire-status-list');
     var pubBtn = document.getElementById('btn-import-grimoire');
-    var searchInp = document.getElementById('grimoire-search');
-    var q = searchInp ? searchInp.value.trim().toLowerCase() : '';
-
     var missing = 0;
     GRIMOIRE_RECIPES.forEach(function(r) { if (!_grimoirePublished[_gDtag(r)]) missing++; });
-
-    var shown = q ? GRIMOIRE_RECIPES.filter(function(r) { return r.name.toLowerCase().indexOf(q) !== -1; }) : GRIMOIRE_RECIPES;
-
-    if (shown.length === 0) {
-        list.innerHTML = '<div style="color:var(--text2);font-size:.8rem;padding:8px 0">Aucune recette pour « ' + escHtml(q) + ' ».</div>';
-    } else {
-        list.innerHTML = shown.map(function(r) {
-            var dtag = _gDtag(r);
-            var isPublished = !!_grimoirePublished[dtag];
-            var actions = '<span class="gsi-actions">';
-            if (isPublished) {
-                var slug = _gSlugify(r.heading);
-                actions += '<a href="grimoire-craft.html#' + slug + '" target="_blank" title="Voir l\'article illustré" onclick="event.stopPropagation()">👁</a>' +
-                    '<button onclick="event.stopPropagation();showGrimoireEventModal(' + jsAttr(dtag) + ')" title="Voir l\'événement NOSTR (JSON)">📋</button>' +
-                    '<button onclick="event.stopPropagation();deleteGrimoireRecipe(' + jsAttr(dtag) + ')" title="Supprimer du relay local (capitaine)" style="color:var(--danger)">🗑</button>';
-            }
-            actions += '</span>';
-            return '<div class="grimoire-status-item" data-dtag="' + escAttr(dtag) + '" onclick="openGrimoireDetail(' + jsAttr(dtag) + ')">' +
-                '<span class="gsi-badge ' + (isPublished ? 'ok' : 'pending') + '">' + (isPublished ? '✅ publiée' : '⏳ à publier') + '</span>' +
-                '<span>' + r.icon + '</span>' +
-                '<span class="gsi-name">' + escHtml(r.name) + '</span>' +
-                actions +
-            '</div>';
-        }).join('');
+    list.className = '';  // la grille est gérée par AdmList (cartes / liste / compact)
+    list.style.padding = '0';
+    function pub(r) { return !!_grimoirePublished[_gDtag(r)]; }
+    function badge(r) { return '<span class="al-badge ' + (pub(r) ? 'ok' : 'warn') + '">' + (pub(r) ? '✅ publiée' : '⏳ à publier') + '</span>'; }
+    function actions(r) {
+        if (!pub(r)) return '';
+        var dtag = _gDtag(r);
+        return '<a href="grimoire-craft.html#' + _gSlugify(r.heading) + '" target="_blank" title="Voir l\'article illustré" onclick="event.stopPropagation()">👁</a> ' +
+            '<button class="btn-regen" onclick="event.stopPropagation();showGrimoireEventModal(' + jsAttr(dtag) + ')" title="Événement NOSTR (JSON)">📋</button> ' +
+            '<button class="btn-regen tn-danger" onclick="event.stopPropagation();deleteGrimoireRecipe(' + jsAttr(dtag) + ')" title="Supprimer du relay local (capitaine)">🗑</button>';
     }
-    document.getElementById('grimoire-status-text').textContent = (GRIMOIRE_RECIPES.length - missing) + ' / ' + GRIMOIRE_RECIPES.length + ' publiée(s) sur ce relay'
-        + (q ? ' — ' + shown.length + ' affichée(s)' : '');
+    function go(r) { return 'onclick="openGrimoireDetail(' + jsAttr(_gDtag(r)) + ')"'; }
+    function mats(r) { return (r.materials || []).length + ' ingrédient(s)'; }
+    AdmList.mount(list, {
+        id: 'grimoire', items: GRIMOIRE_RECIPES, defaultView: 'cards', pageSize: 24,
+        search: function(r) { return r.name + ' ' + (r.description || ''); },
+        sorts: [{ key: 'name', label: 'nom', cmp: function(a, b) { return a.name.localeCompare(b.name); } },
+                { key: 'state', label: 'état (à publier d\'abord)', cmp: function(a, b) { return (pub(a) ? 1 : 0) - (pub(b) ? 1 : 0); } }],
+        filters: [{ key: 'todo', label: 'À publier', test: function(r) { return !pub(r); } }, { key: 'done', label: 'Publiées', test: pub }],
+        card: function(r) { return '<div class="al-card" style="cursor:pointer" ' + go(r) + '><div style="display:flex;gap:6px;align-items:center"><b class="al-grow">' + r.icon + ' ' + escHtml(r.name) + '</b>' + badge(r) + '</div><div class="al-sub">' + escHtml(mats(r)) + (r.cure_time && r.cure_time.workable ? ' · prise ' + escHtml(r.cure_time.workable) : '') + '</div><div style="display:flex;gap:6px">' + actions(r) + '</div></div>'; },
+        row: function(r) { return '<div class="al-row" style="cursor:pointer" ' + go(r) + '>' + badge(r) + '<b class="al-grow">' + r.icon + ' ' + escHtml(r.name) + '</b><span class="al-sub">' + escHtml(mats(r)) + '</span>' + actions(r) + '</div>'; },
+        line: function(r) { return '<div class="al-line" style="cursor:pointer" ' + go(r) + '>' + badge(r) + '<span class="al-grow">' + r.icon + ' ' + escHtml(r.name) + '</span>' + actions(r) + '</div>'; }
+    });
+    document.getElementById('grimoire-status-text').textContent = (GRIMOIRE_RECIPES.length - missing) + ' / ' + GRIMOIRE_RECIPES.length + ' publiée(s) sur ce relay';
     pubBtn.disabled = missing === 0;
     pubBtn.textContent = missing > 0 ? '🚀 Publier les ' + missing + ' recette(s) manquante(s)' : '✅ Toutes les recettes sont publiées';
 }
@@ -3185,7 +3401,7 @@ async function saveGrimoireEdit() {
     var btn = document.querySelector('#grimoire-detail-edit .gd-edit-actions button');
     if (btn) { btn.disabled = true; btn.textContent = '⏳…'; }
     try {
-        var signed = await requireSignedRelay({ kind: 30500, tags: tags, content: JSON.stringify(content) });
+        var signed = await requireSignedRelay({ kind: 30500, tags: tags, content: JSON.stringify(content) }, _grimoirePublished[dtag]);
         _grimoirePublished[dtag] = signed;
         showToast('💾 Recette « ' + content.name + ' » mise à jour', 'ok');
         opsLog([{ type: 'ok', text: '📖 Grimoire : mise à jour ' + content.name }]);
@@ -3424,7 +3640,9 @@ async function loadNodeConfig() {
 }
 
 function renderConfigCategories(categories, prefix) {
-    return categories.map(function(cat) {
+    var toolbar = '<div class="al-bar"><input type="search" class="al-search" placeholder="🔍 Chercher une clé ou un réglage…" oninput="filterConfig(this)" data-prefix="' + prefix + '">' +
+        '<label class="al-sub" style="display:flex;gap:4px;align-items:center"><input type="checkbox" onchange="filterConfig(this)" data-prefix="' + prefix + '" data-unset-only="1"> seulement les non définis</label></div>';
+    return toolbar + categories.map(function(cat) {
         var rows = cat.keys.map(function(k) {
             var id = prefix + '-key-' + k.key;
             var inputType = k.sensitive ? 'password' : (k.kind === 'number' || k.kind === 'percent' ? 'number' : 'text');
@@ -3433,7 +3651,7 @@ function renderConfigCategories(categories, prefix) {
                 : (k.placeholder || ''));
             var value = k.sensitive ? '' : (k.value || '');
             var lockAttrs = k.readonly ? ' disabled' : '';
-            return '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);flex-wrap:wrap">' +
+            return '<div class="cfg-row" data-search="' + escAttr((k.label + ' ' + k.key + ' ' + (k.help || '')).toLowerCase()) + '" data-unset="' + ((k.sensitive ? !k.defined : !k.value) ? 1 : 0) + '" style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);flex-wrap:wrap">' +
                 '<div style="flex:0 0 220px;min-width:180px"><b style="font-size:.78rem">' + escHtml(k.label) + '</b>' +
                 (k.sensitive ? ' 🔒' : '') + (k.readonly ? ' <span style="color:var(--text2);font-size:.7rem">(lecture seule)</span>' : '') +
                 (k.help ? '<div style="font-size:.68rem;color:var(--text2)">' + escHtml(k.help) + '</div>' : '') + '</div>' +
@@ -3444,14 +3662,34 @@ function renderConfigCategories(categories, prefix) {
                 (k.unit ? '<span style="font-size:.72rem;color:var(--text2)">' + escHtml(k.unit) + '</span>' : '') +
                 '</div>';
         }).join('');
-        return '<details style="margin-bottom:8px;border:1px solid var(--border);border-radius:6px;padding:0 10px" open>' +
-            '<summary style="cursor:pointer;padding:8px 0;font-size:.82rem;font-weight:700">' + cat.icon + ' ' + escHtml(cat.title) +
+        return '<details class="cfg-cat" style="margin-bottom:8px;border:1px solid var(--border);border-radius:6px;padding:0 10px">' +
+            '<summary style="cursor:pointer;padding:8px 0;font-size:.82rem;font-weight:700">' + cat.icon + ' ' + escHtml(cat.title) + ' <span class="al-sub">(' + cat.keys.filter(function(k) { return k.sensitive ? k.defined : !!k.value; }).length + '/' + cat.keys.length + ' définies)</span>' +
             (cat.note ? ' <span style="font-size:.68rem;color:var(--text2);font-weight:400">— ' + escHtml(cat.note) + '</span>' : '') + '</summary>' +
             '<div style="padding-bottom:8px">' + rows +
             '<div style="text-align:right;padding-top:8px">' +
             '<button class="btn-regen" onclick="saveConfigCategory(' + jsAttr(cat.id) + ',' + jsAttr(prefix) + ',this)">💾 Enregistrer cette catégorie</button>' +
             '</div></div></details>';
     }).join('');
+}
+
+// Filtre les lignes de config (recherche + « non définis ») et ouvre les
+// catégories qui contiennent un résultat ; vide = tout replié, comme au départ.
+function filterConfig(srcEl) {
+    var scope = srcEl.closest('.arb-adv-body, .profile-panel') || document;
+    var prefix = srcEl.dataset.prefix;
+    var q = ((scope.querySelector('.al-search[data-prefix="' + prefix + '"]') || {}).value || '').toLowerCase();
+    var unsetOnly = !!(scope.querySelector('input[data-unset-only][data-prefix="' + prefix + '"]') || {}).checked;
+    scope.querySelectorAll('details.cfg-cat').forEach(function(cat) {
+        if (!cat.querySelector('[id^="' + prefix + '-key-"]')) return;
+        var any = false;
+        cat.querySelectorAll('.cfg-row').forEach(function(row) {
+            var ok = (!q || row.dataset.search.indexOf(q) !== -1) && (!unsetOnly || row.dataset.unset === '1');
+            row.style.display = ok ? '' : 'none';
+            if (ok) any = true;
+        });
+        cat.style.display = any ? '' : 'none';
+        if (q || unsetOnly) cat.open = any;
+    });
 }
 
 async function saveConfigCategory(catId, prefix, btnEl) {
@@ -3552,12 +3790,13 @@ async function loadArborStatus() {
         // jamais depuis le serveur : pas de mémoire persistée côté Arbor pour ce
         // dialogue (cf. docstring arbor_chat.py).
         if (body) {
-            body.innerHTML = renderArborChatPane() +
-                '<div id="arbor-baton-body"><div class="state-empty" style="padding:14px"><div class="icon">🪄</div><div>Chargement…</div></div></div>' +
-                renderArborStatus(data);
+            body.innerHTML = '<div class="arb-layout"><div class="arb-main">' + renderArborStatus(data) + '</div>' +
+                '<aside class="arb-side">' + renderArborChatPane() + '</aside></div>';
+            mountArborLists(data);
             _replayArborChatHistory();
             loadArborBatonStatus();
         }
+        renderHome(data);
         _arborLastRunId = (data.state && data.state.run_id) || '';
         // Run en cours (ex. page rechargée pendant un run) : suivi en direct du
         // seul bloc #arbor-run-body — jamais de reconstruction du panneau entier
@@ -3863,7 +4102,7 @@ function startArborRunWatch() {
     _arborWatchBaseRunId = _arborLastRunId;
     var tick = async function() {
         try {
-            var data = await apiFetch(_apiUrl + '/api/nostr/admin/arbor_status');
+            var data = await apiFetch(_apiUrl + '/api/nostr/admin/arbor_run_state');   // léger : état + journal seulement
             var st = data.state || {};
             var isNew = st.status === 'running' || (st.run_id && st.run_id !== _arborWatchBaseRunId);
             if (!isNew) {
@@ -3876,7 +4115,6 @@ function startArborRunWatch() {
             if (box) box.innerHTML = renderArborRun(data);
             var newLog = document.getElementById('arbor-run-log');
             if (newLog) newLog.scrollTop = atBottom ? newLog.scrollHeight : (oldLog ? oldLog.scrollTop : 0);
-            updateArborBadge(data);
             if (st.status !== 'running') {
                 stopArborRunWatch();
                 _arborLoaded = true;
@@ -3933,35 +4171,51 @@ function renderArborPendingActions(data) {
     return html;
 }
 
+var _ARBOR_MODE_INFO = {
+    'mine-requests': ['Demandes récurrentes', 'Détecte les besoins que BRO n\'a pas su satisfaire, notifie le Capitaine'],
+    'observe-love':  ['Observer LOVE', 'Observe le code et l\'usage du canal LOVE — rapport seul, aucune modification'],
+    'explore':       ['Explorer', 'Teste des hypothèses (modèle, garde-fou) sur le jeu dev — rapport seul'],
+    'apply':         ['Appliquer', 'Comme Explorer, puis matérialise le gagnant validé dans une branche isolée']
+};
+
+function _arborChip(ok, label) {
+    return '<span class="al-badge ' + (ok ? 'ok' : 'warn') + '">' + (ok ? '✅ ' : '🔒 ') + escHtml(label) + '</span>';
+}
+
+// Composition : ce qui demande une décision d'abord (run, branches à relire,
+// cookies), puis l'action (modes, forge), puis le diagnostic et le réglage
+// REPLIÉS (historique, bâton, seuils) — la configuration avancée reste
+// accessible sans occuper l'écran.
 function renderArborStatus(data) {
-    var html = '';
     var enabled = data.remote_trigger_enabled;
-    html += '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px;' +
-        'border:1px solid var(--border);border-radius:6px;padding:8px 12px;background:var(--bg)">' +
-        '<span style="font-size:.78rem;color:var(--text2)">Déclenchement distant : ' +
-        (enabled ? '<b style="color:var(--ok,#4ade80)">✅ activé</b>' : '<b style="color:var(--text2)">🔒 désactivé</b>') +
-        ' · cooldown ' + escHtml(String(data.cooldown_min)) + ' min</span></div>';
+    var cli = data.claude_cli || {};
+    var cliOk = cli.available && cli.authenticated;
+    var html = '';
+
+    html += '<div class="arb-chips">' +
+        _arborChip(enabled, 'Déclenchement distant ' + (enabled ? 'activé' : 'désactivé')) +
+        '<span class="al-badge">cooldown ' + escHtml(String(data.cooldown_min)) + ' min</span>' +
+        '<span class="al-badge ' + (cliOk ? 'ok' : 'bad') + '">' + (cliOk ? '✅' : '❌') + ' Claude CLI' +
+        (cli.account ? ' · ' + escHtml(cli.account) : (cliOk ? '' : (cli.available ? ' non authentifié' : ' introuvable'))) + '</span>' +
+        '</div>';
 
     html += '<div id="arbor-run-body">' + renderArborRun(data) + '</div>';
 
+    html += '<div class="arb-sec"><h5>🌿 À relire <span class="al-sub">branches arbor/* en attente de décision</span></h5>' +
+        '<div id="arbor-branches-list"></div></div>';
+
     html += renderArborPendingActions(data);
 
-    html += '<div style="margin-bottom:14px"><h5 style="font-size:.8rem;color:var(--text2);margin:0 0 8px">🚀 Déclencher un run</h5>' +
-        ['mine-requests', 'observe-love', 'explore', 'apply'].map(function(m) {
-            return '<button class="btn-regen" style="margin:0 6px 6px 0" ' + (enabled ? '' : 'disabled') +
-                ' onclick="triggerArbor(' + jsAttr(m) + ')">▶ ' + escHtml(m) + '</button>';
-        }).join('') + '</div>';
+    html += '<div class="arb-sec"><h5>🚀 Lancer un run</h5><div class="arb-modes">' +
+        Object.keys(_ARBOR_MODE_INFO).map(function(m) {
+            return '<button class="arb-mode" ' + (enabled ? '' : 'disabled title="Activez ARBOR_REMOTE_TRIGGER_ENABLED dans ⚙️ NODE" ') +
+                'onclick="triggerArbor(' + jsAttr(m) + ')"><b>▶ ' + escHtml(_ARBOR_MODE_INFO[m][0]) + '</b><small>' +
+                escHtml(_ARBOR_MODE_INFO[m][1]) + '</small></button>';
+        }).join('') + '</div></div>';
 
-    var cli = data.claude_cli || {};
-    var cliOk = cli.available && cli.authenticated;
-    html += '<div style="margin-bottom:14px;border:1px solid var(--border);border-radius:6px;padding:10px 12px">' +
-        '<h5 style="font-size:.8rem;color:var(--text2);margin:0 0 8px">🔨 Forger un nouvel outil (génération de code par Claude)</h5>' +
-        '<div style="font-size:.74rem;margin-bottom:8px">Claude CLI : ' +
-        (cli.available ? '✅ installé' : '❌ introuvable') + ' · ' +
-        (cli.authenticated ? '✅ compte authentifié' + (cli.account ? ' (' + escHtml(cli.account) + ')' : '') : '❌ non authentifié') +
-        (!cliOk ? '<br><span style="color:var(--text2)">Configurez-le au préalable : <code>bash Astroport.ONE/claude.vscodium.setup.sh setup</code> (ou <code>migrate</code> si config VSCodium existante).</span>' : '') +
-        '</div>' +
-        '<textarea id="arbor-forge-need" rows="3" maxlength="500" placeholder="Décris le besoin en langage naturel — ex: « suivre un compte Mastodon et résumer ses posts quotidiennement »" ' +
+    html += '<div class="arb-sec"><h5>🔨 Forger un nouvel outil <span class="al-sub">code généré par Claude, sur une branche isolée</span></h5>' +
+        (!cliOk ? '<div class="al-sub" style="margin-bottom:6px">Configurez Claude CLI au préalable : <code>bash Astroport.ONE/claude.vscodium.setup.sh setup</code> (ou <code>migrate</code> si config VSCodium existante).</div>' : '') +
+        '<textarea id="arbor-forge-need" rows="2" maxlength="500" placeholder="Décris le besoin en langage naturel — ex: « suivre un compte Mastodon et résumer ses posts quotidiennement »" ' +
         'style="width:100%;resize:vertical;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:8px;font-size:.78rem;box-sizing:border-box;margin-bottom:6px"' +
         (enabled && cliOk ? '' : ' disabled') + '></textarea>' +
         '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">' +
@@ -3971,41 +4225,311 @@ function renderArborStatus(data) {
         '<button class="btn-regen" ' + (enabled && cliOk ? '' : 'disabled') + ' onclick="triggerArborForge()">🔨 Forger</button>' +
         '</div></div>';
 
-    html += '<div style="margin-bottom:14px"><h5 style="font-size:.8rem;color:var(--text2);margin:0 0 4px">⚙️ Seuils effectifs</h5>' +
-        renderConfigCategories(data.thresholds || [], 'arbor') + '</div>';
+    html += '<details class="arb-adv" id="arbor-adv-history"><summary>🕐 Historique des runs <span class="al-sub">(' + _arborGroupRuns(data.audit || []).length + ')</span></summary>' +
+        '<div class="arb-adv-body"><div id="arbor-audit-list"></div></div></details>';
 
-    var branches = data.branches || [];
-    html += '<div style="margin-bottom:14px"><h5 style="font-size:.8rem;color:var(--text2);margin:0 0 4px">🌿 Branches en attente de revue</h5>';
-    if (!branches.length) {
-        html += '<div class="state-empty" style="padding:14px"><div class="icon">🌿</div><div>Aucune branche arbor/* pour le moment.</div></div>';
-    } else {
-        html += branches.map(function(b) {
-            var statusLabel = b.already_merged ? '✅ déjà mergée — nettoyage possible'
-                : (b.worktree_present ? '📝 à relire (worktree présent)' : '📝 à relire (worktree absent, ex. après reboot)');
-            return '<div style="border:1px solid var(--border);border-radius:6px;padding:8px 12px;margin-bottom:6px;font-size:.78rem">' +
-                '<b>' + escHtml(b.branch) + '</b> — ' + statusLabel + '<br>' +
-                '<span style="color:var(--text2)">' + escHtml(b.subject || '') + ' · ' + escHtml(String(b.commits_ahead)) + ' commit(s) d\'avance</span><br>' +
-                '<code style="font-size:.72rem;color:var(--text2)">' + escHtml(b.review_command) + '</code> ' +
-                '<button class="btn-regen" style="padding:2px 8px;font-size:.7rem" onclick="navigator.clipboard.writeText(' +
-                jsAttr(b.review_command) + ');showToast(\'Commande copiée\',\'ok\')">📋 copier</button>' +
-                '</div>';
-        }).join('');
-    }
-    html += '</div>';
+    html += '<details class="arb-adv"><summary>🪄 Bâton de parole <span class="al-sub">cycle quotidien automatique entre stations</span></summary>' +
+        '<div class="arb-adv-body"><div id="arbor-baton-body"><div class="state-empty" style="padding:14px"><div class="icon">🪄</div><div>Chargement…</div></div></div></div></details>';
 
-    var audit = data.audit || [];
-    html += '<div><h5 style="font-size:.8rem;color:var(--text2);margin:0 0 4px">🕐 Derniers runs</h5>';
-    if (!audit.length) {
-        html += '<div class="state-empty" style="padding:14px"><div class="icon">🕐</div><div>Aucun run enregistré.</div></div>';
-    } else {
-        html += '<div style="font-size:.74rem;color:var(--text2);line-height:1.7">' + audit.map(function(a) {
-            return escHtml(a.at || '') + ' — <b>' + escHtml(a.event || '') + '</b> (' + escHtml(a.mode || '') + ')' +
-                (a.rc !== undefined ? ' rc=' + a.rc : '') + (a.duration_s !== undefined ? ' · ' + a.duration_s + 's' : '') +
-                (a.branch ? ' · branche ' + escHtml(a.branch) : '');
-        }).join('<br>') + '</div>';
-    }
-    html += '</div>';
+    html += '<details class="arb-adv"><summary>⚙️ Seuils et réglages avancés</summary>' +
+        '<div class="arb-adv-body">' + renderConfigCategories(data.thresholds || [], 'arbor') + '</div></details>';
+
     return html;
+}
+
+// Les entrées d'audit sont des évènements start/end : regroupés par run_id en
+// UNE ligne par run (statut, durée, branche) — bien plus lisible que 2 lignes
+// de journal par run.
+function _arborGroupRuns(audit) {
+    var byId = {}, order = [];
+    audit.forEach(function(a, i) {
+        var id = a.run_id || ('x' + i);
+        if (!byId[id]) { byId[id] = { run_id: id, mode: a.mode || '?', at: '', end_at: '', rc: null, duration_s: null, branch: '', ended: false }; order.push(id); }
+        var r = byId[id];
+        if (a.mode) r.mode = a.mode;
+        if (a.event === 'start' || (!a.event && a.at)) r.at = r.at || a.at || '';
+        if (a.event === 'merge' || a.event === 'cleanup') {
+            r.at = a.at || ''; r.ended = true; r.rc = a.rc !== undefined ? Number(a.rc) : 0; r.duration_s = null;
+            r.branch = a.branch || ''; r.mode = a.event === 'merge' ? 'fusion' : 'nettoyage';
+        }
+        if (a.event === 'end') {
+            r.ended = true; r.end_at = a.at || ''; r.rc = a.rc !== undefined ? Number(a.rc) : null;
+            r.duration_s = a.duration_s !== undefined ? a.duration_s : null;
+            if (a.branch) r.branch = a.branch;
+        }
+    });
+    return order.map(function(id) { return byId[id]; });
+}
+
+function _arborRunStatus(r) {
+    if (!r.ended) return { key: 'open', icon: '⏳', cls: 'warn', label: 'sans fin enregistrée' };
+    if (r.rc !== null && r.rc !== 0) return { key: 'fail', icon: '❌', cls: 'bad', label: 'échec (rc=' + r.rc + ')' };
+    return { key: 'ok', icon: '✅', cls: 'ok', label: 'réussi' };
+}
+
+function _arborFmtAt(iso) {
+    var t = iso ? Date.parse(iso) : NaN;
+    return isNaN(t) ? (iso || '—') : new Date(t).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+}
+
+// ── Accueil : état de la station + file « À traiter » ───────────────────────
+// Alimenté par arbor_status (seule source agrégée disponible) ; d'autres
+// sources (relay, comptes, purge) s'ajoutent ici en cartes + éléments « À traiter ».
+var _homeLastData = null;
+var _homeExtra = { at: 0, comptes: null, profils: null };
+
+// Compteurs complémentaires (comptes, profils du relay) : requêtes légères,
+// rafraîchies au plus une fois par minute, jamais bloquantes pour l'Accueil.
+async function loadHomeExtras() {
+    if (Date.now() - _homeExtra.at < 60000 || !_hasAdminAuth()) return;
+    _homeExtra.at = Date.now();
+    try {
+        var d = await apiFetch(_apiUrl + '/api/nostr/admin/multipass_list?' + new URLSearchParams());
+        _homeExtra.comptes = (d.accounts || []).length;
+    } catch(e) { _homeExtra.comptes = null; }
+    try {
+        var relayUrl = (typeof window.getRelayUrl === 'function' && window.getRelayUrl()) || 'ws://127.0.0.1:7777';
+        var evs = await RelaySelector.query(relayUrl, { kinds: [0], limit: 500 }, { timeout: 8000 });
+        _homeExtra.profils = evs.length;
+    } catch(e) { _homeExtra.profils = null; }
+    if (_homeLastData) renderHome(_homeLastData);
+}
+
+function renderHome(data) {
+    var box = document.getElementById('home-body');
+    if (!box) return;
+    _homeLastData = data;
+    loadHomeExtras();
+    var st = data.state || {};
+    var cli = data.claude_cli || {};
+    var cliOk = cli.available && cli.authenticated;
+    var enabled = data.remote_trigger_enabled;
+    var branchesTodo = (data.branches || []).filter(function(b) { return !b.already_merged; });
+    var cookies = data.cookies_without_scraper || [];
+    var lastFailed = st.status === 'failed' || (st.status === 'done' && st.rc !== undefined && Number(st.rc) !== 0);
+
+    var todos = [];
+    if (st.status === 'running') todos.push({ cls: 'warn', text: '⏳ Run ARBOR en cours — mode ' + (st.mode || '?'), btn: 'Suivre', tab: 'arbor' });
+    if (lastFailed) todos.push({ cls: 'bad', text: '❌ Dernier run ARBOR (' + (st.mode || '?') + ') en échec, rc=' + st.rc, btn: 'Voir le journal', tab: 'arbor' });
+    if (branchesTodo.length) todos.push({ cls: 'warn', text: '🌿 ' + branchesTodo.length + ' branche(s) arbor/* à relire', btn: 'Relire', tab: 'arbor' });
+    if (cookies.length) todos.push({ cls: 'warn', text: '🍪 ' + cookies.length + ' cookie(s) déposé(s) sans scraper', btn: 'Forger', tab: 'arbor' });
+    if (!cliOk) todos.push({ cls: 'warn', text: '🤖 Claude CLI ' + (cli.available ? 'non authentifié' : 'introuvable') + ' — forge impossible', btn: 'Réglages', tab: 'node' });
+    if (!enabled) todos.push({ cls: 'warn', text: '🔒 Déclenchement distant ARBOR désactivé', btn: 'Réglages', tab: 'node' });
+
+    (window._stationTodos || []).forEach(function(t) { todos.push(t); });
+    (window._tunnelTodos || []).forEach(function(t) { todos.push(t); });
+    var sb = document.getElementById('tab-station-badge');
+    if (sb) { var n = (window._stationTodos || []).length; sb.textContent = n; sb.style.display = n ? '' : 'none'; }
+    var badge = document.getElementById('tab-home-badge');
+    if (badge) { badge.textContent = todos.length; badge.style.display = todos.length ? '' : 'none'; }
+
+    var runCard = !st.status ? ['idle', 'aucun run', ''] :
+        (st.status === 'running' ? ['warn', '⏳ en cours', st.mode || ''] :
+        (lastFailed ? ['bad', '❌ échec', (st.mode || '') + ' · rc=' + st.rc] : ['ok', '✅ réussi', st.mode || '']));
+    function card(cls, title, value, sub, tab) {
+        return '<button class="hm-card ' + cls + '" onclick="switchTab(' + jsAttr(tab) + ')"><b>' + escHtml(title) + '</b><span>' +
+            escHtml(value) + '</span><small>' + escHtml(sub || '') + '</small></button>';
+    }
+    var html = '<div class="hm-cards">' +
+        card(runCard[0], 'Dernier run ARBOR', runCard[1], runCard[2], 'arbor') +
+        card(branchesTodo.length ? 'warn' : 'ok', 'Branches à relire', String(branchesTodo.length), (data.branches || []).length + ' branche(s) arbor/*', 'arbor') +
+        card(cookies.length ? 'warn' : 'ok', 'Cookies sans scraper', String(cookies.length), cookies.length ? 'à forger' : 'tout est couvert', 'arbor') +
+        card(cliOk ? 'ok' : 'bad', 'Claude CLI', cliOk ? 'prêt' : 'indisponible', cli.account || '', 'node') +
+        card(enabled ? 'ok' : 'idle', 'Déclenchement distant', enabled ? 'activé' : 'désactivé', 'cooldown ' + data.cooldown_min + ' min', 'node') +
+        (_homeExtra.comptes !== null ? card('idle', 'Comptes MULTIPASS', String(_homeExtra.comptes), 'hébergés sur la station', 'memory') : '') +
+        (_homeExtra.profils !== null ? card('idle', 'Profils sur le relay', _homeExtra.profils >= 500 ? '500+' : String(_homeExtra.profils), 'événements Kind 0', 'profile') : '') +
+        '</div>';
+
+    html += '<div><h4 class="hm-h">📌 À traiter' + (todos.length ? ' (' + todos.length + ')' : '') + '</h4>';
+    if (!todos.length) {
+        html += '<div class="al-empty">✨ Rien à traiter — la station est à jour.</div>';
+    } else {
+        html += '<div style="display:flex;flex-direction:column;gap:6px">' + todos.map(function(t) {
+            return '<div class="hm-todo ' + t.cls + '"><span class="al-grow">' + escHtml(t.text) + '</span>' +
+                '<button class="btn-regen" onclick="switchTab(' + jsAttr(t.tab) + ')">' + escHtml(t.btn) + ' →</button></div>';
+        }).join('') + '</div>';
+    }
+    html += '</div>';
+
+    var links = [
+        ['station', '🖥️', 'Station', 'Santé, services, journaux, essaim, économie'],
+        ['savoirs', '📚', 'Savoirs', 'Toile de confiance, recettes, compétences, forks'],
+        ['qdrant', '🗄️', 'Qdrant', 'Base vectorielle : collections et nuages de points'],
+        ['tunnels', '🔌', 'Tunnels', 'Tunnels IPFS P2P : publiés, clients, persistants'],
+        ['arbor', '🧬', 'ARBOR', 'Dialoguer, lancer, forger, relire les branches'],
+        ['query', '🔍', 'Requête', 'Interroger le relay, supprimer des événements'],
+        ['profile', '👤', 'Profil', 'Profils du relay, purge des comptes étrangers'],
+        ['memory', '🧠', 'Mémoire', 'Comptes MULTIPASS : mémoire, cookies, identité'],
+        ['tree', '🌳', 'Arbre', 'Événements d\'une identité par protocole'],
+        ['node', '⚙️', 'NODE', 'Configuration coopérative de la station']
+    ];
+    html += '<div><h4 class="hm-h">Aller à</h4><div class="hm-links">' + links.map(function(l) {
+        return '<button class="hm-link" onclick="switchTab(' + jsAttr(l[0]) + ')"><b>' + l[1] + ' ' + escHtml(l[2]) + '</b><small>' + escHtml(l[3]) + '</small></button>';
+    }).join('') + '</div></div>';
+
+    html += '<div><button class="btn-regen" onclick="_arborLoaded=true;loadArborStatus()">🔄 Actualiser</button></div>';
+    box.innerHTML = html;
+}
+
+// ── Relecture / fusion d'une branche arbor/* ────────────────────────────────
+// Le diff est lu côté serveur (arbor_branch_diff) ; « Fusionner » exige une
+// confirmation TAPÉE (le nom de la branche) puis passe par arbor_branch_merge
+// (NIP-98 Capitaine exclusif, dépôt sur master, aucun fichier suivi modifié).
+var _arborDiffBranch = null;
+
+function _arborColorDiff(text) {
+    return escHtml(text).split('\n').map(function(l) {
+        var cls = '';
+        if (l.indexOf('+++') === 0 || l.indexOf('---') === 0 || l.indexOf('diff --git') === 0) cls = 'df-file';
+        else if (l.charAt(0) === '+') cls = 'df-add';
+        else if (l.charAt(0) === '-') cls = 'df-del';
+        else if (l.indexOf('@@') === 0) cls = 'df-hunk';
+        return cls ? '<span class="' + cls + '">' + l + '</span>' : l;
+    }).join('\n');
+}
+
+async function openArborDiff(branch) {
+    closeArborDiff();
+    _arborDiffBranch = branch;
+    var ov = document.createElement('div');
+    ov.id = 'arbor-diff-overlay'; ov.className = 'df-overlay';
+    ov.onclick = function(e) { if (e.target === ov) closeArborDiff(); };
+    ov.innerHTML = '<div class="df-modal"><div class="df-head"><b>🌿 ' + escHtml(branch) + '</b><span class="al-sub" id="df-state"></span>' +
+        '<button class="al-view" style="margin-left:auto" onclick="closeArborDiff()" title="Fermer (Échap)">✕</button></div>' +
+        '<div class="df-body" id="df-body"><div class="state-empty" style="padding:30px"><div class="icon">⏳</div><div>Lecture du diff…</div></div></div>' +
+        '<div class="df-foot" id="df-foot"></div></div>';
+    document.body.appendChild(ov);
+    try {
+        var d = await apiFetch(_apiUrl + '/api/nostr/admin/arbor_branch_diff?' + new URLSearchParams({ branch: branch }));
+        if (_arborDiffBranch !== branch) return;
+        document.getElementById('df-state').innerHTML = '<span class="al-badge ' + (d.already_merged ? 'ok' : 'warn') + '">' +
+            (d.already_merged ? '✅ déjà mergée' : '📝 à relire') + '</span> ' + d.commits.length + ' commit(s)';
+        var html = '';
+        if (d.commits.length) {
+            html += '<h5 class="hm-h">Commits</h5>' + d.commits.map(function(c) {
+                return '<div class="al-line"><code>' + escHtml(c.sha) + '</code><span class="al-grow">' + escHtml(c.subject) + '</span><span class="al-sub">' + escHtml(c.date.slice(0, 16)) + '</span></div>';
+            }).join('');
+        }
+        html += '<h5 class="hm-h" style="margin-top:12px">Fichiers modifiés</h5><pre class="df-pre">' + escHtml(d.stat || '(aucun)') + '</pre>';
+        html += '<h5 class="hm-h" style="margin-top:12px">Diff' + (d.truncated ? ' <span class="al-badge warn">tronqué à 200 Ko</span>' : '') + '</h5>' +
+            '<pre class="df-pre df-diff">' + _arborColorDiff(d.diff || '') + '</pre>';
+        document.getElementById('df-body').innerHTML = html;
+        document.getElementById('df-foot').innerHTML = d.already_merged
+            ? '<button class="btn-del-local" onclick="deleteArborBranch()">🗑 Supprimer la branche (nettoyage)</button>'
+            : '<button class="btn-query" style="padding:6px 16px" onclick="mergeArborBranch()">✅ Fusionner dans master…</button>' +
+              '<span class="al-sub">Fusion --no-ff, annulée automatiquement en cas de conflit.</span>';
+    } catch(e) {
+        if (e.message !== '403') document.getElementById('df-body').innerHTML = '<div style="color:var(--danger);padding:14px">Erreur : ' + escHtml(e.message) + '</div>';
+    }
+}
+
+function closeArborDiff() {
+    _arborDiffBranch = null;
+    var ov = document.getElementById('arbor-diff-overlay');
+    if (ov) ov.remove();
+}
+document.addEventListener('keydown', function(e) { if (e.key === 'Escape') closeArborDiff(); });
+
+async function mergeArborBranch() {
+    var branch = _arborDiffBranch;
+    if (!branch) return;
+    var typed = prompt('Fusionner « ' + branch + ' » dans master ?\nCela modifie le dépôt de la station.\n\nTapez le nom de la branche pour confirmer :');
+    if (typed === null) return;
+    if (typed.trim() !== branch) { showToast('Confirmation différente — fusion annulée.', 'warn'); return; }
+    try {
+        var r = await apiFetch(_apiUrl + '/api/nostr/admin/arbor_branch_merge', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ branch: branch, confirm: typed.trim() })
+        });
+        showToast('Branche fusionnée dans master (' + r.head + ')', 'ok');
+        opsLog([{ type: 'ok', text: 'arbor_branch_merge ' + branch + ' → ' + r.head }]);
+        closeArborDiff(); _arborLoaded = true; loadArborStatus();
+    } catch(e) {
+        if (e.message !== '403') showToast('Fusion refusée : ' + e.message, 'err');
+    }
+}
+
+async function deleteArborBranch() {
+    var branch = _arborDiffBranch;
+    if (!branch || !confirm('Supprimer la branche déjà fusionnée « ' + branch + ' » (et son worktree) ?')) return;
+    try {
+        await apiFetch(_apiUrl + '/api/nostr/admin/arbor_branch_delete', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ branch: branch })
+        });
+        showToast('Branche supprimée', 'ok');
+        opsLog([{ type: 'ok', text: 'arbor_branch_delete ' + branch }]);
+        closeArborDiff(); _arborLoaded = true; loadArborStatus();
+    } catch(e) {
+        if (e.message !== '403') showToast('Suppression refusée : ' + e.message, 'err');
+    }
+}
+
+function mountArborLists(data) {
+    var branches = data.branches || [];
+    AdmList.mount(document.getElementById('arbor-branches-list'), {
+        id: 'arbor-branches', items: branches, defaultView: 'cards',
+        empty: '✨ Aucune branche arbor/* — rien à relire pour le moment.',
+        search: function(b) { return b.branch + ' ' + (b.subject || ''); },
+        sorts: [
+            { key: 'date', label: 'date', cmp: function(a, b) { return (b.committed_at || 0) - (a.committed_at || 0); } },
+            { key: 'ahead', label: 'commits d\'avance', cmp: function(a, b) { return Number(b.commits_ahead) - Number(a.commits_ahead); } },
+            { key: 'name', label: 'nom', cmp: function(a, b) { return String(a.branch).localeCompare(String(b.branch)); } }
+        ],
+        filters: [
+            { key: 'todo', label: 'À relire', test: function(b) { return !b.already_merged; } },
+            { key: 'merged', label: 'Déjà mergées', test: function(b) { return b.already_merged; } }
+        ],
+        card: function(b) { return _arborBranchHtml(b, 'card'); },
+        row: function(b) { return _arborBranchHtml(b, 'row'); },
+        line: function(b) { return _arborBranchHtml(b, 'line'); }
+    });
+
+    AdmList.mount(document.getElementById('arbor-audit-list'), {
+        id: 'arbor-audit', items: _arborGroupRuns(data.audit || []), defaultView: 'compact', views: ['list', 'compact'],
+        empty: 'Aucun run enregistré.',
+        search: function(r) { return r.mode + ' ' + r.branch + ' ' + r.run_id; },
+        sorts: [
+            { key: 'date', label: 'date', cmp: function(a, b) { return Date.parse(b.at || 0) - Date.parse(a.at || 0); } },
+            { key: 'duration', label: 'durée', cmp: function(a, b) { return (b.duration_s || 0) - (a.duration_s || 0); } }
+        ],
+        filters: [
+            { key: 'fail', label: 'Échecs', test: function(r) { return _arborRunStatus(r).key === 'fail'; } },
+            { key: 'ok', label: 'Réussis', test: function(r) { return _arborRunStatus(r).key === 'ok'; } }
+        ],
+        row: function(r) { return _arborRunHtml(r, 'row'); },
+        line: function(r) { return _arborRunHtml(r, 'line'); }
+    });
+}
+
+function _arborBranchHtml(b, mode) {
+    var merged = b.already_merged;
+    var badge = '<span class="al-badge ' + (merged ? 'ok' : 'warn') + '">' + (merged ? '✅ mergée' : '📝 à relire') + '</span>';
+    var name = escHtml(String(b.branch).replace(/^arbor\//, ''));
+    var when = b.committed_at ? new Date(b.committed_at * 1000).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—';
+    var copy = '<button class="btn-regen" style="font-weight:700" title="Relire le diff dans l\'interface, puis fusionner ou ignorer" onclick="openArborDiff(' + jsAttr(b.branch) + ')">🔍 Relire</button> ' +
+        '<button class="btn-regen" title="Copier la commande git diff" onclick="navigator.clipboard.writeText(' +
+        jsAttr(b.review_command) + ');showToast(\'Commande copiée\',\'ok\')">📋</button>';
+    var ahead = '<span class="al-sub">' + escHtml(String(b.commits_ahead)) + ' commit(s) · ' + when + '</span>';
+    if (mode === 'card') {
+        return '<div class="al-card"><div style="display:flex;justify-content:space-between;gap:6px;align-items:center"><b class="al-grow" title="' + escAttr(b.branch) + '">' + name + '</b>' + badge + '</div>' +
+            '<div>' + escHtml(b.subject || '') + '</div>' + ahead +
+            (b.worktree_present ? '' : '<div class="al-sub">worktree absent (ex. après reboot)</div>') +
+            '<div>' + copy + '</div></div>';
+    }
+    if (mode === 'row') {
+        return '<div class="al-row">' + badge + '<b>' + name + '</b><span class="al-grow al-sub">' + escHtml(b.subject || '') + '</span>' + ahead + copy + '</div>';
+    }
+    return '<div class="al-line">' + badge + '<b>' + name + '</b><span class="al-grow al-sub">' + escHtml(b.subject || '') + '</span>' + ahead + ' <button class="btn-regen" onclick="openArborDiff(' + jsAttr(b.branch) + ')">🔍</button></div>';
+}
+
+function _arborRunHtml(r, mode) {
+    var st = _arborRunStatus(r);
+    var badge = '<span class="al-badge ' + st.cls + '">' + st.icon + ' ' + escHtml(st.label) + '</span>';
+    var dur = r.duration_s !== null ? ' · ' + _arborFmtDuration(Number(r.duration_s)) : '';
+    var br = r.branch ? ' · <code>' + escHtml(r.branch) + '</code>' : '';
+    return '<div class="' + (mode === 'row' ? 'al-row' : 'al-line') + '">' + badge + '<b>' + escHtml(r.mode) + '</b>' +
+        '<span class="al-grow al-sub">' + escHtml(_arborFmtAt(r.at)) + dur + br + '</span></div>';
 }
 
 async function triggerArbor(mode) {

@@ -164,11 +164,27 @@
         });
     }
 
-    function _verifyMarker(apiUrl, npub) {
-        _log('verifyMarker /api/myGPS →', apiUrl, 'npub:', npub.slice(0, 16) + '…');
+    /* NIP-98 : une seule signature, valable sur n'importe quelle station, sans publication sur le relais
+       ni attente du marqueur. Retourne l'en-tête Authorization, ou null si la signature échoue. */
+    function _nip98Header(url, method) {
+        var rnd = new Uint8Array(8); (w.crypto || w.msCrypto).getRandomValues(rnd);
+        var nonce = Array.prototype.map.call(rnd, function (b) { return ('0' + b.toString(16)).slice(-2); }).join('');
+        return w.nostr.signEvent({
+            kind: 27235, created_at: Math.floor(Date.now() / 1000), content: '',
+            tags: [['u', url], ['method', method], ['nonce', nonce]],
+        }).then(function (ev) {
+            return 'Nostr ' + btoa(unescape(encodeURIComponent(JSON.stringify(ev))))
+                .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+        }).catch(function (e) { _warn('signature NIP-98 impossible:', (e && e.message) || e); return null; });
+    }
+
+    function _verifyMarker(apiUrl, npub, authHeader) {
+        _log('verifyMarker /api/myGPS →', apiUrl, 'npub:', npub.slice(0, 16) + '…', authHeader ? '(NIP-98)' : '(NIP-42)');
+        var headers = { Accept: 'application/json' };
+        if (authHeader) headers.Authorization = authHeader;
         return fetch(apiUrl + '/api/myGPS?npub=' + encodeURIComponent(npub), {
             signal: AbortSignal.timeout(6000),
-            headers: { Accept: 'application/json' },
+            headers: headers,
         }).then(function (r) {
             if (!r.ok) throw new Error('HTTP ' + r.status);
             return r.json();
@@ -189,7 +205,7 @@
     /* ── Core detect() ────────────────────────────────────────────────────── */
 
     /**
-     * Effectue le flux NIP-42 complet et retourne l'état de roaming.
+     * Détecte le roaming : NIP-98 (1 signature) puis, en repli, flux NIP-42 complet. Retourne l'état de roaming.
      * @returns {Promise<{source, npub, hexPk, homeStation, verifyData, authOk, error}>}
      */
     function detect() {
@@ -208,31 +224,49 @@
         var relayUrl = _relayUrl();
         _log('detect() — apiUrl:', apiUrl, 'relay:', relayUrl);
 
+        /* 1) NIP-98 : 1 signature, 1 requête. Une station plus ancienne (qui ignore l'en-tête) répond 403 avec
+              un défi : on retombe alors sur le flux NIP-42 historique (2). */
+        function viaNip98() {
+            var url = apiUrl + '/api/myGPS?npub=' + encodeURIComponent(result.npub);
+            return _nip98Header(url, 'GET').then(function (hdr) {
+                if (!hdr) return null;
+                return _verifyMarker(apiUrl, result.npub, hdr).then(function (data) {
+                    result.authOk = true;
+                    return data;
+                }).catch(function (e) {
+                    _log('NIP-98 non accepté (' + ((e && e.message) || e) + ') — repli NIP-42');
+                    return null;
+                });
+            });
+        }
+
+        /* 2) NIP-42 historique : défi → kind 22242 signé → publié sur le relais → attente du marqueur. */
+        function viaNip42() {
+            return _fetchChallenge(apiUrl, result.npub)
+                .then(function (chalData) { return _signEvent(result.hexPk, relayUrl, chalData.challenge); })
+                .then(function (signed) {
+                    _log('événement signé id:', signed.id.slice(0, 12) + '…');
+                    return _sendToRelay(relayUrl, signed);
+                })
+                .then(function (authResult) {
+                    result.authOk = authResult.ok;
+                    _log('authOk:', authResult.ok, authResult.reason ? '(' + authResult.reason + ')' : '');
+                    /* Attendre que le marker soit écrit par filter/22242.sh */
+                    _log('attente 1200ms (écriture marker 22242.sh)…');
+                    return new Promise(function (r) { setTimeout(r, 1200); });
+                })
+                .then(function () { return _verifyMarker(apiUrl, result.npub); });
+        }
+
         return w.nostr.getPublicKey()
             .then(function (hexPk) {
                 if (!hexPk || hexPk.length !== 64) throw new Error('Clé hex invalide');
                 result.hexPk = hexPk;
                 result.npub  = _hexToNpub(hexPk);
                 _log('pubkey obtenue:', hexPk.slice(0, 12) + '… npub:', result.npub.slice(0, 16) + '…');
-                return _fetchChallenge(apiUrl, result.npub);
+                return viaNip98();
             })
-            .then(function (chalData) {
-                return _signEvent(result.hexPk, relayUrl, chalData.challenge);
-            })
-            .then(function (signed) {
-                _log('événement signé id:', signed.id.slice(0, 12) + '…');
-                return _sendToRelay(relayUrl, signed);
-            })
-            .then(function (authResult) {
-                result.authOk = authResult.ok;
-                _log('authOk:', authResult.ok, authResult.reason ? '(' + authResult.reason + ')' : '');
-                /* Attendre que le marker soit écrit par filter/22242.sh */
-                _log('attente 1200ms (écriture marker 22242.sh)…');
-                return new Promise(function (r) { setTimeout(r, 1200); });
-            })
-            .then(function () {
-                return _verifyMarker(apiUrl, result.npub);
-            })
+            .then(function (data) { return data || viaNip42(); })
             .then(function (data) {
                 result.verifyData  = data;
                 result.homeStation = data.home_station_url || data.website || '';

@@ -2256,6 +2256,7 @@ textarea.scan-input:focus { border-color: var(--accent); }
 <script src="nostr.bundle.js"></script>
 <script src="bootstrap.bundle.min.js"></script>
 <script src="common.js"></script>
+<script src="visio.js"></script>
 <script src="minelife.js"></script>
 <script src="feedback.js"></script>
 <script src="app_switch.js"></script>
@@ -6011,6 +6012,7 @@ const LIVE = {
     startedAt: null,
     skill:     null,
     chatSub:   null,
+    room:      null,   /* salle privée tirée au sort par la station (Visio.createRoom) — plus dérivée de l'npub */
 };
 
 function _liveRoomId(skill) {
@@ -6020,19 +6022,12 @@ function _liveRoomId(skill) {
         : 'uplanet_' + npubSlice;
 }
 
-function _liveVdoUrl(role, skill) {
-    const room  = _liveRoomId(skill);
-    const label = encodeURIComponent(
-        (window.userProfile && window.userProfile.display_name)
-            ? window.userProfile.display_name.slice(0, 30)
-            : (window.userPubkey || 'player').slice(0, 10)
-    );
-    if (role === 'view') {
-        /* Spectateur : vue room, lecture seule, sans caméra */
-        return `https://vdo.copylaradio.com/?room=${room}&view&cleanoutput`;
-    }
-    /* Studio : webcam + effets visuels + enregistrement local */
-    return `https://vdo.copylaradio.com/?room=${room}&webcam&effects&record&label=${label}&autostart`;
+function _liveVdoUrl(role) {
+    if (!LIVE.room) return null;
+    const label = (window.userProfile && window.userProfile.display_name)
+        ? window.userProfile.display_name : (window.userPubkey || 'player').slice(0, 10);
+    /* Spectateur : vue room, sans caméra — Studio : webcam + effets visuels + enregistrement local */
+    return Visio.url(LIVE.room, { role: role === 'view' ? 'view' : 'studio', label });
 }
 
 /* Retourne le nom du skill actif dans l'Atelier si le tab craft est ouvert,
@@ -6071,8 +6066,8 @@ function _refreshLivePanel() {
 
     const connected = !!(window.isNostrConnected && window.userPubkey);
     const skill     = LIVE.active ? LIVE.skill : _detectActiveCraftSkill();
-    const viewUrl   = connected ? _liveVdoUrl('view', skill)  : '(Connectez-vous)';
-    const studioUrl = connected ? _liveVdoUrl(null,   skill)  : '#';
+    const viewUrl   = !connected ? '(Connectez-vous)' : (_liveVdoUrl('view') || '(généré au démarrage)');
+    const studioUrl = (connected && _liveVdoUrl(null)) || '#';
 
     if (urlIn)   urlIn.value = viewUrl;
     if (btnOpen) { btnOpen.href = studioUrl; }
@@ -6106,7 +6101,7 @@ function _refreshLivePanel() {
 
 function copyLiveUrl() {
     const url = document.getElementById('live-url-input')?.value;
-    if (!url || url === '(Connectez-vous)') return;
+    if (!url || url.charAt(0) === '(') return;
     navigator.clipboard.writeText(url).then(() => notify('🔗 Lien copié !', 'success'));
 }
 
@@ -6121,8 +6116,13 @@ async function startLiveSession(skillOverride) {
     const skill       = skillOverride || _detectActiveCraftSkill() || null;
     const now         = Math.floor(Date.now() / 1000);
     const sessionId   = 'live_' + _liveRoomId(skill) + '_' + now;
-    const studioUrl   = _liveVdoUrl(null,   skill);
-    const viewUrl     = _liveVdoUrl('view', skill);
+    try {
+        LIVE.room = await Visio.createRoom();
+    } catch (e) {
+        notify('Erreur salle de visio : ' + e.message, 'error'); return;
+    }
+    const studioUrl   = _liveVdoUrl(null);
+    const viewUrl     = _liveVdoUrl('view');
     const displayName = (window.userProfile && window.userProfile.display_name)
         ? window.userProfile.display_name : 'Player UPlanet';
     const titleSuffix = skill ? ` · ${skill}` : '';
@@ -6132,8 +6132,7 @@ async function startLiveSession(skillOverride) {
         ['d',         sessionId],
         ['title',     displayName + ' — LIVE WoTx2' + titleSuffix],
         ['summary',   'Session LIVE UPlanet MineLife · Forge & Certification WoTx2'],
-        ['streaming', studioUrl],
-        ['recording', viewUrl],
+        ['streaming', viewUrl],   /* lien SPECTATEUR seulement : l'événement est public, le lien studio reste local */
         ['starts',    String(now)],
         ['status',    'live'],
         ['t',         'WoTx2'],
@@ -6156,6 +6155,7 @@ async function startLiveSession(skillOverride) {
         _subscribeLiveChat();
         window.open(studioUrl, '_blank', 'noopener,noreferrer');
     } catch (e) {
+        LIVE.room = null;
         notify('Erreur démarrage LIVE : ' + e.message, 'error');
     }
 }
@@ -6166,7 +6166,7 @@ async function stopLiveSession() {
         const tags = [
             ['d',         LIVE.sessionId],
             ['title',     'Session terminée'],
-            ['streaming', _liveVdoUrl(null, LIVE.skill)],
+            ['streaming', _liveVdoUrl('view')],
             ['starts',    String(LIVE.startedAt || now)],
             ['ends',      String(now)],
             ['status',    'ended'],
@@ -6184,6 +6184,7 @@ async function stopLiveSession() {
     LIVE.sessionId = null;
     LIVE.startedAt = null;
     LIVE.skill     = null;
+    LIVE.room      = null;
     if (LIVE.chatSub) { try { LIVE.chatSub.close(); } catch(_) {} LIVE.chatSub = null; }
     notify('⏹ Session LIVE terminée.', 'info');
     _refreshLivePanel();

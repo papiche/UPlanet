@@ -14,6 +14,7 @@
  */
 (function () {
     'use strict';
+    var _HDR_SRC = (document.currentScript && document.currentScript.src) || '';
 
     // ── Navigation ─────────────────────────────────────────────────────────────
     // Entrées avec `sep` = séparateur/titre de section (pas de lien)
@@ -26,14 +27,14 @@
         { e: '🫵', l: 'Profile',        h: 'nostr_profile_viewer.html', mini:true },
         { e: '💎', l: 'Atomic',         h: 'atomic.html',            mini: true },
         { e: '🎫', l: 'Ğ1Billet',       h: 'billet.html',            mini: true },
-        { e: '😎', l: 'Mailjet',        h: 'mailjet.html', mini:true },
+        { e: '😎', l: 'Mon compte',     h: 'moncompte.html', mini:true },
         { e: '🍪', l: 'Cookies',        h: 'cookie.html', mini:true },
         { e: '👥', l: 'Face Cloud',     h: 'ucloud.html' , mini: true },
-        { e: '🎬', l: 'Studio vidéo IA', h: 'story.html' },
+        { e: '🎬', l: 'Studio vidéo IA', h: 'story.html', cap: true },
         { e: '📸', l: 'PlantNet',       h: 'plantnet.html', mini:true },
         { sep: 'Station 모' },
-        { e: '📡', l: 'NODE Admin',     h: 'nostr_admin.html' },
-        { e: '🧾', l: 'OC Admin',       h: 'oc_admin.html' },
+        { e: '📡', l: 'NODE Admin',     h: 'nostr_admin.html', cap: true },
+        { e: '🧾', l: 'OC Admin',       h: 'oc_admin.html', cap: true },
         { e: '♥️', l: 'Station',        h: 'economy.html',           mini: true },
         { e: '🌌', l: 'Swarm',          h: 'economy.Swarm.html' },
         { sep: 'G1FabLab 🛸' },
@@ -266,7 +267,7 @@
                 return '<span class="uph-section-label' + sc + '">' + p.sep + '</span>';
             }
             var isCur = _page === p.h;
-            var cls = [(isCur ? 'uph-cur' : ''), (p.mini ? '' : 'uph-full')].filter(Boolean).join(' ');
+            var cls = [(isCur ? 'uph-cur' : ''), (p.mini ? '' : 'uph-full'), (p.cap ? 'uph-cap' : '')].filter(Boolean).join(' ');
             return '<a href="' + _NAV_BASE + p.h + '"' + (cls ? ' class="' + cls + '"' : '') + '>'
                 + p.e + ' ' + p.l + '</a>';
         }).join('');
@@ -541,6 +542,38 @@
     function _loadAll() {
         _loadProfile();
         _loadMyGPS();
+        _startVisio();
+    }
+
+    // ── Présence + sonneries de visio : chargées SEULEMENT si le membre les a activées (Mon compte) ──
+    // Rien n'est téléchargé ni ouvert sinon. On réutilise la connexion relay de la page (aucune de plus).
+    function _loadScript(name) {
+        return new Promise(function (resolve, reject) {
+            var s = document.createElement('script');
+            s.src = _HDR_SRC ? new URL(name, _HDR_SRC).href : name;
+            s.onload = resolve; s.onerror = function () { reject(new Error(name + ' introuvable')); };
+            document.head.appendChild(s);
+        });
+    }
+    var _visioStarted = false;
+    async function _startVisio(attempt) {
+        if (_visioStarted) return;
+        var on = false;
+        try { on = window.localStorage.getItem('uplanet.presence') === '1'; } catch (e) {}
+        if (!on) return;
+        try {
+            if (!window.Presence) await _loadScript('presence.js');
+            if (!window.Visio) await _loadScript('visio.js');
+            if (await window.Presence.start()) {
+                _visioStarted = true;
+                await window.Visio.attach({ nameOf: function (hex) {
+                    var n = window.NostrState && window.NostrState.profiles && window.NostrState.profiles[hex];
+                    return n && (n.display_name || n.name) || null;
+                } });
+            } else if ((attempt || 0) < 3) {
+                setTimeout(function () { _startVisio((attempt || 0) + 1); }, 4000);   // relay pas encore prêt
+            }
+        } catch (e) { console.warn('[UPH] présence/visio non démarrées :', e.message || e); }
     }
 
     // ── Informations de station (/api/ustats) ──────────────────────────────────
@@ -1389,4 +1422,27 @@
         }, 1200);
     }
 
+})();
+
+/* Entrées réservées au Capitaine (NODE Admin, OC Admin, Studio vidéo) : masquées pour tous les
+   autres. Ce n'est qu'un confort d'affichage — l'accès reste contrôlé par le serveur (NIP-98). */
+(function() {
+    var st = document.createElement('style');
+    st.textContent = '#uph a.uph-cap{display:none!important}html.uph-is-captain #uph a.uph-cap{display:block!important}';
+    document.head.appendChild(st);
+    var done = '';
+    async function mark() {
+        var pk = ((window.NostrState && window.NostrState.userPubkey) || window.userPubkey || '').toLowerCase();
+        if (!pk || pk === done) return;
+        try {
+            var base = (window.getAPIUrl ? window.getAPIUrl() : location.origin).replace(/\/$/, '');
+            var r = await fetch(base + '/api/nostr/admin/captain_info');
+            var info = r.ok ? await r.json() : {};
+            var cap = (info.captain_hex || info.node_hex || '').toLowerCase();
+            done = pk;
+            document.documentElement.classList.toggle('uph-is-captain', !!cap && cap === pk);
+        } catch (e) { /* réseau indisponible : entrées restent masquées */ }
+    }
+    document.addEventListener('nostr:connected', mark);
+    window.addEventListener('load', function() { setTimeout(mark, 800); });
 })();

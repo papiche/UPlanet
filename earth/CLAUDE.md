@@ -569,3 +569,62 @@ réservée au Capitaine. Aucun `innerHTML` : tout passe par `textContent` (helpe
 **🎬 Vidéo FUN pour un ami** (bouton en tête de la bibliothèque et sur l'écran d'accueil, `openFun()`) : assistant en 3 étapes. (1) *La star* : les personnes nommées de l'ucloud (`GET /api/story/people` + vignettes `/mailjet/faces/thumbs`), 3 au plus, avec case de **consentement** obligatoire pour toute nouvelle personne ; `POST /api/story/character-from-person` fabrique le personnage (portrait tiré de ses photos, privé) et l'écran attend la préparation de sa voix (`funWaitVoices`). (2) *L'idée* : discussion avec le scénariste IA (`/api/story/assistant/chat`, pistes rapides « Anniversaire surprise »…), puis « Préparer le storyboard » (`/assistant/storyboard`, validé par `generate_scene.sh --check`). (3) *La scène* : aperçu des plans + durée, `POST /api/story/scene-from-storyboard` puis ouverture dans la table de montage (« Générer la vidéo » reste l'étape suivante, explicite). Après le rendu, **📤 Envoyer à un ami** (`openShare()`) crée un lien secret (14 jours, révocable) avec message prêt pour WhatsApp, Telegram, SMS, mail, « Autres applications… » (`navigator.share`) ou copie ; l'ami lit la vidéo dans son navigateur (`/api/story/watch/<jeton>`), sans compte.
 
 **Tournage, décor, voix (Phase 1)** : panneau « Tournage » (`#fun-shoot`) = durée max réglable 5–12 s (5 s = minimum du moteur) (`#fun-secs`), description libre du tournage (`#fun-brief`), image du décor choisie dans l'ucloud ou envoyée (`#dlg-decor`, `shootPayload()`). Fiche Personnage : la voix générée peut être remplacée par un enregistrement uploadé (`voicePanel()`). À la fin du rendu la vidéo est rangée dans `/VideoFUN/<ami>/` (`archiveRender()`, bouton « 📁 Ranger dans /VideoFUN/ »). **`ucloud.html` → onglet 🎬 Vidéos** (menu « Plus » sur mobile) : liste groupée par ami (`GET /api/cloud/videofun`), lecture (blob), téléchargement, suppression, envoi par lien secret (`shareVideo()` → `POST /api/story/share {path}`) ; les canaux (WhatsApp, Telegram, SMS, mail, partage du téléphone, copie) sont communs avec l'invitation FaceCloud (`fillShareChannels()`). **Envoi** : si l'ami a un MULTIPASS (clé ou email connus), le dialogue d'envoi propose en tête « ☁️ Dans le cloud de X (sans lien) » (`sendVideoToCloud()` → `POST /api/cloud/videofun/send`) ; les vidéos reçues arrivent dans `/VideoFUN/Reçues/<expéditeur>/`. Dans `story.html`, choisir « (moi) » affiche un micro (`makeRecorder()`, commun avec la fiche personnage) pour calibrer la voix. **Photos du visage** : dans l'assistant, chaque personne choisie affiche « 📷 photos choisies automatiquement · changer » ; `pickPhotos()` ouvre une grille de ses photos (sélection automatique cochée, on touche pour changer, 4 au plus, la première = principale ⭐) ; sur la fiche d'un personnage venant de FaceCloud, « 📷 Changer les photos… » (`changeCharacterPhotos()`, fiche et voix conservées). **Savoir-faire** : bloc « Savoir-faire » du tiroir d'une personne (`loadSkills()`) — sur MA fiche : liste, ajout (nom, deux mots, visibilité secteur/région/quartier/aucune), retrait, et « 👥 Qui d'autre dans le coin ? » (`findNearby()`, secteur puis région, case « niveau égal ou supérieur au mien ») ; sur une autre fiche : ses certificats en lecture seule. API `/api/skills/*` (UPassport `skill_map.py`). **Fiche d'un ami** : dans le tiroir d'une personne, `<details id="dr-friend">` (chargée à l'ouverture, `loadFriend()`) réunit ses photos, ce qu'on lui a envoyé, ce qu'il a partagé, les vidéos FUN pour lui (voir / envoyer) et les liens valables avec leurs vues (`GET /api/cloud/friend`).
+
+## Révisions chaînées des savoirs (logique « git » — recettes 30500, formations 30504)
+
+Un événement de savoir qui REMPLACE une version précédente (même kind, même auteur, même `d`) porte :
+
+| Tag | Sens |
+|-----|------|
+| `["prev", "<CID>"]` | CID IPFS de l'événement **parent** (JSON canonique : clés triées, séparateurs compacts, UTF-8 — recalculable par tous) |
+| `["rev", "<N>"]` | numéro de révision = révision du parent + 1 (1 si absent) |
+| `["merge", "<CID>"]` | facultatif : second parent (fusion de deux lignées) |
+
+Le relay ne garde que la dernière version (événement remplaçable) ; la chaîne survit sur IPFS. Un **fork** est une
+révision publiée par un AUTRE auteur dont `prev` pointe vers l'événement d'origine (même `d`, autre clé).
+Restaurer une ancienne révision = en republier le contenu comme NOUVELLE révision (jamais de réécriture).
+
+- `knowledge-rev.js` (`KnowledgeRev.chain(template, {base, lookup})`) : à appeler AVANT la signature ; épingle le parent
+  via `POST /api/savoirs/pin` (NIP-98, événement signé 30500-30505 uniquement) et ajoute `prev`/`rev`. Échec d'épinglage =
+  publication refusée avec un message clair (pas de chaîne cassée en silence). Branché dans `forge.html::requireSigned` et
+  `nostr_admin.html::requireSignedRelay` (Grimoire) ; tout nouvel éditeur de savoirs doit faire de même.
+- `GET /api/savoirs/history?cid=` remonte la chaîne (signatures vérifiées à chaque maillon, cycle détecté, 60 maillons max).
+- Lecture : onglet **Savoirs → Évolutions** de `nostr_admin.html` (frise des révisions, différences champ par champ,
+  restaurer / reprendre en fork). Les événements publiés avant la convention n'ont pas d'historique (`prev` absent).
+- Hors convention : les certificats (30503) et attestations (30502) ne se « révisent » pas (un nouveau niveau ou une nouvelle
+  attestation est un nouvel événement) ; les objets (30505) gardent leur journal de deltas (kind 1505). Les formations (30504)
+  publiées aujourd'hui ont un `d` unique par ressource : elles ne forment des révisions que si un éditeur réutilise le même `d`.
+
+## visio.js — salles de visio privées (2026-10-17)
+`Visio.createRoom()` (NIP-98 → `POST /api/visio/room`), `Visio.url(room, {role:'view'|'studio', label})`,
+`Visio.encodeInvite(room)` / `Visio.parseInvite(text)` (invitation `uplanet.visio` v1 pour message privé
+chiffré ; refuse base non-https, salle/mot de passe mal formés, échéance passée). Ne contacte jamais
+vdo.ninja tant qu'aucune salle n'est ouverte. minelife.html (LIVE) l'utilise : l'événement NIP-53 public
+ne porte que le lien SPECTATEUR (`streaming`), le lien studio reste local. `roaming.js` : NIP-98 d'abord
+(1 signature, 1 requête), repli NIP-42 pour les stations anciennes.
+
+## presence.js + Visio.call / attach (2026-10-17)
+Présence **opt-in** (Mon compte → « Visio : être joignable », `localStorage uplanet.presence`) : kind 24315
+éphémère vers les amis mutuels (≤ 50, cache 1 h), battement toutes les 4 min, `offline` à la fermeture ;
+`Presence.get/isOnline/on`. `uplanet-header.js` ne charge `presence.js` + `visio.js` QUE si l'option est active
+(zéro octet sinon) et réutilise le relay de la page. `Visio.call(hex)` : salle privée → sonnerie chiffrée
+kind 24316 si l'ami est en ligne, sinon message privé durable (`NostrPrivate.sendEncryptedDirectMessage`,
+même charge `uplanet.visio`). `Visio.attach()` n'écoute que les sonneries d'amis mutuels (aucun déchiffrement
+d'inconnu, doublons ignorés, invitation périmée refusée) et affiche une carte « Rejoindre / Ignorer » ; l'iframe
+(`allow="camera; microphone; …"`) n'est créée qu'au clic. Écrans de chat : appeler `Visio.handleText(hex, texte, id)`
+sur chaque message privé déchiffré. Spéc : `NIP-101/KIND_REGISTRY.md` (kinds 24315/24316, section Visio).
+
+### Visio dans le chat (atomic_chat.html, 2026-10-17)
+Bouton 📹 dans l'en-tête de conversation (vrai contact seulement : ni soi-même/BRO, ni NODE, ni LOVE) + pastille
+« ● en ligne / 📹 en visio / ⏳ absent » (si la présence est activée). `_startVisioCall()` : salle privée → message
+d'invitation dans le fil (kind 4, via `_send`, brouillon préservé) ET sonnerie 24316 si l'ami est en ligne (échec de
+sonnerie → le message suffit). Les messages `uplanet.visio` sont rendus en carte « Rejoindre » (ou « expirée / Rappeler »),
+jamais en JSON brut ; aperçu de conversation « 📹 Invitation visio ». Invitation reçue pendant qu'une AUTRE conversation est
+ouverte → `Visio.handleText` (amis mutuels seulement, dédoublonné par salle) ; `window.visioSuppressInvite(hex)` évite
+le doublon flottant quand le chat de cet ami est déjà ouvert. visio.js utilise l'extension NIP-07 (`nostr.nip44`) : plus de
+dépendance à nostr.private.js.
+
+### Liens vdo.ninja — vérifiés (2026-10-17, docs.vdo.ninja + instance réelle)
+`Visio.url(room, {role})` : `call` = `?room=R[&label]#p=PW` (sans autostart, le visiteur choisit caméra/micro) ; `studio` = `+&record&autostart`
+(live, après clic « Démarrer ») ; `view` = `&scene&cleanoutput`. **Un `&view` nu = « aucun flux reçu », jamais un lien spectateur.** Mot de passe
+dans le fragment `#p=` (hors journaux serveur/proxy), lettres+chiffres ≤ 49. `&webcam` retiré (il supprime le partage d'écran).

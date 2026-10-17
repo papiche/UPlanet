@@ -57,12 +57,11 @@ Key functions: `getStationUrl()` → port 12345, `getUSPOTUrl()` → port 54321.
 
 ### Backend Integration
 - **Astroport.ONE (port 12345)**: Station JSON state, captain data, NOSTR relay config
-- **UPassport (port 54321)**: `/g1nostr` (MULTIPASS), `/api/upload/image`, `/check_balance`, `/zen_send`
+- **UPassport (port 54321)**: `/g1nostr` (MULTIPASS), `/api/upload/image`, `/check_balance`
 - **NOSTR relays**: WebSocket connections for profiles (kind 0), messages (kind 1), reactions/payments (kind 7)
 - **IPFS**: Content-addressed storage via Helia 2.0.1
 
 ### Sub-Applications
-- **coinflip/** — Coin flip game with NOSTR auth + ZEN payments (Practice/Live modes)
 - **collaborative-editor.html** — Real-time document editing
 - **plantnet.html** — Plant identification interface
 

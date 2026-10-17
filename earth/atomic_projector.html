@@ -109,7 +109,8 @@
   </div>
   <div id="admin-controls" style="display:none">
     <div style="color:#8be9c9">⚓ Capitaine identifié</div>
-    <input type="password" id="admin-uplanetname" placeholder="UPLANETNAME (64 car. hex)" maxlength="64">
+    <div class="admin-hint-line" style="font-size:.72rem;opacity:.7">Chaque action est signée par votre extension NOSTR (NIP-98) — aucun secret à saisir.</div>
+    <label style="display:flex;gap:6px;align-items:center;font-size:.78rem;margin:6px 0"><input type="checkbox" id="admin-arm"> Armer : un clic sur un glyphe le supprime</label>
     <button class="danger" onclick="_deleteAll()">🗑️ Tout supprimer</button>
     <div id="admin-hint">Clic sur un glyphe dans la constellation pour le supprimer individuellement.</div>
   </div>
@@ -504,9 +505,22 @@ async function _uphConnect() {
     }
 }
 
-function _uph() { return document.getElementById('admin-uplanetname').value.trim(); }
+// Chaque appel admin est signé NIP-98 par l'extension du Capitaine : le secret
+// UPLANETNAME n'est plus accepté par le serveur (il est partagé par tout l'essaim).
+async function _nip98Header(url, method) {
+    var ev = await window.nostr.signEvent({
+        kind: 27235, created_at: Math.floor(Date.now() / 1000),
+        tags: [['u', url], ['method', method]], content: '',
+    });
+    var b64 = btoa(unescape(encodeURIComponent(JSON.stringify(ev))))
+        .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+    return 'Nostr ' + b64;
+}
 
 async function _adminFetch(url, opts) {
+    opts = opts || {};
+    var method = (opts.method || 'GET').toUpperCase();
+    opts.headers = Object.assign({}, opts.headers, { 'Authorization': await _nip98Header(url, method) });
     var resp = await fetch(url, opts);
     if (!resp.ok) throw new Error((await resp.json().catch(function(){return {};})).detail || resp.statusText);
     return resp.json();
@@ -514,8 +528,7 @@ async function _adminFetch(url, opts) {
 
 async function _deleteAll() {
     var st = document.getElementById('admin-status');
-    var uph = _uph();
-    if (!/^[0-9a-fA-F]{64}$/.test(uph)) { st.textContent = '⚠ UPLANETNAME invalide (64 car. hex).'; return; }
+    if (!_isCaptain) { st.textContent = '⚠ Connectez-vous en tant que capitaine.'; return; }
     if (!confirm('Supprimer TOUS les comptes démo et signaux ZICMAMA ?\nIRRÉVERSIBLE.')) return;
     st.textContent = '⏳ Suppression…';
     try {
@@ -525,14 +538,14 @@ async function _deleteAll() {
             { kind: '30078', tag_t: A4L_TAG },
             { kind: String(A4L_BEACON_KIND), tag_t: A4L_BEACON_TAG },
         ]) {
-            var params = new URLSearchParams({ uplanetname: uph, kind: q.kind, tag_t: q.tag_t, limit: '500' });
+            var params = new URLSearchParams({ kind: q.kind, tag_t: q.tag_t, limit: '500' });
             var data = await _adminFetch(api + '/api/nostr/admin/events?' + params.toString());
             (data.events || []).forEach(function(e) { ids.push(e.id); });
         }
         if (!ids.length) { st.textContent = 'Rien à supprimer.'; return; }
         var res = await _adminFetch(api + '/api/nostr/admin/delete', {
             method: 'POST', headers: {'Content-Type':'application/json'},
-            body: JSON.stringify({ uplanetname: uph, ids: ids }),
+            body: JSON.stringify({ ids: ids }),
         });
         _nodes.clear(); _beacons = [];
         document.getElementById('cnt').textContent = '0 connecté·e·s';
@@ -542,8 +555,7 @@ async function _deleteAll() {
 
 async function _deleteOne(pubkey) {
     var st = document.getElementById('admin-status');
-    var uph = _uph();
-    if (!_isCaptain || !/^[0-9a-fA-F]{64}$/.test(uph)) return;
+    if (!_isCaptain) return;
     var node = _nodes.get(pubkey);
     var label = node && node.kinObj ? AtomicGlyphs.label(node.kinObj) : pubkey.slice(0, 8) + '…';
     if (!confirm('Supprimer ' + label + ' ?')) return;
@@ -552,14 +564,14 @@ async function _deleteOne(pubkey) {
         var api = _apiUrl();
         var ids = [];
         for (const kind of ['30078', String(A4L_BEACON_KIND)]) {
-            var params = new URLSearchParams({ uplanetname: uph, kind: kind, author: pubkey, limit: '50' });
+            var params = new URLSearchParams({ kind: kind, author: pubkey, limit: '50' });
             var data = await _adminFetch(api + '/api/nostr/admin/events?' + params.toString());
             (data.events || []).forEach(function(e) { ids.push(e.id); });
         }
         if (ids.length) {
             await _adminFetch(api + '/api/nostr/admin/delete', {
                 method: 'POST', headers: {'Content-Type':'application/json'},
-                body: JSON.stringify({ uplanetname: uph, ids: ids }),
+                body: JSON.stringify({ ids: ids }),
             });
         }
         _nodes.delete(pubkey);
@@ -582,8 +594,8 @@ function mousePressed(event) {
         if (dist(mouseX, mouseY, pos.x, pos.y) < hitR) found = pubkey;
     });
 
-    var uph = _uph();
-    var adminArmed = _isCaptain && /^[0-9a-fA-F]{64}$/.test(uph);
+    var arm = document.getElementById('admin-arm');
+    var adminArmed = _isCaptain && !!(arm && arm.checked);
     if (adminArmed) {
         if (found) _deleteOne(found);
         return;

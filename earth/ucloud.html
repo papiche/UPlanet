@@ -335,7 +335,7 @@
   <p class="fc-hint">Reliez le dossier photos d'un autre cloud. FaceCloud en importe une part chaque jour,
     pour ne pas saturer l'analyse : une grosse archive se rattrape sur plusieurs jours.</p>
   <div class="fc-panel" id="sources"></div>
-  <p class="fc-hint">Vous quittez aussi Google ou Apple pour votre <b>agenda</b> ? Exportez-le en <code>.ics</code> puis importez-le dans <a href="calendars.html">Mes calendriers</a>. Pas de WebDAV chez eux pour les photos : voir le <a href="GAFAM.html">guide de migration</a>.</p>
+  <p class="fc-hint">Vous quittez aussi Google ou Apple pour votre <b>agenda</b> ? Ajoutez-le à votre téléphone par CalDAV (onglet « Téléphone » ci-dessous) : il se synchronise avec <a href="calendars.html">Mes calendriers</a>, chiffré. Ou exportez-le en <code>.ics</code> puis importez-le. Pas de WebDAV chez eux pour les photos : voir le <a href="GAFAM.html">guide de migration</a>.</p>
 
   <div class="fc-panel" id="wizard">
     <h3 id="wd-title">Ajouter une source</h3>
@@ -409,6 +409,7 @@
         <button class="fc-btn fc-btn-sm" data-os="linux">Linux</button>
         <button class="fc-btn fc-btn-sm" data-os="macos">macOS</button>
         <button class="fc-btn fc-btn-sm" data-os="windows">Windows</button>
+        <button class="fc-btn fc-btn-sm" data-os="phone">Téléphone (agenda, contacts)</button>
       </div>
       <p class="fc-hint" id="mount-text"></p>
     </div>
@@ -3373,6 +3374,7 @@ function anRunLine(x, key) {
         return '<p class="fc-an-run">⏳ ' + esc(txt) + '</p>';
     }
     if (r.error === 'direct_unavailable') return '<p class="fc-an-err">Accès direct impossible : ComfyUI ne répond pas, et le capitaine a interdit le relais. Demandez-lui de passer en mode « auto » ou « relais ».</p>';
+    if (r.error === 'gpu_unavailable') return '<p class="fc-an-err">Le GPU de la machine d\'IA est indisponible (le modèle tourne sur le CPU) : analyse mise en pause. Redémarrez la machine d\'IA puis relancez.</p>';
     if (r.error === 'model_unavailable') return '<p class="fc-an-err">Le modèle d\'IA ne répond pas (5 échecs d\'affilée) : analyse arrêtée. Vérifiez qu\'Ollama est joignable depuis la station.</p>';
     if (key === 'embed' && r.error) return '<p class="fc-an-err">Vectorisation arrêtée : ' + esc(r.error) + '</p>';
     if (r.error === 'no_path') return '<p class="fc-an-err">Ni accès direct ni relais NOSTR : rien ne peut démarrer.</p>';
@@ -3743,10 +3745,15 @@ function selectOS(os) {
     document.querySelectorAll('[data-os]').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.os === os)); });
     var url = App.davUrl || '';
     var dav = (url.indexOf('https://') === 0 ? 'davs://' : 'dav://') + url.replace(/^https?:\/\//, '');
+    var origin = url.replace(/\/dav\/?$/, '');
     $('mount-text').textContent = {
         linux: 'Fichiers (Nautilus, Dolphin…) → Autres emplacements → Se connecter à un serveur, puis : ' + dav,
         macos: 'Finder → Aller → Se connecter au serveur (⌘K), puis : ' + url,
-        windows: 'Explorateur → Ce PC → Ajouter un emplacement réseau, puis : ' + url + ' (adresse https obligatoire)'
+        windows: 'Explorateur → Ce PC → Ajouter un emplacement réseau, puis : ' + url + ' (adresse https obligatoire)',
+        phone: 'Android : installez DAVx⁵ (F-Droid), « Nouveau compte » → URL et identifiant, puis : ' + origin + '/caldav/ — vos agendas ' +
+               '(synchronisés aussi avec « Mes calendriers », chiffrés sur NOSTR) — et ' + origin + '/carddav/ pour vos contacts. ' +
+               'iPhone : Réglages → Calendrier (ou Contacts) → Comptes → Autre → Ajouter un compte CalDAV (ou CardDAV), serveur : ' + origin +
+               '. Même identifiant et même mot de passe que le disque.'
     }[os];
 }
 

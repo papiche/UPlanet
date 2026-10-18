@@ -962,11 +962,21 @@ async function refreshStatus() {
     clearTimeout(_statusTimer);
     if ((rp && rp.running) || waiting) {
         _statusTimer = setTimeout(function () {
+            // Onglet en arrière-plan : on ne fatigue pas la station, on reprend au retour (visibilitychange).
+            if (document.hidden) { _statusPaused = true; return; }
             refreshStatus();
             if (!$('view-people').hidden && !document.querySelector('dialog[open]') && !App.selection.length) loadFaces(false);
         }, 60000);
     }
 }
+var _statusPaused = false;
+document.addEventListener('visibilitychange', function () {
+    if (!document.hidden && _statusPaused && App.connected) {
+        _statusPaused = false;
+        refreshStatus();
+        if (!$('view-people').hidden && !document.querySelector('dialog[open]') && !App.selection.length) loadFaces(false);
+    }
+});
 
 /* ── Visages et personnes ───────────────────────────────────────────── */
 function isNamed(f) { return !!f.pubkey || !!f.contact || !!(f.name && !/^Inconnu/.test(f.name)); }
@@ -1017,16 +1027,31 @@ function groupFaces() {
     Object.keys(App.faceKey).forEach(function (id) { App.faceKey[id] = canon[App.faceKey[id]] || App.faceKey[id]; });
 }
 
-async function loadFaces(fit) {
-    try {
-        var data = await nostrFetch('/mailjet/faces');
-        App.faces = data.faces || [];
-        App.facesTruncated = !!data.truncated;
-    } catch (e) {
-        toast('Visages indisponibles : ' + e.message, true);
-        return;
-    }
-    rebuild(fit);
+/* Un seul chargement à la fois (les rafraîchissements demandés pendant qu'un
+   appel est en vol le rejoignent, puis un seul suivant) ; réponse identique à
+   la précédente = rien à reconstruire. */
+var _facesLoad = null, _facesAgain = false, _facesFit = false, _facesSig = '';
+function loadFaces(fit) {
+    if (fit) _facesFit = true;
+    if (_facesLoad) { _facesAgain = true; return _facesLoad; }
+    _facesLoad = (async function () {
+        try {
+            do {
+                _facesAgain = false;
+                var f = _facesFit; _facesFit = false;
+                var data;
+                try { data = await nostrFetch('/mailjet/faces'); }
+                catch (e) { toast('Visages indisponibles : ' + e.message, true); return; }
+                var sig = JSON.stringify(data);
+                if (sig === _facesSig && !f && App.faces.length) continue;
+                _facesSig = sig;
+                App.faces = data.faces || [];
+                App.facesTruncated = !!data.truncated;
+                rebuild(f);
+            } while (_facesAgain);
+        } finally { _facesLoad = null; }
+    })();
+    return _facesLoad;
 }
 
 function rebuild(fit) {

@@ -46,7 +46,7 @@
         if (typeof renderGuide === 'function') renderGuide();
         if (CT.current && App.contacts[CT.current] && !CT.dirty) openContact(CT.current);
         if (App.faces && App.faces.length) rebuild(false);   // noms des pochettes reliées
-        scheduleReconcile();
+        scheduleReconcile(true);
     };
 
     window.contactByName = function (lower) {
@@ -59,8 +59,9 @@
                  email: email || (c.emails && c.emails[0] ? c.emails[0].value : '') };
     };
 
-    var _recTimer = null;
-    window.scheduleReconcile = function () {
+    var _recTimer = null, _recSig = '';
+    window.scheduleReconcile = function (force) {
+        if (force) _recSig = '';          // les fiches ont changé : le résultat peut différer
         clearTimeout(_recTimer);
         _recTimer = setTimeout(reconcile, 700);
     };
@@ -69,8 +70,11 @@
         var persons = (App.persons || []).map(function (p) {
             return { key: p.key, pubkey: p.pubkey || '', email: p.email || '', contact: p.contact || '' };
         });
+        var body = JSON.stringify(persons);
+        if (body === _recSig && App.links) return;      // mêmes personnes : le résultat serait identique
         try {
-            App.links = await nostrFetch('/api/contacts/reconcile', { method: 'POST', body: form({ persons: JSON.stringify(persons) }) });
+            App.links = await nostrFetch('/api/contacts/reconcile', { method: 'POST', body: form({ persons: body }) });
+            _recSig = body;
         } catch (e) { return; }
         renderRows();
         if (CT.current && !CT.dirty && !$('view-contacts').hidden) renderLinks(CT.current);
@@ -283,7 +287,7 @@
         if (!p || !c) return;
         await assignTo(p.faces.map(function (f) { return f.id; }), contactIdentity(c, p.email));
         toast('« ' + p.name + ' » est reliée à la fiche ' + c.fn);
-        scheduleReconcile();
+        scheduleReconcile(true);
     }
 
     /* Bloc « identité » du panneau d'une personne (ucloud.html) : sa fiche,

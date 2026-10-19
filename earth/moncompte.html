@@ -29,6 +29,10 @@ h1 { font-size:1.5rem; margin:0; } h2 { font-size:1.05rem; margin:0 0 4px; } h3 
 .pill { display:inline-block; font-size:.72rem; padding:2px 10px; border-radius:999px; border:1px solid rgba(255,255,255,.55); color:#fff; margin-right:6px; }
 .hero a.btn { background:rgba(255,255,255,.18); color:#fff; border-color:rgba(255,255,255,.5); }
 .nav { position:sticky; top:52px; z-index:20; display:flex; gap:6px; overflow-x:auto; padding:8px 0; margin:0 0 12px; background:var(--mc-bg); }
+.nav .tab { font:inherit; cursor:pointer; white-space:nowrap; padding:6px 14px; border-radius:999px; border:1px solid var(--mc-border); background:var(--mc-surface); color:var(--mc-text); font-size:.82rem; }
+.nav .tab[aria-selected="true"] { background:var(--mc-accent); border-color:var(--mc-accent); color:var(--mc-ink); font-weight:600; }
+.nav .tab:hover, .nav .tab:focus-visible { border-color:var(--mc-accent); outline:none; }
+.pane[hidden] { display:none; }
 .nav a { white-space:nowrap; padding:6px 14px; border-radius:999px; border:1px solid var(--mc-border); background:var(--mc-surface); color:var(--mc-text); text-decoration:none; font-size:.82rem; }
 .nav a:hover, .nav a:focus-visible { border-color:var(--mc-accent); outline:none; }
 .card { background:var(--mc-surface); border:1px solid var(--mc-border); border-radius:14px; padding:16px 18px; margin-bottom:14px; }
@@ -86,6 +90,15 @@ details.d { border:1px solid var(--mc-border); border-radius:10px; padding:0 12p
 .samples { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-top:8px; }
 .mini { display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:8px; }
 .mini div { background:var(--mc-surface2); border-radius:10px; padding:8px 10px; } .mini b { display:block; font-size:1.1rem; } .mini span { font-size:.72rem; color:var(--mc-text2); }
+.mem-src { display:flex; align-items:center; gap:12px; padding:9px 0; border-bottom:1px solid var(--mc-border); flex-wrap:wrap; } .mem-src:last-child { border-bottom:none; }
+.mem-src .t { flex:1; min-width:220px; } .mem-src .t b { display:block; font-size:.88rem; } .mem-src.soon { opacity:.55; }
+.mem-bar { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin:12px 0 6px; } .mem-bar input[type=text] { flex:1; min-width:180px; width:auto; }
+.mem-grp { font-size:.78rem; font-weight:700; color:var(--mc-text2); text-transform:uppercase; letter-spacing:.04em; margin:16px 0 2px; }
+.mem-it { display:flex; align-items:flex-start; gap:10px; padding:8px 0; border-bottom:1px solid var(--mc-border); } .mem-it:last-child { border-bottom:none; }
+.mem-it .tx { flex:1; min-width:0; font-size:.88rem; overflow-wrap:anywhere; } .mem-it .meta { display:flex; gap:6px; flex-wrap:wrap; margin-top:3px; }
+.mem-it .acts { display:flex; gap:4px; flex:none; } .mem-it .acts .btn { padding:3px 9px; font-size:.76rem; }
+.mem-it .btn.love { border-color:var(--mc-accent); color:var(--mc-accent); }
+.mem-edit { display:flex; gap:6px; flex-wrap:wrap; } .mem-edit input { flex:1; min-width:200px; width:auto; }
 @media (prefers-reduced-motion: reduce) { * { transition:none !important; } }
 </style>
 </head>
@@ -178,7 +191,8 @@ function render() {
     '<div class="sub"><span class="pill">' + (d.zencard ? '💳 ZenCard' : '🎫 MULTIPASS') + '</span>' + (d.is_captain ? '<span class="pill">⚓ Capitaine</span>' : '') + '<span class="pill">' + health + '</span></div></div>' +
     '<button class="btn ghost" id="theme-btn" title="Changer de thème" aria-label="Changer de thème">◐</button>' +
     (d.is_captain ? '<a class="btn ghost" href="nostr_admin.html">Console du Capitaine →</a>' : '') + '</section>';
-  h += '<nav class="nav" aria-label="Sections"><a href="#resume">Résumé</a><a href="#notifications">Notifications</a><a href="#securite">Sécurité</a><a href="#espace">Mon espace</a><a href="#liens">Comptes liés</a><a href="#lifeos">Profil IA</a><a href="#donnees">Mes données</a></nav>';
+  h += '<nav class="nav" role="tablist" aria-label="Sections">' + TABS.map(function(t) { return '<button class="tab" role="tab" type="button" data-tab="' + t[0] + '" aria-selected="false">' + t[1] + '</button>'; }).join('') + '</nav>';
+  h += '<div class="pane" data-pane="compte">';
 
   h += '<section class="sec" id="resume"><h2>À faire</h2><div style="margin-top:8px" id="todo-list">' + todoHtml(td) + '</div>';
   var pct = q.pct || 0, qcls = q.full || pct >= 93 ? 'bad' : (q.over || pct >= 85 ? 'warn' : 'ok');
@@ -230,13 +244,44 @@ function render() {
     '<div class="row" style="margin-top:8px"><div class="t"><b>Cloud chiffré</b><span class="sub">' + fmtBytes(q.ucloud) + ' de photos et fichiers · ' + fmtBytes(q.udrive) + ' de dossier public</span></div><a class="btn" href="ucloud.html">Ouvrir FaceCloud</a></div>' +
     '</section>';
 
+  h += '</div><div class="pane" data-pane="espace" hidden>';
   h += '<section class="sec card" id="espace"><h2>Mon espace de données</h2><p class="sub" style="margin:0">Ce que contient votre cloud chiffré, ce que la station en analyse, et ce que vous lui interdisez de regarder. Plus vos photos sont reconnues, décrites et rangées, plus FaceCloud — et demain BRO — pourront vous répondre avec précision.</p><div id="espace-body" class="sub" style="margin-top:10px">Chargement…</div></section>';
+  h += '</div><div class="pane" data-pane="liens" hidden>';
   h += '<section class="sec card" id="liens"><h2>Comptes liés</h2><p class="sub" style="margin:0">Les services que BRO surveille pour vous (cookies de session) et vos clés d\'API officielles. Rien ne quitte votre MULTIPASS : tout est chiffré avec votre clé.</p><div id="liens-body" class="sub" style="margin-top:10px">Chargement…</div></section>';
+  h += '</div><div class="pane" data-pane="memoire" hidden>';
+  h += '<section class="sec card" id="memoire"><h2>Ce que BRO sait de moi</h2><p class="sub" style="margin:0">BRO retient tout seul ce qui compte (vos goûts, vos proches, vos projets) : vous n\'avez rien à taper. Tout est ici, lisible, corrigeable et effaçable. Rien ne quitte votre station.</p><div id="mem-body" class="sub" style="margin-top:10px">Chargement…</div></section>';
+  h += '</div><div class="pane" data-pane="lifeos" hidden>';
   h += '<section class="sec card" id="lifeos"><h2>Profil IA (LifeOS)</h2><p class="sub" style="margin:0">Ce que BRO sait de vous pour mieux répondre : qui vous êtes, votre style, vos règles, vos préférences, vos objectifs. Modifiable à tout moment.</p><div id="lifeos-body" class="sub" style="margin-top:10px">Chargement…</div></section>';
+  h += '</div>';
   $('acct-root').innerHTML = h;
+  bindTabs();
   bind();
-  loadLinks(); loadLifeos(); loadSpace();
+  loadLinks(); loadMemory(); loadLifeos(); loadSpace();
 }
+
+/* Onglets : un seul groupe de sections visible à la fois. Les ancres existantes (#liens, #memoire…) ouvrent
+   le bon onglet — UPassport redirige encore vers moncompte.html#liens. */
+var TABS = [['compte', 'Mon compte'], ['espace', 'Mon espace'], ['liens', 'Comptes liés'], ['memoire', '🧠 Ce que BRO sait de moi'], ['lifeos', 'Profil IA']];
+var TAB_OF = { resume: 'compte', notifications: 'compte', presence: 'compte', securite: 'compte', donnees: 'compte',
+               espace: 'espace', liens: 'liens', memoire: 'memoire', lifeos: 'lifeos' };
+function showTab(name, keepHash) {
+  if (!TABS.some(function(t) { return t[0] === name; })) name = 'compte';
+  document.querySelectorAll('.pane').forEach(function(p) { p.hidden = p.getAttribute('data-pane') !== name; });
+  document.querySelectorAll('.nav .tab').forEach(function(b) { b.setAttribute('aria-selected', b.getAttribute('data-tab') === name ? 'true' : 'false'); });
+  if (!keepHash) { try { history.replaceState(null, '', '#' + name); } catch (e) {} }
+  window.scrollTo(0, 0);
+}
+function tabFromHash() {
+  var id = (location.hash || '').replace('#', '');
+  return TAB_OF[id] || (TABS.some(function(t) { return t[0] === id; }) ? id : 'compte');
+}
+function bindTabs() {
+  document.querySelectorAll('.nav .tab').forEach(function(b) { b.addEventListener('click', function() { showTab(b.getAttribute('data-tab')); }); });
+  var t = tabFromHash(); showTab(t, true);
+  var id = (location.hash || '').replace('#', '');
+  if (TAB_OF[id] && TAB_OF[id] === t && $(id)) setTimeout(function() { $(id).scrollIntoView(); }, 50);   // #securite → l'onglet ET la section
+}
+window.addEventListener('hashchange', function() { if ($('acct-root') && document.querySelector('.pane')) { var t = tabFromHash(); showTab(t, true); var id = location.hash.replace('#', ''); if ($(id)) $(id).scrollIntoView(); } });
 
 function setTheme(t) { document.documentElement.setAttribute('data-mc-theme', t); try { localStorage.setItem('uplanet-theme', t); } catch (e) {} }
 function presetFlux(kind) {
@@ -391,7 +436,7 @@ async function loadLifeos() {
 }
 function renderLifeos() {
   var Lf = A.life, b = $('lifeos-body'); if (!b) return;
-  var h = (Lf.can_regenerate_mastodon ? '<div class="todo info"><div class="t"><b>🐘 Cookie Mastodon détecté</b><span class="sub">Relire vos propres posts pour réapprendre votre profil (15 à 30 s).</span></div><button class="btn" id="life-regen">Régénérer depuis Mastodon</button></div>' : '');
+  var h = (Lf.can_regenerate_mastodon ? '<div class="todo info"><div class="t"><b>🐘 Cookie Mastodon détecté</b><span class="sub">Relire vos propres posts pour réapprendre votre profil (15 à 30 s).</span></div><button class="btn" id="life-regen">Régénérer depuis Mastodon</button></div><div id="life-regen-status" role="status" style="margin:6px 0 12px;font-size:.88rem' + (A.lifeMsg && A.lifeMsg.err ? ';color:var(--mc-danger)' : '') + '">' + (A.lifeMsg ? esc(A.lifeMsg.text) : '') + '</div>' : '');
   h += Lf.files.map(function(f) {
     return '<details class="d"><summary>' + esc(f.label) + (f.content ? '' : ' <span class="sub">· vide</span>') + ' <span class="dirty" id="dirty-' + esc(f.filename) + '"></span></summary>' +
       '<textarea data-life="' + esc(f.filename) + '" placeholder="' + esc(f.placeholder) + '">' + esc(f.content) + '</textarea>' +
@@ -404,10 +449,181 @@ function renderLifeos() {
     try { await acctFetch('/api/account/lifeos', { method: 'POST', body: JSON.stringify({ filename: fn, content: t.value }) }); var d = $('dirty-' + fn); if (d) d.textContent = ''; toast('Profil enregistré'); }
     catch (e) { toast(e.message, true); } }); });
   var rg = $('life-regen'); if (rg) rg.addEventListener('click', async function() {
-    rg.disabled = true; rg.textContent = '⏳ Lecture des posts…';
-    try { var r = await acctFetch('/api/account/lifeos/regenerate', { method: 'POST' }); toast('Profil régénéré depuis ' + r.own_posts_found + ' post(s)'); loadLifeos(); }
-    catch (e) { toast(e.message, true); rg.disabled = false; rg.textContent = 'Régénérer depuis Mastodon'; } });
+    var st = $('life-regen-status'), t0 = Date.now(), tick;
+    rg.disabled = true; rg.textContent = '⏳ Lecture des posts…'; A.lifeMsg = null;
+    tick = setInterval(function() { st.style.color = ''; st.textContent = '⏳ Lecture de vos posts Mastodon puis apprentissage du profil… ' + Math.round((Date.now() - t0) / 1000) + ' s (30 s environ, 90 s maximum). Ne fermez pas la page.'; }, 1000);
+    st.style.color = ''; st.textContent = '⏳ Lecture de vos posts Mastodon puis apprentissage du profil… (30 s environ, 90 s maximum). Ne fermez pas la page.';
+    try {
+      var r = await acctFetch('/api/account/lifeos/regenerate', { method: 'POST' }); clearInterval(tick);
+      A.lifeMsg = r.own_posts_found > 0
+        ? { text: '✅ Profil régénéré à partir de ' + r.own_posts_found + ' de vos posts. Ouvrez les rubriques ci-dessous pour relire ce que BRO a retenu.' }
+        : { text: '⚠️ Aucun de vos propres posts n\'a été trouvé : le profil n\'a pas changé. Le cookie Mastodon est peut-être expiré ou ne correspond pas à votre compte.', err: true };
+      toast(A.lifeMsg.text, !!A.lifeMsg.err); loadLifeos();
+    } catch (e) { clearInterval(tick); A.lifeMsg = { text: '❌ Échec : ' + e.message, err: true }; toast(A.lifeMsg.text, true); renderLifeos(); }
+  });
 }
+
+// ── Mémoire de BRO : « Ce que BRO sait de moi » ─────────────────────────────
+// Les identifiants de souvenir sont des entiers de 60 bits : le serveur les envoie en CHAÎNES
+// (JavaScript perd la précision au-delà de 2^53) et on ne les convertit jamais en nombre.
+var MEM_KINDS = [['fact', 'Faits'], ['person', 'Proches'], ['episode', 'Événements'], ['trait', 'Goûts et style']];
+var MEM_SRC = {
+  chat:         ['💬', 'Mes échanges avec BRO', 'BRO retient ce que vous lui dites de durable. Jamais ses propres réponses.'],
+  love_dm:      ['💞', 'Mes messages privés à LOVE', 'En pause pour le moment : BRO n\'apprend rien des messages à l\'agent de rencontre. Les souvenirs que vous aurez marqués 💞 restent utilisables.'],
+  nostr_public: ['🌐', 'Mes publications NOSTR', 'Vos notes (kind 1) et vos articles (kind 30023) déjà publics.'],
+  mastodon:     ['🐘', 'Mes posts Mastodon', 'Vos propres posts publics (cookie Mastodon requis).'],
+  photo:        ['📷', 'Mes photos choisies dans FaceCloud', 'Jamais automatique : vous choisissez photo par photo (bouton 🧠 dans la visionneuse ou la sélection). BRO retient la date, le lieu approximatif, les personnes reconnues et la scène, jamais l\'image.'],
+  agenda:       ['📅', 'Mon agenda', 'Vos rendez-vous des 30 derniers jours et des 120 prochains : titre, date, lieu et début de la description. Un rendez-vous déplacé remplace l\'ancien souvenir, un rendez-vous supprimé disparaît.'],
+  contact:      ['👥', 'Mes contacts', 'Nom, organisation, anniversaire (jour et mois) et note de vos contacts. Jamais leurs téléphones, e-mails ni adresses.']
+};
+var MEM_SOON = {};   // plus aucune source « bientôt »
+var MEM_MANUAL = { photo: 1 };   // se choisit élément par élément ailleurs : pas d'interrupteur ici
+var MEM_BADGE = { chat: 'conversation', love_dm: 'LOVE', nostr_public: 'NOSTR', mastodon: 'Mastodon', photo: 'photos', agenda: 'agenda', contact: 'contact', manual: 'saisi par vous', rec: '#rec', reve: 'résumé' };
+var M = { items: [], total: 0, sources: null, queue: 0, kind: '', q: '', shown: 50, editing: null, busy: false };
+
+async function loadMemory() {
+  var b = $('mem-body'); if (!b) return;
+  try {
+    var r = await Promise.all([acctFetch('/api/account/memory/sources'), acctFetch('/api/account/memory/items')]);
+    M.sources = r[0].sources; M.queue = r[0].queue || 0; M.items = r[1].items; M.total = r[1].total; renderMemory();
+  } catch (e) { b.innerHTML = '<span style="color:var(--mc-danger)">' + esc(e.message) + '</span> <button class="btn" onclick="loadMemory()">Réessayer</button>'; }
+}
+
+function memDate(ts) { return ts ? String(ts).slice(0, 10) : ''; }
+
+function renderMemory() {
+  var b = $('mem-body'); if (!b) return;
+  var h = '<h3 class="grp" style="margin-top:0">D\'où BRO a le droit d\'apprendre</h3>';
+  M.sources.forEach(function(s) {
+    var m = MEM_SRC[s.source] || ['•', s.label, ''], soon = !!MEM_SOON[s.source] || !!s.paused;
+    h += '<div class="mem-src' + (soon ? ' soon' : '') + '"><div class="t"><b>' + m[0] + ' ' + esc(m[1]) + (s.paused ? ' <span class="badge">en pause</span>' : soon ? ' <span class="badge">bientôt</span>' : '') + '</b><span class="sub">' + esc(m[2]) + '</span></div>' +
+      '<span class="sub">' + (s.memories ? s.memories + ' souvenir' + (s.memories > 1 ? 's' : '') : '') + '</span>' +
+      (s.memories && !soon ? '<button class="btn danger" data-forget="' + esc(s.source) + '" title="Efface tout ce que BRO a appris de cette source et la décoche">Tout oublier</button>' : '') +
+      (MEM_MANUAL[s.source] ? '<a class="btn" href="ucloud.html#photos">Choisir mes photos</a>'
+        : '<label class="sw"><input type="checkbox" data-src="' + esc(s.source) + '"' + (s.enabled ? ' checked' : '') + (soon ? ' disabled' : '') + ' aria-label="' + esc(m[1]) + '"><span class="k"></span></label>') + '</div>';
+  });
+  var anyExtra = M.sources.some(function(s) { return s.enabled && !s.paused && s.source !== 'chat' && !MEM_SOON[s.source] && !MEM_MANUAL[s.source]; });
+  h += '<div class="row" style="border-bottom:none"><div class="t"><span class="sub" id="mem-queue">' + (M.queue ? '⏳ ' + M.queue + ' message(s) en attente d\'analyse.' : 'Aucun message en attente.') + '</span></div>' +
+    '<button class="btn" id="mem-learn"' + (anyExtra || M.queue ? '' : ' disabled') + '>🧠 Apprendre maintenant</button><button class="btn" id="mem-refresh">↻ Actualiser</button></div>';
+
+  h += '<h3 class="grp">Mes souvenirs <span class="sub">(' + M.total + ')</span></h3>' +
+    '<div class="mem-bar"><input type="text" id="mem-q" placeholder="Rechercher dans mes souvenirs…" value="' + esc(M.q) + '" aria-label="Rechercher"></div>' +
+    '<div class="chips" id="mem-kinds"><span class="chip' + (M.kind ? '' : ' on') + '" data-kind="">Tous</span>' +
+    MEM_KINDS.map(function(k) { return '<span class="chip' + (M.kind === k[0] ? ' on' : '') + '" data-kind="' + k[0] + '">' + k[1] + '</span>'; }).join('') + '</div>' +
+    '<div id="mem-list"></div>' +
+    '<div class="mem-bar" style="margin-top:14px"><input type="text" id="mem-new" maxlength="600" placeholder="Ajouter un souvenir : « Je suis allergique aux noix »" aria-label="Nouveau souvenir">' +
+    '<select id="mem-newkind" aria-label="Type">' + MEM_KINDS.map(function(k) { return '<option value="' + k[0] + '">' + k[1] + '</option>'; }).join('') + '</select><button class="btn primary" id="mem-add">Ajouter</button></div>' +
+    '<p class="sub" style="margin:6px 0 0">🔒 Privé : seul BRO s\'en sert pour vous répondre. 💞 Partagé : un extrait de 40 caractères peut être cité à une personne compatible lors d\'une rencontre.</p>';
+  b.innerHTML = h;
+  renderMemList(); bindMemory();
+}
+
+function renderMemList() {
+  var box = $('mem-list'); if (!box) return;
+  var needle = M.q.trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  var rows = M.items.filter(function(i) {
+    if (M.kind && i.kind !== M.kind) return false;
+    return !needle || i.content.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').indexOf(needle) >= 0;
+  });
+  if (!rows.length) { box.innerHTML = '<p class="sub" style="padding:14px 0">' + (M.items.length ? 'Aucun souvenir ne correspond.' : 'BRO ne sait encore rien de vous. Parlez-lui, cochez une source ci-dessus, ou ajoutez un souvenir.') + '</p>'; return; }
+  var h = '', shown = 0, last = null;
+  MEM_KINDS.forEach(function(k) {
+    var part = rows.filter(function(i) { return i.kind === k[0]; });
+    if (!part.length || shown >= M.shown) return;
+    h += '<div class="mem-grp">' + k[1] + ' · ' + part.length + '</div>';
+    part.forEach(function(i) {
+      if (shown >= M.shown) return; shown++;
+      var love = i.visibility === 'love';
+      h += '<div class="mem-it" data-id="' + esc(i.id) + '"><div class="tx">' +
+        (M.editing === i.id ? '<div class="mem-edit"><input type="text" id="mem-edit-in" maxlength="600" value="' + esc(i.content) + '"><button class="btn primary" data-act="save">Enregistrer</button><button class="btn" data-act="cancel">Annuler</button></div>'
+                            : esc(i.content)) +
+        '<div class="meta"><span class="badge">' + esc(MEM_BADGE[i.source] || i.source) + '</span>' +
+        (memDate(i.timestamp) ? '<span class="badge">' + esc(memDate(i.timestamp)) + '</span>' : '') +
+        (i.pinned ? '<span class="badge ok" title="Écrit ou corrigé par vous : BRO ne le modifie pas tout seul à partir de vos publications">✍ de votre main</span>' : '') +
+        (i.edited ? '<span class="badge ok">corrigé</span>' : (i.confidence < 0.7 ? '<span class="badge warn" title="BRO n\'en est pas sûr : corrigez ou supprimez si c\'est faux">à vérifier</span>' : '')) + '</div></div>' +
+        '<div class="acts"><button class="btn' + (love ? ' love' : '') + '" data-act="vis" title="' + (love ? 'Partagé avec LOVE : cliquer pour rendre privé' : 'Privé : cliquer pour autoriser LOVE à le citer') + '">' + (love ? '💞 Partagé' : '🔒 Privé') + '</button>' +
+        '<button class="btn" data-act="edit" aria-label="Modifier">✎</button><button class="btn danger" data-act="del" aria-label="Supprimer">✕</button></div></div>';
+    });
+  });
+  if (rows.length > shown) h += '<div style="padding-top:8px"><button class="btn" id="mem-more">Afficher plus (' + (rows.length - shown) + ')</button></div>';
+  box.innerHTML = h;
+  var inp = $('mem-edit-in'); if (inp) { inp.focus(); inp.select(); }
+}
+
+function memItem(id) { return M.items.filter(function(i) { return i.id === id; })[0]; }
+
+async function memCall(path, body, okMsg) {
+  if (M.busy) return null; M.busy = true;
+  try { var r = await acctFetch(path, { method: 'POST', body: JSON.stringify(body) }); if (okMsg) toast(okMsg); return r; }
+  catch (e) { toast(e.message, true); return null; }
+  finally { M.busy = false; }
+}
+
+function bindMemory() {
+  var b = $('mem-body');
+  b.querySelectorAll('input[data-src]').forEach(function(cb) { cb.addEventListener('change', async function() {
+    var src = cb.getAttribute('data-src'), on = cb.checked;
+    if (on && src === 'love_dm' && !confirm('Les souvenirs tirés de vos messages à LOVE seront « partagés » : un extrait de 40 caractères pourra être cité à une personne compatible. Vous pourrez les repasser en privé un par un. Continuer ?')) { cb.checked = false; return; }
+    var r = await memCall('/api/account/memory/sources', { source: src, enabled: on }, on ? 'Source activée' : 'Source désactivée');
+    if (!r) { cb.checked = !on; return; }
+    loadMemory();
+  }); });
+  b.querySelectorAll('[data-forget]').forEach(function(btn) { btn.addEventListener('click', async function() {
+    var src = btn.getAttribute('data-forget');
+    if (!confirm('Effacer définitivement tout ce que BRO a appris de « ' + (MEM_SRC[src] ? MEM_SRC[src][1] : src) + ' » ? La source sera aussi décochée.')) return;
+    if (await memCall('/api/account/memory/sources/forget', { source: src }, 'Souvenirs effacés')) loadMemory();
+  }); });
+  $('mem-learn').addEventListener('click', async function() {
+    var r = await memCall('/api/account/memory/learn-now', {}, null);
+    if (r) { toast('Apprentissage lancé — actualisez dans une minute'); $('mem-learn').disabled = true; setTimeout(loadMemory, 20000); }
+  });
+  $('mem-refresh').addEventListener('click', loadMemory);
+  $('mem-q').addEventListener('input', function(e) { M.q = e.target.value; M.shown = 50; renderMemList(); });
+  $('mem-kinds').addEventListener('click', function(e) {
+    var k = e.target.getAttribute && e.target.getAttribute('data-kind'); if (k == null) return;
+    M.kind = k; M.shown = 50;
+    $('mem-kinds').querySelectorAll('.chip').forEach(function(c) { c.classList.toggle('on', c.getAttribute('data-kind') === k); });
+    renderMemList();
+  });
+  $('mem-add').addEventListener('click', addMemItem);
+  $('mem-new').addEventListener('keydown', function(e) { if (e.key === 'Enter') addMemItem(); });
+  $('mem-list').addEventListener('click', onMemListClick);
+  $('mem-list').addEventListener('keydown', function(e) {
+    if (e.target.id !== 'mem-edit-in') return;
+    if (e.key === 'Enter') saveMemEdit(); else if (e.key === 'Escape') { M.editing = null; renderMemList(); }
+  });
+}
+
+async function addMemItem() {
+  var inp = $('mem-new'), txt = inp.value.trim(); if (txt.length < 3) { toast('Écrivez au moins quelques mots', true); return; }
+  if (await memCall('/api/account/memory/items', { content: txt, kind: $('mem-newkind').value }, 'Souvenir ajouté')) { inp.value = ''; loadMemory(); }
+}
+
+async function saveMemEdit() {
+  var id = M.editing, it = memItem(id), inp = $('mem-edit-in'); if (!it || !inp) return;
+  var txt = inp.value.trim(); if (txt === it.content) { M.editing = null; renderMemList(); return; }
+  var r = await memCall('/api/account/memory/items/update', { id: id, content: txt }, 'Souvenir corrigé');
+  if (r) { M.editing = null; loadMemory(); }
+}
+
+async function onMemListClick(e) {
+  if (e.target.id === 'mem-more') { M.shown += 50; renderMemList(); return; }
+  var act = e.target.getAttribute && e.target.getAttribute('data-act'); if (!act) return;
+  var row = e.target.closest('.mem-it'), id = row && row.getAttribute('data-id'), it = id && memItem(id); if (!it) return;
+  if (act === 'edit') { M.editing = id; renderMemList(); }
+  else if (act === 'cancel') { M.editing = null; renderMemList(); }
+  else if (act === 'save') saveMemEdit();
+  else if (act === 'del') {
+    if (!confirm('Oublier ce souvenir ?\n\n« ' + it.content + ' »\n\nLe texte est effacé, et BRO ne le réapprendra pas à partir de vos publications ou de votre agenda.')) return;
+    if (await memCall('/api/account/memory/items/delete', { ids: [id] }, 'Souvenir oublié')) loadMemory();
+  } else if (act === 'vis') {
+    var to = it.visibility === 'love' ? 'private' : 'love';
+    if (to === 'love' && !confirm('Autoriser LOVE à citer ce souvenir (les 40 premiers caractères) à une personne compatible ?\n\n« ' + it.content + ' »')) return;
+    var r = await memCall('/api/account/memory/items/update', { id: id, visibility: to }, to === 'love' ? 'Partagé avec LOVE' : 'Redevenu privé');
+    if (r) { it.visibility = to; renderMemList(); }
+  }
+}
+
 async function resetMem(scope, label) {
   if (!confirm('Réinitialiser « ' + label + ' » ? BRO oubliera ces informations. Action irréversible.')) return;
   try { var r = await acctFetch('/api/account/memory/reset', { method: 'POST', body: JSON.stringify({ scope: scope }) }); toast(label + ' réinitialisé (' + r.deleted + ' élément(s))'); load(); }

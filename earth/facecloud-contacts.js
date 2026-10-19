@@ -370,18 +370,91 @@
         if ((CT.preset === 'nextcloud' || CT.preset === 'owncloud') && !/remote\.php/.test(url)) url = url.replace(/\/+$/, '') + '/remote.php/dav/';
         return url;
     }
+    function fmtN(n) { return String(n == null ? 0 : n).replace(/\B(?=(\d{3})+(?!\d))/g, '\u202f'); }
+    function srcLine(s) {
+        var pr = s.progress, ls = s.last_sync;
+        if (pr && pr.state === 'running') {
+            if (pr.phase === 'apply' && pr.total) {
+                return '<progress max="' + pr.total + '" value="' + (pr.done || 0) + '"></progress> Import : ' + fmtN(pr.done || 0) + ' / ' + fmtN(pr.total)
+                    + ' fiches' + (pr.created != null ? ' (' + fmtN(pr.created) + ' ajoutées, ' + fmtN(pr.updated || 0) + ' mises à jour)' : '');
+            }
+            return '<progress></progress> Téléchargement du carnet depuis le serveur… (peut prendre une minute pour un grand carnet)';
+        }
+        if (!ls) return 'En attente du premier import…';
+        if (ls.error) return '<span class="fc-bad">Échec : ' + esc(ls.error) + '</span>';
+        return new Date(ls.at * 1000).toLocaleString() + ' : ' + fmtN(ls.created) + ' ajoutés, ' + fmtN(ls.updated) + ' mis à jour'
+            + (ls.deleted ? ', ' + fmtN(ls.deleted) + ' retirés' : '') + (ls.kept_local ? ', ' + fmtN(ls.kept_local) + ' gardés (modifiés ici)' : '')
+            + (ls.errors ? ', ' + fmtN(ls.errors) + ' illisibles' : '');
+    }
     function renderSources() {
         var box = $('imp-sources');
         if (!CT.sources.length) { box.innerHTML = ''; return; }
         box.innerHTML = '<div class="fc-section-title">Carnets reliés</div>' + CT.sources.map(function (s) {
-            var ls = s.last_sync;
-            var line = !ls ? 'Import en cours…' : ls.error ? 'Échec : ' + ls.error
-                : new Date(ls.at * 1000).toLocaleString() + ' : ' + ls.created + ' ajoutés, ' + ls.updated + ' mis à jour'
-                  + (ls.deleted ? ', ' + ls.deleted + ' retirés' : '') + (ls.kept_local ? ', ' + ls.kept_local + ' gardés (modifiés ici)' : '');
-            return '<div class="fc-ct-source" data-id="' + esc(s.id) + '"><span><b>' + esc(s.label) + '</b><br><span class="fc-hint">' + esc(line) + '</span></span>'
-                + '<button type="button" class="fc-btn fc-btn-sm" data-src="sync">Mettre à jour</button>'
+            var busy = s.progress && s.progress.state === 'running';
+            return '<div class="fc-ct-source" data-id="' + esc(s.id) + '"><span><b>' + esc(s.label) + '</b><br><span class="fc-hint">' + srcLine(s) + '</span></span>'
+                + '<button type="button" class="fc-btn fc-btn-sm" data-src="sync"' + (busy ? ' disabled' : '') + '>Mettre à jour</button>'
                 + '<button type="button" class="fc-btn fc-btn-sm fc-btn-ghost fc-btn-danger" data-src="del">Retirer</button></div>';
         }).join('');
+    }
+
+    /* ── Suivi des imports : un état TOUJOURS visible (jamais « lancé » puis le silence) ─────────────────── */
+    var IMP = { timer: null, ticks: 0, running: {}, fileJob: null };
+    function setImpStatus(html, cls) {
+        var el = $('imp-status');
+        if (!el) return;
+        el.className = 'fc-ct-status' + (cls ? ' ' + cls : '');
+        el.innerHTML = html || '';
+        el.hidden = !html;
+    }
+    function fileJobLine(j) { return '<b>« ' + esc(j.name || 'fichier') + ' »</b> : '; }
+    function stopWatch() { if (IMP.timer) { clearTimeout(IMP.timer); IMP.timer = null; } }
+    function watchImport(opts) {
+        opts = opts || {};
+        stopWatch();
+        var t0 = Date.now();
+        IMP.ticks = 0;
+        (async function tick() {
+            var running = false, finished = [];
+            try {
+                var st = await nostrFetch('/api/contacts/import/status');
+                if (st.state === 'running') {
+                    running = true; IMP.fileJob = st.started;
+                    setImpStatus(fileJobLine(st) + '<progress max="' + st.total + '" value="' + st.done + '"></progress> ' + fmtN(st.done) + ' / ' + fmtN(st.total)
+                        + ' fiches (' + fmtN(st.created) + ' ajoutées, ' + fmtN(st.updated) + ' mises à jour' + (st.errors ? ', ' + fmtN(st.errors) + ' illisibles' : '') + ')<br>'
+                        + '<span class="fc-hint">Vous pouvez fermer cette fenêtre : l\'import continue.</span>');
+                } else if ((st.state === 'done' || st.state === 'error') && IMP.fileJob === st.started) {
+                    IMP.fileJob = null;
+                    finished.push('file');
+                    if (st.state === 'done') {
+                        var msg = fmtN(st.created) + ' contacts ajoutés, ' + fmtN(st.updated) + ' mis à jour' + (st.errors ? ', ' + fmtN(st.errors) + ' illisibles' : '');
+                        setImpStatus('✅ ' + fileJobLine(st) + msg, 'fc-ok'); toast(msg);
+                    } else { setImpStatus('❌ ' + fileJobLine(st) + 'import interrompu : ' + esc(st.error || 'erreur inconnue'), 'fc-bad'); toast('Import interrompu', true); }
+                }
+                var sr = await nostrFetch('/api/contacts/sources');
+                CT.sources = sr.sources || [];
+                CT.sources.forEach(function (s) {
+                    var busy = s.progress && s.progress.state === 'running';
+                    if (busy) { running = true; IMP.running[s.id] = true; }
+                    else if (IMP.running[s.id]) {
+                        delete IMP.running[s.id]; finished.push(s.id);
+                        var ls = s.last_sync || {};
+                        if (ls.error) { setImpStatus('❌ « ' + esc(s.label) + ' » : ' + esc(ls.error), 'fc-bad'); toast('Échec de l\'import : ' + ls.error, true); }
+                        else {
+                            var m = fmtN(ls.created) + ' contacts ajoutés, ' + fmtN(ls.updated) + ' mis à jour' + (ls.errors ? ', ' + fmtN(ls.errors) + ' illisibles' : '');
+                            setImpStatus('✅ « ' + esc(s.label) + ' » : ' + m, 'fc-ok'); toast(m);
+                        }
+                    }
+                });
+                renderSources();
+                IMP.ticks++;
+                if (finished.length) await loadContacts(true);
+                else if (running && IMP.ticks % 6 === 0) await loadContacts(true);       // les contacts arrivent à l'écran pendant l'import
+            } catch (e) {
+                setImpStatus('Suivi de l\'import indisponible : ' + esc(e.message) + ' (l\'import continue peut-être : rouvrez cette fenêtre)', 'fc-bad');
+                return;
+            }
+            if (running && Date.now() - t0 < 30 * 60000) IMP.timer = setTimeout(tick, 1500);
+        })();
     }
     async function discover() {
         var url = importUrl(), user = $('imp-user').value.trim(), pass = $('imp-pass').value;
@@ -406,19 +479,32 @@
                 username: $('imp-user').value.trim(), password: $('imp-pass').value }) });
             $('imp-pass').value = '';
             $('imp-books').hidden = true;
-            toast('Import lancé : les contacts arrivent dans quelques instants.');
-            setTimeout(function () { loadContacts(true).then(renderSources); }, 4000);
-            setTimeout(function () { loadContacts(true).then(renderSources); }, 15000);
+            toast('Import lancé : suivez son avancement dans cette fenêtre.');
+            setImpStatus('<progress></progress> Connexion au serveur…');
+            watchImport();
         } catch (e) { toast('Import impossible : ' + e.message, true); }
     }
     async function importFile(file) {
         if (!file) return;
+        if (!/\.(vcf|vcard)$/i.test(file.name) && file.type !== 'text/vcard' && file.type !== 'text/x-vcard') {
+            setImpStatus('❌ « ' + esc(file.name) + ' » n\'est pas un fichier .vcf.', 'fc-bad');
+            return;
+        }
+        var mb = (file.size / 1048576).toFixed(file.size > 1048576 ? 1 : 2);
+        setImpStatus('<progress></progress> Envoi de <b>« ' + esc(file.name) + ' »</b> (' + mb + ' Mo)… ne fermez pas cette fenêtre tant que l\'envoi n\'est pas terminé.');
         try {
-            var r = await nostrFetch('/api/contacts/import-vcf', { method: 'POST', body: form({ file: file }) });
-            toast(r.created + ' contacts ajoutés, ' + r.updated + ' mis à jour' + (r.errors ? ', ' + r.errors + ' illisibles' : ''));
-            $('dlg-ct-import').close();
-            loadContacts();
-        } catch (e) { toast('Import impossible : ' + e.message, true); }
+            var r = await nostrFetch('/api/contacts/import-vcf', { method: 'POST', body: form({ file: file }), timeout: 600000 });
+            if (r.state === 'running') {
+                IMP.fileJob = r.started;
+                toast('Fichier reçu : ' + fmtN(r.total) + ' fiches à importer.');
+                watchImport();
+            } else {
+                var msg = fmtN(r.created) + ' contacts ajoutés, ' + fmtN(r.updated) + ' mis à jour' + (r.errors ? ', ' + fmtN(r.errors) + ' illisibles' : '');
+                setImpStatus('✅ <b>« ' + esc(file.name) + ' »</b> : ' + msg, 'fc-ok');
+                toast(msg);
+                loadContacts();
+            }
+        } catch (e) { setImpStatus('❌ Import impossible : ' + esc(e.message), 'fc-bad'); toast('Import impossible : ' + e.message, true); }
     }
     async function exportVcf() {
         try {
@@ -474,7 +560,8 @@
             openContact(b.getAttribute('data-name'));
         });
         $('ct-new').addEventListener('click', function () { CT.current = null; renderRows(); renderEditor(null); $('ct-given').focus(); });
-        $('ct-import').addEventListener('click', function () { setPreset(CT.preset || 'nextcloud'); renderSources(); $('dlg-ct-import').showModal(); });
+        $('ct-import').addEventListener('click', function () { setPreset(CT.preset || 'nextcloud'); setImpStatus(''); renderSources(); $('dlg-ct-import').showModal(); watchImport(); });
+        $('dlg-ct-import').addEventListener('close', stopWatch);
         $('ct-export').addEventListener('click', exportVcf);
         $('ct-sync').addEventListener('click', function () { renderSyncCreds(null); syncOs(/iPhone|iPad/.test(navigator.userAgent) ? 'ios' : 'android'); $('dlg-ct-sync').showModal(); });
 
@@ -580,7 +667,9 @@
                 if (b.dataset.src === 'sync') {
                     await nostrFetch('/api/contacts/sources/' + encodeURIComponent(id) + '/sync', { method: 'POST' });
                     toast('Mise à jour lancée');
-                    setTimeout(function () { loadContacts(true).then(renderSources); }, 5000);
+                    IMP.running[id] = true;
+                    setImpStatus('<progress></progress> Mise à jour du carnet…');
+                    watchImport();
                 } else if (await confirmDialog('Retirer ce carnet ?', 'Les contacts déjà importés restent dans FaceCloud.', 'Retirer')) {
                     await nostrFetch('/api/contacts/sources/' + encodeURIComponent(id), { method: 'DELETE' });
                     await loadContacts(true);

@@ -19,7 +19,6 @@
     <button class="fc-tab" role="tab" data-tab="people" aria-selected="true"><i class="ic" aria-hidden="true">◉</i><span class="lb">Personnes</span> <span class="fc-badge" id="badge-unsorted" hidden></span></button>
     <button class="fc-tab" role="tab" data-tab="photos" aria-selected="false"><i class="ic" aria-hidden="true">▦</i><span class="lb">Photos</span></button>
     <button class="fc-tab" role="tab" data-tab="map" aria-selected="false"><i class="ic" aria-hidden="true">⌖</i><span class="lb">Carte</span></button>
-    <button class="fc-tab" role="tab" data-tab="circles" aria-selected="false"><i class="ic" aria-hidden="true">◎</i><span class="lb">Cercles</span></button>
     <button class="fc-tab fc-tab-sec" role="tab" data-tab="videos" aria-selected="false"><i class="ic" aria-hidden="true">🎬</i><span class="lb">Vidéos</span></button>
     <button class="fc-tab fc-tab-sec" role="tab" data-tab="contacts" aria-selected="false"><i class="ic" aria-hidden="true">☰</i><span class="lb">Contacts</span></button>
     <button class="fc-tab fc-tab-sec" role="tab" data-tab="sources" aria-selected="false"><i class="ic" aria-hidden="true">⇩</i><span class="lb">Sources</span></button>
@@ -211,6 +210,7 @@
     <b id="photo-bulk-count"></b>
     <button class="fc-btn fc-btn-sm" id="btn-photo-all" title="Choisir toutes les photos affichées">Tout choisir</button>
     <button class="fc-btn fc-btn-sm" id="btn-photo-describe" title="Écrire une description par IA pour ces photos">✨ Décrire</button>
+    <button class="fc-btn fc-btn-sm" id="btn-photo-memorize" title="BRO retient ces photos (un souvenir par moment) : date, lieu, personnes reconnues, scènes. Jamais les images.">🧠 Mémoriser pour BRO</button>
     <button class="fc-btn fc-btn-sm fc-btn-danger" id="btn-photo-delete">Supprimer</button>
     <button class="fc-btn fc-btn-sm fc-btn-ghost" id="btn-photo-clear">Annuler</button>
   </div></div>
@@ -235,89 +235,6 @@
     <div class="fc-map" id="map" role="application" aria-label="Carte des photos"></div>
     <aside class="fc-map-sheet" id="map-sheet" hidden aria-live="polite"></aside>
   </div>
-</section>
-
-<!-- ══ Cercles : moi, et ceux que je connais ═══════════════════════════ -->
-<section id="view-circles" class="fc-page fc-circles-page" hidden>
-  <div class="fc-hero">
-    <h2>Cercles</h2>
-    <p class="fc-hint" style="max-width:48em">Reprenez la main sur vos contacts. Vous êtes l'origine : placez chaque personne dans votre <b>cercle 1</b> (vous la connaissez directement)
-      ou votre <b>cercle 2</b> (vous la connaissez <i>par quelqu'un</i>), et suivez où elle en est : juste un nom, un email, un MULTIPASS proposé, une clé NOSTR, une fiche synchronisée avec votre téléphone.</p>
-  </div>
-
-  <div class="fc-panel fc-me" id="me-card">
-    <div id="me-done" class="fc-me-done" hidden></div>
-    <div id="me-pick-box">
-      <h3>Qui êtes-vous ?</h3>
-      <p class="fc-hint" style="margin:0 0 10px">Cliquez votre visage parmi les personnes déjà rangées : tout ce qui est rangé sous ce nom devient « vous ». C'est le point de départ de vos cercles.</p>
-      <div class="fc-me-grid" id="me-grid"></div>
-      <details class="fc-me-selfie" id="me-selfie">
-        <summary>Vous n'y êtes pas ? Ajouter un selfie</summary>
-        <div class="fc-row" style="margin-top:8px">
-          <button class="fc-btn" id="btn-selfie-cam">Prendre un selfie</button>
-          <button class="fc-btn" id="btn-selfie-file">Choisir une photo de moi</button>
-        </div>
-        <div id="webcam" hidden style="margin-top:10px">
-          <video id="webcam-video" autoplay playsinline muted style="width:100%;max-width:320px;border-radius:10px;background:#000;display:block"></video>
-          <div class="fc-row" style="margin-top:8px">
-            <button class="fc-btn fc-btn-primary" id="btn-cam-shoot">Prendre la photo</button>
-            <button class="fc-btn" id="btn-cam-stop">Fermer</button>
-          </div>
-        </div>
-      </details>
-    </div>
-  </div>
-
-  <div class="fc-panel" id="faceref-card" hidden>
-    <label class="fc-row" style="gap:12px;align-items:flex-start;cursor:pointer">
-      <input type="checkbox" id="faceref-toggle" style="margin-top:4px;width:20px;height:20px">
-      <span><b>Laisser mes amis me retrouver dans leurs photos</b><br>
-        <span class="fc-hint" id="faceref-hint" style="margin:0"></span></span>
-    </label>
-    <div class="fc-row" id="faceref-given" hidden style="margin-top:8px">
-      <span class="fc-hint" id="faceref-count" style="margin:0"></span>
-      <span class="fc-spacer"></span>
-      <button class="fc-btn fc-btn-sm fc-btn-ghost" id="faceref-revoke">Retirer chez tous</button>
-    </div>
-  </div>
-
-  <div class="fc-panel fc-circles" id="circles-panel" hidden>
-    <div class="fc-row fc-ring-tools">
-      <h3 style="margin:0">Mes cercles</h3>
-      <div class="fc-filters" id="stage-filter" role="group" aria-label="Où en est la personne"></div>
-      <span class="fc-spacer"></span>
-      <input class="fc-input" id="ring-search" type="search" placeholder="Chercher un nom…" style="max-width:200px">
-    </div>
-    <div class="fc-row fc-ring-tools" style="margin-top:6px">
-      <div class="fc-seg" role="group" aria-label="Nature du lien NOSTR" id="ring-filter">
-        <button data-rel="all" aria-pressed="true" title="Tous les liens">Tous</button>
-        <button data-rel="mutual" aria-pressed="false" title="Ils se suivent mutuellement (p2p)">⇄ Mutuels</button>
-        <button data-rel="out" aria-pressed="false" title="Vous les suivez, sans réciproque (1→p)">→ Je les suis</button>
-        <button data-rel="in" aria-pressed="false" title="Ils vous suivent, sans réciproque (p→1)">← Ils me suivent</button>
-      </div>
-      <span class="fc-hint" id="ring-counts"></span>
-      <button class="fc-btn fc-btn-sm" id="ring-refresh" title="Relire les listes d'amis sur les relais NOSTR">Actualiser</button>
-    </div>
-    <p class="fc-hint" id="ring-legend" style="margin:8px 0 12px"><b>Glissez</b> une personne (ou plusieurs, cochées) vers un cercle.
-      Étapes <span class="fc-steps"><i class="on"></i><i></i><i></i><i></i><i></i></span> nom · email · invitation · clé NOSTR · fiche contact.
-      Lien : <b>⇄</b> p2p · <b>→</b> vous la suivez (1→p) · <b>←</b> elle vous suit (p→1)</p>
-    <div class="fc-board3" id="rings"></div>
-    <details class="fc-net" id="net-box">
-      <summary>Mon réseau NOSTR <span class="fc-hint" id="net-sum"></span></summary>
-      <p class="fc-hint">Les personnes de votre réseau qui n'ont pas (encore) de visage rangé ici — pour retrouver un nom. Les profils (nom, vignette) sont lus sur vos relais préférés.</p>
-      <div class="fc-n2list" id="net-list" style="max-height:340px"></div>
-      <div class="fc-row" style="margin-top:8px"><button class="fc-btn fc-btn-sm" id="net-more" hidden>Afficher plus</button>
-        <button class="fc-btn fc-btn-sm" id="net-profiles" title="Interroger vos relais préférés pour lire les profils manquants">Lire les profils manquants</button>
-        <span class="fc-hint" id="net-profiles-msg"></span></div>
-    </details>
-  </div>
-  <div class="fc-bulk" id="ring-bulk" hidden><div>
-    <b id="ring-bulk-count"></b>
-    <button class="fc-btn fc-btn-sm fc-btn-primary" data-bulk="1">→ Cercle 1</button>
-    <button class="fc-btn fc-btn-sm" data-bulk="2">→ Cercle 2…</button>
-    <button class="fc-btn fc-btn-sm" data-bulk="0">À placer</button>
-    <button class="fc-btn fc-btn-sm fc-btn-ghost" data-bulk="x">Annuler</button>
-  </div></div>
 </section>
 
 <!-- ══ Sources ═════════════════════════════════════════════════════════ -->
@@ -369,6 +286,41 @@
 <!-- ══ Réglages ════════════════════════════════════════════════════════ -->
 <section id="view-settings" class="fc-page" hidden>
   <h2>Réglages</h2>
+  <div class="fc-panel fc-me" id="me-card">
+    <div id="me-done" class="fc-me-done" hidden></div>
+    <div id="me-pick-box">
+      <h3>Qui êtes-vous ?</h3>
+      <p class="fc-hint" style="margin:0 0 10px">Cliquez votre visage parmi les personnes déjà rangées : tout ce qui est rangé sous ce nom devient « vous ». Cela sert à reconnaître vos photos et à savoir qui est « vous » quand vous partagez.</p>
+      <div class="fc-me-grid" id="me-grid"></div>
+      <details class="fc-me-selfie" id="me-selfie">
+        <summary>Vous n'y êtes pas ? Ajouter un selfie</summary>
+        <div class="fc-row" style="margin-top:8px">
+          <button class="fc-btn" id="btn-selfie-cam">Prendre un selfie</button>
+          <button class="fc-btn" id="btn-selfie-file">Choisir une photo de moi</button>
+        </div>
+        <div id="webcam" hidden style="margin-top:10px">
+          <video id="webcam-video" autoplay playsinline muted style="width:100%;max-width:320px;border-radius:10px;background:#000;display:block"></video>
+          <div class="fc-row" style="margin-top:8px">
+            <button class="fc-btn fc-btn-primary" id="btn-cam-shoot">Prendre la photo</button>
+            <button class="fc-btn" id="btn-cam-stop">Fermer</button>
+          </div>
+        </div>
+      </details>
+    </div>
+  </div>
+
+  <div class="fc-panel" id="faceref-card" hidden>
+    <label class="fc-row" style="gap:12px;align-items:flex-start;cursor:pointer">
+      <input type="checkbox" id="faceref-toggle" style="margin-top:4px;width:20px;height:20px">
+      <span><b>Laisser mes amis me retrouver dans leurs photos</b><br>
+        <span class="fc-hint" id="faceref-hint" style="margin:0"></span></span>
+    </label>
+    <div class="fc-row" id="faceref-given" hidden style="margin-top:8px">
+      <span class="fc-hint" id="faceref-count" style="margin:0"></span>
+      <span class="fc-spacer"></span>
+      <button class="fc-btn fc-btn-sm fc-btn-ghost" id="faceref-revoke">Retirer chez tous</button>
+    </div>
+  </div>
   <div class="fc-panel" id="quota-panel">
     <h3>Mon espace</h3>
     <div id="quota-body"><p class="fc-hint">Chargement…</p></div>
@@ -434,7 +386,7 @@
       <button class="fc-btn" id="dr-share" type="button" title="WhatsApp, Telegram, SMS, mail… : un message prêt à envoyer">📲 Inviter par message…</button>
     </div>
     <div class="fc-dr-identity" id="dr-identity"></div>
-    <button class="fc-btn fc-btn-sm" id="dr-circle" type="button" style="margin:0 0 12px">Cercle et lien NOSTR…</button>
+    <button class="fc-btn fc-btn-sm" id="dr-circle" type="button" style="margin:0 0 12px">Identité et lien NOSTR…</button>
     <label class="fc-field"><span>Nom</span><input class="fc-input" id="dr-in-name"></label>
     <label class="fc-field"><span>Email</span><input class="fc-input" id="dr-in-email" type="email" placeholder="pour lui envoyer ses photos"></label>
     <details><summary>Clé NOSTR (si vous la connaissez)</summary>
@@ -513,26 +465,7 @@
       </div>
     </div>
 
-    <fieldset class="fc-field fc-levels">
-      <span>Où est-elle dans vos cercles ?</span>
-      <label><input type="radio" name="circ-level" value="1"> Je la connais directement <b>(cercle 1)</b></label>
-      <label><input type="radio" name="circ-level" value="2"> Je l'ai connue <b>par quelqu'un</b> <b>(cercle 2)</b></label>
-      <label><input type="radio" name="circ-level" value="0"> Je ne sais pas encore</label>
-    </fieldset>
-
-    <div class="fc-field" id="circ-via-box" hidden>
-      <span>Par qui ? <em class="fc-hint" style="font-weight:400">— classés par photos en commun</em></span>
-      <select class="fc-input" id="circ-via" aria-label="Par qui"></select>
-      <input class="fc-input" id="circ-via-name" placeholder="Son nom (pas encore dans vos cercles)" style="margin-top:6px" hidden>
-      <div class="fc-row" style="margin-top:8px">
-        <button type="button" class="fc-btn fc-btn-sm" id="circ-n2-load" hidden>Voir ses amis dans NOSTR</button>
-        <span class="fc-hint" id="circ-n2-msg"></span>
-      </div>
-      <input class="fc-input" id="circ-n2-filter" placeholder="Chercher dans ses amis…" style="margin-top:8px" hidden>
-      <div class="fc-n2list" id="circ-n2-list" hidden></div>
-    </div>
-
-    <p class="fc-hint" id="circ-note">Cela ne change rien à vos fichiers ni au disque WebDAV : seule l'étiquette des visages (nom, clé, cercle) est mise à jour.</p>
+    <p class="fc-hint" id="circ-note">Cela ne change rien à vos fichiers ni au disque WebDAV : seule l'étiquette des visages (nom, clé, email) est mise à jour.</p>
     <div class="fc-dialog-actions">
       <button class="fc-btn" value="cancel" formnovalidate>Annuler</button>
       <button class="fc-btn fc-btn-primary" value="ok">Enregistrer</button>
@@ -589,30 +522,6 @@
   </form>
 </dialog>
 
-<dialog class="fc-dialog" id="dlg-via">
-  <form method="dialog">
-    <h3 id="via-title">Connue par qui ?</h3>
-    <p class="fc-hint" style="margin:0 0 8px">Choisissez, dans votre cercle 1, la personne qui vous l'a fait connaître — classée par photos en commun.</p>
-    <label class="fc-field"><span>Introducteur</span><select class="fc-input" id="via-select"></select></label>
-    <input class="fc-input" id="via-name" placeholder="Son nom (pas encore dans vos cercles)" hidden>
-    <div class="fc-dialog-actions">
-      <button class="fc-btn" value="cancel" formnovalidate>Annuler</button>
-      <button class="fc-btn fc-btn-primary" value="ok">Placer dans le cercle 2</button>
-    </div>
-  </form>
-</dialog>
-
-<dialog class="fc-dialog" id="dlg-ring">
-  <form method="dialog">
-    <h3>Nommer ce cercle</h3>
-    <label class="fc-field"><span>Nom</span><input class="fc-input" id="ring-name" autocomplete="off" maxlength="40"></label>
-    <div class="fc-dialog-actions">
-      <button class="fc-btn" value="cancel" formnovalidate>Annuler</button>
-      <button class="fc-btn fc-btn-primary" value="ok">Enregistrer</button>
-    </div>
-  </form>
-</dialog>
-
 <dialog class="fc-dialog fc-dialog-wide" id="dlg-ct-import">
   <form method="dialog">
     <h3>Importer des contacts</h3>
@@ -641,6 +550,7 @@
       <div class="fc-drop" id="imp-drop" tabindex="0" role="button"><b>Choisir un fichier .vcf</b>
         <span class="fc-hint">Une ou plusieurs fiches. Une fiche déjà présente (même identifiant) est mise à jour.</span></div>
     </div>
+    <div id="imp-status" class="fc-ct-status" role="status" aria-live="polite" hidden></div>
     <div id="imp-sources"></div>
     <div class="fc-dialog-actions"><button class="fc-btn" value="close">Fermer</button></div>
   </form>
@@ -690,6 +600,7 @@
     <span class="fc-spacer"></span>
     <button class="fc-lb-btn" id="lb-info" title="Informations (i)" aria-label="Informations">ⓘ</button>
     <a class="fc-lb-btn" id="lb-dl" title="Télécharger l'original" aria-label="Télécharger l'original" download>⤓</a>
+    <button class="fc-lb-btn" id="lb-mem" title="Mémoriser pour BRO : date, lieu, personnes, scène" aria-label="Mémoriser pour BRO">🧠</button>
     <button class="fc-lb-btn" id="lb-del" title="Supprimer (Suppr)" aria-label="Supprimer">🗑</button>
     <button class="fc-lb-btn" id="lb-close" title="Fermer (Échap)" aria-label="Fermer">✕</button>
   </div>
@@ -912,12 +823,12 @@ function saveDismissed() {
 /* Liens profonds depuis GAFAM.html (guide) : ucloud.html#reglages, #sources, #contacts, #videos… */
 function hashTab() {
     var m = location.hash.match(/^#(personnes|contacts|photos|carte|cercles|videos|sources|reglages)\b/);
-    return m ? { personnes: 'people', contacts: 'contacts', photos: 'photos', carte: 'map', cercles: 'circles', videos: 'videos', sources: 'sources', reglages: 'settings' }[m[1]] : null;
+    return m ? { personnes: 'people', contacts: 'contacts', photos: 'photos', carte: 'map', cercles: 'settings', videos: 'videos', sources: 'sources', reglages: 'settings' }[m[1]] : null;
 }
 function sessionTab() { try { return sessionStorage.getItem('fc-tab'); } catch (e) { return null; } }
 
 /* ── Onglets ────────────────────────────────────────────────────────── */
-var VIEWS = { people: 'view-people', photos: 'view-photos', map: 'view-map', circles: 'view-circles', videos: 'view-videos', contacts: 'view-contacts', sources: 'view-sources', settings: 'view-settings' };
+var VIEWS = { people: 'view-people', photos: 'view-photos', map: 'view-map', videos: 'view-videos', contacts: 'view-contacts', sources: 'view-sources', settings: 'view-settings' };
 function selectTab(name) {
     hidePeek();                      // l'aperçu de survol de la table ne suit pas l'onglet
     document.body.dataset.tab = name;
@@ -930,14 +841,13 @@ function selectTab(name) {
     if (name === 'people' && !App.boardReady && App.faces.length) renderBoard(true);
     if (name === 'contacts' && typeof loadContacts === 'function') loadContacts();
     if (name === 'photos') loadGallery();
-    if (name === 'circles') { renderSelfPicker(); renderCircles(); loadFaceRef(); }
     if (name === 'map') openMapTab();
     document.getElementById('more-sheet').hidden = true;
     document.querySelectorAll('.fc-tab-more').forEach(function (b) { b.setAttribute('aria-selected', String(name === 'videos' || name === 'contacts' || name === 'sources' || name === 'settings')); b.setAttribute('aria-expanded', 'false'); });
     window.scrollTo(0, 0);
     if (name === 'videos') loadVideos();
     if (name === 'sources') loadSources();
-    if (name === 'settings') { renderSettings(); loadBackup(); loadAnalysis(); loadQuota(); }
+    if (name === 'settings') { renderSelfPicker(); loadFaceRef(); renderSettings(); loadBackup(); loadAnalysis(); loadQuota(); }
 }
 
 /* ── Statut + avancement de l'analyse ───────────────────────────────── */
@@ -1082,7 +992,6 @@ function rebuild(fit) {
     App.personByKey = {};
     App.persons.forEach(function (p) { App.personByKey[p.key] = p; });
     renderSelfPicker();
-    renderCircles();
 
     var unsorted = App.faces.filter(function (f) { return !isNamed(f); }).length;
     $('count-unsorted').textContent = unsorted ? '(' + unsorted + ')' : '';
@@ -1924,297 +1833,56 @@ async function changeMe() {
     var me = currentPubkey(), mine = (App.persons || []).find(function (p) { return p.pubkey === me; });
     if (!mine) return;
     if (!(await confirmDialog('Changer d\'identité ?', 'Les visages de « ' + mine.name + ' » ne seront plus rangés comme étant les vôtres : vous pourrez en choisir d\'autres.', 'Changer'))) return;
-    await assignTo(mine.faces.map(function (f) { return f.id; }), { name: mine.name, pubkey: '', email: mine.email || '', contact: mine.contact || '', via: '@none' });
+    await assignTo(mine.faces.map(function (f) { return f.id; }), { name: mine.name, pubkey: '', email: mine.email || '', contact: mine.contact || '' });
 }
 
-/* ═══ Mes cercles (N1 / N2) ════════════════════════════════════════════
-   Cercle 1 = je les connais directement ; cercle 2 = connus PAR quelqu'un du cercle 1 ; « À placer » = pas
-   encore situés. Placer = GLISSER (une personne, ou plusieurs cochées) vers un cercle, ou la barre d'actions.
-   Chaque personne affiche où elle en est (ménage de ses contacts, souveraineté) :
+/* ═══ Liens NOSTR (kind 3) ═════════════════════════════════════════════
+   Les listes de suivis NOSTR (kind 3) FONT FOI pour les relations : ⇄ p2p (ils se suivent), → je la suis seulement
+   (1→p), ← elle me suit seulement (p→1). Il n'y a plus de « cercles » à placer à la main (l'onglet a été retiré :
+   il apportait de la confusion). Chaque personne montre où elle en est (ménage de ses contacts) :
        ● nom  ● email  ● invitation MULTIPASS envoyée  ● clé NOSTR obtenue  ● fiche dans le carnet (synchro CardDAV)
-   et la nature du lien NOSTR : ⇄ p2p (ils se suivent), → je la suis seulement (1→p), ← elle me suit seulement (p→1).
-
-   Échelle : 100 amis × 100 amis = 10 000 personnes → jamais tout affiché : listes bornées (40 + « Afficher plus »),
-   réseau NOSTR replié et paginé, cercle 2 d'un ami chargé à la demande. Persistance : `via` par visage (Qdrant) —
-   '@me' cercle 1, clé hex de l'introducteur (ou 'n:Nom') cercle 2, '@none' explicitement non placée. */
+   Échelle : 100 amis × 100 amis = 10 000 personnes → jamais tout affiché. */
 var REL = {
     mutual: { icon: '⇄', text: 'p2p — vous vous suivez mutuellement' },
     out:    { icon: '→', text: 'vous la/le suivez, sans réciproque (1→p)' },
     in:     { icon: '←', text: 'elle/il vous suit, sans réciproque (p→1)' },
     none:   { icon: '·', text: 'aucun lien NOSTR connu avec vous' }
 };
-var RING_PAGE = 40;
-var Ring = { filter: 'all', stage: 'all', query: '', limit: {}, netLimit: 40, loaded: false, error: '', sel: new Set(), drag: null };
-var STAGES = [
-    { k: 'nom', label: 'Juste un nom', hint: 'Aucun moyen de la joindre : ajoutez un email ou reliez-la à un ami NOSTR.' },
-    { k: 'email', label: 'Email connu', hint: 'Vous pouvez lui proposer un MULTIPASS.' },
-    { k: 'invited', label: 'Invitation envoyée', hint: 'Une proposition de MULTIPASS lui a été envoyée par email.' },
-    { k: 'npub', label: 'Dans NOSTR', hint: 'Clé NOSTR (npub) obtenue : lien direct, sans intermédiaire.' },
-    { k: 'card', label: 'NOSTR + carnet', hint: 'Dans NOSTR ET dans votre carnet synchronisé avec le téléphone : vos contacts vous appartiennent.' }
-];
 function personFlags(p) {
     return { email: !!p.email, invited: p.faces.some(function (f) { return f.sent && f.sent.mode === 'invited'; }), npub: !!p.pubkey,
              card: !!(p.contact && App.contacts && App.contacts[p.contact]) };
 }
-function stageOf(p) {
-    var f = personFlags(p);
-    if (f.npub && f.card) return 'card';
-    if (f.npub) return 'npub';
-    if (f.invited) return 'invited';
-    if (f.email) return 'email';
-    return 'nom';
-}
-function stepsHtml(p) {
-    var f = personFlags(p), t = ['Nom', 'Email connu', 'Invitation MULTIPASS envoyée', 'Clé NOSTR (npub) obtenue', 'Fiche dans le carnet (synchro téléphone)'];
-    var on = [true, f.email, f.invited, f.npub, f.card];
-    return '<span class="fc-steps" aria-label="Étapes">' + on.map(function (v, i) { return '<i class="' + (v ? 'on' : '') + '" title="' + esc(t[i] + (v ? ' ✓' : ' —')) + '"></i>'; }).join('') + '</span>';
-}
 
-function ringNamesKey() { return 'fc-ring-names-' + currentPubkey().slice(0, 16); }
-function ringName(n) {
-    var d = { 1: 'Cercle 1 — je les connais', 2: 'Cercle 2 — connus par quelqu\'un', 0: 'À placer' };
-    try { var m = JSON.parse(localStorage.getItem(ringNamesKey()) || '{}'); if (m[n]) return m[n]; } catch (e) {}
-    return d[n];
-}
-function setRingName(n, name) {
-    try {
-        var m = JSON.parse(localStorage.getItem(ringNamesKey()) || '{}');
-        if (name) m[n] = name; else delete m[n];
-        localStorage.setItem(ringNamesKey(), JSON.stringify(m));
-    } catch (e) {}
-}
-function linkOf(pubkey) { return (pubkey && App.links && App.links[pubkey]) || null; }
+function linkOf(pubkey) { return (pubkey && App.nostrLinks && App.nostrLinks[pubkey]) || null; }
 function relOf(p) { var l = linkOf(p.pubkey); return l ? l.rel : 'none'; }
 function relBadge(rel, withText) {
     var r = REL[rel] || REL.none;
     return '<span class="fc-rel ' + rel + '" title="' + esc(r.text) + '">' + r.icon + '</span>' + (withText ? ' ' + esc(r.text) : '');
 }
-/* via d'une personne = valeur majoritaire de ses visages. */
-function personVia(p) {
-    var c = {}, best = '', n = 0;
-    p.faces.forEach(function (f) { if (f.via) c[f.via] = (c[f.via] || 0) + 1; });
-    Object.keys(c).forEach(function (k) { if (c[k] > n) { n = c[k]; best = k; } });
-    return best;
-}
-function introducerOf(p) {
-    var v = p.via || '';
-    if (!v || v === '@me' || v === '@none') return null;
-    if (v.indexOf('n:') === 0) {
-        var nm = v.slice(2).toLowerCase();
-        return App.persons.find(function (x) { return x.name.toLowerCase() === nm; }) || { name: v.slice(2), pubkey: '', faces: [], photos: new Set() };
-    }
-    return App.persons.find(function (x) { return x.pubkey === v; })
-        || { name: (linkOf(v) && (linkOf(v).display_name || linkOf(v).name)) || (v.slice(0, 8) + '…'), pubkey: v, faces: [], photos: new Set() };
-}
-function personCircle(p) {
-    if (p.via === '@none') return 0;
-    if (p.via === '@me') return 1;
-    if (p.via) return 2;
-    var r = relOf(p);
-    return (r === 'out' || r === 'mutual') ? 1 : 0;        // que je suis sur NOSTR → cercle 1 d'office
-}
-function sharedPhotos(a, b) {
-    var n = 0;
-    a.photos.forEach(function (ph) { if (b.photos.has(ph)) n++; });
-    return n;
-}
 function linkLabel(l) { return (l && (l.display_name || l.name)) || ''; }
 
-async function loadCircles(force) {
+/* Liens NOSTR : les listes de suivis (kind 3) FONT FOI pour les relations — mutuel (⇄), je la suis (→), elle me suit (←).
+   Plus de « cercles » à placer à la main : on lit seulement ce que NOSTR dit déjà. */
+async function loadNostrLinks(force) {
+    var ok = false;
     try {
-        var data = await nostrFetch('/api/facecloud/circles' + (force ? '?refresh=1' : ''), { timeout: 60000 });
-        App.links = {};
-        (data.links || []).forEach(function (l) { App.links[l.pubkey] = l; });
+        var data = await nostrFetch('/api/facecloud/links' + (force ? '?refresh=1' : ''), { timeout: 60000 });
+        App.nostrLinks = {};
+        (data.links || []).forEach(function (l) { App.nostrLinks[l.pubkey] = l; });
         App.linkCounts = data.counts || {};
         App.linksTruncated = !!data.truncated;
-        Ring.error = '';
-        Ring.loaded = true;
+        ok = true;
     } catch (e) {
-        Ring.error = 'Liens NOSTR indisponibles : ' + e.message;
+        console.warn('Liens NOSTR indisponibles :', e.message);
     }
-    renderCircles();
     // Une seule lecture automatique des profils manquants par session.
-    if (Ring.loaded && !_profilesAuto && Object.keys(App.links).some(function (k) { return !linkLabel(App.links[k]); })) {
+    if (ok && !_profilesAuto && Object.keys(App.nostrLinks).some(function (k) { return !linkLabel(App.nostrLinks[k]); })) {
         _profilesAuto = true; loadNetworkProfiles(null, true);
     }
 }
 
-function chipHtml(p) {
-    var sel = Ring.sel.has(p.key), st = STAGES.filter(function (x) { return x.k === stageOf(p); })[0];
-    var rel = p.pubkey && linkOf(p.pubkey) ? ' ' + relBadge(relOf(p)) : '';
-    var th = p.faces.length ? thumbTag(p.faces[0].id) : '<i></i>';
-    return '<div class="fc-cchip' + (sel ? ' is-sel' : '') + '" draggable="true" tabindex="0" data-circ-person="' + esc(p.key) + '" title="' + esc(st.label + ' — ' + st.hint) + '">'
-        + '<span class="ck" data-ck role="checkbox" aria-checked="' + sel + '" aria-label="Choisir"></span>' + th
-        + '<span class="nm"><b>' + esc(p.name) + '</b><small>' + esc(st.label) + '</small></span>' + stepsHtml(p) + rel + '</div>';
-}
-function listWithMore(id, persons) {
-    var lim = Ring.limit[id] || RING_PAGE;
-    var html = persons.slice(0, lim).map(chipHtml).join('');
-    var more = persons.length - lim;
-    return '<div class="fc-ring-members">' + html + '</div>'
-        + (more > 0 ? '<button class="fc-btn fc-btn-sm fc-ring-more" data-ring-more="' + esc(id) + '">Afficher plus (' + more + ')</button>' : '');
-}
-function renderCircles() {
-    var panel = $('circles-panel');
-    if (!panel) return;
-    var me = currentPubkey();
-    var self = (App.persons || []).find(function (p) { return p.pubkey === me; });
-    var people = (App.persons || []).filter(function (p) { return p.pubkey !== me && p.name && p.name !== '?'; });
-    panel.hidden = !App.connected || (!people.length && !self && !Object.keys(App.links || {}).length);
-    if (panel.hidden) return;
-    people.forEach(function (p) { p.via = personVia(p); });
-    // Sélection : on retire ce qui n'existe plus
-    Ring.sel.forEach(function (k) { if (!App.personByKey[k]) Ring.sel.delete(k); });
-
-    // Filtres « où en est la personne » avec compteurs (le ménage : voir ce qui reste à régler)
-    var counts = { all: people.length };
-    STAGES.forEach(function (st) { counts[st.k] = 0; });
-    people.forEach(function (p) { counts[stageOf(p)]++; });
-    $('stage-filter').innerHTML = '<button data-stage="all" aria-pressed="' + (Ring.stage === 'all') + '">Tous <span class="n">' + counts.all + '</span></button>'
-        + STAGES.map(function (st) { return '<button data-stage="' + st.k + '" aria-pressed="' + (Ring.stage === st.k) + '" title="' + esc(st.hint) + '">' + esc(st.label) + ' <span class="n">' + counts[st.k] + '</span></button>'; }).join('');
-
-    var q = Ring.query.trim().toLowerCase();
-    var shown = people.filter(function (p) {
-        if (q && p.name.toLowerCase().indexOf(q) < 0) return false;
-        if (Ring.stage !== 'all' && stageOf(p) !== Ring.stage) return false;
-        if (Ring.filter !== 'all' && relOf(p) !== Ring.filter) return false;
-        return true;
-    });
-    var r1 = [], r2 = {}, r0 = [];
-    shown.forEach(function (p) {
-        var c = personCircle(p);
-        if (c === 1) r1.push(p);
-        else if (c === 2) { var k = p.via; (r2[k] = r2[k] || []).push(p); }
-        else r0.push(p);
-    });
-    function head(n, count, sub) {
-        return '<div class="fc-ring-head"><span>' + esc(ringName(n)) + '</span><small>' + count + (sub || '') + '</small>'
-            + '<button data-ring-edit="' + n + '" title="Renommer ce cercle" aria-label="Renommer ce cercle">✎</button></div>';
-    }
-    var groups = Object.keys(r2).sort(function (a, b) { return r2[b].length - r2[a].length; });
-    var n2 = groups.reduce(function (a, k) { return a + r2[k].length; }, 0);
-    var html = '<section class="fc-zone fc-zone-0" data-zone="0" aria-label="À placer">' + head(0, r0.length)
-        + (r0.length ? listWithMore('r0', r0) : '<p class="fc-hint fc-zone-empty">' + (people.length ? 'Tout est placé 🎉' : 'Aucune personne rangée pour l\'instant.') + '</p>') + '</section>'
-        + '<div class="fc-zone-col">'
-        + '<section class="fc-zone fc-zone-1" data-zone="1" aria-label="Cercle 1">' + head(1, r1.length)
-        + (r1.length ? listWithMore('r1', r1) : '<p class="fc-hint fc-zone-empty">Glissez ici les personnes que vous connaissez directement.</p>') + '</section>'
-        + '<section class="fc-zone fc-zone-2" data-zone="2" aria-label="Cercle 2">' + head(2, n2, groups.length ? ' · ' + plural(groups.length, 'introducteur', 'introducteurs') : '')
-        + (groups.length ? groups.map(function (k, gi) {
-            var intro = introducerOf({ via: k });
-            var rel = intro && intro.pubkey && linkOf(intro.pubkey) ? ' ' + relBadge(relOf(intro)) : '';
-            return '<div class="fc-ring-group" data-via="' + esc(k) + '"><p class="fc-hint">Par <b>' + esc(intro ? intro.name : '?') + '</b>' + rel + ' · ' + r2[k].length + '</p>'
-                + listWithMore('g' + gi + ':' + k.slice(0, 12), r2[k]) + '</div>';
-        }).join('') : '')
-        + '<p class="fc-hint fc-zone-empty">' + (groups.length ? 'Glissez ici pour choisir un autre introducteur, ou sur un groupe pour l\'y ajouter.' : 'Glissez ici les personnes connues PAR quelqu\'un : vous choisirez par qui.') + '</p></section></div>';
-    $('rings').innerHTML = (Ring.error ? '<p class="fc-error" style="grid-column:1/-1">' + esc(Ring.error) + '</p>' : '') + html;
-
-    var c = App.linkCounts || {};
-    $('ring-counts').textContent = Ring.loaded ? '⇄ ' + (c.mutual || 0) + ' · → ' + (c.out || 0) + ' · ← ' + (c['in'] || 0) + (App.linksTruncated ? ' (tronquée)' : '') : '';
-    var wantIds = people.slice(0, 200).filter(function (p) { return p.faces.length; }).map(function (p) { return p.faces[0].id; });
-    wantThumbs(wantIds);
-    renderRingBulk();
-    renderNetwork();
-}
-function renderRingBulk() {
-    var n = Ring.sel.size;
-    $('ring-bulk').hidden = !n;
-    $('ring-bulk-count').textContent = plural(n, 'personne choisie', 'personnes choisies');
-}
-/* Placer : `via` = '@me' (cercle 1) | clé hex / 'n:Nom' (cercle 2, par cette personne) | '@none' (à placer). */
-async function applyVia(keys, via) {
-    var persons = keys.map(function (k) { return App.personByKey[k]; }).filter(Boolean);
-    if (!persons.length) return;
-    try {
-        for (var i = 0; i < persons.length; i++) {
-            var p = persons[i];
-            await nostrFetch('/mailjet/faces-edit-bulk', { method: 'POST', body: form({
-                point_ids: p.faces.map(function (f) { return f.id; }).join(','), name: p.name, pubkey: p.pubkey || '',
-                contact_email: p.email || '', contact: p.contact || '', via: via }) });
-            p.faces.forEach(function (f) { f.via = via; });
-        }
-    } catch (e) { toast('Placement impossible : ' + e.message, true); rebuild(false); return; }
-    Ring.sel.clear();
-    rebuild(false);
-    var dest = via === '@me' ? 'cercle 1' : via === '@none' ? '« À placer »' : 'cercle 2';
-    toast(persons.length === 1 ? '« ' + persons[0].name + ' » → ' + dest : plural(persons.length, 'personne placée', 'personnes placées') + ' → ' + dest);
-}
-/* Cercle 2 : « par qui ? » — introducteurs classés par photos en commun avec la première personne. */
-var _viaKeys = [];
-function askVia(keys) {
-    _viaKeys = keys;
-    var p = App.personByKey[keys[0]];
-    var cands = (App.persons || []).filter(function (q) { return keys.indexOf(q.key) < 0 && q.pubkey !== currentPubkey() && personCircle(q) === 1; });
-    cands.forEach(function (q) { q._shared = p ? sharedPhotos(p, q) : 0; });
-    cands.sort(function (a, b) { return b._shared - a._shared || a.name.localeCompare(b.name); });
-    $('via-title').textContent = keys.length > 1 ? plural(keys.length, 'personne', 'personnes') + ' : connues par qui ?' : '« ' + (p ? p.name : '') + ' » : connue par qui ?';
-    $('via-select').innerHTML = '<option value="">Choisir…</option>' + cands.slice(0, 200).map(function (q) {
-        return '<option value="' + esc(q.pubkey || 'n:' + q.name) + '">' + esc(q.name) + (q._shared ? ' (' + plural(q._shared, 'photo ensemble', 'photos ensemble') + ')' : '') + '</option>';
-    }).join('') + '<option value="__other">Quelqu\'un d\'autre (juste un nom)…</option>';
-    $('via-name').hidden = true; $('via-name').value = '';
-    var d = $('dlg-via'); d.returnValue = ''; d.showModal();
-}
-function ringDropTarget(ev) {
-    var g = ev.target.closest('.fc-ring-group'), z = ev.target.closest('.fc-zone');
-    return { el: g || z, group: g, zone: z };
-}
-function ringDragSetup() {
-    var box = $('rings');
-    box.addEventListener('dragstart', function (ev) {
-        var chip = ev.target.closest('[data-circ-person]'); if (!chip) return;
-        var k = chip.getAttribute('data-circ-person');
-        var keys = Ring.sel.has(k) ? Array.from(Ring.sel) : [k];
-        Ring.drag = keys;
-        ev.dataTransfer.setData('text/plain', 'fc-circ:' + JSON.stringify(keys));
-        ev.dataTransfer.effectAllowed = 'move';
-        chip.classList.add('is-drag'); document.body.classList.add('fc-circ-dragging');
-    });
-    box.addEventListener('dragend', function () { Ring.drag = null; document.body.classList.remove('fc-circ-dragging'); box.querySelectorAll('.is-drag,.is-over').forEach(function (e) { e.classList.remove('is-drag', 'is-over'); }); });
-    box.addEventListener('dragover', function (ev) {
-        if (!Ring.drag) return;
-        var t = ringDropTarget(ev); if (!t.zone) return;
-        ev.preventDefault(); ev.dataTransfer.dropEffect = 'move';
-        box.querySelectorAll('.is-over').forEach(function (e) { if (e !== t.el) e.classList.remove('is-over'); });
-        t.el.classList.add('is-over');
-    });
-    box.addEventListener('drop', function (ev) {
-        if (!Ring.drag) return;
-        ev.preventDefault();
-        var t = ringDropTarget(ev), keys = Ring.drag; Ring.drag = null;
-        document.body.classList.remove('fc-circ-dragging'); box.querySelectorAll('.is-over').forEach(function (e) { e.classList.remove('is-over'); });
-        if (!t.zone) return;
-        var z = t.zone.getAttribute('data-zone');
-        if (t.group) applyVia(keys, t.group.getAttribute('data-via'));
-        else if (z === '1') applyVia(keys, '@me');
-        else if (z === '0') applyVia(keys, '@none');
-        else askVia(keys);
-    });
-}
-
-/* Réseau NOSTR sans visage rangé : pour retrouver un nom, replié et paginé. */
-function renderNetwork() {
-    var links = Object.keys(App.links || {}).map(function (k) { return App.links[k]; });
-    var have = {};
-    (App.persons || []).forEach(function (p) { if (p.pubkey) have[p.pubkey] = true; });
-    var q = Ring.query.trim().toLowerCase();
-    var list = links.filter(function (l) {
-        if (have[l.pubkey] || l.pubkey === currentPubkey()) return false;
-        if (Ring.filter !== 'all' && l.rel !== Ring.filter) return false;
-        return !q || (linkLabel(l) + ' ' + (l.email || '')).toLowerCase().indexOf(q) >= 0;
-    }).sort(function (a, b) { return (linkLabel(b) ? 1 : 0) - (linkLabel(a) ? 1 : 0) || linkLabel(a).localeCompare(linkLabel(b)); });
-    $('net-sum').textContent = list.length ? '(' + list.length + ')' : '';
-    if (!$('net-box').open) return;       // rien à dessiner tant que c'est replié
-    $('net-list').innerHTML = list.slice(0, Ring.netLimit).map(function (l) {
-        var nm = linkLabel(l) || (l.npub ? l.npub.slice(0, 14) + '…' : l.pubkey.slice(0, 10) + '…');
-        return '<button data-net-pick="' + esc(l.pubkey) + '">' + avatarHtml(l.pubkey, nm) + '<span class="nm">' + esc(nm) + (l.email ? '<small>' + esc(l.email) + '</small>' : '')
-            + '</span>' + relBadge(l.rel) + '</button>';
-    }).join('') || '<p class="fc-hint" style="padding:8px 12px;margin:0">' + (Ring.loaded ? 'Aucun résultat.' : 'Chargement du réseau…') + '</p>';
-    wantAvatars(list.slice(0, Ring.netLimit).map(function (l) { return l.pubkey; }));
-    $('net-more').hidden = list.length <= Ring.netLimit;
-    $('net-more').textContent = 'Afficher plus (' + (list.length - Ring.netLimit) + ')';
-}
-
-/* ── Fiche d'une personne (nommer, relier, placer) ─────────────────── */
-var Circ = { person: null, link: null, n2: { items: [], total: 0, offset: 0, q: '', via: '', busy: false }, timer: null };
+/* ── Fiche d'une personne (nommer, relier à NOSTR, email) ─────────────────── */
+var Circ = { person: null, link: null };
 
 function openCircle(key, preset) {
     var p = preset || App.personByKey[key];
@@ -2232,11 +1900,6 @@ function openCircle(key, preset) {
     var l = p.pubkey && linkOf(p.pubkey);
     if (p.pubkey) tr.push('<div>' + (l ? relBadge(l.rel, true) : 'Dans NOSTR, sans lien direct avec vous') + '</div>');
     else tr.push('<div>Pas encore dans NOSTR : <b>juste un nom</b>' + (p.email ? ' (email connu : invitation possible)' : '') + '</div>');
-    var intro = introducerOf(p);
-    if (intro) {
-        var rl = intro.pubkey && linkOf(intro.pubkey) ? ' ' + relBadge(relOf(intro)) : '';
-        tr.push('<div>Connue par <b>' + esc(intro.name) + '</b>' + rl + '</div>');
-    } else if (p.via === '@me') tr.push('<div>Vous la connaissez <b>directement</b> (cercle 1).</div>');
     $('circ-trace').innerHTML = tr.join('');
     // Ménage : ce qu'on peut faire MAINTENANT pour cette personne (souveraineté sur ses contacts)
     var fl = personFlags(p), acts = [];
@@ -2251,16 +1914,11 @@ function openCircle(key, preset) {
     $('circ-nostr-link').hidden = !!p.pubkey;
     var used = {};
     (App.persons || []).forEach(function (x) { if (x.pubkey && x !== p) used[x.pubkey] = true; });
-    var friends = Object.keys(App.links || {}).map(function (k) { return App.links[k]; }).filter(function (x) {
+    var friends = Object.keys(App.nostrLinks || {}).map(function (k) { return App.nostrLinks[k]; }).filter(function (x) {
         return !used[x.pubkey];
     }).sort(function (a, b) { return linkLabel(a).localeCompare(linkLabel(b)); }).slice(0, 300);
     $('circ-friend').innerHTML = '<option value="">…ou relier à un ami NOSTR (' + friends.length + ')</option>'
         + friends.map(function (x) { return '<option value="' + esc(x.pubkey) + '">' + esc(REL[x.rel].icon + ' ' + (linkLabel(x) || x.pubkey.slice(0, 10) + '…')) + '</option>'; }).join('');
-    // Cercle + introducteur.
-    var level = personCircle(p) || 0;
-    document.querySelectorAll('input[name="circ-level"]').forEach(function (r) { r.checked = String(level) === r.value; });
-    fillIntroducers(p);
-    circLevelChanged();
     d.returnValue = '';
     d.showModal();
     $('circ-name').focus();
@@ -2270,72 +1928,6 @@ function shortNpub(hex) {
     var n = hex;
     if (window.hexToNpub) { try { n = window.hexToNpub(hex) || hex; } catch (e) {} }
     return n.slice(0, 14) + '…';
-}
-/* Introducteurs possibles = cercle 1, classés par PHOTOS EN COMMUN avec cette
-   personne : celui qui apparaît sur les mêmes photos est le plus probable. */
-function fillIntroducers(p) {
-    var cands = (App.persons || []).filter(function (q) { return q !== p && q.pubkey !== currentPubkey() && personCircle(q) === 1; });
-    cands.forEach(function (q) { q._shared = p.photos ? sharedPhotos(p, q) : 0; });
-    cands.sort(function (a, b) { return b._shared - a._shared || a.name.localeCompare(b.name); });
-    var cur = introducerOf(p);
-    var curKey = cur ? (cur.pubkey || 'n:' + cur.name) : '';
-    var html = '<option value="">Choisir…</option>' + cands.slice(0, 200).map(function (q) {
-        return '<option value="' + esc(q.pubkey || 'n:' + q.name) + '">' + esc(q.name) + (q._shared ? ' (' + plural(q._shared, 'photo ensemble', 'photos ensemble') + ')' : '') + '</option>';
-    }).join('') + '<option value="__other">Quelqu\'un d\'autre (juste un nom)…</option>';
-    $('circ-via').innerHTML = html;
-    if (curKey && !cands.some(function (q) { return (q.pubkey || 'n:' + q.name) === curKey; }) && cur) {
-        $('circ-via').insertAdjacentHTML('beforeend', '<option value="' + esc(curKey) + '">' + esc(cur.name) + '</option>');
-    }
-    $('circ-via').value = curKey || '';
-    $('circ-via-name').value = '';
-}
-function circLevel() { var r = document.querySelector('input[name="circ-level"]:checked'); return r ? r.value : '0'; }
-function circLevelChanged() {
-    $('circ-via-box').hidden = circLevel() !== '2';
-    circViaChanged();
-}
-function circViaChanged() {
-    var v = $('circ-via').value;
-    $('circ-via-name').hidden = v !== '__other';
-    var hex = /^[0-9a-f]{64}$/.test(v) ? v : '';
-    $('circ-n2-load').hidden = !hex || circLevel() !== '2';
-    $('circ-n2-filter').hidden = true;
-    $('circ-n2-list').hidden = true;
-    $('circ-n2-msg').textContent = (v && !hex && v !== '__other') ? 'Cette personne n\'est pas encore dans NOSTR : on retient son nom.' : '';
-    Circ.n2 = { items: [], total: 0, offset: 0, q: '', via: hex, busy: false };
-}
-/* Les amis d'UN ami : page de 50, recherche côté serveur (jamais le cercle 2 entier). */
-async function loadN2(reset) {
-    var st = Circ.n2;
-    if (!st.via || st.busy) return;
-    st.busy = true;
-    if (reset) { st.items = []; st.offset = 0; }
-    $('circ-n2-msg').textContent = 'Lecture sur le réseau NOSTR…';
-    try {
-        var url = '/api/facecloud/circles/via/' + encodeURIComponent(st.via) + '?limit=50&offset=' + st.offset + '&q=' + encodeURIComponent(st.q);
-        var r = await nostrFetch(url, { timeout: 60000 });
-        st.items = st.items.concat(r.items || []);
-        st.total = r.total;
-        st.offset = st.items.length;
-        $('circ-n2-msg').textContent = plural(r.total, 'ami', 'amis') + (st.q ? ' pour « ' + st.q + ' »' : ' (sur ' + r.total_friends + ')');
-        renderN2();
-    } catch (e) {
-        $('circ-n2-msg').textContent = 'Impossible : ' + e.message;
-    }
-    st.busy = false;
-}
-function renderN2() {
-    var st = Circ.n2, box = $('circ-n2-list');
-    box.hidden = false;
-    $('circ-n2-filter').hidden = false;
-    box.innerHTML = st.items.map(function (l) {
-        var nm = linkLabel(l) || (l.npub ? l.npub.slice(0, 14) + '…' : l.pubkey.slice(0, 10) + '…');
-        var sel = Circ.link && Circ.link.pubkey === l.pubkey;
-        return '<button type="button" data-n2-pick="' + esc(l.pubkey) + '" aria-pressed="' + sel + '">' + avatarHtml(l.pubkey, nm)
-            + '<span class="nm">' + esc(nm) + (l.email ? '<small>' + esc(l.email) + '</small>' : '') + '</span>'
-            + (l.rel !== 'none' ? relBadge(l.rel) : '') + '</button>';
-    }).join('') + (st.items.length < st.total ? '<button type="button" data-n2-more="1">Afficher plus (' + (st.total - st.items.length) + ')</button>' : '');
-    wantAvatars(st.items.map(function (l) { return l.pubkey; }));
 }
 function pickLink(l) {
     Circ.link = l;
@@ -2350,20 +1942,13 @@ async function saveCircle() {
     if (!p || !name) return;
     var pubkey = p.pubkey || (Circ.link && Circ.link.pubkey) || $('circ-friend').value || '';
     var email = $('circ-email').value.trim();
-    var level = circLevel(), via = '@none';
-    if (level === '1') via = '@me';
-    else if (level === '2') {
-        var v = $('circ-via').value;
-        if (v === '__other') { var nn = $('circ-via-name').value.trim(); via = nn ? 'n:' + nn : '@none'; }
-        else via = v || '@none';
-    }
     var ids = (p.faces || []).map(function (f) { return f.id; });
     if (!ids.length) {
         // Personne issue du réseau NOSTR, sans visage rangé : rien à étiqueter ici pour l'instant.
         toast('Cette personne n\'a pas encore de visage : rangez d\'abord un visage dans « ' + name + ' » depuis la table de tri.', true);
         return;
     }
-    await assignTo(ids, { name: name, pubkey: pubkey, email: email, contact: p.contact || '', via: via });
+    await assignTo(ids, { name: name, pubkey: pubkey, email: email, contact: p.contact || '' });
 }
 /* ── Inviter par une autre application : WhatsApp, Telegram, SMS, mail, « Partager… » du téléphone ──
    POST /mailjet/person-invite-link crée un lien à usage unique (7 jours) portant les photos ; l'invité l'ouvre,
@@ -2464,42 +2049,14 @@ async function inviteMultipass(p) {
    Le serveur parcourt vos relais préférés (celui de la station, vos relais déclarés NIP-65, ceux de la constellation) pour
    lire les profils (kind 0) manquants, puis sert LUI-MÊME les vignettes : cette page ne charge aucune image extérieure. */
 App.avatars = App.avatars || {};
-var _avWanted = {}, _avTimer = null, _profilesAuto = false;
-function avatarHtml(hex, label, cls) {
-    var url = App.avatars[hex];
-    var ch = (label || '?').trim().charAt(0).toUpperCase() || '?';
-    return url ? '<img class="av ' + (cls || '') + '" src="' + url + '" alt="">'
-        : '<span class="av ' + (cls || '') + '" data-av="' + esc(hex) + '" style="background:' + hashColor(hex) + '">' + esc(ch) + '</span>';
-}
-function paintAvatars(root) {
-    (root || document).querySelectorAll('[data-av]').forEach(function (el) {
-        var u = App.avatars[el.getAttribute('data-av')]; if (!u) return;
-        var img = document.createElement('img'); img.className = el.className; img.src = u; img.alt = ''; el.replaceWith(img);
-    });
-}
-/* Demande (par lots, une fois) les vignettes des clés affichées qui en ont une. */
-function wantAvatars(hexes) {
-    hexes.forEach(function (h) { var l = linkOf(h); if (!App.avatars[h] && !_avWanted[h] && l && (l.has_pic || l.avatar)) _avWanted[h] = 1; });
-    clearTimeout(_avTimer);
-    _avTimer = setTimeout(async function () {
-        var todo = Object.keys(_avWanted).filter(function (h) { return _avWanted[h] === 1; });
-        for (var i = 0; i < todo.length; i += 40) {
-            var chunk = todo.slice(i, i + 40); chunk.forEach(function (h) { _avWanted[h] = 2; });
-            try {
-                var r = await nostrFetch('/api/facecloud/avatars', { method: 'POST', body: form({ hexes: JSON.stringify(chunk) }), timeout: 90000 });
-                Object.keys(r.avatars || {}).forEach(function (h) { App.avatars[h] = r.avatars[h]; });
-                paintAvatars($('circles-panel'));
-            } catch (e) { console.warn('Vignettes :', e.message); }
-        }
-    }, 200);
-}
+var _profilesAuto = false;       // une seule lecture automatique des profils manquants par session
 async function loadNetworkProfiles(btn, silent) {
-    var links = Object.keys(App.links || {}).map(function (k) { return App.links[k]; });
+    var links = Object.keys(App.nostrLinks || {}).map(function (k) { return App.nostrLinks[k]; });
     var missing = links.filter(function (l) { return !linkLabel(l); }).map(function (l) { return l.pubkey; });
     // Profils manquants d'abord ; s'il n'en manque pas, on relit tout (nouvelle vignette, nom modifié).
     var targets = missing.length ? missing : links.map(function (l) { return l.pubkey; });
     if (!targets.length) { if (!silent) toast('Aucun contact NOSTR à lire.'); return; }
-    var msg = $('net-profiles-msg');
+    var msg = {};      // (l'ancienne zone d'état « Mon réseau NOSTR » n'existe plus)
     if (btn) btn.disabled = true;
     msg.textContent = '⏳ Lecture sur vos relais préférés…';
     var found = 0, relays = [];
@@ -2509,7 +2066,7 @@ async function loadNetworkProfiles(btn, silent) {
                 body: form({ hexes: JSON.stringify(targets.slice(i, i + 100)), refresh: missing.length || !silent ? '0' : '1' }) });
             relays = r.relays && r.relays.length ? r.relays : relays;
             Object.keys(r.profiles || {}).forEach(function (h) {
-                var p = r.profiles[h], l = App.links[h]; if (!l) return;
+                var p = r.profiles[h], l = App.nostrLinks[h]; if (!l) return;
                 found++; l.name = l.name || p.name; l.display_name = l.display_name || p.display_name; l.email = l.email || p.email;
                 if (p.has_pic) l.has_pic = true;
             });
@@ -2517,18 +2074,8 @@ async function loadNetworkProfiles(btn, silent) {
         }
         msg.textContent = found ? plural(found, 'profil lu', 'profils lus') + (relays.length ? ' sur ' + plural(relays.length, 'relais', 'relais') + ' (' + relays.map(function (u) { return u.replace(/^wss?:\/\//, ''); }).join(', ') + ')' : '') + '.'
                                 : 'Aucun profil trouvé sur vos relais (' + relays.length + ' interrogés).';
-        renderNetwork(); renderCircles();
-        wantAvatars(targets);
     } catch (e) { msg.textContent = 'Lecture impossible : ' + e.message; if (!silent) toast('Profils : ' + e.message, true); }
     if (btn) btn.disabled = false;
-}
-function openNetworkPick(pubkey) {
-    var l = linkOf(pubkey);
-    if (!l) return;
-    toast('« ' + (linkLabel(l) || shortNpub(pubkey)) + ' » : rangez un visage dans cette personne depuis la table de tri, puis reliez-la ici.');
-    $('ring-search').value = linkLabel(l);
-    Ring.query = linkLabel(l);
-    renderCircles();
 }
 
 function selfTarget() { return { pubkey: currentPubkey(), name: App.selfName || 'Moi' }; }
@@ -3205,6 +2752,22 @@ async function lbDownload() {
         document.body.appendChild(a); a.click(); a.remove(); setTimeout(function () { URL.revokeObjectURL(a.href); }, 4000);
     } catch (e) { toast('Téléchargement impossible : ' + e.message, true); }
 }
+// Mémoire de BRO : JAMAIS automatique pour les photos — la personne choisit, photo par photo (visionneuse)
+// ou par sélection. Le serveur regroupe les photos choisies par moment (6 h) : un souvenir par moment.
+async function memorizePhotos(paths, btn) {
+    if (!paths || !paths.length) return false;
+    var label = btn ? btn.textContent : '';
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ …'; }
+    try {
+        var r = await nostrFetch('/api/cloud/memory/remember', { method: 'POST', body: form({ paths: JSON.stringify(paths.slice(0, 200)) }) });
+        if (!r.moments) { toast('Ces photos n\'ont ni description ni personne reconnue : lancez « ✨ Décrire » d\'abord.', true); return false; }
+        toast('BRO y repense : ' + plural(r.moments, 'souvenir', 'souvenirs') + ' en cours d\'enregistrement. À relire dans Mon compte › Ce que BRO sait de moi.');
+        return true;
+    } catch (e) { toast('Mémorisation impossible : ' + e.message, true); return false; }
+    finally { if (btn) { btn.disabled = false; btn.textContent = label; } }
+}
+function lbMemorize() { var f = LC().items[LB.i]; if (f) memorizePhotos([f.path], $('lb-mem')); }
+
 async function lbDelete() {
     var C = LC(), f = C.items[LB.i]; if (!f) return;
     if (!(await confirmDialog('Supprimer cette photo ?', 'Elle est effacée définitivement de votre cloud, avec ses visages.', 'Supprimer'))) return;
@@ -3918,7 +3481,7 @@ async function loadFriends() {
             if (m && (m.display_name || m.name)) App.selfName = m.display_name || m.name;
         }).catch(function () {});
     }
-    loadCircles(false);
+    loadNostrLinks(false);
     if (typeof window.fetchUserFollowsWithMetadata !== 'function') return;
     try {
         var list = await window.fetchUserFollowsWithMetadata(currentPubkey(), { timeout: 6000 });
@@ -4354,7 +3917,7 @@ function guideAction(key) {
         try { localStorage.setItem('fc-guide-off-' + currentPubkey().slice(0, 16), '1'); } catch (e) {}
         $('guide').hidden = true;
     } else if (key === 'face') {
-        selectTab('circles');
+        selectTab('settings');
         $('btn-selfie-cam').scrollIntoView({ behavior: 'smooth', block: 'center' });
         $('btn-selfie-cam').focus();
     } else if (key === 'photos') {
@@ -4746,71 +4309,7 @@ document.addEventListener('DOMContentLoaded', function () {
     $('btn-selfie-cam').addEventListener('click', startCam);
     $('me-pick-box').addEventListener('click', function (ev) { var b = ev.target.closest('[data-me-pick]'); if (b) chooseMe(b.dataset.mePick); });
     $('me-done').addEventListener('click', function (ev) { if (ev.target.closest('#me-change')) changeMe(); });
-    // Cercles
-    ringDragSetup();
-    $('stage-filter').addEventListener('click', function (ev) { var b = ev.target.closest('[data-stage]'); if (b) { Ring.stage = b.dataset.stage; renderCircles(); } });
-    $('ring-bulk').addEventListener('click', function (ev) {
-        var b = ev.target.closest('[data-bulk]'); if (!b) return;
-        var keys = Array.from(Ring.sel);
-        if (b.dataset.bulk === 'x') { Ring.sel.clear(); renderCircles(); }
-        else if (b.dataset.bulk === '1') applyVia(keys, '@me');
-        else if (b.dataset.bulk === '0') applyVia(keys, '@none');
-        else askVia(keys);
-    });
-    $('dlg-via').addEventListener('close', function () {
-        var d = $('dlg-via'); if (d.returnValue !== 'ok') return;
-        var v = $('via-select').value, via = '';
-        if (v === '__other') { var nn = $('via-name').value.trim(); via = nn ? 'n:' + nn : ''; } else via = v;
-        if (via) applyVia(_viaKeys, via); else toast('Choisissez par qui vous les avez connus.', true);
-    });
-    $('via-select').addEventListener('change', function () { $('via-name').hidden = this.value !== '__other'; });
-    $('net-profiles').addEventListener('click', function () { loadNetworkProfiles(this); });
-    $('rings').addEventListener('click', function (ev) {
-        var ck = ev.target.closest('[data-ck]');
-        var chip = ev.target.closest('[data-circ-person]');
-        if (chip && (ck || Ring.sel.size)) {
-            var k = chip.getAttribute('data-circ-person');
-            if (Ring.sel.has(k)) Ring.sel.delete(k); else Ring.sel.add(k);
-            chip.classList.toggle('is-sel', Ring.sel.has(k)); renderRingBulk(); return;
-        }
-        if (chip) { openCircle(chip.getAttribute('data-circ-person')); return; }
-        var more = ev.target.closest('[data-ring-more]');
-        if (more) { var id = more.getAttribute('data-ring-more'); Ring.limit[id] = (Ring.limit[id] || RING_PAGE) + RING_PAGE; renderCircles(); return; }
-        var ed = ev.target.closest('[data-ring-edit]');
-        if (ed) {
-            var n = ed.getAttribute('data-ring-edit'), d = $('dlg-ring');
-            $('ring-name').value = ringName(+n); d._n = +n; d.returnValue = ''; d.showModal(); $('ring-name').focus();
-        }
-    });
-    $('dlg-ring').addEventListener('close', function () {
-        var d = $('dlg-ring');
-        if (d.returnValue === 'ok') { setRingName(d._n, $('ring-name').value.trim()); renderCircles(); }
-    });
-    $('ring-filter').addEventListener('click', function (ev) {
-        var b = ev.target.closest('[data-rel]'); if (!b) return;
-        Ring.filter = b.getAttribute('data-rel');
-        document.querySelectorAll('#ring-filter [data-rel]').forEach(function (x) { x.setAttribute('aria-pressed', String(x === b)); });
-        Ring.netLimit = 40; renderCircles();
-    });
-    $('ring-search').addEventListener('input', function () { Ring.query = this.value; Ring.netLimit = 40; renderCircles(); });
-    $('ring-refresh').addEventListener('click', function () { this.disabled = true; var b = this; loadCircles(true).then(function () { b.disabled = false; }); });
-    $('net-box').addEventListener('toggle', renderNetwork);
-    $('net-more').addEventListener('click', function () { Ring.netLimit += 40; renderNetwork(); });
-    $('net-list').addEventListener('click', function (ev) { var b = ev.target.closest('[data-net-pick]'); if (b) openNetworkPick(b.getAttribute('data-net-pick')); });
-    document.querySelectorAll('input[name="circ-level"]').forEach(function (r) { r.addEventListener('change', circLevelChanged); });
-    $('circ-via').addEventListener('change', circViaChanged);
     $('circ-friend').addEventListener('change', function () { var l = linkOf(this.value); if (l) pickLink(l); });
-    $('circ-n2-load').addEventListener('click', function () { $('circ-n2-filter').value = ''; Circ.n2.q = ''; loadN2(true); });
-    $('circ-n2-filter').addEventListener('input', function () {
-        var v = this.value; clearTimeout(Circ.timer);
-        Circ.timer = setTimeout(function () { Circ.n2.q = v.trim(); loadN2(true); }, 300);
-    });
-    $('circ-n2-list').addEventListener('click', function (ev) {
-        if (ev.target.closest('[data-n2-more]')) { loadN2(false); return; }
-        var b = ev.target.closest('[data-n2-pick]'); if (!b) return;
-        var l = Circ.n2.items.find(function (x) { return x.pubkey === b.getAttribute('data-n2-pick'); });
-        if (l) { pickLink(l); renderN2(); }
-    });
     $('dlg-circle').addEventListener('close', function () { if ($('dlg-circle').returnValue === 'ok') saveCircle(); });
     $('circ-actions').addEventListener('click', async function (ev) {
         var b = ev.target.closest('[data-circ-act]'); if (!b || !Circ.person) return;
@@ -4874,6 +4373,7 @@ document.addEventListener('DOMContentLoaded', function () {
     $('btn-photo-delete').addEventListener('click', deleteSelectedPhotos);
     $('btn-photo-describe').addEventListener('click', function () { var ps = Array.from(G.selected).slice(0, 200); if (ps.length) runAnalysis('describe', this, ps).then(function () { G.selected.clear(); syncSelection(); }); });
     $('btn-photo-clear').addEventListener('click', function () { G.selected.clear(); syncSelection(); });
+    $('btn-photo-memorize').addEventListener('click', function () { memorizePhotos(Array.from(G.selected), this).then(function (ok) { if (ok) { G.selected.clear(); syncSelection(); } }); });
     $('btn-photo-all').addEventListener('click', function () { G.items.forEach(function (f) { if (!f.readonly) G.selected.add(f.path); }); syncSelection(); });
     $('btn-dups').addEventListener('click', openDups);
     $('dups-close').addEventListener('click', closeDups);
@@ -4890,6 +4390,7 @@ document.addEventListener('DOMContentLoaded', function () {
     $('lb-next').addEventListener('click', function () { lbGo(1); });
     $('lb-info').addEventListener('click', function () { LB.info = !LB.info; $('lb-panel').hidden = !LB.info; if (LB.info) renderLbInfo(); });
     $('lb-del').addEventListener('click', lbDelete);
+    $('lb-mem').addEventListener('click', lbMemorize);
     $('lb-cap').addEventListener('click', function () { if (!LB.info) $('lb-info').click(); setTimeout(function () { var t = $('lb-desc'); if (t) t.focus(); }, 60); });
     $('lb-panel').addEventListener('click', function (ev) { if (ev.target.closest('#lb-desc-save')) saveDesc(); else if (ev.target.closest('#lb-desc-ai')) describeWithAI(); else onWhoClick(ev); });
     $('lb-dl').addEventListener('click', function (ev) { ev.preventDefault(); lbDownload(); });

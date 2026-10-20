@@ -45,15 +45,18 @@
       <li><div><b>Envoyez à chacun ses photos</b><span>Il les retrouve dans son MULTIPASS, ou reçoit une invitation pour en créer un.</span></div></li>
     </ol>
     <div class="fc-invite" id="invite" hidden>
-      <div class="fc-invite-faces" id="invite-faces"></div>
-      <p class="fc-invite-title" id="invite-title"></p>
+      <p class="fc-invite-kicker">🎁 Un cadeau vous attend</p>
+      <div class="fc-invite-faces" id="invite-faces" aria-hidden="true"></div>
+      <p class="fc-invite-title" id="invite-title" aria-live="polite"></p>
+      <p class="fc-invite-sub" id="invite-sub"></p>
       <label class="fc-field" id="invite-email-box" hidden><span>Votre email (votre MULTIPASS y sera attaché)</span><input class="fc-input" id="invite-email" type="email" autocomplete="email" placeholder="vous@exemple.org"></label>
       <ul class="fc-invite-why">
         <li>🔒 <b>Chiffrées</b> : vous seul·e y avez accès</li>
-        <li>🎁 <b>Gratuit</b>, rien à installer — une minute</li>
+        <li>🎁 <b>Gratuit</b>, rien à installer, pas de mot de passe à inventer — une minute</li>
         <li>✋ <b>Vous gardez la main</b> : tout est supprimable</li>
       </ul>
       <button class="fc-btn fc-btn-primary fc-btn-big" id="btn-claim">Voir mes photos</button>
+      <p class="fc-invite-recip" id="invite-recip" hidden></p>
     </div>
     <div class="fc-start" id="start">
       <label class="fc-field"><span>Votre email</span><input class="fc-input" id="start-email" type="email" autocomplete="email" placeholder="vous@exemple.org"></label>
@@ -3796,6 +3799,25 @@ function hashParam(name) {
     var m = location.hash.match(new RegExp('[#&]' + name + '=([^&]+)'));
     return m ? decodeURIComponent(m[1]) : '';
 }
+/* L'invité ne doit voir qu'une chose : son cadeau. Les vignettes se « développent » une à une (flou → net), le compteur
+   monte jusqu'au nombre de photos, et le bouton n'attend rien d'autre qu'une adresse email. */
+function countUp(el, to) {
+    if (!to || window.matchMedia('(prefers-reduced-motion: reduce)').matches) { el.textContent = to; return; }
+    var t0 = null, dur = Math.min(1600, 500 + to * 25);
+    function step(t) {
+        if (t0 === null) t0 = t;
+        var k = Math.min(1, (t - t0) / dur);
+        el.textContent = Math.round(to * (1 - Math.pow(1 - k, 3)));
+        if (k < 1) requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+}
+function inviteDeadline(ts) {
+    if (!ts) return '';
+    var days = Math.ceil((ts * 1000 - Date.now()) / 86400000);
+    if (days <= 0) return '';
+    return days === 1 ? 'Valable jusqu\'à demain.' : 'Valable ' + days + ' jours.';
+}
 async function loadInvitation() {
     var claim = hashParam('claim');
     if (!claim) return;
@@ -3804,17 +3826,31 @@ async function loadInvitation() {
         var inv = await r.json();
         if (!r.ok) throw new Error(inv.error || 'Invitation introuvable');
         App.invite = Object.assign({ token: claim }, inv);
-        $('invite-faces').innerHTML = (inv.previews || []).map(function (u) { return '<img src="' + u + '" alt="">'; }).join('');
-        $('invite-title').innerHTML = '<b>' + esc(inv.from_name) + '</b> vous a reconnu·e sur '
-            + plural(inv.photos, 'photo', 'photos') + ' et vous les offre.';
-        $('btn-claim').textContent = inv.open ? 'Voir mes photos' : 'Recevoir mes photos';
-        $('invite-email-box').hidden = true;      // invitation par lien : l'email vient APRÈS avoir vu ses photos
+        var tilts = [-5, 3, -2, 5];
+        $('invite-faces').innerHTML = (inv.previews || []).map(function (u, i) {
+            return '<figure class="fc-pola" style="--i:' + i + ';--tilt:' + tilts[i % 4] + 'deg"><img src="' + u + '" alt=""></figure>';
+        }).join('') + ((inv.photos || 0) > (inv.previews || []).length
+            ? '<span class="fc-pola-more" style="--i:' + (inv.previews || []).length + '">+' + (inv.photos - (inv.previews || []).length) + '</span>' : '');
+        $('invite-title').innerHTML = '<b>' + esc(inv.from_name) + '</b> vous a reconnu·e sur <b class="fc-invite-n">0</b> '
+            + (inv.photos > 1 ? 'photos' : 'photo') + '.';
+        $('invite-sub').textContent = 'Il·elle vous les offre. ' + inviteDeadline(inv.expires_at);
+        $('invite-recip').hidden = false;
+        $('invite-recip').innerHTML = '↩️ Ensuite, <b>rendez-lui la pareille</b> : FaceCloud retrouve ' + esc(inv.from_name)
+            + ' dans vos propres photos et les lui envoie, en un geste.';
+        if (inv.open) {                            // lien : on demande l'email tout de suite (les vignettes sont déjà là)
+            $('invite-email-box').hidden = false;
+            $('btn-claim').textContent = 'Créer mon MULTIPASS et les recevoir';
+        } else {
+            $('invite-email-box').hidden = true;
+            $('btn-claim').textContent = 'Recevoir mes photos';
+        }
         $('invite').hidden = false;
         $('start').hidden = true;
         // L'invitation passe en tête : c'est la seule chose qui compte pour un invité
         var col = $('welcome').firstElementChild;
         col.insertBefore($('invite'), col.firstChild);
         $('welcome').classList.add('has-invite');
+        countUp(document.querySelector('#invite-title .fc-invite-n'), inv.photos || 0);
     } catch (e) {
         $('login-error').hidden = false;
         $('login-error').textContent = e.message + '. Vous pouvez quand même créer votre MULTIPASS.';
@@ -3824,13 +3860,17 @@ async function startAccount(claim) {
     var btn = claim ? $('btn-claim') : $('btn-start');
     var openInv = !!(claim && App.invite && App.invite.open);
     if (openInv && $('invite-email-box').hidden) {            // 1er clic : on demande l'email, puis 2e clic : création
-        $('invite-email-box').hidden = false; $('btn-claim').textContent = 'Créer mon MULTIPASS et les recevoir'; $('invite-email').focus(); return;
+        $('invite-email-box').hidden = false; $('btn-claim').textContent = 'Créer mon MULTIPASS et les recevoir'; $('invite-email').focus(); return;   // (repli : la boîte est normalement déjà ouverte)
     }
     var email = ((openInv ? $('invite-email') : $('start-email')).value || '').trim();
     if ((!claim || openInv) && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { (openInv ? $('invite-email') : $('start-email')).focus(); return; }
     btn.disabled = true;
     var label = btn.textContent;
-    btn.textContent = 'Création de votre MULTIPASS… (jusqu\'à une minute)';
+    // Une minute d'attente muette = un onglet fermé : on dit ce qui se passe, dans l'ordre réel des opérations.
+    var phases = ['Création de votre MULTIPASS…', 'Chiffrement de votre espace…', claim ? 'Copie de vos photos…' : 'Préparation de votre cloud…', 'Presque prêt…'];
+    var phase = 0;
+    btn.textContent = phases[0];
+    var ticker = setInterval(function () { phase = Math.min(phase + 1, phases.length - 1); btn.textContent = phases[phase]; }, 9000);
     $('login-error').hidden = true;
     try {
         var r = await fetch(apiBase().replace(/\/$/, '') + '/api/facecloud/start', { method: 'POST',
@@ -3858,6 +3898,7 @@ async function startAccount(claim) {
         $('login-error').hidden = false;
         $('login-error').textContent = 'Création impossible : ' + e.message;
     } finally {
+        clearInterval(ticker);
         btn.disabled = false;
         btn.textContent = label;
     }
@@ -3992,6 +4033,7 @@ document.addEventListener('DOMContentLoaded', function () {
     $('btn-start').addEventListener('click', function () { startAccount(''); });
     $('start-email').addEventListener('keydown', function (ev) { if (ev.key === 'Enter') startAccount(''); });
     $('btn-claim').addEventListener('click', function () { startAccount(App.invite.token); });
+    $('invite-email').addEventListener('keydown', function (ev) { if (ev.key === 'Enter') { ev.preventDefault(); startAccount(App.invite.token); } });
     $('guide').addEventListener('click', function (ev) { var b = ev.target.closest('[data-guide]'); if (b) guideAction(b.dataset.guide); });
     $('senders').addEventListener('click', async function (ev) {
         var b = ev.target.closest('[data-sender]');

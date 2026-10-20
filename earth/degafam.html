@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Quitter Google et Apple — UPlanet</title>
+<meta name="robots" content="noindex">
+<link rel="icon" type="image/x-icon" href="favicon.ico">
+<link rel="stylesheet" href="facecloud.css">
+<style>
+.dg { max-width: 760px; margin: 0 auto; padding: 20px 16px 80px; }
+.dg h1 { font-size: clamp(28px, 6vw, 42px); line-height: 1.1; font-weight: 900; margin: 8px 0 6px; letter-spacing: -.02em; }
+.dg .lead { color: var(--fc-muted); margin: 0 0 18px; }
+.dg-bar { display: flex; gap: 6px; margin: 0 0 20px; }
+.dg-bar i { flex: 1; height: 8px; border-radius: 99px; background: var(--fc-chip); transition: background .4s; }
+.dg-bar i.on { background: var(--fc-ok); }
+.dg-bar i.cur { background: var(--fc-act); }
+.dg-step { background: var(--fc-surface); border-radius: 16px; box-shadow: var(--fc-shadow); margin: 0 0 14px; overflow: hidden; }
+.dg-head { display: flex; align-items: center; gap: 12px; width: 100%; padding: 16px; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.dg-num { flex: none; width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; font-weight: 900; background: var(--fc-kraft); color: var(--fc-kraft-ink); }
+.dg-step.done .dg-num { background: var(--fc-ok); color: #fff; }
+.dg-title { font-weight: 800; font-size: 18px; }
+.dg-title small { display: block; font-weight: 500; font-size: 13px; color: var(--fc-muted); }
+.dg-body { padding: 0 16px 18px; display: none; }
+.dg-step.open .dg-body { display: block; }
+.dg-os { display: flex; gap: 6px; margin: 0 0 12px; }
+.dg-os button { flex: 1; padding: 9px; border-radius: 10px; border: 1px solid var(--fc-line); background: none; color: inherit; font: inherit; font-weight: 700; cursor: pointer; }
+.dg-os button[aria-pressed="true"] { background: var(--fc-act); color: var(--fc-act-ink); border-color: var(--fc-act); }
+.dg-do { list-style: none; counter-reset: d; margin: 0 0 12px; padding: 0; display: grid; gap: 10px; }
+.dg-do li { counter-increment: d; display: grid; grid-template-columns: 26px 1fr; gap: 10px; }
+.dg-do li::before { content: counter(d); width: 26px; height: 26px; border-radius: 50%; background: var(--fc-chip); display: grid; place-items: center; font-weight: 800; font-size: 13px; }
+.dg-creds { background: var(--fc-table); border-radius: 12px; padding: 12px; margin: 0 0 12px; display: grid; gap: 8px; }
+.dg-cred { display: grid; grid-template-columns: 86px 1fr auto; gap: 8px; align-items: center; font-size: 14px; }
+.dg-cred span { color: var(--fc-muted); }
+.dg-cred code { overflow-wrap: anywhere; font-size: 13px; }
+.dg-live { margin: 10px 0 0; padding: 10px 12px; border-radius: 10px; background: var(--fc-table); font-weight: 700; }
+.dg-live.ok { background: color-mix(in srgb, var(--fc-ok) 18%, transparent); color: var(--fc-ok); }
+.dg-more { margin: 24px 0 0; color: var(--fc-muted); font-size: 14px; }
+.dg-more a { color: var(--fc-act); font-weight: 700; }
+.dg-connect { text-align: center; padding: 28px 16px; }
+@media (prefers-reduced-motion: no-preference) { .dg-live.ok { animation: dg-pop .5s ease; } }
+@keyframes dg-pop { from { transform: scale(.96); } to { transform: none; } }
+</style>
+</head>
+<body>
+<main class="dg">
+  <h1>Quitter Google et Apple, en 3 étapes</h1>
+  <p class="lead">Une copie chiffrée de vos photos, contacts et agenda, chez vous. Rien n'est supprimé chez eux tant que vous n'êtes pas rassuré·e. Trois minutes par étape.</p>
+  <div class="dg-bar" id="bar" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+  <div id="root"><div class="dg-step dg-connect"><p>Connectez votre MULTIPASS pour voir vos étapes.</p>
+    <button class="fc-btn fc-btn-primary fc-btn-big" id="btn-connect">Me connecter</button></div></div>
+  <p class="dg-more">Pour aller plus loin : <a href="ucloud.html">FaceCloud</a> (vos photos par personne) ·
+    <a href="GAFAM.html#migrer">le guide complet</a> · <a href="moncompte.html#notifications">gérer ces emails</a></p>
+</main>
+
+<script src="nacl-fast.min.js"></script>
+<script src="nostr.bundle.js"></script>
+<script src="common.js"></script>
+<script src="uplanet-header.js"></script>
+<script>
+'use strict';
+var S = { st: null, creds: null, os: /iPhone|iPad|Mac/.test(navigator.userAgent) && 'ontouchend' in document ? 'ios' : 'android', open: '', timer: null, announced: {} };
+var ORDER = ['photos', 'contacts', 'agenda', 'amis'];
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+function $(id) { return document.getElementById(id); }
+function apiBase() { if (window.getAPIUrl) { try { return window.getAPIUrl(); } catch (e) {} } return window.location.origin; }
+function pubkey() { return (window.NostrState && window.NostrState.userPubkey) || window.userPubkey || ''; }
+function nonce() { var a = new Uint8Array(8); crypto.getRandomValues(a); return Array.prototype.map.call(a, function (b) { return ('0' + b.toString(16)).slice(-2); }).join(''); }
+async function signEvent(tpl) {
+  if (window.nostr && typeof window.nostr.signEvent === 'function') { tpl.pubkey = pubkey(); return await window.nostr.signEvent(tpl); }
+  if (window.userPrivateKey && window.NostrTools) return window.NostrTools.finishEvent(tpl, window.userPrivateKey);
+  throw new Error('Connectez votre MULTIPASS.');
+}
+async function api(path, method) {
+  method = method || 'GET'; var url = apiBase().replace(/\/$/, '') + path;
+  var ev = await signEvent({ kind: 27235, created_at: Math.floor(Date.now() / 1000), tags: [['u', url], ['method', method], ['nonce', nonce()]], content: '' });
+  var auth = 'Nostr ' + btoa(unescape(encodeURIComponent(JSON.stringify(ev)))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+  var r = await fetch(url, { method: method, headers: { Authorization: auth } });
+  var d = null; try { d = await r.json(); } catch (e) {}
+  if (!r.ok) { var er = new Error((d && (d.detail || d.error)) || ('Erreur ' + r.status)); er.status = r.status; throw er; }
+  return d;
+}
+function plural(n, a, b) { return n + ' ' + (n > 1 ? b : a); }
+
+/* Identifiants : on montre le mot de passe existant, sinon on en crée un (jamais renouvelé sans le dire : cela déconnecte les clients). */
+async function loadCreds() {
+  if (S.creds) return S.creds;
+  try { S.creds = await api('/api/cloud/reveal', 'POST'); }
+  catch (e) { if (e.status !== 404) throw e; S.creds = await api('/api/cloud/enroll', 'POST'); }
+  return S.creds;
+}
+function credsHtml(c, which) {
+  var url = which === 'contacts' ? c.carddav_url : which === 'agenda' ? c.caldav_url : c.dav_url;
+  function row(l, v, secret) { return '<div class="dg-cred"><span>' + l + '</span><code>' + (secret ? '••••••••••••' : esc(v)) + '</code><button class="fc-btn fc-btn-sm" data-copy="' + esc(v) + '">Copier</button></div>'; }
+  return '<div class="dg-creds">' + row('Adresse', url) + row('Identifiant', c.email) + row('Mot de passe', c.token, true) + '</div>';
+}
+var HOW = {
+  photos: {
+    android: ['Installez <b>FolderSync</b> (Play Store ou F-Droid) et ajoutez un compte de type <b>WebDAV</b>.',
+              'Collez l\'adresse, l\'identifiant et le mot de passe ci-dessus (HTTPS coché).',
+              'Paire de dossiers : <b>DCIM/Camera</b> (téléphone) → <b>/Photos/Telephone</b> (cloud), « vers le dossier distant ». Lancez sur Wi-Fi, branché.'],
+    ios: ['Installez <b>PhotoSync</b> (App Store) et ajoutez une destination <b>WebDAV</b>.',
+          'Collez l\'adresse, l\'identifiant et le mot de passe ci-dessus (HTTPS activé).',
+          'Dossier : <b>/Photos/iPhone</b>. Choisissez vos photos (JPEG/compatible), restez sur Wi-Fi, application ouverte pour le premier lot.'],
+    tip: 'Quelques photos seulement ? Plus simple : ouvrez <a href="ucloud.html">FaceCloud</a> dans votre navigateur → Photos → « Ajouter ».'
+  },
+  contacts: {
+    android: ['Installez <b>DAVx⁵</b> (F-Droid ou Play Store) → « Connexion avec une URL et un nom d\'utilisateur ».',
+              'Collez l\'adresse, l\'identifiant et le mot de passe ci-dessus.',
+              'Cochez le carnet <b>contacts</b> et lancez la synchronisation.'],
+    ios: ['Réglages → Contacts → Comptes → Ajouter un compte → <b>Autre</b> → <b>CardDAV</b>.',
+          'Serveur, identifiant et mot de passe : ceux ci-dessus.',
+          'Validez : vos contacts se synchronisent.'],
+    tip: 'Vos contacts sont chez Google ? Exportez-les en .vcf (contacts.google.com → Exporter) puis <a href="ucloud.html">FaceCloud</a> → Contacts → Importer.'
+  },
+  agenda: {
+    android: ['Dans <b>DAVx⁵</b> (le même compte que les contacts), cochez aussi l\'<b>agenda</b>.',
+              'Adresse, identifiant et mot de passe : ceux ci-dessus (même compte).',
+              'Gardez votre ancien agenda en lecture quelques semaines, le temps de vous habituer.'],
+    ios: ['Réglages → Calendrier → Comptes → Ajouter un compte → <b>Autre</b> → <b>CalDAV</b>.',
+          'Serveur, identifiant et mot de passe : ceux ci-dessus.',
+          'Validez : vos agendas apparaissent dans l\'application Calendrier.'],
+    tip: 'Vous voulez reprendre l\'existant ? Exportez un .ics depuis Google Agenda ou Apple, puis importez-le dans <a href="calendars.html">Mes calendriers</a>.'
+  }
+};
+var META = {
+  photos: ['📷', 'Vos photos', 'Une copie chiffrée, envoyée toute seule'],
+  contacts: ['📇', 'Vos contacts', 'Votre carnet d\'adresses, synchronisé'],
+  agenda: ['📅', 'Votre agenda', 'Vos rendez-vous, chiffrés chez vous'],
+  amis: ['💌', 'Vos proches', 'Rendez-leur leurs photos, en un clic']
+};
+function liveText(k, s) {
+  if (k === 'photos') return s.done ? '✓ ' + plural(s.count, 'photo est', 'photos sont') + ' chez vous.' : s.count ? s.count + ' / 20 photos reçues… ça arrive !' : 'En attente de votre première photo…';
+  if (k === 'contacts') return s.done ? '✓ ' + plural(s.count, 'contact est', 'contacts sont') + ' chez vous.' : 'En attente de vos contacts…';
+  if (k === 'agenda') return s.done ? '✓ ' + plural(s.count, 'événement est', 'événements sont') + ' chez vous.' : 'En attente de votre agenda…';
+  return s.done ? '✓ Un proche a reçu son lien.' : '';
+}
+function stepHtml(k, i, cur) {
+  var s = S.st.steps[k], m = META[k], open = S.open === k, h = HOW[k];
+  var h1 = '<div class="dg-step' + (s.done ? ' done' : '') + (open ? ' open' : '') + '" id="step-' + k + '"><button class="dg-head" data-toggle="' + k + '" aria-expanded="' + open + '">'
+    + '<span class="dg-num">' + (s.done ? '✓' : i + 1) + '</span><span class="dg-title">' + m[0] + ' ' + m[1] + '<small>' + (s.done ? liveText(k, s) : m[2]) + '</small></span></button><div class="dg-body">';
+  if (k === 'amis') {
+    h1 += '<ol class="dg-do"><li>Ouvrez <a href="ucloud.html"><b>FaceCloud</b></a> : vos visages sont rangés par personne.</li><li><b>Nommez</b> quelqu\'un que vous aimez.</li>'
+      + '<li>« <b>Inviter…</b> » : un message prêt à envoyer par WhatsApp, SMS ou mail. Ses photos l\'attendent, son cloud est offert.</li></ol>'
+      + '<a class="fc-btn fc-btn-primary" href="ucloud.html">Ouvrir FaceCloud</a></div></div>';
+    return h1;
+  }
+  h1 += '<div class="dg-os" role="group" aria-label="Téléphone"><button data-os="android" aria-pressed="' + (S.os === 'android') + '">🤖 Android</button><button data-os="ios" aria-pressed="' + (S.os === 'ios') + '">🍎 iPhone</button></div>';
+  h1 += S.creds ? credsHtml(S.creds, k) : '<p><button class="fc-btn fc-btn-primary" data-creds="1">Afficher mes identifiants</button></p>';
+  h1 += '<ol class="dg-do">' + h[S.os].map(function (t) { return '<li><div>' + t + '</div></li>'; }).join('') + '</ol>';
+  h1 += '<p class="fc-hint">' + h.tip + '</p><div class="dg-live' + (s.done ? ' ok' : '') + '" aria-live="polite">' + liveText(k, s) + '</div></div></div>';
+  return h1;
+}
+function render() {
+  var cur = ORDER.filter(function (k) { return !S.st.steps[k].done; })[0];
+  if (!S.open) S.open = location.hash.slice(1) in META ? location.hash.slice(1) : (cur || '');
+  document.querySelectorAll('#bar i').forEach(function (b, i) { var d = S.st.steps[ORDER[i]].done; b.className = d ? 'on' : (ORDER[i] === cur ? 'cur' : ''); });
+  $('root').innerHTML = ORDER.map(function (k, i) { return stepHtml(k, i, cur); }).join('')
+    + (cur ? '' : '<div class="dg-step open"><div class="dg-body" style="display:block;padding-top:16px"><b>🎉 Vous avez quitté les GAFAM.</b> Photos, contacts et agenda sont chez vous.</div></div>');
+}
+async function refresh() {
+  try {
+    var prev = S.st; S.st = await api('/api/degafam/status');
+    ORDER.forEach(function (k) { if (prev && !prev.steps[k].done && S.st.steps[k].done) S.announced[k] = true; });
+    render();
+  } catch (e) { $('root').innerHTML = '<div class="dg-step dg-connect"><p>' + esc(e.message) + '</p><button class="fc-btn" id="btn-retry">Réessayer</button></div>'; }
+}
+document.addEventListener('click', async function (ev) {
+  var t = ev.target.closest('[data-toggle],[data-os],[data-creds],[data-copy],#btn-connect,#btn-retry');
+  if (!t) return;
+  if (t.id === 'btn-connect') { if (window.uphOpenLogin) window.uphOpenLogin(); return; }
+  if (t.id === 'btn-retry') return refresh();
+  if (t.dataset.toggle) { S.open = S.open === t.dataset.toggle ? '' : t.dataset.toggle; if (S.st) render(); return; }
+  if (t.dataset.os) { S.os = t.dataset.os; render(); return; }
+  if (t.dataset.creds) { t.disabled = true; try { await loadCreds(); render(); } catch (e) { t.disabled = false; alert(e.message); } return; }
+  if (t.dataset.copy) { try { await navigator.clipboard.writeText(t.dataset.copy); t.textContent = 'Copié ✓'; setTimeout(function () { t.textContent = 'Copier'; }, 1500); } catch (e) { prompt('Copiez :', t.dataset.copy); } }
+});
+function start() {
+  if (!pubkey()) { setTimeout(start, 600); return; }
+  refresh();
+  clearInterval(S.timer);
+  S.timer = setInterval(function () { if (!document.hidden && S.st && ORDER.some(function (k) { return k !== 'amis' && !S.st.steps[k].done; })) refresh(); }, 6000);
+}
+window.addEventListener('load', start);
+window.addEventListener('nostr-login', start);
+</script>
+</body>
+</html>
